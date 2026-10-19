@@ -1,6 +1,6 @@
 # ⚾ Sunday Pickup Baseball WebApp
 
-A reliable, durable, and lightweight web application built for a non-profit pickup baseball charity organizing weekly Sunday games at noon.
+A reliable, durable, and lightweight web application built for a pickup baseball charity organizing weekly Sunday games at noon.
 
 Designed with a **10-year longevity philosophy**:
 - **Zero build steps**: Pure HTML5, modern semantic CSS3, and standard Vanilla JavaScript. No bundlers, Webpack, Vite, or frontend framework churn that breaks over time.
@@ -25,7 +25,7 @@ Designed with a **10-year longevity philosophy**:
 4. **Game Discussion Board**:
    - Pre-game announcements (weather updates, field conditions, carpools) and post-game recaps/photos.
 5. **Admin Organizer Dashboard**:
-   - ⚡ **1-Click Post Next Sunday**: Automatically computes next Sunday's date at 12:00 PM and attaches charity duties.
+   - ⚡ **1-Click Post Next Sunday**: Automatically computes next Sunday's date at 12:00 PM and attaches game duties.
    - Custom game creator, roster management, and manual "Send Reminders Now" trigger.
 
 ---
@@ -68,7 +68,7 @@ APP_NAME="Sunday Pickup Baseball"
 
 # Administrator Account
 # Anyone signing in with this email automatically has admin powers
-ADMIN_EMAIL=admin@baseballcharity.org
+ADMIN_EMAIL=pickupbaseballfoundation@gmail.com
 ADMIN_NAME="League Organizer"
 
 # SQLite Data Storage Directory

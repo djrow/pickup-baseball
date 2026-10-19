@@ -8,7 +8,7 @@ services:
       - PORT=3000
       - NODE_ENV=production
       - APP_URL=https://your-domain.com
-      - ADMIN_EMAIL=admin@baseballcharity.org
+      - ADMIN_EMAIL=pickupbaseballfoundation@gmail.com
       - ADMIN_NAME=League Organizer
     volumes:
       - baseball-data:/app/data

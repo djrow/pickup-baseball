@@ -22,7 +22,7 @@
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px;">
       <div>
         <span class="badge badge-clay">Admin Control</span>
-        <h1 style="color: var(--secondary); font-size: 1.8rem; margin-top: 4px;">Game & Charity Manager</h1>
+        <h1 style="color: var(--secondary); font-size: 1.8rem; margin-top: 4px;">Game & Org Manager</h1>
       </div>
       <div>
         <button id="quick-sunday-btn" class="btn btn-primary">
@@ -67,18 +67,25 @@
           <textarea id="event-desc-input" rows="3" placeholder="Field condition, parking details, whether to bring cleats or flats..."></textarea>
         </div>
 
-        <!-- Duties Setup -->
-        <div class="form-group" style="background: #f8fafc; padding: 16px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <label style="margin-bottom: 0;">Game Duties</label>
-            <label style="display: flex; align-items: center; gap: 8px; font-weight: normal; font-size: 0.88rem; cursor: pointer;">
-              <input type="checkbox" id="use-default-duties" checked>
-              <span>Include Standard Baseball Charity Duties (Bases, Balls, Catcher's Gear, Bats, Umpire, etc.)</span>
-            </label>
+        <!-- Duties / Task Builder Setup -->
+        <div class="form-group" style="background: #f8fafc; padding: 20px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+            <div>
+              <h3 style="font-size: 1.05rem; color: var(--secondary); margin-bottom: 2px;">🛡️ Game Tasks & Volunteer Duties</h3>
+              <p style="font-size: 0.82rem; color: var(--text-muted); margin: 0;">
+                These are the tasks players and guests can reserve when they RSVP. Customize them below:
+              </p>
+            </div>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+              <button type="button" id="btn-add-task-row" class="btn btn-primary btn-sm">+ Add Custom Task</button>
+              <button type="button" id="btn-reset-default-tasks" class="btn btn-outline btn-sm">↺ Reset to Standard</button>
+              <button type="button" id="btn-clear-tasks" class="btn btn-outline btn-sm">✕ Clear All</button>
+            </div>
           </div>
-          <p style="font-size: 0.82rem; color: var(--text-muted);">
-            When enabled, the 8 standard equipment & volunteer duties will automatically be attached to this game for players to sign up for.
-          </p>
+
+          <div id="task-builder-list" style="display: flex; flex-direction: column; gap: 10px; margin-top: 14px;">
+            <!-- Rendered dynamically by admin.js -->
+          </div>
         </div>
 
         <button type="submit" id="create-event-btn" class="btn btn-primary btn-lg" style="margin-top: 8px;">
@@ -89,7 +96,10 @@
 
     <!-- Manage Existing Games -->
     <section class="card" style="margin-top: 36px;">
-      <h2 class="card-title" style="margin-bottom: 16px;">Active Scheduled Games</h2>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
+        <h2 class="card-title" style="margin-bottom: 0;">Active Scheduled Games</h2>
+        <span style="font-size: 0.85rem; color: var(--text-muted);">Click <strong>"🛡️ Manage Tasks"</strong> on any game to add, edit, or remove duties.</span>
+      </div>
       <div id="admin-games-container">
         <p style="color: var(--text-muted);">Loading games...</p>
       </div>
@@ -99,7 +109,7 @@
 
   <footer class="site-footer">
     <div class="container">
-      <p>⚾ Sunday Pickup Baseball Charity</p>
+      <p>⚾ Pickup Baseball Foundation</p>
     </div>
   </footer>
 

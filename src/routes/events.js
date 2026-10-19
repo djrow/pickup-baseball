@@ -421,6 +421,85 @@ router.delete('/:id', requireAdmin, (req, res) => {
 });
 
 /**
+ * Get default charity duties template
+ */
+router.get('/default-duties', (req, res) => {
+  res.json({ duties: DEFAULT_BASEBALL_DUTIES });
+});
+
+/**
+ * Add a new duty/task to an existing event (Admin only)
+ */
+router.post('/:id/duties', requireAdmin, (req, res) => {
+  try {
+    const eventId = req.params.id;
+    const { title, description, slots_needed } = req.body;
+
+    if (!title || !title.trim()) {
+      return res.status(400).json({ error: 'Duty title is required.' });
+    }
+
+    const maxSort = db.prepare('SELECT MAX(sort_order) as max_sort FROM event_duties WHERE event_id = ?').get(eventId);
+    const nextSort = (maxSort && maxSort.max_sort !== null) ? maxSort.max_sort + 1 : 0;
+
+    const result = db.prepare(`
+      INSERT INTO event_duties (event_id, title, description, slots_needed, sort_order)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(eventId, title.trim(), (description || '').trim(), parseInt(slots_needed || 1, 10), nextSort);
+
+    const newDuty = db.prepare('SELECT * FROM event_duties WHERE id = ?').get(result.lastInsertRowid);
+    res.json({ success: true, duty: newDuty });
+  } catch (err) {
+    console.error('[Events] Error adding duty:', err);
+    res.status(500).json({ error: 'Failed to add duty.' });
+  }
+});
+
+/**
+ * Update an existing duty/task (Admin only)
+ */
+router.put('/:id/duties/:dutyId', requireAdmin, (req, res) => {
+  try {
+    const { id: eventId, dutyId } = req.params;
+    const { title, description, slots_needed } = req.body;
+
+    db.prepare(`
+      UPDATE event_duties
+      SET title = COALESCE(?, title),
+          description = COALESCE(?, description),
+          slots_needed = COALESCE(?, slots_needed)
+      WHERE id = ? AND event_id = ?
+    `).run(
+      title ? title.trim() : null,
+      description !== undefined ? description.trim() : null,
+      slots_needed ? parseInt(slots_needed, 10) : null,
+      dutyId,
+      eventId
+    );
+
+    const updated = db.prepare('SELECT * FROM event_duties WHERE id = ?').get(dutyId);
+    res.json({ success: true, duty: updated });
+  } catch (err) {
+    console.error('[Events] Error updating duty:', err);
+    res.status(500).json({ error: 'Failed to update duty.' });
+  }
+});
+
+/**
+ * Delete a duty/task from an event (Admin only)
+ */
+router.delete('/:id/duties/:dutyId', requireAdmin, (req, res) => {
+  try {
+    const { id: eventId, dutyId } = req.params;
+    db.prepare('DELETE FROM event_duties WHERE id = ? AND event_id = ?').run(dutyId, eventId);
+    res.json({ success: true, message: 'Duty removed.' });
+  } catch (err) {
+    console.error('[Events] Error deleting duty:', err);
+    res.status(500).json({ error: 'Failed to delete duty.' });
+  }
+});
+
+/**
  * Trigger manual reminders for an event (Admin only)
  */
 router.post('/:id/send-reminders', requireAdmin, async (req, res) => {

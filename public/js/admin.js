@@ -1,6 +1,23 @@
 /**
- * Admin Dashboard logic
+ * Admin Dashboard logic with Task & Duty Management
  */
+
+const DEFAULT_BASEBALL_DUTIES = [
+  { title: "Bases & Home Plate", description: "Bring 3 throw-down/stake bases and home plate", slots_needed: 1 },
+  { title: "Game Baseballs & Scorebook", description: "Bring game balls bucket and pickup roster/scorebook", slots_needed: 1 },
+  { title: "Catcher's Gear", description: "Bring shin guards, chest protector, and catcher's helmet", slots_needed: 1 },
+  { title: "Team Bats & Helmets", description: "Bring community wood/BBCOR bats & batting helmets", slots_needed: 1 },
+  { title: "Field Setup & Cones", description: "Arrive 20 mins early to lay out foul lines and inspect turf/dirt", slots_needed: 2 },
+  { title: "Cold Water & First Aid", description: "Bring community ice water jug and basic sports first aid kit", slots_needed: 1 },
+  { title: "Umpire / Inning Coordinator", description: "Volunteer to umpire or coordinate team inning rotations", slots_needed: 2 },
+  { title: "Post-Game Dugout Cleanup", description: "Ensure dugouts and bleachers are completely clean after the game", slots_needed: 2 }
+];
+
+// Current duties being customized in the "Schedule New Game" form
+let builderDuties = JSON.parse(JSON.stringify(DEFAULT_BASEBALL_DUTIES));
+
+// Currently expanded event task manager
+let openTaskManagerEventId = null;
 
 async function initAdmin() {
   const user = await API.getMe();
@@ -13,6 +30,7 @@ async function initAdmin() {
   API.renderNav(user);
   setDefaultDateTime();
   setupQuickSundayButton();
+  setupTaskBuilder();
   setupCreateForm();
   await loadAdminGames();
 }
@@ -42,6 +60,101 @@ function setDefaultDateTime() {
   }
 }
 
+// -------------------------------------------------------------
+// TASK & DUTY BUILDER (For New Event Form)
+// -------------------------------------------------------------
+function setupTaskBuilder() {
+  const addBtn = document.getElementById('btn-add-task-row');
+  const resetBtn = document.getElementById('btn-reset-default-tasks');
+  const clearBtn = document.getElementById('btn-clear-tasks');
+
+  addBtn.addEventListener('click', () => {
+    syncBuilderDutiesFromDOM();
+    builderDuties.push({
+      title: '',
+      description: '',
+      slots_needed: 1
+    });
+    renderTaskBuilder();
+    // Focus new title input
+    const inputs = document.querySelectorAll('.task-builder-title');
+    if (inputs.length > 0) inputs[inputs.length - 1].focus();
+  });
+
+  resetBtn.addEventListener('click', () => {
+    if (confirm('Reset tasks to the 8 standard baseball charity duties?')) {
+      builderDuties = JSON.parse(JSON.stringify(DEFAULT_BASEBALL_DUTIES));
+      renderTaskBuilder();
+    }
+  });
+
+  clearBtn.addEventListener('click', () => {
+    if (confirm('Remove all tasks from this game? Players will only RSVP without volunteer duty signups.')) {
+      builderDuties = [];
+      renderTaskBuilder();
+    }
+  });
+
+  renderTaskBuilder();
+}
+
+function syncBuilderDutiesFromDOM() {
+  const rows = document.querySelectorAll('.task-builder-row');
+  const updated = [];
+  rows.forEach(row => {
+    const title = row.querySelector('.task-builder-title').value;
+    const desc = row.querySelector('.task-builder-desc').value;
+    const slots = parseInt(row.querySelector('.task-builder-slots').value, 10) || 1;
+    updated.push({
+      title,
+      description: desc,
+      slots_needed: slots
+    });
+  });
+  builderDuties = updated;
+}
+
+function renderTaskBuilder() {
+  const container = document.getElementById('task-builder-list');
+  if (builderDuties.length === 0) {
+    container.innerHTML = `
+      <div style="text-align: center; padding: 20px; background: #ffffff; border: 1px dashed var(--border); border-radius: var(--radius-sm); color: var(--text-muted); font-size: 0.9rem;">
+        No tasks added yet. Click <strong>"+ Add Custom Task"</strong> or <strong>"↺ Reset to Standard"</strong> above.
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = builderDuties.map((duty, idx) => `
+    <div class="task-builder-row" style="display: grid; grid-template-columns: 2fr 3fr 100px 40px; gap: 10px; align-items: center; background: #ffffff; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);">
+      <div>
+        <label style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 2px;">Task Name</label>
+        <input type="text" class="task-builder-title" value="${API.escapeHtml(duty.title)}" placeholder="e.g. Umpire, Baseballs..." required style="padding: 6px 10px; font-size: 0.9rem;">
+      </div>
+      <div>
+        <label style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 2px;">Description / Details</label>
+        <input type="text" class="task-builder-desc" value="${API.escapeHtml(duty.description)}" placeholder="e.g. Bring bucket of balls..." style="padding: 6px 10px; font-size: 0.9rem;">
+      </div>
+      <div>
+        <label style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 2px;">Volunteers</label>
+        <input type="number" class="task-builder-slots" min="1" max="15" value="${duty.slots_needed || 1}" required style="padding: 6px 8px; font-size: 0.9rem; text-align: center;">
+      </div>
+      <div style="text-align: right; padding-top: 18px;">
+        <button type="button" onclick="removeTaskBuilderRow(${idx})" title="Remove task" style="background: none; border: none; cursor: pointer; color: var(--danger); font-size: 1.15rem; line-height: 1;">🗑️</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+window.removeTaskBuilderRow = function(index) {
+  syncBuilderDutiesFromDOM();
+  builderDuties.splice(index, 1);
+  renderTaskBuilder();
+};
+
+// -------------------------------------------------------------
+// EVENT CREATION
+// -------------------------------------------------------------
 function setupQuickSundayButton() {
   const btn = document.getElementById('quick-sunday-btn');
   btn.addEventListener('click', async () => {
@@ -95,12 +208,22 @@ function setupCreateForm() {
     submitBtn.disabled = true;
     submitBtn.textContent = 'Publishing...';
 
+    syncBuilderDutiesFromDOM();
+
+    // Validate that duties have titles
+    const invalidDuty = builderDuties.find(d => !d.title.trim());
+    if (invalidDuty) {
+      showAlert('Please enter a name for all tasks, or click the trash can to delete empty rows.', true);
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Publish Game';
+      return;
+    }
+
     const title = document.getElementById('event-title-input').value;
     const eventDate = new Date(document.getElementById('event-date-input').value).toISOString();
     const location = document.getElementById('event-location-input').value;
     const locationUrl = document.getElementById('event-map-input').value;
     const description = document.getElementById('event-desc-input').value;
-    const useDefaultDuties = document.getElementById('use-default-duties').checked;
 
     try {
       const res = await fetch('/api/events', {
@@ -112,7 +235,7 @@ function setupCreateForm() {
           location,
           location_url: locationUrl,
           description,
-          use_default_duties: useDefaultDuties
+          custom_duties: builderDuties
         })
       });
 
@@ -120,10 +243,11 @@ function setupCreateForm() {
       if (data.error) {
         showAlert(data.error, true);
       } else {
-        showAlert('Game published successfully!', false);
+        showAlert(`Game "${title}" published with ${builderDuties.length} volunteer tasks!`, false);
         form.reset();
         document.getElementById('event-title-input').value = 'Sunday Pickup Baseball';
-        document.getElementById('use-default-duties').checked = true;
+        builderDuties = JSON.parse(JSON.stringify(DEFAULT_BASEBALL_DUTIES));
+        renderTaskBuilder();
         setDefaultDateTime();
         await loadAdminGames();
       }
@@ -136,6 +260,9 @@ function setupCreateForm() {
   });
 }
 
+// -------------------------------------------------------------
+// MANAGE EXISTING GAMES & INLINE TASK MANAGER
+// -------------------------------------------------------------
 async function loadAdminGames() {
   const container = document.getElementById('admin-games-container');
   try {
@@ -148,34 +275,226 @@ async function loadAdminGames() {
     }
 
     container.innerHTML = `
-      <div style="display: flex; flex-direction: column; gap: 14px;">
+      <div style="display: flex; flex-direction: column; gap: 16px;">
         ${events.map(ev => `
-          <div class="card" style="margin-bottom: 0; padding: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-            <div>
-              <div style="font-weight: 700; font-size: 1.1rem; color: var(--secondary);">
-                ${API.escapeHtml(ev.title)}
+          <div class="card" style="margin-bottom: 0; padding: 18px; border-left: 4px solid var(--secondary);">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px;">
+              <div>
+                <div style="font-weight: 700; font-size: 1.15rem; color: var(--secondary);">
+                  ${API.escapeHtml(ev.title)}
+                </div>
+                <div style="font-size: 0.9rem; color: #334155; margin-top: 3px;">
+                  📅 ${API.formatDateTime(ev.event_date)} | 📍 ${API.escapeHtml(ev.location)}
+                </div>
+                <div style="font-size: 0.82rem; color: var(--primary); font-weight: 600; margin-top: 5px;">
+                  👥 ${ev.attendee_count} players on roster | 🛡️ ${ev.duty_count} volunteer tasks configured
+                </div>
               </div>
-              <div style="font-size: 0.88rem; color: #334155;">
-                📅 ${API.formatDateTime(ev.event_date)} | 📍 ${API.escapeHtml(ev.location)}
-              </div>
-              <div style="font-size: 0.82rem; color: var(--primary); font-weight: 600; margin-top: 4px;">
-                👥 ${ev.attendee_count} players on roster | 🛡️ ${ev.duty_count} duties
+
+              <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                <button onclick="toggleTaskManager(${ev.id})" class="btn btn-primary btn-sm">
+                  🛡️ Manage Tasks (${ev.duty_count})
+                </button>
+                <a href="/event.html?id=${ev.id}" class="btn btn-outline btn-sm" target="_blank">
+                  View Page ↗
+                </a>
+                <button onclick="sendReminders(${ev.id})" class="btn btn-outline btn-sm">
+                  📧 Send Reminders
+                </button>
+                <button onclick="deleteGame(${ev.id})" class="btn btn-danger btn-sm">
+                  Delete
+                </button>
               </div>
             </div>
 
-            <div style="display: flex; gap: 8px; align-items: center;">
-              <a href="/event.html?id=${ev.id}" class="btn btn-outline btn-sm">View Page →</a>
-              <button onclick="sendReminders(${ev.id})" class="btn btn-outline btn-sm">📧 Remind</button>
-              <button onclick="deleteGame(${ev.id})" class="btn btn-danger btn-sm">Delete</button>
+            <!-- Inline Task Management Panel (Toggled via button) -->
+            <div id="task-manager-panel-${ev.id}" style="display: ${openTaskManagerEventId === ev.id ? 'block' : 'none'}; margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--border);">
+              <!-- Rendered by renderTaskManagerContent(eventId) -->
             </div>
           </div>
         `).join('')}
       </div>
     `;
+
+    if (openTaskManagerEventId) {
+      renderTaskManagerContent(openTaskManagerEventId);
+    }
   } catch (err) {
     container.innerHTML = '<div class="alert alert-error">Unable to load games.</div>';
   }
 }
+
+window.toggleTaskManager = async function(eventId) {
+  const panel = document.getElementById(`task-manager-panel-${eventId}`);
+  if (!panel) return;
+
+  if (openTaskManagerEventId === eventId) {
+    openTaskManagerEventId = null;
+    panel.style.display = 'none';
+  } else {
+    // Close previously open panel
+    if (openTaskManagerEventId) {
+      const prev = document.getElementById(`task-manager-panel-${openTaskManagerEventId}`);
+      if (prev) prev.style.display = 'none';
+    }
+    openTaskManagerEventId = eventId;
+    panel.style.display = 'block';
+    await renderTaskManagerContent(eventId);
+  }
+};
+
+async function renderTaskManagerContent(eventId) {
+  const panel = document.getElementById(`task-manager-panel-${eventId}`);
+  if (!panel) return;
+
+  panel.innerHTML = '<p style="color: var(--text-muted); font-size: 0.85rem;">Loading tasks...</p>';
+
+  try {
+    const res = await API.getEvent(eventId);
+    const duties = res.duties || [];
+
+    panel.innerHTML = `
+      <div style="background: #f8fafc; padding: 16px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+          <h4 style="color: var(--secondary); font-size: 1rem; margin: 0;">
+            Tasks for "${API.escapeHtml(res.event.title)}"
+          </h4>
+          <span style="font-size: 0.8rem; color: var(--text-muted);">
+            Changes save immediately to the live event page.
+          </span>
+        </div>
+
+        <!-- Current Duties List -->
+        <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px;">
+          ${duties.length === 0 ? '<p style="font-size: 0.85rem; color: var(--text-muted); font-style: italic;">No tasks added yet for this game.</p>' : ''}
+          ${duties.map(d => {
+            const assignedNames = d.assigned_players.map(p => p.name).join(', ');
+            return `
+              <div style="display: flex; justify-content: space-between; align-items: center; background: #ffffff; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); flex-wrap: wrap; gap: 8px;">
+                <div style="flex: 1; min-width: 220px;">
+                  <div style="font-weight: 700; font-size: 0.95rem;">${API.escapeHtml(d.title)}</div>
+                  <div style="font-size: 0.82rem; color: var(--text-muted);">${API.escapeHtml(d.description || 'No description')}</div>
+                  <div style="font-size: 0.78rem; color: var(--primary); font-weight: 600; margin-top: 3px;">
+                    Slots: ${d.assigned_players.length} / ${d.slots_needed} filled
+                    ${assignedNames ? ` (${API.escapeHtml(assignedNames)})` : ' (Open)'}
+                  </div>
+                </div>
+
+                <div style="display: flex; gap: 8px; align-items: center;">
+                  <button onclick="editDutyInline(${eventId}, ${d.id}, '${encodeURIComponent(d.title)}', '${encodeURIComponent(d.description || '')}', ${d.slots_needed})" class="btn btn-outline btn-sm" style="font-size: 0.78rem; padding: 4px 8px;">
+                    ✏️ Edit
+                  </button>
+                  <button onclick="deleteDutyInline(${eventId}, ${d.id})" class="btn btn-danger btn-sm" style="font-size: 0.78rem; padding: 4px 8px;">
+                    🗑️ Delete
+                  </button>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+
+        <!-- Add New Task to this Event -->
+        <div style="background: #ffffff; padding: 12px; border: 1px dashed var(--border); border-radius: var(--radius-sm);">
+          <div style="font-weight: 700; font-size: 0.85rem; color: var(--secondary); margin-bottom: 8px;">
+            + Add Another Task to this Game:
+          </div>
+          <div style="display: grid; grid-template-columns: 2fr 3fr 100px auto; gap: 8px; align-items: center;">
+            <input type="text" id="new-duty-title-${eventId}" placeholder="Task Name (e.g. Bring Cooler)" style="padding: 6px 10px; font-size: 0.85rem;">
+            <input type="text" id="new-duty-desc-${eventId}" placeholder="Details (e.g. 5gal cooler + ice)" style="padding: 6px 10px; font-size: 0.85rem;">
+            <input type="number" id="new-duty-slots-${eventId}" min="1" max="15" value="1" placeholder="Slots" style="padding: 6px 8px; font-size: 0.85rem; text-align: center;">
+            <button onclick="addDutyToEvent(${eventId})" class="btn btn-primary btn-sm">Add Task</button>
+          </div>
+        </div>
+      </div>
+    `;
+  } catch (e) {
+    panel.innerHTML = '<div class="alert alert-error">Failed to load tasks for this event.</div>';
+  }
+}
+
+window.addDutyToEvent = async function(eventId) {
+  const title = document.getElementById(`new-duty-title-${eventId}`).value.trim();
+  const desc = document.getElementById(`new-duty-desc-${eventId}`).value.trim();
+  const slots = parseInt(document.getElementById(`new-duty-slots-${eventId}`).value, 10) || 1;
+
+  if (!title) {
+    alert('Please enter a task name.');
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/events/${eventId}/duties`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, description: desc, slots_needed: slots })
+    });
+    const data = await res.json();
+    if (data.error) {
+      alert(data.error);
+    } else {
+      await renderTaskManagerContent(eventId);
+      await loadAdminGames();
+    }
+  } catch (err) {
+    alert('Failed to add task.');
+  }
+};
+
+window.editDutyInline = async function(eventId, dutyId, encodedTitle, encodedDesc, slots) {
+  const currentTitle = decodeURIComponent(encodedTitle);
+  const currentDesc = decodeURIComponent(encodedDesc);
+
+  const newTitle = prompt('Edit Task Name:', currentTitle);
+  if (newTitle === null) return;
+
+  const newDesc = prompt('Edit Task Details / Description:', currentDesc);
+  if (newDesc === null) return;
+
+  const newSlots = prompt('Volunteers Needed (Number):', slots);
+  if (newSlots === null) return;
+
+  try {
+    const res = await fetch(`/api/events/${eventId}/duties/${dutyId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: newTitle.trim(),
+        description: newDesc.trim(),
+        slots_needed: parseInt(newSlots, 10) || 1
+      })
+    });
+    const data = await res.json();
+    if (data.error) {
+      alert(data.error);
+    } else {
+      await renderTaskManagerContent(eventId);
+      await loadAdminGames();
+    }
+  } catch (err) {
+    alert('Failed to update task.');
+  }
+};
+
+window.deleteDutyInline = async function(eventId, dutyId) {
+  if (!confirm('Are you sure you want to delete this task? Any existing volunteer assignment for this task will be cleared.')) {
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/events/${eventId}/duties/${dutyId}`, {
+      method: 'DELETE'
+    });
+    const data = await res.json();
+    if (data.error) {
+      alert(data.error);
+    } else {
+      await renderTaskManagerContent(eventId);
+      await loadAdminGames();
+    }
+  } catch (err) {
+    alert('Failed to delete task.');
+  }
+};
 
 async function sendReminders(eventId) {
   if (!confirm('Send reminder emails right now to all confirmed attendees for this event?')) {
