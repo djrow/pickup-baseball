@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const { initDatabase, db, DEFAULT_BASEBALL_DUTIES } = require('./db');
 
 function seed() {
@@ -22,7 +23,7 @@ function seed() {
     INSERT INTO events (title, description, location, location_url, event_date)
     VALUES (?, ?, ?, ?, ?)
   `).run(
-    `Sunday Charity Pickup Baseball (${formattedDate})`,
+    `Sunday Pickup Baseball (${formattedDate})`,
     'Weekly community pickup baseball game. All skill levels welcome! Bring your glove and turf/molded cleats. Let the team know below if you can take an open duty or bring extra gear.',
     'Riverside Park - Diamond #1 (96th St)',
     'https://maps.google.com/?q=Riverside+Park+96th+St+Baseball+Field',
@@ -58,7 +59,8 @@ function seed() {
   `);
 
   samplePlayers.forEach((p, idx) => {
-    const attRes = insertAttendee.run(eventId, p.name, p.email, p.gear, `seed-token-${idx + 1}`);
+    const token = crypto.randomBytes(16).toString('hex');
+    const attRes = insertAttendee.run(eventId, p.name, p.email, p.gear, token);
     if (p.dutyIdx !== null && dutyIds[p.dutyIdx]) {
       db.prepare('INSERT INTO duty_assignments (duty_id, attendee_id) VALUES (?, ?)').run(
         dutyIds[p.dutyIdx],
