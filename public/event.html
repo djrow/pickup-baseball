@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Game Details & RSVP - Sunday Pickup Baseball</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%20%22100%22%20%22100%22><text y=%22.9em%22 font-size=%2290%22>⚾</text></svg>">
+</head>
+<body>
+
+  <!-- Site Header -->
+  <header class="site-header">
+    <div class="container" id="main-nav">
+      <!-- Populated via API.renderNav() -->
+    </div>
+  </header>
+
+  <main class="container" style="margin-top: 24px; margin-bottom: 60px;">
+    
+    <!-- Breadcrumb -->
+    <div style="margin-bottom: 16px;">
+      <a href="/index.html" style="color: var(--secondary); text-decoration: none; font-weight: 600; font-size: 0.9rem;">
+        ← Back to All Games
+      </a>
+    </div>
+
+    <!-- Loading State -->
+    <div id="event-loading">
+      <p style="color: var(--text-muted);">Loading game details...</p>
+    </div>
+
+    <!-- Error State -->
+    <div id="event-error" style="display: none;" class="alert alert-error"></div>
+
+    <!-- Main Event Container -->
+    <div id="event-container" style="display: none;">
+
+      <!-- Event Header Card -->
+      <div class="card" style="border-top: 5px solid var(--secondary);">
+        <div class="card-header">
+          <div>
+            <span class="badge badge-green" id="event-status-badge">Upcoming Game</span>
+            <h1 id="event-title" style="color: var(--secondary); font-size: 1.8rem; margin-top: 6px;"></h1>
+          </div>
+          <div id="admin-actions-container" style="display: none;">
+            <button id="send-reminders-btn" class="btn btn-outline btn-sm">📧 Send Reminders Now</button>
+          </div>
+        </div>
+
+        <div class="event-meta-grid">
+          <div class="meta-item">
+            <span class="meta-icon">📅</span>
+            <div>
+              <div class="meta-label">Date & Time</div>
+              <div class="meta-value" id="event-datetime"></div>
+            </div>
+          </div>
+          <div class="meta-item">
+            <span class="meta-icon">📍</span>
+            <div>
+              <div class="meta-label">Field Location</div>
+              <div class="meta-value">
+                <span id="event-location"></span>
+                <span id="event-map-link"></span>
+              </div>
+            </div>
+          </div>
+          <div class="meta-item">
+            <span class="meta-icon">👥</span>
+            <div>
+              <div class="meta-label">Roster Count</div>
+              <div class="meta-value" id="event-attendee-count" style="color: var(--primary); font-size: 1.15rem; font-weight: 700;">
+                0 Players
+              </div>
+            </div>
+          </div>
+          <div class="meta-item">
+            <span class="meta-icon">🛡️</span>
+            <div>
+              <div class="meta-label">Duties Status</div>
+              <div class="meta-value" id="event-duties-status"></div>
+            </div>
+          </div>
+        </div>
+
+        <p id="event-description" style="color: #334155; margin-top: 8px; white-space: pre-wrap;"></p>
+      </div>
+
+      <!-- RSVP & Volunteer Section -->
+      <section class="card" id="rsvp-section" style="border: 2px solid var(--primary); background: #ffffff;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
+          <div>
+            <h2 style="font-size: 1.35rem; color: var(--secondary); margin-bottom: 4px;">
+              Mark Attendance & Sign Up for Duties
+            </h2>
+            <p style="font-size: 0.88rem; color: var(--text-muted);">
+              Let the team know if you are coming, what gear you have, and claim a duty.
+            </p>
+          </div>
+          <div id="rsvp-badge-container"></div>
+        </div>
+
+        <div id="rsvp-alert"></div>
+
+        <form id="rsvp-form">
+          <!-- User / Guest Identity Fields -->
+          <div id="guest-fields" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 16px;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="rsvp-name">Your Full Name *</label>
+              <input type="text" id="rsvp-name" placeholder="First and Last Name" required>
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="rsvp-email">Email Address *</label>
+              <input type="email" id="rsvp-email" placeholder="For game reminder notifications" required>
+            </div>
+          </div>
+
+          <!-- Attendance Choice -->
+          <div class="form-group">
+            <label style="margin-bottom: 8px;">Will you attend?</label>
+            <div style="display: flex; gap: 16px;">
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600;">
+                <input type="radio" name="rsvp-status" value="attending" checked>
+                <span>⚾ Yes, I'm playing!</span>
+              </label>
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; color: var(--text-muted);">
+                <input type="radio" name="rsvp-status" value="declined">
+                <span>✕ Can't make it</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Gear Coordination -->
+          <div class="form-group" id="gear-group">
+            <label for="rsvp-gear">Gear You Can Bring (Optional)</label>
+            <input type="text" id="rsvp-gear" placeholder="e.g. 2 wood bats, catcher's helmet, spare glove, bucket of balls">
+            <div class="help-text">
+              Coordination helps us make sure we have enough bats, balls, and gear for players without their own.
+            </div>
+          </div>
+
+          <!-- Duties Signup -->
+          <div class="form-group" id="duties-selection-group">
+            <label style="margin-bottom: 6px;">Volunteer for Game Duties (Check any you can take):</label>
+            <div class="help-text" style="margin-bottom: 10px;">
+              Pickup baseball relies on everyone pitching in. Check an open slot below!
+            </div>
+            <div id="rsvp-duties-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px;">
+              <!-- Populated dynamically -->
+            </div>
+          </div>
+
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 24px; flex-wrap: wrap; gap: 12px;">
+            <button type="submit" id="rsvp-submit-btn" class="btn btn-primary btn-lg">
+              Confirm RSVP & Duty Signup
+            </button>
+            <span style="font-size: 0.8rem; color: var(--text-muted);">
+              📬 You will receive an immediate confirmation email + reminder 24h before game time.
+            </span>
+          </div>
+        </form>
+      </section>
+
+      <!-- Duties Board -->
+      <section class="card">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">🛡️ Game Day Duty Board</h2>
+            <p style="font-size: 0.88rem; color: var(--text-muted);">
+              Essential roles to keep our charity games safe, fun, and organized.
+            </p>
+          </div>
+        </div>
+
+        <div id="duties-grid" class="duty-grid">
+          <!-- Populated dynamically -->
+        </div>
+      </section>
+
+      <!-- Attendees Roster & Gear List -->
+      <section class="card">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">👥 Player Roster & Equipment</h2>
+            <p style="font-size: 0.88rem; color: var(--text-muted);">
+              See who is playing, what gear is covered, and team duties.
+            </p>
+          </div>
+          <span id="roster-badge" class="badge badge-green"></span>
+        </div>
+
+        <div id="attendees-container">
+          <!-- Populated dynamically -->
+        </div>
+      </section>
+
+      <!-- Event Discussion Board -->
+      <section class="card">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">💬 Game Discussion Board</h2>
+            <p style="font-size: 0.88rem; color: var(--text-muted);">
+              Coordinate carpools, ask about gear, discuss weather, or post post-game highlights!
+            </p>
+          </div>
+        </div>
+
+        <div id="comments-container" class="comments-list">
+          <!-- Populated dynamically -->
+        </div>
+
+        <!-- Add Comment Form -->
+        <form id="comment-form" style="border-top: 1px solid var(--border); padding-top: 18px; margin-top: 18px;">
+          <h3 style="font-size: 1rem; color: var(--secondary); margin-bottom: 12px;">Leave a Message</h3>
+          
+          <div id="comment-guest-fields" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 12px;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="comment-author-name">Your Name *</label>
+              <input type="text" id="comment-author-name" placeholder="Your Name" required>
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="comment-author-email">Email (Optional)</label>
+              <input type="email" id="comment-author-email" placeholder="you@example.com">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="comment-content">Message</label>
+            <textarea id="comment-content" rows="3" placeholder="Field update, gear questions, or post-game shoutouts..." required></textarea>
+          </div>
+
+          <button type="submit" id="comment-submit-btn" class="btn btn-secondary">
+            Post to Discussion
+          </button>
+        </form>
+      </section>
+
+    </div>
+
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>⚾ Sunday Pickup Baseball Charity</p>
+    </div>
+  </footer>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/event.js"></script>
+</body>
+</html>

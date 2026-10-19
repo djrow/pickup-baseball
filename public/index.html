@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sunday Pickup Baseball Charity</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%20%22100%22%20%22100%22><text y=%22.9em%22 font-size=%2290%22>⚾</text></svg>">
+</head>
+<body>
+
+  <!-- Site Header -->
+  <header class="site-header">
+    <div class="container" id="main-nav">
+      <!-- Populated via API.renderNav() -->
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-subtitle">⚾ Non-Profit Pickup Baseball</div>
+      <h1 class="hero-title">Free Pickup Baseball Every Sunday at Noon</h1>
+      <p class="hero-desc">
+        We provide accessible, friendly Sunday baseball games for everyone in the community.
+        Check the head count, coordinate gear, volunteer for game-day duties, and play ball!
+      </p>
+    </div>
+  </section>
+
+  <!-- Main Content -->
+  <main class="container" style="margin-top: 32px;">
+
+    <!-- Featured Next Game Section -->
+    <div id="featured-game-container">
+      <!-- Rendered dynamically -->
+    </div>
+
+    <!-- Upcoming Games List -->
+    <section style="margin-top: 36px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
+        <h2 style="color: var(--secondary); font-size: 1.4rem;">Scheduled Games</h2>
+        <div style="display: flex; gap: 8px;">
+          <button id="filter-upcoming-btn" class="btn btn-outline btn-sm active" style="font-weight: 700;">Upcoming</button>
+          <button id="filter-past-btn" class="btn btn-outline btn-sm">Past Archive</button>
+        </div>
+      </div>
+
+      <div id="games-list-container">
+        <p style="color: var(--text-muted);">Loading scheduled games...</p>
+      </div>
+    </section>
+
+    <!-- How It Works Section -->
+    <section class="card" style="margin-top: 48px; background: #ffffff;">
+      <h2 style="font-size: 1.3rem; color: var(--secondary); margin-bottom: 20px; text-align: center;">
+        How Our Pickup Charity Works
+      </h2>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px;">
+        <div>
+          <div style="font-size: 1.8rem; margin-bottom: 8px;">👥</div>
+          <h3 style="font-size: 1rem; margin-bottom: 6px;">1. RSVP Anytime</h3>
+          <p style="font-size: 0.88rem; color: var(--text-muted);">
+            Sign up in seconds as a guest or with just your name & email. Knowing player numbers helps us balance teams and pick the right field.
+          </p>
+        </div>
+        <div>
+          <div style="font-size: 1.8rem; margin-bottom: 8px;">🎒</div>
+          <h3 style="font-size: 1rem; margin-bottom: 6px;">2. Coordinate Gear & Duties</h3>
+          <p style="font-size: 0.88rem; color: var(--text-muted);">
+            Sign up to bring bases, balls, catcher's gear, or first aid. Tell everyone in advance what equipment you can share.
+          </p>
+        </div>
+        <div>
+          <div style="font-size: 1.8rem; margin-bottom: 8px;">📬</div>
+          <h3 style="font-size: 1rem; margin-bottom: 6px;">3. Email Reminders</h3>
+          <p style="font-size: 0.88rem; color: var(--text-muted);">
+            You'll receive an instant confirmation upon RSVP, plus an automated reminder email the day before game day with field details and rosters.
+          </p>
+        </div>
+        <div>
+          <div style="font-size: 1.8rem; margin-bottom: 8px;">💬</div>
+          <h3 style="font-size: 1rem; margin-bottom: 6px;">4. Game Discussion</h3>
+          <p style="font-size: 0.88rem; color: var(--text-muted);">
+            Discuss pre-game weather, field conditions, carpools, or share post-game photos and recaps directly on the event board.
+          </p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Site Footer -->
+  <footer class="site-footer">
+    <div class="container">
+      <p>⚾ <strong>Sunday Pickup Baseball Charity</strong> — Building community through America's pastime.</p>
+      <p style="margin-top: 6px; font-size: 0.8rem; color: #94a3b8;">
+        Built for simplicity and durability. Free & open-source.
+      </p>
+    </div>
+  </footer>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>

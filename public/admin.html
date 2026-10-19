@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard - Sunday Pickup Baseball</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%20%22100%22%20%22100%22><text y=%22.9em%22 font-size=%2290%22>⚾</text></svg>">
+</head>
+<body>
+
+  <!-- Site Header -->
+  <header class="site-header">
+    <div class="container" id="main-nav">
+      <!-- Populated via API.renderNav() -->
+    </div>
+  </header>
+
+  <main class="container" style="margin-top: 32px; margin-bottom: 60px;">
+
+    <!-- Top Admin Header -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px;">
+      <div>
+        <span class="badge badge-clay">Admin Control</span>
+        <h1 style="color: var(--secondary); font-size: 1.8rem; margin-top: 4px;">Game & Charity Manager</h1>
+      </div>
+      <div>
+        <button id="quick-sunday-btn" class="btn btn-primary">
+          ⚡ 1-Click: Post Next Sunday @ Noon
+        </button>
+      </div>
+    </div>
+
+    <div id="admin-alert"></div>
+
+    <!-- Create Event Card -->
+    <section class="card">
+      <h2 class="card-title" style="margin-bottom: 16px;">Schedule a New Game</h2>
+      
+      <form id="create-event-form">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+          <div class="form-group">
+            <label for="event-title-input">Game Title *</label>
+            <input type="text" id="event-title-input" value="Sunday Pickup Baseball" required>
+          </div>
+
+          <div class="form-group">
+            <label for="event-date-input">Date & Time *</label>
+            <input type="datetime-local" id="event-date-input" required>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+          <div class="form-group">
+            <label for="event-location-input">Field Location *</label>
+            <input type="text" id="event-location-input" placeholder="e.g. Memorial Park - Diamond #2" required>
+          </div>
+
+          <div class="form-group">
+            <label for="event-map-input">Map / Directions Link (Optional)</label>
+            <input type="text" id="event-map-input" placeholder="https://maps.google.com/?q=...">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="event-desc-input">Game Details & Announcements</label>
+          <textarea id="event-desc-input" rows="3" placeholder="Field condition, parking details, whether to bring cleats or flats..."></textarea>
+        </div>
+
+        <!-- Duties Setup -->
+        <div class="form-group" style="background: #f8fafc; padding: 16px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <label style="margin-bottom: 0;">Game Duties</label>
+            <label style="display: flex; align-items: center; gap: 8px; font-weight: normal; font-size: 0.88rem; cursor: pointer;">
+              <input type="checkbox" id="use-default-duties" checked>
+              <span>Include Standard Baseball Charity Duties (Bases, Balls, Catcher's Gear, Bats, Umpire, etc.)</span>
+            </label>
+          </div>
+          <p style="font-size: 0.82rem; color: var(--text-muted);">
+            When enabled, the 8 standard equipment & volunteer duties will automatically be attached to this game for players to sign up for.
+          </p>
+        </div>
+
+        <button type="submit" id="create-event-btn" class="btn btn-primary btn-lg" style="margin-top: 8px;">
+          Publish Game
+        </button>
+      </form>
+    </section>
+
+    <!-- Manage Existing Games -->
+    <section class="card" style="margin-top: 36px;">
+      <h2 class="card-title" style="margin-bottom: 16px;">Active Scheduled Games</h2>
+      <div id="admin-games-container">
+        <p style="color: var(--text-muted);">Loading games...</p>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>⚾ Sunday Pickup Baseball Charity</p>
+    </div>
+  </footer>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/admin.js"></script>
+</body>
+</html>

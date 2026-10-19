@@ -1,0 +1,17 @@
+services:
+  baseball-app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+      - APP_URL=https://your-domain.com
+      - ADMIN_EMAIL=admin@baseballcharity.org
+      - ADMIN_NAME=League Organizer
+    volumes:
+      - baseball-data:/app/data
+
+volumes:
+  baseball-data:
