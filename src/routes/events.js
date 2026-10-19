@@ -434,4 +434,23 @@ router.post('/:id/send-reminders', requireAdmin, async (req, res) => {
   }
 });
 
+/**
+ * Periodic reminder trigger endpoint (can be called by cron-job.org or internal scheduler)
+ */
+router.all('/reminders/check', async (req, res) => {
+  try {
+    const cronSecret = process.env.CRON_SECRET;
+    if (cronSecret && req.headers['x-cron-secret'] !== cronSecret && req.query.secret !== cronSecret) {
+      return res.status(401).json({ error: 'Unauthorized cron request.' });
+    }
+
+    const { processUpcomingEventReminders } = require('../reminders');
+    await processUpcomingEventReminders();
+    res.json({ success: true, message: 'Upcoming reminder check completed.' });
+  } catch (err) {
+    console.error('[Reminders] Error during check endpoint:', err);
+    res.status(500).json({ error: 'Failed to process reminders.' });
+  }
+});
+
 module.exports = router;

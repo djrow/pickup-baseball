@@ -90,38 +90,74 @@ FROM_EMAIL="Sunday Pickup Baseball" <pickup@your-custom-domain.org>
 
 ---
 
-## 🌐 Low-Cost Hosting Guide
+## 🆓 Free-Tier Deployment: Fly.io + Resend
 
-This application can be hosted on multiple reliable, low-cost online providers:
+You can run this application **100% free forever** by pairing **Fly.io**'s free resource allowance with **Resend**'s free email tier.
 
-### Option A: Railway (Recommended - ~$5/month)
-1. Fork or push this repository to GitHub.
-2. In Railway, click **New Project** → **Deploy from GitHub repo**.
-3. Add a **Persistent Volume** mounted at `/app/data` (this preserves your SQLite database between deploys).
-4. Add your environment variables (`ADMIN_EMAIL`, `APP_URL`, etc.).
+### 1. Set Up Resend (Free 3,000 Emails/Month)
+1. Go to **[resend.com](https://resend.com)** and sign up for a free account.
+2. In the sidebar, click **API Keys** → **Create API Key**. Name it `baseball-app` and copy the key (starts with `re_...`).
+3. *(Optional for custom domain)*: If you own a domain (e.g., `mybaseballcharity.org`), go to **Domains** → **Add Domain** and add the DNS records.
+   - If you don't have a custom domain yet, you can use Resend's free built-in test sender: `onboarding@resend.dev` to test sending to your registered account email!
 
-### Option B: Render ($7/month or Free Tier with Disk)
-1. Connect repository in Render as a **Web Service**.
-2. Select **Node** environment, Build Command: `npm install`, Start Command: `npm start`.
-3. Under **Disks**, add a persistent disk mounted to `/app/data`.
+---
 
-### Option C: Fly.io ($0 - $3/month)
-1. Run `fly launch`.
-2. Create a volume: `fly volumes create baseball_data -s 1`.
-3. In `fly.toml`, mount `baseball_data` to `/app/data`.
-4. Deploy with `fly deploy`.
+### 2. Deploy to Fly.io (Free Tier VM + 1GB Persistent Disk)
 
-### Option D: Hetzner / DigitalOcean Basic VPS ($3 - $4/month)
-1. Launch an Ubuntu VPS ($3.50/mo on Hetzner Cloud or $4/mo on DigitalOcean/Linode).
-2. Install Docker and Docker Compose:
-   ```bash
-   apt update && apt install -y docker.io docker-compose
-   ```
-3. Clone your repository and run:
-   ```bash
-   docker-compose up -d
-   ```
-4. Point your domain (e.g. `pickupbaseball.org`) to your server IP.
+Fly.io's free tier includes up to **3 shared-cpu-1x 256MB VMs** and **3GB of persistent volume storage**. This app requires only **1 VM** and **1GB disk**, keeping your cost at **$0.00/month**.
+
+#### Step A: Install the Fly.io CLI
+In PowerShell on Windows:
+```powershell
+pwsh -Command "iwr https://fly.io/install.ps1 -useb | iex"
+```
+*(On Mac/Linux: `curl -L https://fly.io/install.sh | sh`)*
+
+#### Step B: Log In to Fly.io
+```bash
+fly auth login
+```
+
+#### Step C: Launch the App
+Run this in the project folder:
+```bash
+fly launch --no-deploy
+```
+- Give your app a name (e.g. `sunday-pickup-baseball`).
+- Choose your preferred region (e.g. `iad` for US East, `ord` for US Central, `sjc` for US West).
+- When asked to tweak settings, press **No** (the included `fly.toml` is already pre-configured).
+
+#### Step D: Create the Free 1GB SQLite Storage Volume
+SQLite needs disk persistence so your rosters and games survive restarts:
+```bash
+fly volumes create baseball_data --region iad --size 1
+```
+*(Make sure `--region` matches the region selected in Step C)*
+
+#### Step E: Set Your Secrets (Resend & Admin)
+Set your Resend API Key and Admin details securely:
+```bash
+fly secrets set RESEND_API_KEY="re_your_api_key_here" \
+                ADMIN_EMAIL="your-email@example.com" \
+                ADMIN_NAME="League Coordinator" \
+                APP_URL="https://your-app-name.fly.dev" \
+                FROM_EMAIL="Sunday Pickup Baseball <onboarding@resend.dev>"
+```
+*(Replace `your-app-name` with your actual Fly.io app name, and update `FROM_EMAIL` once you verify your custom domain)*
+
+#### Step F: Deploy!
+```bash
+fly deploy
+```
+
+Your app is now live at: `https://your-app-name.fly.dev`!
+
+---
+
+### 3. How the 24-Hour Reminders Work on Fly.io
+In `fly.toml`, `auto_stop_machines = "off"` and `min_machines_running = 1` are set. This keeps your single 256MB free machine running continuously, allowing the built-in background scheduler to check for upcoming Sunday games every 15 minutes and dispatch reminders via Resend.
+
+*(Optional)* If you prefer the machine to sleep when idle to save energy, you can use a free web cron like **[cron-job.org](https://cron-job.org)** to ping `https://your-app-name.fly.dev/api/events/reminders/check` once an hour to wake the app and process reminders automatically.
 
 ---
 

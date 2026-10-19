@@ -6,41 +6,72 @@ const APP_NAME = process.env.APP_NAME || 'Sunday Pickup Baseball';
 
 let transporter = null;
 
-function getTransporter() {
-  if (transporter) return transporter;
+/**
+ * Universal dispatcher: Resend REST API -> SMTP Transport -> Local Console
+ */
+async function dispatchEmail({ to, subject, text, html }) {
+  const from = process.env.FROM_EMAIL || `"${APP_NAME}" <onboarding@resend.dev>`;
+  const resendApiKey = process.env.RESEND_API_KEY;
 
+  // 1. Direct Resend REST API (Best for Fly.io - fast, no SMTP port blocks, 100% free tier compatible)
+  if (resendApiKey) {
+    try {
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${resendApiKey.trim()}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          from,
+          to: Array.isArray(to) ? to : [to],
+          subject,
+          text,
+          html
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || `Resend API error (${response.status})`);
+      }
+
+      console.log(`[Mailer:Resend] Email delivered to ${to} (ID: ${data.id})`);
+      return { messageId: data.id };
+    } catch (err) {
+      console.error(`[Mailer:Resend] Delivery failed to ${to}:`, err.message);
+      throw err;
+    }
+  }
+
+  // 2. Standard SMTP Fallback (e.g. Resend SMTP or others)
   const host = process.env.SMTP_HOST;
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;
 
   if (host && user && pass) {
-    transporter = nodemailer.createTransport({
-      host: host,
-      port: parseInt(process.env.SMTP_PORT || '587', 10),
-      secure: process.env.SMTP_SECURE === 'true',
-      auth: {
-        user: user,
-        pass: pass
-      }
-    });
-    console.log(`[Mailer] Configured SMTP transport with host: ${host}`);
-  } else {
-    // Development / Console Fallback transport
-    transporter = {
-      sendMail: async (options) => {
-        console.log('\n================== [EMAIL DISPATCHED (LOCAL DEV)] ==================');
-        console.log(`To:      ${options.to}`);
-        console.log(`Subject: ${options.subject}`);
-        console.log('--------------------------------------------------------------------');
-        console.log(options.text);
-        console.log('====================================================================\n');
-        return { messageId: 'mock-' + Date.now() };
-      }
-    };
-    console.log('[Mailer] No SMTP credentials configured. Outgoing emails will be logged to the console with clickable links.');
+    if (!transporter) {
+      transporter = nodemailer.createTransport({
+        host: host,
+        port: parseInt(process.env.SMTP_PORT || '587', 10),
+        secure: process.env.SMTP_SECURE === 'true',
+        auth: { user, pass }
+      });
+      console.log(`[Mailer:SMTP] Configured SMTP transport with host: ${host}`);
+    }
+
+    return transporter.sendMail({ from, to, subject, text, html });
   }
 
-  return transporter;
+  // 3. Local Development / Console Fallback
+  console.log('\n================== [EMAIL DISPATCHED (LOCAL DEV)] ==================');
+  console.log(`From:    ${from}`);
+  console.log(`To:      ${to}`);
+  console.log(`Subject: ${subject}`);
+  console.log('--------------------------------------------------------------------');
+  console.log(text);
+  console.log('====================================================================\n');
+  return { messageId: 'mock-' + Date.now() };
 }
 
 /**
@@ -48,17 +79,15 @@ function getTransporter() {
  */
 async function sendAuthCode({ email, name, code, token }) {
   const magicLink = `${APP_URL}/api/auth/verify-magic?token=${encodeURIComponent(token)}`;
-  const mailer = getTransporter();
-  const from = process.env.FROM_EMAIL || `"${APP_NAME}" <no-reply@baseballcharity.org>`;
-
   const subject = `Your Sign-In Code for ${APP_NAME}: ${code}`;
+  
   const text = `Hi ${name || 'there'},
 
 Welcome to ${APP_NAME}!
 
 Your 6-digit sign-in code is: ${code}
 
-Or simply click the link below to sign in automatically:
+Or click the link below to sign in automatically:
 ${magicLink}
 
 This code and link will expire in 20 minutes.
@@ -83,21 +112,13 @@ Play ball!
     </div>
   `;
 
-  return mailer.sendMail({
-    from,
-    to: email,
-    subject,
-    text,
-    html
-  });
+  return dispatchEmail({ to: email, subject, text, html });
 }
 
 /**
  * Send instant RSVP confirmation email
  */
 async function sendRsvpConfirmation({ email, name, event, dutyName, gearBringing, managementToken }) {
-  const mailer = getTransporter();
-  const from = process.env.FROM_EMAIL || `"${APP_NAME}" <no-reply@baseballcharity.org>`;
   const manageLink = `${APP_URL}/event.html?id=${event.id}&token=${encodeURIComponent(managementToken || '')}`;
   const eventDateFormatted = new Date(event.event_date).toLocaleString('en-US', {
     weekday: 'long',
@@ -151,21 +172,13 @@ See you on the field!
     </div>
   `;
 
-  return mailer.sendMail({
-    from,
-    to: email,
-    subject,
-    text,
-    html
-  });
+  return dispatchEmail({ to: email, subject, text, html });
 }
 
 /**
  * Send 24-hour reminder email before the event
  */
 async function sendEventReminder({ email, name, event, dutyName, gearBringing, totalAttendees, managementToken }) {
-  const mailer = getTransporter();
-  const from = process.env.FROM_EMAIL || `"${APP_NAME}" <no-reply@baseballcharity.org>`;
   const manageLink = `${APP_URL}/event.html?id=${event.id}&token=${encodeURIComponent(managementToken || '')}`;
   const eventDateFormatted = new Date(event.event_date).toLocaleString('en-US', {
     weekday: 'long',
@@ -218,16 +231,11 @@ See you tomorrow at the field!
     </div>
   `;
 
-  return mailer.sendMail({
-    from,
-    to: email,
-    subject,
-    text,
-    html
-  });
+  return dispatchEmail({ to: email, subject, text, html });
 }
 
 module.exports = {
+  dispatchEmail,
   sendAuthCode,
   sendRsvpConfirmation,
   sendEventReminder
