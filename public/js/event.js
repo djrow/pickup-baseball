@@ -210,13 +210,16 @@ function setupRsvpState() {
   const dutiesList = document.getElementById('rsvp-duties-list');
 
   // Populate guest name/email fields if user is logged in
+  const loginPrompt = document.getElementById('rsvp-login-prompt');
   if (user) {
+    if (loginPrompt) loginPrompt.style.display = 'none';
     guestFields.style.display = 'none';
     document.getElementById('rsvp-name').required = false;
     document.getElementById('rsvp-email').required = false;
     document.getElementById('comment-guest-fields').style.display = 'none';
     document.getElementById('comment-author-name').required = false;
   } else {
+    if (loginPrompt) loginPrompt.style.display = 'flex';
     guestFields.style.display = 'grid';
     document.getElementById('rsvp-name').required = true;
     document.getElementById('rsvp-email').required = true;

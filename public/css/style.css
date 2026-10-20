@@ -200,6 +200,33 @@ header.site-header {
   color: var(--crisp-white);
 }
 
+.btn-login {
+  background-color: var(--giants-orange);
+  color: var(--crisp-white) !important;
+  font-weight: 700;
+  padding: 8px 18px;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 2px 8px rgba(253, 90, 30, 0.3);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.92rem;
+  border: 1px solid transparent;
+  transition: background-color 0.15s, transform 0.05s, box-shadow 0.15s;
+}
+
+.btn-login:hover {
+  background-color: var(--giants-orange-hover);
+  box-shadow: 0 4px 12px rgba(253, 90, 30, 0.45);
+  color: var(--crisp-white) !important;
+  transform: translateY(-1px);
+}
+
+.btn-login:active {
+  transform: translateY(1px);
+}
+
 .btn-danger {
   background-color: var(--danger);
   color: var(--crisp-white);

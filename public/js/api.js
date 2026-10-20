@@ -146,7 +146,7 @@ const API = {
       `;
     } else {
       authHtml = `
-        <a href="/login.html" class="btn btn-outline btn-sm">Sign In / Register</a>
+        <a href="/login.html" class="btn-login">⚾ Log In</a>
       `;
     }
 
