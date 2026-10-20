@@ -149,6 +149,7 @@ async function sendRsvpConfirmation({ email, name, event, dutyName, gearBringing
     year: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
+    timeZone: 'America/Los_Angeles',
     timeZoneName: 'short'
   });
 
@@ -208,6 +209,7 @@ async function sendEventReminder({ email, name, event, dutyName, gearBringing, t
     day: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
+    timeZone: 'America/Los_Angeles',
     timeZoneName: 'short'
   });
 

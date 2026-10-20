@@ -130,20 +130,66 @@ const API = {
       weekday: 'short',
       month: 'short',
       day: 'numeric',
-      year: 'numeric'
+      year: 'numeric',
+      timeZone: 'America/Los_Angeles'
     });
   },
 
   formatDateTime(isoString) {
     if (!isoString) return '';
     const d = new Date(isoString);
-    return d.toLocaleDateString('en-US', {
+    return d.toLocaleString('en-US', {
       weekday: 'long',
       month: 'short',
       day: 'numeric',
       hour: 'numeric',
-      minute: '2-digit'
+      minute: '2-digit',
+      timeZone: 'America/Los_Angeles',
+      timeZoneName: 'short'
     });
+  },
+
+  localToPacificIso(dateString, timeString = '12:00') {
+    if (!dateString) return '';
+    const [datePart, timePart] = dateString.includes('T') ? dateString.split('T') : [dateString, timeString];
+    const [year, month, day] = datePart.split('-').map(Number);
+    const [hour, min] = (timePart || '12:00').split(':').map(Number);
+    let d = new Date(Date.UTC(year, month - 1, day, hour + 7, min || 0));
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Los_Angeles',
+      hourCycle: 'h23',
+      year: 'numeric', month: 'numeric', day: 'numeric',
+      hour: 'numeric', minute: 'numeric'
+    }).formatToParts(d);
+    const pHour = Number(parts.find(p => p.type === 'hour').value);
+    const diffHours = hour - pHour;
+    d = new Date(d.getTime() + diffHours * 3600000);
+    return d.toISOString();
+  },
+
+  getNextSundayNoonPacificIso() {
+    const now = new Date();
+    const laFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Los_Angeles',
+      year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short'
+    });
+    const dayName = laFormatter.formatToParts(now).find(p => p.type === 'weekday').value;
+    const daysMap = { 'Sun': 0, 'Mon': 1, 'Tue': 2, 'Wed': 3, 'Thu': 4, 'Fri': 5, 'Sat': 6 };
+    const currentDay = daysMap[dayName] !== undefined ? daysMap[dayName] : now.getDay();
+    let daysUntilSunday = 7 - currentDay;
+    if (daysUntilSunday === 7) {
+      const currentHour = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', hourCycle: 'h23', hour: 'numeric' }).format(now));
+      if (currentHour < 12) daysUntilSunday = 0;
+    }
+    const targetDate = new Date(now.getTime() + daysUntilSunday * 86400000);
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Los_Angeles',
+      year: 'numeric', month: '2-digit', day: '2-digit'
+    }).formatToParts(targetDate);
+    const yyyy = parts.find(p => p.type === 'year').value;
+    const mm = parts.find(p => p.type === 'month').value;
+    const dd = parts.find(p => p.type === 'day').value;
+    return this.localToPacificIso(`${yyyy}-${mm}-${dd}`, '12:00');
   },
 
   renderNav(user) {

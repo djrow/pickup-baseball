@@ -355,12 +355,8 @@ async function saveDefaultsToBackend(dutiesToSave) {
 function setupQuickSundayButton() {
   const btn = document.getElementById('quick-sunday-btn');
   btn.addEventListener('click', async () => {
-    const nextSunday = getNextSundayNoon();
-    const dateFormatted = nextSunday.toLocaleDateString('en-US', {
-      weekday: 'long',
-      month: 'short',
-      day: 'numeric'
-    });
+    const nextSundayIso = API.getNextSundayNoonPacificIso();
+    const dateFormatted = API.formatDate(nextSundayIso);
 
     const location = prompt('Enter field location for this Sunday game:', 'Central Park - North Meadow Field #4');
     if (!location) return;
@@ -374,7 +370,7 @@ function setupQuickSundayButton() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: `Sunday Pickup Baseball (${dateFormatted})`,
-          event_date: nextSunday.toISOString(),
+          event_date: nextSundayIso,
           location: location.trim(),
           description: 'Weekly community pickup baseball game. All skill levels welcome! Bring your glove and enthusiasm. Please check off any gear you can share or duties you can take.',
           use_default_duties: true
@@ -424,11 +420,11 @@ function setupCreateForm() {
 
       const title = document.getElementById('event-title-input').value.trim();
       const rawDate = document.getElementById('event-date-input').value;
-      if (!rawDate || isNaN(new Date(rawDate).getTime())) {
+      if (!rawDate) {
         showAlert('Please enter a valid date and time for the game.', true);
         return;
       }
-      const eventDate = new Date(rawDate).toISOString();
+      const eventDate = API.localToPacificIso(rawDate);
       const location = document.getElementById('event-location-input').value.trim();
       const locationUrl = document.getElementById('event-map-input').value.trim();
       const description = document.getElementById('event-desc-input').value.trim();

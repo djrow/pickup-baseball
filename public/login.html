@@ -437,11 +437,12 @@
           quickBtn.textContent = 'Scheduling Sunday Game...';
 
           try {
+            const nextSundayIso = API.getNextSundayNoonPacificIso();
             const res = await API.createEvent({
               title: 'Sunday Pickup Baseball - Noon Game',
               location: (loc.trim() || defaultLoc),
               location_url: '',
-              event_date: nextSunday.toISOString(),
+              event_date: nextSundayIso,
               max_players: 30,
               description: 'Accessible, friendly community pickup baseball. Free for everyone!'
             });
@@ -481,9 +482,10 @@
             const locationUrl = document.getElementById('event-map-input').value.trim();
             const desc = document.getElementById('event-desc-input').value.trim();
 
+            const eventDate = API.localToPacificIso(rawDate);
             const res = await API.createEvent({
               title,
-              event_date: new Date(rawDate).toISOString(),
+              event_date: eventDate,
               location,
               location_url: locationUrl,
               description: desc,

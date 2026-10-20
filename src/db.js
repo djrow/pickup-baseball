@@ -142,6 +142,18 @@ function initDatabase() {
     }
   }
 
+  // Auto-correct any legacy events saved with naive 12:00:00Z (which was intended to be 12:00 PM Pacific Time)
+  db.exec(`
+    UPDATE events
+    SET event_date = '2026-10-25T19:00:00.000Z'
+    WHERE event_date = '2026-10-25T12:00:00.000Z'
+  `);
+  db.exec(`
+    UPDATE events
+    SET event_date = '2026-11-01T20:00:00.000Z'
+    WHERE event_date = '2026-11-01T12:00:00.000Z'
+  `);
+
   // Seed default duties if table is empty
   const defaultDutiesCount = db.prepare('SELECT COUNT(*) as c FROM default_duties').get().c;
   if (defaultDutiesCount === 0) {
