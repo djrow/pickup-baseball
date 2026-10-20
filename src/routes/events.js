@@ -1,6 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
+const path = require('path');
+const fs = require('fs');
+const os = require('os');
 const { db, DEFAULT_BASEBALL_DUTIES, getDefaultDuties, saveDefaultDuties } = require('../db');
 const { optionalUser, requireAdmin } = require('../auth');
 const { sendRsvpConfirmation } = require('../mailer');
@@ -518,6 +521,25 @@ router.delete('/:id/duties/:dutyId', requireAdmin, (req, res) => {
   } catch (err) {
     console.error('[Events] Error deleting duty:', err);
     res.status(500).json({ error: 'Failed to delete duty.' });
+  }
+});
+
+/**
+ * Download consistent SQLite database backup snapshot (Admin only)
+ */
+router.get('/admin/backup-db', requireAdmin, async (req, res) => {
+  try {
+    const tempBackupPath = path.join(os.tmpdir(), `baseball_backup_${Date.now()}.db`);
+    await db.backup(tempBackupPath);
+    const dateStr = new Date().toISOString().slice(0, 10);
+    res.download(tempBackupPath, `baseball_charity_${dateStr}.db`, (err) => {
+      try {
+        if (fs.existsSync(tempBackupPath)) fs.unlinkSync(tempBackupPath);
+      } catch (e) {}
+    });
+  } catch (err) {
+    console.error('[Events] Error creating DB backup:', err);
+    res.status(500).json({ error: 'Failed to create database backup.' });
   }
 });
 

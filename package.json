@@ -7,6 +7,9 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "seed": "node src/seed.js",
+    "backup": "powershell -Command \"& \\\"$env:USERPROFILE\\.fly\\bin\\flyctl.exe\\\" sftp get /app/data/baseball_charity.db ./baseball_charity_backup.db\"",
+    "backup-avatars": "powershell -Command \"& \\\"$env:USERPROFILE\\.fly\\bin\\flyctl.exe\\\" sftp get /app/data/avatars ./backup-avatars\"",
+    "deploy": "powershell -Command \"& \\\"$env:USERPROFILE\\.fly\\bin\\flyctl.exe\\\" deploy\"",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
