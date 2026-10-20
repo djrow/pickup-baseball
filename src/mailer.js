@@ -13,7 +13,7 @@ async function dispatchEmail({ to, subject, text, html }) {
   const from = process.env.FROM_EMAIL || `"${APP_NAME}" <onboarding@resend.dev>`;
   const resendApiKey = process.env.RESEND_API_KEY;
 
-  // 1. Direct Resend REST API (Best for Fly.io - fast, no SMTP port blocks, 100% free tier compatible)
+  // 1. Direct Resend REST API (Fast, no SMTP port blocks, 100% free tier compatible)
   if (resendApiKey) {
     try {
       const response = await fetch('https://api.resend.com/emails', {
@@ -44,7 +44,27 @@ async function dispatchEmail({ to, subject, text, html }) {
     }
   }
 
-  // 2. Standard SMTP Fallback (e.g. Resend SMTP or others)
+  // 2. Direct Gmail SMTP (Send directly from your personal @gmail.com using a free Google App Password)
+  const gmailUser = process.env.GMAIL_USER;
+  const gmailPass = process.env.GMAIL_APP_PASSWORD || process.env.GMAIL_APP_PASS;
+
+  if (gmailUser && gmailPass) {
+    if (!transporter) {
+      transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: gmailUser.trim(),
+          pass: gmailPass.trim()
+        }
+      });
+      console.log(`[Mailer:Gmail] Configured direct Gmail SMTP transport for: ${gmailUser}`);
+    }
+
+    const fromAddress = `"${APP_NAME}" <${gmailUser.trim()}>`;
+    return transporter.sendMail({ from: fromAddress, to, subject, text, html });
+  }
+
+  // 3. Standard SMTP Fallback (e.g. custom SMTP servers)
   const host = process.env.SMTP_HOST;
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;

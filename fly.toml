@@ -12,6 +12,7 @@ primary_region = "sjc"
   NODE_ENV = "production"
   DATA_DIR = "/app/data"
   APP_NAME = "Sunday Pickup Baseball"
+  APP_URL = "https://pickupbaseballfoundationapp.fly.dev"
 
 [http_service]
   internal_port = 3000
