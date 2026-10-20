@@ -88,12 +88,12 @@ function renderFeaturedGame(ev, container) {
     : '';
 
   container.innerHTML = `
-    <div class="card" style="border-top: 5px solid var(--primary); box-shadow: var(--shadow-md);">
+    <div class="card" style="border-top: 5px solid var(--giants-orange); box-shadow: var(--shadow-md);">
       <div class="card-header">
         <div>
-          <span class="badge badge-green">Next Sunday Pickup</span>
+          <span class="badge badge-orange">Next Sunday Pickup</span>
           ${myRsvpBadge}
-          <h2 style="font-size: 1.6rem; color: var(--secondary); margin-top: 6px;">
+          <h2 style="font-size: 1.7rem; color: var(--as-green); margin-top: 8px;">
             ${API.escapeHtml(ev.title)}
           </h2>
         </div>
@@ -116,7 +116,7 @@ function renderFeaturedGame(ev, container) {
             <div class="meta-label">Field Location</div>
             <div class="meta-value">
               ${API.escapeHtml(ev.location)}
-              ${ev.location_url ? `<a href="${API.escapeHtml(ev.location_url)}" target="_blank" style="color: #2563eb; font-size: 0.8rem; display: block;">Map Link ↗</a>` : ''}
+              ${ev.location_url ? `<a href="${API.escapeHtml(ev.location_url)}" target="_blank" style="color: var(--giants-orange); font-size: 0.82rem; font-weight: 700; display: block;">Map Link ↗</a>` : ''}
             </div>
           </div>
         </div>
@@ -124,7 +124,7 @@ function renderFeaturedGame(ev, container) {
           <span class="meta-icon">👥</span>
           <div>
             <div class="meta-label">Confirmed Players</div>
-            <div class="meta-value" style="color: var(--primary); font-size: 1.1rem; font-weight: 700;">
+            <div class="meta-value" style="color: var(--as-green); font-size: 1.15rem; font-weight: 800;">
               ${ev.attendee_count} Players
             </div>
           </div>
@@ -134,20 +134,25 @@ function renderFeaturedGame(ev, container) {
           <div>
             <div class="meta-label">Duty Coordination</div>
             <div class="meta-value">
-              ${ev.duty_count} Duties Needed
+              ${ev.duty_count} Duties Configured
             </div>
           </div>
         </div>
       </div>
 
-      ${ev.description ? `<p style="color: #334155; margin-bottom: 20px;">${API.escapeHtml(ev.description)}</p>` : ''}
+      ${ev.description ? `<p style="color: var(--text-main); font-size: 0.98rem; margin-bottom: 20px; line-height: 1.5;">${API.escapeHtml(ev.description)}</p>` : ''}
 
       <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border); padding-top: 16px; flex-wrap: wrap; gap: 12px;">
         <span style="font-size: 0.88rem; color: var(--text-muted);">
-          ⚡ Open to all skill levels. Need gear or can bring some? Click below to let the team know.
+          ⚾ Open to all skill levels. Need gear or can bring some? Click below to let the team know.
         </span>
         <a href="/event.html?id=${ev.id}" class="btn btn-secondary">
-          Join Roster / Sign Up for Duties
+          Join Roster / Volunteer for Duties
+        </a>
+      </div>
+    </div>
+  `;
+}
         </a>
       </div>
     </div>

@@ -96,19 +96,19 @@ Play ball!
 - ${APP_NAME} Team`;
 
   const html = `
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 8px;">
-      <h2 style="color: #1e3a8a; margin-top: 0;">⚾ ${APP_NAME}</h2>
-      <p>Hi <strong>${name || 'there'}</strong>,</p>
-      <p>Use the code below to sign in to your account:</p>
-      <div style="background: #f1f5f9; padding: 16px; border-radius: 6px; text-align: center; margin: 24px 0;">
-        <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #0f172a;">${code}</span>
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 26px; border: 1px solid #dbe4e0; border-top: 5px solid #003831; border-radius: 8px; background: #ffffff;">
+      <h2 style="color: #003831; margin-top: 0; font-size: 22px;">⚾ ${APP_NAME}</h2>
+      <p style="color: #0c1f1a; font-size: 16px;">Hi <strong>${name || 'there'}</strong>,</p>
+      <p style="color: #546e66; font-size: 15px;">Use the code below to sign in to your account:</p>
+      <div style="background: #f5f8f7; border: 1px solid #dbe4e0; padding: 18px; border-radius: 8px; text-align: center; margin: 24px 0;">
+        <span style="font-size: 34px; font-weight: 800; letter-spacing: 6px; color: #003831;">${code}</span>
       </div>
-      <p style="text-align: center; margin: 24px 0;">
-        <a href="${magicLink}" style="background: #15803d; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; display: inline-block;">
-          Or Click to Sign In Instantly
+      <p style="text-align: center; margin: 26px 0;">
+        <a href="${magicLink}" style="background: #FD5A1E; color: #ffffff; padding: 13px 26px; border-radius: 6px; text-decoration: none; font-weight: 700; font-size: 15px; display: inline-block;">
+          Or Click to Sign In Instantly →
         </a>
       </p>
-      <p style="color: #64748b; font-size: 14px; margin-top: 32px;">This code expires in 20 minutes. If you did not request this, you can safely ignore this email.</p>
+      <p style="color: #546e66; font-size: 13px; margin-top: 32px; border-top: 1px solid #dbe4e0; padding-top: 14px;">This code expires in 20 minutes. If you did not request this, you can safely ignore this email.</p>
     </div>
   `;
 
@@ -147,26 +147,26 @@ See you on the field!
 - ${APP_NAME}`;
 
   const html = `
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 8px;">
-      <h2 style="color: #1e3a8a; margin-top: 0;">⚾ RSVP Confirmed!</h2>
-      <p>Hi <strong>${name}</strong>,</p>
-      <p>You are on the roster for <strong>${event.title}</strong>.</p>
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 26px; border: 1px solid #dbe4e0; border-top: 5px solid #FD5A1E; border-radius: 8px; background: #ffffff;">
+      <h2 style="color: #003831; margin-top: 0; font-size: 22px;">⚾ RSVP Confirmed!</h2>
+      <p style="color: #0c1f1a; font-size: 16px;">Hi <strong>${name}</strong>,</p>
+      <p style="color: #546e66; font-size: 15px;">You are confirmed on the roster for <strong>${event.title}</strong>.</p>
       
-      <div style="background: #f8fafc; border-left: 4px solid #15803d; padding: 16px; margin: 20px 0; border-radius: 4px;">
-        <p style="margin: 4px 0;"><strong>📅 When:</strong> ${eventDateFormatted}</p>
-        <p style="margin: 4px 0;"><strong>📍 Where:</strong> ${event.location}</p>
-        ${event.location_url ? `<p style="margin: 4px 0;"><a href="${event.location_url}" target="_blank" style="color: #2563eb;">View Map / Directions</a></p>` : ''}
-        ${dutyName ? `<p style="margin: 4px 0; color: #166534;"><strong>🛡️ Your Duty:</strong> ${dutyName}</p>` : ''}
-        ${gearBringing ? `<p style="margin: 4px 0; color: #1e293b;"><strong>🎒 Gear You're Bringing:</strong> ${gearBringing}</p>` : ''}
+      <div style="background: #f5f8f7; border-left: 4px solid #003831; border: 1px solid #dbe4e0; padding: 18px; margin: 20px 0; border-radius: 6px;">
+        <p style="margin: 4px 0; color: #0c1f1a;"><strong>📅 When:</strong> ${eventDateFormatted}</p>
+        <p style="margin: 4px 0; color: #0c1f1a;"><strong>📍 Where:</strong> ${event.location}</p>
+        ${event.location_url ? `<p style="margin: 4px 0;"><a href="${event.location_url}" target="_blank" style="color: #FD5A1E; font-weight: 700;">View Map / Directions ↗</a></p>` : ''}
+        ${dutyName ? `<p style="margin: 6px 0 4px 0; color: #003831;"><strong>🛡️ Your Duty:</strong> <span style="background: #e6f0ed; padding: 2px 8px; border-radius: 4px; font-weight: 700;">${dutyName}</span></p>` : ''}
+        ${gearBringing ? `<p style="margin: 4px 0; color: #0c1f1a;"><strong>🎒 Gear You're Bringing:</strong> <em>${gearBringing}</em></p>` : ''}
       </div>
 
       <p style="text-align: center; margin: 28px 0;">
-        <a href="${manageLink}" style="background: #1e3a8a; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; display: inline-block;">
-          View Roster, Coordinate & Manage RSVP
+        <a href="${manageLink}" style="background: #FD5A1E; color: #ffffff; padding: 13px 26px; border-radius: 6px; text-decoration: none; font-weight: 700; font-size: 15px; display: inline-block;">
+          View Live Roster & Coordinate Gear →
         </a>
       </p>
 
-      <p style="color: #64748b; font-size: 13px;">
+      <p style="color: #546e66; font-size: 13px; border-top: 1px solid #dbe4e0; padding-top: 14px;">
         Plans changed? Use the button above to update your gear or cancel your attendance so another player can take your spot.
       </p>
     </div>
@@ -206,26 +206,26 @@ See you tomorrow at the field!
 - ${APP_NAME}`;
 
   const html = `
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 8px;">
-      <h2 style="color: #1e3a8a; margin-top: 0;">⚾ Game Day Tomorrow!</h2>
-      <p>Hi <strong>${name}</strong>,</p>
-      <p>This is your friendly reminder that pickup baseball is tomorrow at noon!</p>
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 26px; border: 1px solid #dbe4e0; border-top: 5px solid #003831; border-radius: 8px; background: #ffffff;">
+      <h2 style="color: #003831; margin-top: 0; font-size: 22px;">⚾ Game Day Tomorrow!</h2>
+      <p style="color: #0c1f1a; font-size: 16px;">Hi <strong>${name}</strong>,</p>
+      <p style="color: #546e66; font-size: 15px;">Friendly reminder that pickup baseball is tomorrow at noon!</p>
       
-      <div style="background: #f8fafc; border-left: 4px solid #f59e0b; padding: 16px; margin: 20px 0; border-radius: 4px;">
-        <p style="margin: 4px 0;"><strong>📅 When:</strong> ${eventDateFormatted}</p>
-        <p style="margin: 4px 0;"><strong>📍 Where:</strong> ${event.location}</p>
-        <p style="margin: 4px 0;"><strong>👥 Attendance:</strong> <strong>${totalAttendees}</strong> players confirmed</p>
-        ${dutyName ? `<p style="margin: 4px 0; color: #92400e;"><strong>🛡️ Your Duty:</strong> ${dutyName}</p>` : ''}
-        ${gearBringing ? `<p style="margin: 4px 0; color: #1e293b;"><strong>🎒 Gear You're Bringing:</strong> ${gearBringing}</p>` : ''}
+      <div style="background: #f5f8f7; border-left: 4px solid #FD5A1E; border: 1px solid #dbe4e0; padding: 18px; margin: 20px 0; border-radius: 6px;">
+        <p style="margin: 4px 0; color: #0c1f1a;"><strong>📅 When:</strong> ${eventDateFormatted}</p>
+        <p style="margin: 4px 0; color: #0c1f1a;"><strong>📍 Where:</strong> ${event.location}</p>
+        <p style="margin: 4px 0; color: #003831;"><strong>👥 Headcount:</strong> <strong style="font-size: 16px; color: #FD5A1E;">${totalAttendees}</strong> players confirmed</p>
+        ${dutyName ? `<p style="margin: 6px 0 4px 0; color: #003831;"><strong>🛡️ Your Duty:</strong> <span style="background: #e6f0ed; padding: 2px 8px; border-radius: 4px; font-weight: 700;">${dutyName}</span></p>` : ''}
+        ${gearBringing ? `<p style="margin: 4px 0; color: #0c1f1a;"><strong>🎒 Gear You Promised:</strong> <em>${gearBringing}</em></p>` : ''}
       </div>
 
       <p style="text-align: center; margin: 28px 0;">
-        <a href="${manageLink}" style="background: #15803d; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; display: inline-block;">
-          Check Event Chat & Final Roster
+        <a href="${manageLink}" style="background: #003831; color: #ffffff; padding: 13px 26px; border-radius: 6px; text-decoration: none; font-weight: 700; font-size: 15px; display: inline-block;">
+          Check Event Chat & Final Roster →
         </a>
       </p>
 
-      <p style="color: #64748b; font-size: 13px;">
+      <p style="color: #546e66; font-size: 13px; border-top: 1px solid #dbe4e0; padding-top: 14px;">
         If you can no longer make it, please click the link above immediately to withdraw so the organizer and team can plan the game.
       </p>
     </div>

@@ -105,15 +105,15 @@ function renderDutiesBoard() {
       <div class="duty-card ${isFilled ? 'filled' : 'needed'}">
         <div style="display: flex; justify-content: space-between; align-items: flex-start;">
           <h3 class="duty-title">${API.escapeHtml(d.title)}</h3>
-          <span class="badge ${isFilled ? 'badge-green' : 'badge-clay'}">
+          <span class="badge ${isFilled ? 'badge-green' : 'badge-orange'}">
             ${isFilled ? 'Filled' : 'Needed'}
           </span>
         </div>
         <div class="duty-desc">${API.escapeHtml(d.description || '')}</div>
         <div class="duty-status">
           ${isFilled
-            ? `<span style="color: var(--primary);">✓ Volunteer(s): <strong>${names}</strong></span>`
-            : `<span style="color: var(--clay);">⚠️ Needs ${d.slots_needed - d.assigned_players.length} volunteer(s)${names ? ` (Current: ${names})` : ''}</span>`
+            ? `<span style="color: var(--as-green);">✓ Volunteer(s): <strong>${names}</strong></span>`
+            : `<span style="color: var(--giants-orange);">⚠️ Needs ${d.slots_needed - d.assigned_players.length} volunteer(s)${names ? ` (Current: ${names})` : ''}</span>`
           }
         </div>
       </div>
