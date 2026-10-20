@@ -29,7 +29,24 @@
   <main class="container" style="max-width: 480px; margin-top: 48px; margin-bottom: 60px;">
     
     <div class="card" style="box-shadow: var(--shadow-md);">
-      <div style="text-align: center; margin-bottom: 24px;">
+      
+      <!-- Visible when already logged in -->
+      <div id="already-logged-in" style="display: none; text-align: center; padding: 12px 0;">
+        <span style="font-size: 3.2rem;">⚾</span>
+        <h2 style="color: var(--as-green); font-size: 1.5rem; margin-top: 8px; margin-bottom: 6px;">You are Signed In!</h2>
+        <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 24px;">
+          Signed in as <strong id="logged-in-user-name" style="color: var(--secondary);"></strong> (<span id="logged-in-user-email"></span>)
+        </p>
+        <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+          <a href="/index.html" class="btn btn-primary" style="font-weight: 700;">⚾ View Scheduled Games</a>
+          <a href="/profile.html" class="btn btn-outline" style="font-weight: 700;">👤 Player Profile</a>
+          <button type="button" id="login-page-logout-btn" class="btn btn-outline" style="color: var(--danger); border-color: var(--danger);">
+            Log Out
+          </button>
+        </div>
+      </div>
+
+      <div id="login-header-section" style="text-align: center; margin-bottom: 24px;">
         <span style="font-size: 2.8rem;">⚾</span>
         <h1 style="color: var(--secondary); font-size: 1.5rem; margin-top: 8px;">Player Sign-In</h1>
         <p style="color: var(--text-muted); font-size: 0.9rem;">
@@ -107,11 +124,27 @@
   <script>
     document.addEventListener('DOMContentLoaded', async () => {
       const user = await API.getMe();
+      API.renderNav(user);
+
       if (user) {
-        window.location.href = '/index.html';
+        document.getElementById('step-request-form').style.display = 'none';
+        document.getElementById('step-verify-form').style.display = 'none';
+        const headerSec = document.getElementById('login-header-section');
+        if (headerSec) headerSec.style.display = 'none';
+
+        const alreadyLoggedInBox = document.getElementById('already-logged-in');
+        if (alreadyLoggedInBox) {
+          alreadyLoggedInBox.style.display = 'block';
+          document.getElementById('logged-in-user-name').textContent = user.name;
+          document.getElementById('logged-in-user-email').textContent = user.email;
+        }
+
+        const logoutBtn = document.getElementById('login-page-logout-btn');
+        if (logoutBtn) {
+          logoutBtn.addEventListener('click', () => API.logout());
+        }
         return;
       }
-      API.renderNav(user);
 
       const requestForm = document.getElementById('step-request-form');
       const verifyForm = document.getElementById('step-verify-form');

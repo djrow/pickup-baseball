@@ -8,6 +8,28 @@ async function initHome() {
   const user = await API.getMe();
   API.renderNav(user);
 
+  // Check if arrived via magic link login or successful code verification
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('logged_in') === '1') {
+    const banner = document.getElementById('login-success-banner');
+    if (banner) {
+      banner.style.display = 'block';
+      const displayName = user ? user.name : 'Player';
+      banner.innerHTML = `🎉 <strong>Welcome, ${API.escapeHtml(displayName)}!</strong> You are signed in.`;
+    }
+    // Clean up query param from URL without page reload
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+
+  // Update hero button if logged in
+  if (user) {
+    const heroBtn = document.getElementById('hero-login-btn');
+    if (heroBtn) {
+      heroBtn.textContent = `👤 Player Profile (${user.name})`;
+      heroBtn.href = '/profile.html';
+    }
+  }
+
   setupFilters();
   await loadGames();
 }

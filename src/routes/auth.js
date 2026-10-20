@@ -199,7 +199,7 @@ router.get('/verify-magic', (req, res) => {
       maxAge: SESSION_DURATION_DAYS * 24 * 60 * 60 * 1000
     });
 
-    res.redirect(redirect || '/index.html');
+    res.redirect(redirect || '/index.html?logged_in=1');
   } catch (err) {
     console.error('[Auth] Error handling magic link:', err);
     res.status(500).send('Internal server error verifying magic link.');
