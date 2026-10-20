@@ -122,6 +122,25 @@ function initDatabase() {
   if (!userCols.includes('avatar_url')) {
     db.exec('ALTER TABLE users ADD COLUMN avatar_url TEXT');
   }
+  if (!userCols.includes('role')) {
+    db.exec("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'player'");
+  }
+
+  // Ensure role synchronization
+  db.exec("UPDATE users SET role = 'admin' WHERE is_admin = 1 AND (role IS NULL OR role = 'player')");
+  db.exec("UPDATE users SET is_admin = 1 WHERE role = 'admin'");
+  db.exec("UPDATE users SET role = 'player' WHERE role IS NULL");
+
+  // Bootstrap admin: Ensure at least one admin exists
+  const adminCount = db.prepare("SELECT COUNT(*) as c FROM users WHERE role = 'admin' OR is_admin = 1").get().c;
+  if (adminCount === 0) {
+    const targetUser = db.prepare("SELECT id, email FROM users WHERE email = 'pickupbaseballfoundation@gmail.com'").get()
+      || db.prepare("SELECT id, email FROM users ORDER BY id ASC LIMIT 1").get();
+    if (targetUser) {
+      db.prepare("UPDATE users SET role = 'admin', is_admin = 1 WHERE id = ?").run(targetUser.id);
+      console.log(`[Database] Auto-promoted initial user ${targetUser.email} to Administrator.`);
+    }
+  }
 
   // Seed default duties if table is empty
   const defaultDutiesCount = db.prepare('SELECT COUNT(*) as c FROM default_duties').get().c;

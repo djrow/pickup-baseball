@@ -100,6 +100,29 @@ const API = {
     return res.json();
   },
 
+  async createEvent(payload) {
+    const res = await fetch('/api/events', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return res.json();
+  },
+
+  async getUsers() {
+    const res = await fetch('/api/auth/users');
+    return res.json();
+  },
+
+  async updateUserRole(userId, role) {
+    const res = await fetch(`/api/auth/users/${userId}/role`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role })
+    });
+    return res.json();
+  },
+
   formatDate(isoString) {
     if (!isoString) return '';
     const d = new Date(isoString);
@@ -141,7 +164,7 @@ const API = {
           </span>
         </a>
         <a href="/profile.html" class="btn btn-outline btn-sm">👤 Profile</a>
-        ${user.isAdmin ? '<a href="/admin.html" class="btn btn-outline btn-sm">⚙️ Admin</a>' : ''}
+        ${user.canManageEvents ? `<a href="/admin.html" class="btn btn-outline btn-sm">${user.isAdmin ? '⚙️ Admin' : '⚾ Org Panel'}</a>` : ''}
         <button id="nav-logout-btn" class="btn btn-outline btn-sm">Log Out</button>
       `;
     } else {

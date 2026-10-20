@@ -52,20 +52,35 @@ function optionalUser(req, res, next) {
   }
 
   const session = db.prepare(`
-    SELECT s.id as session_id, s.expires_at, u.id, u.name, u.email, u.bio, u.avatar_url, u.is_admin
+    SELECT 
+      s.id as session_id, 
+      s.expires_at, 
+      u.id, 
+      u.name, 
+      u.email, 
+      u.bio, 
+      u.avatar_url, 
+      u.is_admin,
+      COALESCE(u.role, CASE WHEN u.is_admin = 1 THEN 'admin' ELSE 'player' END) as role
     FROM sessions s
     JOIN users u ON s.user_id = u.id
     WHERE s.id = ? AND s.expires_at > CURRENT_TIMESTAMP
   `).get(sessionId);
 
   if (session) {
+    const role = session.role || (session.is_admin === 1 ? 'admin' : 'player');
+    const isAdmin = role === 'admin' || Boolean(session.is_admin);
+    const canManageEvents = role === 'admin' || role === 'organizer' || isAdmin;
+
     req.user = {
       id: session.id,
       name: session.name,
       email: session.email,
       bio: session.bio || '',
       avatarUrl: session.avatar_url || '',
-      isAdmin: Boolean(session.is_admin)
+      role: role,
+      isAdmin: isAdmin,
+      canManageEvents: canManageEvents
     };
   } else {
     req.user = null;
@@ -81,6 +96,18 @@ function requireUser(req, res, next) {
   optionalUser(req, res, () => {
     if (!req.user) {
       return res.status(401).json({ error: 'Authentication required. Please sign in.' });
+    }
+    next();
+  });
+}
+
+/**
+ * Middleware: Require event organizer or admin
+ */
+function requireEventCreator(req, res, next) {
+  requireUser(req, res, () => {
+    if (!req.user.canManageEvents) {
+      return res.status(403).json({ error: 'Access denied: Event Organizer or Administrator privileges required.' });
     }
     next();
   });
@@ -107,5 +134,6 @@ module.exports = {
   deleteSession,
   optionalUser,
   requireUser,
+  requireEventCreator,
   requireAdmin
 };

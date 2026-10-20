@@ -144,6 +144,35 @@
       </div>
     </section>
 
+    <!-- User Management & Roles (Admins only) -->
+    <section id="admin-user-mgmt-section" class="card" style="margin-top: 36px; display: none;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
+        <div>
+          <h2 class="card-title" style="margin-bottom: 2px;">👥 User Roles & Permissions</h2>
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0;">Change account roles to assign Organizer or Admin privileges.</p>
+        </div>
+        <button type="button" id="admin-refresh-users-btn" class="btn btn-outline btn-sm">🔄 Refresh</button>
+      </div>
+      <div id="admin-user-mgmt-alert"></div>
+      <div class="table-responsive" style="border: 1px solid var(--border); border-radius: var(--radius-sm);">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>User Account</th>
+              <th>Games Attended</th>
+              <th>Current Role</th>
+              <th>Change Role</th>
+            </tr>
+          </thead>
+          <tbody id="admin-users-table-body">
+            <tr>
+              <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 16px;">Loading users...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
   </main>
 
   <footer class="site-footer">

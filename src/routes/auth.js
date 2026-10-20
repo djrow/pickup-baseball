@@ -12,7 +12,8 @@ const {
   createSession,
   deleteSession,
   optionalUser,
-  requireUser
+  requireUser,
+  requireAdmin
 } = require('../auth');
 const { sendAuthCode } = require('../mailer');
 
@@ -125,9 +126,14 @@ router.post('/verify-code', (req, res) => {
     let user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
     if (!user) {
       const displayName = authRecord.name || email.split('@')[0];
+      const adminCount = db.prepare("SELECT COUNT(*) as c FROM users WHERE role = 'admin' OR is_admin = 1").get().c;
+      const shouldBeAdmin = (adminCount === 0 || email === 'pickupbaseballfoundation@gmail.com');
+      const role = shouldBeAdmin ? 'admin' : 'player';
+      const isAdminFlag = shouldBeAdmin ? 1 : 0;
+
       const result = db.prepare(`
-        INSERT INTO users (name, email) VALUES (?, ?)
-      `).run(displayName, email);
+        INSERT INTO users (name, email, role, is_admin) VALUES (?, ?, ?, ?)
+      `).run(displayName, email, role, isAdminFlag);
       user = db.prepare('SELECT * FROM users WHERE id = ?').get(result.lastInsertRowid);
     }
 
@@ -184,9 +190,14 @@ router.get('/verify-magic', (req, res) => {
     let user = db.prepare('SELECT * FROM users WHERE email = ?').get(authRecord.email);
     if (!user) {
       const displayName = authRecord.name || authRecord.email.split('@')[0];
+      const adminCount = db.prepare("SELECT COUNT(*) as c FROM users WHERE role = 'admin' OR is_admin = 1").get().c;
+      const shouldBeAdmin = (adminCount === 0 || authRecord.email === 'pickupbaseballfoundation@gmail.com');
+      const role = shouldBeAdmin ? 'admin' : 'player';
+      const isAdminFlag = shouldBeAdmin ? 1 : 0;
+
       const result = db.prepare(`
-        INSERT INTO users (name, email) VALUES (?, ?)
-      `).run(displayName, authRecord.email);
+        INSERT INTO users (name, email, role, is_admin) VALUES (?, ?, ?, ?)
+      `).run(displayName, authRecord.email, role, isAdminFlag);
       user = db.prepare('SELECT * FROM users WHERE id = ?').get(result.lastInsertRowid);
     }
 
@@ -303,6 +314,85 @@ router.delete('/avatar', requireUser, (req, res) => {
   } catch (err) {
     console.error('[Auth] Error removing avatar:', err);
     res.status(500).json({ error: 'Failed to remove profile picture.' });
+  }
+});
+
+/**
+ * List all users with their roles (Admin only)
+ */
+router.get('/users', requireAdmin, (req, res) => {
+  try {
+    const users = db.prepare(`
+      SELECT 
+        u.id, 
+        u.name, 
+        u.email, 
+        u.bio, 
+        u.avatar_url as avatarUrl, 
+        COALESCE(u.role, CASE WHEN u.is_admin = 1 THEN 'admin' ELSE 'player' END) as role,
+        u.is_admin as isAdmin,
+        u.created_at as createdAt,
+        (SELECT COUNT(*) FROM attendees WHERE user_id = u.id AND status = 'attending') as eventsAttended
+      FROM users u
+      ORDER BY 
+        CASE WHEN u.role = 'admin' OR u.is_admin = 1 THEN 1 
+             WHEN u.role = 'organizer' THEN 2 
+             ELSE 3 END,
+        u.name COLLATE NOCASE ASC
+    `).all();
+
+    res.json({ users });
+  } catch (err) {
+    console.error('[Auth] Error fetching users list:', err);
+    res.status(500).json({ error: 'Failed to fetch users list.' });
+  }
+});
+
+/**
+ * Update a user's role (Admin only)
+ * Body: { role: 'admin' | 'organizer' | 'player' }
+ */
+router.put('/users/:id/role', requireAdmin, (req, res) => {
+  try {
+    const targetId = parseInt(req.params.id, 10);
+    const { role } = req.body;
+    const validRoles = ['admin', 'organizer', 'player'];
+
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({ error: `Invalid role. Must be one of: ${validRoles.join(', ')}` });
+    }
+
+    const targetUser = db.prepare('SELECT id, email, role, is_admin FROM users WHERE id = ?').get(targetId);
+    if (!targetUser) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    // Prevent demoting the only remaining admin
+    if ((targetUser.role === 'admin' || targetUser.is_admin === 1) && role !== 'admin') {
+      const adminCount = db.prepare("SELECT COUNT(*) as c FROM users WHERE role = 'admin' OR is_admin = 1").get().c;
+      if (adminCount <= 1) {
+        return res.status(400).json({ error: 'Cannot demote the last remaining administrator.' });
+      }
+    }
+
+    const isAdminFlag = (role === 'admin') ? 1 : 0;
+    db.prepare('UPDATE users SET role = ?, is_admin = ? WHERE id = ?').run(role, isAdminFlag, targetId);
+
+    // If target user is updating their own role, update req.user as well
+    if (req.user && req.user.id === targetId) {
+      req.user.role = role;
+      req.user.isAdmin = Boolean(isAdminFlag);
+      req.user.canManageEvents = role === 'admin' || role === 'organizer' || Boolean(isAdminFlag);
+    }
+
+    res.json({
+      success: true,
+      message: `Role for ${targetUser.email} updated to ${role}.`,
+      user: { id: targetId, role, isAdmin: Boolean(isAdminFlag) }
+    });
+  } catch (err) {
+    console.error('[Auth] Error updating user role:', err);
+    res.status(500).json({ error: 'Failed to update user role.' });
   }
 });
 

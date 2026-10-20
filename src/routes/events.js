@@ -5,7 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const { db, DEFAULT_BASEBALL_DUTIES, getDefaultDuties, saveDefaultDuties } = require('../db');
-const { optionalUser, requireAdmin } = require('../auth');
+const { optionalUser, requireAdmin, requireEventCreator } = require('../auth');
 const { sendRsvpConfirmation } = require('../mailer');
 const { sendRemindersForEvent } = require('../reminders');
 
@@ -316,9 +316,9 @@ router.post('/:id/comments', optionalUser, (req, res) => {
 });
 
 /**
- * Create new event (Admin only)
+ * Create new event (Admin or Organizer)
  */
-router.post('/', requireAdmin, (req, res) => {
+router.post('/', requireEventCreator, (req, res) => {
   try {
     const {
       title,
@@ -379,9 +379,9 @@ router.post('/', requireAdmin, (req, res) => {
 });
 
 /**
- * Update event (Admin only)
+ * Update event (Admin or Organizer)
  */
-router.put('/:id', requireAdmin, (req, res) => {
+router.put('/:id', requireEventCreator, (req, res) => {
   try {
     const eventId = req.params.id;
     const { title, description, location, location_url, event_date, max_players, status } = req.body;
@@ -453,9 +453,9 @@ router.put('/default-duties', requireAdmin, (req, res) => {
 });
 
 /**
- * Add a new duty/task to an existing event (Admin only)
+ * Add a new duty/task to an existing event (Admin or Organizer)
  */
-router.post('/:id/duties', requireAdmin, (req, res) => {
+router.post('/:id/duties', requireEventCreator, (req, res) => {
   try {
     const eventId = req.params.id;
     const { title, description, slots_needed } = req.body;
@@ -481,9 +481,9 @@ router.post('/:id/duties', requireAdmin, (req, res) => {
 });
 
 /**
- * Update an existing duty/task (Admin only)
+ * Update an existing duty/task (Admin or Organizer)
  */
-router.put('/:id/duties/:dutyId', requireAdmin, (req, res) => {
+router.put('/:id/duties/:dutyId', requireEventCreator, (req, res) => {
   try {
     const { id: eventId, dutyId } = req.params;
     const { title, description, slots_needed } = req.body;
@@ -511,9 +511,9 @@ router.put('/:id/duties/:dutyId', requireAdmin, (req, res) => {
 });
 
 /**
- * Delete a duty/task from an event (Admin only)
+ * Delete a duty/task from an event (Admin or Organizer)
  */
-router.delete('/:id/duties/:dutyId', requireAdmin, (req, res) => {
+router.delete('/:id/duties/:dutyId', requireEventCreator, (req, res) => {
   try {
     const { id: eventId, dutyId } = req.params;
     db.prepare('DELETE FROM event_duties WHERE id = ? AND event_id = ?').run(dutyId, eventId);

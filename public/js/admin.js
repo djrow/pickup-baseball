@@ -16,8 +16,8 @@ let openTaskManagerEventId = null;
 
 async function initAdmin() {
   const user = await API.getMe();
-  if (!user || !user.isAdmin) {
-    alert('Access restricted to administrators. Please sign in with an admin account.');
+  if (!user || (!user.isAdmin && !user.canManageEvents)) {
+    alert('Access restricted to organizers and administrators. Please sign in with an authorized account.');
     window.location.href = '/login.html';
     return;
   }
@@ -33,6 +33,11 @@ async function initAdmin() {
   setupDefaultTemplateEditor();
   setupCreateForm();
   await loadAdminGames();
+
+  // If Admin, load User Roles Management section
+  if (user.isAdmin) {
+    setupAdminUserManagement(user);
+  }
 }
 
 async function loadDefaultDuties() {
@@ -691,6 +696,106 @@ function showAlert(msg, isError = false) {
   const alertBox = document.getElementById('admin-alert');
   alertBox.innerHTML = `<div class="alert ${isError ? 'alert-error' : 'alert-success'}">${API.escapeHtml(msg)}</div>`;
   window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function setupAdminUserManagement(currentUser) {
+  const section = document.getElementById('admin-user-mgmt-section');
+  if (!section) return;
+  section.style.display = 'block';
+
+  const alertBox = document.getElementById('admin-user-mgmt-alert');
+  const tableBody = document.getElementById('admin-users-table-body');
+  const refreshBtn = document.getElementById('admin-refresh-users-btn');
+
+  async function loadUsers() {
+    tableBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 14px;">Loading users...</td></tr>';
+    try {
+      const res = await API.getUsers();
+      if (res.error) {
+        tableBody.innerHTML = `<tr><td colspan="4" style="color: var(--danger); text-align: center; padding: 14px;">${API.escapeHtml(res.error)}</td></tr>`;
+        return;
+      }
+
+      const users = res.users || [];
+      if (users.length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 14px;">No users registered yet.</td></tr>';
+        return;
+      }
+
+      tableBody.innerHTML = users.map(u => {
+        const isMe = u.id === currentUser.id;
+        let roleBadge = '<span class="badge badge-gray">👤 Player</span>';
+        if (u.role === 'admin') {
+          roleBadge = '<span class="badge badge-orange">👑 Admin</span>';
+        } else if (u.role === 'organizer') {
+          roleBadge = '<span class="badge badge-green">🛡️ Organizer</span>';
+        }
+
+        return `
+          <tr>
+            <td>
+              <div style="font-weight: 700; color: var(--secondary);">
+                ${API.escapeHtml(u.name)}
+                ${isMe ? '<span style="color: var(--primary); font-size: 0.78rem; margin-left: 4px;">(You)</span>' : ''}
+              </div>
+              <div style="font-size: 0.8rem; color: var(--text-muted);">${API.escapeHtml(u.email)}</div>
+            </td>
+            <td style="font-weight: 600;">
+              ${u.eventsAttended} game${u.eventsAttended === 1 ? '' : 's'}
+            </td>
+            <td>
+              ${roleBadge}
+            </td>
+            <td>
+              <select class="admin-role-selector" data-user-id="${u.id}" data-user-name="${API.escapeHtml(u.name)}" style="padding: 4px 8px; border-radius: var(--radius-sm); border: 1.5px solid var(--border); font-size: 0.85rem; font-weight: 600; background: #fff; cursor: pointer;">
+                <option value="player" ${u.role === 'player' ? 'selected' : ''}>👤 Player</option>
+                <option value="organizer" ${u.role === 'organizer' ? 'selected' : ''}>🛡️ Organizer (Can Post Games)</option>
+                <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>👑 Admin (Full Access)</option>
+              </select>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      document.querySelectorAll('.admin-role-selector').forEach(sel => {
+        sel.addEventListener('change', async (e) => {
+          const targetUserId = e.target.getAttribute('data-user-id');
+          const targetUserName = e.target.getAttribute('data-user-name');
+          const newRole = e.target.value;
+
+          alertBox.innerHTML = `<div class="alert alert-info" style="font-size: 0.88rem;">Updating role for ${API.escapeHtml(targetUserName)}...</div>`;
+
+          try {
+            const updateRes = await API.updateUserRole(targetUserId, newRole);
+            if (updateRes.error) {
+              alertBox.innerHTML = `<div class="alert alert-error" style="font-size: 0.88rem;">${API.escapeHtml(updateRes.error)}</div>`;
+              await loadUsers();
+            } else {
+              alertBox.innerHTML = `<div class="alert alert-success" style="font-size: 0.88rem;">✓ Role for <strong>${API.escapeHtml(targetUserName)}</strong> updated to <strong>${newRole}</strong>!</div>`;
+
+              if (parseInt(targetUserId, 10) === currentUser.id) {
+                currentUser.role = newRole;
+                currentUser.isAdmin = (newRole === 'admin');
+                currentUser.canManageEvents = (newRole === 'admin' || newRole === 'organizer');
+                API.renderNav(currentUser);
+              }
+
+              await loadUsers();
+            }
+          } catch (err) {
+            alertBox.innerHTML = `<div class="alert alert-error" style="font-size: 0.88rem;">Failed to update role. Please try again.</div>`;
+            await loadUsers();
+          }
+        });
+      });
+
+    } catch (err) {
+      tableBody.innerHTML = '<tr><td colspan="4" style="color: var(--danger); text-align: center; padding: 14px;">Error loading users.</td></tr>';
+    }
+  }
+
+  loadUsers();
+  if (refreshBtn) refreshBtn.addEventListener('click', loadUsers);
 }
 
 document.addEventListener('DOMContentLoaded', initAdmin);
