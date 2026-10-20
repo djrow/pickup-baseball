@@ -111,7 +111,7 @@ router.post('/verify-code', (req, res) => {
 
     const authRecord = db.prepare(`
       SELECT * FROM auth_codes
-      WHERE email = ? AND code = ? AND used_at IS NULL AND expires_at > CURRENT_TIMESTAMP
+      WHERE email = ? AND code = ? AND used_at IS NULL AND datetime(expires_at) > datetime('now')
       ORDER BY id DESC LIMIT 1
     `).get(email, code);
 
@@ -176,7 +176,7 @@ router.get('/verify-magic', (req, res) => {
 
     const authRecord = db.prepare(`
       SELECT * FROM auth_codes
-      WHERE token = ? AND used_at IS NULL AND expires_at > CURRENT_TIMESTAMP
+      WHERE token = ? AND used_at IS NULL AND datetime(expires_at) > datetime('now')
     `).get(token);
 
     if (!authRecord) {

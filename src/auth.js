@@ -64,7 +64,7 @@ function optionalUser(req, res, next) {
       COALESCE(u.role, CASE WHEN u.is_admin = 1 THEN 'admin' ELSE 'player' END) as role
     FROM sessions s
     JOIN users u ON s.user_id = u.id
-    WHERE s.id = ? AND s.expires_at > CURRENT_TIMESTAMP
+    WHERE s.id = ? AND datetime(s.expires_at) > datetime('now')
   `).get(sessionId);
 
   if (session) {

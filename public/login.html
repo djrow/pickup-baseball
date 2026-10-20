@@ -451,9 +451,10 @@
               quickBtn.disabled = false;
               quickBtn.textContent = '⚡ 1-Click: Post Next Sunday @ Noon';
             } else {
+              const newId = res.eventId || (res.event && res.event.id);
               alertBox.innerHTML = `<div class="alert alert-success">✓ Sunday game scheduled! Redirecting to game page...</div>`;
               setTimeout(() => {
-                window.location.href = `/event.html?id=${res.event.id}`;
+                window.location.href = `/event.html?id=${newId}`;
               }, 600);
             }
           } catch (err) {
@@ -472,13 +473,14 @@
           submitBtn.disabled = true;
           submitBtn.textContent = 'Publishing...';
 
-          const title = document.getElementById('event-title-input').value.trim();
-          const rawDate = document.getElementById('event-date-input').value;
-          const location = document.getElementById('event-location-input').value.trim();
-          const locationUrl = document.getElementById('event-map-input').value.trim();
-          const desc = document.getElementById('event-desc-input').value.trim();
-
+          let isSuccess = false;
           try {
+            const title = document.getElementById('event-title-input').value.trim();
+            const rawDate = document.getElementById('event-date-input').value;
+            const location = document.getElementById('event-location-input').value.trim();
+            const locationUrl = document.getElementById('event-map-input').value.trim();
+            const desc = document.getElementById('event-desc-input').value.trim();
+
             const res = await API.createEvent({
               title,
               event_date: new Date(rawDate).toISOString(),
@@ -490,18 +492,21 @@
 
             if (res.error) {
               alertBox.innerHTML = `<div class="alert alert-error">${API.escapeHtml(res.error)}</div>`;
-              submitBtn.disabled = false;
-              submitBtn.textContent = 'Publish Game & Roster';
             } else {
+              isSuccess = true;
+              const newId = res.eventId || (res.event && res.event.id);
               alertBox.innerHTML = `<div class="alert alert-success">✓ Game published successfully! Redirecting...</div>`;
               setTimeout(() => {
-                window.location.href = `/event.html?id=${res.event.id}`;
+                window.location.href = `/event.html?id=${newId}`;
               }, 600);
             }
           } catch (err) {
-            alertBox.innerHTML = `<div class="alert alert-error">Failed to publish game. Please try again.</div>`;
-            submitBtn.disabled = false;
-            submitBtn.textContent = 'Publish Game & Roster';
+            alertBox.innerHTML = `<div class="alert alert-error">${API.escapeHtml(err.message || 'Failed to publish game. Please try again.')}</div>`;
+          } finally {
+            if (!isSuccess) {
+              submitBtn.disabled = false;
+              submitBtn.textContent = 'Publish Game & Roster';
+            }
           }
         });
       }
@@ -581,10 +586,11 @@
                   alertBox.innerHTML = `<div class="alert alert-error" style="font-size: 0.88rem;">${API.escapeHtml(updateRes.error)}</div>`;
                   await loadUsers();
                 } else {
-                  alertBox.innerHTML = `<div class="alert alert-success" style="font-size: 0.88rem;">✓ Role for <strong>${API.escapeHtml(targetUserName)}</strong> updated to <strong>${newRole}</strong>!</div>`;
-                  
+                  const isSelf = parseInt(targetUserId, 10) === currentUser.id;
+                  const isSelfDemotion = isSelf && newRole !== 'admin';
+
                   // If current user changed their own role, update top badge!
-                  if (parseInt(targetUserId, 10) === currentUser.id) {
+                  if (isSelf) {
                     currentUser.role = newRole;
                     currentUser.isAdmin = (newRole === 'admin');
                     currentUser.canManageEvents = (newRole === 'admin' || newRole === 'organizer');
@@ -598,7 +604,28 @@
                     }
                   }
 
-                  await loadUsers();
+                  if (isSelfDemotion) {
+                    const roleTitle = newRole === 'organizer' ? 'Organizer' : 'Player';
+                    alertBox.innerHTML = `<div class="alert alert-success" style="font-size: 0.88rem;">Your role has been updated to ${roleTitle}. Admin management features are now restricted.</div>`;
+
+                    const eventSec = document.getElementById('event-creation-section');
+                    const playerNotice = document.getElementById('player-notice-section');
+                    if (newRole === 'player') {
+                      if (eventSec) eventSec.style.display = 'none';
+                      if (playerNotice) playerNotice.style.display = 'block';
+                    } else if (newRole === 'organizer') {
+                      if (eventSec) eventSec.style.display = 'block';
+                      if (playerNotice) playerNotice.style.display = 'none';
+                    }
+
+                    setTimeout(() => {
+                      const userMgmtSec = document.getElementById('user-management-section');
+                      if (userMgmtSec) userMgmtSec.style.display = 'none';
+                    }, 2500);
+                  } else {
+                    alertBox.innerHTML = `<div class="alert alert-success" style="font-size: 0.88rem;">✓ Role for <strong>${API.escapeHtml(targetUserName)}</strong> updated to <strong>${newRole}</strong>!</div>`;
+                    await loadUsers();
+                  }
                 }
               } catch (err) {
                 alertBox.innerHTML = `<div class="alert alert-error" style="font-size: 0.88rem;">Failed to update role. Please try again.</div>`;

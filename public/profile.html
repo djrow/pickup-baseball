@@ -43,7 +43,7 @@
             Customize how other players see you on the Sunday game rosters and discussion board.
           </p>
         </div>
-        <span id="role-badge" class="badge badge-green">Player</span>
+        <span id="role-badge" class="badge badge-gray">👤 Player</span>
       </div>
 
       <div id="profile-alert"></div>
@@ -137,9 +137,15 @@
       charCount.textContent = `${(currentUser.bio || '').length} / 280`;
 
       const roleBadge = document.getElementById('role-badge');
-      if (currentUser.isAdmin) {
+      if (currentUser.isAdmin || currentUser.role === 'admin') {
         roleBadge.className = 'badge badge-orange';
-        roleBadge.textContent = 'Administrator';
+        roleBadge.textContent = '👑 Administrator';
+      } else if (currentUser.role === 'organizer') {
+        roleBadge.className = 'badge badge-green';
+        roleBadge.textContent = '🛡️ Event Organizer';
+      } else {
+        roleBadge.className = 'badge badge-gray';
+        roleBadge.textContent = '👤 Player';
       }
 
       renderAvatarPreview();

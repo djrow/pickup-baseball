@@ -84,7 +84,7 @@ async function loadGames() {
             <p style="color: var(--text-muted); max-width: 480px; margin: 0 auto 20px;">
               Check back soon! Our Sunday pickup games are posted throughout the season.
             </p>
-            ${API.currentUser && API.currentUser.isAdmin ? '<a href="/admin.html" class="btn btn-primary">Create Next Sunday Game</a>' : ''}
+            ${API.currentUser && API.currentUser.canManageEvents ? '<a href="/admin.html" class="btn btn-primary">Create Next Sunday Game</a>' : ''}
           </div>
         `;
       }
@@ -170,11 +170,6 @@ function renderFeaturedGame(ev, container) {
         </span>
         <a href="/event.html?id=${ev.id}" class="btn btn-secondary">
           Join Roster / Volunteer for Duties
-        </a>
-      </div>
-    </div>
-  `;
-}
         </a>
       </div>
     </div>

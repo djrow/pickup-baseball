@@ -193,7 +193,7 @@ function saveDefaultDuties(duties) {
   
   const txn = db.transaction((list) => {
     db.prepare('DELETE FROM default_duties').run();
-    list.forEach((d, idx) => {
+    list.filter(d => d && d.title && d.title.trim()).forEach((d, idx) => {
       insert.run(d.title.trim(), (d.description || '').trim(), parseInt(d.slots_needed || 1, 10), idx);
     });
   });

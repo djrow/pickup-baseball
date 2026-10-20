@@ -58,6 +58,68 @@ router.get('/', optionalUser, (req, res) => {
 });
 
 /**
+ * Get default charity duties template
+ */
+router.get('/default-duties', (req, res) => {
+  res.json({ duties: getDefaultDuties() });
+});
+
+/**
+ * Update default charity duties template (Admin only)
+ */
+router.put('/default-duties', requireAdmin, (req, res) => {
+  try {
+    const { duties } = req.body;
+    if (!Array.isArray(duties)) {
+      return res.status(400).json({ error: 'duties array is required.' });
+    }
+    saveDefaultDuties(duties);
+    res.json({ success: true, duties: getDefaultDuties(), message: 'Default task template updated successfully!' });
+  } catch (err) {
+    console.error('[Events] Error updating default duties:', err);
+    res.status(500).json({ error: 'Failed to update default duties template.' });
+  }
+});
+
+/**
+ * Download consistent SQLite database backup snapshot (Admin only)
+ */
+router.get('/admin/backup-db', requireAdmin, async (req, res) => {
+  try {
+    const tempBackupPath = path.join(os.tmpdir(), `baseball_backup_${Date.now()}.db`);
+    await db.backup(tempBackupPath);
+    const dateStr = new Date().toISOString().slice(0, 10);
+    res.download(tempBackupPath, `baseball_charity_${dateStr}.db`, (err) => {
+      try {
+        if (fs.existsSync(tempBackupPath)) fs.unlinkSync(tempBackupPath);
+      } catch (e) {}
+    });
+  } catch (err) {
+    console.error('[Events] Error creating DB backup:', err);
+    res.status(500).json({ error: 'Failed to create database backup.' });
+  }
+});
+
+/**
+ * Periodic reminder trigger endpoint (can be called by cron-job.org or internal scheduler)
+ */
+router.all('/reminders/check', async (req, res) => {
+  try {
+    const cronSecret = process.env.CRON_SECRET;
+    if (cronSecret && req.headers['x-cron-secret'] !== cronSecret && req.query.secret !== cronSecret) {
+      return res.status(401).json({ error: 'Unauthorized cron request.' });
+    }
+
+    const { processUpcomingEventReminders } = require('../reminders');
+    await processUpcomingEventReminders();
+    res.json({ success: true, message: 'Upcoming reminder check completed.' });
+  } catch (err) {
+    console.error('[Reminders] Error during check endpoint:', err);
+    res.status(500).json({ error: 'Failed to process reminders.' });
+  }
+});
+
+/**
  * Get single event details with duties, attendees, and comments
  */
 router.get('/:id', optionalUser, (req, res) => {
@@ -276,6 +338,11 @@ router.post('/:id/rsvp', optionalUser, async (req, res) => {
 router.post('/:id/comments', optionalUser, (req, res) => {
   try {
     const eventId = req.params.id;
+    const event = db.prepare('SELECT id FROM events WHERE id = ?').get(eventId);
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found.' });
+    }
+
     const { content, author_name, author_email } = req.body;
 
     if (!content || !content.trim()) {
@@ -331,45 +398,80 @@ router.post('/', requireEventCreator, (req, res) => {
       custom_duties
     } = req.body;
 
-    if (!title || !location || !event_date) {
+    if (!title || !title.trim() || !location || !location.trim() || !event_date) {
       return res.status(400).json({ error: 'Title, location, and event date/time are required.' });
     }
 
-    const result = db.prepare(`
-      INSERT INTO events (title, description, location, location_url, event_date, max_players, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      title.trim(),
-      (description || '').trim(),
-      location.trim(),
-      (location_url || '').trim(),
-      event_date,
-      max_players ? parseInt(max_players, 10) : null,
-      req.user.id
-    );
+    if (isNaN(new Date(event_date).getTime())) {
+      return res.status(400).json({ error: 'A valid event date/time is required.' });
+    }
 
-    const eventId = result.lastInsertRowid;
-
-    // Insert duties
+    // Determine duties to insert
     let dutiesToInsert = [];
     if (use_default_duties || (!custom_duties || custom_duties.length === 0)) {
       dutiesToInsert = getDefaultDuties();
     } else if (Array.isArray(custom_duties)) {
+      for (const d of custom_duties) {
+        if (!d || !d.title || !d.title.trim()) {
+          return res.status(400).json({ error: 'All custom duties must have a non-empty title.' });
+        }
+      }
       dutiesToInsert = custom_duties;
+    } else {
+      dutiesToInsert = getDefaultDuties();
     }
 
-    const insertDuty = db.prepare(`
-      INSERT INTO event_duties (event_id, title, description, slots_needed, sort_order)
-      VALUES (?, ?, ?, ?, ?)
-    `);
+    // Wrap event creation and duty insertions in an atomic SQLite transaction
+    const createEventTxn = db.transaction((eventData, duties) => {
+      const result = db.prepare(`
+        INSERT INTO events (title, description, location, location_url, event_date, max_players, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        eventData.title.trim(),
+        (eventData.description || '').trim(),
+        eventData.location.trim(),
+        (eventData.location_url || '').trim(),
+        eventData.event_date,
+        eventData.max_players ? parseInt(eventData.max_players, 10) : null,
+        eventData.userId
+      );
 
-    dutiesToInsert.forEach((d, idx) => {
-      insertDuty.run(eventId, d.title, d.description || '', d.slots_needed || 1, idx);
+      const eventId = result.lastInsertRowid;
+
+      const insertDuty = db.prepare(`
+        INSERT INTO event_duties (event_id, title, description, slots_needed, sort_order)
+        VALUES (?, ?, ?, ?, ?)
+      `);
+
+      duties.forEach((d, idx) => {
+        insertDuty.run(
+          eventId,
+          d.title.trim(),
+          (d.description || '').trim(),
+          parseInt(d.slots_needed || 1, 10),
+          d.sort_order !== undefined ? parseInt(d.sort_order, 10) : idx
+        );
+      });
+
+      return eventId;
     });
+
+    const eventId = createEventTxn({
+      title,
+      description,
+      location,
+      location_url,
+      event_date,
+      max_players,
+      userId: req.user.id
+    }, dutiesToInsert);
+
+    const newEvent = db.prepare('SELECT * FROM events WHERE id = ?').get(eventId);
 
     res.json({
       success: true,
       eventId,
+      event: newEvent,
       message: 'Event created successfully.'
     });
   } catch (err) {
@@ -386,7 +488,37 @@ router.put('/:id', requireEventCreator, (req, res) => {
     const eventId = req.params.id;
     const { title, description, location, location_url, event_date, max_players, status } = req.body;
 
-    db.prepare(`
+    const existingEvent = db.prepare('SELECT * FROM events WHERE id = ?').get(eventId);
+    if (!existingEvent) {
+      return res.status(404).json({ error: 'Event not found.' });
+    }
+
+    if (title !== undefined && (!title || !title.trim())) {
+      return res.status(400).json({ error: 'Event title cannot be empty.' });
+    }
+
+    if (location !== undefined && (!location || !location.trim())) {
+      return res.status(400).json({ error: 'Event location cannot be empty.' });
+    }
+
+    if (event_date !== undefined && event_date !== null) {
+      if (isNaN(new Date(event_date).getTime())) {
+        return res.status(400).json({ error: 'A valid event date/time is required.' });
+      }
+    }
+
+    // Preserve existing max_players if not provided (undefined)
+    let newMaxPlayers;
+    if (max_players === undefined) {
+      newMaxPlayers = existingEvent.max_players;
+    } else if (max_players === null || max_players === '') {
+      newMaxPlayers = null;
+    } else {
+      const parsed = parseInt(max_players, 10);
+      newMaxPlayers = isNaN(parsed) ? existingEvent.max_players : parsed;
+    }
+
+    const result = db.prepare(`
       UPDATE events
       SET title = COALESCE(?, title),
           description = COALESCE(?, description),
@@ -397,17 +529,23 @@ router.put('/:id', requireEventCreator, (req, res) => {
           status = COALESCE(?, status)
       WHERE id = ?
     `).run(
-      title ? title.trim() : null,
+      title !== undefined ? title.trim() : null,
       description !== undefined ? description.trim() : null,
-      location ? location.trim() : null,
+      location !== undefined ? location.trim() : null,
       location_url !== undefined ? location_url.trim() : null,
       event_date || null,
-      max_players ? parseInt(max_players, 10) : null,
+      newMaxPlayers,
       status || null,
       eventId
     );
 
-    res.json({ success: true, message: 'Event updated.' });
+    if (result.changes === 0) {
+      return res.status(404).json({ error: 'Event not found.' });
+    }
+
+    const updatedEvent = db.prepare('SELECT * FROM events WHERE id = ?').get(eventId);
+
+    res.json({ success: true, event: updatedEvent, message: 'Event updated.' });
   } catch (err) {
     console.error('[Events] Error updating event:', err);
     res.status(500).json({ error: 'Failed to update event.' });
@@ -420,7 +558,10 @@ router.put('/:id', requireEventCreator, (req, res) => {
 router.delete('/:id', requireAdmin, (req, res) => {
   try {
     const eventId = req.params.id;
-    db.prepare('DELETE FROM events WHERE id = ?').run(eventId);
+    const result = db.prepare('DELETE FROM events WHERE id = ?').run(eventId);
+    if (result.changes === 0) {
+      return res.status(404).json({ error: 'Event not found.' });
+    }
     res.json({ success: true, message: 'Event deleted.' });
   } catch (err) {
     console.error('[Events] Error deleting event:', err);
@@ -428,29 +569,6 @@ router.delete('/:id', requireAdmin, (req, res) => {
   }
 });
 
-/**
- * Get default charity duties template
- */
-router.get('/default-duties', (req, res) => {
-  res.json({ duties: getDefaultDuties() });
-});
-
-/**
- * Update default charity duties template (Admin only)
- */
-router.put('/default-duties', requireAdmin, (req, res) => {
-  try {
-    const { duties } = req.body;
-    if (!Array.isArray(duties)) {
-      return res.status(400).json({ error: 'duties array is required.' });
-    }
-    saveDefaultDuties(duties);
-    res.json({ success: true, duties: getDefaultDuties(), message: 'Default task template updated successfully!' });
-  } catch (err) {
-    console.error('[Events] Error updating default duties:', err);
-    res.status(500).json({ error: 'Failed to update default duties template.' });
-  }
-});
 
 /**
  * Add a new duty/task to an existing event (Admin or Organizer)
@@ -458,6 +576,11 @@ router.put('/default-duties', requireAdmin, (req, res) => {
 router.post('/:id/duties', requireEventCreator, (req, res) => {
   try {
     const eventId = req.params.id;
+    const event = db.prepare('SELECT id FROM events WHERE id = ?').get(eventId);
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found.' });
+    }
+
     const { title, description, slots_needed } = req.body;
 
     if (!title || !title.trim()) {
@@ -488,7 +611,11 @@ router.put('/:id/duties/:dutyId', requireEventCreator, (req, res) => {
     const { id: eventId, dutyId } = req.params;
     const { title, description, slots_needed } = req.body;
 
-    db.prepare(`
+    if (title !== undefined && (!title || !title.trim())) {
+      return res.status(400).json({ error: 'Duty title cannot be empty.' });
+    }
+
+    const result = db.prepare(`
       UPDATE event_duties
       SET title = COALESCE(?, title),
           description = COALESCE(?, description),
@@ -501,6 +628,10 @@ router.put('/:id/duties/:dutyId', requireEventCreator, (req, res) => {
       dutyId,
       eventId
     );
+
+    if (result.changes === 0) {
+      return res.status(404).json({ error: 'Duty not found.' });
+    }
 
     const updated = db.prepare('SELECT * FROM event_duties WHERE id = ?').get(dutyId);
     res.json({ success: true, duty: updated });
@@ -516,30 +647,14 @@ router.put('/:id/duties/:dutyId', requireEventCreator, (req, res) => {
 router.delete('/:id/duties/:dutyId', requireEventCreator, (req, res) => {
   try {
     const { id: eventId, dutyId } = req.params;
-    db.prepare('DELETE FROM event_duties WHERE id = ? AND event_id = ?').run(dutyId, eventId);
+    const result = db.prepare('DELETE FROM event_duties WHERE id = ? AND event_id = ?').run(dutyId, eventId);
+    if (result.changes === 0) {
+      return res.status(404).json({ error: 'Duty not found.' });
+    }
     res.json({ success: true, message: 'Duty removed.' });
   } catch (err) {
     console.error('[Events] Error deleting duty:', err);
     res.status(500).json({ error: 'Failed to delete duty.' });
-  }
-});
-
-/**
- * Download consistent SQLite database backup snapshot (Admin only)
- */
-router.get('/admin/backup-db', requireAdmin, async (req, res) => {
-  try {
-    const tempBackupPath = path.join(os.tmpdir(), `baseball_backup_${Date.now()}.db`);
-    await db.backup(tempBackupPath);
-    const dateStr = new Date().toISOString().slice(0, 10);
-    res.download(tempBackupPath, `baseball_charity_${dateStr}.db`, (err) => {
-      try {
-        if (fs.existsSync(tempBackupPath)) fs.unlinkSync(tempBackupPath);
-      } catch (e) {}
-    });
-  } catch (err) {
-    console.error('[Events] Error creating DB backup:', err);
-    res.status(500).json({ error: 'Failed to create database backup.' });
   }
 });
 
@@ -549,30 +664,15 @@ router.get('/admin/backup-db', requireAdmin, async (req, res) => {
 router.post('/:id/send-reminders', requireAdmin, async (req, res) => {
   try {
     const eventId = req.params.id;
+    const event = db.prepare('SELECT id FROM events WHERE id = ?').get(eventId);
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found.' });
+    }
     await sendRemindersForEvent(eventId);
     res.json({ success: true, message: 'Reminders have been sent to all confirmed attendees.' });
   } catch (err) {
     console.error('[Events] Error sending reminders manually:', err);
     res.status(500).json({ error: 'Failed to send reminders.' });
-  }
-});
-
-/**
- * Periodic reminder trigger endpoint (can be called by cron-job.org or internal scheduler)
- */
-router.all('/reminders/check', async (req, res) => {
-  try {
-    const cronSecret = process.env.CRON_SECRET;
-    if (cronSecret && req.headers['x-cron-secret'] !== cronSecret && req.query.secret !== cronSecret) {
-      return res.status(401).json({ error: 'Unauthorized cron request.' });
-    }
-
-    const { processUpcomingEventReminders } = require('../reminders');
-    await processUpcomingEventReminders();
-    res.json({ success: true, message: 'Upcoming reminder check completed.' });
-  } catch (err) {
-    console.error('[Reminders] Error during check endpoint:', err);
-    res.status(500).json({ error: 'Failed to process reminders.' });
   }
 });
 

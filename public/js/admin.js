@@ -14,6 +14,37 @@ let templateDuties = [];
 // Currently expanded event task manager
 let openTaskManagerEventId = null;
 
+// Currently logged-in admin/organizer user
+let currentAdminUser = null;
+
+function applyRoleUI(user) {
+  const badgeEl = document.getElementById('admin-header-badge');
+  const backupBtn = document.getElementById('btn-backup-db');
+  const defaultTemplateCard = document.getElementById('default-template-card');
+  const saveAsDefaultsBtn = document.getElementById('btn-save-as-defaults');
+  const userMgmtSec = document.getElementById('admin-user-mgmt-section');
+
+  if (user && user.isAdmin) {
+    if (badgeEl) {
+      badgeEl.className = 'badge badge-orange';
+      badgeEl.innerHTML = '👑 Admin Control';
+    }
+    if (backupBtn) backupBtn.style.display = 'inline-flex';
+    if (defaultTemplateCard) defaultTemplateCard.style.display = 'block';
+    if (saveAsDefaultsBtn) saveAsDefaultsBtn.style.display = 'inline-block';
+  } else if (user && user.canManageEvents) {
+    // Organizer Control
+    if (badgeEl) {
+      badgeEl.className = 'badge badge-green';
+      badgeEl.innerHTML = '🛡️ Organizer Control';
+    }
+    if (backupBtn) backupBtn.style.display = 'none';
+    if (defaultTemplateCard) defaultTemplateCard.style.display = 'none';
+    if (saveAsDefaultsBtn) saveAsDefaultsBtn.style.display = 'none';
+    if (userMgmtSec) userMgmtSec.style.display = 'none';
+  }
+}
+
 async function initAdmin() {
   const user = await API.getMe();
   if (!user || (!user.isAdmin && !user.canManageEvents)) {
@@ -22,7 +53,9 @@ async function initAdmin() {
     return;
   }
 
+  currentAdminUser = user;
   API.renderNav(user);
+  applyRoleUI(user);
   setDefaultDateTime();
   setupQuickSundayButton();
 
@@ -352,8 +385,15 @@ function setupQuickSundayButton() {
       if (data.error) {
         showAlert(data.error, true);
       } else {
-        showAlert(`Successfully posted Sunday game for ${dateFormatted}!`, false);
-        await loadAdminGames();
+        const newId = data.eventId || (data.event && data.event.id);
+        showAlert(`Successfully posted Sunday game for ${dateFormatted}! Redirecting...`, false);
+        if (newId) {
+          setTimeout(() => {
+            window.location.href = `/event.html?id=${newId}`;
+          }, 600);
+        } else {
+          await loadAdminGames();
+        }
       }
     } catch (err) {
       showAlert('Failed to post game.', true);
@@ -372,24 +412,27 @@ function setupCreateForm() {
     submitBtn.disabled = true;
     submitBtn.textContent = 'Publishing...';
 
-    syncBuilderDutiesFromDOM();
-
-    // Validate that duties have titles
-    const invalidDuty = builderDuties.find(d => !d.title.trim());
-    if (invalidDuty) {
-      showAlert('Please enter a name for all tasks, or click the trash can to delete empty rows.', true);
-      submitBtn.disabled = false;
-      submitBtn.textContent = 'Publish Game';
-      return;
-    }
-
-    const title = document.getElementById('event-title-input').value;
-    const eventDate = new Date(document.getElementById('event-date-input').value).toISOString();
-    const location = document.getElementById('event-location-input').value;
-    const locationUrl = document.getElementById('event-map-input').value;
-    const description = document.getElementById('event-desc-input').value;
-
     try {
+      syncBuilderDutiesFromDOM();
+
+      // Validate that duties have titles
+      const invalidDuty = builderDuties.find(d => !d.title.trim());
+      if (invalidDuty) {
+        showAlert('Please enter a name for all tasks, or click the trash can to delete empty rows.', true);
+        return;
+      }
+
+      const title = document.getElementById('event-title-input').value.trim();
+      const rawDate = document.getElementById('event-date-input').value;
+      if (!rawDate || isNaN(new Date(rawDate).getTime())) {
+        showAlert('Please enter a valid date and time for the game.', true);
+        return;
+      }
+      const eventDate = new Date(rawDate).toISOString();
+      const location = document.getElementById('event-location-input').value.trim();
+      const locationUrl = document.getElementById('event-map-input').value.trim();
+      const description = document.getElementById('event-desc-input').value.trim();
+
       const res = await fetch('/api/events', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -407,16 +450,23 @@ function setupCreateForm() {
       if (data.error) {
         showAlert(data.error, true);
       } else {
-        showAlert(`Game "${title}" published with ${builderDuties.length} volunteer tasks!`, false);
+        const newId = data.eventId || (data.event && data.event.id);
+        showAlert(`Game "${title}" published with ${builderDuties.length} volunteer tasks! Redirecting...`, false);
         form.reset();
         document.getElementById('event-title-input').value = 'Sunday Pickup Baseball';
         builderDuties = JSON.parse(JSON.stringify(orgDefaultDuties));
         renderTaskBuilder();
         setDefaultDateTime();
-        await loadAdminGames();
+        if (newId) {
+          setTimeout(() => {
+            window.location.href = `/event.html?id=${newId}`;
+          }, 600);
+        } else {
+          await loadAdminGames();
+        }
       }
     } catch (err) {
-      showAlert('Error creating game.', true);
+      showAlert(err.message || 'Error creating game.', true);
     } finally {
       submitBtn.disabled = false;
       submitBtn.textContent = 'Publish Game';
@@ -462,12 +512,14 @@ async function loadAdminGames() {
                 <a href="/event.html?id=${ev.id}" class="btn btn-outline btn-sm" target="_blank">
                   View Page ↗
                 </a>
-                <button onclick="sendReminders(${ev.id})" class="btn btn-outline btn-sm">
-                  📧 Send Reminders
-                </button>
-                <button onclick="deleteGame(${ev.id})" class="btn btn-danger btn-sm">
-                  Delete
-                </button>
+                ${currentAdminUser && currentAdminUser.isAdmin ? `
+                  <button onclick="sendReminders(${ev.id})" class="btn btn-outline btn-sm">
+                    📧 Send Reminders
+                  </button>
+                  <button onclick="deleteGame(${ev.id})" class="btn btn-danger btn-sm">
+                    Delete
+                  </button>
+                ` : ''}
               </div>
             </div>
 
@@ -532,6 +584,8 @@ async function renderTaskManagerContent(eventId) {
           ${duties.length === 0 ? '<p style="font-size: 0.85rem; color: var(--text-muted); font-style: italic;">No tasks added yet for this game.</p>' : ''}
           ${duties.map(d => {
             const assignedNames = d.assigned_players.map(p => p.name).join(', ');
+            const safeTitle = encodeURIComponent(d.title).replace(/'/g, '%27');
+            const safeDesc = encodeURIComponent(d.description || '').replace(/'/g, '%27');
             return `
               <div style="display: flex; justify-content: space-between; align-items: center; background: #ffffff; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); flex-wrap: wrap; gap: 8px;">
                 <div style="flex: 1; min-width: 220px;">
@@ -544,7 +598,7 @@ async function renderTaskManagerContent(eventId) {
                 </div>
 
                 <div style="display: flex; gap: 8px; align-items: center;">
-                  <button onclick="editDutyInline(${eventId}, ${d.id}, '${encodeURIComponent(d.title)}', '${encodeURIComponent(d.description || '')}', ${d.slots_needed})" class="btn btn-outline btn-sm" style="font-size: 0.78rem; padding: 4px 8px;">
+                  <button onclick="editDutyInline(${eventId}, ${d.id}, '${safeTitle}', '${safeDesc}', ${d.slots_needed})" class="btn btn-outline btn-sm" style="font-size: 0.78rem; padding: 4px 8px;">
                     ✏️ Edit
                   </button>
                   <button onclick="deleteDutyInline(${eventId}, ${d.id})" class="btn btn-danger btn-sm" style="font-size: 0.78rem; padding: 4px 8px;">
@@ -771,16 +825,39 @@ function setupAdminUserManagement(currentUser) {
               alertBox.innerHTML = `<div class="alert alert-error" style="font-size: 0.88rem;">${API.escapeHtml(updateRes.error)}</div>`;
               await loadUsers();
             } else {
-              alertBox.innerHTML = `<div class="alert alert-success" style="font-size: 0.88rem;">✓ Role for <strong>${API.escapeHtml(targetUserName)}</strong> updated to <strong>${newRole}</strong>!</div>`;
+              const isSelf = parseInt(targetUserId, 10) === currentUser.id;
+              const isSelfDemotion = isSelf && newRole !== 'admin';
 
-              if (parseInt(targetUserId, 10) === currentUser.id) {
+              if (isSelf) {
                 currentUser.role = newRole;
                 currentUser.isAdmin = (newRole === 'admin');
                 currentUser.canManageEvents = (newRole === 'admin' || newRole === 'organizer');
+                currentAdminUser = currentUser;
                 API.renderNav(currentUser);
               }
 
-              await loadUsers();
+              if (isSelfDemotion) {
+                const roleTitle = newRole === 'organizer' ? 'Organizer' : 'Player';
+                alertBox.innerHTML = `<div class="alert alert-success" style="font-size: 0.88rem;">Your role has been updated to ${roleTitle}. Admin management features are now restricted.</div>`;
+
+                applyRoleUI(currentUser);
+                await loadAdminGames();
+
+                if (newRole === 'player') {
+                  setTimeout(() => {
+                    alert('Your role has been updated to Player. Redirecting to home page.');
+                    window.location.href = '/index.html';
+                  }, 1500);
+                } else {
+                  setTimeout(() => {
+                    const sec = document.getElementById('admin-user-mgmt-section');
+                    if (sec) sec.style.display = 'none';
+                  }, 2500);
+                }
+              } else {
+                alertBox.innerHTML = `<div class="alert alert-success" style="font-size: 0.88rem;">✓ Role for <strong>${API.escapeHtml(targetUserName)}</strong> updated to <strong>${newRole}</strong>!</div>`;
+                await loadUsers();
+              }
             }
           } catch (err) {
             alertBox.innerHTML = `<div class="alert alert-error" style="font-size: 0.88rem;">Failed to update role. Please try again.</div>`;
