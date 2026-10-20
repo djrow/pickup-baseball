@@ -139,19 +139,29 @@ function renderAttendeesRoster() {
 
   container.innerHTML = `
     <ul class="roster-list">
-      ${attendees.map(a => `
-        <li class="roster-item">
-          <div>
-            <div class="roster-name">
-              ${API.escapeHtml(a.name)}
-              ${a.is_guest ? '<span style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal;">(Guest)</span>' : ''}
+      ${attendees.map(a => {
+        const avatarImg = a.avatar_url
+          ? `<img src="${API.escapeHtml(a.avatar_url)}" alt="${API.escapeHtml(a.name)}" class="roster-avatar">`
+          : `<span class="roster-avatar-placeholder">${API.escapeHtml(a.name.charAt(0).toUpperCase())}</span>`;
+
+        return `
+          <li class="roster-item" style="display: flex; gap: 12px; align-items: flex-start;">
+            ${avatarImg}
+            <div style="flex: 1; min-width: 0;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div class="roster-name">
+                  ${API.escapeHtml(a.name)}
+                  ${a.is_guest ? '<span style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal;">(Guest)</span>' : ''}
+                </div>
+                <span class="badge badge-green" style="font-size: 0.7rem;">Playing</span>
+              </div>
+              ${a.bio ? `<div class="player-bio-text">"${API.escapeHtml(a.bio)}"</div>` : ''}
+              ${a.gear_bringing ? `<div class="roster-gear">🎒 <em>${API.escapeHtml(a.gear_bringing)}</em></div>` : ''}
+              ${a.duties_assigned ? `<div style="font-size: 0.78rem; color: var(--primary); font-weight: 600; margin-top: 2px;">🛡️ ${API.escapeHtml(a.duties_assigned)}</div>` : ''}
             </div>
-            ${a.gear_bringing ? `<div class="roster-gear">🎒 <em>${API.escapeHtml(a.gear_bringing)}</em></div>` : ''}
-            ${a.duties_assigned ? `<div style="font-size: 0.78rem; color: var(--primary); font-weight: 600; margin-top: 2px;">🛡️ ${API.escapeHtml(a.duties_assigned)}</div>` : ''}
-          </div>
-          <span class="badge badge-green" style="font-size: 0.7rem;">Playing</span>
-        </li>
-      `).join('')}
+          </li>
+        `;
+      }).join('')}
     </ul>
   `;
 }
@@ -169,15 +179,27 @@ function renderComments() {
     return;
   }
 
-  container.innerHTML = comments.map(c => `
-    <div class="comment-bubble">
-      <div class="comment-header">
-        <span class="comment-author">${API.escapeHtml(c.author_name)}</span>
-        <span class="comment-time">${API.formatDateTime(c.created_at)}</span>
+  container.innerHTML = comments.map(c => {
+    const avatarImg = c.avatar_url
+      ? `<img src="${API.escapeHtml(c.avatar_url)}" alt="${API.escapeHtml(c.author_name)}" class="comment-avatar">`
+      : `<span class="comment-avatar-placeholder">${API.escapeHtml(c.author_name.charAt(0).toUpperCase())}</span>`;
+
+    return `
+      <div class="comment-bubble" style="display: flex; gap: 12px; align-items: flex-start;">
+        ${avatarImg}
+        <div style="flex: 1; min-width: 0;">
+          <div class="comment-header">
+            <div>
+              <span class="comment-author">${API.escapeHtml(c.author_name)}</span>
+              ${c.bio ? `<span style="font-size: 0.75rem; color: var(--text-muted); font-style: italic; margin-left: 6px;">• ${API.escapeHtml(c.bio)}</span>` : ''}
+            </div>
+            <span class="comment-time">${API.formatDateTime(c.created_at)}</span>
+          </div>
+          <div class="comment-body">${API.escapeHtml(c.content)}</div>
+        </div>
       </div>
-      <div class="comment-body">${API.escapeHtml(c.content)}</div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 }
 
 function setupRsvpState() {

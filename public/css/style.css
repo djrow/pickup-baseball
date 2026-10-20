@@ -483,6 +483,118 @@ select:focus {
   border: 1px solid #fecaca;
 }
 
+/* User Avatars & Profile Styles */
+.nav-user-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  transition: background-color 0.15s;
+}
+
+.nav-user-badge:hover {
+  background-color: #f1f5f9;
+}
+
+.nav-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--border);
+}
+
+.nav-avatar-placeholder {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: var(--primary-light);
+  color: var(--primary);
+  font-weight: 700;
+  font-size: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.roster-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.roster-avatar-placeholder {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background-color: #e2e8f0;
+  color: #475569;
+  font-weight: 700;
+  font-size: 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.comment-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.comment-avatar-placeholder {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background-color: #dbeafe;
+  color: var(--secondary);
+  font-weight: 700;
+  font-size: 0.88rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.profile-avatar-preview {
+  width: 108px;
+  height: 108px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+
+.profile-avatar-placeholder {
+  width: 108px;
+  height: 108px;
+  border-radius: 50%;
+  background-color: var(--primary-light);
+  color: var(--primary);
+  font-size: 2.5rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid var(--border);
+}
+
+.player-bio-text {
+  font-size: 0.82rem;
+  color: #475569;
+  margin-top: 3px;
+  line-height: 1.4;
+}
+
 /* Footer */
 footer.site-footer {
   margin-top: auto;

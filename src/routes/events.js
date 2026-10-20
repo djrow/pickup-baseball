@@ -71,9 +71,10 @@ router.get('/:id', optionalUser, (req, res) => {
     const duties = db.prepare(`
       SELECT d.*,
         COALESCE((
-          SELECT json_group_array(json_object('attendee_id', a.id, 'name', a.name))
+          SELECT json_group_array(json_object('attendee_id', a.id, 'name', a.name, 'avatar_url', u.avatar_url))
           FROM duty_assignments da
           JOIN attendees a ON da.attendee_id = a.id
+          LEFT JOIN users u ON a.user_id = u.id
           WHERE da.duty_id = d.id AND a.status = 'attending'
         ), '[]') as assigned_players
       FROM event_duties d
@@ -87,6 +88,7 @@ router.get('/:id', optionalUser, (req, res) => {
     // Fetch confirmed attendees
     const attendees = db.prepare(`
       SELECT a.id, a.name, a.status, a.gear_bringing, a.is_guest, a.created_at,
+        u.bio, u.avatar_url,
         (
           SELECT group_concat(d.title, ', ')
           FROM duty_assignments da
@@ -94,14 +96,17 @@ router.get('/:id', optionalUser, (req, res) => {
           WHERE da.attendee_id = a.id
         ) as duties_assigned
       FROM attendees a
+      LEFT JOIN users u ON a.user_id = u.id
       WHERE a.event_id = ? AND a.status = 'attending'
       ORDER BY a.created_at ASC
     `).all(eventId);
 
     // Fetch comments
     const comments = db.prepare(`
-      SELECT c.id, c.author_name, c.content, c.created_at, c.user_id
+      SELECT c.id, c.author_name, c.content, c.created_at, c.user_id,
+        u.avatar_url, u.bio
       FROM comments c
+      LEFT JOIN users u ON c.user_id = u.id
       WHERE c.event_id = ?
       ORDER BY c.created_at ASC
     `).all(eventId);

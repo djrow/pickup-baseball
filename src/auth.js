@@ -52,7 +52,7 @@ function optionalUser(req, res, next) {
   }
 
   const session = db.prepare(`
-    SELECT s.id as session_id, s.expires_at, u.id, u.name, u.email, u.is_admin
+    SELECT s.id as session_id, s.expires_at, u.id, u.name, u.email, u.bio, u.avatar_url, u.is_admin
     FROM sessions s
     JOIN users u ON s.user_id = u.id
     WHERE s.id = ? AND s.expires_at > CURRENT_TIMESTAMP
@@ -63,6 +63,8 @@ function optionalUser(req, res, next) {
       id: session.id,
       name: session.name,
       email: session.email,
+      bio: session.bio || '',
+      avatarUrl: session.avatar_url || '',
       isAdmin: Boolean(session.is_admin)
     };
   } else {

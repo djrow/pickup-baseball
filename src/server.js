@@ -1,4 +1,5 @@
 require('dotenv').config();
+const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const cookieParser = require('cookie-parser');
@@ -14,13 +15,21 @@ const PORT = process.env.PORT || 3000;
 // Initialize SQLite database tables and indices
 initDatabase();
 
+// Ensure avatars directory exists inside persistent data storage
+const dataDir = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
+const avatarsDir = path.join(dataDir, 'avatars');
+if (!fs.existsSync(avatarsDir)) {
+  fs.mkdirSync(avatarsDir, { recursive: true });
+}
+
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// Serve static frontend assets (HTML, CSS, JS, images)
+// Serve static frontend assets and persistent user uploaded avatars
 app.use(express.static(path.join(__dirname, '..', 'public')));
+app.use('/uploads/avatars', express.static(avatarsDir));
 
 // API Routes
 app.use('/api/auth', authRoutes);

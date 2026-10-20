@@ -74,6 +74,32 @@ const API = {
     return res.json();
   },
 
+  async updateProfile(name, bio) {
+    const res = await fetch('/api/auth/profile', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, bio })
+    });
+    return res.json();
+  },
+
+  async uploadAvatar(file) {
+    const formData = new FormData();
+    formData.append('avatar', file);
+    const res = await fetch('/api/auth/avatar', {
+      method: 'POST',
+      body: formData
+    });
+    return res.json();
+  },
+
+  async deleteAvatar() {
+    const res = await fetch('/api/auth/avatar', {
+      method: 'DELETE'
+    });
+    return res.json();
+  },
+
   formatDate(isoString) {
     if (!isoString) return '';
     const d = new Date(isoString);
@@ -103,10 +129,18 @@ const API = {
 
     let authHtml = '';
     if (user) {
+      const avatarImg = user.avatarUrl
+        ? `<img src="${this.escapeHtml(user.avatarUrl)}" alt="${this.escapeHtml(user.name)}" class="nav-avatar">`
+        : `<span class="nav-avatar-placeholder">${this.escapeHtml(user.name.charAt(0).toUpperCase())}</span>`;
+
       authHtml = `
-        <span style="font-weight: 600; font-size: 0.9rem; color: var(--secondary);">
-          👋 ${this.escapeHtml(user.name)}
-        </span>
+        <a href="/profile.html" class="nav-user-badge" title="View & Edit Profile">
+          ${avatarImg}
+          <span style="font-weight: 600; font-size: 0.9rem; color: var(--secondary);">
+            ${this.escapeHtml(user.name)}
+          </span>
+        </a>
+        <a href="/profile.html" class="btn btn-outline btn-sm">👤 Profile</a>
         ${user.isAdmin ? '<a href="/admin.html" class="btn btn-outline btn-sm">⚙️ Admin</a>' : ''}
         <button id="nav-logout-btn" class="btn btn-outline btn-sm">Log Out</button>
       `;
@@ -120,8 +154,8 @@ const API = {
       <div class="nav-wrap">
         <a href="/index.html" class="brand">
           <span class="brand-icon">⚾</span>
-          <span>Sunday Pickup Baseball</span>
-          <span class="brand-tag">Charity</span>
+          <span>Pickup Baseball Foundation</span>
+          <span class="brand-tag">Community</span>
         </a>
         <div class="nav-links">
           <a href="/index.html">Games</a>

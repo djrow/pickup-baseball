@@ -21,6 +21,8 @@ function initDatabase() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+      bio TEXT,
+      avatar_url TEXT,
       is_admin INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
@@ -111,6 +113,15 @@ function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_attendees_event ON attendees(event_id);
     CREATE INDEX IF NOT EXISTS idx_comments_event ON comments(event_id);
   `);
+
+  // Migrate users table columns if upgrading
+  const userCols = db.pragma('table_info(users)').map(c => c.name);
+  if (!userCols.includes('bio')) {
+    db.exec('ALTER TABLE users ADD COLUMN bio TEXT');
+  }
+  if (!userCols.includes('avatar_url')) {
+    db.exec('ALTER TABLE users ADD COLUMN avatar_url TEXT');
+  }
 
   // Seed default duties if table is empty
   const defaultDutiesCount = db.prepare('SELECT COUNT(*) as c FROM default_duties').get().c;

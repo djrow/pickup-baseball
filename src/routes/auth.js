@@ -1,5 +1,8 @@
 const express = require('express');
 const router = express.Router();
+const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
 const { db } = require('../db');
 const {
   SESSION_COOKIE_NAME,
@@ -8,9 +11,41 @@ const {
   generateToken,
   createSession,
   deleteSession,
-  optionalUser
+  optionalUser,
+  requireUser
 } = require('../auth');
 const { sendAuthCode } = require('../mailer');
+
+// Set up avatar upload destination in persistent data directory
+const dataDir = process.env.DATA_DIR || path.join(__dirname, '..', '..', 'data');
+const avatarsDir = path.join(dataDir, 'avatars');
+if (!fs.existsSync(avatarsDir)) {
+  fs.mkdirSync(avatarsDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, avatarsDir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+    const safeExt = ['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(ext) ? ext : '.jpg';
+    cb(null, `avatar-${req.user.id}-${Date.now()}${safeExt}`);
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB max
+  fileFilter: (req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/jpg'];
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only JPEG, PNG, WebP, and GIF images are allowed.'));
+    }
+  }
+});
 
 /**
  * Request a 6-digit login code and magic link
@@ -176,6 +211,99 @@ router.get('/verify-magic', (req, res) => {
  */
 router.get('/me', optionalUser, (req, res) => {
   res.json({ user: req.user });
+});
+
+/**
+ * Update user profile (Name and Short Bio)
+ */
+router.put('/profile', requireUser, (req, res) => {
+  try {
+    const { name, bio } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Name cannot be empty.' });
+    }
+
+    db.prepare(`
+      UPDATE users
+      SET name = ?, bio = ?
+      WHERE id = ?
+    `).run(name.trim(), (bio || '').trim(), req.user.id);
+
+    req.user.name = name.trim();
+    req.user.bio = (bio || '').trim();
+
+    res.json({
+      success: true,
+      message: 'Profile updated successfully.',
+      user: {
+        id: req.user.id,
+        name: req.user.name,
+        email: req.user.email,
+        bio: req.user.bio,
+        avatarUrl: req.user.avatarUrl,
+        isAdmin: req.user.isAdmin
+      }
+    });
+  } catch (err) {
+    console.error('[Auth] Error updating profile:', err);
+    res.status(500).json({ error: 'Failed to update profile.' });
+  }
+});
+
+/**
+ * Upload profile picture
+ */
+router.post('/avatar', requireUser, upload.single('avatar'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image file uploaded.' });
+    }
+
+    // Delete previous avatar file if exists
+    const prevUser = db.prepare('SELECT avatar_url FROM users WHERE id = ?').get(req.user.id);
+    if (prevUser && prevUser.avatar_url && prevUser.avatar_url.startsWith('/uploads/avatars/')) {
+      const prevFile = path.join(avatarsDir, path.basename(prevUser.avatar_url));
+      if (fs.existsSync(prevFile)) {
+        try { fs.unlinkSync(prevFile); } catch (e) {}
+      }
+    }
+
+    const avatarUrl = `/uploads/avatars/${req.file.filename}`;
+    db.prepare('UPDATE users SET avatar_url = ? WHERE id = ?').run(avatarUrl, req.user.id);
+    req.user.avatarUrl = avatarUrl;
+
+    res.json({
+      success: true,
+      avatarUrl,
+      message: 'Profile picture updated successfully!'
+    });
+  } catch (err) {
+    console.error('[Auth] Error uploading avatar:', err);
+    res.status(500).json({ error: 'Failed to upload profile picture.' });
+  }
+});
+
+/**
+ * Remove profile picture
+ */
+router.delete('/avatar', requireUser, (req, res) => {
+  try {
+    const prevUser = db.prepare('SELECT avatar_url FROM users WHERE id = ?').get(req.user.id);
+    if (prevUser && prevUser.avatar_url && prevUser.avatar_url.startsWith('/uploads/avatars/')) {
+      const prevFile = path.join(avatarsDir, path.basename(prevUser.avatar_url));
+      if (fs.existsSync(prevFile)) {
+        try { fs.unlinkSync(prevFile); } catch (e) {}
+      }
+    }
+
+    db.prepare('UPDATE users SET avatar_url = NULL WHERE id = ?').run(req.user.id);
+    req.user.avatarUrl = null;
+
+    res.json({ success: true, message: 'Profile picture removed.' });
+  } catch (err) {
+    console.error('[Auth] Error removing avatar:', err);
+    res.status(500).json({ error: 'Failed to remove profile picture.' });
+  }
 });
 
 /**

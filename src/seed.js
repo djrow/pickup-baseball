@@ -44,23 +44,32 @@ function seed() {
     dutyIds.push(res.lastInsertRowid);
   });
 
-  // Seed sample attendees
+  // Seed sample attendees with profiles & bios
   const samplePlayers = [
-    { name: 'Marcus Rivera', email: 'marcus@example.com', gear: 'Bucket of 24 balls, 2 BBCOR bats', dutyIdx: 1 },
-    { name: 'Sarah Chen', email: 'sarah@example.com', gear: '3 throw-down bases and home plate', dutyIdx: 0 },
-    { name: 'Dave K.', email: 'dave@example.com', gear: 'Full adult catcher gear set', dutyIdx: 2 },
-    { name: 'Alex Johnson', email: 'alex@example.com', gear: 'Ice water cooler and cups', dutyIdx: 5 },
-    { name: 'Elena Rostova', email: 'elena@example.com', gear: 'Extra fielding gloves (R and L handed)', dutyIdx: null }
+    { name: 'Marcus Rivera', email: 'marcus@example.com', bio: 'Shortstop & leadoff hitter. Playing pickup since 2018!', gear: 'Bucket of 24 balls, 2 BBCOR bats', dutyIdx: 1 },
+    { name: 'Sarah Chen', email: 'sarah@example.com', bio: 'Utility infielder, always down for extra batting practice.', gear: '3 throw-down bases and home plate', dutyIdx: 0 },
+    { name: 'Dave K.', email: 'dave@example.com', bio: 'Catcher / first base. Heavy hitter with slow feet.', gear: 'Full adult catcher gear set', dutyIdx: 2 },
+    { name: 'Alex Johnson', email: 'alex@example.com', bio: 'Outfield & pitching relief. Happy to umpire whenever needed.', gear: 'Ice water cooler and cups', dutyIdx: 5 },
+    { name: 'Elena Rostova', email: 'elena@example.com', bio: 'New to baseball, having a blast learning to track fly balls.', gear: 'Extra fielding gloves (R and L handed)', dutyIdx: null }
   ];
 
   const insertAttendee = db.prepare(`
-    INSERT INTO attendees (event_id, name, email, is_guest, status, gear_bringing, management_token)
-    VALUES (?, ?, ?, 0, 'attending', ?, ?)
+    INSERT INTO attendees (event_id, user_id, name, email, is_guest, status, gear_bringing, management_token)
+    VALUES (?, ?, ?, ?, 0, 'attending', ?, ?)
   `);
 
   samplePlayers.forEach((p, idx) => {
+    // Ensure user row exists with bio
+    let user = db.prepare('SELECT id FROM users WHERE email = ?').get(p.email);
+    if (!user) {
+      const uRes = db.prepare('INSERT INTO users (name, email, bio) VALUES (?, ?, ?)').run(p.name, p.email, p.bio);
+      user = { id: uRes.lastInsertRowid };
+    } else {
+      db.prepare('UPDATE users SET bio = ? WHERE id = ?').run(p.bio, user.id);
+    }
+
     const token = crypto.randomBytes(16).toString('hex');
-    const attRes = insertAttendee.run(eventId, p.name, p.email, p.gear, token);
+    const attRes = insertAttendee.run(eventId, user.id, p.name, p.email, p.gear, token);
     if (p.dutyIdx !== null && dutyIds[p.dutyIdx]) {
       db.prepare('INSERT INTO duty_assignments (duty_id, attendee_id) VALUES (?, ?)').run(
         dutyIds[p.dutyIdx],
