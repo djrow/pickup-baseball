@@ -10,7 +10,8 @@ let transporter = null;
  * Universal dispatcher: Resend REST API -> SMTP Transport -> Local Console
  */
 async function dispatchEmail({ to, subject, text, html }) {
-  const from = process.env.FROM_EMAIL || `"${APP_NAME}" <onboarding@resend.dev>`;
+  const from = process.env.FROM_EMAIL || `"${APP_NAME}" <games@pickupbaseballfoundation.org>`;
+  const replyTo = process.env.REPLY_TO_EMAIL || 'pickupbaseballfoundation@gmail.com';
   const resendApiKey = process.env.RESEND_API_KEY;
 
   // 1. Direct Resend REST API (Fast, no SMTP port blocks, 100% free tier compatible)
@@ -25,6 +26,7 @@ async function dispatchEmail({ to, subject, text, html }) {
         body: JSON.stringify({
           from,
           to: Array.isArray(to) ? to : [to],
+          reply_to: replyTo,
           subject,
           text,
           html
@@ -61,7 +63,7 @@ async function dispatchEmail({ to, subject, text, html }) {
     }
 
     const fromAddress = `"${APP_NAME}" <${gmailUser.trim()}>`;
-    return transporter.sendMail({ from: fromAddress, to, subject, text, html });
+    return transporter.sendMail({ from: fromAddress, to, replyTo, subject, text, html });
   }
 
   // 3. Standard SMTP Fallback (e.g. custom SMTP servers)
@@ -80,7 +82,7 @@ async function dispatchEmail({ to, subject, text, html }) {
       console.log(`[Mailer:SMTP] Configured SMTP transport with host: ${host}`);
     }
 
-    return transporter.sendMail({ from, to, subject, text, html });
+    return transporter.sendMail({ from, to, replyTo, subject, text, html });
   }
 
   // 3. Local Development / Console Fallback
