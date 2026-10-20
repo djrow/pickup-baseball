@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
-const { db, DEFAULT_BASEBALL_DUTIES } = require('../db');
+const { db, DEFAULT_BASEBALL_DUTIES, getDefaultDuties, saveDefaultDuties } = require('../db');
 const { optionalUser, requireAdmin } = require('../auth');
 const { sendRsvpConfirmation } = require('../mailer');
 const { sendRemindersForEvent } = require('../reminders');
@@ -345,7 +345,7 @@ router.post('/', requireAdmin, (req, res) => {
     // Insert duties
     let dutiesToInsert = [];
     if (use_default_duties || (!custom_duties || custom_duties.length === 0)) {
-      dutiesToInsert = DEFAULT_BASEBALL_DUTIES;
+      dutiesToInsert = getDefaultDuties();
     } else if (Array.isArray(custom_duties)) {
       dutiesToInsert = custom_duties;
     }
@@ -424,7 +424,24 @@ router.delete('/:id', requireAdmin, (req, res) => {
  * Get default charity duties template
  */
 router.get('/default-duties', (req, res) => {
-  res.json({ duties: DEFAULT_BASEBALL_DUTIES });
+  res.json({ duties: getDefaultDuties() });
+});
+
+/**
+ * Update default charity duties template (Admin only)
+ */
+router.put('/default-duties', requireAdmin, (req, res) => {
+  try {
+    const { duties } = req.body;
+    if (!Array.isArray(duties)) {
+      return res.status(400).json({ error: 'duties array is required.' });
+    }
+    saveDefaultDuties(duties);
+    res.json({ success: true, duties: getDefaultDuties(), message: 'Default task template updated successfully!' });
+  } catch (err) {
+    console.error('[Events] Error updating default duties:', err);
+    res.status(500).json({ error: 'Failed to update default duties template.' });
+  }
 });
 
 /**

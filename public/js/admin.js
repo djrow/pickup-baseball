@@ -1,20 +1,15 @@
 /**
- * Admin Dashboard logic with Task & Duty Management
+ * Admin Dashboard logic with Task & Duty Management and Default Template Editor
  */
 
-const DEFAULT_BASEBALL_DUTIES = [
-  { title: "Bases & Home Plate", description: "Bring 3 throw-down/stake bases and home plate", slots_needed: 1 },
-  { title: "Game Baseballs & Scorebook", description: "Bring game balls bucket and pickup roster/scorebook", slots_needed: 1 },
-  { title: "Catcher's Gear", description: "Bring shin guards, chest protector, and catcher's helmet", slots_needed: 1 },
-  { title: "Team Bats & Helmets", description: "Bring community wood/BBCOR bats & batting helmets", slots_needed: 1 },
-  { title: "Field Setup & Cones", description: "Arrive 20 mins early to lay out foul lines and inspect turf/dirt", slots_needed: 2 },
-  { title: "Cold Water & First Aid", description: "Bring community ice water jug and basic sports first aid kit", slots_needed: 1 },
-  { title: "Umpire / Inning Coordinator", description: "Volunteer to umpire or coordinate team inning rotations", slots_needed: 2 },
-  { title: "Post-Game Dugout Cleanup", description: "Ensure dugouts and bleachers are completely clean after the game", slots_needed: 2 }
-];
+// Cached organization default duties
+let orgDefaultDuties = [];
 
 // Current duties being customized in the "Schedule New Game" form
-let builderDuties = JSON.parse(JSON.stringify(DEFAULT_BASEBALL_DUTIES));
+let builderDuties = [];
+
+// Duties in the "Organization Default Tasks Template" editor
+let templateDuties = [];
 
 // Currently expanded event task manager
 let openTaskManagerEventId = null;
@@ -30,9 +25,36 @@ async function initAdmin() {
   API.renderNav(user);
   setDefaultDateTime();
   setupQuickSundayButton();
+
+  // Load organization default duties from API
+  await loadDefaultDuties();
+
   setupTaskBuilder();
+  setupDefaultTemplateEditor();
   setupCreateForm();
   await loadAdminGames();
+}
+
+async function loadDefaultDuties() {
+  try {
+    const res = await fetch('/api/events/default-duties');
+    const data = await res.json();
+    orgDefaultDuties = data.duties || [];
+  } catch (err) {
+    console.error('Failed to load default duties, using fallback:', err);
+    orgDefaultDuties = [
+      { title: "Bases & Home Plate", description: "Bring 3 throw-down/stake bases and home plate", slots_needed: 1 },
+      { title: "Game Baseballs & Scorebook", description: "Bring game balls bucket and pickup roster/scorebook", slots_needed: 1 },
+      { title: "Catcher's Gear", description: "Bring shin guards, chest protector, and catcher's helmet", slots_needed: 1 },
+      { title: "Team Bats & Helmets", description: "Bring community wood/BBCOR bats & batting helmets", slots_needed: 1 },
+      { title: "Field Setup & Cones", description: "Arrive 20 mins early to lay out foul lines and inspect turf/dirt", slots_needed: 2 },
+      { title: "Cold Water & First Aid", description: "Bring community ice water jug and basic sports first aid kit", slots_needed: 1 },
+      { title: "Umpire / Inning Coordinator", description: "Volunteer to umpire or coordinate team inning rotations", slots_needed: 2 },
+      { title: "Post-Game Dugout Cleanup", description: "Ensure dugouts and bleachers are completely clean after the game", slots_needed: 2 }
+    ];
+  }
+  builderDuties = JSON.parse(JSON.stringify(orgDefaultDuties));
+  templateDuties = JSON.parse(JSON.stringify(orgDefaultDuties));
 }
 
 function getNextSundayNoon() {
@@ -67,6 +89,7 @@ function setupTaskBuilder() {
   const addBtn = document.getElementById('btn-add-task-row');
   const resetBtn = document.getElementById('btn-reset-default-tasks');
   const clearBtn = document.getElementById('btn-clear-tasks');
+  const saveAsDefaultsBtn = document.getElementById('btn-save-as-defaults');
 
   addBtn.addEventListener('click', () => {
     syncBuilderDutiesFromDOM();
@@ -76,14 +99,13 @@ function setupTaskBuilder() {
       slots_needed: 1
     });
     renderTaskBuilder();
-    // Focus new title input
     const inputs = document.querySelectorAll('.task-builder-title');
     if (inputs.length > 0) inputs[inputs.length - 1].focus();
   });
 
   resetBtn.addEventListener('click', () => {
-    if (confirm('Reset tasks to the 8 standard baseball charity duties?')) {
-      builderDuties = JSON.parse(JSON.stringify(DEFAULT_BASEBALL_DUTIES));
+    if (confirm('Reset tasks to your organization\'s default tasks template?')) {
+      builderDuties = JSON.parse(JSON.stringify(orgDefaultDuties));
       renderTaskBuilder();
     }
   });
@@ -94,6 +116,21 @@ function setupTaskBuilder() {
       renderTaskBuilder();
     }
   });
+
+  if (saveAsDefaultsBtn) {
+    saveAsDefaultsBtn.addEventListener('click', async () => {
+      syncBuilderDutiesFromDOM();
+      const invalidDuty = builderDuties.find(d => !d.title.trim());
+      if (invalidDuty) {
+        alert('Please give a title to all tasks before saving as defaults.');
+        return;
+      }
+
+      if (confirm(`Save these ${builderDuties.length} tasks as the organization's permanent default tasks template for all future games?`)) {
+        await saveDefaultsToBackend(builderDuties);
+      }
+    });
+  }
 
   renderTaskBuilder();
 }
@@ -119,7 +156,7 @@ function renderTaskBuilder() {
   if (builderDuties.length === 0) {
     container.innerHTML = `
       <div style="text-align: center; padding: 20px; background: #ffffff; border: 1px dashed var(--border); border-radius: var(--radius-sm); color: var(--text-muted); font-size: 0.9rem;">
-        No tasks added yet. Click <strong>"+ Add Custom Task"</strong> or <strong>"↺ Reset to Standard"</strong> above.
+        No tasks added yet. Click <strong>"+ Add Task"</strong> or <strong>"↺ Reset"</strong> above.
       </div>
     `;
     return;
@@ -151,6 +188,128 @@ window.removeTaskBuilderRow = function(index) {
   builderDuties.splice(index, 1);
   renderTaskBuilder();
 };
+
+// -------------------------------------------------------------
+// ORGANIZATION DEFAULT TASKS TEMPLATE EDITOR
+// -------------------------------------------------------------
+function setupDefaultTemplateEditor() {
+  const toggleBtn = document.getElementById('toggle-default-template-btn');
+  const panel = document.getElementById('default-template-panel');
+  const addBtn = document.getElementById('btn-add-default-template-row');
+  const saveBtn = document.getElementById('btn-save-default-template');
+
+  if (!toggleBtn || !panel) return;
+
+  toggleBtn.addEventListener('click', () => {
+    const isHidden = panel.style.display === 'none';
+    panel.style.display = isHidden ? 'block' : 'none';
+    toggleBtn.textContent = isHidden ? '✕ Close Template' : '✏️ Edit Default Template';
+    if (isHidden) {
+      templateDuties = JSON.parse(JSON.stringify(orgDefaultDuties));
+      renderDefaultTemplateList();
+    }
+  });
+
+  addBtn.addEventListener('click', () => {
+    syncTemplateDutiesFromDOM();
+    templateDuties.push({
+      title: '',
+      description: '',
+      slots_needed: 1
+    });
+    renderDefaultTemplateList();
+  });
+
+  saveBtn.addEventListener('click', async () => {
+    syncTemplateDutiesFromDOM();
+    const invalidDuty = templateDuties.find(d => !d.title.trim());
+    if (invalidDuty) {
+      alert('Please enter a task name for all items, or click the trash icon to remove empty rows.');
+      return;
+    }
+
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+    await saveDefaultsToBackend(templateDuties);
+    saveBtn.disabled = false;
+    saveBtn.textContent = '💾 Save New Default Template';
+  });
+}
+
+function syncTemplateDutiesFromDOM() {
+  const rows = document.querySelectorAll('.template-task-row');
+  const updated = [];
+  rows.forEach(row => {
+    const title = row.querySelector('.template-task-title').value;
+    const desc = row.querySelector('.template-task-desc').value;
+    const slots = parseInt(row.querySelector('.template-task-slots').value, 10) || 1;
+    updated.push({
+      title,
+      description: desc,
+      slots_needed: slots
+    });
+  });
+  templateDuties = updated;
+}
+
+function renderDefaultTemplateList() {
+  const container = document.getElementById('default-template-list');
+  if (templateDuties.length === 0) {
+    container.innerHTML = `
+      <div style="text-align: center; padding: 16px; background: #ffffff; border: 1px dashed var(--border); border-radius: var(--radius-sm); color: var(--text-muted); font-size: 0.9rem;">
+        No default tasks configured. Click "+ Add Task to Template" below.
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = templateDuties.map((duty, idx) => `
+    <div class="template-task-row" style="display: grid; grid-template-columns: 2fr 3fr 100px 40px; gap: 10px; align-items: center; background: #ffffff; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);">
+      <div>
+        <label style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 2px;">Default Task</label>
+        <input type="text" class="template-task-title" value="${API.escapeHtml(duty.title)}" placeholder="e.g. Umpire, Baseballs..." required style="padding: 6px 10px; font-size: 0.88rem;">
+      </div>
+      <div>
+        <label style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 2px;">Description</label>
+        <input type="text" class="template-task-desc" value="${API.escapeHtml(duty.description)}" placeholder="e.g. Bring bucket of balls..." style="padding: 6px 10px; font-size: 0.88rem;">
+      </div>
+      <div>
+        <label style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 2px;">Volunteers</label>
+        <input type="number" class="template-task-slots" min="1" max="15" value="${duty.slots_needed || 1}" required style="padding: 6px 8px; font-size: 0.88rem; text-align: center;">
+      </div>
+      <div style="text-align: right; padding-top: 18px;">
+        <button type="button" onclick="removeTemplateRow(${idx})" title="Remove task" style="background: none; border: none; cursor: pointer; color: var(--danger); font-size: 1.15rem; line-height: 1;">🗑️</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+window.removeTemplateRow = function(index) {
+  syncTemplateDutiesFromDOM();
+  templateDuties.splice(index, 1);
+  renderDefaultTemplateList();
+};
+
+async function saveDefaultsToBackend(dutiesToSave) {
+  try {
+    const res = await fetch('/api/events/default-duties', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ duties: dutiesToSave })
+    });
+    const data = await res.json();
+    if (data.error) {
+      showAlert(data.error, true);
+    } else {
+      orgDefaultDuties = data.duties;
+      templateDuties = JSON.parse(JSON.stringify(orgDefaultDuties));
+      showAlert(`Organization default tasks template saved (${orgDefaultDuties.length} tasks)! All future games will use these defaults.`, false);
+      renderDefaultTemplateList();
+    }
+  } catch (err) {
+    showAlert('Error saving default template.', true);
+  }
+}
 
 // -------------------------------------------------------------
 // EVENT CREATION
@@ -246,7 +405,7 @@ function setupCreateForm() {
         showAlert(`Game "${title}" published with ${builderDuties.length} volunteer tasks!`, false);
         form.reset();
         document.getElementById('event-title-input').value = 'Sunday Pickup Baseball';
-        builderDuties = JSON.parse(JSON.stringify(DEFAULT_BASEBALL_DUTIES));
+        builderDuties = JSON.parse(JSON.stringify(orgDefaultDuties));
         renderTaskBuilder();
         setDefaultDateTime();
         await loadAdminGames();
@@ -332,7 +491,6 @@ window.toggleTaskManager = async function(eventId) {
     openTaskManagerEventId = null;
     panel.style.display = 'none';
   } else {
-    // Close previously open panel
     if (openTaskManagerEventId) {
       const prev = document.getElementById(`task-manager-panel-${openTaskManagerEventId}`);
       if (prev) prev.style.display = 'none';

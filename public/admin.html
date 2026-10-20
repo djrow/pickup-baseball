@@ -77,8 +77,9 @@
               </p>
             </div>
             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-              <button type="button" id="btn-add-task-row" class="btn btn-primary btn-sm">+ Add Custom Task</button>
-              <button type="button" id="btn-reset-default-tasks" class="btn btn-outline btn-sm">↺ Reset to Standard</button>
+              <button type="button" id="btn-add-task-row" class="btn btn-primary btn-sm">+ Add Task</button>
+              <button type="button" id="btn-save-as-defaults" class="btn btn-secondary btn-sm" title="Save this task list as the default template for all future games">💾 Save as Org Defaults</button>
+              <button type="button" id="btn-reset-default-tasks" class="btn btn-outline btn-sm">↺ Reset</button>
               <button type="button" id="btn-clear-tasks" class="btn btn-outline btn-sm">✕ Clear All</button>
             </div>
           </div>
@@ -92,6 +93,31 @@
           Publish Game
         </button>
       </form>
+    </section>
+
+    <!-- Organization Default Template Card -->
+    <section class="card" style="margin-top: 28px; background: #ffffff;">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+        <div>
+          <h2 class="card-title" style="margin-bottom: 2px;">⚙️ Organization Default Tasks Template</h2>
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0;">
+            These default tasks automatically populate every new Sunday pickup game and the 1-Click game scheduler.
+          </p>
+        </div>
+        <button type="button" id="toggle-default-template-btn" class="btn btn-outline btn-sm">
+          ✏️ Edit Default Template
+        </button>
+      </div>
+
+      <div id="default-template-panel" style="display: none; margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--border);">
+        <div id="default-template-list" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px;">
+          <!-- Loaded dynamically -->
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+          <button type="button" id="btn-add-default-template-row" class="btn btn-outline btn-sm">+ Add Task to Template</button>
+          <button type="button" id="btn-save-default-template" class="btn btn-primary">💾 Save New Default Template</button>
+        </div>
+      </div>
     </section>
 
     <!-- Manage Existing Games -->
