@@ -746,6 +746,58 @@ app.put('/events/default-duties', async (c) => {
   }
 });
 
+app.get('/events/admin/backup-db', async (c) => {
+  const user = c.get('user');
+  if (!user || !user.isAdmin) {
+    return c.text('Administrator access required. Please sign in as an admin.', 403);
+  }
+
+  try {
+    const tables = [
+      'users',
+      'events',
+      'event_duties',
+      'attendees',
+      'duty_assignments',
+      'comments',
+      'default_duties'
+    ];
+
+    const timestamp = new Date().toISOString();
+    const dateStr = timestamp.slice(0, 10);
+    let sqlDump = `-- Sunday Pickup Baseball Database Backup\n-- Exported: ${timestamp}\n-- Platform: Cloudflare D1 SQL\n\n`;
+
+    for (const table of tables) {
+      const { results: rows } = await c.env.DB.prepare(`SELECT * FROM "${table}"`).all();
+      if (rows && rows.length > 0) {
+        sqlDump += `-- Table: ${table} (${rows.length} rows)\n`;
+        for (const row of rows) {
+          const cols = Object.keys(row).map(k => `"${k}"`).join(', ');
+          const vals = Object.values(row).map(v => {
+            if (v === null || v === undefined) return 'NULL';
+            if (typeof v === 'number') return v;
+            return `'${String(v).replace(/'/g, "''")}'`;
+          }).join(', ');
+          sqlDump += `INSERT OR IGNORE INTO "${table}" (${cols}) VALUES (${vals});\n`;
+        }
+        sqlDump += '\n';
+      }
+    }
+
+    return new Response(sqlDump, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/sql; charset=utf-8',
+        'Content-Disposition': `attachment; filename="baseball_backup_${dateStr}.sql"`,
+        'Cache-Control': 'no-store'
+      }
+    });
+  } catch (err) {
+    console.error('[Backup] Error creating SQL dump:', err);
+    return c.text('Failed to generate database backup: ' + err.message, 500);
+  }
+});
+
 app.get('/events/:id', async (c) => {
   try {
     const eventId = parseInt(c.req.param('id'), 10);
