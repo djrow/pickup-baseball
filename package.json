@@ -7,7 +7,7 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "pages:dev": "npx wrangler pages dev public",
-    "deploy": "npx wrangler pages deploy public --project-name pickup-baseball --commit-dirty=true",
+    "deploy": "npx wrangler pages deploy public --project-name pickup-baseball --branch trunk --commit-dirty=true",
     "d1:backup": "npx wrangler d1 export pickup-baseball-db --remote --output ./d1_backup.sql",
     "seed": "node src/seed.js",
     "test": "node scripts/verify-all.js"
