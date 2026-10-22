@@ -12,3 +12,6 @@ backup*
 Thumbs.db
 npm-debug.log*
 .agents/
+
+baseball_backup*
+d1_backup*.sql
