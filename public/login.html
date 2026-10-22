@@ -46,6 +46,7 @@
           <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
             <a href="/index.html" class="btn btn-primary" style="font-weight: 700;">⚾ View Scheduled Games</a>
             <a href="/profile.html" class="btn btn-outline" style="font-weight: 700;">👤 Player Profile</a>
+            <a href="#security-management-section" id="admin-security-link" class="btn btn-outline" style="display: none; font-weight: 700;">🛡️ Access Control &amp; Bans</a>
             <button type="button" id="login-page-logout-btn" class="btn btn-outline" style="color: var(--danger); border-color: var(--danger);">
               Log Out
             </button>
@@ -242,7 +243,14 @@
 
         <div class="form-group">
           <label for="player-email">Email Address *</label>
-          <input type="email" id="player-email" placeholder="you@example.com" required>
+          <input type="email" id="player-email" placeholder="you@example.com" required autocomplete="email">
+        </div>
+
+        <div class="form-group" style="margin-bottom: 4px;">
+          <label style="display: flex; align-items: center; gap: 8px; font-weight: 500; font-size: 0.88rem; cursor: pointer;">
+            <input type="checkbox" id="remember-email" style="width: 16px; height: 16px; cursor: pointer;">
+            Remember my email address on this device
+          </label>
         </div>
 
         <button type="submit" id="send-code-btn" class="btn btn-primary" style="width: 100%; margin-top: 8px;">
@@ -284,7 +292,7 @@
       </form>
 
       <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 0.82rem; color: var(--text-muted); text-align: center;">
-        💡 <strong>Guest?</strong> You don't have to sign in! You can RSVP for individual games as a guest on any game page.
+        💡 New here? Just enter your name and email above — we'll email you a code, and your account is created automatically.
       </div>
     </div>
 
@@ -359,6 +367,18 @@
 
       let currentEmail = '';
 
+      // Remember email on this device (stored locally in the browser only; never sent anywhere)
+      const rememberBox = document.getElementById('remember-email');
+      try {
+        const savedEmail = localStorage.getItem('pickup_remembered_email');
+        const savedName = localStorage.getItem('pickup_remembered_name');
+        if (savedEmail) {
+          document.getElementById('player-email').value = savedEmail;
+          if (savedName) document.getElementById('player-name').value = savedName;
+          rememberBox.checked = true;
+        }
+      } catch (e) {}
+
       function showAlert(msg, isError = false) {
         alertBox.innerHTML = `<div class="alert ${isError ? 'alert-error' : 'alert-success'}">${API.escapeHtml(msg)}</div>`;
       }
@@ -380,6 +400,16 @@
           showAlert('Please enter a valid email address.', true);
           return;
         }
+
+        try {
+          if (rememberBox.checked) {
+            localStorage.setItem('pickup_remembered_email', email);
+            if (name) localStorage.setItem('pickup_remembered_name', name);
+          } else {
+            localStorage.removeItem('pickup_remembered_email');
+            localStorage.removeItem('pickup_remembered_name');
+          }
+        } catch (e) {}
 
         sendBtn.disabled = true;
         sendBtn.textContent = 'Sending code...';
@@ -744,6 +774,8 @@
       // Access Control & Banned Emails Setup
       const secSection = document.getElementById('security-management-section');
       if (secSection) secSection.style.display = 'block';
+      const secLink = document.getElementById('admin-security-link');
+      if (secLink) secLink.style.display = 'inline-flex';
 
       const requireLoginCheckbox = document.getElementById('setting-require-login');
       const settingsAlert = document.getElementById('settings-alert');
