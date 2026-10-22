@@ -123,6 +123,48 @@ const API = {
     return res.json();
   },
 
+  async deleteUser(userId, ban = false, reason = '') {
+    const res = await fetch(`/api/auth/users/${userId}?ban=${ban ? 'true' : 'false'}&reason=${encodeURIComponent(reason)}`, {
+      method: 'DELETE'
+    });
+    return res.json();
+  },
+
+  async getBannedEmails() {
+    const res = await fetch('/api/auth/banned-emails');
+    return res.json();
+  },
+
+  async banEmail(email, reason = '') {
+    const res = await fetch('/api/auth/banned-emails', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, reason })
+    });
+    return res.json();
+  },
+
+  async unbanEmail(id) {
+    const res = await fetch(`/api/auth/banned-emails/${id}`, {
+      method: 'DELETE'
+    });
+    return res.json();
+  },
+
+  async getSettings() {
+    const res = await fetch('/api/settings');
+    return res.json();
+  },
+
+  async updateSettings(settings) {
+    const res = await fetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(settings)
+    });
+    return res.json();
+  },
+
   formatDate(isoString) {
     if (!isoString) return '';
     const d = new Date(isoString);

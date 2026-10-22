@@ -202,28 +202,79 @@ function renderComments() {
   }).join('');
 }
 
-function setupRsvpState() {
+async function setupRsvpState() {
   const user = API.currentUser;
   const myRsvp = eventData.myRsvp;
   const guestFields = document.getElementById('guest-fields');
   const rsvpBadge = document.getElementById('rsvp-badge-container');
   const dutiesList = document.getElementById('rsvp-duties-list');
+  const rsvpForm = document.getElementById('rsvp-form');
+
+  let requireLogin = true;
+  try {
+    const s = await API.getSettings();
+    if (s && s.require_login_to_rsvp !== undefined) {
+      requireLogin = Boolean(s.require_login_to_rsvp);
+    }
+  } catch (e) {}
 
   // Populate guest name/email fields if user is logged in
   const loginPrompt = document.getElementById('rsvp-login-prompt');
+  const commentGuestFields = document.getElementById('comment-guest-fields');
+  const commentForm = document.getElementById('comment-form');
+
   if (user) {
     if (loginPrompt) loginPrompt.style.display = 'none';
     guestFields.style.display = 'none';
     document.getElementById('rsvp-name').required = false;
     document.getElementById('rsvp-email').required = false;
-    document.getElementById('comment-guest-fields').style.display = 'none';
+    if (commentGuestFields) commentGuestFields.style.display = 'none';
     document.getElementById('comment-author-name').required = false;
+  } else if (requireLogin) {
+    // Guest access disabled: require sign-in
+    if (loginPrompt) {
+      loginPrompt.className = 'alert alert-info';
+      loginPrompt.style.display = 'block';
+      loginPrompt.style.textAlign = 'center';
+      loginPrompt.innerHTML = `
+        <h4 style="margin: 0 0 6px 0; color: var(--secondary); font-size: 1.05rem;">⚾ Sign-In Required to RSVP</h4>
+        <p style="margin: 0 0 12px 0; font-size: 0.88rem; color: var(--text-muted);">
+          To protect community games from spam, players must sign in with a verified email before joining the roster.
+        </p>
+        <a href="/login.html?redirect=${encodeURIComponent(window.location.href)}" class="btn btn-primary" style="font-weight: 700;">
+          ⚾ Sign In / Register to RSVP →
+        </a>
+      `;
+    }
+    guestFields.style.display = 'none';
+    document.getElementById('rsvp-name').required = false;
+    document.getElementById('rsvp-email').required = false;
+
+    const submitBtn = rsvpForm ? rsvpForm.querySelector('button[type="submit"]') : null;
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.innerText = 'Sign In to Submit RSVP';
+    }
+
+    if (commentForm) {
+      commentForm.innerHTML = `
+        <div style="background: #f8fafc; border: 1.5px dashed var(--border); border-radius: var(--radius-sm); padding: 18px; text-align: center;">
+          <p style="margin: 0 0 10px 0; color: var(--text-muted); font-size: 0.9rem;">
+            Please sign in to join the game discussion and coordinate gear with teammates.
+          </p>
+          <a href="/login.html?redirect=${encodeURIComponent(window.location.href)}" class="btn btn-outline btn-sm" style="font-weight: 700;">
+            Sign In with Email →
+          </a>
+        </div>
+      `;
+    }
   } else {
+    // Guest access allowed
     if (loginPrompt) loginPrompt.style.display = 'flex';
     guestFields.style.display = 'grid';
     document.getElementById('rsvp-name').required = true;
     document.getElementById('rsvp-email').required = true;
-    document.getElementById('comment-guest-fields').style.display = 'grid';
+    if (commentGuestFields) commentGuestFields.style.display = 'grid';
     document.getElementById('comment-author-name').required = true;
   }
 

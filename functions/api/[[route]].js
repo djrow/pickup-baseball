@@ -327,6 +327,11 @@ app.post('/auth/send-code', async (c) => {
     email = email.trim().toLowerCase();
     name = (name || '').trim();
 
+    const banRecord = await c.env.DB.prepare('SELECT id, reason FROM banned_emails WHERE email = ?').bind(email).first();
+    if (banRecord) {
+      return c.json({ error: 'This email address has been restricted from accessing this service.' }, 403);
+    }
+
     const existingUser = await c.env.DB.prepare('SELECT id, name FROM users WHERE email = ?').bind(email).first();
     if (existingUser && !name) {
       name = existingUser.name;
@@ -646,6 +651,95 @@ app.put('/auth/users/:id/role', async (c) => {
     message: `Role updated to ${role}.`,
     user: { id: targetId, role, isAdmin: Boolean(isAdminFlag) }
   });
+});
+
+app.delete('/auth/users/:id', async (c) => {
+  const currentUser = c.get('user');
+  if (!currentUser || !currentUser.isAdmin) {
+    return c.json({ error: 'Administrator access required.' }, 403);
+  }
+
+  const targetId = parseInt(c.req.param('id'), 10);
+  if (targetId === currentUser.id) {
+    return c.json({ error: 'You cannot delete your own administrator account.' }, 400);
+  }
+
+  const targetUser = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(targetId).first();
+  if (!targetUser) {
+    return c.json({ error: 'User not found.' }, 404);
+  }
+
+  const ban = c.req.query('ban') === 'true';
+  const reason = c.req.query('reason') || 'Banned by administrator';
+
+  if (ban) {
+    await c.env.DB.prepare(
+      'INSERT OR REPLACE INTO banned_emails (email, reason) VALUES (?, ?)'
+    ).bind(targetUser.email, reason).run();
+  }
+
+  await c.env.DB.batch([
+    c.env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(targetId),
+    c.env.DB.prepare('DELETE FROM auth_codes WHERE email = ?').bind(targetUser.email),
+    c.env.DB.prepare('UPDATE attendees SET user_id = NULL WHERE user_id = ?').bind(targetId),
+    c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(targetId)
+  ]);
+
+  return c.json({
+    success: true,
+    message: ban ? `User ${targetUser.email} has been removed and banned from re-registering.` : `User ${targetUser.email} has been removed.`
+  });
+});
+
+app.get('/auth/banned-emails', async (c) => {
+  const currentUser = c.get('user');
+  if (!currentUser || !currentUser.isAdmin) {
+    return c.json({ error: 'Administrator access required.' }, 403);
+  }
+  const { results } = await c.env.DB.prepare('SELECT * FROM banned_emails ORDER BY id DESC').all();
+  return c.json({ bannedEmails: results || [] });
+});
+
+app.post('/auth/banned-emails', async (c) => {
+  const currentUser = c.get('user');
+  if (!currentUser || !currentUser.isAdmin) {
+    return c.json({ error: 'Administrator access required.' }, 403);
+  }
+  const { email, reason } = await c.req.json();
+  if (!email || !email.includes('@')) {
+    return c.json({ error: 'A valid email is required.' }, 400);
+  }
+  await c.env.DB.prepare(
+    'INSERT OR REPLACE INTO banned_emails (email, reason) VALUES (?, ?)'
+  ).bind(email.trim().toLowerCase(), (reason || 'Banned by admin').trim()).run();
+  return c.json({ success: true, message: `Email ${email} added to ban list.` });
+});
+
+app.delete('/auth/banned-emails/:id', async (c) => {
+  const currentUser = c.get('user');
+  if (!currentUser || !currentUser.isAdmin) {
+    return c.json({ error: 'Administrator access required.' }, 403);
+  }
+  const id = parseInt(c.req.param('id'), 10);
+  await c.env.DB.prepare('DELETE FROM banned_emails WHERE id = ?').bind(id).run();
+  return c.json({ success: true, message: 'Ban removed.' });
+});
+
+app.get('/settings', async (c) => {
+  const row = await c.env.DB.prepare("SELECT value FROM app_settings WHERE key = 'require_login_to_rsvp'").first();
+  const requireLogin = row ? row.value === 'true' : true;
+  return c.json({ require_login_to_rsvp: requireLogin });
+});
+
+app.put('/settings', async (c) => {
+  const currentUser = c.get('user');
+  if (!currentUser || !currentUser.isAdmin) {
+    return c.json({ error: 'Administrator access required.' }, 403);
+  }
+  const { require_login_to_rsvp } = await c.req.json();
+  const val = require_login_to_rsvp ? 'true' : 'false';
+  await c.env.DB.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('require_login_to_rsvp', ?)").bind(val).run();
+  return c.json({ success: true, require_login_to_rsvp: val === 'true', message: 'Settings saved.' });
 });
 
 app.post('/auth/logout', async (c) => {
@@ -1070,6 +1164,12 @@ app.post('/events/:id/rsvp', async (c) => {
     let { name, email, gear_bringing, duty_ids, management_token, status } = await c.req.json();
     status = status === 'declined' ? 'declined' : 'attending';
 
+    const settingRow = await c.env.DB.prepare("SELECT value FROM app_settings WHERE key = 'require_login_to_rsvp'").first();
+    const requireLogin = settingRow ? settingRow.value === 'true' : true;
+    if (requireLogin && !user) {
+      return c.json({ error: 'Sign-in required to RSVP. Please sign in or register before joining the roster.' }, 401);
+    }
+
     let userId = user ? user.id : null;
     let isGuest = user ? 0 : 1;
 
@@ -1090,6 +1190,13 @@ app.post('/events/:id/rsvp', async (c) => {
       if (existingUser) {
         userId = existingUser.id;
         isGuest = 0;
+      }
+    }
+
+    if (email) {
+      const banRecord = await c.env.DB.prepare('SELECT id FROM banned_emails WHERE email = ?').bind(email).first();
+      if (banRecord) {
+        return c.json({ error: 'This email address has been restricted from registering.' }, 403);
       }
     }
 
@@ -1190,6 +1297,12 @@ app.post('/events/:id/comments', async (c) => {
       return c.json({ error: 'Comment message cannot be empty.' }, 400);
     }
 
+    const settingRow = await c.env.DB.prepare("SELECT value FROM app_settings WHERE key = 'require_login_to_rsvp'").first();
+    const requireLogin = settingRow ? settingRow.value === 'true' : true;
+    if (requireLogin && !user) {
+      return c.json({ error: 'Sign-in required to post comments.' }, 401);
+    }
+
     let name = '';
     let email = '';
     let userId = null;
@@ -1203,6 +1316,13 @@ app.post('/events/:id/comments', async (c) => {
       email = (author_email || '').trim().toLowerCase();
       if (!name) {
         return c.json({ error: 'Please enter your name to post a comment.' }, 400);
+      }
+    }
+
+    if (email) {
+      const banRecord = await c.env.DB.prepare('SELECT id FROM banned_emails WHERE email = ?').bind(email).first();
+      if (banRecord) {
+        return c.json({ error: 'This email address has been restricted.' }, 403);
       }
     }
 

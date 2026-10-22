@@ -799,9 +799,42 @@ function setupAdminUserManagement(currentUser) {
                 <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>👑 Admin (Full Access)</option>
               </select>
             </td>
+            <td>
+              ${isMe ? '<span style="color: var(--text-muted); font-size: 0.8rem;">(Your account)</span>' : `
+                <button type="button" class="btn btn-outline btn-sm btn-delete-user" data-user-id="${u.id}" data-user-email="${API.escapeHtml(u.email)}" style="color: var(--danger); border-color: var(--danger); font-size: 0.8rem; padding: 4px 10px; font-weight: 600;">
+                  🗑️ Remove
+                </button>
+              `}
+            </td>
           </tr>
         `;
       }).join('');
+
+      document.querySelectorAll('.btn-delete-user').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const targetUserId = e.currentTarget.getAttribute('data-user-id');
+          const targetUserEmail = e.currentTarget.getAttribute('data-user-email');
+
+          if (!confirm(`Are you sure you want to permanently remove user account: ${targetUserEmail}?`)) {
+            return;
+          }
+
+          const alsoBan = confirm(`Would you also like to permanently BAN ${targetUserEmail} from re-registering or signing in again?`);
+          alertBox.innerHTML = `<div class="alert alert-info" style="font-size: 0.88rem;">Removing ${API.escapeHtml(targetUserEmail)}...</div>`;
+
+          try {
+            const deleteRes = await API.deleteUser(targetUserId, alsoBan, 'Banned by admin');
+            if (deleteRes.error) {
+              alertBox.innerHTML = `<div class="alert alert-error" style="font-size: 0.88rem;">${API.escapeHtml(deleteRes.error)}</div>`;
+            } else {
+              alertBox.innerHTML = `<div class="alert alert-success" style="font-size: 0.88rem;">✓ ${API.escapeHtml(deleteRes.message)}</div>`;
+              await loadUsers();
+            }
+          } catch (err) {
+            alertBox.innerHTML = `<div class="alert alert-error" style="font-size: 0.88rem;">Failed to remove user account.</div>`;
+          }
+        });
+      });
 
       document.querySelectorAll('.admin-role-selector').forEach(sel => {
         sel.addEventListener('change', async (e) => {
