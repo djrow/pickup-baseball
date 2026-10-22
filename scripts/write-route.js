@@ -293,14 +293,10 @@ app.use('*', async (c, next) => {
 });
 
 const DEFAULT_BASEBALL_DUTIES = [
-  { title: "Bases & Home Plate", description: "Bring 3 throw-down/stake bases and home plate", slots_needed: 1 },
-  { title: "Game Baseballs & Scorebook", description: "Bring game balls bucket and pickup roster/scorebook", slots_needed: 1 },
-  { title: "Catcher's Gear", description: "Bring shin guards, chest protector, and catcher's helmet", slots_needed: 1 },
-  { title: "Team Bats & Helmets", description: "Bring community wood/BBCOR bats & batting helmets", slots_needed: 1 },
-  { title: "Field Setup & Cones", description: "Arrive 20 mins early to lay out foul lines and inspect turf/dirt", slots_needed: 2 },
-  { title: "Cold Water & First Aid", description: "Bring community ice water jug and basic sports first aid kit", slots_needed: 1 },
-  { title: "Umpire / Inning Coordinator", description: "Volunteer to umpire or coordinate team inning rotations", slots_needed: 2 },
-  { title: "Post-Game Dugout Cleanup", description: "Ensure dugouts and bleachers are completely clean after the game", slots_needed: 2 }
+  { title: "Bases", description: "Bring 3 throw-down bases.", slots_needed: 1 },
+  { title: "Pitching machine and power", description: "Bring a pitching machine and a way to run it on the field.", slots_needed: 1 },
+  { title: "Game Baseballs", description: "Bring game balls bucket.", slots_needed: 1 },
+  { title: "Field Dragging", description: "Arrive 20 mins early to drag the infield with the pull rake.", slots_needed: 2 }
 ];
 
 async function getDefaultDuties(db) {
