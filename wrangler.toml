@@ -1,0 +1,16 @@
+name = "pickup-baseball"
+compatibility_date = "2024-10-22"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = "public"
+
+[vars]
+APP_NAME = "Sunday Pickup Baseball"
+FROM_EMAIL = "Sunday Pickup Baseball <games@pickupbaseballfoundation.org>"
+REPLY_TO_EMAIL = "pickupbaseballfoundation@gmail.com"
+ADMIN_EMAIL = "pickupbaseballfoundation@gmail.com"
+ADMIN_NAME = "David Rowland"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "pickup-baseball-db"
+database_id = "7a738a45-ffc0-4232-b5e0-93ed1846bf93"

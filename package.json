@@ -6,10 +6,10 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
+    "pages:dev": "npx wrangler pages dev public",
+    "deploy": "npx wrangler pages deploy public --project-name pickup-baseball --commit-dirty=true",
+    "d1:backup": "npx wrangler d1 export pickup-baseball-db --remote --output ./d1_backup.sql",
     "seed": "node src/seed.js",
-    "backup": "powershell -Command \"& \\\"$env:USERPROFILE\\.fly\\bin\\flyctl.exe\\\" sftp get /app/data/baseball_charity.db ./baseball_charity_backup.db\"",
-    "backup-avatars": "powershell -Command \"& \\\"$env:USERPROFILE\\.fly\\bin\\flyctl.exe\\\" sftp get /app/data/avatars ./backup-avatars\"",
-    "deploy": "powershell -Command \"& \\\"$env:USERPROFILE\\.fly\\bin\\flyctl.exe\\\" deploy\"",
     "test": "node scripts/verify-all.js"
   },
   "keywords": [],
@@ -20,6 +20,7 @@
     "cookie-parser": "^1.4.7",
     "dotenv": "^18.0.8",
     "express": "^5.3.0",
+    "hono": "^4.13.13",
     "multer": "^2.4.0",
     "nodemailer": "^10.1.7"
   }

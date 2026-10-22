@@ -1,5 +1,8 @@
 node_modules/
 .env
+.dev.vars
+.wrangler/
+_worker.bundle
 *.db
 *.db-wal
 *.db-shm
