@@ -98,6 +98,7 @@ header.site-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 40px;
   height: 68px;
 }
 
@@ -105,6 +106,8 @@ header.site-header {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-shrink: 0;
+  white-space: nowrap;
   text-decoration: none;
   color: var(--as-green);
   font-weight: 800;
@@ -132,7 +135,8 @@ header.site-header {
 .nav-links {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 24px;
+  margin-left: auto;
 }
 
 .nav-links a {
