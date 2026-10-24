@@ -858,10 +858,6 @@ footer.site-footer strong {
   background: var(--giants-orange-light);
 }
 
-[data-theme="dark"] img[src="/logo.svg"] {
-  filter: invert(1) brightness(1.08);
-}
-
 [data-theme="dark"] .btn-secondary,
 [data-theme="dark"] .nav-avatar-placeholder {
   background-color: #00544a;
@@ -938,9 +934,13 @@ footer.site-footer strong {
     width: 28px;
     height: 28px;
   }
-  .brand-suffix,
+  .brand-text,
   .nav-user-name {
     display: none;
+  }
+  .brand-short {
+    display: inline;
+    font-size: 1rem;
   }
   .nav-user-badge {
     padding: 2px;
@@ -979,13 +979,6 @@ footer.site-footer strong {
 @media (max-width: 34em) {
   #main-nav.container {
     padding: 0 10px;
-  }
-  .brand-text {
-    display: none;
-  }
-  .brand-short {
-    display: inline;
-    font-size: 0.95rem;
   }
   .nav-links {
     gap: 6px;
