@@ -71,7 +71,7 @@ function renderEventDetails() {
   const mapLink = document.getElementById('event-map-link');
   const safeMapUrl = API.safeUrl(ev.location_url);
   if (safeMapUrl) {
-    mapLink.innerHTML = ` <a href="${API.escapeHtml(safeMapUrl)}" target="_blank" rel="noopener noreferrer" style="color: #2563eb; font-size: 0.85rem;">[Open Map ↗]</a>`;
+    mapLink.innerHTML = ` <a href="${API.escapeHtml(safeMapUrl)}" target="_blank" rel="noopener noreferrer" style="color: var(--primary); font-size: 0.85rem;">[Open Map ↗]</a>`;
   } else {
     mapLink.innerHTML = '';
   }
@@ -293,7 +293,7 @@ async function setupRsvpState() {
 
     if (commentForm) {
       commentForm.innerHTML = `
-        <div style="background: #f8fafc; border: 1.5px dashed var(--border); border-radius: var(--radius-sm); padding: 18px; text-align: center;">
+        <div style="background: var(--bg-subtle); border: 1.5px dashed var(--border); border-radius: var(--radius-sm); padding: 18px; text-align: center;">
           <p style="margin: 0 0 10px 0; color: var(--text-muted); font-size: 0.9rem;">
             Please sign in to join the game discussion and coordinate gear with teammates.
           </p>
@@ -346,7 +346,7 @@ async function setupRsvpState() {
     const disabledAttr = (isFull && !isMine) ? 'disabled' : '';
 
     return `
-      <label style="display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: ${disabledAttr ? '#f1f5f9' : '#ffffff'}; cursor: ${disabledAttr ? 'not-allowed' : 'pointer'};">
+      <label style="display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: ${disabledAttr ? 'var(--bg-subtle)' : 'var(--bg-card)'}; cursor: ${disabledAttr ? 'not-allowed' : 'pointer'};">
         <input 
           type="checkbox" 
           name="duty_id" 

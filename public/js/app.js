@@ -202,7 +202,7 @@ function renderGamesList(events, container) {
                   ${API.escapeHtml(ev.title)}
                 </a>
               </h3>
-              <p style="font-size: 0.88rem; font-weight: 600; color: #1e293b; margin-bottom: 4px;">
+              <p style="font-size: 0.88rem; font-weight: 600; color: var(--text-main); margin-bottom: 4px;">
                 📅 ${dateFormatted}
               </p>
               <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">

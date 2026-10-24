@@ -24,7 +24,7 @@ window.initAuthenticatedDashboard = function(user) {
 
         <div id="event-create-alert"></div>
 
-        <div style="background: #f8fafc; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 18px; margin-top: 14px;">
+        <div style="background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 18px; margin-top: 14px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
             <h4 style="font-size: 0.95rem; color: var(--secondary); margin: 0;">Custom Game Details:</h4>
             <button type="button" id="toggle-custom-form-btn" class="btn btn-outline btn-sm" style="font-size: 0.8rem;">
@@ -72,7 +72,7 @@ window.initAuthenticatedDashboard = function(user) {
     `;
   } else {
     html += `
-      <div id="player-notice-section" style="background: #f8fafc; border: 1px dashed var(--border); border-radius: var(--radius-sm); padding: 16px; text-align: center;">
+      <div id="player-notice-section" style="background: var(--bg-subtle); border: 1px dashed var(--border); border-radius: var(--radius-sm); padding: 16px; text-align: center;">
         <p style="margin: 0; font-size: 0.88rem; color: var(--text-muted);">
           ℹ️ You have a standard <strong>Player</strong> account. You can RSVP for games, volunteer for game-day duties, and participate in event discussions.
           To schedule new games, ask a community administrator to grant your account the <strong>Organizer</strong> role.
@@ -128,7 +128,7 @@ window.initAuthenticatedDashboard = function(user) {
           </p>
         </div>
 
-        <div style="background: #f8fafc; border: 1.5px solid var(--border); border-radius: var(--radius-sm); padding: 16px; margin-bottom: 20px;">
+        <div style="background: var(--bg-subtle); border: 1.5px solid var(--border); border-radius: var(--radius-sm); padding: 16px; margin-bottom: 20px;">
           <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 700; color: var(--secondary); margin-bottom: 4px;">
             <input type="checkbox" id="setting-require-login" style="width: 18px; height: 18px; cursor: pointer;">
             Require Email Sign-In to RSVP (Disable Anonymous Guest RSVPs)
@@ -139,7 +139,7 @@ window.initAuthenticatedDashboard = function(user) {
           <div id="settings-alert" style="margin-top: 8px;"></div>
         </div>
 
-        <div style="background: #ffffff; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 18px;">
+        <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 18px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
             <div>
               <h4 style="margin: 0; color: var(--secondary); font-size: 1rem;">🚫 Banned Email Addresses</h4>
@@ -369,7 +369,7 @@ function setupUserManagementScreen(currentUser) {
               ${roleBadge}
             </td>
             <td>
-              <select class="role-selector" data-user-id="${u.id}" data-user-name="${API.escapeHtml(u.name)}" style="padding: 4px 8px; border-radius: var(--radius-sm); border: 1.5px solid var(--border); font-size: 0.85rem; font-weight: 600; background: #fff; cursor: pointer;">
+              <select class="role-selector" data-user-id="${u.id}" data-user-name="${API.escapeHtml(u.name)}" style="padding: 4px 8px; border-radius: var(--radius-sm); border: 1.5px solid var(--border); font-size: 0.85rem; font-weight: 600; background: var(--bg-input); color: var(--text-main); cursor: pointer;">
                 <option value="player" ${u.role === 'player' ? 'selected' : ''}>👤 Player</option>
                 <option value="organizer" ${u.role === 'organizer' ? 'selected' : ''}>🛡️ Organizer (Can Post Games)</option>
                 <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>👑 Admin (Full Access)</option>

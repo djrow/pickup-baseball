@@ -7,6 +7,59 @@ const API = {
   // Current user cache
   currentUser: null,
 
+  getTheme() {
+    try {
+      const saved = localStorage.getItem('pickup_theme');
+      if (saved === 'dark' || saved === 'light') return saved;
+    } catch (e) {}
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      return 'dark';
+    }
+    return 'light';
+  },
+
+  applyTheme(theme) {
+    if (theme === 'dark') {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+    }
+    const btn = document.getElementById('theme-toggle-btn');
+    if (btn) {
+      btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+      btn.title = theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode';
+      btn.setAttribute('aria-label', btn.title);
+    }
+  },
+
+  toggleTheme() {
+    const next = this.getTheme() === 'dark' ? 'light' : 'dark';
+    try {
+      localStorage.setItem('pickup_theme', next);
+    } catch (e) {}
+    this.applyTheme(next);
+  },
+
+  initTheme() {
+    this.applyTheme(this.getTheme());
+    const btn = document.getElementById('theme-toggle-btn');
+    if (btn && !btn.dataset.bound) {
+      btn.dataset.bound = '1';
+      btn.addEventListener('click', () => API.toggleTheme());
+    }
+    if (window.matchMedia) {
+      try {
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+          try {
+            if (!localStorage.getItem('pickup_theme')) {
+              this.applyTheme(e.matches ? 'dark' : 'light');
+            }
+          } catch (err) {}
+        });
+      } catch (e) {}
+    }
+  },
+
   async getMe() {
     try {
       const res = await fetch('/api/auth/me');
@@ -262,6 +315,9 @@ const API = {
       `;
     }
 
+    const isDark = this.getTheme() === 'dark';
+    const themeBtnHtml = `<button type="button" id="theme-toggle-btn" class="btn-theme-toggle" title="${isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}" aria-label="${isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}">${isDark ? '☀️' : '🌙'}</button>`;
+
     navContainer.innerHTML = `
       <div class="nav-wrap">
         <a href="/index.html" class="brand">
@@ -273,6 +329,7 @@ const API = {
           <a href="/index.html">Games</a>
           <a href="/donate.html">Donate</a>
           ${authHtml}
+          ${themeBtnHtml}
         </div>
       </div>
     `;
@@ -280,6 +337,11 @@ const API = {
     const logoutBtn = document.getElementById('nav-logout-btn');
     if (logoutBtn) {
       logoutBtn.addEventListener('click', () => API.logout());
+    }
+
+    const themeBtn = document.getElementById('theme-toggle-btn');
+    if (themeBtn) {
+      themeBtn.addEventListener('click', () => API.toggleTheme());
     }
   },
 
@@ -313,3 +375,5 @@ const API = {
     return this.safeUrl(trimmed);
   }
 };
+
+API.initTheme();

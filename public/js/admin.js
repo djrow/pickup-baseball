@@ -191,7 +191,7 @@ function renderTaskBuilder() {
   const container = document.getElementById('task-builder-list');
   if (builderDuties.length === 0) {
     container.innerHTML = `
-      <div style="text-align: center; padding: 20px; background: #ffffff; border: 1px dashed var(--border); border-radius: var(--radius-sm); color: var(--text-muted); font-size: 0.9rem;">
+      <div style="text-align: center; padding: 20px; background: var(--bg-card); border: 1px dashed var(--border); border-radius: var(--radius-sm); color: var(--text-muted); font-size: 0.9rem;">
         No tasks added yet. Click <strong>"+ Add Task"</strong> or <strong>"↺ Reset"</strong> above.
       </div>
     `;
@@ -199,7 +199,7 @@ function renderTaskBuilder() {
   }
 
   container.innerHTML = builderDuties.map((duty, idx) => `
-    <div class="task-builder-row" style="display: grid; grid-template-columns: 2fr 3fr 100px 40px; gap: 10px; align-items: center; background: #ffffff; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);">
+    <div class="task-builder-row" style="display: grid; grid-template-columns: 2fr 3fr 100px 40px; gap: 10px; align-items: center; background: var(--bg-card); padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);">
       <div>
         <label style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 2px;">Task Name</label>
         <input type="text" class="task-builder-title" value="${API.escapeHtml(duty.title)}" placeholder="e.g. Umpire, Baseballs..." required style="padding: 6px 10px; font-size: 0.9rem;">
@@ -292,7 +292,7 @@ function renderDefaultTemplateList() {
   const container = document.getElementById('default-template-list');
   if (templateDuties.length === 0) {
     container.innerHTML = `
-      <div style="text-align: center; padding: 16px; background: #ffffff; border: 1px dashed var(--border); border-radius: var(--radius-sm); color: var(--text-muted); font-size: 0.9rem;">
+      <div style="text-align: center; padding: 16px; background: var(--bg-card); border: 1px dashed var(--border); border-radius: var(--radius-sm); color: var(--text-muted); font-size: 0.9rem;">
         No default tasks configured. Click "+ Add Task to Template" below.
       </div>
     `;
@@ -300,7 +300,7 @@ function renderDefaultTemplateList() {
   }
 
   container.innerHTML = templateDuties.map((duty, idx) => `
-    <div class="template-task-row" style="display: grid; grid-template-columns: 2fr 3fr 100px 40px; gap: 10px; align-items: center; background: #ffffff; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);">
+    <div class="template-task-row" style="display: grid; grid-template-columns: 2fr 3fr 100px 40px; gap: 10px; align-items: center; background: var(--bg-card); padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);">
       <div>
         <label style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 2px;">Default Task</label>
         <input type="text" class="template-task-title" value="${API.escapeHtml(duty.title)}" placeholder="e.g. Umpire, Baseballs..." required style="padding: 6px 10px; font-size: 0.88rem;">
@@ -491,7 +491,7 @@ async function loadAdminGames() {
                 <div style="font-weight: 700; font-size: 1.15rem; color: var(--secondary);">
                   ${API.escapeHtml(ev.title)}
                 </div>
-                <div style="font-size: 0.9rem; color: #334155; margin-top: 3px;">
+                <div style="font-size: 0.9rem; color: var(--text-main); margin-top: 3px;">
                   📅 ${API.formatDateTime(ev.event_date)} | 📍 ${API.escapeHtml(ev.location)}
                 </div>
                 <div style="font-size: 0.82rem; color: var(--primary); font-weight: 600; margin-top: 5px;">
@@ -563,7 +563,7 @@ async function renderTaskManagerContent(eventId) {
     const duties = res.duties || [];
 
     panel.innerHTML = `
-      <div style="background: #f8fafc; padding: 16px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+      <div style="background: var(--bg-subtle); padding: 16px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
           <h4 style="color: var(--secondary); font-size: 1rem; margin: 0;">
             Tasks for "${API.escapeHtml(res.event.title)}"
@@ -581,7 +581,7 @@ async function renderTaskManagerContent(eventId) {
             const safeTitle = encodeURIComponent(d.title).replace(/'/g, '%27');
             const safeDesc = encodeURIComponent(d.description || '').replace(/'/g, '%27');
             return `
-              <div style="display: flex; justify-content: space-between; align-items: center; background: #ffffff; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); flex-wrap: wrap; gap: 8px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-card); padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); flex-wrap: wrap; gap: 8px;">
                 <div style="flex: 1; min-width: 220px;">
                   <div style="font-weight: 700; font-size: 0.95rem;">${API.escapeHtml(d.title)}</div>
                   <div style="font-size: 0.82rem; color: var(--text-muted);">${API.escapeHtml(d.description || 'No description')}</div>
@@ -605,7 +605,7 @@ async function renderTaskManagerContent(eventId) {
         </div>
 
         <!-- Add New Task to this Event -->
-        <div style="background: #ffffff; padding: 12px; border: 1px dashed var(--border); border-radius: var(--radius-sm);">
+        <div style="background: var(--bg-card); padding: 12px; border: 1px dashed var(--border); border-radius: var(--radius-sm);">
           <div style="font-weight: 700; font-size: 0.85rem; color: var(--secondary); margin-bottom: 8px;">
             + Add Another Task to this Game:
           </div>
@@ -795,7 +795,7 @@ function setupAdminUserManagement(currentUser) {
               ${roleBadge}
             </td>
             <td>
-              <select class="admin-role-selector" data-user-id="${u.id}" data-user-name="${API.escapeHtml(u.name)}" style="padding: 4px 8px; border-radius: var(--radius-sm); border: 1.5px solid var(--border); font-size: 0.85rem; font-weight: 600; background: #fff; cursor: pointer;">
+              <select class="admin-role-selector" data-user-id="${u.id}" data-user-name="${API.escapeHtml(u.name)}" style="padding: 4px 8px; border-radius: var(--radius-sm); border: 1.5px solid var(--border); font-size: 0.85rem; font-weight: 600; background: var(--bg-input); color: var(--text-main); cursor: pointer;">
                 <option value="player" ${u.role === 'player' ? 'selected' : ''}>👤 Player</option>
                 <option value="organizer" ${u.role === 'organizer' ? 'selected' : ''}>🛡️ Organizer (Can Post Games)</option>
                 <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>👑 Admin (Full Access)</option>

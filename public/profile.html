@@ -22,6 +22,7 @@
           <a href="/index.html">Games</a>
           <a href="/donate.html">Donate</a>
           <a href="/login.html" class="btn-login"><span class="btn-login-icon">⚾ </span>Log In</a>
+          <button type="button" id="theme-toggle-btn" class="btn-theme-toggle" title="Switch Theme" aria-label="Switch Theme">🌙</button>
         </div>
       </div>
     </div>
@@ -50,7 +51,7 @@
       <div id="profile-alert"></div>
 
       <!-- Avatar Section -->
-      <div style="display: flex; align-items: center; gap: 20px; padding: 20px; background: #f8fafc; border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 24px; flex-wrap: wrap;">
+      <div style="display: flex; align-items: center; gap: 20px; padding: 20px; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 24px; flex-wrap: wrap;">
         <div id="avatar-preview-container">
           <!-- Populated dynamically -->
         </div>
@@ -81,7 +82,7 @@
 
         <div class="form-group">
           <label for="profile-email">Email Address</label>
-          <input type="email" id="profile-email" disabled style="background: #f1f5f9; cursor: not-allowed; color: #64748b;">
+          <input type="email" id="profile-email" disabled style="background: var(--bg-subtle); cursor: not-allowed; color: var(--text-muted);">
           <div class="help-text">Used for sign-in and game day reminder notifications.</div>
         </div>
 

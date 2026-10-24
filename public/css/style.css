@@ -23,6 +23,8 @@
   --crisp-white: #ffffff;
   --bg-page: #f5f8f7;             /* Clean stadium morning field mist */
   --bg-card: #ffffff;
+  --bg-subtle: #f7faf9;
+  --bg-input: #ffffff;
   --border: #dbe4e0;
   --border-focus: var(--giants-orange);
 
@@ -58,6 +60,42 @@
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
+[data-theme="dark"] {
+  color-scheme: dark;
+  --as-green: #34d399;            /* Scoreboard emerald for high-contrast dark mode headings & links */
+  --as-green-hover: #6ee7b7;
+  --as-green-light: #00544a;
+  --as-green-subtle: rgba(16, 185, 129, 0.14);
+  --as-green-border: rgba(52, 211, 153, 0.32);
+
+  --giants-orange: #ff6b35;
+  --giants-orange-hover: #ff8252;
+  --giants-orange-light: rgba(253, 90, 30, 0.16);
+  --giants-orange-border: rgba(253, 90, 30, 0.38);
+  --giants-orange-glow: rgba(253, 90, 30, 0.35);
+
+  --bg-page: #0a1412;             /* Deep stadium night sky */
+  --bg-card: #11221e;             /* Elevated dark dugout card */
+  --bg-subtle: #162b26;           /* Inset surface / table headers */
+  --bg-input: #0d1b18;            /* Form input dark background */
+  --border: #23423b;
+
+  --text-main: #ecfdf5;           /* Crisp stadium floodlight white */
+  --text-muted: #94b8af;          /* Muted night-field sage */
+  --text-inverted: #ffffff;
+
+  --secondary: var(--as-green);
+  --secondary-hover: var(--as-green-hover);
+  --secondary-light: var(--as-green-subtle);
+
+  --danger: #f87171;
+  --danger-light: rgba(239, 68, 68, 0.16);
+
+  --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 4px 16px -2px rgba(0, 0, 0, 0.45), 0 2px 6px -1px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 14px 30px -4px rgba(0, 0, 0, 0.6), 0 6px 12px -3px rgba(0, 0, 0, 0.4);
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -85,7 +123,7 @@ body {
 
 /* Header & Nav */
 header.site-header {
-  background: var(--crisp-white);
+  background: var(--bg-card);
   border-top: 3px solid var(--as-green);
   border-bottom: 1px solid var(--border);
   position: sticky;
@@ -386,7 +424,7 @@ header.site-header {
 }
 
 .badge-gray {
-  background: #f1f5f4;
+  background: var(--bg-subtle);
   color: var(--text-muted);
   border: 1px solid var(--border);
 }
@@ -397,7 +435,7 @@ header.site-header {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 14px;
   margin-bottom: 22px;
-  background: #f7faf9;
+  background: var(--bg-subtle);
   padding: 18px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
@@ -450,7 +488,7 @@ header.site-header {
 }
 
 .data-table th {
-  background: #f8fafc;
+  background: var(--bg-subtle);
   color: var(--secondary);
   font-weight: 700;
   padding: 10px 14px;
@@ -464,11 +502,11 @@ header.site-header {
 }
 
 .data-table tr:hover {
-  background-color: #fafcfb;
+  background-color: var(--bg-subtle);
 }
 
 .duty-card {
-  background: #ffffff;
+  background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 16px;
@@ -477,12 +515,12 @@ header.site-header {
 }
 
 .duty-card.filled {
-  background: #fbfdfc;
+  background: var(--bg-subtle);
   border-left: 5px solid var(--as-green);
 }
 
 .duty-card.needed {
-  background: #fffcfb;
+  background: var(--bg-card);
   border-left: 5px solid var(--giants-orange);
 }
 
@@ -531,7 +569,7 @@ select {
   font-size: 0.95rem;
   font-family: inherit;
   transition: border-color 0.15s, box-shadow 0.15s;
-  background: var(--crisp-white);
+  background: var(--bg-input);
   color: var(--text-main);
 }
 
@@ -559,7 +597,7 @@ select:focus {
 }
 
 .roster-item {
-  background: #ffffff;
+  background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 12px 16px;
@@ -592,7 +630,7 @@ select:focus {
 }
 
 .comment-bubble {
-  background: #ffffff;
+  background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 16px;
@@ -769,7 +807,7 @@ select:focus {
 /* Footer */
 footer.site-footer {
   margin-top: auto;
-  background: var(--crisp-white);
+  background: var(--bg-card);
   border-top: 1px solid var(--border);
   border-bottom: 4px solid var(--giants-orange);
   padding: 28px 0;
@@ -780,6 +818,78 @@ footer.site-footer {
 
 footer.site-footer strong {
   color: var(--as-green);
+}
+
+/* Theme Toggle Button & Dark Mode Overrides */
+.btn-theme-toggle {
+  background: var(--bg-subtle);
+  border: 1.5px solid var(--border);
+  color: var(--text-main);
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-full);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0;
+  flex-shrink: 0;
+  transition: background-color 0.15s, border-color 0.15s, transform 0.1s;
+}
+
+.btn-theme-toggle:hover {
+  border-color: var(--giants-orange);
+  background: var(--giants-orange-light);
+}
+
+[data-theme="dark"] img[src="/logo.svg"] {
+  filter: invert(1) brightness(1.08);
+}
+
+[data-theme="dark"] .btn-secondary,
+[data-theme="dark"] .nav-avatar-placeholder {
+  background-color: #00544a;
+  color: #ffffff;
+}
+
+[data-theme="dark"] .btn-secondary:hover {
+  background-color: #006b5e;
+}
+
+[data-theme="dark"] .btn-outline:hover {
+  background-color: #00544a;
+  border-color: var(--as-green);
+  color: #ffffff;
+}
+
+[data-theme="dark"] .badge-orange,
+[data-theme="dark"] .badge-clay,
+[data-theme="dark"] .alert-info {
+  color: #ff9e75;
+}
+
+[data-theme="dark"] .alert-error {
+  color: #fca5a5;
+  border-color: rgba(248, 113, 113, 0.4);
+}
+
+[data-theme="dark"] #privacy-policy {
+  background: rgba(17, 34, 30, 0.94) !important;
+  color: var(--text-main) !important;
+  border: 1px solid var(--border);
+}
+
+[data-theme="dark"] #hero-actions .btn-outline {
+  background: rgba(17, 34, 30, 0.9) !important;
+  color: var(--as-green) !important;
+  border-color: var(--as-green) !important;
+}
+
+[data-theme="dark"] #rsvp-login-prompt {
+  background: var(--bg-subtle) !important;
+  border-color: var(--as-green-border) !important;
 }
 
 /* Responsive & Width-to-Text-Size (em) Compaction */
