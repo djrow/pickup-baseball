@@ -79,6 +79,20 @@ const API = {
     } catch (e) {}
   },
 
+  clearDataCaches() {
+    try {
+      localStorage.removeItem('pickup_cached_user');
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('pickup_cached_event')) {
+          keysToRemove.push(k);
+        }
+      }
+      keysToRemove.forEach(k => localStorage.removeItem(k));
+    } catch (e) {}
+  },
+
   async getMe() {
     try {
       const res = await fetch('/api/auth/me');
@@ -94,7 +108,7 @@ const API = {
 
   async logout() {
     try {
-      API.setCachedUser(null);
+      API.clearDataCaches();
       await fetch('/api/auth/logout', { method: 'POST' });
     } finally {
       window.location.href = '/index.html';

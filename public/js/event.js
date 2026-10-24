@@ -50,19 +50,30 @@ function applyLoadedEventToDom(res) {
   document.getElementById('event-container').style.display = 'block';
 
   const adminContainer = document.getElementById('admin-actions-container');
-  const sendRemindersBtn = document.getElementById('send-reminders-btn');
-  const editEventBtn = document.getElementById('edit-event-btn');
+  const editPanel = document.getElementById('edit-event-panel');
   if (API.currentUser && (API.currentUser.canManageEvents || API.currentUser.isAdmin)) {
     adminContainer.style.display = 'flex';
+    adminContainer.innerHTML = `
+      <button type="button" id="edit-event-btn" class="btn btn-outline btn-sm">✏️ Edit Game</button>
+      ${API.currentUser.isAdmin ? '<button type="button" id="send-reminders-btn" class="btn btn-outline btn-sm">📧 Send Reminders Now</button>' : ''}
+    `;
+    const editEventBtn = document.getElementById('edit-event-btn');
     if (editEventBtn) {
       editEventBtn.onclick = toggleEditEventPanel;
     }
+    const sendRemindersBtn = document.getElementById('send-reminders-btn');
     if (sendRemindersBtn) {
-      sendRemindersBtn.style.display = API.currentUser.isAdmin ? 'inline-flex' : 'none';
       sendRemindersBtn.onclick = handleSendReminders;
     }
-  } else if (adminContainer) {
-    adminContainer.style.display = 'none';
+  } else {
+    if (adminContainer) {
+      adminContainer.style.display = 'none';
+      adminContainer.innerHTML = '';
+    }
+    if (editPanel) {
+      editPanel.style.display = 'none';
+      editPanel.innerHTML = '';
+    }
   }
 }
 
@@ -86,7 +97,16 @@ async function loadEventData() {
     }
 
     try {
-      localStorage.setItem(cacheKey, JSON.stringify(res));
+      // Cache only public event fields (never store user session or personal RSVP in event cache)
+      const publicCacheCopy = {
+        event: res.event,
+        duties: res.duties,
+        attendees: res.attendees,
+        comments: res.comments,
+        totalAttendees: res.totalAttendees,
+        require_login_to_rsvp: res.require_login_to_rsvp
+      };
+      localStorage.setItem(cacheKey, JSON.stringify(publicCacheCopy));
     } catch (e) {}
 
     applyLoadedEventToDom(res);
@@ -522,23 +542,60 @@ window.toggleEditEventPanel = function() {
   const panel = document.getElementById('edit-event-panel');
   const editBtn = document.getElementById('edit-event-btn');
   if (!panel || !eventData || !eventData.event) return;
+  if (!API.currentUser || (!API.currentUser.canManageEvents && !API.currentUser.isAdmin)) return;
+
   const isOpen = panel.style.display === 'block';
   if (isOpen) {
     panel.style.display = 'none';
+    panel.innerHTML = '';
     if (editBtn) editBtn.textContent = '✏️ Edit Game';
     return;
   }
+
   const ev = eventData.event;
-  document.getElementById('edit-event-title').value = ev.title || '';
-  if (API.isoToPacificLocalInput) {
-    document.getElementById('edit-event-date').value = API.isoToPacificLocalInput(ev.event_date);
-  } else if (ev.event_date) {
-    document.getElementById('edit-event-date').value = ev.event_date.slice(0, 16);
-  }
-  document.getElementById('edit-event-location').value = ev.location || '';
-  document.getElementById('edit-event-map').value = ev.location_url || '';
-  document.getElementById('edit-event-desc').value = ev.description || '';
-  document.getElementById('edit-event-alert').innerHTML = '';
+  const pacificLocal = API.isoToPacificLocalInput
+    ? API.isoToPacificLocalInput(ev.event_date)
+    : (ev.event_date ? ev.event_date.slice(0, 16) : '');
+
+  panel.innerHTML = `
+    <div id="edit-event-alert"></div>
+    <form id="edit-event-form" style="background: var(--bg-subtle); padding: 16px; border-radius: var(--radius-sm); border: 1.5px solid var(--primary);">
+      <h3 style="font-size: 1rem; color: var(--secondary); margin: 0 0 12px 0;">✏️ Edit Game Details</h3>
+      <div class="grid-2">
+        <div class="form-group">
+          <label for="edit-event-title">Game Title *</label>
+          <input type="text" id="edit-event-title" value="${API.escapeHtml(ev.title || '')}" required>
+        </div>
+        <div class="form-group">
+          <label for="edit-event-date">Date &amp; Time (Pacific) *</label>
+          <input type="datetime-local" id="edit-event-date" value="${API.escapeHtml(pacificLocal)}" required>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="form-group">
+          <label for="edit-event-location">Field Location *</label>
+          <input type="text" id="edit-event-location" value="${API.escapeHtml(ev.location || '')}" list="common-locations-list" required>
+        </div>
+        <div class="form-group">
+          <label for="edit-event-map">Map / Directions Link (Optional)</label>
+          <input type="text" id="edit-event-map" value="${API.escapeHtml(ev.location_url || '')}" placeholder="https://maps.google.com/?q=...">
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="edit-event-desc">Game Details &amp; Announcements</label>
+        <textarea id="edit-event-desc" rows="2">${API.escapeHtml(ev.description || '')}</textarea>
+      </div>
+      <datalist id="common-locations-list">
+        <option value="Bushrod Park Field 1">
+        <option value="Bushrod Park Field 2">
+      </datalist>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <button type="submit" id="save-edit-event-btn" class="btn btn-primary btn-sm">💾 Save Changes</button>
+        <button type="button" id="cancel-edit-event-btn" class="btn btn-outline btn-sm">Cancel</button>
+      </div>
+    </form>
+  `;
+
   panel.style.display = 'block';
   if (editBtn) editBtn.textContent = '✕ Close Editor';
   document.getElementById('edit-event-title').focus();
@@ -547,13 +604,13 @@ window.toggleEditEventPanel = function() {
   if (cancelBtn) {
     cancelBtn.onclick = () => {
       panel.style.display = 'none';
+      panel.innerHTML = '';
       if (editBtn) editBtn.textContent = '✏️ Edit Game';
     };
   }
 
   const form = document.getElementById('edit-event-form');
-  if (form && !form.dataset.bound) {
-    form.dataset.bound = '1';
+  if (form) {
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const saveBtn = document.getElementById('save-edit-event-btn');
@@ -585,14 +642,16 @@ window.toggleEditEventPanel = function() {
         }
         if (res.error) {
           alertBox.innerHTML = `<div class="alert alert-error">${API.escapeHtml(res.error)}</div>`;
+          saveBtn.disabled = false;
+          saveBtn.textContent = '💾 Save Changes';
         } else {
           panel.style.display = 'none';
+          panel.innerHTML = '';
           if (editBtn) editBtn.textContent = '✏️ Edit Game';
           await loadEventData();
         }
       } catch (err) {
         alertBox.innerHTML = `<div class="alert alert-error">Failed to save changes.</div>`;
-      } finally {
         saveBtn.disabled = false;
         saveBtn.textContent = '💾 Save Changes';
       }
