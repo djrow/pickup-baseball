@@ -248,17 +248,17 @@ const API = {
       authHtml = `
         <a href="/profile.html" class="nav-user-badge" title="View & Edit Profile">
           ${avatarImg}
-          <span style="font-weight: 600; font-size: 0.9rem; color: var(--secondary);">
+          <span class="nav-user-name" style="font-weight: 600; font-size: 0.9rem; color: var(--secondary);">
             ${this.escapeHtml(user.name)}
           </span>
         </a>
-        <a href="/profile.html" class="btn btn-outline btn-sm">👤 Profile</a>
-        ${user.canManageEvents ? `<a href="/admin.html" class="btn btn-outline btn-sm">${user.isAdmin ? '⚙️ Admin' : '⚾ Org Panel'}</a>` : ''}
+        <a href="/profile.html" class="btn btn-outline btn-sm nav-profile-btn">👤 Profile</a>
+        ${user.canManageEvents ? `<a href="/admin.html" class="btn btn-outline btn-sm">${user.isAdmin ? '⚙️ Admin' : '⚾ Org'}</a>` : ''}
         <button id="nav-logout-btn" class="btn btn-outline btn-sm">Log Out</button>
       `;
     } else {
       authHtml = `
-        <a href="/login.html" class="btn-login">⚾ Log In</a>
+        <a href="/login.html" class="btn-login"><span class="btn-login-icon">⚾ </span>Log In</a>
       `;
     }
 
@@ -266,7 +266,7 @@ const API = {
       <div class="nav-wrap">
         <a href="/index.html" class="brand">
           <span class="brand-icon">⚾</span>
-          <span>Pickup Baseball Foundation</span>
+          <span class="brand-text">Pickup Baseball<span class="brand-suffix"> Foundation</span></span>
           <span class="brand-tag">Community</span>
         </a>
         <div class="nav-links">
