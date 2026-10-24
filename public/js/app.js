@@ -138,7 +138,7 @@ function renderFeaturedGame(ev, container) {
             <div class="meta-label">Field Location</div>
             <div class="meta-value">
               ${API.escapeHtml(ev.location)}
-              ${ev.location_url ? `<a href="${API.escapeHtml(ev.location_url)}" target="_blank" style="color: var(--giants-orange); font-size: 0.82rem; font-weight: 700; display: block;">Map Link ↗</a>` : ''}
+              ${API.safeUrl(ev.location_url) ? `<a href="${API.escapeHtml(API.safeUrl(ev.location_url))}" target="_blank" rel="noopener noreferrer" style="color: var(--giants-orange); font-size: 0.82rem; font-weight: 700; display: block;">Map Link ↗</a>` : ''}
             </div>
           </div>
         </div>

@@ -6,9 +6,11 @@ const app = new Hono().basePath('/api');
 
 const SESSION_COOKIE_NAME = 'baseball_session';
 const SESSION_DURATION_SECONDS = 90 * 24 * 60 * 60; // 90 days
+const AUTH_CODE_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
+const MAX_CODE_VERIFY_ATTEMPTS = 5;
 
 // -----------------------------------------------------------------------------
-// Utilities
+// Security & Crypto Utilities
 // -----------------------------------------------------------------------------
 
 function generateToken() {
@@ -19,8 +21,59 @@ function generateToken() {
 
 function generateCode() {
   const array = new Uint32Array(1);
-  crypto.getRandomValues(array);
-  return (100000 + (array[0] % 900000)).toString();
+  // Rejection sampling to eliminate modulo bias (4294000000 is largest multiple of 900000 < 2^32)
+  let val = 4294967295;
+  while (val >= 4294000000) {
+    crypto.getRandomValues(array);
+    val = array[0];
+  }
+  return (100000 + (val % 900000)).toString();
+}
+
+async function sha256Hex(input) {
+  const data = new TextEncoder().encode(String(input));
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function sanitizeHttpUrl(rawUrl) {
+  if (!rawUrl || !String(rawUrl).trim()) return '';
+  const trimmed = String(rawUrl).trim();
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      return parsed.href;
+    }
+  } catch (e) {}
+  return null;
+}
+
+function getSafeRelativeRedirect(redirectParam) {
+  if (!redirectParam || typeof redirectParam !== 'string') {
+    return '/index.html?logged_in=1';
+  }
+  const trimmed = redirectParam.trim();
+  try {
+    const parsed = new URL(trimmed, 'https://www.pickupbaseballfoundation.org');
+    if (parsed.origin === 'https://www.pickupbaseballfoundation.org' && parsed.pathname.startsWith('/') && !parsed.pathname.startsWith('//')) {
+      return parsed.pathname + parsed.search + parsed.hash;
+    }
+  } catch (e) {}
+  if (trimmed.startsWith('/') && !trimmed.startsWith('//') && !trimmed.startsWith('/\\')) {
+    return trimmed;
+  }
+  return '/index.html?logged_in=1';
 }
 
 function arrayBufferToBase64(buffer) {
@@ -31,6 +84,88 @@ function arrayBufferToBase64(buffer) {
     binary += String.fromCharCode(bytes[i]);
   }
   return btoa(binary);
+}
+
+function isValidRasterImageBuffer(buffer, mime) {
+  const bytes = new Uint8Array(buffer);
+  if (bytes.length < 12) return false;
+  if (mime === 'image/jpeg') {
+    return bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF;
+  }
+  if (mime === 'image/png') {
+    return bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47;
+  }
+  if (mime === 'image/gif') {
+    return bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x38;
+  }
+  if (mime === 'image/webp') {
+    return (
+      bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+      bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50
+    );
+  }
+  return false;
+}
+
+function getClientIp(c) {
+  return (
+    c.req.header('CF-Connecting-IP') ||
+    (c.req.header('X-Forwarded-For') || '').split(',')[0].trim() ||
+    'unknown'
+  );
+}
+
+async function checkRateLimit(db, key, maxRequests, windowSeconds) {
+  if (!db) return { allowed: true };
+  const nowSec = Math.floor(Date.now() / 1000);
+  const windowStartCutoff = nowSec - windowSeconds;
+
+  try {
+    const existing = await db.prepare(
+      'SELECT count, window_start FROM rate_limits WHERE key = ?'
+    ).bind(key).first();
+
+    if (!existing || existing.window_start < windowStartCutoff) {
+      await db.prepare(
+        'INSERT OR REPLACE INTO rate_limits (key, count, window_start) VALUES (?, 1, ?)'
+      ).bind(key, nowSec).run();
+      return { allowed: true, remaining: maxRequests - 1 };
+    }
+
+    if (existing.count >= maxRequests) {
+      return { allowed: false, remaining: 0 };
+    }
+
+    await db.prepare(
+      'UPDATE rate_limits SET count = count + 1 WHERE key = ?'
+    ).bind(key).run();
+
+    return { allowed: true, remaining: maxRequests - (existing.count + 1) };
+  } catch (err) {
+    console.warn('[RateLimit] Fallback allow due to error:', err.message);
+    return { allowed: true };
+  }
+}
+
+async function verifyTurnstileIfConfigured(env, token, remoteip) {
+  if (!env.TURNSTILE_SECRET_KEY) return true;
+  if (!token) return false;
+  try {
+    const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        secret: env.TURNSTILE_SECRET_KEY,
+        response: token,
+        remoteip: remoteip || ''
+      })
+    });
+    const data = await res.json();
+    return Boolean(data.success);
+  } catch (e) {
+    console.error('[Turnstile] Verification error:', e);
+    return false;
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -80,6 +215,9 @@ async function sendAuthCode(env, origin, { email, name, code, token }) {
   const appName = env.APP_NAME || 'Sunday Pickup Baseball';
   const magicLink = `${origin}/api/auth/verify-magic?token=${encodeURIComponent(token)}`;
   const subject = `Your Sign-In Code for ${appName}: ${code}`;
+  const safeName = escapeHtml(name || 'there');
+  const safeAppName = escapeHtml(appName);
+  const safeCode = escapeHtml(code);
 
   const text = `Hi ${name || 'there'},
 
@@ -90,25 +228,25 @@ Your 6-digit sign-in code is: ${code}
 Or click the link below to sign in automatically:
 ${magicLink}
 
-This code and link will expire in 20 minutes.
+This code and link will expire in 10 minutes.
 
 Play ball!
 - ${appName} Team`;
 
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 26px; border: 1px solid #dbe4e0; border-top: 5px solid #003831; border-radius: 8px; background: #ffffff;">
-      <h2 style="color: #003831; margin-top: 0; font-size: 22px;">⚾ ${appName}</h2>
-      <p style="color: #0c1f1a; font-size: 16px;">Hi <strong>${name || 'there'}</strong>,</p>
+      <h2 style="color: #003831; margin-top: 0; font-size: 22px;">⚾ ${safeAppName}</h2>
+      <p style="color: #0c1f1a; font-size: 16px;">Hi <strong>${safeName}</strong>,</p>
       <p style="color: #546e66; font-size: 15px;">Use the code below to sign in to your account:</p>
       <div style="background: #f5f8f7; border: 1px solid #dbe4e0; padding: 18px; border-radius: 8px; text-align: center; margin: 24px 0;">
-        <span style="font-size: 34px; font-weight: 800; letter-spacing: 6px; color: #003831;">${code}</span>
+        <span style="font-size: 34px; font-weight: 800; letter-spacing: 6px; color: #003831;">${safeCode}</span>
       </div>
       <p style="text-align: center; margin: 26px 0;">
         <a href="${magicLink}" style="background: #FD5A1E; color: #ffffff; padding: 13px 26px; border-radius: 6px; text-decoration: none; font-weight: 700; font-size: 15px; display: inline-block;">
           Or Click to Sign In Instantly →
         </a>
       </p>
-      <p style="color: #546e66; font-size: 13px; margin-top: 32px; border-top: 1px solid #dbe4e0; padding-top: 14px;">This code expires in 20 minutes. If you did not request this, you can safely ignore this email.</p>
+      <p style="color: #546e66; font-size: 13px; margin-top: 32px; border-top: 1px solid #dbe4e0; padding-top: 14px;">This code expires in 10 minutes and is invalidated after 5 failed attempts. If you did not request this, you can safely ignore this email.</p>
     </div>
   `;
 
@@ -129,6 +267,13 @@ async function sendRsvpConfirmation(env, origin, { email, name, event, dutyName,
     timeZoneName: 'short'
   });
 
+  const safeName = escapeHtml(name);
+  const safeTitle = escapeHtml(event.title);
+  const safeLocation = escapeHtml(event.location);
+  const safeLocationUrl = sanitizeHttpUrl(event.location_url);
+  const safeDutyName = escapeHtml(dutyName);
+  const safeGear = escapeHtml(gearBringing);
+
   const subject = `Confirmed: You're playing in ${event.title} (${eventDateFormatted})`;
   const text = `Hi ${name},
 
@@ -148,15 +293,15 @@ See you on the field!
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 26px; border: 1px solid #dbe4e0; border-top: 5px solid #FD5A1E; border-radius: 8px; background: #ffffff;">
       <h2 style="color: #003831; margin-top: 0; font-size: 22px;">⚾ RSVP Confirmed!</h2>
-      <p style="color: #0c1f1a; font-size: 16px;">Hi <strong>${name}</strong>,</p>
-      <p style="color: #546e66; font-size: 15px;">You are confirmed on the roster for <strong>${event.title}</strong>.</p>
+      <p style="color: #0c1f1a; font-size: 16px;">Hi <strong>${safeName}</strong>,</p>
+      <p style="color: #546e66; font-size: 15px;">You are confirmed on the roster for <strong>${safeTitle}</strong>.</p>
       
       <div style="background: #f5f8f7; border-left: 4px solid #003831; border: 1px solid #dbe4e0; padding: 18px; margin: 20px 0; border-radius: 6px;">
-        <p style="margin: 4px 0; color: #0c1f1a;"><strong>📅 When:</strong> ${eventDateFormatted}</p>
-        <p style="margin: 4px 0; color: #0c1f1a;"><strong>📍 Where:</strong> ${event.location}</p>
-        ${event.location_url ? `<p style="margin: 4px 0;"><a href="${event.location_url}" target="_blank" style="color: #FD5A1E; font-weight: 700;">View Map / Directions ↗</a></p>` : ''}
-        ${dutyName ? `<p style="margin: 6px 0 4px 0; color: #003831;"><strong>🛡️ Your Duty:</strong> <span style="background: #e6f0ed; padding: 2px 8px; border-radius: 4px; font-weight: 700;">${dutyName}</span></p>` : ''}
-        ${gearBringing ? `<p style="margin: 4px 0; color: #0c1f1a;"><strong>🎒 Gear You're Bringing:</strong> <em>${gearBringing}</em></p>` : ''}
+        <p style="margin: 4px 0; color: #0c1f1a;"><strong>📅 When:</strong> ${escapeHtml(eventDateFormatted)}</p>
+        <p style="margin: 4px 0; color: #0c1f1a;"><strong>📍 Where:</strong> ${safeLocation}</p>
+        ${safeLocationUrl ? `<p style="margin: 4px 0;"><a href="${escapeHtml(safeLocationUrl)}" target="_blank" rel="noopener noreferrer" style="color: #FD5A1E; font-weight: 700;">View Map / Directions ↗</a></p>` : ''}
+        ${safeDutyName ? `<p style="margin: 6px 0 4px 0; color: #003831;"><strong>🛡️ Your Duty:</strong> <span style="background: #e6f0ed; padding: 2px 8px; border-radius: 4px; font-weight: 700;">${safeDutyName}</span></p>` : ''}
+        ${safeGear ? `<p style="margin: 4px 0; color: #0c1f1a;"><strong>🎒 Gear You're Bringing:</strong> <em>${safeGear}</em></p>` : ''}
       </div>
 
       <p style="text-align: center; margin: 28px 0;">
@@ -188,6 +333,13 @@ async function sendEventReminder(env, origin, { email, name, event, dutyName, ge
     timeZoneName: 'short'
   });
 
+  const safeName = escapeHtml(name);
+  const safeTitle = escapeHtml(event.title);
+  const safeLocation = escapeHtml(event.location);
+  const safeLocationUrl = sanitizeHttpUrl(event.location_url);
+  const safeDutyName = escapeHtml(dutyName);
+  const safeGear = escapeHtml(gearBringing);
+
   const subject = `Game Reminder: ${event.title} is coming up! (${eventDateFormatted})`;
   const text = `Hi ${name},
 
@@ -207,16 +359,16 @@ See you on the diamond!
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 26px; border: 1px solid #dbe4e0; border-top: 5px solid #003831; border-radius: 8px; background: #ffffff;">
       <h2 style="color: #003831; margin-top: 0; font-size: 22px;">⚾ Game Day Reminder</h2>
-      <p style="color: #0c1f1a; font-size: 16px;">Hi <strong>${name}</strong>,</p>
-      <p style="color: #546e66; font-size: 15px;">Get ready! <strong>${event.title}</strong> is coming up soon.</p>
+      <p style="color: #0c1f1a; font-size: 16px;">Hi <strong>${safeName}</strong>,</p>
+      <p style="color: #546e66; font-size: 15px;">Get ready! <strong>${safeTitle}</strong> is coming up soon.</p>
       
       <div style="background: #f5f8f7; border-left: 4px solid #003831; border: 1px solid #dbe4e0; padding: 18px; margin: 20px 0; border-radius: 6px;">
-        <p style="margin: 4px 0; color: #0c1f1a;"><strong>📅 When:</strong> ${eventDateFormatted}</p>
-        <p style="margin: 4px 0; color: #0c1f1a;"><strong>📍 Where:</strong> ${event.location}</p>
-        <p style="margin: 4px 0; color: #0c1f1a;"><strong>👥 Confirmed Players:</strong> ${totalAttendees}</p>
-        ${event.location_url ? `<p style="margin: 4px 0;"><a href="${event.location_url}" target="_blank" style="color: #FD5A1E; font-weight: 700;">View Map / Directions ↗</a></p>` : ''}
-        ${dutyName ? `<p style="margin: 6px 0 4px 0; color: #003831;"><strong>🛡️ Your Duty:</strong> <span style="background: #e6f0ed; padding: 2px 8px; border-radius: 4px; font-weight: 700;">${dutyName}</span></p>` : ''}
-        ${gearBringing ? `<p style="margin: 4px 0; color: #0c1f1a;"><strong>🎒 Gear You're Bringing:</strong> <em>${gearBringing}</em></p>` : ''}
+        <p style="margin: 4px 0; color: #0c1f1a;"><strong>📅 When:</strong> ${escapeHtml(eventDateFormatted)}</p>
+        <p style="margin: 4px 0; color: #0c1f1a;"><strong>📍 Where:</strong> ${safeLocation}</p>
+        <p style="margin: 4px 0; color: #0c1f1a;"><strong>👥 Confirmed Players:</strong> ${Number(totalAttendees) || 0}</p>
+        ${safeLocationUrl ? `<p style="margin: 4px 0;"><a href="${escapeHtml(safeLocationUrl)}" target="_blank" rel="noopener noreferrer" style="color: #FD5A1E; font-weight: 700;">View Map / Directions ↗</a></p>` : ''}
+        ${safeDutyName ? `<p style="margin: 6px 0 4px 0; color: #003831;"><strong>🛡️ Your Duty:</strong> <span style="background: #e6f0ed; padding: 2px 8px; border-radius: 4px; font-weight: 700;">${safeDutyName}</span></p>` : ''}
+        ${safeGear ? `<p style="margin: 4px 0; color: #0c1f1a;"><strong>🎒 Gear You're Bringing:</strong> <em>${safeGear}</em></p>` : ''}
       </div>
 
       <p style="text-align: center; margin: 28px 0;">
@@ -231,7 +383,7 @@ See you on the diamond!
 }
 
 // -----------------------------------------------------------------------------
-// Auth & RBAC Middleware
+// Auth, RBAC & Security Headers Middleware
 // -----------------------------------------------------------------------------
 
 async function getUserFromSession(db, sessionId) {
@@ -250,7 +402,9 @@ async function getUserFromSession(db, sessionId) {
       COALESCE(u.role, CASE WHEN u.is_admin = 1 THEN 'admin' ELSE 'player' END) as role
     FROM sessions s
     JOIN users u ON s.user_id = u.id
-    WHERE s.id = ? AND datetime(s.expires_at) > datetime('now')
+    WHERE s.id = ?
+      AND datetime(s.expires_at) > datetime('now')
+      AND NOT EXISTS (SELECT 1 FROM banned_emails b WHERE b.email = u.email)
   `).bind(sessionId).first();
 
   if (!session) return null;
@@ -284,6 +438,11 @@ app.use('*', async (c, next) => {
     c.set('user', null);
   }
   await next();
+  c.header('X-Content-Type-Options', 'nosniff');
+  c.header('X-Frame-Options', 'DENY');
+  c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+  c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+  c.header('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
 });
 
 const DEFAULT_BASEBALL_DUTIES = [
@@ -319,13 +478,29 @@ app.get('/health', (c) => {
 app.post('/auth/send-code', async (c) => {
   try {
     const body = await c.req.json();
-    let { email, name } = body;
-    if (!email || !email.includes('@')) {
+    let { email, name, cf_turnstile_response } = body;
+    if (!email || typeof email !== 'string' || !email.includes('@') || email.length > 254) {
       return c.json({ error: 'A valid email address is required.' }, 400);
     }
 
     email = email.trim().toLowerCase();
-    name = (name || '').trim();
+    name = (name || '').toString().trim().slice(0, 120);
+
+    const clientIp = getClientIp(c);
+    const turnstileOk = await verifyTurnstileIfConfigured(c.env, cf_turnstile_response, clientIp);
+    if (!turnstileOk) {
+      return c.json({ error: 'Bot verification failed. Please refresh and try again.' }, 403);
+    }
+
+    // Rate limit: max 5 send-code requests per IP per 10 minutes, max 3 per email per 10 minutes
+    const ipLimit = await checkRateLimit(c.env.DB, `send_code_ip:${clientIp}`, 5, 600);
+    if (!ipLimit.allowed) {
+      return c.json({ error: 'Too many sign-in requests from your network. Please wait 10 minutes and try again.' }, 429);
+    }
+    const emailLimit = await checkRateLimit(c.env.DB, `send_code_email:${email}`, 3, 600);
+    if (!emailLimit.allowed) {
+      return c.json({ error: 'Too many sign-in codes requested for this email. Please check your inbox or wait 10 minutes.' }, 429);
+    }
 
     const banRecord = await c.env.DB.prepare('SELECT id, reason FROM banned_emails WHERE email = ?').bind(email).first();
     if (banRecord) {
@@ -339,12 +514,18 @@ app.post('/auth/send-code', async (c) => {
 
     const code = generateCode();
     const token = generateToken();
-    const expiresAt = new Date(Date.now() + 20 * 60 * 1000).toISOString();
+    const codeHash = await sha256Hex(code);
+    const tokenHash = await sha256Hex(token);
+    const expiresAt = new Date(Date.now() + AUTH_CODE_EXPIRY_MS).toISOString();
 
-    await c.env.DB.prepare(`
-      INSERT INTO auth_codes (email, name, code, token, expires_at)
-      VALUES (?, ?, ?, ?, ?)
-    `).bind(email, name, code, token, expiresAt).run();
+    // Invalidate any previous unused codes for this email so only the newest code is valid
+    await c.env.DB.batch([
+      c.env.DB.prepare('UPDATE auth_codes SET used_at = CURRENT_TIMESTAMP WHERE email = ? AND used_at IS NULL').bind(email),
+      c.env.DB.prepare(`
+        INSERT INTO auth_codes (email, name, code, token, attempts, expires_at)
+        VALUES (?, ?, ?, ?, 0, ?)
+      `).bind(email, name, codeHash, tokenHash, expiresAt)
+    ]);
 
     const origin = new URL(c.req.url).origin;
     await sendAuthCode(c.env, origin, {
@@ -356,7 +537,7 @@ app.post('/auth/send-code', async (c) => {
 
     return c.json({
       success: true,
-      message: `A 6-digit code has been sent to ${email}. Please check your inbox.`
+      message: `A 6-digit code has been sent to ${email}. It expires in 10 minutes.`
     });
   } catch (err) {
     console.error('[Auth] Error sending code:', err);
@@ -371,27 +552,60 @@ app.post('/auth/verify-code', async (c) => {
       return c.json({ error: 'Email and 6-digit verification code are required.' }, 400);
     }
 
-    const cleanEmail = email.trim().toLowerCase();
-    const cleanCode = code.toString().trim();
+    const cleanEmail = String(email).trim().toLowerCase();
+    const cleanCode = String(code).trim();
 
-    const authRecord = await c.env.DB.prepare(`
+    const clientIp = getClientIp(c);
+    const ipLimit = await checkRateLimit(c.env.DB, `verify_code_ip:${clientIp}`, 10, 600);
+    if (!ipLimit.allowed) {
+      return c.json({ error: 'Too many verification attempts. Please wait 10 minutes before trying again.' }, 429);
+    }
+
+    const banRecord = await c.env.DB.prepare('SELECT id FROM banned_emails WHERE email = ?').bind(cleanEmail).first();
+    if (banRecord) {
+      return c.json({ error: 'This email address has been restricted from accessing this service.' }, 403);
+    }
+
+    // Fetch the most recent active code for this email
+    const latestActive = await c.env.DB.prepare(`
       SELECT * FROM auth_codes
-      WHERE email = ? AND code = ? AND used_at IS NULL AND datetime(expires_at) > datetime('now')
+      WHERE email = ? AND used_at IS NULL AND datetime(expires_at) > datetime('now')
       ORDER BY id DESC LIMIT 1
-    `).bind(cleanEmail, cleanCode).first();
+    `).bind(cleanEmail).first();
 
-    if (!authRecord) {
+    if (!latestActive) {
       return c.json({ error: 'Invalid or expired code. Please request a new code.' }, 400);
     }
 
-    await c.env.DB.prepare('UPDATE auth_codes SET used_at = CURRENT_TIMESTAMP WHERE id = ?').bind(authRecord.id).run();
+    const codeHash = await sha256Hex(cleanCode);
+    const isMatch = (latestActive.code === codeHash || latestActive.code === cleanCode);
+
+    if (!isMatch) {
+      const newAttempts = (latestActive.attempts || 0) + 1;
+      if (newAttempts >= MAX_CODE_VERIFY_ATTEMPTS) {
+        await c.env.DB.prepare(
+          'UPDATE auth_codes SET attempts = ?, used_at = CURRENT_TIMESTAMP WHERE id = ?'
+        ).bind(newAttempts, latestActive.id).run();
+        return c.json({
+          error: 'Too many failed attempts. This code has been invalidated—please request a new code.'
+        }, 400);
+      } else {
+        await c.env.DB.prepare(
+          'UPDATE auth_codes SET attempts = ? WHERE id = ?'
+        ).bind(newAttempts, latestActive.id).run();
+        return c.json({
+          error: `Invalid verification code (${MAX_CODE_VERIFY_ATTEMPTS - newAttempts} attempt(s) remaining).`
+        }, 400);
+      }
+    }
+
+    await c.env.DB.prepare('UPDATE auth_codes SET used_at = CURRENT_TIMESTAMP WHERE id = ?').bind(latestActive.id).run();
 
     let user = await c.env.DB.prepare('SELECT * FROM users WHERE email = ?').bind(cleanEmail).first();
     if (!user) {
-      const displayName = authRecord.name || cleanEmail.split('@')[0];
-      const adminCountRow = await c.env.DB.prepare("SELECT COUNT(*) as c FROM users WHERE role = 'admin' OR is_admin = 1").first();
-      const adminCount = adminCountRow ? adminCountRow.c : 0;
-      const shouldBeAdmin = (adminCount === 0 || cleanEmail === (c.env.ADMIN_EMAIL || 'pickupbaseballfoundation@gmail.com').toLowerCase());
+      const displayName = (latestActive.name || cleanEmail.split('@')[0]).slice(0, 120);
+      const configuredAdminEmail = (c.env.ADMIN_EMAIL || 'pickupbaseballfoundation@gmail.com').toLowerCase();
+      const shouldBeAdmin = (cleanEmail === configuredAdminEmail);
       const role = shouldBeAdmin ? 'admin' : 'player';
       const isAdminFlag = shouldBeAdmin ? 1 : 0;
 
@@ -443,29 +657,36 @@ app.get('/auth/verify-magic', async (c) => {
       return c.text('Invalid or missing magic link token.', 400);
     }
 
+    const tokenHash = await sha256Hex(token);
+
     const authRecord = await c.env.DB.prepare(`
       SELECT * FROM auth_codes
-      WHERE token = ? AND used_at IS NULL AND datetime(expires_at) > datetime('now')
-    `).bind(token).first();
+      WHERE (token = ? OR token = ?) AND used_at IS NULL AND datetime(expires_at) > datetime('now')
+    `).bind(tokenHash, token).first();
 
     if (!authRecord) {
       return c.text('This sign-in link is invalid or has expired. Please request a new one on the login page.', 400);
     }
 
+    const cleanEmail = authRecord.email.trim().toLowerCase();
+    const banRecord = await c.env.DB.prepare('SELECT id FROM banned_emails WHERE email = ?').bind(cleanEmail).first();
+    if (banRecord) {
+      return c.text('This email address has been restricted from accessing this service.', 403);
+    }
+
     await c.env.DB.prepare('UPDATE auth_codes SET used_at = CURRENT_TIMESTAMP WHERE id = ?').bind(authRecord.id).run();
 
-    let user = await c.env.DB.prepare('SELECT * FROM users WHERE email = ?').bind(authRecord.email).first();
+    let user = await c.env.DB.prepare('SELECT * FROM users WHERE email = ?').bind(cleanEmail).first();
     if (!user) {
-      const displayName = authRecord.name || authRecord.email.split('@')[0];
-      const adminCountRow = await c.env.DB.prepare("SELECT COUNT(*) as c FROM users WHERE role = 'admin' OR is_admin = 1").first();
-      const adminCount = adminCountRow ? adminCountRow.c : 0;
-      const shouldBeAdmin = (adminCount === 0 || authRecord.email === (c.env.ADMIN_EMAIL || 'pickupbaseballfoundation@gmail.com').toLowerCase());
+      const displayName = (authRecord.name || cleanEmail.split('@')[0]).slice(0, 120);
+      const configuredAdminEmail = (c.env.ADMIN_EMAIL || 'pickupbaseballfoundation@gmail.com').toLowerCase();
+      const shouldBeAdmin = (cleanEmail === configuredAdminEmail);
       const role = shouldBeAdmin ? 'admin' : 'player';
       const isAdminFlag = shouldBeAdmin ? 1 : 0;
 
       const insertRes = await c.env.DB.prepare(`
         INSERT INTO users (name, email, role, is_admin) VALUES (?, ?, ?, ?)
-      `).bind(displayName, authRecord.email, role, isAdminFlag).run();
+      `).bind(displayName, cleanEmail, role, isAdminFlag).run();
 
       const lastId = insertRes.meta.last_row_id;
       user = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(lastId).first();
@@ -487,7 +708,7 @@ app.get('/auth/verify-magic', async (c) => {
       maxAge: SESSION_DURATION_SECONDS
     });
 
-    return c.redirect(redirect || '/index.html?logged_in=1');
+    return c.redirect(getSafeRelativeRedirect(redirect));
   } catch (err) {
     console.error('[Auth] Error handling magic link:', err);
     return c.text('Internal error verifying magic link.', 500);
@@ -507,16 +728,19 @@ app.put('/auth/profile', async (c) => {
 
   try {
     const { name, bio } = await c.req.json();
-    if (!name || !name.trim()) {
+    if (!name || !String(name).trim()) {
       return c.json({ error: 'Name cannot be empty.' }, 400);
     }
 
+    const cleanName = String(name).trim().slice(0, 120);
+    const cleanBio = String(bio || '').trim().slice(0, 280);
+
     await c.env.DB.prepare(`
       UPDATE users SET name = ?, bio = ? WHERE id = ?
-    `).bind(name.trim(), (bio || '').trim(), user.id).run();
+    `).bind(cleanName, cleanBio, user.id).run();
 
-    user.name = name.trim();
-    user.bio = (bio || '').trim();
+    user.name = cleanName;
+    user.bio = cleanBio;
 
     return c.json({
       success: true,
@@ -542,14 +766,19 @@ app.post('/auth/avatar', async (c) => {
       return c.json({ error: 'No image file uploaded.' }, 400);
     }
 
-    const mime = file.type || 'image/jpeg';
-    if (!mime.startsWith('image/')) {
-      return c.json({ error: 'Only image files are allowed.' }, 400);
+    const allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    const mime = (file.type || '').toLowerCase();
+    if (!allowedMimes.includes(mime)) {
+      return c.json({ error: 'Only JPEG, PNG, WebP, or GIF image files are allowed.' }, 400);
     }
 
     const buffer = await file.arrayBuffer();
     if (buffer.byteLength > 5 * 1024 * 1024) {
       return c.json({ error: 'Image size exceeds 5MB limit.' }, 400);
+    }
+
+    if (!isValidRasterImageBuffer(buffer, mime)) {
+      return c.json({ error: 'Invalid or corrupted image file content.' }, 400);
     }
 
     const base64 = arrayBufferToBase64(buffer);
@@ -670,12 +899,12 @@ app.delete('/auth/users/:id', async (c) => {
   }
 
   const ban = c.req.query('ban') === 'true';
-  const reason = c.req.query('reason') || 'Banned by administrator';
+  const reason = (c.req.query('reason') || 'Banned by administrator').slice(0, 200);
 
   if (ban) {
     await c.env.DB.prepare(
       'INSERT OR REPLACE INTO banned_emails (email, reason) VALUES (?, ?)'
-    ).bind(targetUser.email, reason).run();
+    ).bind(targetUser.email.toLowerCase(), reason).run();
   }
 
   await c.env.DB.batch([
@@ -706,13 +935,23 @@ app.post('/auth/banned-emails', async (c) => {
     return c.json({ error: 'Administrator access required.' }, 403);
   }
   const { email, reason } = await c.req.json();
-  if (!email || !email.includes('@')) {
+  if (!email || typeof email !== 'string' || !email.includes('@')) {
     return c.json({ error: 'A valid email is required.' }, 400);
   }
-  await c.env.DB.prepare(
-    'INSERT OR REPLACE INTO banned_emails (email, reason) VALUES (?, ?)'
-  ).bind(email.trim().toLowerCase(), (reason || 'Banned by admin').trim()).run();
-  return c.json({ success: true, message: `Email ${email} added to ban list.` });
+  const cleanEmail = email.trim().toLowerCase();
+  if (cleanEmail === currentUser.email.toLowerCase()) {
+    return c.json({ error: 'You cannot ban your own administrator email address.' }, 400);
+  }
+  const cleanReason = (reason || 'Banned by admin').toString().trim().slice(0, 200);
+
+  // Immediately insert ban and revoke any active sessions or pending login codes for this email
+  await c.env.DB.batch([
+    c.env.DB.prepare('INSERT OR REPLACE INTO banned_emails (email, reason) VALUES (?, ?)').bind(cleanEmail, cleanReason),
+    c.env.DB.prepare('DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE email = ?)').bind(cleanEmail),
+    c.env.DB.prepare('DELETE FROM auth_codes WHERE email = ?').bind(cleanEmail)
+  ]);
+
+  return c.json({ success: true, message: `Email ${cleanEmail} added to ban list and any active sessions revoked.` });
 });
 
 app.delete('/auth/banned-emails/:id', async (c) => {
@@ -771,18 +1010,21 @@ app.get('/events', async (c) => {
       FROM events e
       WHERE e.status = 'active'
     `;
+    const params = [];
 
     if (filter === 'past') {
-      query += ` AND e.event_date < '${nowIso}'`;
+      query += ' AND e.event_date < ?';
+      params.push(nowIso);
     } else if (filter === 'all') {
       // no restriction
     } else {
-      query += ` AND e.event_date >= date('now', '-1 day')`;
+      query += " AND e.event_date >= date('now', '-1 day')";
     }
 
     query += ' ORDER BY e.event_date ASC';
 
-    const { results: events } = await c.env.DB.prepare(query).all();
+    const stmt = c.env.DB.prepare(query);
+    const { results: events } = params.length > 0 ? await stmt.bind(...params).all() : await stmt.all();
 
     if (user && events && events.length > 0) {
       const { results: userRsvps } = await c.env.DB.prepare(`
@@ -822,12 +1064,12 @@ app.put('/events/default-duties', async (c) => {
     }
 
     const batch = [c.env.DB.prepare('DELETE FROM default_duties')];
-    duties.filter(d => d && d.title && d.title.trim()).forEach((d, idx) => {
+    duties.filter(d => d && d.title && String(d.title).trim()).forEach((d, idx) => {
       batch.push(
         c.env.DB.prepare(`
           INSERT INTO default_duties (title, description, slots_needed, sort_order)
           VALUES (?, ?, ?, ?)
-        `).bind(d.title.trim(), (d.description || '').trim(), parseInt(d.slots_needed || 1, 10), idx)
+        `).bind(String(d.title).trim().slice(0, 120), String(d.description || '').trim().slice(0, 300), parseInt(d.slots_needed || 1, 10), idx)
       );
     });
 
@@ -854,7 +1096,9 @@ app.get('/events/admin/backup-db', async (c) => {
       'attendees',
       'duty_assignments',
       'comments',
-      'default_duties'
+      'default_duties',
+      'banned_emails',
+      'app_settings'
     ];
 
     const timestamp = new Date().toISOString();
@@ -883,7 +1127,9 @@ app.get('/events/admin/backup-db', async (c) => {
       headers: {
         'Content-Type': 'application/sql; charset=utf-8',
         'Content-Disposition': `attachment; filename="baseball_backup_${dateStr}.sql"`,
-        'Cache-Control': 'no-store'
+        'Cache-Control': 'no-store',
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY'
       }
     });
   } catch (err) {
@@ -922,6 +1168,7 @@ app.get('/events/:id', async (c) => {
       assigned_players: JSON.parse(d.assigned_players || '[]')
     }));
 
+    // Public roster query explicitly selects only non-sensitive columns (never emails or tokens)
     const { results: attendees } = await c.env.DB.prepare(`
       SELECT a.id, a.name, a.status, a.gear_bringing, a.is_guest, a.created_at,
         u.bio, u.avatar_url,
@@ -937,6 +1184,7 @@ app.get('/events/:id', async (c) => {
       ORDER BY a.created_at ASC
     `).bind(eventId).all();
 
+    // Public comments query explicitly selects only public columns (never author_email)
     const { results: comments } = await c.env.DB.prepare(`
       SELECT c.id, c.author_name, c.content, c.created_at, c.user_id,
         u.avatar_url, u.bio
@@ -949,14 +1197,14 @@ app.get('/events/:id', async (c) => {
     let myRsvp = null;
     if (user) {
       myRsvp = await c.env.DB.prepare(`
-        SELECT a.*,
+        SELECT a.id, a.event_id, a.user_id, a.name, a.status, a.gear_bringing,
           (SELECT json_group_array(duty_id) FROM duty_assignments WHERE attendee_id = a.id) as duty_ids
         FROM attendees a
         WHERE a.event_id = ? AND (a.user_id = ? OR a.email = ?)
       `).bind(eventId, user.id, user.email).first();
     } else if (token) {
       myRsvp = await c.env.DB.prepare(`
-        SELECT a.*,
+        SELECT a.id, a.event_id, a.user_id, a.name, a.status, a.gear_bringing,
           (SELECT json_group_array(duty_id) FROM duty_assignments WHERE attendee_id = a.id) as duty_ids
         FROM attendees a
         WHERE a.event_id = ? AND a.management_token = ?
@@ -999,7 +1247,7 @@ app.post('/events', async (c) => {
       custom_duties
     } = await c.req.json();
 
-    if (!title || !title.trim() || !location || !location.trim() || !event_date) {
+    if (!title || !String(title).trim() || !location || !String(location).trim() || !event_date) {
       return c.json({ error: 'Title, location, and event date/time are required.' }, 400);
     }
 
@@ -1007,12 +1255,17 @@ app.post('/events', async (c) => {
       return c.json({ error: 'A valid event date/time is required.' }, 400);
     }
 
+    const safeLocUrl = sanitizeHttpUrl(location_url);
+    if (safeLocUrl === null) {
+      return c.json({ error: 'Map link must be a valid http:// or https:// URL.' }, 400);
+    }
+
     let dutiesToInsert = [];
     if (use_default_duties || (!custom_duties || custom_duties.length === 0)) {
       dutiesToInsert = await getDefaultDuties(c.env.DB);
     } else if (Array.isArray(custom_duties)) {
       for (const d of custom_duties) {
-        if (!d || !d.title || !d.title.trim()) {
+        if (!d || !d.title || !String(d.title).trim()) {
           return c.json({ error: 'All custom duties must have a non-empty title.' }, 400);
         }
       }
@@ -1025,10 +1278,10 @@ app.post('/events', async (c) => {
       INSERT INTO events (title, description, location, location_url, event_date, max_players, created_by)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).bind(
-      title.trim(),
-      (description || '').trim(),
-      location.trim(),
-      (location_url || '').trim(),
+      String(title).trim().slice(0, 150),
+      String(description || '').trim().slice(0, 2000),
+      String(location).trim().slice(0, 200),
+      safeLocUrl,
       event_date,
       max_players ? parseInt(max_players, 10) : null,
       user.id
@@ -1043,8 +1296,8 @@ app.post('/events', async (c) => {
           VALUES (?, ?, ?, ?, ?)
         `).bind(
           eventId,
-          d.title.trim(),
-          (d.description || '').trim(),
+          String(d.title).trim().slice(0, 120),
+          String(d.description || '').trim().slice(0, 300),
           parseInt(d.slots_needed || 1, 10),
           d.sort_order !== undefined ? parseInt(d.sort_order, 10) : idx
         )
@@ -1081,15 +1334,23 @@ app.put('/events/:id', async (c) => {
       return c.json({ error: 'Event not found.' }, 404);
     }
 
-    if (title !== undefined && (!title || !title.trim())) {
+    if (title !== undefined && (!title || !String(title).trim())) {
       return c.json({ error: 'Event title cannot be empty.' }, 400);
     }
-    if (location !== undefined && (!location || !location.trim())) {
+    if (location !== undefined && (!location || !String(location).trim())) {
       return c.json({ error: 'Event location cannot be empty.' }, 400);
     }
     if (event_date !== undefined && event_date !== null) {
       if (isNaN(new Date(event_date).getTime())) {
         return c.json({ error: 'A valid event date/time is required.' }, 400);
+      }
+    }
+
+    let safeLocUrl = null;
+    if (location_url !== undefined) {
+      safeLocUrl = sanitizeHttpUrl(location_url);
+      if (safeLocUrl === null) {
+        return c.json({ error: 'Map link must be a valid http:// or https:// URL.' }, 400);
       }
     }
 
@@ -1114,10 +1375,10 @@ app.put('/events/:id', async (c) => {
           status = COALESCE(?, status)
       WHERE id = ?
     `).bind(
-      title !== undefined ? title.trim() : null,
-      description !== undefined ? description.trim() : null,
-      location !== undefined ? location.trim() : null,
-      location_url !== undefined ? location_url.trim() : null,
+      title !== undefined ? String(title).trim().slice(0, 150) : null,
+      description !== undefined ? String(description).trim().slice(0, 2000) : null,
+      location !== undefined ? String(location).trim().slice(0, 200) : null,
+      location_url !== undefined ? safeLocUrl : null,
       event_date || null,
       newMaxPlayers,
       status || null,
@@ -1156,13 +1417,26 @@ app.post('/events/:id/rsvp', async (c) => {
     const eventId = parseInt(c.req.param('id'), 10);
     const user = c.get('user');
 
+    const clientIp = getClientIp(c);
+    const rsvpLimit = await checkRateLimit(c.env.DB, `rsvp_ip:${clientIp}`, 10, 600);
+    if (!rsvpLimit.allowed) {
+      return c.json({ error: 'Too many RSVP requests. Please wait a few minutes and try again.' }, 429);
+    }
+
     const event = await c.env.DB.prepare('SELECT * FROM events WHERE id = ?').bind(eventId).first();
     if (!event) {
       return c.json({ error: 'Event not found.' }, 404);
     }
 
-    let { name, email, gear_bringing, duty_ids, management_token, status } = await c.req.json();
+    let { name, email, gear_bringing, duty_ids, management_token, status, cf_turnstile_response } = await c.req.json();
     status = status === 'declined' ? 'declined' : 'attending';
+
+    if (!user) {
+      const turnstileOk = await verifyTurnstileIfConfigured(c.env, cf_turnstile_response, clientIp);
+      if (!turnstileOk) {
+        return c.json({ error: 'Bot verification failed. Please refresh and try again.' }, 403);
+      }
+    }
 
     const settingRow = await c.env.DB.prepare("SELECT value FROM app_settings WHERE key = 'require_login_to_rsvp'").first();
     const requireLogin = settingRow ? settingRow.value === 'true' : true;
@@ -1174,16 +1448,16 @@ app.post('/events/:id/rsvp', async (c) => {
     let isGuest = user ? 0 : 1;
 
     if (user) {
-      name = name || user.name;
+      name = (name ? String(name).trim() : user.name).slice(0, 120);
       email = user.email;
     } else {
-      if (!name || !name.trim()) {
+      if (!name || !String(name).trim()) {
         return c.json({ error: 'Your name is required to RSVP.' }, 400);
       }
-      if (!email || !email.includes('@')) {
+      if (!email || typeof email !== 'string' || !email.includes('@')) {
         return c.json({ error: 'A valid email address is required.' }, 400);
       }
-      name = name.trim();
+      name = String(name).trim().slice(0, 120);
       email = email.trim().toLowerCase();
 
       const existingUser = await c.env.DB.prepare('SELECT id, name FROM users WHERE email = ?').bind(email).first();
@@ -1200,6 +1474,7 @@ app.post('/events/:id/rsvp', async (c) => {
       }
     }
 
+    const cleanGear = String(gear_bringing || '').trim().slice(0, 300);
     const mgmtToken = management_token || generateToken();
 
     const existingAttendee = await c.env.DB.prepare(
@@ -1213,12 +1488,12 @@ app.post('/events/:id/rsvp', async (c) => {
         UPDATE attendees
         SET name = ?, status = ?, gear_bringing = ?, user_id = COALESCE(?, user_id), is_guest = ?
         WHERE id = ?
-      `).bind(name, status, (gear_bringing || '').trim(), userId, isGuest, attendeeId).run();
+      `).bind(name, status, cleanGear, userId, isGuest, attendeeId).run();
     } else {
       const insertAttendeeRes = await c.env.DB.prepare(`
         INSERT INTO attendees (event_id, user_id, name, email, is_guest, status, gear_bringing, management_token)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).bind(eventId, userId, name, email, isGuest, status, (gear_bringing || '').trim(), mgmtToken).run();
+      `).bind(eventId, userId, name, email, isGuest, status, cleanGear, mgmtToken).run();
       attendeeId = insertAttendeeRes.meta.last_row_id;
     }
 
@@ -1259,8 +1534,8 @@ app.post('/events/:id/rsvp', async (c) => {
         name,
         event,
         dutyName: assignedDutyNames.join(', '),
-        gearBringing: (gear_bringing || '').trim(),
-        managementToken: mgmtToken
+        gearBringing: cleanGear,
+        managementToken: existingAttendee ? (existingAttendee.management_token || mgmtToken) : mgmtToken
       }).catch(e => console.error('[RSVP Email Error]:', e));
 
       if (c.executionCtx && c.executionCtx.waitUntil) {
@@ -1271,7 +1546,7 @@ app.post('/events/:id/rsvp', async (c) => {
     return c.json({
       success: true,
       status,
-      managementToken: mgmtToken,
+      managementToken: existingAttendee ? (existingAttendee.management_token || mgmtToken) : mgmtToken,
       message: status === 'attending'
         ? `You're on the roster! A confirmation email has been sent to ${email}.`
         : 'Your RSVP has been cancelled.'
@@ -1287,13 +1562,19 @@ app.post('/events/:id/comments', async (c) => {
     const eventId = parseInt(c.req.param('id'), 10);
     const user = c.get('user');
 
+    const clientIp = getClientIp(c);
+    const commentLimit = await checkRateLimit(c.env.DB, `comment_ip:${clientIp}`, 10, 600);
+    if (!commentLimit.allowed) {
+      return c.json({ error: 'Too many comments posted recently. Please wait a few minutes.' }, 429);
+    }
+
     const event = await c.env.DB.prepare('SELECT id FROM events WHERE id = ?').bind(eventId).first();
     if (!event) {
       return c.json({ error: 'Event not found.' }, 404);
     }
 
     const { content, author_name, author_email } = await c.req.json();
-    if (!content || !content.trim()) {
+    if (!content || !String(content).trim()) {
       return c.json({ error: 'Comment message cannot be empty.' }, 400);
     }
 
@@ -1312,8 +1593,8 @@ app.post('/events/:id/comments', async (c) => {
       email = user.email;
       userId = user.id;
     } else {
-      name = (author_name || '').trim();
-      email = (author_email || '').trim().toLowerCase();
+      name = String(author_name || '').trim().slice(0, 120);
+      email = String(author_email || '').trim().toLowerCase().slice(0, 254);
       if (!name) {
         return c.json({ error: 'Please enter your name to post a comment.' }, 400);
       }
@@ -1326,13 +1607,18 @@ app.post('/events/:id/comments', async (c) => {
       }
     }
 
+    const cleanContent = String(content).trim().slice(0, 2000);
+
     const insertCommentRes = await c.env.DB.prepare(`
       INSERT INTO comments (event_id, user_id, author_name, author_email, content)
       VALUES (?, ?, ?, ?, ?)
-    `).bind(eventId, userId, name, email || 'guest', content.trim()).run();
+    `).bind(eventId, userId, name, email || 'guest', cleanContent).run();
 
     const commentId = insertCommentRes.meta.last_row_id;
-    const newComment = await c.env.DB.prepare('SELECT * FROM comments WHERE id = ?').bind(commentId).first();
+    // Never return author_email in the public response payload
+    const newComment = await c.env.DB.prepare(
+      'SELECT id, event_id, user_id, author_name, content, created_at FROM comments WHERE id = ?'
+    ).bind(commentId).first();
 
     return c.json({ success: true, comment: newComment });
   } catch (err) {
@@ -1351,7 +1637,7 @@ app.post('/events/:id/duties', async (c) => {
     const eventId = parseInt(c.req.param('id'), 10);
     const { title, description, slots_needed } = await c.req.json();
 
-    if (!title || !title.trim()) {
+    if (!title || !String(title).trim()) {
       return c.json({ error: 'Duty title is required.' }, 400);
     }
 
@@ -1361,7 +1647,13 @@ app.post('/events/:id/duties', async (c) => {
     const res = await c.env.DB.prepare(`
       INSERT INTO event_duties (event_id, title, description, slots_needed, sort_order)
       VALUES (?, ?, ?, ?, ?)
-    `).bind(eventId, title.trim(), (description || '').trim(), parseInt(slots_needed || 1, 10), nextSort).run();
+    `).bind(
+      eventId,
+      String(title).trim().slice(0, 120),
+      String(description || '').trim().slice(0, 300),
+      parseInt(slots_needed || 1, 10),
+      nextSort
+    ).run();
 
     const duty = await c.env.DB.prepare('SELECT * FROM event_duties WHERE id = ?').bind(res.meta.last_row_id).first();
     return c.json({ success: true, duty });
@@ -1382,7 +1674,7 @@ app.put('/events/:id/duties/:dutyId', async (c) => {
     const dutyId = parseInt(c.req.param('dutyId'), 10);
     const { title, description, slots_needed } = await c.req.json();
 
-    if (title !== undefined && (!title || !title.trim())) {
+    if (title !== undefined && (!title || !String(title).trim())) {
       return c.json({ error: 'Duty title cannot be empty.' }, 400);
     }
 
@@ -1393,8 +1685,8 @@ app.put('/events/:id/duties/:dutyId', async (c) => {
           slots_needed = COALESCE(?, slots_needed)
       WHERE id = ? AND event_id = ?
     `).bind(
-      title ? title.trim() : null,
-      description !== undefined ? description.trim() : null,
+      title ? String(title).trim().slice(0, 120) : null,
+      description !== undefined ? String(description).trim().slice(0, 300) : null,
       slots_needed ? parseInt(slots_needed, 10) : null,
       dutyId,
       eventId

@@ -69,8 +69,9 @@ function renderEventDetails() {
   document.getElementById('event-location').textContent = ev.location;
 
   const mapLink = document.getElementById('event-map-link');
-  if (ev.location_url) {
-    mapLink.innerHTML = ` <a href="${API.escapeHtml(ev.location_url)}" target="_blank" style="color: #2563eb; font-size: 0.85rem;">[Open Map ↗]</a>`;
+  const safeMapUrl = API.safeUrl(ev.location_url);
+  if (safeMapUrl) {
+    mapLink.innerHTML = ` <a href="${API.escapeHtml(safeMapUrl)}" target="_blank" rel="noopener noreferrer" style="color: #2563eb; font-size: 0.85rem;">[Open Map ↗]</a>`;
   } else {
     mapLink.innerHTML = '';
   }
@@ -140,9 +141,10 @@ function renderAttendeesRoster() {
   container.innerHTML = `
     <ul class="roster-list">
       ${attendees.map(a => {
-        const avatarImg = a.avatar_url
-          ? `<img src="${API.escapeHtml(a.avatar_url)}" alt="${API.escapeHtml(a.name)}" class="roster-avatar">`
-          : `<span class="roster-avatar-placeholder">${API.escapeHtml(a.name.charAt(0).toUpperCase())}</span>`;
+        const safeAvatar = API.safeAvatarUrl(a.avatar_url);
+        const avatarImg = safeAvatar
+          ? `<img src="${API.escapeHtml(safeAvatar)}" alt="${API.escapeHtml(a.name)}" class="roster-avatar">`
+          : `<span class="roster-avatar-placeholder">${API.escapeHtml((a.name || 'P').charAt(0).toUpperCase())}</span>`;
 
         return `
           <li class="roster-item" style="display: flex; gap: 12px; align-items: flex-start;">
@@ -180,9 +182,10 @@ function renderComments() {
   }
 
   container.innerHTML = comments.map(c => {
-    const avatarImg = c.avatar_url
-      ? `<img src="${API.escapeHtml(c.avatar_url)}" alt="${API.escapeHtml(c.author_name)}" class="comment-avatar">`
-      : `<span class="comment-avatar-placeholder">${API.escapeHtml(c.author_name.charAt(0).toUpperCase())}</span>`;
+    const safeAvatar = API.safeAvatarUrl(c.avatar_url);
+    const avatarImg = safeAvatar
+      ? `<img src="${API.escapeHtml(safeAvatar)}" alt="${API.escapeHtml(c.author_name)}" class="comment-avatar">`
+      : `<span class="comment-avatar-placeholder">${API.escapeHtml((c.author_name || 'P').charAt(0).toUpperCase())}</span>`;
 
     return `
       <div class="comment-bubble" style="display: flex; gap: 12px; align-items: flex-start;">

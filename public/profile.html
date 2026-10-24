@@ -156,11 +156,12 @@
       const container = document.getElementById('avatar-preview-container');
       const removeBtn = document.getElementById('btn-remove-avatar');
 
-      if (currentUser.avatarUrl) {
-        container.innerHTML = `<img src="${API.escapeHtml(currentUser.avatarUrl)}" alt="${API.escapeHtml(currentUser.name)}" class="profile-avatar-preview">`;
+      const safeAvatar = API.safeAvatarUrl(currentUser.avatarUrl);
+      if (safeAvatar) {
+        container.innerHTML = `<img src="${API.escapeHtml(safeAvatar)}" alt="${API.escapeHtml(currentUser.name)}" class="profile-avatar-preview">`;
         removeBtn.style.display = 'inline-block';
       } else {
-        const initial = (currentUser.name || 'P').charAt(0).toUpperCase();
+        const initial = API.escapeHtml((currentUser.name || 'P').charAt(0).toUpperCase());
         container.innerHTML = `<span class="profile-avatar-placeholder">${initial}</span>`;
         removeBtn.style.display = 'none';
       }

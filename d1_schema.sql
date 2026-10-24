@@ -24,9 +24,16 @@ CREATE TABLE IF NOT EXISTS auth_codes (
   name TEXT,
   code TEXT NOT NULL,
   token TEXT NOT NULL UNIQUE,
+  attempts INTEGER DEFAULT 0,
   expires_at DATETIME NOT NULL,
   used_at DATETIME,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS rate_limits (
+  key TEXT PRIMARY KEY,
+  count INTEGER DEFAULT 1,
+  window_start INTEGER NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS events (

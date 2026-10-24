@@ -240,9 +240,10 @@ const API = {
 
     let authHtml = '';
     if (user) {
-      const avatarImg = user.avatarUrl
-        ? `<img src="${this.escapeHtml(user.avatarUrl)}" alt="${this.escapeHtml(user.name)}" class="nav-avatar">`
-        : `<span class="nav-avatar-placeholder">${this.escapeHtml(user.name.charAt(0).toUpperCase())}</span>`;
+      const safeAvatar = this.safeAvatarUrl(user.avatarUrl);
+      const avatarImg = safeAvatar
+        ? `<img src="${this.escapeHtml(safeAvatar)}" alt="${this.escapeHtml(user.name)}" class="nav-avatar">`
+        : `<span class="nav-avatar-placeholder">${this.escapeHtml((user.name || 'P').charAt(0).toUpperCase())}</span>`;
 
       authHtml = `
         <a href="/profile.html" class="nav-user-badge" title="View & Edit Profile">
@@ -283,7 +284,32 @@ const API = {
   },
 
   escapeHtml(str) {
-    if (!str) return '';
-    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    if (str === null || str === undefined) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  },
+
+  safeUrl(rawUrl) {
+    if (!rawUrl || typeof rawUrl !== 'string') return '';
+    try {
+      const parsed = new URL(rawUrl.trim());
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        return parsed.href;
+      }
+    } catch (e) {}
+    return '';
+  },
+
+  safeAvatarUrl(rawUrl) {
+    if (!rawUrl || typeof rawUrl !== 'string') return '';
+    const trimmed = rawUrl.trim();
+    if (/^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/=]+$/i.test(trimmed)) {
+      return trimmed;
+    }
+    return this.safeUrl(trimmed);
   }
 };
