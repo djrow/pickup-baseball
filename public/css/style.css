@@ -194,7 +194,7 @@ header.site-header {
   height: 22px;
   object-fit: contain;
   vertical-align: middle;
-  margin-right: 4px;
+  margin-inline-end: 4px;
 }
 
 .brand-tag {
@@ -216,7 +216,7 @@ header.site-header {
   white-space: nowrap;
   flex-shrink: 0;
   gap: 12px;
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 
 .nav-links a {
@@ -385,7 +385,7 @@ header.site-header {
   color: #1f2937;
   border-radius: 10px;
   padding: 10px 16px;
-  text-align: left;
+  text-align: start;
   font-size: 0.85rem;
   line-height: 1.5;
   border: 1px solid rgba(255, 255, 255, 0.25);
@@ -409,7 +409,7 @@ header.site-header {
 }
 
 .privacy-accordion summary::after {
-  content: "Read details ▾";
+  content: var(--privacy-more, "Read details ▾");
   font-size: 0.76rem;
   font-weight: 700;
   color: var(--giants-orange);
@@ -417,7 +417,7 @@ header.site-header {
 }
 
 .privacy-accordion[open] summary::after {
-  content: "Hide ▴";
+  content: var(--privacy-hide, "Hide ▴");
 }
 
 .privacy-accordion-body {
@@ -582,7 +582,7 @@ header.site-header {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.9rem;
-  text-align: left;
+  text-align: start;
 }
 
 .data-table th {
@@ -614,12 +614,12 @@ header.site-header {
 
 .duty-card.filled {
   background: var(--bg-subtle);
-  border-left: 5px solid var(--as-green);
+  border-inline-start: 5px solid var(--as-green);
 }
 
 .duty-card.needed {
   background: var(--bg-card);
-  border-left: 5px solid var(--giants-orange);
+  border-inline-start: 5px solid var(--giants-orange);
 }
 
 .duty-title {
@@ -942,6 +942,26 @@ footer.site-footer strong {
   background: var(--giants-orange-light);
 }
 
+.lang-select {
+  width: auto;
+  height: 34px;
+  padding: 0 8px;
+  border-radius: var(--radius-full);
+  background: var(--bg-subtle);
+  border: 1.5px solid var(--border);
+  color: var(--text-main);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.lang-select:hover {
+  border-color: var(--giants-orange);
+  background: var(--giants-orange-light);
+}
+
 [data-theme="dark"] .btn-secondary,
 [data-theme="dark"] .nav-avatar-placeholder {
   background-color: #00544a;
@@ -1063,6 +1083,11 @@ footer.site-footer strong {
     width: 30px;
     height: 30px;
     font-size: 0.9rem;
+  }
+  .lang-select {
+    height: 30px;
+    padding: 0 6px;
+    font-size: 0.74rem;
   }
   .hero {
     padding: 28px 0;

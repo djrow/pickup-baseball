@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sign In / Register - Sunday Pickup Baseball</title>
-  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/style.css?v=4">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
 </head>
 <body>
@@ -17,12 +17,12 @@
           <img src="/logo.svg" alt="Pickup Baseball Foundation Logo" class="brand-logo">
           <span class="brand-text"><span class="brand-line">Pickup Baseball</span> <span class="brand-line">Foundation</span></span>
           <span class="brand-short">PBF</span>
-          <span class="brand-tag">Community</span>
+          <span class="brand-tag" data-i18n="nav.community">Community</span>
         </a>
         <div class="nav-links">
           <button type="button" id="theme-toggle-btn" class="btn-theme-toggle" title="Switch Theme" aria-label="Switch Theme">🌙</button>
-          <a href="/donate.html">Donate</a>
-          <a href="/login.html" class="btn-login"><span class="btn-login-icon">⚾ </span>Log In</a>
+          <a href="/donate.html" data-i18n="nav.donate">Donate</a>
+          <a href="/login.html" class="btn-login"><span class="btn-login-icon">⚾ </span><span data-i18n="nav.login">Log In</span></a>
         </div>
       </div>
     </div>
@@ -38,7 +38,7 @@
         <!-- User Status Header -->
         <div style="text-align: center; border-bottom: 1px solid var(--border); padding-bottom: 24px; margin-bottom: 24px;">
           <img src="/logo.svg" alt="Pickup Baseball Foundation Logo" style="width: 64px; height: 64px; object-fit: contain; display: inline-block;">
-          <h2 style="color: var(--secondary); font-size: 1.5rem; margin-top: 6px; margin-bottom: 4px;">You are Signed In!</h2>
+          <h2 style="color: var(--secondary); font-size: 1.5rem; margin-top: 6px; margin-bottom: 4px;" data-i18n="login.signed_in_title">You are Signed In!</h2>
           <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 8px;">
             <strong id="logged-in-user-name" style="color: var(--as-green); font-size: 1.1rem;"></strong>
             <span id="logged-in-role-badge"></span>
@@ -46,10 +46,10 @@
           <p id="logged-in-user-email" style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 16px;"></p>
           
           <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
-            <a href="/index.html" class="btn btn-primary" style="font-weight: 700;">⚾ View Scheduled Games</a>
-            <a href="/profile.html" class="btn btn-outline" style="font-weight: 700;">👤 Player Profile</a>
+            <a href="/index.html" class="btn btn-primary" style="font-weight: 700;" data-i18n="login.view_games_btn">⚾ View Scheduled Games</a>
+            <a href="/profile.html" class="btn btn-outline" style="font-weight: 700;" data-i18n="login.profile_btn">👤 Player Profile</a>
             <a href="#security-management-section" id="admin-security-link" class="btn btn-outline" style="display: none; font-weight: 700;">🛡️ Access Control &amp; Bans</a>
-            <button type="button" id="login-page-logout-btn" class="btn btn-outline" style="color: var(--danger); border-color: var(--danger);">
+            <button type="button" id="login-page-logout-btn" class="btn btn-outline" style="color: var(--danger); border-color: var(--danger);" data-i18n="nav.logout">
               Log Out
             </button>
           </div>
@@ -62,8 +62,8 @@
 
       <div id="login-header-section" style="text-align: center; margin-bottom: 24px;">
         <img src="/logo.svg" alt="Pickup Baseball Foundation Logo" style="width: 64px; height: 64px; object-fit: contain; display: inline-block;">
-        <h1 style="color: var(--secondary); font-size: 1.5rem; margin-top: 8px;">Player Sign-In</h1>
-        <p style="color: var(--text-muted); font-size: 0.9rem;">
+        <h1 style="color: var(--secondary); font-size: 1.5rem; margin-top: 8px;" data-i18n="login.title">Player Sign-In</h1>
+        <p style="color: var(--text-muted); font-size: 0.9rem;" data-i18n="login.subtitle">
           No password needed. We'll send a 6-digit code or magic link to your email.
         </p>
       </div>
@@ -73,24 +73,24 @@
       <!-- STEP 1: Enter Name & Email -->
       <form id="step-request-form">
         <div class="form-group">
-          <label for="player-name">Name</label>
-          <input type="text" id="player-name" placeholder="Your name" autofocus>
-          <div class="help-text">Only needed if this is your first time playing with us.</div>
+          <label for="player-name" data-i18n="login.name_label">Name</label>
+          <input type="text" id="player-name" placeholder="Your name" data-i18n-placeholder="login.name_placeholder" autofocus>
+          <div class="help-text" data-i18n="login.name_help">Only needed if this is your first time playing with us.</div>
         </div>
 
         <div class="form-group">
-          <label for="player-email">Email Address *</label>
+          <label for="player-email" data-i18n="login.email_label">Email Address *</label>
           <input type="email" id="player-email" placeholder="you@example.com" required autocomplete="email">
         </div>
 
         <div class="form-group" style="margin-bottom: 4px;">
           <label style="display: flex; align-items: center; gap: 8px; font-weight: 500; font-size: 0.88rem; cursor: pointer;">
             <input type="checkbox" id="remember-email" style="width: 16px; height: 16px; cursor: pointer;">
-            Remember my email address on this device
+            <span data-i18n="login.remember_email">Remember my email address on this device</span>
           </label>
         </div>
 
-        <button type="submit" id="send-code-btn" class="btn btn-primary" style="width: 100%; margin-top: 8px;">
+        <button type="submit" id="send-code-btn" class="btn btn-primary" style="width: 100%; margin-top: 8px;" data-i18n="login.send_code_btn">
           Send Sign-In Code
         </button>
       </form>
@@ -102,7 +102,7 @@
         </div>
 
         <div class="form-group" style="text-align: center;">
-          <label for="auth-code" style="font-size: 1rem;">Enter 6-Digit Code</label>
+          <label for="auth-code" style="font-size: 1rem;" data-i18n="login.enter_code_label">Enter 6-Digit Code</label>
           <input 
             type="text" 
             id="auth-code" 
@@ -112,23 +112,23 @@
             required 
             style="font-size: 1.8rem; text-align: center; letter-spacing: 6px; font-weight: bold; width: 220px; margin: 0 auto;"
           >
-          <div class="help-text" style="margin-top: 8px;">
+          <div class="help-text" style="margin-top: 8px;" data-i18n="login.code_help">
             Or click the link sent to your email to log in instantly. (Code expires in 10 minutes.)
           </div>
         </div>
 
-        <button type="submit" id="verify-code-btn" class="btn btn-primary" style="width: 100%; margin-top: 14px;">
+        <button type="submit" id="verify-code-btn" class="btn btn-primary" style="width: 100%; margin-top: 14px;" data-i18n="login.verify_btn">
           Verify & Sign In
         </button>
 
         <div style="text-align: center; margin-top: 14px;">
-          <button type="button" id="start-over-btn" class="btn btn-outline btn-sm">
+          <button type="button" id="start-over-btn" class="btn btn-outline btn-sm" data-i18n="login.change_email_btn">
             ← Change Email
           </button>
         </div>
       </form>
 
-      <div id="login-footer-hint" style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 0.82rem; color: var(--text-muted); text-align: center;">
+      <div id="login-footer-hint" style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 0.82rem; color: var(--text-muted); text-align: center;" data-i18n="login.footer_hint">
         💡 New here? Just enter your name and email above — we'll email you a code, and your account is created automatically.
       </div>
     </div>
@@ -141,7 +141,7 @@
     </div>
   </footer>
 
-  <script src="/js/api.js"></script>
+  <script src="/js/api.js?v=4"></script>
   <script>
     function getSafeRedirectUrl() {
       const params = new URLSearchParams(window.location.search);

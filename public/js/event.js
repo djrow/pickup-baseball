@@ -21,7 +21,19 @@ async function initEvent() {
   if (cachedUser) {
     API.currentUser = cachedUser;
     API.renderNav(cachedUser);
+  } else {
+    API.renderNav(null);
   }
+
+  window.addEventListener('pickup:langchange', () => {
+    if (eventData && eventData.event) {
+      renderEventDetails();
+      renderDutiesBoard();
+      renderAttendeesRoster();
+      renderComments();
+      setupRsvpState();
+    }
+  });
 
   setupRsvpForm();
   setupCommentForm();
@@ -120,20 +132,21 @@ async function loadEventData() {
 
 function renderEventDetails() {
   const ev = eventData.event;
-  document.getElementById('event-title').textContent = ev.title;
+  document.getElementById('event-title').textContent = API.translateEventTitle(ev);
   document.getElementById('event-datetime').textContent = API.formatDateTime(ev.event_date);
   document.getElementById('event-location').textContent = ev.location;
 
   const mapLink = document.getElementById('event-map-link');
   const safeMapUrl = API.safeUrl(ev.location_url);
   if (safeMapUrl) {
-    mapLink.innerHTML = ` <a href="${API.escapeHtml(safeMapUrl)}" target="_blank" rel="noopener noreferrer" style="color: var(--primary); font-size: 0.85rem;">[Open Map ↗]</a>`;
+    mapLink.innerHTML = ` <a href="${API.escapeHtml(safeMapUrl)}" target="_blank" rel="noopener noreferrer" style="color: var(--primary); font-size: 0.85rem;">${API.escapeHtml(API.t('event.open_map'))}</a>`;
   } else {
     mapLink.innerHTML = '';
   }
 
-  document.getElementById('event-description').textContent = ev.description || 'No special announcements for this pickup game. Bring your glove and enthusiasm!';
-  document.getElementById('event-attendee-count').textContent = `${eventData.totalAttendees} Players`;
+  const rawDesc = ev.description || 'No special announcements for this pickup game. Bring your glove and enthusiasm!';
+  document.getElementById('event-description').textContent = API.translatePhrase(rawDesc);
+  document.getElementById('event-attendee-count').textContent = API.t('home.players_count', { count: eventData.totalAttendees });
 
   // Total duties filled calculation
   let totalSlots = 0;
@@ -144,8 +157,8 @@ function renderEventDetails() {
   });
   const pct = totalSlots > 0 ? Math.min(100, Math.round((filledSlots / totalSlots) * 100)) : 100;
   document.getElementById('event-duties-status').innerHTML = `
-    <div>${filledSlots} of ${totalSlots} Slots Filled</div>
-    <div class="duty-progress-track" title="${pct}% of game duties covered">
+    <div>${API.escapeHtml(API.t('event.slots_filled', { filled: filledSlots, total: totalSlots }))}</div>
+    <div class="duty-progress-track" title="${pct}%">
       <div class="duty-progress-fill" style="width: ${pct}%;"></div>
     </div>
   `;
@@ -163,20 +176,22 @@ function renderDutiesBoard() {
   grid.innerHTML = duties.map(d => {
     const isFilled = d.assigned_players.length >= d.slots_needed;
     const names = d.assigned_players.map(p => API.escapeHtml(p.name)).join(', ');
+    const translatedTitle = API.translatePhrase(d.title);
+    const translatedDesc = API.translatePhrase(d.description || '');
 
     return `
       <div class="duty-card ${isFilled ? 'filled' : 'needed'}">
         <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-          <h3 class="duty-title">${API.escapeHtml(d.title)}</h3>
+          <h3 class="duty-title">${API.escapeHtml(translatedTitle)}</h3>
           <span class="badge ${isFilled ? 'badge-green' : 'badge-orange'}">
-            ${isFilled ? 'Filled' : 'Needed'}
+            ${API.escapeHtml(isFilled ? API.t('event.duty_filled') : API.t('event.duty_needed'))}
           </span>
         </div>
-        <div class="duty-desc">${API.escapeHtml(d.description || '')}</div>
+        <div class="duty-desc">${API.escapeHtml(translatedDesc)}</div>
         <div class="duty-status">
           ${isFilled
-            ? `<span style="color: var(--as-green);">✓ Volunteer(s): <strong>${names}</strong></span>`
-            : `<span style="color: var(--giants-orange);">⚠️ Needs ${d.slots_needed - d.assigned_players.length} volunteer(s)${names ? ` (Current: ${names})` : ''}</span>`
+            ? `<span style="color: var(--as-green);">${API.escapeHtml(API.t('event.duty_volunteers'))} <strong>${names}</strong></span>`
+            : `<span style="color: var(--giants-orange);">${API.escapeHtml(API.t('event.duty_needs_count', { count: d.slots_needed - d.assigned_players.length }))}${names ? ` (${names})` : ''}</span>`
           }
         </div>
       </div>
@@ -189,12 +204,12 @@ function renderAttendeesRoster() {
   const attendees = eventData.attendees || [];
   const rosterBadge = document.getElementById('roster-badge');
 
-  rosterBadge.textContent = `${attendees.length} Confirmed`;
+  rosterBadge.textContent = API.t('event.confirmed_badge', { count: attendees.length });
 
   if (attendees.length === 0) {
     container.innerHTML = `
       <p style="color: var(--text-muted); font-style: italic; padding: 12px 0;">
-        No players on the roster yet. Be the first to mark yourself attending!
+        ${API.escapeHtml(API.t('event.no_players_yet'))}
       </p>
     `;
     return;
@@ -208,6 +223,9 @@ function renderAttendeesRoster() {
           ? `<img src="${API.escapeHtml(safeAvatar)}" alt="${API.escapeHtml(a.name)}" class="roster-avatar" loading="lazy" decoding="async">`
           : `<span class="roster-avatar-placeholder">${API.escapeHtml((a.name || 'P').charAt(0).toUpperCase())}</span>`;
         const canMod = API.currentUser && API.currentUser.canManageEvents;
+        const translatedDuties = a.duties_assigned
+          ? a.duties_assigned.split(',').map(part => API.translatePhrase(part.trim())).join(', ')
+          : '';
 
         return `
           <li class="roster-item" style="display: flex; gap: 12px; align-items: flex-start;">
@@ -216,16 +234,16 @@ function renderAttendeesRoster() {
               <div style="display: flex; justify-content: space-between; align-items: center;">
                 <div class="roster-name">
                   ${API.escapeHtml(a.name)}
-                  ${a.is_guest ? '<span style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal;">(Guest)</span>' : ''}
+                  ${a.is_guest ? `<span style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal;">${API.escapeHtml(API.t('event.guest_tag'))}</span>` : ''}
                 </div>
                 <div style="display: flex; gap: 6px; align-items: center;">
-                  <span class="badge badge-green" style="font-size: 0.7rem;">Playing</span>
+                  <span class="badge badge-green" style="font-size: 0.7rem;">${API.escapeHtml(API.t('event.playing_badge'))}</span>
                   ${canMod ? `<button type="button" onclick="removeRosterAttendee(${a.id})" title="Remove from roster" style="background:none;border:none;cursor:pointer;font-size:0.85rem;color:var(--danger);padding:0 2px;">🗑️</button>` : ''}
                 </div>
               </div>
               ${a.bio ? `<div class="player-bio-text">"${API.escapeHtml(a.bio)}"</div>` : ''}
               ${a.gear_bringing ? `<div class="roster-gear">🎒 <em>${API.escapeHtml(a.gear_bringing)}</em></div>` : ''}
-              ${a.duties_assigned ? `<div style="font-size: 0.78rem; color: var(--primary); font-weight: 600; margin-top: 2px;">🛡️ ${API.escapeHtml(a.duties_assigned)}</div>` : ''}
+              ${translatedDuties ? `<div style="font-size: 0.78rem; color: var(--primary); font-weight: 600; margin-top: 2px;">🛡️ ${API.escapeHtml(translatedDuties)}</div>` : ''}
             </div>
           </li>
         `;
@@ -241,7 +259,7 @@ function renderComments() {
   if (comments.length === 0) {
     container.innerHTML = `
       <p style="color: var(--text-muted); font-style: italic;">
-        No discussion yet. Have a question about field location or gear? Start the conversation below!
+        ${API.escapeHtml(API.t('event.no_comments_yet'))}
       </p>
     `;
     return;
@@ -338,12 +356,12 @@ async function setupRsvpState() {
       loginPrompt.style.display = 'block';
       loginPrompt.style.textAlign = 'center';
       loginPrompt.innerHTML = `
-        <h4 style="margin: 0 0 6px 0; color: var(--secondary); font-size: 1.05rem;">⚾ Sign-In Required to RSVP</h4>
+        <h4 style="margin: 0 0 6px 0; color: var(--secondary); font-size: 1.05rem;">${API.escapeHtml(API.t('event.signin_required_title'))}</h4>
         <p style="margin: 0 0 12px 0; font-size: 0.88rem; color: var(--text-muted);">
-          To protect community games from spam, players must sign in with a verified email before joining the roster.
+          ${API.escapeHtml(API.t('event.signin_required_desc'))}
         </p>
         <a href="/login.html?redirect=${encodeURIComponent(window.location.href)}" class="btn btn-primary" style="font-weight: 700;">
-          ⚾ Sign In / Register to RSVP →
+          ${API.escapeHtml(API.t('event.signin_required_btn'))}
         </a>
       `;
     }
@@ -354,17 +372,18 @@ async function setupRsvpState() {
     const submitBtn = rsvpForm ? rsvpForm.querySelector('button[type="submit"]') : null;
     if (submitBtn) {
       submitBtn.disabled = true;
-      submitBtn.innerText = 'Sign In to Submit RSVP';
+      submitBtn.removeAttribute('data-i18n');
+      submitBtn.innerText = API.t('event.signin_submit_btn');
     }
 
     if (commentForm) {
       commentForm.innerHTML = `
         <div style="background: var(--bg-subtle); border: 1.5px dashed var(--border); border-radius: var(--radius-sm); padding: 18px; text-align: center;">
           <p style="margin: 0 0 10px 0; color: var(--text-muted); font-size: 0.9rem;">
-            Please sign in to join the game discussion and coordinate gear with teammates.
+            ${API.escapeHtml(API.t('event.signin_to_comment'))}
           </p>
           <a href="/login.html?redirect=${encodeURIComponent(window.location.href)}" class="btn btn-outline btn-sm" style="font-weight: 700;">
-            Sign In with Email →
+            ${API.escapeHtml(API.t('event.signin_email_btn'))}
           </a>
         </div>
       `;
@@ -382,9 +401,9 @@ async function setupRsvpState() {
   // Pre-fill existing RSVP if present
   if (myRsvp) {
     if (myRsvp.status === 'attending') {
-      rsvpBadge.innerHTML = '<span class="badge badge-green">✓ You are Attending</span>';
+      rsvpBadge.innerHTML = `<span class="badge badge-green">${API.escapeHtml(API.t('home.you_are_attending'))}</span>`;
     } else {
-      rsvpBadge.innerHTML = '<span class="badge badge-gray">You marked Can\'t Make It</span>';
+      rsvpBadge.innerHTML = `<span class="badge badge-gray">${API.escapeHtml(API.t('event.cant_make_it_badge'))}</span>`;
     }
 
     if (myRsvp.name) document.getElementById('rsvp-name').value = myRsvp.name;
@@ -411,6 +430,8 @@ async function setupRsvpState() {
     const isFull = filledCount >= d.slots_needed;
     const disabledAttr = (isFull && !isMine) ? 'disabled' : '';
     const volunteerNames = d.assigned_players.map(p => API.escapeHtml(p.name)).join(', ');
+    const translatedTitle = API.translatePhrase(d.title);
+    const translatedDesc = API.translatePhrase(d.description || '');
 
     return `
       <label style="display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: ${disabledAttr ? 'var(--bg-subtle)' : 'var(--bg-card)'}; cursor: ${disabledAttr ? 'not-allowed' : 'pointer'};">
@@ -423,11 +444,11 @@ async function setupRsvpState() {
           style="margin-top: 3px;"
         >
         <div style="font-size: 0.88rem; flex: 1;">
-          <strong style="color: ${disabledAttr ? 'var(--text-muted)' : 'var(--text-main)'};">${API.escapeHtml(d.title)}</strong>
-          <div style="font-size: 0.78rem; color: var(--text-muted);">${API.escapeHtml(d.description || '')}</div>
+          <strong style="color: ${disabledAttr ? 'var(--text-muted)' : 'var(--text-main)'};">${API.escapeHtml(translatedTitle)}</strong>
+          <div style="font-size: 0.78rem; color: var(--text-muted);">${API.escapeHtml(translatedDesc)}</div>
           ${disabledAttr
-            ? `<div style="font-size: 0.76rem; color: var(--as-green); font-weight: 700; margin-top: 3px;">✓ Covered by ${volunteerNames || 'Volunteer'}</div>`
-            : (volunteerNames ? `<div style="font-size: 0.76rem; color: var(--primary); font-weight: 600; margin-top: 3px;">Current: ${volunteerNames} (${d.slots_needed - d.assigned_players.length} open)</div>` : '')
+            ? `<div style="font-size: 0.76rem; color: var(--as-green); font-weight: 700; margin-top: 3px;">${API.escapeHtml(API.t('event.duty_covered_by', { names: volunteerNames || 'Volunteer' }))}</div>`
+            : (volunteerNames ? `<div style="font-size: 0.76rem; color: var(--primary); font-weight: 600; margin-top: 3px;">${API.escapeHtml(API.t('event.duty_current_open', { names: volunteerNames, count: d.slots_needed - d.assigned_players.length }))}</div>` : '')
           }
         </div>
       </label>

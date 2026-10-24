@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Game Details & RSVP - Sunday Pickup Baseball</title>
-  <link rel="stylesheet" href="/css/style.css?v=2">
+  <link rel="stylesheet" href="/css/style.css?v=4">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
 </head>
 <body>
@@ -17,12 +17,12 @@
           <img src="/logo.svg" alt="Pickup Baseball Foundation Logo" class="brand-logo">
           <span class="brand-text"><span class="brand-line">Pickup Baseball</span> <span class="brand-line">Foundation</span></span>
           <span class="brand-short">PBF</span>
-          <span class="brand-tag">Community</span>
+          <span class="brand-tag" data-i18n="nav.community">Community</span>
         </a>
         <div class="nav-links">
           <button type="button" id="theme-toggle-btn" class="btn-theme-toggle" title="Switch Theme" aria-label="Switch Theme">🌙</button>
-          <a href="/donate.html">Donate</a>
-          <a href="/login.html" class="btn-login"><span class="btn-login-icon">⚾ </span>Log In</a>
+          <a href="/donate.html" data-i18n="nav.donate">Donate</a>
+          <a href="/login.html" class="btn-login"><span class="btn-login-icon">⚾ </span><span data-i18n="nav.login">Log In</span></a>
         </div>
       </div>
     </div>
@@ -32,14 +32,14 @@
     
     <!-- Breadcrumb -->
     <div style="margin-bottom: 16px;">
-      <a href="/index.html" style="color: var(--secondary); text-decoration: none; font-weight: 600; font-size: 0.9rem;">
+      <a href="/index.html" style="color: var(--secondary); text-decoration: none; font-weight: 600; font-size: 0.9rem;" data-i18n="event.back_to_games">
         ← Back to All Games
       </a>
     </div>
 
     <!-- Loading State -->
     <div id="event-loading">
-      <p style="color: var(--text-muted);">Loading game details...</p>
+      <p style="color: var(--text-muted);" data-i18n="event.loading">Loading game details...</p>
     </div>
 
     <!-- Error State -->
@@ -52,7 +52,7 @@
       <div class="card" style="border-top: 5px solid var(--secondary);">
         <div class="card-header">
           <div>
-            <span class="badge badge-green" id="event-status-badge">Upcoming Game</span>
+            <span class="badge badge-green" id="event-status-badge" data-i18n="event.upcoming_badge">Upcoming Game</span>
             <h1 id="event-title" style="color: var(--secondary); font-size: 1.8rem; margin-top: 6px;"></h1>
           </div>
           <div id="admin-actions-container" style="display: none; gap: 8px; flex-wrap: wrap;"></div>
@@ -66,7 +66,7 @@
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
             </span>
             <div>
-              <div class="meta-label">Date & Time</div>
+              <div class="meta-label" data-i18n="home.date_time">Date & Time</div>
               <div class="meta-value" id="event-datetime"></div>
             </div>
           </div>
@@ -75,7 +75,7 @@
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
             </span>
             <div>
-              <div class="meta-label">Field Location</div>
+              <div class="meta-label" data-i18n="home.field_location">Field Location</div>
               <div class="meta-value">
                 <span id="event-location"></span>
                 <span id="event-map-link"></span>
@@ -87,7 +87,7 @@
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
             </span>
             <div>
-              <div class="meta-label">Roster Count</div>
+              <div class="meta-label" data-i18n="event.roster_count">Roster Count</div>
               <div class="meta-value" id="event-attendee-count" style="color: var(--primary); font-size: 1.15rem; font-weight: 700;">
                 0 Players
               </div>
@@ -98,7 +98,7 @@
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
             </span>
             <div style="flex: 1;">
-              <div class="meta-label">Duties Status</div>
+              <div class="meta-label" data-i18n="event.duties_status">Duties Status</div>
               <div class="meta-value" id="event-duties-status"></div>
             </div>
           </div>
@@ -111,10 +111,10 @@
       <section class="card" id="rsvp-section" style="border: 2px solid var(--primary); background: var(--bg-card);">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
           <div>
-            <h2 style="font-size: 1.35rem; color: var(--secondary); margin-bottom: 4px;">
+            <h2 style="font-size: 1.35rem; color: var(--secondary); margin-bottom: 4px;" data-i18n="event.rsvp_heading">
               Mark Attendance & Sign Up for Duties
             </h2>
-            <p style="font-size: 0.88rem; color: var(--text-muted);">
+            <p style="font-size: 0.88rem; color: var(--text-muted);" data-i18n="event.rsvp_subheading">
               Let the team know if you are coming, what gear you have, and claim a duty.
             </p>
           </div>
@@ -126,11 +126,11 @@
         <!-- Registered Player Login Prompt -->
         <div id="rsvp-login-prompt" style="background: #f0fdf4; border: 1.5px solid #bbf7d0; border-radius: var(--radius-sm); padding: 12px 16px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
           <div>
-            <strong style="color: var(--as-green); font-size: 0.95rem;">Already have a player account?</strong>
-            <div style="font-size: 0.82rem; color: var(--text-muted); margin-top: 2px;">Log in to auto-fill your name, photo, bio, and duty assignments.</div>
+            <strong style="color: var(--as-green); font-size: 0.95rem;" data-i18n="event.already_account">Already have a player account?</strong>
+            <div style="font-size: 0.82rem; color: var(--text-muted); margin-top: 2px;" data-i18n="event.login_autofill">Log in to auto-fill your name, photo, bio, and duty assignments.</div>
           </div>
           <a href="/login.html" class="btn btn-primary btn-sm" style="font-weight: 700; text-decoration: none;">
-            ⚾ Log In
+            ⚾ <span data-i18n="nav.login">Log In</span>
           </a>
         </div>
 
@@ -138,43 +138,43 @@
           <!-- User / Guest Identity Fields -->
           <div id="guest-fields" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 16px;">
             <div class="form-group" style="margin-bottom: 0;">
-              <label for="rsvp-name">Name *</label>
-              <input type="text" id="rsvp-name" placeholder="Your name" required>
+              <label for="rsvp-name" data-i18n="event.name_label">Name *</label>
+              <input type="text" id="rsvp-name" placeholder="Your name" data-i18n-placeholder="event.name_placeholder" required>
             </div>
             <div class="form-group" style="margin-bottom: 0;">
-              <label for="rsvp-email">Email Address *</label>
-              <input type="email" id="rsvp-email" placeholder="For game reminder notifications" required>
+              <label for="rsvp-email" data-i18n="event.email_label">Email Address *</label>
+              <input type="email" id="rsvp-email" placeholder="For game reminder notifications" data-i18n-placeholder="event.email_placeholder" required>
             </div>
           </div>
 
           <!-- Attendance Choice -->
           <div class="form-group">
-            <label style="margin-bottom: 8px;">Will you attend?</label>
-            <div style="display: flex; gap: 16px;">
+            <label style="margin-bottom: 8px;" data-i18n="event.will_attend">Will you attend?</label>
+            <div style="display: flex; gap: 16px; flex-wrap: wrap;">
               <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600;">
                 <input type="radio" name="rsvp-status" value="attending" checked>
-                <span>⚾ Yes, I'm playing!</span>
+                <span data-i18n="event.attending_yes">⚾ Yes, I'm playing!</span>
               </label>
               <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; color: var(--text-muted);">
                 <input type="radio" name="rsvp-status" value="declined">
-                <span>✕ Can't make it</span>
+                <span data-i18n="event.attending_no">✕ Can't make it</span>
               </label>
             </div>
           </div>
 
           <!-- Gear Coordination -->
           <div class="form-group" id="gear-group">
-            <label for="rsvp-gear">Gear You Can Bring (Optional)</label>
-            <input type="text" id="rsvp-gear" placeholder="e.g. 2 wood bats, catcher's helmet, spare glove, bucket of balls">
-            <div class="help-text">
+            <label for="rsvp-gear" data-i18n="event.gear_label">Gear You Can Bring (Optional)</label>
+            <input type="text" id="rsvp-gear" placeholder="e.g. 2 wood bats, catcher's helmet, spare glove, bucket of balls" data-i18n-placeholder="event.gear_placeholder">
+            <div class="help-text" data-i18n="event.gear_help">
               Coordination helps us make sure we have enough bats, balls, and gear for players without their own.
             </div>
           </div>
 
           <!-- Duties Signup -->
           <div class="form-group" id="duties-selection-group">
-            <label style="margin-bottom: 6px;">Volunteer for Game Duties (Check any you can take):</label>
-            <div class="help-text" style="margin-bottom: 10px;">
+            <label style="margin-bottom: 6px;" data-i18n="event.duties_label">Volunteer for Game Duties (Check any you can take):</label>
+            <div class="help-text" style="margin-bottom: 10px;" data-i18n="event.duties_help">
               Pickup baseball relies on everyone pitching in. Check an open slot below!
             </div>
             <div id="rsvp-duties-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px;">
@@ -183,10 +183,10 @@
           </div>
 
           <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 24px; flex-wrap: wrap; gap: 12px;">
-            <button type="submit" id="rsvp-submit-btn" class="btn btn-primary btn-lg">
+            <button type="submit" id="rsvp-submit-btn" class="btn btn-primary btn-lg" data-i18n="event.submit_rsvp_btn">
               Confirm RSVP & Duty Signup
             </button>
-            <span style="font-size: 0.8rem; color: var(--text-muted);">
+            <span style="font-size: 0.8rem; color: var(--text-muted);" data-i18n="event.rsvp_email_note">
               📬 You will receive an immediate confirmation email + reminder 24h before game time.
             </span>
           </div>
@@ -197,8 +197,8 @@
       <section class="card">
         <div class="card-header">
           <div>
-            <h2 class="card-title">🛡️ Game Day Duty Board</h2>
-            <p style="font-size: 0.88rem; color: var(--text-muted);">
+            <h2 class="card-title" data-i18n="event.duty_board_title">🛡️ Game Day Duty Board</h2>
+            <p style="font-size: 0.88rem; color: var(--text-muted);" data-i18n="event.duty_board_desc">
               Essential roles to keep our pickup games safe, fun, and organized.
             </p>
           </div>
@@ -213,8 +213,8 @@
       <section class="card">
         <div class="card-header">
           <div>
-            <h2 class="card-title">👥 Player Roster & Equipment</h2>
-            <p style="font-size: 0.88rem; color: var(--text-muted);">
+            <h2 class="card-title" data-i18n="event.roster_title">👥 Player Roster & Equipment</h2>
+            <p style="font-size: 0.88rem; color: var(--text-muted);" data-i18n="event.roster_desc">
               See who is playing, what gear is covered, and team duties.
             </p>
           </div>
@@ -230,8 +230,8 @@
       <section class="card">
         <div class="card-header">
           <div>
-            <h2 class="card-title">💬 Game Discussion Board</h2>
-            <p style="font-size: 0.88rem; color: var(--text-muted);">
+            <h2 class="card-title" data-i18n="event.discussion_title">💬 Game Discussion Board</h2>
+            <p style="font-size: 0.88rem; color: var(--text-muted);" data-i18n="event.discussion_desc">
               Coordinate carpools, ask about gear, discuss weather, or post post-game highlights!
             </p>
           </div>
@@ -243,25 +243,25 @@
 
         <!-- Add Comment Form -->
         <form id="comment-form" style="border-top: 1px solid var(--border); padding-top: 18px; margin-top: 18px;">
-          <h3 style="font-size: 1rem; color: var(--secondary); margin-bottom: 12px;">Leave a Message</h3>
+          <h3 style="font-size: 1rem; color: var(--secondary); margin-bottom: 12px;" data-i18n="event.leave_message">Leave a Message</h3>
           
           <div id="comment-guest-fields" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 12px;">
             <div class="form-group" style="margin-bottom: 0;">
-              <label for="comment-author-name">Name *</label>
-              <input type="text" id="comment-author-name" placeholder="Your name" required>
+              <label for="comment-author-name" data-i18n="event.name_label">Name *</label>
+              <input type="text" id="comment-author-name" placeholder="Your name" data-i18n-placeholder="event.name_placeholder" required>
             </div>
             <div class="form-group" style="margin-bottom: 0;">
-              <label for="comment-author-email">Email (Optional)</label>
+              <label for="comment-author-email" data-i18n="event.email_optional">Email (Optional)</label>
               <input type="email" id="comment-author-email" placeholder="you@example.com">
             </div>
           </div>
 
           <div class="form-group">
-            <label for="comment-content">Message</label>
-            <textarea id="comment-content" rows="3" placeholder="Field update, gear questions, or post-game shoutouts..." required></textarea>
+            <label for="comment-content" data-i18n="event.message_label">Message</label>
+            <textarea id="comment-content" rows="3" placeholder="Field update, gear questions, or post-game shoutouts..." data-i18n-placeholder="event.message_placeholder" required></textarea>
           </div>
 
-          <button type="submit" id="comment-submit-btn" class="btn btn-secondary">
+          <button type="submit" id="comment-submit-btn" class="btn btn-secondary" data-i18n="event.post_comment_btn">
             Post to Discussion
           </button>
         </form>
@@ -277,7 +277,7 @@
     </div>
   </footer>
 
-  <script src="/js/api.js?v=3"></script>
-  <script src="/js/event.js?v=3"></script>
+  <script src="/js/api.js?v=4"></script>
+  <script src="/js/event.js?v=4"></script>
 </body>
 </html>

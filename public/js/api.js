@@ -3,9 +3,357 @@
  * Vanilla JS, no external dependencies, durable for 10+ years.
  */
 
+const EN_DICT = {
+  "nav.community": "Community",
+  "nav.donate": "Donate",
+  "nav.login": "Log In",
+  "nav.logout": "Log Out",
+  "nav.admin": "⚙️ Admin",
+  "nav.org": "⚾ Org",
+  "footer.tagline": "Building community through America's pastime.",
+  "footer.subtext": "Built for simplicity and durability. Free & open-source.",
+  "hero.title": "Free Pickup Baseball Every Sunday at Noon",
+  "hero.desc": "We provide accessible, friendly Sunday baseball games for everyone in the community. Check the head count, coordinate gear, volunteer for game-day duties, and play ball!",
+  "hero.notice": "NOTICE: This site is new and few people know about it. Published in October 2026.",
+  "hero.login_btn": "⚾ Player Log In / Sign In",
+  "hero.profile_btn": "👤 Player Profile ({name})",
+  "hero.mailing_btn": "Join Mailing List ↗",
+  "hero.view_games_btn": "View Games ↓",
+  "privacy.summary": "🔒 Our Privacy Promise: We collect only your name & email and never share it.",
+  "privacy.read_details": "Read details ▾",
+  "privacy.hide": "Hide ▴",
+  "privacy.b1": "We collect only your <strong>name</strong> and <strong>email address</strong>.",
+  "privacy.b2": "We <strong>never share</strong> your email address with anyone.",
+  "privacy.b3": "Only <strong>One Person</strong> sends messages to the mailing list. Right now, that's David.",
+  "privacy.b4": "Your handwritten signature is only on a paper waiver we keep on file. We <strong>never share it</strong>.",
+  "privacy.b5": "If you make a player account, the site will also email you sign-in codes and game confirmations or reminders. Anything extra you add to your profile (like a bio or photo) is optional.",
+  "privacy.contact_prefix": "Questions or want your info removed? Email",
+  "home.welcome_signed_in": "Welcome, {name}! You are signed in.",
+  "home.scheduled_games": "Scheduled Games",
+  "home.filter_upcoming": "Upcoming",
+  "home.filter_past": "Past Archive",
+  "home.loading_games": "Loading scheduled games...",
+  "home.no_upcoming_title": "No Upcoming Games Scheduled Yet",
+  "home.no_upcoming_desc": "Check back soon! Our Sunday pickup games are posted throughout the season.",
+  "home.no_past": "No past games in the archive yet.",
+  "home.no_additional": "No additional games scheduled right now.",
+  "home.next_sunday_badge": "Next Sunday Pickup",
+  "home.sunday_game_badge": "Sunday Game",
+  "home.you_are_attending": "✓ You are Attending",
+  "home.rsvp_view_details": "RSVP & View Details →",
+  "home.view_rsvp": "View & RSVP →",
+  "home.date_time": "Date & Time",
+  "home.field_location": "Field Location",
+  "home.map_link": "Map Link ↗",
+  "home.confirmed_players": "Confirmed Players",
+  "home.players_count": "{count} Players",
+  "home.on_roster_count": "{count} on Roster",
+  "home.duty_coordination": "Duty Coordination",
+  "home.duties_configured": "{count} Duties Configured",
+  "home.skill_levels_note": "⚾ Open to all skill levels. Need gear or can bring some? Click below to let the team know.",
+  "home.join_roster_btn": "Join Roster / Volunteer for Duties",
+  "how.title": "How Our Pickup Baseball Program Works",
+  "how.s1_title": "1. RSVP Anytime",
+  "how.s1_desc": "Sign up in seconds as a guest or with just your name & email. Knowing player numbers helps us balance teams and pick the right field.",
+  "how.s2_title": "2. Coordinate Gear & Duties",
+  "how.s2_desc": "Sign up to bring bases, balls, catcher's gear, or first aid. Tell everyone in advance what equipment you can share.",
+  "how.s3_title": "3. Email Reminders",
+  "how.s3_desc": "You'll receive an instant confirmation upon RSVP, plus an automated reminder email the day before game day with field details and rosters.",
+  "how.s4_title": "4. Game Discussion",
+  "how.s4_desc": "Discuss pre-game weather, field conditions, carpools, or share post-game photos and recaps directly on the event board.",
+  "event.back_to_games": "← Back to All Games",
+  "event.loading": "Loading game details...",
+  "event.upcoming_badge": "Upcoming Game",
+  "event.roster_count": "Roster Count",
+  "event.duties_status": "Duties Status",
+  "event.slots_filled": "{filled} of {total} Slots Filled",
+  "event.open_map": "[Open Map ↗]",
+  "event.rsvp_heading": "Mark Attendance & Sign Up for Duties",
+  "event.rsvp_subheading": "Let the team know if you are coming, what gear you have, and claim a duty.",
+  "event.already_account": "Already have a player account?",
+  "event.login_autofill": "Log in to auto-fill your name, photo, bio, and duty assignments.",
+  "event.signin_required_title": "⚾ Sign-In Required to RSVP",
+  "event.signin_required_desc": "To protect community games from spam, players must sign in with a verified email before joining the roster.",
+  "event.signin_required_btn": "⚾ Sign In / Register to RSVP →",
+  "event.signin_submit_btn": "Sign In to Submit RSVP",
+  "event.name_label": "Name *",
+  "event.name_placeholder": "Your name",
+  "event.email_label": "Email Address *",
+  "event.email_placeholder": "For game reminder notifications",
+  "event.will_attend": "Will you attend?",
+  "event.attending_yes": "⚾ Yes, I'm playing!",
+  "event.attending_no": "✕ Can't make it",
+  "event.cant_make_it_badge": "You marked Can't Make It",
+  "event.gear_label": "Gear You Can Bring (Optional)",
+  "event.gear_placeholder": "e.g. 2 wood bats, catcher's helmet, spare glove, bucket of balls",
+  "event.gear_help": "Coordination helps us make sure we have enough bats, balls, and gear for players without their own.",
+  "event.duties_label": "Volunteer for Game Duties (Check any you can take):",
+  "event.duties_help": "Pickup baseball relies on everyone pitching in. Check an open slot below!",
+  "event.submit_rsvp_btn": "Confirm RSVP & Duty Signup",
+  "event.update_rsvp_btn": "Update RSVP & Duties",
+  "event.saving_rsvp": "Saving RSVP...",
+  "event.rsvp_email_note": "📬 You will receive an immediate confirmation email + reminder 24h before game time.",
+  "event.duty_board_title": "🛡️ Game Day Duty Board",
+  "event.duty_board_desc": "Essential roles to keep our pickup games safe, fun, and organized.",
+  "event.duty_filled": "Filled",
+  "event.duty_needed": "Needed",
+  "event.duty_volunteers": "✓ Volunteer(s):",
+  "event.duty_needs_count": "⚠️ Needs {count} volunteer(s)",
+  "event.duty_covered_by": "✓ Covered by {names}",
+  "event.duty_current_open": "Current: {names} ({count} open)",
+  "event.roster_title": "👥 Player Roster & Equipment",
+  "event.roster_desc": "See who is playing, what gear is covered, and team duties.",
+  "event.confirmed_badge": "{count} Confirmed",
+  "event.no_players_yet": "No players on the roster yet. Be the first to mark yourself attending!",
+  "event.playing_badge": "Playing",
+  "event.guest_tag": "(Guest)",
+  "event.discussion_title": "💬 Game Discussion Board",
+  "event.discussion_desc": "Coordinate carpools, ask about gear, discuss weather, or post post-game highlights!",
+  "event.no_comments_yet": "No discussion yet. Have a question about field location or gear? Start the conversation below!",
+  "event.signin_to_comment": "Please sign in to join the game discussion and coordinate gear with teammates.",
+  "event.signin_email_btn": "Sign In with Email →",
+  "event.leave_message": "Leave a Message",
+  "event.email_optional": "Email (Optional)",
+  "event.message_label": "Message",
+  "event.message_placeholder": "Field update, gear questions, or post-game shoutouts...",
+  "event.post_comment_btn": "Post to Discussion",
+  "login.title": "Player Sign-In",
+  "login.subtitle": "No password needed. We'll send a 6-digit code or magic link to your email.",
+  "login.name_label": "Name",
+  "login.name_placeholder": "Your name",
+  "login.name_help": "Only needed if this is your first time playing with us.",
+  "login.email_label": "Email Address *",
+  "login.remember_email": "Remember my email address on this device",
+  "login.send_code_btn": "Send Sign-In Code",
+  "login.enter_code_label": "Enter 6-Digit Code",
+  "login.code_help": "Or click the link sent to your email to log in instantly. (Code expires in 10 minutes.)",
+  "login.verify_btn": "Verify & Sign In",
+  "login.change_email_btn": "← Change Email",
+  "login.footer_hint": "💡 New here? Just enter your name and email above — we'll email you a code, and your account is created automatically.",
+  "login.signed_in_title": "You are Signed In!",
+  "login.view_games_btn": "⚾ View Scheduled Games",
+  "login.profile_btn": "👤 Player Profile",
+  "profile.back_to_games": "← Back to Games",
+  "profile.title": "Player Profile",
+  "profile.subtitle": "Customize how other players see you on the Sunday game rosters and discussion board.",
+  "profile.picture_title": "Profile Picture",
+  "profile.picture_desc": "JPEG, PNG, WebP or GIF (up to 5MB).",
+  "profile.choose_photo": "📷 Choose Photo",
+  "profile.remove_photo": "Remove",
+  "profile.name_label": "Name *",
+  "profile.name_placeholder": "Your name",
+  "profile.email_label": "Email Address",
+  "profile.email_help": "Used for sign-in and game day reminder notifications.",
+  "profile.bio_label": "Short Bio / Baseball Background",
+  "profile.bio_placeholder": "e.g. Played 3rd base in college, always happy to pitch in. Love Sunday pickup ball!",
+  "profile.bio_help": "Shown on the game roster alongside gear you bring.",
+  "profile.save_btn": "Save Changes",
+  "profile.cancel_btn": "Cancel",
+  "donate.hero_pill": "❤️ Support Free Community Baseball",
+  "donate.hero_title": "Help Keep the Games Free",
+  "donate.hero_desc": "Pickup Baseball Foundation provides free, welcoming Sunday baseball for everyone in the community. Your donation helps us buy equipment, maintain gear, and keep the games open to all.",
+  "donate.paypal_title": "Donate with PayPal",
+  "donate.paypal_desc": "Give securely through our official PayPal Giving Fund charity fundraiser page.",
+  "donate.paypal_btn": "Donate via PayPal →",
+  "donate.every_title": "Donate with Every.org",
+  "donate.every_desc": "Give through our Every.org nonprofit page, which supports card, bank, DAF, and stock gifts.",
+  "donate.every_btn": "Donate via Every.org →",
+  "donate.tax_title": "🧾 Tax Receipts",
+  "donate.tax_desc": "Need a receipt for your taxes? After you donate, email David at <a href=\"mailto:pickupbaseballfoundation@gmail.com\">pickupbaseballfoundation@gmail.com</a> with your name and the amount and date of your gift. David will send you a donation receipt on our letterhead that you can submit to the IRS.",
+  "donate.footer_note": "Thank you for supporting the game! ⚾ Questions? Reply to any of our emails or write to <a href=\"mailto:pickupbaseballfoundation@gmail.com\">pickupbaseballfoundation@gmail.com</a>.",
+  "phrase.sunday_pickup": "Sunday Pickup Baseball",
+  "phrase.sunday_pickup_noon": "Sunday Pickup Baseball - Noon Game",
+  "phrase.default_desc_1": "Weekly community pickup baseball game. All skill levels welcome! Bring your glove and enthusiasm. Please check off any gear you can share or duties you can take.",
+  "phrase.default_desc_2": "Accessible, friendly community pickup baseball. Free for everyone!",
+  "phrase.default_desc_3": "No special announcements for this pickup game. Bring your glove and enthusiasm!",
+  "phrase.duty_bases": "Bases",
+  "phrase.duty_bases_desc": "Bring 3 throw-down bases.",
+  "phrase.duty_machine": "Pitching machine and power",
+  "phrase.duty_machine_desc": "Bring a pitching machine and a way to run it on the field.",
+  "phrase.duty_balls": "Game Baseballs",
+  "phrase.duty_balls_desc": "Bring game balls bucket.",
+  "phrase.duty_drag": "Field Dragging",
+  "phrase.duty_drag_desc": "Arrive 20 mins early to drag the infield with the pull rake."
+};
+
+const KNOWN_PHRASE_KEYS = {
+  "Sunday Pickup Baseball": "phrase.sunday_pickup",
+  "Sunday Pickup Baseball - Noon Game": "phrase.sunday_pickup_noon",
+  "Weekly community pickup baseball game. All skill levels welcome! Bring your glove and enthusiasm. Please check off any gear you can share or duties you can take.": "phrase.default_desc_1",
+  "Accessible, friendly community pickup baseball. Free for everyone!": "phrase.default_desc_2",
+  "No special announcements for this pickup game. Bring your glove and enthusiasm!": "phrase.default_desc_3",
+  "Bases": "phrase.duty_bases",
+  "Bring 3 throw-down bases.": "phrase.duty_bases_desc",
+  "Pitching machine and power": "phrase.duty_machine",
+  "Bring a pitching machine and a way to run it on the field.": "phrase.duty_machine_desc",
+  "Game Baseballs": "phrase.duty_balls",
+  "Bring game balls bucket.": "phrase.duty_balls_desc",
+  "Field Dragging": "phrase.duty_drag",
+  "Arrive 20 mins early to drag the infield with the pull rake.": "phrase.duty_drag_desc"
+};
+
 const API = {
   // Current user cache
   currentUser: null,
+
+  // Top 15 languages spoken in California
+  SUPPORTED_LANGUAGES: [
+    { code: 'en', label: 'English', short: 'EN', locale: 'en-US', rtl: false },
+    { code: 'es', label: 'Español', short: 'ES', locale: 'es-US', rtl: false },
+    { code: 'zh', label: '中文', short: '中文', locale: 'zh-CN', rtl: false },
+    { code: 'tl', label: 'Tagalog', short: 'TL', locale: 'fil-PH', rtl: false },
+    { code: 'vi', label: 'Tiếng Việt', short: 'VI', locale: 'vi-VN', rtl: false },
+    { code: 'ko', label: '한국어', short: 'KO', locale: 'ko-KR', rtl: false },
+    { code: 'fa', label: 'فارسی', short: 'FA', locale: 'fa-IR', rtl: true },
+    { code: 'hy', label: 'Հայերեն', short: 'HY', locale: 'hy-AM', rtl: false },
+    { code: 'ar', label: 'العربية', short: 'AR', locale: 'ar', rtl: true },
+    { code: 'ru', label: 'Русский', short: 'RU', locale: 'ru-RU', rtl: false },
+    { code: 'hi', label: 'हिन्दी', short: 'HI', locale: 'hi-IN', rtl: false },
+    { code: 'pa', label: 'ਪੰਜਾਬੀ', short: 'PA', locale: 'pa-IN', rtl: false },
+    { code: 'ja', label: '日本語', short: 'JA', locale: 'ja-JP', rtl: false },
+    { code: 'fr', label: 'Français', short: 'FR', locale: 'fr-FR', rtl: false },
+    { code: 'pt', label: 'Português', short: 'PT', locale: 'pt-BR', rtl: false }
+  ],
+
+  i18nCache: { en: EN_DICT },
+
+  getLang() {
+    try {
+      const saved = localStorage.getItem('pickup_lang');
+      if (saved && this.SUPPORTED_LANGUAGES.some(l => l.code === saved)) {
+        return saved;
+      }
+    } catch (e) {}
+    if (typeof navigator !== 'undefined' && navigator.language) {
+      const base = navigator.language.split('-')[0].toLowerCase();
+      const normalized = base === 'fil' ? 'tl' : base;
+      if (this.SUPPORTED_LANGUAGES.some(l => l.code === normalized)) {
+        return normalized;
+      }
+    }
+    return 'en';
+  },
+
+  getLangMeta(code) {
+    const langCode = code || this.getLang();
+    return this.SUPPORTED_LANGUAGES.find(l => l.code === langCode) || this.SUPPORTED_LANGUAGES[0];
+  },
+
+  t(key, vars = {}) {
+    const lang = this.getLang();
+    const dict = this.i18nCache[lang] || EN_DICT;
+    let str = (dict && dict[key] !== undefined) ? dict[key] : (EN_DICT[key] !== undefined ? EN_DICT[key] : key);
+    for (const [k, v] of Object.entries(vars)) {
+      str = str.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v));
+    }
+    return str;
+  },
+
+  translatePhrase(text) {
+    if (!text) return '';
+    const trimmed = String(text).trim();
+    const key = KNOWN_PHRASE_KEYS[trimmed];
+    if (key) return this.t(key);
+    return String(text);
+  },
+
+  translateEventTitle(ev) {
+    if (!ev || !ev.title) return '';
+    const raw = String(ev.title).trim();
+    if (KNOWN_PHRASE_KEYS[raw]) {
+      return this.t(KNOWN_PHRASE_KEYS[raw]);
+    }
+    if (/^Sunday Pickup Baseball\s*\(.+\)$/i.test(raw)) {
+      if (this.getLang() === 'en') return raw;
+      return `${this.t('phrase.sunday_pickup')} (${this.formatDate(ev.event_date)})`;
+    }
+    return raw;
+  },
+
+  async loadLangDict(lang) {
+    if (lang === 'en') return EN_DICT;
+    if (this.i18nCache[lang]) return this.i18nCache[lang];
+    try {
+      const cachedRaw = localStorage.getItem(`pickup_i18n_v1_${lang}`);
+      if (cachedRaw) {
+        this.i18nCache[lang] = JSON.parse(cachedRaw);
+        return this.i18nCache[lang];
+      }
+    } catch (e) {}
+    try {
+      const res = await fetch(`/i18n/${lang}.json?v=1`);
+      if (res.ok) {
+        const data = await res.json();
+        this.i18nCache[lang] = data;
+        try {
+          localStorage.setItem(`pickup_i18n_v1_${lang}`, JSON.stringify(data));
+        } catch (e) {}
+        return data;
+      }
+    } catch (err) {
+      console.warn('Could not load language dictionary:', lang, err);
+    }
+    return EN_DICT;
+  },
+
+  async setLang(lang) {
+    if (!this.SUPPORTED_LANGUAGES.some(l => l.code === lang)) return;
+    try {
+      localStorage.setItem('pickup_lang', lang);
+    } catch (e) {}
+    await this.loadLangDict(lang);
+    this.applyTranslations();
+    this.renderNav(this.currentUser);
+    window.dispatchEvent(new CustomEvent('pickup:langchange', { detail: { lang } }));
+  },
+
+  applyTranslations(root = document) {
+    const lang = this.getLang();
+    const meta = this.getLangMeta(lang);
+    document.documentElement.lang = lang;
+    document.documentElement.dir = meta.rtl ? 'rtl' : 'ltr';
+    document.documentElement.style.setProperty('--privacy-more', `"${this.t('privacy.read_details')}"`);
+    document.documentElement.style.setProperty('--privacy-hide', `"${this.t('privacy.hide')}"`);
+
+    root.querySelectorAll('[data-i18n]').forEach(el => {
+      const key = el.getAttribute('data-i18n');
+      if (key) el.textContent = this.t(key);
+    });
+
+    root.querySelectorAll('[data-i18n-html]').forEach(el => {
+      const key = el.getAttribute('data-i18n-html');
+      if (key) el.innerHTML = this.t(key);
+    });
+
+    root.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+      const key = el.getAttribute('data-i18n-placeholder');
+      if (key) el.setAttribute('placeholder', this.t(key));
+    });
+
+    const langSelect = document.getElementById('lang-select');
+    if (langSelect && langSelect.value !== lang) {
+      langSelect.value = lang;
+    }
+  },
+
+  async initI18n() {
+    const lang = this.getLang();
+    if (lang !== 'en') {
+      try {
+        const cachedRaw = localStorage.getItem(`pickup_i18n_v1_${lang}`);
+        if (cachedRaw) {
+          this.i18nCache[lang] = JSON.parse(cachedRaw);
+        }
+      } catch (e) {}
+      if (!this.i18nCache[lang]) {
+        await this.loadLangDict(lang);
+      }
+    }
+    this.applyTranslations();
+    if (lang !== 'en') {
+      window.dispatchEvent(new CustomEvent('pickup:langchange', { detail: { lang } }));
+    }
+  },
 
   getTheme() {
     try {
@@ -298,7 +646,8 @@ const API = {
   formatDate(isoString) {
     if (!isoString) return '';
     const d = new Date(isoString);
-    return d.toLocaleDateString('en-US', {
+    const locale = this.getLangMeta().locale || 'en-US';
+    return d.toLocaleDateString(locale, {
       weekday: 'short',
       month: 'short',
       day: 'numeric',
@@ -310,7 +659,8 @@ const API = {
   formatDateTime(isoString) {
     if (!isoString) return '';
     const d = new Date(isoString);
-    return d.toLocaleString('en-US', {
+    const locale = this.getLangMeta().locale || 'en-US';
+    return d.toLocaleString(locale, {
       weekday: 'long',
       month: 'short',
       day: 'numeric',
@@ -385,6 +735,7 @@ const API = {
     const navContainer = document.getElementById('main-nav');
     if (!navContainer) return;
 
+    const currentLang = this.getLang();
     let authHtml = '';
     if (user) {
       const safeAvatar = this.safeAvatarUrl(user.avatarUrl);
@@ -393,23 +744,28 @@ const API = {
         : `<span class="nav-avatar-placeholder">${this.escapeHtml((user.name || 'P').charAt(0).toUpperCase())}</span>`;
 
       authHtml = `
-        <a href="/profile.html" class="nav-user-badge" title="View & Edit Profile (${this.escapeHtml(user.name)})">
+        <a href="/profile.html" class="nav-user-badge" title="${this.escapeHtml(user.name)}">
           ${avatarImg}
           <span class="nav-user-name">
             ${this.escapeHtml(user.name)}
           </span>
         </a>
-        ${user.canManageEvents ? `<a href="/admin.html" class="btn btn-outline btn-sm">${user.isAdmin ? '⚙️ Admin' : '⚾ Org'}</a>` : ''}
-        <button id="nav-logout-btn" class="btn btn-outline btn-sm">Log Out</button>
+        ${user.canManageEvents ? `<a href="/admin.html" class="btn btn-outline btn-sm">${user.isAdmin ? this.t('nav.admin') : this.t('nav.org')}</a>` : ''}
+        <button id="nav-logout-btn" class="btn btn-outline btn-sm">${this.t('nav.logout')}</button>
       `;
     } else {
       authHtml = `
-        <a href="/login.html" class="btn-login"><span class="btn-login-icon">⚾ </span>Log In</a>
+        <a href="/login.html" class="btn-login"><span class="btn-login-icon">⚾ </span><span>${this.t('nav.login')}</span></a>
       `;
     }
 
     const isDark = this.getTheme() === 'dark';
     const themeBtnHtml = `<button type="button" id="theme-toggle-btn" class="btn-theme-toggle" title="${isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}" aria-label="${isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}">${isDark ? '☀️' : '🌙'}</button>`;
+
+    const langOptionsHtml = this.SUPPORTED_LANGUAGES.map(l =>
+      `<option value="${l.code}" ${l.code === currentLang ? 'selected' : ''}>🌐 ${l.short} — ${l.label}</option>`
+    ).join('');
+    const langSelectHtml = `<select id="lang-select" class="lang-select" aria-label="Language" title="Language / Idioma / 语言">${langOptionsHtml}</select>`;
 
     navContainer.innerHTML = `
       <div class="nav-wrap">
@@ -417,11 +773,12 @@ const API = {
           <img src="/logo.svg" alt="Pickup Baseball Foundation Logo" class="brand-logo">
           <span class="brand-text"><span class="brand-line">Pickup Baseball</span> <span class="brand-line">Foundation</span></span>
           <span class="brand-short">PBF</span>
-          <span class="brand-tag">Community</span>
+          <span class="brand-tag">${this.t('nav.community')}</span>
         </a>
         <div class="nav-links">
+          ${langSelectHtml}
           ${themeBtnHtml}
-          <a href="/donate.html">Donate</a>
+          <a href="/donate.html">${this.t('nav.donate')}</a>
           ${authHtml}
         </div>
       </div>
@@ -435,6 +792,11 @@ const API = {
     const themeBtn = document.getElementById('theme-toggle-btn');
     if (themeBtn) {
       themeBtn.addEventListener('click', () => API.toggleTheme());
+    }
+
+    const langSelect = document.getElementById('lang-select');
+    if (langSelect) {
+      langSelect.addEventListener('change', (e) => API.setLang(e.target.value));
     }
   },
 
@@ -488,3 +850,8 @@ const API = {
 
 window.API = API;
 API.initTheme();
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => API.initI18n());
+} else {
+  API.initI18n();
+}

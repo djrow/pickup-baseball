@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Donate - Pickup Baseball Foundation</title>
-  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/style.css?v=4">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
 </head>
 <body>
@@ -17,12 +17,12 @@
           <img src="/logo.svg" alt="Pickup Baseball Foundation Logo" class="brand-logo">
           <span class="brand-text"><span class="brand-line">Pickup Baseball</span> <span class="brand-line">Foundation</span></span>
           <span class="brand-short">PBF</span>
-          <span class="brand-tag">Community</span>
+          <span class="brand-tag" data-i18n="nav.community">Community</span>
         </a>
         <div class="nav-links">
           <button type="button" id="theme-toggle-btn" class="btn-theme-toggle" title="Switch Theme" aria-label="Switch Theme">🌙</button>
-          <a href="/donate.html">Donate</a>
-          <a href="/login.html" class="btn-login"><span class="btn-login-icon">⚾ </span>Log In</a>
+          <a href="/donate.html" data-i18n="nav.donate">Donate</a>
+          <a href="/login.html" class="btn-login"><span class="btn-login-icon">⚾ </span><span data-i18n="nav.login">Log In</span></a>
         </div>
       </div>
     </div>
@@ -31,9 +31,9 @@
   <!-- Hero -->
   <section class="hero">
     <div class="container">
-      <div class="hero-subtitle">❤️ Support Free Community Baseball</div>
-      <h1 class="hero-title">Help Keep the Games Free</h1>
-      <p class="hero-desc">
+      <div class="hero-subtitle" data-i18n="donate.hero_pill">❤️ Support Free Community Baseball</div>
+      <h1 class="hero-title" data-i18n="donate.hero_title">Help Keep the Games Free</h1>
+      <p class="hero-desc" data-i18n="donate.hero_desc">
         Pickup Baseball Foundation provides free, welcoming Sunday baseball for everyone in the community.
         Your donation helps us buy equipment, maintain gear, and keep the games open to all.
       </p>
@@ -48,13 +48,13 @@
           <div class="meta-icon" style="margin-bottom: 12px;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
           </div>
-          <h2 style="color: var(--secondary); font-size: 1.3rem; margin-bottom: 6px;">Donate with PayPal</h2>
-          <p style="color: var(--text-muted); font-size: 0.92rem; margin-bottom: 18px;">
+          <h2 style="color: var(--secondary); font-size: 1.3rem; margin-bottom: 6px;" data-i18n="donate.paypal_title">Donate with PayPal</h2>
+          <p style="color: var(--text-muted); font-size: 0.92rem; margin-bottom: 18px;" data-i18n="donate.paypal_desc">
             Give securely through our official PayPal Giving Fund charity fundraiser page.
           </p>
         </div>
         <a href="https://www.paypal.com/us/fundraiser/charity/4535178" target="_blank" rel="noopener noreferrer"
-           class="btn btn-primary" style="font-weight: 700; width: 100%;">
+           class="btn btn-primary" style="font-weight: 700; width: 100%;" data-i18n="donate.paypal_btn">
           Donate via PayPal →
         </a>
       </section>
@@ -64,21 +64,21 @@
           <div class="meta-icon orange" style="margin-bottom: 12px;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
           </div>
-          <h2 style="color: var(--secondary); font-size: 1.3rem; margin-bottom: 6px;">Donate with Every.org</h2>
-          <p style="color: var(--text-muted); font-size: 0.92rem; margin-bottom: 18px;">
+          <h2 style="color: var(--secondary); font-size: 1.3rem; margin-bottom: 6px;" data-i18n="donate.every_title">Donate with Every.org</h2>
+          <p style="color: var(--text-muted); font-size: 0.92rem; margin-bottom: 18px;" data-i18n="donate.every_desc">
             Give through our Every.org nonprofit page, which supports card, bank, DAF, and stock gifts.
           </p>
         </div>
         <a href="https://www.every.org/pickupbaseballfoundation" target="_blank" rel="noopener noreferrer"
-           class="btn btn-primary" style="font-weight: 700; width: 100%;">
+           class="btn btn-primary" style="font-weight: 700; width: 100%;" data-i18n="donate.every_btn">
           Donate via Every.org →
         </a>
       </section>
     </div>
 
-    <section class="card" style="margin-bottom: 20px; border-left: 4px solid var(--giants-orange);">
-      <h2 style="color: var(--secondary); font-size: 1.3rem; margin-bottom: 6px;">🧾 Tax Receipts</h2>
-      <p style="color: var(--text-muted); font-size: 0.92rem; margin: 0;">
+    <section class="card" style="margin-bottom: 20px; border-inline-start: 4px solid var(--giants-orange);">
+      <h2 style="color: var(--secondary); font-size: 1.3rem; margin-bottom: 6px;" data-i18n="donate.tax_title">🧾 Tax Receipts</h2>
+      <p style="color: var(--text-muted); font-size: 0.92rem; margin: 0;" data-i18n-html="donate.tax_desc">
         Need a receipt for your taxes? After you donate, email David at
         <a href="mailto:pickupbaseballfoundation@gmail.com">pickupbaseballfoundation@gmail.com</a>
         with your name and the amount and date of your gift. David will send you a donation receipt on our
@@ -86,7 +86,7 @@
       </p>
     </section>
 
-    <p style="text-align: center; color: var(--text-muted); font-size: 0.88rem;">
+    <p style="text-align: center; color: var(--text-muted); font-size: 0.88rem;" data-i18n-html="donate.footer_note">
       Thank you for supporting the game! ⚾ Questions? Reply to any of our emails or write to
       <a href="mailto:pickupbaseballfoundation@gmail.com">pickupbaseballfoundation@gmail.com</a>.
     </p>
@@ -95,11 +95,11 @@
 
   <footer class="site-footer">
     <div class="container">
-      <p><img src="/logo.svg" alt="" class="footer-logo"> <strong>Pickup Baseball Foundation</strong> — Building community through America's pastime.</p>
+      <p><img src="/logo.svg" alt="" class="footer-logo"> <strong>Pickup Baseball Foundation</strong> — <span data-i18n="footer.tagline">Building community through America's pastime.</span></p>
     </div>
   </footer>
 
-  <script src="/js/api.js"></script>
+  <script src="/js/api.js?v=4"></script>
   <script>
     document.addEventListener('DOMContentLoaded', async () => {
       try {
