@@ -86,7 +86,13 @@ function renderEventDetails() {
     totalSlots += d.slots_needed;
     filledSlots += Math.min(d.assigned_players.length, d.slots_needed);
   });
-  document.getElementById('event-duties-status').textContent = `${filledSlots} of ${totalSlots} Slots Filled`;
+  const pct = totalSlots > 0 ? Math.min(100, Math.round((filledSlots / totalSlots) * 100)) : 100;
+  document.getElementById('event-duties-status').innerHTML = `
+    <div>${filledSlots} of ${totalSlots} Slots Filled</div>
+    <div class="duty-progress-track" title="${pct}% of game duties covered">
+      <div class="duty-progress-fill" style="width: ${pct}%;"></div>
+    </div>
+  `;
 }
 
 function renderDutiesBoard() {
@@ -344,9 +350,10 @@ async function setupRsvpState() {
     const filledCount = d.assigned_players.filter(p => !myRsvp || p.attendee_id !== myRsvp.id).length;
     const isFull = filledCount >= d.slots_needed;
     const disabledAttr = (isFull && !isMine) ? 'disabled' : '';
+    const volunteerNames = d.assigned_players.map(p => API.escapeHtml(p.name)).join(', ');
 
     return `
-      <label style="display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: ${disabledAttr ? 'var(--bg-subtle)' : 'var(--bg-card)'}; cursor: ${disabledAttr ? 'not-allowed' : 'pointer'};">
+      <label style="display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: ${disabledAttr ? 'var(--bg-subtle)' : 'var(--bg-card)'}; cursor: ${disabledAttr ? 'not-allowed' : 'pointer'};">
         <input 
           type="checkbox" 
           name="duty_id" 
@@ -355,10 +362,13 @@ async function setupRsvpState() {
           ${disabledAttr}
           style="margin-top: 3px;"
         >
-        <div style="font-size: 0.88rem;">
+        <div style="font-size: 0.88rem; flex: 1;">
           <strong style="color: ${disabledAttr ? 'var(--text-muted)' : 'var(--text-main)'};">${API.escapeHtml(d.title)}</strong>
           <div style="font-size: 0.78rem; color: var(--text-muted);">${API.escapeHtml(d.description || '')}</div>
-          ${disabledAttr ? '<div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">(Slot already taken)</div>' : ''}
+          ${disabledAttr
+            ? `<div style="font-size: 0.76rem; color: var(--as-green); font-weight: 700; margin-top: 3px;">✓ Covered by ${volunteerNames || 'Volunteer'}</div>`
+            : (volunteerNames ? `<div style="font-size: 0.76rem; color: var(--primary); font-weight: 600; margin-top: 3px;">Current: ${volunteerNames} (${d.slots_needed - d.assigned_players.length} open)</div>` : '')
+          }
         </div>
       </label>
     `;

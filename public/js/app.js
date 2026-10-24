@@ -126,14 +126,14 @@ function renderFeaturedGame(ev, container) {
 
       <div class="event-meta-grid">
         <div class="meta-item">
-          <span class="meta-icon">📅</span>
+          <span class="meta-icon">${API.icon('calendar', 20)}</span>
           <div>
             <div class="meta-label">Date & Time</div>
             <div class="meta-value">${dateFormatted}</div>
           </div>
         </div>
         <div class="meta-item">
-          <span class="meta-icon">📍</span>
+          <span class="meta-icon orange">${API.icon('pin', 20)}</span>
           <div>
             <div class="meta-label">Field Location</div>
             <div class="meta-value">
@@ -143,7 +143,7 @@ function renderFeaturedGame(ev, container) {
           </div>
         </div>
         <div class="meta-item">
-          <span class="meta-icon">👥</span>
+          <span class="meta-icon">${API.icon('users', 20)}</span>
           <div>
             <div class="meta-label">Confirmed Players</div>
             <div class="meta-value" style="color: var(--as-green); font-size: 1.15rem; font-weight: 800;">
@@ -152,7 +152,7 @@ function renderFeaturedGame(ev, container) {
           </div>
         </div>
         <div class="meta-item">
-          <span class="meta-icon">🛡️</span>
+          <span class="meta-icon orange">${API.icon('shield', 20)}</span>
           <div>
             <div class="meta-label">Duty Coordination</div>
             <div class="meta-value">
@@ -202,17 +202,17 @@ function renderGamesList(events, container) {
                   ${API.escapeHtml(ev.title)}
                 </a>
               </h3>
-              <p style="font-size: 0.88rem; font-weight: 600; color: var(--text-main); margin-bottom: 4px;">
-                📅 ${dateFormatted}
+              <p style="font-size: 0.88rem; font-weight: 600; color: var(--text-main); margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                <span style="color: var(--as-green);">${API.icon('calendar', 15)}</span> ${dateFormatted}
               </p>
-              <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
-                📍 ${API.escapeHtml(ev.location)}
+              <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+                <span style="color: var(--giants-orange);">${API.icon('pin', 15)}</span> ${API.escapeHtml(ev.location)}
               </p>
             </div>
 
             <div style="border-top: 1px solid var(--border); padding-top: 12px; margin-top: 12px; display: flex; justify-content: space-between; align-items: center;">
-              <span style="font-weight: 700; color: var(--primary); font-size: 0.9rem;">
-                👥 ${ev.attendee_count} on Roster
+              <span style="font-weight: 700; color: var(--primary); font-size: 0.9rem; display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums;">
+                ${API.icon('users', 16)} ${ev.attendee_count} on Roster
               </span>
               <a href="/event.html?id=${ev.id}" class="btn btn-outline btn-sm">
                 View & RSVP →

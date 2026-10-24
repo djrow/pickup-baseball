@@ -35,33 +35,40 @@
       <h1 class="hero-title">Free Pickup Baseball Every Sunday at Noon</h1>
       <p class="hero-desc">
         We provide accessible, friendly Sunday baseball games for everyone in the community.
-        Check the head count, coordinate gear, volunteer for game-day duties, and play ball! NOTICE: This site is new and few people know about it. Published in October 2026. 
-        <br><br>
-        <a href="https://docs.google.com/forms/d/e/1FAIpQLSfexDvQitKsRkfrpViQnJAumJTmH3yLP4Qj-LiIWiT2L2MhMw/viewform" id="mailing-list-link" target="_blank" rel="noopener noreferrer" style="color: var(--primary); font-weight: 700; text-decoration: underline;">
-          Click Here To Join The Mailing List
-        </a>
+        Check the head count, coordinate gear, volunteer for game-day duties, and play ball!
+        <span style="display: block; font-size: 0.85rem; opacity: 0.88; margin-top: 6px;">
+          NOTICE: This site is new and few people know about it. Published in October 2026.
+        </span>
       </p>
 
-      <!-- Plain-language privacy policy -->
-      <div id="privacy-policy" style="max-width: 640px; margin: 18px auto 0 auto; background: rgba(255,255,255,0.92); color: #1f2937; border-radius: 10px; padding: 14px 18px; text-align: left; font-size: 0.88rem; line-height: 1.5;">
-        <strong style="color: var(--secondary);">🔒 Our Privacy Promise (in plain English)</strong>
-        <ul style="margin: 8px 0 0 18px; padding: 0;">
-          <li>We collect only your <strong>name</strong> and <strong>email address</strong>.</li>
-          <li>We <strong>never share</strong> your email address with anyone.</li>
-          <li>Only <strong>One Person</strong> sends messages to the mailing list. Right now, that's David.</li>
-          <li>Your handwritten signature is only on a paper waiver we keep on file. We <strong>never share it</strong>.</li>
-          <li>If you make a player account, the site will also email you sign-in codes and game confirmations or reminders. Anything extra you add to your profile (like a bio or photo) is optional.</li>
-        </ul>
-        <div style="margin-top: 8px;">Questions or want your info removed? Email <a href="mailto:pickupbaseballfoundation@gmail.com">pickupbaseballfoundation@gmail.com</a>.</div>
-      </div>
-      <div id="hero-actions" style="margin-top: 24px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
-        <a href="/login.html" id="hero-login-btn" class="btn btn-primary btn-lg" style="font-weight: 700;">
+      <div id="hero-actions" style="margin-top: 16px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+        <a href="/login.html" id="hero-login-btn" class="btn btn-primary" style="font-weight: 700;">
           ⚾ Player Log In / Sign In
         </a>
-        <a href="#featured-game-container" class="btn btn-outline btn-lg" style="background: rgba(255,255,255,0.9); font-weight: 700;">
-          View Games →
+        <a href="https://docs.google.com/forms/d/e/1FAIpQLSfexDvQitKsRkfrpViQnJAumJTmH3yLP4Qj-LiIWiT2L2MhMw/viewform" id="mailing-list-link" target="_blank" rel="noopener noreferrer" class="btn btn-outline" style="background: rgba(255,255,255,0.92); font-weight: 700;">
+          Join Mailing List ↗
+        </a>
+        <a href="#featured-game-container" class="btn btn-outline" style="background: rgba(255,255,255,0.92); font-weight: 700;">
+          View Games ↓
         </a>
       </div>
+
+      <!-- Plain-language privacy policy (compact expandable accordion) -->
+      <details id="privacy-policy" class="privacy-accordion">
+        <summary>
+          <span>🔒 Our Privacy Promise: We collect only your name &amp; email and never share it.</span>
+        </summary>
+        <div class="privacy-accordion-body">
+          <ul style="margin: 0 0 0 18px; padding: 0;">
+            <li>We collect only your <strong>name</strong> and <strong>email address</strong>.</li>
+            <li>We <strong>never share</strong> your email address with anyone.</li>
+            <li>Only <strong>One Person</strong> sends messages to the mailing list. Right now, that's David.</li>
+            <li>Your handwritten signature is only on a paper waiver we keep on file. We <strong>never share it</strong>.</li>
+            <li>If you make a player account, the site will also email you sign-in codes and game confirmations or reminders. Anything extra you add to your profile (like a bio or photo) is optional.</li>
+          </ul>
+          <div style="margin-top: 8px;">Questions or want your info removed? Email <a href="mailto:pickupbaseballfoundation@gmail.com" style="color: var(--primary); font-weight: 600;">pickupbaseballfoundation@gmail.com</a>.</div>
+        </div>
+      </details>
     </div>
   </section>
 
@@ -98,28 +105,36 @@
       </h2>
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px;">
         <div>
-          <div style="font-size: 1.8rem; margin-bottom: 8px;">👥</div>
+          <div class="meta-icon" style="margin-bottom: 10px;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </div>
           <h3 style="font-size: 1rem; margin-bottom: 6px;">1. RSVP Anytime</h3>
           <p style="font-size: 0.88rem; color: var(--text-muted);">
             Sign up in seconds as a guest or with just your name & email. Knowing player numbers helps us balance teams and pick the right field.
           </p>
         </div>
         <div>
-          <div style="font-size: 1.8rem; margin-bottom: 8px;">🎒</div>
+          <div class="meta-icon orange" style="margin-bottom: 10px;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
           <h3 style="font-size: 1rem; margin-bottom: 6px;">2. Coordinate Gear & Duties</h3>
           <p style="font-size: 0.88rem; color: var(--text-muted);">
             Sign up to bring bases, balls, catcher's gear, or first aid. Tell everyone in advance what equipment you can share.
           </p>
         </div>
         <div>
-          <div style="font-size: 1.8rem; margin-bottom: 8px;">📬</div>
+          <div class="meta-icon" style="margin-bottom: 10px;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          </div>
           <h3 style="font-size: 1rem; margin-bottom: 6px;">3. Email Reminders</h3>
           <p style="font-size: 0.88rem; color: var(--text-muted);">
             You'll receive an instant confirmation upon RSVP, plus an automated reminder email the day before game day with field details and rosters.
           </p>
         </div>
         <div>
-          <div style="font-size: 1.8rem; margin-bottom: 8px;">💬</div>
+          <div class="meta-icon orange" style="margin-bottom: 10px;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          </div>
           <h3 style="font-size: 1rem; margin-bottom: 6px;">4. Game Discussion</h3>
           <p style="font-size: 0.88rem; color: var(--text-muted);">
             Discuss pre-game weather, field conditions, carpools, or share post-game photos and recaps directly on the event board.
