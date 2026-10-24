@@ -327,7 +327,6 @@ const API = {
         </a>
         <div class="nav-links">
           ${themeBtnHtml}
-          <a href="/index.html">Games</a>
           <a href="/donate.html">Donate</a>
           ${authHtml}
         </div>
