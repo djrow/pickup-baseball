@@ -278,7 +278,7 @@ Play ball!
 
   const html = \`
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 26px; border: 1px solid #dbe4e0; border-top: 5px solid #003831; border-radius: 8px; background: #ffffff;">
-      <h2 style="color: #003831; margin-top: 0; font-size: 22px;">⚾ \${safeAppName}</h2>
+      <h2 style="color: #003831; margin-top: 0; font-size: 22px;"><img src="\${origin}/logo.svg" alt="" style="width: 30px; height: 30px; vertical-align: middle; margin-right: 6px;">\${safeAppName}</h2>
       <p style="color: #0c1f1a; font-size: 16px;">Hi <strong>\${safeName}</strong>,</p>
       <p style="color: #546e66; font-size: 15px;">Use the code below to sign in to your account:</p>
       <div style="background: #f5f8f7; border: 1px solid #dbe4e0; padding: 18px; border-radius: 8px; text-align: center; margin: 24px 0;">
@@ -335,7 +335,7 @@ See you on the field!
 
   const html = \`
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 26px; border: 1px solid #dbe4e0; border-top: 5px solid #FD5A1E; border-radius: 8px; background: #ffffff;">
-      <h2 style="color: #003831; margin-top: 0; font-size: 22px;">⚾ RSVP Confirmed!</h2>
+      <h2 style="color: #003831; margin-top: 0; font-size: 22px;"><img src="\${origin}/logo.svg" alt="" style="width: 30px; height: 30px; vertical-align: middle; margin-right: 6px;">RSVP Confirmed!</h2>
       <p style="color: #0c1f1a; font-size: 16px;">Hi <strong>\${safeName}</strong>,</p>
       <p style="color: #546e66; font-size: 15px;">You are confirmed on the roster for <strong>\${safeTitle}</strong>.</p>
       
@@ -401,7 +401,7 @@ See you on the diamond!
 
   const html = \`
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 26px; border: 1px solid #dbe4e0; border-top: 5px solid #003831; border-radius: 8px; background: #ffffff;">
-      <h2 style="color: #003831; margin-top: 0; font-size: 22px;">⚾ Game Day Reminder</h2>
+      <h2 style="color: #003831; margin-top: 0; font-size: 22px;"><img src="\${origin}/logo.svg" alt="" style="width: 30px; height: 30px; vertical-align: middle; margin-right: 6px;">Game Day Reminder</h2>
       <p style="color: #0c1f1a; font-size: 16px;">Hi <strong>\${safeName}</strong>,</p>
       <p style="color: #546e66; font-size: 15px;">Get ready! <strong>\${safeTitle}</strong> is coming up soon.</p>
       

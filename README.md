@@ -1,4 +1,4 @@
-# ⚾ Pickup Baseball Foundation (`www.pickupbaseballfoundation.org`)
+# <img src="public/logo.svg" alt="Pickup Baseball Foundation Logo" width="38" align="top"> Pickup Baseball Foundation (`www.pickupbaseballfoundation.org`)
 
 A fast, durable, and zero-cost web application built for the **[Pickup Baseball Foundation](https://www.pickupbaseballfoundation.org)** to organize free weekly Sunday pickup baseball games at Noon.
 

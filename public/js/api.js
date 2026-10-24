@@ -265,7 +265,7 @@ const API = {
     navContainer.innerHTML = `
       <div class="nav-wrap">
         <a href="/index.html" class="brand">
-          <span class="brand-icon">⚾</span>
+          <img src="/logo.svg" alt="Pickup Baseball Foundation Logo" class="brand-logo">
           <span class="brand-text">Pickup Baseball<span class="brand-suffix"> Foundation</span></span>
           <span class="brand-tag">Community</span>
         </a>
