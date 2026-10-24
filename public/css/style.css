@@ -1018,7 +1018,7 @@ footer.site-footer strong {
   }
   .brand {
     font-size: 0.98rem;
-    gap: 6px;
+    gap: 7px;
   }
   .brand-icon {
     font-size: 1.2rem;
@@ -1027,13 +1027,19 @@ footer.site-footer strong {
     width: 32px;
     height: 32px;
   }
-  .brand-text,
+  .brand-text {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    line-height: 1.08;
+    font-size: 0.78rem;
+    letter-spacing: -0.01em;
+  }
+  .brand-line {
+    display: block;
+  }
   .nav-user-name {
     display: none;
-  }
-  .brand-short {
-    display: inline;
-    font-size: 1rem;
   }
   .nav-user-badge {
     padding: 2px;
@@ -1085,6 +1091,16 @@ footer.site-footer strong {
   }
   .btn-login-icon {
     display: none;
+  }
+}
+
+@media (max-width: 21.25em) {
+  .brand-text {
+    display: none;
+  }
+  .brand-short {
+    display: inline;
+    font-size: 0.95rem;
   }
 }
 
