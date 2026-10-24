@@ -16,12 +16,16 @@ async function initEvent() {
     return;
   }
 
-  const user = await API.getMe();
-  API.renderNav(user);
+  // Instant 0ms nav + cached event render on low-signal mobile connections
+  const cachedUser = API.getCachedUser();
+  if (cachedUser) {
+    API.currentUser = cachedUser;
+    API.renderNav(cachedUser);
+  }
 
-  await loadEventData();
   setupRsvpForm();
   setupCommentForm();
+  await loadEventData();
 }
 
 function showError(msg) {
@@ -31,7 +35,42 @@ function showError(msg) {
   errBox.textContent = msg;
 }
 
+function applyLoadedEventToDom(res) {
+  eventData = res;
+  if (res.user !== undefined) {
+    API.renderNav(res.user);
+  }
+  renderEventDetails();
+  renderDutiesBoard();
+  renderAttendeesRoster();
+  renderComments();
+  setupRsvpState();
+
+  document.getElementById('event-loading').style.display = 'none';
+  document.getElementById('event-container').style.display = 'block';
+
+  const adminContainer = document.getElementById('admin-actions-container');
+  if (API.currentUser && API.currentUser.isAdmin) {
+    adminContainer.style.display = 'block';
+    const sendRemindersBtn = document.getElementById('send-reminders-btn');
+    sendRemindersBtn.onclick = handleSendReminders;
+  } else if (adminContainer) {
+    adminContainer.style.display = 'none';
+  }
+}
+
 async function loadEventData() {
+  const cacheKey = `pickup_cached_event_${eventId}`;
+  try {
+    const cachedRaw = localStorage.getItem(cacheKey);
+    if (cachedRaw) {
+      const cachedRes = JSON.parse(cachedRaw);
+      if (cachedRes && cachedRes.event) {
+        applyLoadedEventToDom(cachedRes);
+      }
+    }
+  } catch (e) {}
+
   try {
     const res = await API.getEvent(eventId, guestToken);
     if (res.error) {
@@ -39,26 +78,16 @@ async function loadEventData() {
       return;
     }
 
-    eventData = res;
-    renderEventDetails();
-    renderDutiesBoard();
-    renderAttendeesRoster();
-    renderComments();
-    setupRsvpState();
+    try {
+      localStorage.setItem(cacheKey, JSON.stringify(res));
+    } catch (e) {}
 
-    document.getElementById('event-loading').style.display = 'none';
-    document.getElementById('event-container').style.display = 'block';
-
-    // Admin button setup
-    if (API.currentUser && API.currentUser.isAdmin) {
-      const adminContainer = document.getElementById('admin-actions-container');
-      adminContainer.style.display = 'block';
-      const sendRemindersBtn = document.getElementById('send-reminders-btn');
-      sendRemindersBtn.onclick = handleSendReminders;
-    }
+    applyLoadedEventToDom(res);
   } catch (err) {
     console.error('Error loading event:', err);
-    showError('Unable to load event details. Please try again.');
+    if (!eventData) {
+      showError('Unable to load event details. Please try again.');
+    }
   }
 }
 
@@ -149,7 +178,7 @@ function renderAttendeesRoster() {
       ${attendees.map(a => {
         const safeAvatar = API.safeAvatarUrl(a.avatar_url);
         const avatarImg = safeAvatar
-          ? `<img src="${API.escapeHtml(safeAvatar)}" alt="${API.escapeHtml(a.name)}" class="roster-avatar">`
+          ? `<img src="${API.escapeHtml(safeAvatar)}" alt="${API.escapeHtml(a.name)}" class="roster-avatar" loading="lazy" decoding="async">`
           : `<span class="roster-avatar-placeholder">${API.escapeHtml((a.name || 'P').charAt(0).toUpperCase())}</span>`;
         const canMod = API.currentUser && API.currentUser.canManageEvents;
 
@@ -194,7 +223,7 @@ function renderComments() {
   container.innerHTML = comments.map(c => {
     const safeAvatar = API.safeAvatarUrl(c.avatar_url);
     const avatarImg = safeAvatar
-      ? `<img src="${API.escapeHtml(safeAvatar)}" alt="${API.escapeHtml(c.author_name)}" class="comment-avatar">`
+      ? `<img src="${API.escapeHtml(safeAvatar)}" alt="${API.escapeHtml(c.author_name)}" class="comment-avatar" loading="lazy" decoding="async">`
       : `<span class="comment-avatar-placeholder">${API.escapeHtml((c.author_name || 'P').charAt(0).toUpperCase())}</span>`;
     const canMod = API.currentUser && API.currentUser.canManageEvents;
 
@@ -252,12 +281,16 @@ async function setupRsvpState() {
   const rsvpForm = document.getElementById('rsvp-form');
 
   let requireLogin = true;
-  try {
-    const s = await API.getSettings();
-    if (s && s.require_login_to_rsvp !== undefined) {
-      requireLogin = Boolean(s.require_login_to_rsvp);
-    }
-  } catch (e) {}
+  if (eventData && eventData.require_login_to_rsvp !== undefined) {
+    requireLogin = Boolean(eventData.require_login_to_rsvp);
+  } else {
+    try {
+      const s = await API.getSettings();
+      if (s && s.require_login_to_rsvp !== undefined) {
+        requireLogin = Boolean(s.require_login_to_rsvp);
+      }
+    } catch (e) {}
+  }
 
   // Populate guest name/email fields if user is logged in
   const loginPrompt = document.getElementById('rsvp-login-prompt');

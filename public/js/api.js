@@ -60,20 +60,41 @@ const API = {
     }
   },
 
+  getCachedUser() {
+    try {
+      const raw = localStorage.getItem('pickup_cached_user');
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
+  },
+
+  setCachedUser(user) {
+    try {
+      if (user) {
+        localStorage.setItem('pickup_cached_user', JSON.stringify(user));
+      } else {
+        localStorage.removeItem('pickup_cached_user');
+      }
+    } catch (e) {}
+  },
+
   async getMe() {
     try {
       const res = await fetch('/api/auth/me');
       const data = await res.json();
-      API.currentUser = data.user;
-      return data.user;
+      API.currentUser = data.user || null;
+      API.setCachedUser(API.currentUser);
+      return API.currentUser;
     } catch (e) {
       console.warn('Could not fetch session', e);
-      return null;
+      return API.getCachedUser();
     }
   },
 
   async logout() {
     try {
+      API.setCachedUser(null);
       await fetch('/api/auth/logout', { method: 'POST' });
     } finally {
       window.location.href = '/index.html';
@@ -82,13 +103,23 @@ const API = {
 
   async getEvents(filter = 'upcoming') {
     const res = await fetch(`/api/events?filter=${filter}`);
-    return res.json();
+    const data = await res.json();
+    if (data && data.user !== undefined) {
+      API.currentUser = data.user || null;
+      API.setCachedUser(API.currentUser);
+    }
+    return data;
   },
 
   async getEvent(id, token = '') {
     const url = `/api/events/${id}${token ? `?token=${encodeURIComponent(token)}` : ''}`;
     const res = await fetch(url);
-    return res.json();
+    const data = await res.json();
+    if (data && data.user !== undefined) {
+      API.currentUser = data.user || null;
+      API.setCachedUser(API.currentUser);
+    }
+    return data;
   },
 
   async postRsvp(id, payload) {
@@ -295,7 +326,7 @@ const API = {
     if (user) {
       const safeAvatar = this.safeAvatarUrl(user.avatarUrl);
       const avatarImg = safeAvatar
-        ? `<img src="${this.escapeHtml(safeAvatar)}" alt="${this.escapeHtml(user.name)}" class="nav-avatar">`
+        ? `<img src="${this.escapeHtml(safeAvatar)}" alt="${this.escapeHtml(user.name)}" class="nav-avatar" decoding="async">`
         : `<span class="nav-avatar-placeholder">${this.escapeHtml((user.name || 'P').charAt(0).toUpperCase())}</span>`;
 
       authHtml = `
@@ -368,6 +399,9 @@ const API = {
   safeAvatarUrl(rawUrl) {
     if (!rawUrl || typeof rawUrl !== 'string') return '';
     const trimmed = rawUrl.trim();
+    if (/^\/api\/users\/\d+\/avatar(\?v=\d+)?$/i.test(trimmed)) {
+      return trimmed;
+    }
     if (/^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/=]+$/i.test(trimmed)) {
       return trimmed;
     }

@@ -51,6 +51,8 @@
   <script>
     document.addEventListener('DOMContentLoaded', async () => {
       try {
+        const cached = API.getCachedUser();
+        if (cached) API.renderNav(cached);
         const user = await API.getMe();
         API.renderNav(user);
       } catch (e) {}

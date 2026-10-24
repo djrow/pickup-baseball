@@ -434,7 +434,7 @@ async function getUserFromSession(db, sessionId) {
       u.name, 
       u.email, 
       u.bio, 
-      u.avatar_url, 
+      CASE WHEN u.avatar_url IS NOT NULL AND u.avatar_url != '' THEN '/api/users/' || u.id || '/avatar?v=' || length(u.avatar_url) ELSE '' END as avatar_url, 
       u.is_admin,
       COALESCE(u.role, CASE WHEN u.is_admin = 1 THEN 'admin' ELSE 'player' END) as role
     FROM sessions s
@@ -839,8 +839,8 @@ app.post('/auth/avatar', async (c) => {
     }
 
     const buffer = await file.arrayBuffer();
-    if (buffer.byteLength > 5 * 1024 * 1024) {
-      return c.json({ error: 'Image size exceeds 5MB limit.' }, 400);
+    if (buffer.byteLength > 250 * 1024) {
+      return c.json({ error: 'Image size exceeds 250KB limit.' }, 400);
     }
 
     if (!isValidRasterImageBuffer(buffer, mime)) {
@@ -852,16 +852,70 @@ app.post('/auth/avatar', async (c) => {
     const dataUrl = `data:${mime};base64,${base64}`;
 
     await c.env.DB.prepare('UPDATE users SET avatar_url = ? WHERE id = ?').bind(dataUrl, user.id).run();
-    user.avatarUrl = dataUrl;
+    const avatarEndpointUrl = `/api/users/${user.id}/avatar?v=${dataUrl.length}`;
+    user.avatarUrl = avatarEndpointUrl;
 
     return c.json({
       success: true,
-      avatarUrl: dataUrl,
+      avatarUrl: avatarEndpointUrl,
       message: 'Profile picture updated successfully!'
     });
   } catch (err) {
     console.error('[Auth] Error updating avatar:', err);
     return c.json({ error: 'Failed to upload profile picture.' }, 500);
+  }
+});
+
+app.get('/users/:id/avatar', async (c) => {
+  try {
+    const userId = parseInt(c.req.param('id'), 10);
+    if (!userId || isNaN(userId)) {
+      return c.text('Not found', 404);
+    }
+
+    const row = await c.env.DB.prepare('SELECT avatar_url FROM users WHERE id = ?').bind(userId).first();
+    if (!row || !row.avatar_url) {
+      return c.text('No avatar', 404);
+    }
+
+    const raw = String(row.avatar_url).trim();
+    const etag = `W/"av-${userId}-${raw.length}"`;
+    if (c.req.header('If-None-Match') === etag) {
+      return new Response(null, {
+        status: 304,
+        headers: {
+          'ETag': etag,
+          'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800'
+        }
+      });
+    }
+
+    const match = raw.match(/^data:(image\/(?:jpeg|png|webp|gif));base64,([A-Za-z0-9+/=]+)$/i);
+    if (!match) {
+      return c.text('Invalid avatar format', 404);
+    }
+
+    const mime = match[1].toLowerCase();
+    const b64 = match[2];
+    const binStr = atob(b64);
+    const len = binStr.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binStr.charCodeAt(i);
+    }
+
+    return new Response(bytes.buffer, {
+      status: 200,
+      headers: {
+        'Content-Type': mime,
+        'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800',
+        'ETag': etag,
+        'X-Content-Type-Options': 'nosniff'
+      }
+    });
+  } catch (err) {
+    console.error('[Avatar] Error serving avatar:', err);
+    return c.text('Error serving avatar', 500);
   }
 });
 
@@ -894,7 +948,7 @@ app.get('/auth/users', async (c) => {
         u.name, 
         u.email, 
         u.bio, 
-        u.avatar_url as avatarUrl, 
+        CASE WHEN u.avatar_url IS NOT NULL AND u.avatar_url != '' THEN '/api/users/' || u.id || '/avatar?v=' || length(u.avatar_url) ELSE '' END as avatarUrl, 
         COALESCE(u.role, CASE WHEN u.is_admin = 1 THEN 'admin' ELSE 'player' END) as role,
         u.is_admin as isAdmin,
         u.created_at as createdAt,
@@ -1113,7 +1167,7 @@ app.get('/events', async (c) => {
       });
     }
 
-    return c.json({ events: events || [] });
+    return c.json({ events: events || [], user: user || null });
   } catch (err) {
     console.error('[Events] Error listing events:', err);
     return c.json({ error: 'Failed to fetch events.' }, 500);
@@ -1218,73 +1272,85 @@ app.get('/events/:id', async (c) => {
     const token = c.req.query('token');
     const user = c.get('user');
 
-    const event = await c.env.DB.prepare('SELECT * FROM events WHERE id = ?').bind(eventId).first();
+    const batchStmts = [
+      c.env.DB.prepare('SELECT * FROM events WHERE id = ?').bind(eventId),
+      c.env.DB.prepare(`
+        SELECT d.*,
+          COALESCE((
+            SELECT json_group_array(json_object('attendee_id', a.id, 'name', a.name))
+            FROM duty_assignments da
+            JOIN attendees a ON da.attendee_id = a.id
+            WHERE da.duty_id = d.id AND a.status = 'attending'
+          ), '[]') as assigned_players
+        FROM event_duties d
+        WHERE d.event_id = ?
+        ORDER BY d.sort_order ASC, d.id ASC
+      `).bind(eventId),
+      c.env.DB.prepare(`
+        SELECT a.id, a.name, a.status, a.gear_bringing, a.is_guest, a.created_at,
+          u.bio,
+          CASE WHEN u.avatar_url IS NOT NULL AND u.avatar_url != '' THEN '/api/users/' || u.id || '/avatar?v=' || length(u.avatar_url) ELSE '' END as avatar_url,
+          (
+            SELECT group_concat(d.title, ', ')
+            FROM duty_assignments da
+            JOIN event_duties d ON da.duty_id = d.id
+            WHERE da.attendee_id = a.id
+          ) as duties_assigned
+        FROM attendees a
+        LEFT JOIN users u ON a.user_id = u.id
+        WHERE a.event_id = ? AND a.status = 'attending'
+        ORDER BY a.created_at ASC
+      `).bind(eventId),
+      c.env.DB.prepare(`
+        SELECT c.id, c.author_name, c.content, c.created_at, c.user_id,
+          CASE WHEN u.avatar_url IS NOT NULL AND u.avatar_url != '' THEN '/api/users/' || u.id || '/avatar?v=' || length(u.avatar_url) ELSE '' END as avatar_url,
+          u.bio
+        FROM comments c
+        LEFT JOIN users u ON c.user_id = u.id
+        WHERE c.event_id = ?
+        ORDER BY c.created_at ASC
+      `).bind(eventId),
+      c.env.DB.prepare("SELECT value FROM app_settings WHERE key = 'require_login_to_rsvp'")
+    ];
+
+    if (user) {
+      batchStmts.push(
+        c.env.DB.prepare(`
+          SELECT a.id, a.event_id, a.user_id, a.name, a.status, a.gear_bringing,
+            (SELECT json_group_array(duty_id) FROM duty_assignments WHERE attendee_id = a.id) as duty_ids
+          FROM attendees a
+          WHERE a.event_id = ? AND (a.user_id = ? OR a.email = ?)
+        `).bind(eventId, user.id, user.email)
+      );
+    } else if (token) {
+      batchStmts.push(
+        c.env.DB.prepare(`
+          SELECT a.id, a.event_id, a.user_id, a.name, a.status, a.gear_bringing,
+            (SELECT json_group_array(duty_id) FROM duty_assignments WHERE attendee_id = a.id) as duty_ids
+          FROM attendees a
+          WHERE a.event_id = ? AND a.management_token = ?
+        `).bind(eventId, token)
+      );
+    }
+
+    const batchRes = await c.env.DB.batch(batchStmts);
+    const event = (batchRes[0].results && batchRes[0].results[0]) || null;
     if (!event) {
       return c.json({ error: 'Event not found.' }, 404);
     }
 
-    const { results: rawDuties } = await c.env.DB.prepare(`
-      SELECT d.*,
-        COALESCE((
-          SELECT json_group_array(json_object('attendee_id', a.id, 'name', a.name, 'avatar_url', u.avatar_url))
-          FROM duty_assignments da
-          JOIN attendees a ON da.attendee_id = a.id
-          LEFT JOIN users u ON a.user_id = u.id
-          WHERE da.duty_id = d.id AND a.status = 'attending'
-        ), '[]') as assigned_players
-      FROM event_duties d
-      WHERE d.event_id = ?
-      ORDER BY d.sort_order ASC, d.id ASC
-    `).bind(eventId).all();
-
-    const duties = (rawDuties || []).map(d => ({
+    const rawDuties = batchRes[1].results || [];
+    const duties = rawDuties.map(d => ({
       ...d,
       assigned_players: JSON.parse(d.assigned_players || '[]')
     }));
 
-    // Public roster query explicitly selects only non-sensitive columns (never emails or tokens)
-    const { results: attendees } = await c.env.DB.prepare(`
-      SELECT a.id, a.name, a.status, a.gear_bringing, a.is_guest, a.created_at,
-        u.bio, u.avatar_url,
-        (
-          SELECT group_concat(d.title, ', ')
-          FROM duty_assignments da
-          JOIN event_duties d ON da.duty_id = d.id
-          WHERE da.attendee_id = a.id
-        ) as duties_assigned
-      FROM attendees a
-      LEFT JOIN users u ON a.user_id = u.id
-      WHERE a.event_id = ? AND a.status = 'attending'
-      ORDER BY a.created_at ASC
-    `).bind(eventId).all();
+    const attendees = batchRes[2].results || [];
+    const comments = batchRes[3].results || [];
+    const settingRow = (batchRes[4].results && batchRes[4].results[0]) || null;
+    const requireLogin = settingRow ? settingRow.value === 'true' : true;
 
-    // Public comments query explicitly selects only public columns (never author_email)
-    const { results: comments } = await c.env.DB.prepare(`
-      SELECT c.id, c.author_name, c.content, c.created_at, c.user_id,
-        u.avatar_url, u.bio
-      FROM comments c
-      LEFT JOIN users u ON c.user_id = u.id
-      WHERE c.event_id = ?
-      ORDER BY c.created_at ASC
-    `).bind(eventId).all();
-
-    let myRsvp = null;
-    if (user) {
-      myRsvp = await c.env.DB.prepare(`
-        SELECT a.id, a.event_id, a.user_id, a.name, a.status, a.gear_bringing,
-          (SELECT json_group_array(duty_id) FROM duty_assignments WHERE attendee_id = a.id) as duty_ids
-        FROM attendees a
-        WHERE a.event_id = ? AND (a.user_id = ? OR a.email = ?)
-      `).bind(eventId, user.id, user.email).first();
-    } else if (token) {
-      myRsvp = await c.env.DB.prepare(`
-        SELECT a.id, a.event_id, a.user_id, a.name, a.status, a.gear_bringing,
-          (SELECT json_group_array(duty_id) FROM duty_assignments WHERE attendee_id = a.id) as duty_ids
-        FROM attendees a
-        WHERE a.event_id = ? AND a.management_token = ?
-      `).bind(eventId, token).first();
-    }
-
+    let myRsvp = (batchRes[5] && batchRes[5].results && batchRes[5].results[0]) || null;
     if (myRsvp) {
       myRsvp.duty_ids = JSON.parse(myRsvp.duty_ids || '[]');
     }
@@ -1295,7 +1361,9 @@ app.get('/events/:id', async (c) => {
       attendees: attendees || [],
       comments: comments || [],
       myRsvp,
-      totalAttendees: (attendees || []).length
+      totalAttendees: (attendees || []).length,
+      user: user || null,
+      require_login_to_rsvp: requireLogin
     });
   } catch (err) {
     console.error('[Events] Error fetching event details:', err);

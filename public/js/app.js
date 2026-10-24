@@ -4,34 +4,39 @@
 
 let currentFilter = 'upcoming';
 
-async function initHome() {
-  const user = await API.getMe();
+function applyUserToHomeUi(user) {
   API.renderNav(user);
-
-  // Check if arrived via magic link login or successful code verification
-  const urlParams = new URLSearchParams(window.location.search);
-  if (urlParams.get('logged_in') === '1') {
-    const banner = document.getElementById('login-success-banner');
-    if (banner) {
-      banner.style.display = 'block';
-      const displayName = user ? user.name : 'Player';
-      banner.innerHTML = `🎉 <strong>Welcome, ${API.escapeHtml(displayName)}!</strong> You are signed in.`;
-    }
-    // Clean up query param from URL without page reload
-    window.history.replaceState({}, document.title, window.location.pathname);
-  }
-
-  // Update hero button if logged in
-  if (user) {
-    const heroBtn = document.getElementById('hero-login-btn');
-    if (heroBtn) {
+  const heroBtn = document.getElementById('hero-login-btn');
+  if (heroBtn) {
+    if (user) {
       heroBtn.textContent = `👤 Player Profile (${user.name})`;
       heroBtn.href = '/profile.html';
+    } else {
+      heroBtn.textContent = '⚾ Player Log In / Sign In';
+      heroBtn.href = '/login.html';
     }
+  }
+}
+
+async function initHome() {
+  // Instant 0ms render from local cache on weak mobile connections
+  const cachedUser = API.getCachedUser();
+  if (cachedUser) {
+    API.currentUser = cachedUser;
+    applyUserToHomeUi(cachedUser);
   }
 
   setupFilters();
-  await loadGames();
+
+  // Check if arrived via magic link login or successful code verification
+  const urlParams = new URLSearchParams(window.location.search);
+  const justLoggedIn = urlParams.get('logged_in') === '1';
+  if (justLoggedIn) {
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+
+  // Single API request fetches both events AND current session user
+  await loadGames(justLoggedIn);
 }
 
 function setupFilters() {
@@ -59,44 +64,76 @@ function setupFilters() {
   }
 }
 
-async function loadGames() {
+function renderEventsView(events, featuredContainer, listContainer) {
+  if (currentFilter === 'upcoming') {
+    if (events.length > 0) {
+      renderFeaturedGame(events[0], featuredContainer);
+      renderGamesList(events.slice(1), listContainer);
+    } else {
+      featuredContainer.innerHTML = '';
+      listContainer.innerHTML = `
+        <div class="card" style="text-align: center; padding: 40px 20px;">
+          <div style="font-size: 2.5rem; margin-bottom: 12px;">⚾</div>
+          <h3 style="color: var(--secondary); margin-bottom: 8px;">No Upcoming Games Scheduled Yet</h3>
+          <p style="color: var(--text-muted); max-width: 480px; margin: 0 auto 20px;">
+            Check back soon! Our Sunday pickup games are posted throughout the season.
+          </p>
+          ${API.currentUser && API.currentUser.canManageEvents ? '<a href="/admin.html" class="btn btn-primary">Create Next Sunday Game</a>' : ''}
+        </div>
+      `;
+    }
+  } else {
+    featuredContainer.innerHTML = '';
+    if (events.length === 0) {
+      listContainer.innerHTML = '<p style="color: var(--text-muted);">No past games in the archive yet.</p>';
+    } else {
+      renderGamesList(events, listContainer);
+    }
+  }
+}
+
+async function loadGames(justLoggedIn = false) {
   const listContainer = document.getElementById('games-list-container');
   const featuredContainer = document.getElementById('featured-game-container');
+  const cacheKey = `pickup_cached_events_${currentFilter}`;
 
-  listContainer.innerHTML = '<p style="color: var(--text-muted);">Loading games...</p>';
+  let renderedFromCache = false;
+  try {
+    const cachedRaw = localStorage.getItem(cacheKey);
+    if (cachedRaw) {
+      const cachedEvents = JSON.parse(cachedRaw);
+      if (Array.isArray(cachedEvents) && cachedEvents.length > 0) {
+        renderEventsView(cachedEvents, featuredContainer, listContainer);
+        renderedFromCache = true;
+      }
+    }
+  } catch (e) {}
+
+  if (!renderedFromCache) {
+    listContainer.innerHTML = '<p style="color: var(--text-muted);">Loading games...</p>';
+  }
 
   try {
     const data = await API.getEvents(currentFilter);
     const events = data.events || [];
 
-    if (currentFilter === 'upcoming') {
-      if (events.length > 0) {
-        // First upcoming event is featured
-        renderFeaturedGame(events[0], featuredContainer);
-        // Remaining events
-        renderGamesList(events.slice(1), listContainer);
-      } else {
-        featuredContainer.innerHTML = '';
-        listContainer.innerHTML = `
-          <div class="card" style="text-align: center; padding: 40px 20px;">
-            <div style="font-size: 2.5rem; margin-bottom: 12px;">⚾</div>
-            <h3 style="color: var(--secondary); margin-bottom: 8px;">No Upcoming Games Scheduled Yet</h3>
-            <p style="color: var(--text-muted); max-width: 480px; margin: 0 auto 20px;">
-              Check back soon! Our Sunday pickup games are posted throughout the season.
-            </p>
-            ${API.currentUser && API.currentUser.canManageEvents ? '<a href="/admin.html" class="btn btn-primary">Create Next Sunday Game</a>' : ''}
-          </div>
-        `;
-      }
-    } else {
-      // Past games view
-      featuredContainer.innerHTML = '';
-      if (events.length === 0) {
-        listContainer.innerHTML = '<p style="color: var(--text-muted);">No past games in the archive yet.</p>';
-      } else {
-        renderGamesList(events, listContainer);
+    if (data.user !== undefined) {
+      applyUserToHomeUi(data.user);
+      if (justLoggedIn) {
+        const banner = document.getElementById('login-success-banner');
+        if (banner) {
+          banner.style.display = 'block';
+          const displayName = data.user ? data.user.name : 'Player';
+          banner.innerHTML = `🎉 <strong>Welcome, ${API.escapeHtml(displayName)}!</strong> You are signed in.`;
+        }
       }
     }
+
+    try {
+      localStorage.setItem(cacheKey, JSON.stringify(events));
+    } catch (e) {}
+
+    renderEventsView(events, featuredContainer, listContainer);
   } catch (err) {
     console.error('Error loading games:', err);
     listContainer.innerHTML = '<div class="alert alert-error">Unable to load games at this time.</div>';
