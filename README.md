@@ -48,48 +48,165 @@ Designed with a **10+ year longevity philosophy**:
 │   ├── 404.html                # Custom 404 page
 │   ├── _headers                # Cloudflare Pages security headers (CSP, HSTS, etc.)
 │   ├── _redirects              # Enforces canonical custom domain over *.pages.dev
+│   ├── _routes.json            # Routes /api/* and /health to Cloudflare Pages Functions
 │   ├── css/style.css           # Stylesheet
 │   └── js/                     # Vanilla JS modules (api.js, app.js, event.js, admin.js, account-dashboard.js)
 ├── functions/
-│   ├── api/[[route]].js        # Hono REST API running on Cloudflare Pages Functions
+│   ├── api/[[route]].js        # Hono REST API running on Cloudflare Pages Functions / Workers
 │   └── health.js               # Health check endpoint (/health)
 ├── scripts/
 │   └── write-route.js          # Generator script for functions/api/[[route]].js
 ├── d1_schema.sql               # Cloudflare D1 SQLite database schema (DDL + default duties)
-└── wrangler.toml               # Cloudflare Pages & D1 configuration
+└── wrangler.toml               # Cloudflare Pages, environment vars, & D1 binding configuration
 ```
 
 ---
 
-## 🚀 Local Development & Deployment (Cloudflare Pages + D1)
+## 🛠️ Step-by-Step Setup Guide (From Scratch)
 
-### 1. Install Dependencies
-```bash
-npm install
+You can run this entire stack **100% free** using a free **[Cloudflare](https://dash.cloudflare.com)** account and a free **[Resend](https://resend.com)** account.
+
+### Prerequisites
+1. Install **[Node.js](https://nodejs.org/)** (v18+ or v22 LTS).
+2. Clone the repository and install dependencies (`hono` and `wrangler`):
+   ```bash
+   git clone https://github.com/djrow/pickup-baseball.git
+   cd pickup-baseball
+   npm install
+   ```
+3. Authenticate the Cloudflare Wrangler CLI with your Cloudflare account:
+   ```bash
+   npx wrangler login
+   ```
+
+---
+
+### Step 1: Set Up Cloudflare D1 (Serverless SQLite Database)
+
+Cloudflare D1 provides a serverless SQLite database at the edge (free tier includes 5 GB storage and 5 million rows read/day).
+
+1. **Create the D1 database**:
+   ```bash
+   npx wrangler d1 create pickup-baseball-db --location=wnam
+   ```
+   *(Valid locations include `wnam` for Western North America, `enam` for Eastern North America, `weur` for Western Europe, etc.)*
+
+2. **Copy the `database_id` into `wrangler.toml`**:
+   Update the `[[d1_databases]]` section of `wrangler.toml` with the `database_id` returned by the command above:
+   ```toml
+   [[d1_databases]]
+   binding = "DB"
+   database_name = "pickup-baseball-db"
+   database_id = "YOUR-DATABASE-ID-HERE"
+   ```
+
+3. **Initialize the database schema (Remote & Local)**:
+   Apply `d1_schema.sql` to create all tables (`users`, `sessions`, `auth_codes`, `events`, `event_duties`, `attendees`, `duty_assignments`, `comments`, `default_duties`, `banned_emails`, `app_settings`, `rate_limits`) and seed the 4 default duties:
+   ```bash
+   # Apply to the live remote D1 database in Cloudflare:
+   npx wrangler d1 execute pickup-baseball-db --remote --file=d1_schema.sql
+
+   # Apply to your local development D1 database:
+   npx wrangler d1 execute pickup-baseball-db --local --file=d1_schema.sql
+   ```
+
+---
+
+### Step 2: Configure Environment Variables (`wrangler.toml`)
+
+In `wrangler.toml`, configure your organization's public variables under `[vars]`:
+
+```toml
+name = "pickup-baseball"
+compatibility_date = "2024-10-22"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = "public"
+
+[vars]
+APP_NAME = "Sunday Pickup Baseball"
+FROM_EMAIL = "Sunday Pickup Baseball <games@pickupbaseballfoundation.org>"
+REPLY_TO_EMAIL = "pickupbaseballfoundation@gmail.com"
+ADMIN_EMAIL = "pickupbaseballfoundation@gmail.com"
+ADMIN_NAME = "David Rowland"
 ```
+> **Admin Auto-Assignment**: When the user matching `ADMIN_EMAIL` signs in via email code or magic link for the first time, their account is automatically granted the `admin` role. All other self-registered accounts are strictly assigned the `player` role.
 
-### 2. Initialize Local D1 Database
-```bash
-npx wrangler d1 execute pickup-baseball-db --local --file=d1_schema.sql
-```
+---
 
-### 3. Run Locally with Wrangler Pages Dev
+### Step 3: Set Up Resend (Transactional Email)
+
+Resend's free tier provides **3,000 emails/month** (100/day) over HTTPS REST API, used for sending 6-digit login codes, magic links, and RSVP confirmations.
+
+1. **Create a Resend Account & Verify Your Domain**:
+   - Sign up at **[resend.com](https://resend.com)** → go to **Domains** → **Add Domain** (e.g., `pickupbaseballfoundation.org`).
+   - Add the DNS records Resend provides (`send` CNAME/MX for Return-Path and `resend._domainkey` TXT for DKIM) to your Cloudflare DNS settings.
+2. **Generate an API Key**:
+   - In Resend, go to **API Keys** → **Create API Key** and copy the key (starts with `re_...`).
+3. **For Local Development (`.dev.vars`)**:
+   - Create a `.dev.vars` file in the project root (ignored by Git):
+     ```ini
+     RESEND_API_KEY=re_your_api_key_here
+     ```
+   - *(If `RESEND_API_KEY` is omitted locally, sign-in codes and magic links are printed to the terminal console instead.)*
+
+---
+
+### Step 4: Set Up Cloudflare Pages & Pages Functions / Workers
+
+Cloudflare Pages hosts both the static files in `public/` and the serverless Hono API in `functions/api/[[route]].js`.
+
+- **How the Worker Routing Works**:
+  - `public/_routes.json` instructs Cloudflare Pages to serve all static HTML/CSS/JS files directly from the CDN edge (0 Worker invocations) and only invoke the Pages Function Worker for `/api/*` and `/health`.
+  - Because Windows PowerShell treats `[` and `]` in `functions/api/[[route]].js` as wildcard glob characters, the API code is maintained in `scripts/write-route.js`. Running `node scripts/write-route.js` regenerates `functions/api/[[route]].js`.
+
+1. **Create the Cloudflare Pages Project**:
+   ```bash
+   npx wrangler pages project create pickup-baseball --production-branch trunk
+   ```
+
+2. **Save Your `RESEND_API_KEY` as an Encrypted Cloudflare Secret**:
+   ```bash
+   npx wrangler pages secret put RESEND_API_KEY --project-name pickup-baseball
+   ```
+   *(Paste your `re_...` key when prompted. This encrypts and attaches the secret to your production Worker without ever storing it in `wrangler.toml` or Git.)*
+
+3. **Deploy to Cloudflare Pages**:
+   ```bash
+   npm run deploy
+   ```
+   *(This runs `npx wrangler pages deploy public --project-name pickup-baseball --branch trunk --commit-dirty=true`, bundling `functions/` automatically and reading the D1 binding from `wrangler.toml`.)*
+
+---
+
+### Step 5: Connect Your Custom Domain & Harden Cloudflare Edge
+
+1. **Attach Custom Domain to Pages**:
+   - In **Cloudflare Dashboard → Workers & Pages → `pickup-baseball` → Custom domains**, click **Set up a custom domain** and add both `www.pickupbaseballfoundation.org` and `pickupbaseballfoundation.org`.
+2. **DNS Records (`Cloudflare Dashboard → DNS → Records`)**:
+   - `CNAME` `www` → `pickup-baseball.pages.dev` (*Proxied / Orange cloud*)
+   - `CNAME` `@` → `pickup-baseball.pages.dev` (*Proxied / Orange cloud*)
+   - `CNAME` `send` → `send.forge.rmta.net` (*DNS only / Grey cloud* — for Resend)
+   - `TXT` `resend._domainkey` → *(Your Resend DKIM public key)*
+   - `TXT` `_dmarc` → `v=DMARC1; p=quarantine; rua=mailto:pickupbaseballfoundation@gmail.com`
+   - `TXT` `@` → `v=spf1 include:_spf.google.com include:amazonses.com ~all`
+3. **Edge Bot & WAF Protection (`Cloudflare Dashboard → Security`)**:
+   - **Security → Bots**: Enable **Bot Fight Mode**.
+   - **Security → WAF → Rate limiting rules**: Create a rule matching `URI Path equals /api/auth/send-code` → block for `10 seconds` when rate exceeds `5 requests per 10 seconds`.
+
+---
+
+## 💻 Local Development Commands
+
 ```bash
+# Start local Cloudflare Pages + D1 dev server at http://localhost:8788
 npm run dev
-```
-Open **[http://localhost:8788](http://localhost:8788)** in your browser.
 
-### 4. Configure Production Secrets (One-Time Setup)
-Store your Resend API key as an encrypted Cloudflare Pages secret:
-```bash
-npx wrangler pages secret put RESEND_API_KEY --project-name pickup-baseball
-```
+# Regenerate functions/api/[[route]].js after editing scripts/write-route.js
+node scripts/write-route.js
 
-### 5. Deploy to Production
-```bash
+# Deploy static assets and Worker functions to production
 npm run deploy
 ```
-This deploys the `public/` directory and `functions/` bundle to Cloudflare Pages (`trunk` branch), serving live traffic at **`https://www.pickupbaseballfoundation.org`**.
 
 ---
 
