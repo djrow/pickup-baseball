@@ -46,10 +46,14 @@ All of the following application and database security fixes have already been c
 
 1. **Cloudflare Nameservers Active (`gail.ns.cloudflare.com`, `will.ns.cloudflare.com`)**
    - Switched from Namecheap BasicDNS to Cloudflare DNS.
-   - Verified `www`, `@`, `send` (Resend Return-Path), `resend._domainkey` (DKIM), and `_dmarc` records are live.
-2. **Cloudflare Bot Fight Mode Enabled**
+   - Verified both `https://www.pickupbaseballfoundation.org` and `https://pickupbaseballfoundation.org` return `200 OK` with full security headers.
+   - Verified `send.pickupbaseballfoundation.org` (Resend Return-Path) and `resend._domainkey` (DKIM) are active.
+2. **Email Anti-Spoofing (`SPF` & `DMARC`) Active**
+   - Root `SPF` record live: `v=spf1 include:_spf.google.com include:amazonses.com ~all`
+   - `_dmarc` record upgraded to quarantine: `v=DMARC1; p=quarantine; rua=mailto:pickupbaseballfoundation@gmail.com`
+3. **Cloudflare Bot Fight Mode Enabled**
    - Active under **Security → Bots**.
-3. **Cloudflare Edge WAF Rate Limiting Rule Deployed**
+4. **Cloudflare Edge WAF Rate Limiting Rule Deployed**
    - Active on `/api/auth/send-code` (5 requests / 10 seconds → Block).
 
 ---
@@ -64,21 +68,8 @@ All of the following application and database security fixes have already been c
      - **Namecheap** (domain registrar)
      - **Google** (`pickupbaseballfoundation@gmail.com` — admin email & mailing list Google Form)
 
-2. **Optional DNS Email Anti-Spoofing Upgrade (In Cloudflare DNS → Records)**
-   - Edit the `_dmarc` TXT record from `v=DMARC1; p=none;` to:
-     `v=DMARC1; p=quarantine; rua=mailto:pickupbaseballfoundation@gmail.com`
-   - Add a TXT record on `@` (`pickupbaseballfoundation.org`) with:
-     `v=spf1 include:amazonses.com ~all`
-
-3. **Optional: Fix `https://pickupbaseballfoundation.org` (without `www`) in Cloudflare DNS**
-   - When Cloudflare imported your records from Namecheap, it imported Namecheap's old URL-forwarding `A` record for `@` (`pickupbaseballfoundation.org`), which causes `https://pickupbaseballfoundation.org` (without `www`) to return `Error 522` while `https://www.pickupbaseballfoundation.org` works normally.
-   - **Fix**: In **Cloudflare Dashboard → `pickupbaseballfoundation.org` → DNS → Records**, delete the old **`A`** record named `pickupbaseballfoundation.org` (which points to a `192.64.x.x` or `162.255.x.x` IP) and replace it with a **`CNAME`** record:
-     - **Name**: `@`
-     - **Target**: `pickup-baseball.pages.dev`
-     - **Proxy status**: **Proxied (Orange cloud)**
-
-4. **Optional: Re-Upload Your Profile Picture Once**
+2. **Optional: Re-Upload Your Profile Picture Once**
    - Visit `https://www.pickupbaseballfoundation.org/profile.html` while signed in and re-upload your profile photo once so the new uploader replaces the old 1.8 MB image with a fast ~15 KB EXIF-free version.
 
-4. **Periodic Database Backups**
+3. **Periodic Database Backups**
    - Occasionally click **📥 Backup Database (.sql)** on `https://www.pickupbaseballfoundation.org/admin.html` to save a copy of your database to your computer.
