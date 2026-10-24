@@ -299,13 +299,12 @@ const API = {
         : `<span class="nav-avatar-placeholder">${this.escapeHtml((user.name || 'P').charAt(0).toUpperCase())}</span>`;
 
       authHtml = `
-        <a href="/profile.html" class="nav-user-badge" title="View & Edit Profile">
+        <a href="/profile.html" class="nav-user-badge" title="View & Edit Profile (${this.escapeHtml(user.name)})">
           ${avatarImg}
-          <span class="nav-user-name" style="font-weight: 600; font-size: 0.9rem; color: var(--secondary);">
+          <span class="nav-user-name">
             ${this.escapeHtml(user.name)}
           </span>
         </a>
-        <a href="/profile.html" class="btn btn-outline btn-sm nav-profile-btn">👤 Profile</a>
         ${user.canManageEvents ? `<a href="/admin.html" class="btn btn-outline btn-sm">${user.isAdmin ? '⚙️ Admin' : '⚾ Org'}</a>` : ''}
         <button id="nav-logout-btn" class="btn btn-outline btn-sm">Log Out</button>
       `;
@@ -323,13 +322,14 @@ const API = {
         <a href="/index.html" class="brand">
           <img src="/logo.svg" alt="Pickup Baseball Foundation Logo" class="brand-logo">
           <span class="brand-text">Pickup Baseball<span class="brand-suffix"> Foundation</span></span>
+          <span class="brand-short">PBF</span>
           <span class="brand-tag">Community</span>
         </a>
         <div class="nav-links">
+          ${themeBtnHtml}
           <a href="/index.html">Games</a>
           <a href="/donate.html">Donate</a>
           ${authHtml}
-          ${themeBtnHtml}
         </div>
       </div>
     `;

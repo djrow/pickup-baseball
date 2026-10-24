@@ -137,7 +137,7 @@ header.site-header {
   align-items: center;
   justify-content: space-between;
   flex-wrap: nowrap;
-  gap: 16px;
+  gap: 12px;
   min-height: 48px;
   max-height: 56px;
   padding: 6px 0;
@@ -158,8 +158,22 @@ header.site-header {
   text-decoration: none;
   color: var(--as-green);
   font-weight: 800;
-  font-size: 1.15rem;
+  font-size: 1.1rem;
   letter-spacing: -0.02em;
+}
+
+.brand-short {
+  display: none;
+}
+
+.nav-user-name {
+  font-weight: 600;
+  font-size: 0.88rem;
+  color: var(--secondary);
+  max-width: 115px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .brand-icon {
@@ -201,7 +215,7 @@ header.site-header {
   flex-wrap: nowrap;
   white-space: nowrap;
   flex-shrink: 0;
-  gap: 18px;
+  gap: 12px;
   margin-left: auto;
 }
 
@@ -893,13 +907,12 @@ footer.site-footer strong {
 }
 
 /* Responsive & Width-to-Text-Size (em) Compaction */
-@media (max-width: 56em) {
-  .brand-tag,
-  .nav-profile-btn {
+@media (max-width: 64em) {
+  .brand-tag {
     display: none;
   }
   .nav-links {
-    gap: 12px;
+    gap: 10px;
   }
   .btn-login {
     padding: 6px 12px;
@@ -907,10 +920,10 @@ footer.site-footer strong {
   }
 }
 
-@media (max-width: 40em) {
+@media (max-width: 48em) {
   .nav-wrap {
-    min-height: 42px;
-    max-height: 48px;
+    min-height: 44px;
+    max-height: 50px;
     padding: 4px 0;
     gap: 8px;
   }
@@ -934,7 +947,7 @@ footer.site-footer strong {
     background: transparent;
   }
   .nav-links {
-    gap: 10px;
+    gap: 8px;
   }
   .nav-links a {
     font-size: 0.85rem;
@@ -947,6 +960,11 @@ footer.site-footer strong {
     padding: 5px 10px;
     font-size: 0.82rem;
   }
+  .btn-theme-toggle {
+    width: 30px;
+    height: 30px;
+    font-size: 0.9rem;
+  }
   .hero {
     padding: 28px 0;
   }
@@ -958,12 +976,26 @@ footer.site-footer strong {
   }
 }
 
-@media (max-width: 28em) {
+@media (max-width: 34em) {
   #main-nav.container {
     padding: 0 10px;
   }
-  .brand {
-    font-size: 0.9rem;
+  .brand-text {
+    display: none;
+  }
+  .brand-short {
+    display: inline;
+    font-size: 0.95rem;
+  }
+  .nav-links {
+    gap: 6px;
+  }
+  .nav-links a {
+    font-size: 0.8rem;
+  }
+  .nav-links .btn-sm {
+    padding: 4px 6px;
+    font-size: 0.75rem;
   }
   .btn-login-icon {
     display: none;
