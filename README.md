@@ -1,179 +1,105 @@
-# ⚾ Sunday Pickup Baseball WebApp
+# ⚾ Pickup Baseball Foundation (`www.pickupbaseballfoundation.org`)
 
-A reliable, durable, and lightweight web application built for a pickup baseball charity organizing weekly Sunday games at noon.
+A fast, durable, and zero-cost web application built for the **[Pickup Baseball Foundation](https://www.pickupbaseballfoundation.org)** to organize free weekly Sunday pickup baseball games at Noon.
 
-Designed with a **10-year longevity philosophy**:
-- **Zero build steps**: Pure HTML5, modern semantic CSS3, and standard Vanilla JavaScript. No bundlers, Webpack, Vite, or frontend framework churn that breaks over time.
-- **Single-file SQLite Database**: Powered by `better-sqlite3` with Write-Ahead Logging (WAL) mode for fast, atomic, zero-maintenance storage. Backing up is as simple as copying one file.
-- **Low-Cost Hosting**: Runs smoothly on any low-cost hosting provider (Render, Railway, Fly.io, or a $3–$4/month VPS) or standard Docker container.
-- **Zero-Password Authentication**: Users only need a name and email address. Sign-in uses 6-digit verification codes or one-click magic links with 90-day persistent cookies.
-- **Full Guest Access**: Anyone can view games, check the headcount, RSVP, claim duties, coordinate gear, and discuss games without requiring an account.
+Designed with a **10+ year longevity philosophy**:
+- **Zero Frontend Build Steps**: Pure HTML5, semantic CSS3, and standard Vanilla JavaScript (`public/`). No bundlers, Webpack, Vite, or framework churn that breaks over time.
+- **100% Free-Tier Serverless Edge Stack**: Hosted on **Cloudflare Pages** (static assets + global CDN), **Cloudflare Pages Functions / Workers** (`functions/api/[[route]].js` powered by Hono), **Cloudflare D1** (serverless SQLite in the cloud), and **Resend** (transactional email).
+- **Passwordless Email Authentication**: Players sign in with a 6-digit verification code or 1-click magic link sent to their email (SHA-256 hashed in D1, 10-minute expiration, 5-attempt lockout, and 90-day `HttpOnly; Secure; SameSite=Lax` session cookies).
+- **Defense-in-Depth Security**: Parameterized D1 prepared statements, server-side + Cloudflare WAF rate limiting, CSRF `Origin` checks, strict CSP/HSTS headers (`public/_headers`), automatic client- and server-side EXIF/GPS metadata stripping on profile photos, and configurable guest access controls.
 
 ---
 
 ## 🌟 Key Features
 
-1. **Headcount & Attendance Tracking**:
-   - Live roster showing who is attending.
-   - Immediate RSVP confirmation email with game details and a personal management link.
-   - Automated reminder email sent 24 hours before the game.
-2. **Duty & Volunteer Coordination**:
-   - Each game includes customizable volunteer duties (Bases & Home Plate, Game Balls, Catcher's Gear, Bats & Helmets, Field Setup, Cold Water / First Aid, Umpire, Dugout Cleanup).
+1. **Game Scheduling & Roster Tracking**:
+   - Live player roster showing confirmed headcount, player bios, and shared equipment.
+   - Instant RSVP confirmation email with game details and a personal management link.
+   - 1-Click **"Post Next Sunday @ Noon"** scheduler normalized to `America/Los_Angeles` (Pacific Time).
+2. **Volunteer Duty Coordination**:
+   - Customizable default task template pre-configured with the 4 essential game-day duties:
+     - **Bases** (1 slot) — *Bring 3 throw-down bases.*
+     - **Pitching machine and power** (1 slot) — *Bring a pitching machine and a way to run it on the field.*
+     - **Game Baseballs** (1 slot) — *Bring game balls bucket.*
+     - **Field Dragging** (2 slots) — *Arrive 20 mins early to drag the infield with the pull rake.*
    - Real-time slot availability prevents double-booking.
-3. **Gear Coordination**:
-   - Attendees list what gear they are bringing (e.g., bats, helmets, catcher's equipment, extra gloves) so the group knows what is covered.
-4. **Game Discussion Board**:
-   - Pre-game announcements (weather updates, field conditions, carpools) and post-game recaps/photos.
-5. **Admin Organizer Dashboard**:
-   - ⚡ **1-Click Post Next Sunday**: Automatically computes next Sunday's date at 12:00 PM and attaches game duties.
-   - Custom game creator, roster management, and manual "Send Reminders Now" trigger.
+3. **Equipment Sharing & Game Discussion Board**:
+   - Players list what gear they can bring (bats, catcher's gear, spare gloves) and coordinate field conditions or carpools on the per-game discussion board.
+4. **Donations & Plain-Language Privacy**:
+   - Dedicated **[Donate page](https://www.pickupbaseballfoundation.org/donate.html)** with PayPal Giving Fund, Every.org, and IRS tax-receipt instructions.
+   - Plain-English privacy notice on the homepage explaining exactly what is collected (names and emails only) and that data is never shared.
+5. **Admin & Moderation Tools**:
+   - Role-based access control (`Admin`, `Organizer`, `Player`).
+   - One-click **📥 Backup Database (`.sql`)** download directly from the Admin Dashboard.
+   - User account removal, email ban list (`banned_emails`), guest RSVP policy toggle, and one-click roster/comment moderation.
 
 ---
 
-## 🚀 Quickstart (Local Development)
+## 🏗️ Project Structure
 
-### 1. Requirements
-- Node.js 18+ (tested on Node 22 LTS)
+```text
+├── public/                     # Static frontend served by Cloudflare Pages
+│   ├── index.html              # Homepage, privacy promise, & upcoming/past games
+│   ├── event.html              # Game details, RSVP form, duty board, & discussion
+│   ├── login.html              # Passwordless email sign-in / registration
+│   ├── profile.html            # Player profile, bio, & EXIF-stripping avatar uploader
+│   ├── admin.html              # Organizer & Admin dashboard
+│   ├── donate.html             # Charity donation options & IRS receipt notice
+│   ├── 404.html                # Custom 404 page
+│   ├── _headers                # Cloudflare Pages security headers (CSP, HSTS, etc.)
+│   ├── _redirects              # Enforces canonical custom domain over *.pages.dev
+│   ├── css/style.css           # Stylesheet
+│   └── js/                     # Vanilla JS modules (api.js, app.js, event.js, admin.js, account-dashboard.js)
+├── functions/
+│   ├── api/[[route]].js        # Hono REST API running on Cloudflare Pages Functions
+│   └── health.js               # Health check endpoint (/health)
+├── scripts/
+│   └── write-route.js          # Generator script for functions/api/[[route]].js
+├── d1_schema.sql               # Cloudflare D1 SQLite database schema (DDL + default duties)
+└── wrangler.toml               # Cloudflare Pages & D1 configuration
+```
 
-### 2. Install Dependencies
+---
+
+## 🚀 Local Development & Deployment (Cloudflare Pages + D1)
+
+### 1. Install Dependencies
 ```bash
 npm install
 ```
 
-### 3. (Optional) Seed Sample Data
-Populates a realistic upcoming Sunday game with players, duties, and discussion:
+### 2. Initialize Local D1 Database
 ```bash
-npm run seed
+npx wrangler d1 execute pickup-baseball-db --local --file=d1_schema.sql
 ```
 
-### 4. Start the Application
+### 3. Run Locally with Wrangler Pages Dev
 ```bash
-npm start
+npm run dev
 ```
-Open **[http://localhost:3000](http://localhost:3000)** in your browser!
+Open **[http://localhost:8788](http://localhost:8788)** in your browser.
 
-> **Local Email Note**: When running locally without SMTP credentials configured, all outgoing emails (login codes, RSVP confirmations, 24h reminders) are formatted and printed directly to your terminal console with clickable links.
+### 4. Configure Production Secrets (One-Time Setup)
+Store your Resend API key as an encrypted Cloudflare Pages secret:
+```bash
+npx wrangler pages secret put RESEND_API_KEY --project-name pickup-baseball
+```
+
+### 5. Deploy to Production
+```bash
+npm run deploy
+```
+This deploys the `public/` directory and `functions/` bundle to Cloudflare Pages (`trunk` branch), serving live traffic at **`https://www.pickupbaseballfoundation.org`**.
 
 ---
 
-## ⚙️ Configuration (`.env`)
+## 💾 Database Backups
 
-Copy `.env.example` to `.env`:
+Signed-in administrators can download a complete `.sql` backup of the live Cloudflare D1 database at any time by clicking **📥 Backup Database (.sql)** on the **[Admin Dashboard](https://www.pickupbaseballfoundation.org/admin.html)** (`/api/events/admin/backup-db`).
 
-```ini
-PORT=3000
-NODE_ENV=production
-APP_URL=https://your-custom-domain.org
-APP_NAME="Sunday Pickup Baseball"
-
-# Administrator Account
-# Anyone signing in with this email automatically has admin powers
-ADMIN_EMAIL=pickupbaseballfoundation@gmail.com
-ADMIN_NAME="League Organizer"
-
-# SQLite Data Storage Directory
-DATA_DIR=./data
-
-# SMTP Email Configuration (Optional)
-# Leave blank for local console logging, or configure with any low-cost provider:
-# - Brevo (Free 300 emails/day)
-# - Resend (Free 3,000 emails/month)
-# - Amazon SES (~$0.10 per 1,000 emails)
-# - Zoho / Gmail App Password
-SMTP_HOST=smtp.resend.com
-SMTP_PORT=587
-SMTP_SECURE=false
-SMTP_USER=resend
-SMTP_PASS=re_your_api_key_here
-FROM_EMAIL="Sunday Pickup Baseball" <pickup@your-custom-domain.org>
-```
-
----
-
-## 🆓 Free-Tier Deployment: Fly.io + Resend
-
-You can run this application **100% free forever** by pairing **Fly.io**'s free resource allowance with **Resend**'s free email tier.
-
-### 1. Set Up Resend (Free 3,000 Emails/Month)
-1. Go to **[resend.com](https://resend.com)** and sign up for a free account.
-2. In the sidebar, click **API Keys** → **Create API Key**. Name it `baseball-app` and copy the key (starts with `re_...`).
-3. *(Optional for custom domain)*: If you own a domain (e.g., `mybaseballcharity.org`), go to **Domains** → **Add Domain** and add the DNS records.
-   - If you don't have a custom domain yet, you can use Resend's free built-in test sender: `onboarding@resend.dev` to test sending to your registered account email!
-
----
-
-### 2. Deploy to Fly.io (Free Tier VM + 1GB Persistent Disk)
-
-Fly.io's free tier includes up to **3 shared-cpu-1x 256MB VMs** and **3GB of persistent volume storage**. This app requires only **1 VM** and **1GB disk**, keeping your cost at **$0.00/month**.
-
-#### Step A: Install the Fly.io CLI
-In PowerShell on Windows:
-```powershell
-pwsh -Command "iwr https://fly.io/install.ps1 -useb | iex"
-```
-*(On Mac/Linux: `curl -L https://fly.io/install.sh | sh`)*
-
-#### Step B: Log In to Fly.io
-```bash
-fly auth login
-```
-
-#### Step C: Launch the App
-Run this in the project folder:
-```bash
-fly launch --no-deploy
-```
-- Give your app a name (e.g. `sunday-pickup-baseball`).
-- Choose your preferred region (e.g. `iad` for US East, `ord` for US Central, `sjc` for US West).
-- When asked to tweak settings, press **No** (the included `fly.toml` is already pre-configured).
-
-#### Step D: Create the Free 1GB SQLite Storage Volume
-SQLite needs disk persistence so your rosters and games survive restarts:
-```bash
-fly volumes create baseball_data --region iad --size 1
-```
-*(Make sure `--region` matches the region selected in Step C)*
-
-#### Step E: Set Your Secrets (Resend & Admin)
-Set your Resend API Key and Admin details securely:
-```bash
-fly secrets set RESEND_API_KEY="re_your_api_key_here" \
-                ADMIN_EMAIL="your-email@example.com" \
-                ADMIN_NAME="League Coordinator" \
-                APP_URL="https://your-app-name.fly.dev" \
-                FROM_EMAIL="Sunday Pickup Baseball <onboarding@resend.dev>"
-```
-*(Replace `your-app-name` with your actual Fly.io app name, and update `FROM_EMAIL` once you verify your custom domain)*
-
-#### Step F: Deploy!
-```bash
-fly deploy
-```
-
-Your app is now live at: `https://your-app-name.fly.dev`!
-
----
-
-### 3. How the 24-Hour Reminders Work on Fly.io
-In `fly.toml`, `auto_stop_machines = "off"` and `min_machines_running = 1` are set. This keeps your single 256MB free machine running continuously, allowing the built-in background scheduler to check for upcoming Sunday games every 15 minutes and dispatch reminders via Resend.
-
-*(Optional)* If you prefer the machine to sleep when idle to save energy, you can use a free web cron like **[cron-job.org](https://cron-job.org)** to ping `https://your-app-name.fly.dev/api/events/reminders/check` once an hour to wake the app and process reminders automatically.
-
----
-
-## 💾 Backups & Maintenance
-
-Your entire database is stored in a single file: `data/baseball_charity.db`.
-
-To create a backup at any time:
-```bash
-# SQLite safe online backup command:
-node -e "const { db } = require('./src/db'); db.backup('./data/backup-' + Date.now() + '.db'); console.log('Backup complete');"
-```
-
-You can automate this via a simple cron job to copy the file to Google Drive, Dropbox, or S3 for complete peace of mind.
+*(Note: `.db` and `.sql` backup files are excluded via `.gitignore` so player email addresses are never committed to Git.)*
 
 ---
 
 ## 📜 License
-MIT License. Free to use, adapt, and share for charitable sports organizations.
+MIT License. Built for the Pickup Baseball Foundation.
