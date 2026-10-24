@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Game Details & RSVP - Sunday Pickup Baseball</title>
-  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/style.css?v=2">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
 </head>
 <body>
@@ -56,9 +56,49 @@
             <h1 id="event-title" style="color: var(--secondary); font-size: 1.8rem; margin-top: 6px;"></h1>
           </div>
           <div id="admin-actions-container" style="display: none; gap: 8px; flex-wrap: wrap;">
-            <button type="button" id="edit-event-btn" class="btn btn-outline btn-sm">✏️ Edit Game</button>
+            <button type="button" id="edit-event-btn" onclick="if(window.toggleEditEventPanel) window.toggleEditEventPanel();" class="btn btn-outline btn-sm">✏️ Edit Game</button>
             <button type="button" id="send-reminders-btn" class="btn btn-outline btn-sm" style="display: none;">📧 Send Reminders Now</button>
           </div>
+        </div>
+
+        <!-- Inline Edit Game Form (Opens directly below the Edit Game button) -->
+        <div id="edit-event-panel" style="display: none; margin-bottom: 18px;">
+          <div id="edit-event-alert"></div>
+          <form id="edit-event-form" style="background: var(--bg-subtle); padding: 16px; border-radius: var(--radius-sm); border: 1.5px solid var(--primary);">
+            <h3 style="font-size: 1rem; color: var(--secondary); margin: 0 0 12px 0;">✏️ Edit Game Details</h3>
+            <div class="grid-2">
+              <div class="form-group">
+                <label for="edit-event-title">Game Title *</label>
+                <input type="text" id="edit-event-title" required>
+              </div>
+              <div class="form-group">
+                <label for="edit-event-date">Date &amp; Time (Pacific) *</label>
+                <input type="datetime-local" id="edit-event-date" required>
+              </div>
+            </div>
+            <div class="grid-2">
+              <div class="form-group">
+                <label for="edit-event-location">Field Location *</label>
+                <input type="text" id="edit-event-location" list="common-locations-list" required>
+              </div>
+              <div class="form-group">
+                <label for="edit-event-map">Map / Directions Link (Optional)</label>
+                <input type="text" id="edit-event-map" placeholder="https://maps.google.com/?q=...">
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="edit-event-desc">Game Details &amp; Announcements</label>
+              <textarea id="edit-event-desc" rows="2"></textarea>
+            </div>
+            <datalist id="common-locations-list">
+              <option value="Bushrod Park Field 1">
+              <option value="Bushrod Park Field 2">
+            </datalist>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+              <button type="submit" id="save-edit-event-btn" class="btn btn-primary btn-sm">💾 Save Changes</button>
+              <button type="button" id="cancel-edit-event-btn" class="btn btn-outline btn-sm">Cancel</button>
+            </div>
+          </form>
         </div>
 
         <div class="event-meta-grid">
@@ -106,46 +146,6 @@
         </div>
 
         <p id="event-description" style="color: var(--text-main); margin-top: 8px; white-space: pre-wrap;"></p>
-
-        <!-- Inline Edit Game Form (Visible to Admins & Organizers when toggled) -->
-        <div id="edit-event-panel" style="display: none; margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--border);">
-          <div id="edit-event-alert"></div>
-          <form id="edit-event-form" style="background: var(--bg-subtle); padding: 16px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
-            <h3 style="font-size: 1rem; color: var(--secondary); margin: 0 0 12px 0;">✏️ Edit Game Details</h3>
-            <div class="grid-2">
-              <div class="form-group">
-                <label for="edit-event-title">Game Title *</label>
-                <input type="text" id="edit-event-title" required>
-              </div>
-              <div class="form-group">
-                <label for="edit-event-date">Date &amp; Time (Pacific) *</label>
-                <input type="datetime-local" id="edit-event-date" required>
-              </div>
-            </div>
-            <div class="grid-2">
-              <div class="form-group">
-                <label for="edit-event-location">Field Location *</label>
-                <input type="text" id="edit-event-location" list="common-locations-list" required>
-              </div>
-              <div class="form-group">
-                <label for="edit-event-map">Map / Directions Link (Optional)</label>
-                <input type="text" id="edit-event-map" placeholder="https://maps.google.com/?q=...">
-              </div>
-            </div>
-            <div class="form-group">
-              <label for="edit-event-desc">Game Details &amp; Announcements</label>
-              <textarea id="edit-event-desc" rows="2"></textarea>
-            </div>
-            <datalist id="common-locations-list">
-              <option value="Bushrod Park Field 1">
-              <option value="Bushrod Park Field 2">
-            </datalist>
-            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-              <button type="submit" id="save-edit-event-btn" class="btn btn-primary btn-sm">💾 Save Changes</button>
-              <button type="button" id="cancel-edit-event-btn" class="btn btn-outline btn-sm">Cancel</button>
-            </div>
-          </form>
-        </div>
       </div>
 
       <!-- RSVP & Volunteer Section -->
@@ -318,7 +318,7 @@
     </div>
   </footer>
 
-  <script src="/js/api.js"></script>
-  <script src="/js/event.js"></script>
+  <script src="/js/api.js?v=2"></script>
+  <script src="/js/event.js?v=2"></script>
 </body>
 </html>

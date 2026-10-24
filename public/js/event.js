@@ -518,26 +518,37 @@ async function handleSendReminders() {
   }
 }
 
-function toggleEditEventPanel() {
+window.toggleEditEventPanel = function() {
   const panel = document.getElementById('edit-event-panel');
+  const editBtn = document.getElementById('edit-event-btn');
   if (!panel || !eventData || !eventData.event) return;
   const isOpen = panel.style.display === 'block';
   if (isOpen) {
     panel.style.display = 'none';
+    if (editBtn) editBtn.textContent = '✏️ Edit Game';
     return;
   }
   const ev = eventData.event;
   document.getElementById('edit-event-title').value = ev.title || '';
-  document.getElementById('edit-event-date').value = API.isoToPacificLocalInput(ev.event_date);
+  if (API.isoToPacificLocalInput) {
+    document.getElementById('edit-event-date').value = API.isoToPacificLocalInput(ev.event_date);
+  } else if (ev.event_date) {
+    document.getElementById('edit-event-date').value = ev.event_date.slice(0, 16);
+  }
   document.getElementById('edit-event-location').value = ev.location || '';
   document.getElementById('edit-event-map').value = ev.location_url || '';
   document.getElementById('edit-event-desc').value = ev.description || '';
   document.getElementById('edit-event-alert').innerHTML = '';
   panel.style.display = 'block';
+  if (editBtn) editBtn.textContent = '✕ Close Editor';
+  document.getElementById('edit-event-title').focus();
 
   const cancelBtn = document.getElementById('cancel-edit-event-btn');
   if (cancelBtn) {
-    cancelBtn.onclick = () => { panel.style.display = 'none'; };
+    cancelBtn.onclick = () => {
+      panel.style.display = 'none';
+      if (editBtn) editBtn.textContent = '✏️ Edit Game';
+    };
   }
 
   const form = document.getElementById('edit-event-form');
@@ -561,11 +572,22 @@ function toggleEditEventPanel() {
           description: document.getElementById('edit-event-desc').value.trim()
         };
 
-        const res = await API.updateEvent(eventId, payload);
+        let res;
+        if (API.updateEvent) {
+          res = await API.updateEvent(eventId, payload);
+        } else {
+          const r = await fetch(`/api/events/${eventId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          res = await r.json();
+        }
         if (res.error) {
           alertBox.innerHTML = `<div class="alert alert-error">${API.escapeHtml(res.error)}</div>`;
         } else {
           panel.style.display = 'none';
+          if (editBtn) editBtn.textContent = '✏️ Edit Game';
           await loadEventData();
         }
       } catch (err) {
@@ -576,6 +598,7 @@ function toggleEditEventPanel() {
       }
     });
   }
-}
+};
+const toggleEditEventPanel = window.toggleEditEventPanel;
 
 document.addEventListener('DOMContentLoaded', initEvent);
