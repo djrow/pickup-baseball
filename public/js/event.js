@@ -145,6 +145,7 @@ function renderAttendeesRoster() {
         const avatarImg = safeAvatar
           ? `<img src="${API.escapeHtml(safeAvatar)}" alt="${API.escapeHtml(a.name)}" class="roster-avatar">`
           : `<span class="roster-avatar-placeholder">${API.escapeHtml((a.name || 'P').charAt(0).toUpperCase())}</span>`;
+        const canMod = API.currentUser && API.currentUser.canManageEvents;
 
         return `
           <li class="roster-item" style="display: flex; gap: 12px; align-items: flex-start;">
@@ -155,7 +156,10 @@ function renderAttendeesRoster() {
                   ${API.escapeHtml(a.name)}
                   ${a.is_guest ? '<span style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal;">(Guest)</span>' : ''}
                 </div>
-                <span class="badge badge-green" style="font-size: 0.7rem;">Playing</span>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                  <span class="badge badge-green" style="font-size: 0.7rem;">Playing</span>
+                  ${canMod ? `<button type="button" onclick="removeRosterAttendee(${a.id})" title="Remove from roster" style="background:none;border:none;cursor:pointer;font-size:0.85rem;color:var(--danger);padding:0 2px;">🗑️</button>` : ''}
+                </div>
               </div>
               ${a.bio ? `<div class="player-bio-text">"${API.escapeHtml(a.bio)}"</div>` : ''}
               ${a.gear_bringing ? `<div class="roster-gear">🎒 <em>${API.escapeHtml(a.gear_bringing)}</em></div>` : ''}
@@ -186,6 +190,7 @@ function renderComments() {
     const avatarImg = safeAvatar
       ? `<img src="${API.escapeHtml(safeAvatar)}" alt="${API.escapeHtml(c.author_name)}" class="comment-avatar">`
       : `<span class="comment-avatar-placeholder">${API.escapeHtml((c.author_name || 'P').charAt(0).toUpperCase())}</span>`;
+    const canMod = API.currentUser && API.currentUser.canManageEvents;
 
     return `
       <div class="comment-bubble" style="display: flex; gap: 12px; align-items: flex-start;">
@@ -196,7 +201,10 @@ function renderComments() {
               <span class="comment-author">${API.escapeHtml(c.author_name)}</span>
               ${c.bio ? `<span style="font-size: 0.75rem; color: var(--text-muted); font-style: italic; margin-left: 6px;">• ${API.escapeHtml(c.bio)}</span>` : ''}
             </div>
-            <span class="comment-time">${API.formatDateTime(c.created_at)}</span>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <span class="comment-time">${API.formatDateTime(c.created_at)}</span>
+              ${canMod ? `<button type="button" onclick="deleteDiscussionComment(${c.id})" title="Delete comment" style="background:none;border:none;cursor:pointer;font-size:0.85rem;color:var(--danger);padding:0 2px;">🗑️</button>` : ''}
+            </div>
           </div>
           <div class="comment-body">${API.escapeHtml(c.content)}</div>
         </div>
@@ -204,6 +212,30 @@ function renderComments() {
     `;
   }).join('');
 }
+
+window.deleteDiscussionComment = async function(commentId) {
+  if (!confirm('Delete this comment from the discussion board?')) return;
+  try {
+    const res = await fetch(`/api/events/${eventId}/comments/${commentId}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.error) alert(data.error);
+    else await loadEventData();
+  } catch (e) {
+    alert('Failed to delete comment.');
+  }
+};
+
+window.removeRosterAttendee = async function(attendeeId) {
+  if (!confirm('Remove this player from the game roster?')) return;
+  try {
+    const res = await fetch(`/api/events/${eventId}/attendees/${attendeeId}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.error) alert(data.error);
+    else await loadEventData();
+  } catch (e) {
+    alert('Failed to remove player.');
+  }
+};
 
 async function setupRsvpState() {
   const user = API.currentUser;

@@ -54,6 +54,8 @@ async function initAdmin() {
   }
 
   currentAdminUser = user;
+  const adminMain = document.getElementById('admin-main-container');
+  if (adminMain) adminMain.style.display = 'block';
   API.renderNav(user);
   applyRoleUI(user);
   setDefaultDateTime();

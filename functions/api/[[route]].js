@@ -86,6 +86,43 @@ function arrayBufferToBase64(buffer) {
   return btoa(binary);
 }
 
+function stripJpegMetadata(buffer) {
+  const bytes = new Uint8Array(buffer);
+  if (bytes.length < 4 || bytes[0] !== 0xFF || bytes[1] !== 0xD8) return buffer;
+  const chunks = [bytes.slice(0, 2)];
+  let pos = 2;
+  while (pos + 4 <= bytes.length) {
+    if (bytes[pos] !== 0xFF) {
+      chunks.push(bytes.slice(pos));
+      break;
+    }
+    const marker = bytes[pos + 1];
+    // SOS (Start of Scan) or EOI: copy the rest of the image data
+    if (marker === 0xDA || marker === 0xD9) {
+      chunks.push(bytes.slice(pos));
+      break;
+    }
+    const segLen = (bytes[pos + 2] << 8) | bytes[pos + 3];
+    if (segLen < 2 || pos + 2 + segLen > bytes.length) {
+      chunks.push(bytes.slice(pos));
+      break;
+    }
+    // Strip APP1..APP15 (0xE1..0xEF, which contain EXIF/GPS) and Comment (0xFE)
+    if (!((marker >= 0xE1 && marker <= 0xEF) || marker === 0xFE)) {
+      chunks.push(bytes.slice(pos, pos + 2 + segLen));
+    }
+    pos += 2 + segLen;
+  }
+  const totalLen = chunks.reduce((acc, c) => acc + c.length, 0);
+  const out = new Uint8Array(totalLen);
+  let offset = 0;
+  for (const c of chunks) {
+    out.set(c, offset);
+    offset += c.length;
+  }
+  return out.buffer;
+}
+
 function isValidRasterImageBuffer(buffer, mime) {
   const bytes = new Uint8Array(buffer);
   if (bytes.length < 12) return false;
@@ -426,6 +463,25 @@ async function getUserFromSession(db, sessionId) {
 }
 
 app.use('*', async (c, next) => {
+  // CSRF Origin verification on all state-changing requests (POST, PUT, DELETE)
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(c.req.method)) {
+    const reqOrigin = new URL(c.req.url).origin;
+    const originHeader = c.req.header('Origin');
+    const refererHeader = c.req.header('Referer');
+    if (originHeader && originHeader !== reqOrigin) {
+      return c.json({ error: 'Cross-origin request blocked (CSRF protection).' }, 403);
+    }
+    if (!originHeader && refererHeader) {
+      try {
+        if (new URL(refererHeader).origin !== reqOrigin) {
+          return c.json({ error: 'Cross-origin referer blocked (CSRF protection).' }, 403);
+        }
+      } catch (e) {
+        return c.json({ error: 'Invalid referer header.' }, 403);
+      }
+    }
+  }
+
   const sessionId = getCookie(c, SESSION_COOKIE_NAME);
   if (sessionId && c.env.DB) {
     try {
@@ -781,7 +837,8 @@ app.post('/auth/avatar', async (c) => {
       return c.json({ error: 'Invalid or corrupted image file content.' }, 400);
     }
 
-    const base64 = arrayBufferToBase64(buffer);
+    const cleanBuffer = mime === 'image/jpeg' ? stripJpegMetadata(buffer) : buffer;
+    const base64 = arrayBufferToBase64(cleanBuffer);
     const dataUrl = `data:${mime};base64,${base64}`;
 
     await c.env.DB.prepare('UPDATE users SET avatar_url = ? WHERE id = ?').bind(dataUrl, user.id).run();
@@ -907,12 +964,19 @@ app.delete('/auth/users/:id', async (c) => {
     ).bind(targetUser.email.toLowerCase(), reason).run();
   }
 
-  await c.env.DB.batch([
+  const cleanupBatch = [
     c.env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(targetId),
     c.env.DB.prepare('DELETE FROM auth_codes WHERE email = ?').bind(targetUser.email),
-    c.env.DB.prepare('UPDATE attendees SET user_id = NULL WHERE user_id = ?').bind(targetId),
+    ban
+      ? c.env.DB.prepare('DELETE FROM attendees WHERE user_id = ? OR email = ?').bind(targetId, targetUser.email)
+      : c.env.DB.prepare('UPDATE attendees SET user_id = NULL WHERE user_id = ?').bind(targetId),
+    ban
+      ? c.env.DB.prepare('DELETE FROM comments WHERE user_id = ? OR author_email = ?').bind(targetId, targetUser.email)
+      : c.env.DB.prepare('UPDATE comments SET user_id = NULL WHERE user_id = ?').bind(targetId),
     c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(targetId)
-  ]);
+  ];
+
+  await c.env.DB.batch(cleanupBatch);
 
   return c.json({
     success: true,
@@ -1624,6 +1688,46 @@ app.post('/events/:id/comments', async (c) => {
   } catch (err) {
     console.error('[Comments] Error posting comment:', err);
     return c.json({ error: 'Failed to post comment.' }, 500);
+  }
+});
+
+app.delete('/events/:id/comments/:commentId', async (c) => {
+  const user = c.get('user');
+  if (!user || !user.canManageEvents) {
+    return c.json({ error: 'Organizer or Admin permissions required.' }, 403);
+  }
+
+  try {
+    const eventId = parseInt(c.req.param('id'), 10);
+    const commentId = parseInt(c.req.param('commentId'), 10);
+    const res = await c.env.DB.prepare('DELETE FROM comments WHERE id = ? AND event_id = ?').bind(commentId, eventId).run();
+    if (res.meta.changes === 0) {
+      return c.json({ error: 'Comment not found.' }, 404);
+    }
+    return c.json({ success: true, message: 'Comment deleted.' });
+  } catch (err) {
+    console.error('[Comments] Error deleting comment:', err);
+    return c.json({ error: 'Failed to delete comment.' }, 500);
+  }
+});
+
+app.delete('/events/:id/attendees/:attendeeId', async (c) => {
+  const user = c.get('user');
+  if (!user || !user.canManageEvents) {
+    return c.json({ error: 'Organizer or Admin permissions required.' }, 403);
+  }
+
+  try {
+    const eventId = parseInt(c.req.param('id'), 10);
+    const attendeeId = parseInt(c.req.param('attendeeId'), 10);
+    await c.env.DB.batch([
+      c.env.DB.prepare('DELETE FROM duty_assignments WHERE attendee_id = ?').bind(attendeeId),
+      c.env.DB.prepare('DELETE FROM attendees WHERE id = ? AND event_id = ?').bind(attendeeId, eventId)
+    ]);
+    return c.json({ success: true, message: 'Player removed from roster.' });
+  } catch (err) {
+    console.error('[RSVP] Error removing attendee:', err);
+    return c.json({ error: 'Failed to remove attendee.' }, 500);
   }
 });
 
