@@ -577,4 +577,14 @@ function setupUserManagementScreen(currentUser) {
 
   loadSettings();
   loadBannedEmails();
+
+  // If page was loaded with an anchor hash (e.g. #security-management-section), scroll to it once mounted
+  if (window.location.hash) {
+    setTimeout(() => {
+      try {
+        const targetEl = document.querySelector(window.location.hash);
+        if (targetEl) targetEl.scrollIntoView({ behavior: 'smooth' });
+      } catch (e) {}
+    }, 100);
+  }
 }

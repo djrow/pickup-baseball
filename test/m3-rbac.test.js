@@ -95,7 +95,7 @@ test('M3-UI: 2. public/js/admin.js implements Organizer vs Admin UI filtering', 
 
 test('M3-UI: 3. Self-demotion gracefulness in public/js/admin.js & public/login.html', () => {
   const adminJs = loadFile('public/js/admin.js');
-  const loginHtml = loadFile('public/login.html');
+  const loginHtml = loadFile('public/login.html') + loadFile('public/js/account-dashboard.js');
 
   // Check admin.js self-demotion detection
   assert.ok(

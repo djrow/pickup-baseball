@@ -60,7 +60,9 @@ test('Area 1: Interactive Elements Catalog & HTML Structure Verification', async
 
   for (const [viewName, def] of Object.entries(views)) {
     await t.test(`Catalog verify for ${viewName}`, () => {
-      const content = loadFile(def.file);
+      let content = loadFile(def.file);
+      if (def.file === 'public/login.html') content += loadFile('public/js/account-dashboard.js');
+      if (def.file === 'public/event.html') content += loadFile('public/js/event.js');
       assert.ok(content.length > 0, `${viewName} must not be empty`);
 
       // Verify all buttons exist
@@ -229,7 +231,7 @@ test('Area 3: Query Parameter & Redirection Contract (event.html?id=...)', async
   });
 
   await t.test('All event creator redirections target /event.html?id=<id>', () => {
-    const loginHtml = loadFile('public/login.html');
+    const loginHtml = loadFile('public/login.html') + loadFile('public/js/account-dashboard.js');
     const adminJs = loadFile('public/js/admin.js');
     const appJs = loadFile('public/js/app.js');
 
@@ -817,7 +819,7 @@ test('Area 6: Role-Based UI Display & Navigation Conformance', async (t) => {
   await t.test('api.js renderNav renders Admin vs Org Panel button based on role', () => {
     const apiJs = loadFile('public/js/api.js');
     assert.ok(
-      apiJs.includes("user.isAdmin ? '⚙️ Admin' : '⚾ Org Panel'"),
+      apiJs.includes("user.isAdmin ? '⚙️ Admin' : '⚾ Org Panel'") || apiJs.includes("user.isAdmin ? this.t('nav.admin') : this.t('nav.org')"),
       'renderNav must distinguish Admin and Org Panel links'
     );
     assert.ok(

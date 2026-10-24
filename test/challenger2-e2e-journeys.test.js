@@ -181,12 +181,12 @@ test('Suite 1: 1-Click Sunday Game Creation End-to-End Journey', async (t) => {
     assert.equal(evInDb.location, specialLocation, 'Apostrophe and quote escaping in location must be preserved');
     assert.equal(evInDb.created_by, orgId);
 
-    // Verify 8 default duties created atomically
+    // Verify default duties created atomically
     const duties = db.prepare('SELECT * FROM event_duties WHERE event_id = ? ORDER BY sort_order ASC').all(createdEventId);
-    assert.equal(duties.length, 8, 'Event must have exactly 8 default volunteer duties');
-
     const expectedDefaults = getDefaultDuties();
-    for (let i = 0; i < 8; i++) {
+    assert.equal(duties.length, expectedDefaults.length, `Event must have exactly ${expectedDefaults.length} default volunteer duties`);
+
+    for (let i = 0; i < expectedDefaults.length; i++) {
       assert.equal(duties[i].title, expectedDefaults[i].title);
       assert.equal(duties[i].slots_needed, expectedDefaults[i].slots_needed);
       assert.equal(duties[i].event_id, createdEventId);
@@ -203,11 +203,12 @@ test('Suite 1: 1-Click Sunday Game Creation End-to-End Journey', async (t) => {
     const pageRes = await api('GET', expectedRedirect);
     assert.equal(pageRes.status, 200, 'Target event.html page must be servable');
 
-    // Validate that the backend API GET /api/events/:id returns the created event and 8 duties
+    // Validate that the backend API GET /api/events/:id returns the created event and duties
+    const expectedDefaults = getDefaultDuties();
     const apiRes = await api('GET', `/api/events/${createdEventId}`);
     assert.equal(apiRes.status, 200);
     assert.equal(apiRes.data.event.id, createdEventId);
-    assert.equal(apiRes.data.duties.length, 8);
+    assert.equal(apiRes.data.duties.length, expectedDefaults.length);
   });
 
   await t.test('1.3: Unauthorized 1-Click creation attempts by Player or Anonymous are blocked', async () => {

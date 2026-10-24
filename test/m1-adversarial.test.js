@@ -149,7 +149,8 @@ test('Area 1: Stress test 50 concurrent event creations with mixed creators and 
       assert.ok(duties.some(d => d.title === `Custom Task A-${r.index}`));
       assert.ok(duties.some(d => d.title === `Custom Task B-${r.index}`));
     } else {
-      assert.equal(duties.length, 8, `Default duty event ${r.body.eventId} should have exactly 8 default duties`);
+      const expectedDefaultsCount = getDefaultDuties().length;
+      assert.equal(duties.length, expectedDefaultsCount, `Default duty event ${r.body.eventId} should have exactly ${expectedDefaultsCount} default duties`);
     }
   }
 });

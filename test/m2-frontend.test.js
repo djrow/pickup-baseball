@@ -59,7 +59,7 @@ test('M2: 2. public/js/app.js Repair Verification', (t) => {
 });
 
 test('M2: 3. public/login.html 1-Click and Custom Game Handlers', (t) => {
-  const loginHtml = loadFile('public/login.html');
+  const loginHtml = loadFile('public/login.html') + loadFile('public/js/account-dashboard.js');
 
   // Verify required element IDs exist
   const requiredIds = [
@@ -133,7 +133,7 @@ test('M2: 4. public/js/admin.js Redirection, Exception Safety & Apostrophe Bug',
   const createFormSection = adminJs.slice(createFormIdx, loadAdminGamesIdx);
 
   const tryIdx = createFormSection.indexOf('try {');
-  const dateParseIdx = createFormSection.indexOf('new Date(');
+  const dateParseIdx = createFormSection.indexOf('localToPacificIso') !== -1 ? createFormSection.indexOf('localToPacificIso') : createFormSection.indexOf('new Date(');
   const finallyIdx = createFormSection.indexOf('finally {');
   assert.ok(tryIdx !== -1, 'setupCreateForm must have try block');
   assert.ok(dateParseIdx !== -1, 'setupCreateForm must parse date');
@@ -206,7 +206,10 @@ test('M2: 6. Comprehensive Interactive Controls Audit Across Views', (t) => {
   ];
 
   for (const view of views) {
-    const content = loadFile(path.join('public', view.name));
+    let content = loadFile(path.join('public', view.name));
+    if (view.name === 'login.html') {
+      content += loadFile('public/js/account-dashboard.js');
+    }
     assert.ok(content.includes('<!DOCTYPE html>'), `${view.name} must have DOCTYPE`);
     assert.ok(content.includes('</html>'), `${view.name} must have closing html tag`);
 

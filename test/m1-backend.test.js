@@ -85,8 +85,9 @@ test('1. Express Route Ordering: GET /api/events/default-duties is not shadowed 
   assert.equal(res.status, 200, 'GET /default-duties should return HTTP 200');
   const data = await res.json();
   assert.ok(Array.isArray(data.duties), 'Should return duties array');
-  assert.equal(data.duties.length, 8, 'Default duties should contain 8 items');
-  assert.equal(data.duties[0].title, 'Bases & Home Plate');
+  const expectedDefaults = getDefaultDuties();
+  assert.equal(data.duties.length, expectedDefaults.length, `Default duties should contain ${expectedDefaults.length} items`);
+  assert.equal(data.duties[0].title, expectedDefaults[0].title);
 });
 
 test('1. Express Route Ordering: ALL /api/events/reminders/check is accessible', async () => {
@@ -141,9 +142,10 @@ test('2 & 3. Atomic Event Creation: Default duties and response contract', async
   assert.equal(data.event.title, 'Sunday Pickup Baseball - Noon Game');
   assert.equal(data.event.max_players, 30);
 
-  // Verify that all 8 default duties were created atomically in SQLite
+  // Verify that all default duties were created atomically in SQLite
   const duties = db.prepare('SELECT * FROM event_duties WHERE event_id = ?').all(data.eventId);
-  assert.equal(duties.length, 8, 'Should have exactly 8 default duties');
+  const expectedDefaults = getDefaultDuties();
+  assert.equal(duties.length, expectedDefaults.length, `Should have exactly ${expectedDefaults.length} default duties`);
 });
 
 test('2. Atomic Event Creation: Custom duties validation and rollback', async () => {

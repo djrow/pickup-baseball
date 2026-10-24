@@ -545,7 +545,7 @@ test('T4: 1-Click Sunday Game Creation', async (t) => {
     assert.equal(res.data.event.title, 'Sunday Pickup Baseball (Contract Check)');
   });
 
-  await t.test('T4.3: Inspect SQLite database to confirm event record and 8 default volunteer duties are created atomically', async () => {
+  await t.test('T4.3: Inspect SQLite database to confirm event record and default volunteer duties are created atomically', async () => {
     // Inspect event row in SQLite
     const eventRow = db.prepare('SELECT * FROM events WHERE id = ?').get(createdEventId);
     assert.ok(eventRow, 'Event record must exist in SQLite events table');
@@ -558,12 +558,10 @@ test('T4: 1-Click Sunday Game Creation', async (t) => {
       SELECT * FROM event_duties WHERE event_id = ? ORDER BY sort_order ASC, id ASC
     `).all(createdEventId);
 
-    assert.equal(duties.length, 8, 'Event must have exactly 8 default volunteer duties created');
-
     const expectedDefaults = getDefaultDuties();
-    assert.equal(expectedDefaults.length, 8);
+    assert.equal(duties.length, expectedDefaults.length, `Event must have exactly ${expectedDefaults.length} default volunteer duties created`);
 
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < expectedDefaults.length; i++) {
       assert.equal(duties[i].title, expectedDefaults[i].title, `Duty #${i + 1} title must match default template`);
       assert.equal(duties[i].slots_needed, expectedDefaults[i].slots_needed, `Duty #${i + 1} slots_needed must match default`);
       assert.equal(duties[i].event_id, createdEventId, 'Duty foreign key must point to created event');

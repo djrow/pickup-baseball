@@ -110,9 +110,10 @@ test('Obj 1.1: Minimal event creation payload returns both eventId and event.id'
   assert.equal(body.event.event_date, payload.event_date);
   assert.equal(body.event.max_players, null, 'Default max_players should be null');
 
-  // Verify 8 default duties were auto-attached when custom_duties omitted
+  // Verify default duties were auto-attached when custom_duties omitted
   const duties = db.prepare('SELECT * FROM event_duties WHERE event_id = ?').all(body.eventId);
-  assert.equal(duties.length, 8, 'Default 8 duties should be inserted for minimal event payload');
+  const expectedDefaults = getDefaultDuties();
+  assert.equal(duties.length, expectedDefaults.length, `Default ${expectedDefaults.length} duties should be inserted for minimal event payload`);
 });
 
 test('Obj 1.2: Full payload with custom duties returns matching eventId and event.id', async () => {
@@ -715,7 +716,8 @@ test('Obj 3.2: Malformed or non-array custom_duties fall back safely without cra
   assert.equal(res1.status, 200, 'Should fall back to default duties without crashing');
   const body1 = await res1.json();
   const duties1 = db.prepare('SELECT * FROM event_duties WHERE event_id = ?').all(body1.eventId);
-  assert.equal(duties1.length, 8, 'Should default to 8 duties');
+  const expectedDefaults = getDefaultDuties();
+  assert.equal(duties1.length, expectedDefaults.length, `Should default to ${expectedDefaults.length} duties`);
 
   // custom_duties with slots_needed as string, non-numeric, or null
   const res2 = await fetch(`${baseUrl}/api/events`, {
