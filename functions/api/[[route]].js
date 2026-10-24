@@ -463,9 +463,19 @@ async function getUserFromSession(db, sessionId) {
 }
 
 app.use('*', async (c, next) => {
+  const reqUrl = new URL(c.req.url);
+
+  // Block direct API access via *.pages.dev so all traffic must pass through the custom domain WAF
+  if (reqUrl.hostname.endsWith('.pages.dev')) {
+    if (c.req.method === 'GET' || c.req.method === 'HEAD') {
+      return c.redirect(`https://www.pickupbaseballfoundation.org${reqUrl.pathname}${reqUrl.search}`, 301);
+    }
+    return c.json({ error: 'Direct origin/preview API access is disabled. Please use www.pickupbaseballfoundation.org.' }, 403);
+  }
+
   // CSRF Origin verification on all state-changing requests (POST, PUT, DELETE)
   if (!['GET', 'HEAD', 'OPTIONS'].includes(c.req.method)) {
-    const reqOrigin = new URL(c.req.url).origin;
+    const reqOrigin = reqUrl.origin;
     const originHeader = c.req.header('Origin');
     const refererHeader = c.req.header('Referer');
     if (originHeader && originHeader !== reqOrigin) {
