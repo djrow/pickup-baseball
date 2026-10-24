@@ -47,7 +47,11 @@ window.initAuthenticatedDashboard = function(user) {
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-bottom: 14px;">
               <div class="form-group" style="margin-bottom: 0;">
                 <label for="event-location-input">Field Location *</label>
-                <input type="text" id="event-location-input" placeholder="e.g. Memorial Park - Diamond #2" required>
+                <input type="text" id="event-location-input" value="Bushrod Park Field 1" list="common-locations-list" placeholder="e.g. Bushrod Park Field 1" required>
+                <datalist id="common-locations-list">
+                  <option value="Bushrod Park Field 1">
+                  <option value="Bushrod Park Field 2">
+                </datalist>
               </div>
               <div class="form-group" style="margin-bottom: 0;">
                 <label for="event-map-input">Map / GPS Link (Optional)</label>

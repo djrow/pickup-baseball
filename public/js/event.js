@@ -50,10 +50,17 @@ function applyLoadedEventToDom(res) {
   document.getElementById('event-container').style.display = 'block';
 
   const adminContainer = document.getElementById('admin-actions-container');
-  if (API.currentUser && API.currentUser.isAdmin) {
-    adminContainer.style.display = 'block';
-    const sendRemindersBtn = document.getElementById('send-reminders-btn');
-    sendRemindersBtn.onclick = handleSendReminders;
+  const sendRemindersBtn = document.getElementById('send-reminders-btn');
+  const editEventBtn = document.getElementById('edit-event-btn');
+  if (API.currentUser && (API.currentUser.canManageEvents || API.currentUser.isAdmin)) {
+    adminContainer.style.display = 'flex';
+    if (editEventBtn) {
+      editEventBtn.onclick = toggleEditEventPanel;
+    }
+    if (sendRemindersBtn) {
+      sendRemindersBtn.style.display = API.currentUser.isAdmin ? 'inline-flex' : 'none';
+      sendRemindersBtn.onclick = handleSendReminders;
+    }
   } else if (adminContainer) {
     adminContainer.style.display = 'none';
   }
@@ -508,6 +515,66 @@ async function handleSendReminders() {
     alert(data.message || data.error);
   } catch (err) {
     alert('Failed to send reminders.');
+  }
+}
+
+function toggleEditEventPanel() {
+  const panel = document.getElementById('edit-event-panel');
+  if (!panel || !eventData || !eventData.event) return;
+  const isOpen = panel.style.display === 'block';
+  if (isOpen) {
+    panel.style.display = 'none';
+    return;
+  }
+  const ev = eventData.event;
+  document.getElementById('edit-event-title').value = ev.title || '';
+  document.getElementById('edit-event-date').value = API.isoToPacificLocalInput(ev.event_date);
+  document.getElementById('edit-event-location').value = ev.location || '';
+  document.getElementById('edit-event-map').value = ev.location_url || '';
+  document.getElementById('edit-event-desc').value = ev.description || '';
+  document.getElementById('edit-event-alert').innerHTML = '';
+  panel.style.display = 'block';
+
+  const cancelBtn = document.getElementById('cancel-edit-event-btn');
+  if (cancelBtn) {
+    cancelBtn.onclick = () => { panel.style.display = 'none'; };
+  }
+
+  const form = document.getElementById('edit-event-form');
+  if (form && !form.dataset.bound) {
+    form.dataset.bound = '1';
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const saveBtn = document.getElementById('save-edit-event-btn');
+      const alertBox = document.getElementById('edit-event-alert');
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Saving...';
+      alertBox.innerHTML = '';
+
+      try {
+        const rawDate = document.getElementById('edit-event-date').value;
+        const payload = {
+          title: document.getElementById('edit-event-title').value.trim(),
+          event_date: API.localToPacificIso(rawDate),
+          location: document.getElementById('edit-event-location').value.trim(),
+          location_url: document.getElementById('edit-event-map').value.trim(),
+          description: document.getElementById('edit-event-desc').value.trim()
+        };
+
+        const res = await API.updateEvent(eventId, payload);
+        if (res.error) {
+          alertBox.innerHTML = `<div class="alert alert-error">${API.escapeHtml(res.error)}</div>`;
+        } else {
+          panel.style.display = 'none';
+          await loadEventData();
+        }
+      } catch (err) {
+        alertBox.innerHTML = `<div class="alert alert-error">Failed to save changes.</div>`;
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = '💾 Save Changes';
+      }
+    });
   }
 }
 

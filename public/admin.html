@@ -15,7 +15,7 @@
       <div class="nav-wrap">
         <a href="/index.html" class="brand">
           <img src="/logo.svg" alt="Pickup Baseball Foundation Logo" class="brand-logo">
-          <span class="brand-text">Pickup Baseball Foundation</span>
+          <span class="brand-text"><span class="brand-line">Pickup Baseball</span> <span class="brand-line">Foundation</span></span>
           <span class="brand-short">PBF</span>
           <span class="brand-tag">Community</span>
         </a>
@@ -71,7 +71,11 @@
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
           <div class="form-group">
             <label for="event-location-input">Field Location *</label>
-            <input type="text" id="event-location-input" placeholder="e.g. Memorial Park - Diamond #2" required>
+            <input type="text" id="event-location-input" value="Bushrod Park Field 1" list="common-locations-list" placeholder="e.g. Bushrod Park Field 1" required>
+            <datalist id="common-locations-list">
+              <option value="Bushrod Park Field 1">
+              <option value="Bushrod Park Field 2">
+            </datalist>
           </div>
 
           <div class="form-group">

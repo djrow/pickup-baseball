@@ -1154,6 +1154,13 @@ app.get('/events', async (c) => {
     const stmt = c.env.DB.prepare(query);
     const { results: events } = params.length > 0 ? await stmt.bind(...params).all() : await stmt.all();
 
+    if (events && events.some(ev => ev.location === 'Bushrod Part Field 1')) {
+      await c.env.DB.prepare("UPDATE events SET location = 'Bushrod Park Field 1' WHERE location = 'Bushrod Part Field 1'").run();
+      events.forEach(ev => {
+        if (ev.location === 'Bushrod Part Field 1') ev.location = 'Bushrod Park Field 1';
+      });
+    }
+
     if (user && events && events.length > 0) {
       const { results: userRsvps } = await c.env.DB.prepare(`
         SELECT event_id, status, gear_bringing

@@ -128,7 +128,12 @@ const API = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    return res.json();
+    const data = await res.json();
+    try {
+      localStorage.removeItem(`pickup_cached_event_${id}`);
+      localStorage.removeItem('pickup_cached_events_upcoming');
+    } catch (e) {}
+    return data;
   },
 
   async postComment(id, payload) {
@@ -137,7 +142,11 @@ const API = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    return res.json();
+    const data = await res.json();
+    try {
+      localStorage.removeItem(`pickup_cached_event_${id}`);
+    } catch (e) {}
+    return data;
   },
 
   async sendLoginCode(email, name = '') {
@@ -190,7 +199,30 @@ const API = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    return res.json();
+    const data = await res.json();
+    try {
+      localStorage.removeItem('pickup_cached_events_upcoming');
+      localStorage.removeItem('pickup_cached_events_all');
+    } catch (e) {}
+    return data;
+  },
+
+  async updateEvent(id, payload) {
+    const res = await fetch(`/api/events/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (data && data.success) {
+      try {
+        localStorage.removeItem(`pickup_cached_event_${id}`);
+        localStorage.removeItem('pickup_cached_events_upcoming');
+        localStorage.removeItem('pickup_cached_events_past');
+        localStorage.removeItem('pickup_cached_events_all');
+      } catch (e) {}
+    }
+    return data;
   },
 
   async getUsers() {
@@ -273,6 +305,23 @@ const API = {
       timeZone: 'America/Los_Angeles',
       timeZoneName: 'short'
     });
+  },
+
+  isoToPacificLocalInput(isoString) {
+    if (!isoString) return '';
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return '';
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Los_Angeles',
+      hourCycle: 'h23',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).formatToParts(d);
+    const get = (t) => (parts.find(p => p.type === t) || {}).value || '00';
+    return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}`;
   },
 
   localToPacificIso(dateString, timeString = '12:00') {

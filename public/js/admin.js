@@ -11,8 +11,10 @@ let builderDuties = [];
 // Duties in the "Organization Default Tasks Template" editor
 let templateDuties = [];
 
-// Currently expanded event task manager
+// Currently expanded event task manager or game details editor
 let openTaskManagerEventId = null;
+let openEditGameEventId = null;
+let loadedAdminEventsMap = new Map();
 
 // Currently logged-in admin/organizer user
 let currentAdminUser = null;
@@ -448,6 +450,7 @@ function setupCreateForm() {
         showAlert(`Game "${title}" published with ${builderDuties.length} volunteer tasks! Redirecting...`, false);
         form.reset();
         document.getElementById('event-title-input').value = 'Sunday Pickup Baseball';
+        document.getElementById('event-location-input').value = 'Bushrod Park Field 1';
         builderDuties = JSON.parse(JSON.stringify(orgDefaultDuties));
         renderTaskBuilder();
         setDefaultDateTime();
@@ -476,6 +479,19 @@ async function loadAdminGames() {
   try {
     const data = await API.getEvents('all');
     const events = data.events || [];
+    loadedAdminEventsMap = new Map(events.map(ev => [ev.id, ev]));
+
+    // Populate common-locations-list datalist with unique clean locations from existing games
+    const datalist = document.getElementById('common-locations-list');
+    if (datalist) {
+      const locSet = new Set(['Bushrod Park Field 1', 'Bushrod Park Field 2']);
+      events.forEach(ev => {
+        if (ev.location && ev.location.trim()) locSet.add(ev.location.trim());
+      });
+      datalist.innerHTML = Array.from(locSet)
+        .map(loc => `<option value="${API.escapeHtml(loc)}">`)
+        .join('');
+    }
 
     if (events.length === 0) {
       container.innerHTML = '<p style="color: var(--text-muted);">No games created yet.</p>';
@@ -500,6 +516,9 @@ async function loadAdminGames() {
               </div>
 
               <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                <button onclick="toggleEditGamePanel(${ev.id})" class="btn btn-outline btn-sm">
+                  ✏️ Edit Details
+                </button>
                 <button onclick="toggleTaskManager(${ev.id})" class="btn btn-primary btn-sm">
                   🛡️ Manage Tasks (${ev.duty_count})
                 </button>
@@ -514,6 +533,42 @@ async function loadAdminGames() {
                     Delete
                   </button>
                 ` : ''}
+              </div>
+            </div>
+
+            <!-- Inline Game Details Edit Panel -->
+            <div id="edit-game-panel-${ev.id}" style="display: ${openEditGameEventId === ev.id ? 'block' : 'none'}; margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--border);">
+              <div id="edit-game-alert-${ev.id}"></div>
+              <div style="background: var(--bg-subtle); padding: 16px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+                <h4 style="color: var(--secondary); font-size: 1rem; margin: 0 0 12px 0;">✏️ Edit Game Details</h4>
+                <div class="grid-2">
+                  <div class="form-group">
+                    <label>Game Title *</label>
+                    <input type="text" id="edit-title-${ev.id}" value="${API.escapeHtml(ev.title || '')}" required>
+                  </div>
+                  <div class="form-group">
+                    <label>Date &amp; Time (Pacific) *</label>
+                    <input type="datetime-local" id="edit-date-${ev.id}" value="${API.escapeHtml(API.isoToPacificLocalInput(ev.event_date))}" required>
+                  </div>
+                </div>
+                <div class="grid-2">
+                  <div class="form-group">
+                    <label>Field Location *</label>
+                    <input type="text" id="edit-location-${ev.id}" value="${API.escapeHtml(ev.location || '')}" list="common-locations-list" required>
+                  </div>
+                  <div class="form-group">
+                    <label>Map / Directions Link (Optional)</label>
+                    <input type="text" id="edit-map-${ev.id}" value="${API.escapeHtml(ev.location_url || '')}" placeholder="https://maps.google.com/?q=...">
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label>Game Details &amp; Announcements</label>
+                  <textarea id="edit-desc-${ev.id}" rows="2">${API.escapeHtml(ev.description || '')}</textarea>
+                </div>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                  <button type="button" id="save-game-btn-${ev.id}" onclick="saveEditedGame(${ev.id})" class="btn btn-primary btn-sm">💾 Save Changes</button>
+                  <button type="button" onclick="toggleEditGamePanel(${ev.id})" class="btn btn-outline btn-sm">Cancel</button>
+                </div>
               </div>
             </div>
 
@@ -533,6 +588,64 @@ async function loadAdminGames() {
     container.innerHTML = '<div class="alert alert-error">Unable to load games.</div>';
   }
 }
+
+window.toggleEditGamePanel = function(eventId) {
+  const panel = document.getElementById(`edit-game-panel-${eventId}`);
+  if (!panel) return;
+  if (openEditGameEventId === eventId) {
+    openEditGameEventId = null;
+    panel.style.display = 'none';
+  } else {
+    if (openEditGameEventId) {
+      const prev = document.getElementById(`edit-game-panel-${openEditGameEventId}`);
+      if (prev) prev.style.display = 'none';
+    }
+    openEditGameEventId = eventId;
+    panel.style.display = 'block';
+  }
+};
+
+window.saveEditedGame = async function(eventId) {
+  const saveBtn = document.getElementById(`save-game-btn-${eventId}`);
+  const alertBox = document.getElementById(`edit-game-alert-${eventId}`);
+  const title = document.getElementById(`edit-title-${eventId}`).value.trim();
+  const rawDate = document.getElementById(`edit-date-${eventId}`).value;
+  const location = document.getElementById(`edit-location-${eventId}`).value.trim();
+  const locationUrl = document.getElementById(`edit-map-${eventId}`).value.trim();
+  const description = document.getElementById(`edit-desc-${eventId}`).value.trim();
+
+  if (!title || !rawDate || !location) {
+    alertBox.innerHTML = '<div class="alert alert-error">Title, Date/Time, and Field Location are required.</div>';
+    return;
+  }
+
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving...';
+  alertBox.innerHTML = '';
+
+  try {
+    const res = await API.updateEvent(eventId, {
+      title,
+      event_date: API.localToPacificIso(rawDate),
+      location,
+      location_url: locationUrl,
+      description
+    });
+    if (res.error) {
+      alertBox.innerHTML = `<div class="alert alert-error">${API.escapeHtml(res.error)}</div>`;
+      saveBtn.disabled = false;
+      saveBtn.textContent = '💾 Save Changes';
+    } else {
+      openEditGameEventId = null;
+      showAlert(`Updated game details for "${title}".`, false);
+      await loadAdminGames();
+    }
+  } catch (err) {
+    alertBox.innerHTML = '<div class="alert alert-error">Failed to update game details.</div>';
+    saveBtn.disabled = false;
+    saveBtn.textContent = '💾 Save Changes';
+  }
+};
 
 window.toggleTaskManager = async function(eventId) {
   const panel = document.getElementById(`task-manager-panel-${eventId}`);
