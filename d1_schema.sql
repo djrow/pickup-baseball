@@ -47,6 +47,9 @@ CREATE TABLE IF NOT EXISTS events (
   status TEXT DEFAULT 'active',
   created_by INTEGER REFERENCES users(id),
   reminder_sent INTEGER DEFAULT 0,
+  rainout_note TEXT,
+  rainout_at DATETIME,
+  rainout_email_sent INTEGER DEFAULT 0,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 

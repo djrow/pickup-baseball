@@ -126,6 +126,18 @@ function initDatabase() {
     db.exec("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'player'");
   }
 
+  // Migrate events table columns for rainout handling
+  const eventCols = db.pragma('table_info(events)').map(c => c.name);
+  if (!eventCols.includes('rainout_note')) {
+    db.exec('ALTER TABLE events ADD COLUMN rainout_note TEXT');
+  }
+  if (!eventCols.includes('rainout_at')) {
+    db.exec('ALTER TABLE events ADD COLUMN rainout_at DATETIME');
+  }
+  if (!eventCols.includes('rainout_email_sent')) {
+    db.exec('ALTER TABLE events ADD COLUMN rainout_email_sent INTEGER DEFAULT 0');
+  }
+
   // Ensure role synchronization
   db.exec("UPDATE users SET role = 'admin' WHERE is_admin = 1 AND (role IS NULL OR role = 'player')");
   db.exec("UPDATE users SET is_admin = 1 WHERE role = 'admin'");

@@ -1,10 +1,4 @@
-const fs = require('fs');
-const path = require('path');
-
-const targetPath = path.join(__dirname, '..', 'functions', 'api', '[[route]].js');
-fs.mkdirSync(path.dirname(targetPath), { recursive: true });
-
-const code = `import { Hono } from 'hono';
+import { Hono } from 'hono';
 import { handle } from 'hono/cloudflare-pages';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 
@@ -76,7 +70,7 @@ function getSafeRelativeRedirect(redirectParam) {
       return parsed.pathname + parsed.search + parsed.hash;
     }
   } catch (e) {}
-  if (trimmed.startsWith('/') && !trimmed.startsWith('//') && !trimmed.startsWith('/\\\\')) {
+  if (trimmed.startsWith('/') && !trimmed.startsWith('//') && !trimmed.startsWith('/\\')) {
     return trimmed;
   }
   return '/index.html?logged_in=1';
@@ -217,7 +211,7 @@ async function verifyTurnstileIfConfigured(env, token, remoteip) {
 
 async function dispatchEmail(env, { to, subject, text, html }) {
   const appName = env.APP_NAME || 'Sunday Pickup Baseball';
-  const from = env.FROM_EMAIL || \`"\${appName}" <games@pickupbaseballfoundation.org>\`;
+  const from = env.FROM_EMAIL || `"${appName}" <games@pickupbaseballfoundation.org>`;
   const replyTo = env.REPLY_TO_EMAIL || 'pickupbaseballfoundation@gmail.com';
   const apiKey = env.RESEND_API_KEY;
 
@@ -226,7 +220,7 @@ async function dispatchEmail(env, { to, subject, text, html }) {
       const response = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
-          'Authorization': \`Bearer \${apiKey.trim()}\`,
+          'Authorization': `Bearer ${apiKey.trim()}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
@@ -241,7 +235,7 @@ async function dispatchEmail(env, { to, subject, text, html }) {
 
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.message || \`Resend API error (\${response.status})\`);
+        throw new Error(data.message || `Resend API error (${response.status})`);
       }
       return { messageId: data.id };
     } catch (err) {
@@ -250,55 +244,55 @@ async function dispatchEmail(env, { to, subject, text, html }) {
     }
   }
 
-  console.log('\\n[Email Dispatch (No Key)] To: ' + to + ' | Subject: ' + subject);
+  console.log('\n[Email Dispatch (No Key)] To: ' + to + ' | Subject: ' + subject);
   return { messageId: 'mock-' + Date.now() };
 }
 
 async function sendAuthCode(env, origin, { email, name, code, token }) {
   const appName = env.APP_NAME || 'Sunday Pickup Baseball';
-  const magicLink = \`\${origin}/api/auth/verify-magic?token=\${encodeURIComponent(token)}\`;
-  const subject = \`Your Sign-In Code for \${appName}: \${code}\`;
+  const magicLink = `${origin}/api/auth/verify-magic?token=${encodeURIComponent(token)}`;
+  const subject = `Your Sign-In Code for ${appName}: ${code}`;
   const safeName = escapeHtml(name || 'there');
   const safeAppName = escapeHtml(appName);
   const safeCode = escapeHtml(code);
 
-  const text = \`Hi \${name || 'there'},
+  const text = `Hi ${name || 'there'},
 
-Welcome to \${appName}!
+Welcome to ${appName}!
 
-Your 6-digit sign-in code is: \${code}
+Your 6-digit sign-in code is: ${code}
 
 Or click the link below to sign in automatically:
-\${magicLink}
+${magicLink}
 
 This code and link will expire in 10 minutes.
 
 Play ball!
-- \${appName} Team\`;
+- ${appName} Team`;
 
-  const html = \`
+  const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 26px; border: 1px solid #dbe4e0; border-top: 5px solid #003831; border-radius: 8px; background: #ffffff;">
-      <h2 style="color: #003831; margin-top: 0; font-size: 22px;"><img src="\${origin}/logo.svg" alt="" style="width: 30px; height: 30px; vertical-align: middle; margin-right: 6px;">\${safeAppName}</h2>
-      <p style="color: #0c1f1a; font-size: 16px;">Hi <strong>\${safeName}</strong>,</p>
+      <h2 style="color: #003831; margin-top: 0; font-size: 22px;"><img src="${origin}/logo.svg" alt="" style="width: 30px; height: 30px; vertical-align: middle; margin-right: 6px;">${safeAppName}</h2>
+      <p style="color: #0c1f1a; font-size: 16px;">Hi <strong>${safeName}</strong>,</p>
       <p style="color: #546e66; font-size: 15px;">Use the code below to sign in to your account:</p>
       <div style="background: #f5f8f7; border: 1px solid #dbe4e0; padding: 18px; border-radius: 8px; text-align: center; margin: 24px 0;">
-        <span style="font-size: 34px; font-weight: 800; letter-spacing: 6px; color: #003831;">\${safeCode}</span>
+        <span style="font-size: 34px; font-weight: 800; letter-spacing: 6px; color: #003831;">${safeCode}</span>
       </div>
       <p style="text-align: center; margin: 26px 0;">
-        <a href="\${magicLink}" style="background: #FD5A1E; color: #ffffff; padding: 13px 26px; border-radius: 6px; text-decoration: none; font-weight: 700; font-size: 15px; display: inline-block;">
+        <a href="${magicLink}" style="background: #FD5A1E; color: #ffffff; padding: 13px 26px; border-radius: 6px; text-decoration: none; font-weight: 700; font-size: 15px; display: inline-block;">
           Or Click to Sign In Instantly →
         </a>
       </p>
       <p style="color: #546e66; font-size: 13px; margin-top: 32px; border-top: 1px solid #dbe4e0; padding-top: 14px;">This code expires in 10 minutes and is invalidated after 5 failed attempts. If you did not request this, you can safely ignore this email.</p>
     </div>
-  \`;
+  `;
 
   return dispatchEmail(env, { to: email, subject, text, html });
 }
 
 async function sendRsvpConfirmation(env, origin, { email, name, event, dutyName, gearBringing, managementToken }) {
   const appName = env.APP_NAME || 'Sunday Pickup Baseball';
-  const manageLink = \`\${origin}/event.html?id=\${event.id}&token=\${encodeURIComponent(managementToken || '')}\`;
+  const manageLink = `${origin}/event.html?id=${event.id}&token=${encodeURIComponent(managementToken || '')}`;
   const eventDateFormatted = new Date(event.event_date).toLocaleString('en-US', {
     weekday: 'long',
     month: 'long',
@@ -317,38 +311,38 @@ async function sendRsvpConfirmation(env, origin, { email, name, event, dutyName,
   const safeDutyName = escapeHtml(dutyName);
   const safeGear = escapeHtml(gearBringing);
 
-  const subject = \`Confirmed: You're playing in \${event.title} (\${eventDateFormatted})\`;
-  const text = \`Hi \${name},
+  const subject = `Confirmed: You're playing in ${event.title} (${eventDateFormatted})`;
+  const text = `Hi ${name},
 
 You're confirmed for pickup baseball!
 
-Event: \${event.title}
-Date & Time: \${eventDateFormatted}
-Location: \${event.location}
-\${dutyName ? \`Duty Signed Up For: \${dutyName}\\n\` : ''}\${gearBringing ? \`Gear You're Bringing: \${gearBringing}\\n\` : ''}
+Event: ${event.title}
+Date & Time: ${eventDateFormatted}
+Location: ${event.location}
+${dutyName ? `Duty Signed Up For: ${dutyName}\n` : ''}${gearBringing ? `Gear You're Bringing: ${gearBringing}\n` : ''}
 Need to coordinate gear, check who else is coming, or change your RSVP?
 Visit the event page here:
-\${manageLink}
+${manageLink}
 
 See you on the field!
-- \${appName}\`;
+- ${appName}`;
 
-  const html = \`
+  const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 26px; border: 1px solid #dbe4e0; border-top: 5px solid #FD5A1E; border-radius: 8px; background: #ffffff;">
-      <h2 style="color: #003831; margin-top: 0; font-size: 22px;"><img src="\${origin}/logo.svg" alt="" style="width: 30px; height: 30px; vertical-align: middle; margin-right: 6px;">RSVP Confirmed!</h2>
-      <p style="color: #0c1f1a; font-size: 16px;">Hi <strong>\${safeName}</strong>,</p>
-      <p style="color: #546e66; font-size: 15px;">You are confirmed on the roster for <strong>\${safeTitle}</strong>.</p>
+      <h2 style="color: #003831; margin-top: 0; font-size: 22px;"><img src="${origin}/logo.svg" alt="" style="width: 30px; height: 30px; vertical-align: middle; margin-right: 6px;">RSVP Confirmed!</h2>
+      <p style="color: #0c1f1a; font-size: 16px;">Hi <strong>${safeName}</strong>,</p>
+      <p style="color: #546e66; font-size: 15px;">You are confirmed on the roster for <strong>${safeTitle}</strong>.</p>
       
       <div style="background: #f5f8f7; border-left: 4px solid #003831; border: 1px solid #dbe4e0; padding: 18px; margin: 20px 0; border-radius: 6px;">
-        <p style="margin: 4px 0; color: #0c1f1a;"><strong>📅 When:</strong> \${escapeHtml(eventDateFormatted)}</p>
-        <p style="margin: 4px 0; color: #0c1f1a;"><strong>📍 Where:</strong> \${safeLocation}</p>
-        \${safeLocationUrl ? \`<p style="margin: 4px 0;"><a href="\${escapeHtml(safeLocationUrl)}" target="_blank" rel="noopener noreferrer" style="color: #FD5A1E; font-weight: 700;">View Map / Directions ↗</a></p>\` : ''}
-        \${safeDutyName ? \`<p style="margin: 6px 0 4px 0; color: #003831;"><strong>🛡️ Your Duty:</strong> <span style="background: #e6f0ed; padding: 2px 8px; border-radius: 4px; font-weight: 700;">\${safeDutyName}</span></p>\` : ''}
-        \${safeGear ? \`<p style="margin: 4px 0; color: #0c1f1a;"><strong>🎒 Gear You're Bringing:</strong> <em>\${safeGear}</em></p>\` : ''}
+        <p style="margin: 4px 0; color: #0c1f1a;"><strong>📅 When:</strong> ${escapeHtml(eventDateFormatted)}</p>
+        <p style="margin: 4px 0; color: #0c1f1a;"><strong>📍 Where:</strong> ${safeLocation}</p>
+        ${safeLocationUrl ? `<p style="margin: 4px 0;"><a href="${escapeHtml(safeLocationUrl)}" target="_blank" rel="noopener noreferrer" style="color: #FD5A1E; font-weight: 700;">View Map / Directions ↗</a></p>` : ''}
+        ${safeDutyName ? `<p style="margin: 6px 0 4px 0; color: #003831;"><strong>🛡️ Your Duty:</strong> <span style="background: #e6f0ed; padding: 2px 8px; border-radius: 4px; font-weight: 700;">${safeDutyName}</span></p>` : ''}
+        ${safeGear ? `<p style="margin: 4px 0; color: #0c1f1a;"><strong>🎒 Gear You're Bringing:</strong> <em>${safeGear}</em></p>` : ''}
       </div>
 
       <p style="text-align: center; margin: 28px 0;">
-        <a href="\${manageLink}" style="background: #FD5A1E; color: #ffffff; padding: 13px 26px; border-radius: 6px; text-decoration: none; font-weight: 700; font-size: 15px; display: inline-block;">
+        <a href="${manageLink}" style="background: #FD5A1E; color: #ffffff; padding: 13px 26px; border-radius: 6px; text-decoration: none; font-weight: 700; font-size: 15px; display: inline-block;">
           View Live Roster & Coordinate Gear →
         </a>
       </p>
@@ -357,14 +351,14 @@ See you on the field!
         Plans changed? Use the button above to update your gear or cancel your attendance so another player can take your spot.
       </p>
     </div>
-  \`;
+  `;
 
   return dispatchEmail(env, { to: email, subject, text, html });
 }
 
 async function sendEventReminder(env, origin, { email, name, event, dutyName, gearBringing, totalAttendees, managementToken }) {
   const appName = env.APP_NAME || 'Sunday Pickup Baseball';
-  const manageLink = \`\${origin}/event.html?id=\${event.id}&token=\${encodeURIComponent(managementToken || '')}\`;
+  const manageLink = `${origin}/event.html?id=${event.id}&token=${encodeURIComponent(managementToken || '')}`;
   const eventDateFormatted = new Date(event.event_date).toLocaleString('en-US', {
     weekday: 'long',
     month: 'long',
@@ -383,56 +377,188 @@ async function sendEventReminder(env, origin, { email, name, event, dutyName, ge
   const safeDutyName = escapeHtml(dutyName);
   const safeGear = escapeHtml(gearBringing);
 
-  const subject = \`Game Reminder: \${event.title} is coming up! (\${eventDateFormatted})\`;
-  const text = \`Hi \${name},
+  const subject = `Game Reminder: ${event.title} is coming up! (${eventDateFormatted})`;
+  const text = `Hi ${name},
 
 This is a reminder that you're signed up for pickup baseball:
 
-Event: \${event.title}
-Date & Time: \${eventDateFormatted}
-Location: \${event.location}
-\${dutyName ? \`Your Assigned Duty: \${dutyName}\\n\` : ''}\${gearBringing ? \`Gear You're Bringing: \${gearBringing}\\n\` : ''}Total Players Confirmed: \${totalAttendees}
+Event: ${event.title}
+Date & Time: ${eventDateFormatted}
+Location: ${event.location}
+${dutyName ? `Your Assigned Duty: ${dutyName}\n` : ''}${gearBringing ? `Gear You're Bringing: ${gearBringing}\n` : ''}Total Players Confirmed: ${totalAttendees}
 
 View details & live roster:
-\${manageLink}
+${manageLink}
 
 See you on the diamond!
-- \${appName}\`;
+- ${appName}`;
 
-  const html = \`
+  const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 26px; border: 1px solid #dbe4e0; border-top: 5px solid #003831; border-radius: 8px; background: #ffffff;">
-      <h2 style="color: #003831; margin-top: 0; font-size: 22px;"><img src="\${origin}/logo.svg" alt="" style="width: 30px; height: 30px; vertical-align: middle; margin-right: 6px;">Game Day Reminder</h2>
-      <p style="color: #0c1f1a; font-size: 16px;">Hi <strong>\${safeName}</strong>,</p>
-      <p style="color: #546e66; font-size: 15px;">Get ready! <strong>\${safeTitle}</strong> is coming up soon.</p>
+      <h2 style="color: #003831; margin-top: 0; font-size: 22px;"><img src="${origin}/logo.svg" alt="" style="width: 30px; height: 30px; vertical-align: middle; margin-right: 6px;">Game Day Reminder</h2>
+      <p style="color: #0c1f1a; font-size: 16px;">Hi <strong>${safeName}</strong>,</p>
+      <p style="color: #546e66; font-size: 15px;">Get ready! <strong>${safeTitle}</strong> is coming up soon.</p>
       
       <div style="background: #f5f8f7; border-left: 4px solid #003831; border: 1px solid #dbe4e0; padding: 18px; margin: 20px 0; border-radius: 6px;">
-        <p style="margin: 4px 0; color: #0c1f1a;"><strong>📅 When:</strong> \${escapeHtml(eventDateFormatted)}</p>
-        <p style="margin: 4px 0; color: #0c1f1a;"><strong>📍 Where:</strong> \${safeLocation}</p>
-        <p style="margin: 4px 0; color: #0c1f1a;"><strong>👥 Confirmed Players:</strong> \${Number(totalAttendees) || 0}</p>
-        \${safeLocationUrl ? \`<p style="margin: 4px 0;"><a href="\${escapeHtml(safeLocationUrl)}" target="_blank" rel="noopener noreferrer" style="color: #FD5A1E; font-weight: 700;">View Map / Directions ↗</a></p>\` : ''}
-        \${safeDutyName ? \`<p style="margin: 6px 0 4px 0; color: #003831;"><strong>🛡️ Your Duty:</strong> <span style="background: #e6f0ed; padding: 2px 8px; border-radius: 4px; font-weight: 700;">\${safeDutyName}</span></p>\` : ''}
-        \${safeGear ? \`<p style="margin: 4px 0; color: #0c1f1a;"><strong>🎒 Gear You're Bringing:</strong> <em>\${safeGear}</em></p>\` : ''}
+        <p style="margin: 4px 0; color: #0c1f1a;"><strong>📅 When:</strong> ${escapeHtml(eventDateFormatted)}</p>
+        <p style="margin: 4px 0; color: #0c1f1a;"><strong>📍 Where:</strong> ${safeLocation}</p>
+        <p style="margin: 4px 0; color: #0c1f1a;"><strong>👥 Confirmed Players:</strong> ${Number(totalAttendees) || 0}</p>
+        ${safeLocationUrl ? `<p style="margin: 4px 0;"><a href="${escapeHtml(safeLocationUrl)}" target="_blank" rel="noopener noreferrer" style="color: #FD5A1E; font-weight: 700;">View Map / Directions ↗</a></p>` : ''}
+        ${safeDutyName ? `<p style="margin: 6px 0 4px 0; color: #003831;"><strong>🛡️ Your Duty:</strong> <span style="background: #e6f0ed; padding: 2px 8px; border-radius: 4px; font-weight: 700;">${safeDutyName}</span></p>` : ''}
+        ${safeGear ? `<p style="margin: 4px 0; color: #0c1f1a;"><strong>🎒 Gear You're Bringing:</strong> <em>${safeGear}</em></p>` : ''}
       </div>
 
       <p style="text-align: center; margin: 28px 0;">
-        <a href="\${manageLink}" style="background: #003831; color: #ffffff; padding: 13px 26px; border-radius: 6px; text-decoration: none; font-weight: 700; font-size: 15px; display: inline-block;">
+        <a href="${manageLink}" style="background: #003831; color: #ffffff; padding: 13px 26px; border-radius: 6px; text-decoration: none; font-weight: 700; font-size: 15px; display: inline-block;">
           Check Game Discussion & Roster →
         </a>
       </p>
     </div>
-  \`;
+  `;
 
   return dispatchEmail(env, { to: email, subject, text, html });
 }
 
 // -----------------------------------------------------------------------------
+async function sendRainoutEmail(env, origin, { email, name, event, note, managementToken }) {
+  const appName = env.APP_NAME || 'Sunday Pickup Baseball';
+  const manageLink = `${origin}/event.html?id=${event.id}&token=${encodeURIComponent(managementToken || '')}`;
+  const eventDateFormatted = new Date(event.event_date).toLocaleString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: 'America/Los_Angeles',
+    timeZoneName: 'short'
+  });
+
+  const safeName = escapeHtml(name);
+  const safeTitle = escapeHtml(event.title);
+  const safeLocation = escapeHtml(event.location);
+  const safeNote = note ? escapeHtml(note) : '';
+
+  const subject = `🌧️ Sunday Pickup Baseball Rained Out: ${event.title}`;
+  const text = `Hi ${name},
+
+Today's pickup baseball game has been called due to rain and field conditions.
+
+Event: ${event.title}
+Originally Scheduled: ${eventDateFormatted}
+Location: ${event.location}
+${note ? `Organizer Note:\n"${note}"\n\n` : ''}Any volunteer duty or equipment commitments you made for today are excused.
+
+The discussion board on the event page remains open if you'd like to chat with teammates or coordinate alternate plans:
+${manageLink}
+
+Stay dry, and see you on the field next Sunday!
+- ${appName}`;
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 26px; border: 1px solid #cbd5e1; border-top: 5px solid #0284c7; border-radius: 8px; background: #ffffff;">
+      <h2 style="color: #0f172a; margin-top: 0; font-size: 22px;"><img src="${origin}/logo.svg" alt="" style="width: 30px; height: 30px; vertical-align: middle; margin-right: 6px;">🌧️ Game Called Due to Rain</h2>
+      <p style="color: #0c1f1a; font-size: 16px;">Hi <strong>${safeName}</strong>,</p>
+      <p style="color: #475569; font-size: 15px;">Today's pickup baseball game (<strong>${safeTitle}</strong>) has been called due to rain and wet field conditions.</p>
+      
+      ${safeNote ? `
+      <div style="background: #f1f5f9; border-left: 4px solid #0284c7; padding: 14px 18px; margin: 18px 0; border-radius: 6px;">
+        <strong style="color: #0f172a; display: block; font-size: 13px; text-transform: uppercase; margin-bottom: 4px;">Organizer Note:</strong>
+        <p style="margin: 0; color: #334155; font-size: 15px; font-style: italic;">"${safeNote}"</p>
+      </div>` : ''}
+
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; margin: 18px 0; border-radius: 6px;">
+        <p style="margin: 3px 0; color: #64748b; font-size: 14px;"><strong>📅 Scheduled:</strong> ${escapeHtml(eventDateFormatted)}</p>
+        <p style="margin: 3px 0; color: #64748b; font-size: 14px;"><strong>📍 Field:</strong> ${safeLocation}</p>
+        <p style="margin: 6px 0 0; color: #0284c7; font-weight: 600; font-size: 14px;">✓ Your duty and equipment commitments are excused for today.</p>
+      </div>
+
+      <p style="text-align: center; margin: 26px 0;">
+        <a href="${manageLink}" style="background: #0f172a; color: #ffffff; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 700; font-size: 14px; display: inline-block;">
+          Open Event Discussion Board →
+        </a>
+      </p>
+
+      <p style="color: #64748b; font-size: 13px; border-top: 1px solid #e2e8f0; padding-top: 14px; margin-bottom: 0;">
+        The discussion board is still active if you want to chat with teammates, coordinate batting cages, or catch up before next Sunday.
+      </p>
+    </div>
+  `;
+
+  return dispatchEmail(env, { to: email, subject, text, html });
+}
+
+async function sendReopenEmail(env, origin, { email, name, event, note, managementToken }) {
+  const appName = env.APP_NAME || 'Sunday Pickup Baseball';
+  const manageLink = `${origin}/event.html?id=${event.id}&token=${encodeURIComponent(managementToken || '')}`;
+  const eventDateFormatted = new Date(event.event_date).toLocaleString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: 'America/Los_Angeles',
+    timeZoneName: 'short'
+  });
+
+  const safeName = escapeHtml(name);
+  const safeTitle = escapeHtml(event.title);
+  const safeLocation = escapeHtml(event.location);
+  const safeNote = note ? escapeHtml(note) : '';
+
+  const subject = `⚾ Game is BACK ON! Sunday Pickup Baseball: ${event.title}`;
+  const text = `Hi ${name},
+
+Great news! The field or weather conditions have cleared up and today's pickup baseball game is BACK ON!
+
+Event: ${event.title}
+When: ${eventDateFormatted}
+Where: ${event.location}
+${note ? `Organizer Note:\n"${note}"\n\n` : ''}Your roster spot is active. Grab your gear and see you on the field!
+
+Check the live roster & event page:
+${manageLink}
+
+Play ball!
+- ${appName}`;
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 26px; border: 1px solid #dbe4e0; border-top: 5px solid #FD5A1E; border-radius: 8px; background: #ffffff;">
+      <h2 style="color: #003831; margin-top: 0; font-size: 22px;"><img src="${origin}/logo.svg" alt="" style="width: 30px; height: 30px; vertical-align: middle; margin-right: 6px;">⚾ Game is BACK ON!</h2>
+      <p style="color: #0c1f1a; font-size: 16px;">Hi <strong>${safeName}</strong>,</p>
+      <p style="color: #546e66; font-size: 15px;">Great news! Weather or field conditions have cleared up and today's game (<strong>${safeTitle}</strong>) is officially BACK ON!</p>
+      
+      ${safeNote ? `
+      <div style="background: #fff7ed; border-left: 4px solid #FD5A1E; padding: 14px 18px; margin: 18px 0; border-radius: 6px;">
+        <strong style="color: #9a3412; display: block; font-size: 13px; text-transform: uppercase; margin-bottom: 4px;">Organizer Note:</strong>
+        <p style="margin: 0; color: #7c2d12; font-size: 15px; font-style: italic;">"${safeNote}"</p>
+      </div>` : ''}
+
+      <div style="background: #f5f8f7; border-left: 4px solid #003831; border: 1px solid #dbe4e0; padding: 16px; margin: 18px 0; border-radius: 6px;">
+        <p style="margin: 3px 0; color: #0c1f1a; font-size: 14px;"><strong>📅 When:</strong> ${escapeHtml(eventDateFormatted)}</p>
+        <p style="margin: 3px 0; color: #0c1f1a; font-size: 14px;"><strong>📍 Where:</strong> ${safeLocation}</p>
+        <p style="margin: 6px 0 0; color: #003831; font-weight: 700; font-size: 14px;">✓ Your roster spot is active. Grab your glove and head out!</p>
+      </div>
+
+      <p style="text-align: center; margin: 26px 0;">
+        <a href="${manageLink}" style="background: #FD5A1E; color: #ffffff; padding: 13px 26px; border-radius: 6px; text-decoration: none; font-weight: 700; font-size: 15px; display: inline-block;">
+          Check Live Roster & Duties →
+        </a>
+      </p>
+    </div>
+  `;
+
+  return dispatchEmail(env, { to: email, subject, text, html });
+}
+
 // Auth, RBAC & Security Headers Middleware
 // -----------------------------------------------------------------------------
 
 async function getUserFromSession(db, sessionId) {
   if (!sessionId) return null;
 
-  const session = await db.prepare(\`
+  const session = await db.prepare(`
     SELECT 
       s.id as session_id, 
       s.expires_at, 
@@ -448,7 +574,7 @@ async function getUserFromSession(db, sessionId) {
     WHERE s.id = ?
       AND datetime(s.expires_at) > datetime('now')
       AND NOT EXISTS (SELECT 1 FROM banned_emails b WHERE b.email = u.email)
-  \`).bind(sessionId).first();
+  `).bind(sessionId).first();
 
   if (!session) return null;
 
@@ -474,7 +600,7 @@ app.use('*', async (c, next) => {
   // Block direct API access via *.pages.dev so all traffic must pass through the custom domain WAF
   if (reqUrl.hostname.endsWith('.pages.dev')) {
     if (c.req.method === 'GET' || c.req.method === 'HEAD') {
-      return c.redirect(\`https://www.pickupbaseballfoundation.org\${reqUrl.pathname}\${reqUrl.search}\`, 301);
+      return c.redirect(`https://www.pickupbaseballfoundation.org${reqUrl.pathname}${reqUrl.search}`, 301);
     }
     return c.json({ error: 'Direct origin/preview API access is disabled. Please use www.pickupbaseballfoundation.org.' }, 403);
   }
@@ -565,11 +691,11 @@ app.post('/auth/send-code', async (c) => {
     }
 
     // Rate limit: max 5 send-code requests per IP per 10 minutes, max 3 per email per 10 minutes
-    const ipLimit = await checkRateLimit(c.env.DB, \`send_code_ip:\${clientIp}\`, 5, 600);
+    const ipLimit = await checkRateLimit(c.env.DB, `send_code_ip:${clientIp}`, 5, 600);
     if (!ipLimit.allowed) {
       return c.json({ error: 'Too many sign-in requests from your network. Please wait 10 minutes and try again.' }, 429);
     }
-    const emailLimit = await checkRateLimit(c.env.DB, \`send_code_email:\${email}\`, 3, 600);
+    const emailLimit = await checkRateLimit(c.env.DB, `send_code_email:${email}`, 3, 600);
     if (!emailLimit.allowed) {
       return c.json({ error: 'Too many sign-in codes requested for this email. Please check your inbox or wait 10 minutes.' }, 429);
     }
@@ -593,10 +719,10 @@ app.post('/auth/send-code', async (c) => {
     // Invalidate any previous unused codes for this email so only the newest code is valid
     await c.env.DB.batch([
       c.env.DB.prepare('UPDATE auth_codes SET used_at = CURRENT_TIMESTAMP WHERE email = ? AND used_at IS NULL').bind(email),
-      c.env.DB.prepare(\`
+      c.env.DB.prepare(`
         INSERT INTO auth_codes (email, name, code, token, attempts, expires_at)
         VALUES (?, ?, ?, ?, 0, ?)
-      \`).bind(email, name, codeHash, tokenHash, expiresAt)
+      `).bind(email, name, codeHash, tokenHash, expiresAt)
     ]);
 
     const origin = new URL(c.req.url).origin;
@@ -609,7 +735,7 @@ app.post('/auth/send-code', async (c) => {
 
     return c.json({
       success: true,
-      message: \`A 6-digit code has been sent to \${email}. It expires in 10 minutes.\`
+      message: `A 6-digit code has been sent to ${email}. It expires in 10 minutes.`
     });
   } catch (err) {
     console.error('[Auth] Error sending code:', err);
@@ -628,7 +754,7 @@ app.post('/auth/verify-code', async (c) => {
     const cleanCode = String(code).trim();
 
     const clientIp = getClientIp(c);
-    const ipLimit = await checkRateLimit(c.env.DB, \`verify_code_ip:\${clientIp}\`, 10, 600);
+    const ipLimit = await checkRateLimit(c.env.DB, `verify_code_ip:${clientIp}`, 10, 600);
     if (!ipLimit.allowed) {
       return c.json({ error: 'Too many verification attempts. Please wait 10 minutes before trying again.' }, 429);
     }
@@ -639,11 +765,11 @@ app.post('/auth/verify-code', async (c) => {
     }
 
     // Fetch the most recent active code for this email
-    const latestActive = await c.env.DB.prepare(\`
+    const latestActive = await c.env.DB.prepare(`
       SELECT * FROM auth_codes
       WHERE email = ? AND used_at IS NULL AND datetime(expires_at) > datetime('now')
       ORDER BY id DESC LIMIT 1
-    \`).bind(cleanEmail).first();
+    `).bind(cleanEmail).first();
 
     if (!latestActive) {
       return c.json({ error: 'Invalid or expired code. Please request a new code.' }, 400);
@@ -666,7 +792,7 @@ app.post('/auth/verify-code', async (c) => {
           'UPDATE auth_codes SET attempts = ? WHERE id = ?'
         ).bind(newAttempts, latestActive.id).run();
         return c.json({
-          error: \`Invalid verification code (\${MAX_CODE_VERIFY_ATTEMPTS - newAttempts} attempt(s) remaining).\`
+          error: `Invalid verification code (${MAX_CODE_VERIFY_ATTEMPTS - newAttempts} attempt(s) remaining).`
         }, 400);
       }
     }
@@ -681,9 +807,9 @@ app.post('/auth/verify-code', async (c) => {
       const role = shouldBeAdmin ? 'admin' : 'player';
       const isAdminFlag = shouldBeAdmin ? 1 : 0;
 
-      const insertRes = await c.env.DB.prepare(\`
+      const insertRes = await c.env.DB.prepare(`
         INSERT INTO users (name, email, role, is_admin) VALUES (?, ?, ?, ?)
-      \`).bind(displayName, cleanEmail, role, isAdminFlag).run();
+      `).bind(displayName, cleanEmail, role, isAdminFlag).run();
 
       const lastId = insertRes.meta.last_row_id;
       user = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(lastId).first();
@@ -692,10 +818,10 @@ app.post('/auth/verify-code', async (c) => {
     const sessionId = generateToken();
     const expiresAt = new Date(Date.now() + SESSION_DURATION_SECONDS * 1000).toISOString();
 
-    await c.env.DB.prepare(\`
+    await c.env.DB.prepare(`
       INSERT INTO sessions (id, user_id, expires_at)
       VALUES (?, ?, ?)
-    \`).bind(sessionId, user.id, expiresAt).run();
+    `).bind(sessionId, user.id, expiresAt).run();
 
     setCookie(c, SESSION_COOKIE_NAME, sessionId, {
       httpOnly: true,
@@ -731,10 +857,10 @@ app.get('/auth/verify-magic', async (c) => {
 
     const tokenHash = await sha256Hex(token);
 
-    const authRecord = await c.env.DB.prepare(\`
+    const authRecord = await c.env.DB.prepare(`
       SELECT * FROM auth_codes
       WHERE (token = ? OR token = ?) AND used_at IS NULL AND datetime(expires_at) > datetime('now')
-    \`).bind(tokenHash, token).first();
+    `).bind(tokenHash, token).first();
 
     if (!authRecord) {
       return c.text('This sign-in link is invalid or has expired. Please request a new one on the login page.', 400);
@@ -756,9 +882,9 @@ app.get('/auth/verify-magic', async (c) => {
       const role = shouldBeAdmin ? 'admin' : 'player';
       const isAdminFlag = shouldBeAdmin ? 1 : 0;
 
-      const insertRes = await c.env.DB.prepare(\`
+      const insertRes = await c.env.DB.prepare(`
         INSERT INTO users (name, email, role, is_admin) VALUES (?, ?, ?, ?)
-      \`).bind(displayName, cleanEmail, role, isAdminFlag).run();
+      `).bind(displayName, cleanEmail, role, isAdminFlag).run();
 
       const lastId = insertRes.meta.last_row_id;
       user = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(lastId).first();
@@ -767,10 +893,10 @@ app.get('/auth/verify-magic', async (c) => {
     const sessionId = generateToken();
     const expiresAt = new Date(Date.now() + SESSION_DURATION_SECONDS * 1000).toISOString();
 
-    await c.env.DB.prepare(\`
+    await c.env.DB.prepare(`
       INSERT INTO sessions (id, user_id, expires_at)
       VALUES (?, ?, ?)
-    \`).bind(sessionId, user.id, expiresAt).run();
+    `).bind(sessionId, user.id, expiresAt).run();
 
     setCookie(c, SESSION_COOKIE_NAME, sessionId, {
       httpOnly: true,
@@ -807,9 +933,9 @@ app.put('/auth/profile', async (c) => {
     const cleanName = String(name).trim().slice(0, 120);
     const cleanBio = String(bio || '').trim().slice(0, 280);
 
-    await c.env.DB.prepare(\`
+    await c.env.DB.prepare(`
       UPDATE users SET name = ?, bio = ? WHERE id = ?
-    \`).bind(cleanName, cleanBio, user.id).run();
+    `).bind(cleanName, cleanBio, user.id).run();
 
     user.name = cleanName;
     user.bio = cleanBio;
@@ -855,10 +981,10 @@ app.post('/auth/avatar', async (c) => {
 
     const cleanBuffer = mime === 'image/jpeg' ? stripJpegMetadata(buffer) : buffer;
     const base64 = arrayBufferToBase64(cleanBuffer);
-    const dataUrl = \`data:\${mime};base64,\${base64}\`;
+    const dataUrl = `data:${mime};base64,${base64}`;
 
     await c.env.DB.prepare('UPDATE users SET avatar_url = ? WHERE id = ?').bind(dataUrl, user.id).run();
-    const avatarEndpointUrl = \`/api/users/\${user.id}/avatar?v=\${dataUrl.length}\`;
+    const avatarEndpointUrl = `/api/users/${user.id}/avatar?v=${dataUrl.length}`;
     user.avatarUrl = avatarEndpointUrl;
 
     return c.json({
@@ -885,7 +1011,7 @@ app.get('/users/:id/avatar', async (c) => {
     }
 
     const raw = String(row.avatar_url).trim();
-    const etag = \`W/"av-\${userId}-\${raw.length}"\`;
+    const etag = `W/"av-${userId}-${raw.length}"`;
     if (c.req.header('If-None-Match') === etag) {
       return new Response(null, {
         status: 304,
@@ -896,7 +1022,7 @@ app.get('/users/:id/avatar', async (c) => {
       });
     }
 
-    const match = raw.match(/^data:(image\\/(?:jpeg|png|webp|gif));base64,([A-Za-z0-9+/=]+)$/i);
+    const match = raw.match(/^data:(image\/(?:jpeg|png|webp|gif));base64,([A-Za-z0-9+/=]+)$/i);
     if (!match) {
       return c.text('Invalid avatar format', 404);
     }
@@ -948,7 +1074,7 @@ app.get('/auth/users', async (c) => {
   }
 
   try {
-    const { results } = await c.env.DB.prepare(\`
+    const { results } = await c.env.DB.prepare(`
       SELECT 
         u.id, 
         u.name, 
@@ -965,7 +1091,7 @@ app.get('/auth/users', async (c) => {
              WHEN u.role = 'organizer' THEN 2 
              ELSE 3 END,
         u.name COLLATE NOCASE ASC
-    \`).all();
+    `).all();
 
     return c.json({ users: results || [] });
   } catch (err) {
@@ -1004,7 +1130,7 @@ app.put('/auth/users/:id/role', async (c) => {
 
   return c.json({
     success: true,
-    message: \`Role updated to \${role}.\`,
+    message: `Role updated to ${role}.`,
     user: { id: targetId, role, isAdmin: Boolean(isAdminFlag) }
   });
 });
@@ -1050,7 +1176,7 @@ app.delete('/auth/users/:id', async (c) => {
 
   return c.json({
     success: true,
-    message: ban ? \`User \${targetUser.email} has been removed and banned from re-registering.\` : \`User \${targetUser.email} has been removed.\`
+    message: ban ? `User ${targetUser.email} has been removed and banned from re-registering.` : `User ${targetUser.email} has been removed.`
   });
 });
 
@@ -1085,7 +1211,7 @@ app.post('/auth/banned-emails', async (c) => {
     c.env.DB.prepare('DELETE FROM auth_codes WHERE email = ?').bind(cleanEmail)
   ]);
 
-  return c.json({ success: true, message: \`Email \${cleanEmail} added to ban list and any active sessions revoked.\` });
+  return c.json({ success: true, message: `Email ${cleanEmail} added to ban list and any active sessions revoked.` });
 });
 
 app.delete('/auth/banned-emails/:id', async (c) => {
@@ -1137,13 +1263,13 @@ app.get('/events', async (c) => {
     const user = c.get('user');
     const nowIso = new Date().toISOString();
 
-    let query = \`
+    let query = `
       SELECT e.*,
         (SELECT COUNT(*) FROM attendees a WHERE a.event_id = e.id AND a.status = 'attending') as attendee_count,
         (SELECT COUNT(*) FROM event_duties d WHERE d.event_id = e.id) as duty_count
       FROM events e
-      WHERE e.status = 'active'
-    \`;
+      WHERE e.status IN ('active', 'rainout')
+    `;
     const params = [];
 
     if (filter === 'past') {
@@ -1168,11 +1294,11 @@ app.get('/events', async (c) => {
     }
 
     if (user && events && events.length > 0) {
-      const { results: userRsvps } = await c.env.DB.prepare(\`
+      const { results: userRsvps } = await c.env.DB.prepare(`
         SELECT event_id, status, gear_bringing
         FROM attendees
         WHERE user_id = ?
-      \`).bind(user.id).all();
+      `).bind(user.id).all();
 
       const rsvpMap = new Map((userRsvps || []).map(r => [r.event_id, r]));
       events.forEach(ev => {
@@ -1207,10 +1333,10 @@ app.put('/events/default-duties', async (c) => {
     const batch = [c.env.DB.prepare('DELETE FROM default_duties')];
     duties.filter(d => d && d.title && String(d.title).trim()).forEach((d, idx) => {
       batch.push(
-        c.env.DB.prepare(\`
+        c.env.DB.prepare(`
           INSERT INTO default_duties (title, description, slots_needed, sort_order)
           VALUES (?, ?, ?, ?)
-        \`).bind(String(d.title).trim().slice(0, 120), String(d.description || '').trim().slice(0, 300), parseInt(d.slots_needed || 1, 10), idx)
+        `).bind(String(d.title).trim().slice(0, 120), String(d.description || '').trim().slice(0, 300), parseInt(d.slots_needed || 1, 10), idx)
       );
     });
 
@@ -1244,22 +1370,22 @@ app.get('/events/admin/backup-db', async (c) => {
 
     const timestamp = new Date().toISOString();
     const dateStr = timestamp.slice(0, 10);
-    let sqlDump = \`-- Sunday Pickup Baseball Database Backup\\n-- Exported: \${timestamp}\\n-- Platform: Cloudflare D1 SQL\\n\\n\`;
+    let sqlDump = `-- Sunday Pickup Baseball Database Backup\n-- Exported: ${timestamp}\n-- Platform: Cloudflare D1 SQL\n\n`;
 
     for (const table of tables) {
-      const { results: rows } = await c.env.DB.prepare(\`SELECT * FROM "\${table}"\`).all();
+      const { results: rows } = await c.env.DB.prepare(`SELECT * FROM "${table}"`).all();
       if (rows && rows.length > 0) {
-        sqlDump += \`-- Table: \${table} (\${rows.length} rows)\\n\`;
+        sqlDump += `-- Table: ${table} (${rows.length} rows)\n`;
         for (const row of rows) {
-          const cols = Object.keys(row).map(k => \`"\${k}"\`).join(', ');
+          const cols = Object.keys(row).map(k => `"${k}"`).join(', ');
           const vals = Object.values(row).map(v => {
             if (v === null || v === undefined) return 'NULL';
             if (typeof v === 'number') return v;
-            return \`'\${String(v).replace(/'/g, "''")}'\`;
+            return `'${String(v).replace(/'/g, "''")}'`;
           }).join(', ');
-          sqlDump += \`INSERT OR IGNORE INTO "\${table}" (\${cols}) VALUES (\${vals});\\n\`;
+          sqlDump += `INSERT OR IGNORE INTO "${table}" (${cols}) VALUES (${vals});\n`;
         }
-        sqlDump += '\\n';
+        sqlDump += '\n';
       }
     }
 
@@ -1267,7 +1393,7 @@ app.get('/events/admin/backup-db', async (c) => {
       status: 200,
       headers: {
         'Content-Type': 'application/sql; charset=utf-8',
-        'Content-Disposition': \`attachment; filename="baseball_backup_\${dateStr}.sql"\`,
+        'Content-Disposition': `attachment; filename="baseball_backup_${dateStr}.sql"`,
         'Cache-Control': 'no-store',
         'X-Content-Type-Options': 'nosniff',
         'X-Frame-Options': 'DENY'
@@ -1287,7 +1413,7 @@ app.get('/events/:id', async (c) => {
 
     const batchStmts = [
       c.env.DB.prepare('SELECT * FROM events WHERE id = ?').bind(eventId),
-      c.env.DB.prepare(\`
+      c.env.DB.prepare(`
         SELECT d.*,
           COALESCE((
             SELECT json_group_array(json_object('attendee_id', a.id, 'name', a.name))
@@ -1298,8 +1424,8 @@ app.get('/events/:id', async (c) => {
         FROM event_duties d
         WHERE d.event_id = ?
         ORDER BY d.sort_order ASC, d.id ASC
-      \`).bind(eventId),
-      c.env.DB.prepare(\`
+      `).bind(eventId),
+      c.env.DB.prepare(`
         SELECT a.id, a.name, a.status, a.gear_bringing, a.is_guest, a.created_at,
           u.bio,
           CASE WHEN u.avatar_url IS NOT NULL AND u.avatar_url != '' THEN '/api/users/' || u.id || '/avatar?v=' || length(u.avatar_url) ELSE '' END as avatar_url,
@@ -1313,8 +1439,8 @@ app.get('/events/:id', async (c) => {
         LEFT JOIN users u ON a.user_id = u.id
         WHERE a.event_id = ? AND a.status = 'attending'
         ORDER BY a.created_at ASC
-      \`).bind(eventId),
-      c.env.DB.prepare(\`
+      `).bind(eventId),
+      c.env.DB.prepare(`
         SELECT c.id, c.author_name, c.content, c.created_at, c.user_id,
           CASE WHEN u.avatar_url IS NOT NULL AND u.avatar_url != '' THEN '/api/users/' || u.id || '/avatar?v=' || length(u.avatar_url) ELSE '' END as avatar_url,
           u.bio
@@ -1322,27 +1448,27 @@ app.get('/events/:id', async (c) => {
         LEFT JOIN users u ON c.user_id = u.id
         WHERE c.event_id = ?
         ORDER BY c.created_at ASC
-      \`).bind(eventId),
+      `).bind(eventId),
       c.env.DB.prepare("SELECT value FROM app_settings WHERE key = 'require_login_to_rsvp'")
     ];
 
     if (user) {
       batchStmts.push(
-        c.env.DB.prepare(\`
+        c.env.DB.prepare(`
           SELECT a.id, a.event_id, a.user_id, a.name, a.status, a.gear_bringing,
             (SELECT json_group_array(duty_id) FROM duty_assignments WHERE attendee_id = a.id) as duty_ids
           FROM attendees a
           WHERE a.event_id = ? AND (a.user_id = ? OR a.email = ?)
-        \`).bind(eventId, user.id, user.email)
+        `).bind(eventId, user.id, user.email)
       );
     } else if (token) {
       batchStmts.push(
-        c.env.DB.prepare(\`
+        c.env.DB.prepare(`
           SELECT a.id, a.event_id, a.user_id, a.name, a.status, a.gear_bringing,
             (SELECT json_group_array(duty_id) FROM duty_assignments WHERE attendee_id = a.id) as duty_ids
           FROM attendees a
           WHERE a.event_id = ? AND a.management_token = ?
-        \`).bind(eventId, token)
+        `).bind(eventId, token)
       );
     }
 
@@ -1429,10 +1555,10 @@ app.post('/events', async (c) => {
       dutiesToInsert = await getDefaultDuties(c.env.DB);
     }
 
-    const insertEventRes = await c.env.DB.prepare(\`
+    const insertEventRes = await c.env.DB.prepare(`
       INSERT INTO events (title, description, location, location_url, event_date, max_players, created_by)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    \`).bind(
+    `).bind(
       String(title).trim().slice(0, 150),
       String(description || '').trim().slice(0, 2000),
       String(location).trim().slice(0, 200),
@@ -1446,10 +1572,10 @@ app.post('/events', async (c) => {
 
     if (dutiesToInsert.length > 0) {
       const dutyBatch = dutiesToInsert.map((d, idx) => (
-        c.env.DB.prepare(\`
+        c.env.DB.prepare(`
           INSERT INTO event_duties (event_id, title, description, slots_needed, sort_order)
           VALUES (?, ?, ?, ?, ?)
-        \`).bind(
+        `).bind(
           eventId,
           String(d.title).trim().slice(0, 120),
           String(d.description || '').trim().slice(0, 300),
@@ -1519,7 +1645,7 @@ app.put('/events/:id', async (c) => {
       newMaxPlayers = isNaN(parsed) ? existingEvent.max_players : parsed;
     }
 
-    await c.env.DB.prepare(\`
+    await c.env.DB.prepare(`
       UPDATE events
       SET title = COALESCE(?, title),
           description = COALESCE(?, description),
@@ -1529,7 +1655,7 @@ app.put('/events/:id', async (c) => {
           max_players = ?,
           status = COALESCE(?, status)
       WHERE id = ?
-    \`).bind(
+    `).bind(
       title !== undefined ? String(title).trim().slice(0, 150) : null,
       description !== undefined ? String(description).trim().slice(0, 2000) : null,
       location !== undefined ? String(location).trim().slice(0, 200) : null,
@@ -1573,7 +1699,7 @@ app.post('/events/:id/rsvp', async (c) => {
     const user = c.get('user');
 
     const clientIp = getClientIp(c);
-    const rsvpLimit = await checkRateLimit(c.env.DB, \`rsvp_ip:\${clientIp}\`, 10, 600);
+    const rsvpLimit = await checkRateLimit(c.env.DB, `rsvp_ip:${clientIp}`, 10, 600);
     if (!rsvpLimit.allowed) {
       return c.json({ error: 'Too many RSVP requests. Please wait a few minutes and try again.' }, 429);
     }
@@ -1585,6 +1711,10 @@ app.post('/events/:id/rsvp', async (c) => {
 
     let { name, email, gear_bringing, duty_ids, management_token, status, cf_turnstile_response } = await c.req.json();
     status = status === 'declined' ? 'declined' : 'attending';
+
+    if (event.status === 'rainout' && status === 'attending') {
+      return c.json({ error: 'RSVPs are closed because this game has been called for rain.' }, 400);
+    }
 
     if (!user) {
       const turnstileOk = await verifyTurnstileIfConfigured(c.env, cf_turnstile_response, clientIp);
@@ -1639,16 +1769,16 @@ app.post('/events/:id/rsvp', async (c) => {
     let attendeeId;
     if (existingAttendee) {
       attendeeId = existingAttendee.id;
-      await c.env.DB.prepare(\`
+      await c.env.DB.prepare(`
         UPDATE attendees
         SET name = ?, status = ?, gear_bringing = ?, user_id = COALESCE(?, user_id), is_guest = ?
         WHERE id = ?
-      \`).bind(name, status, cleanGear, userId, isGuest, attendeeId).run();
+      `).bind(name, status, cleanGear, userId, isGuest, attendeeId).run();
     } else {
-      const insertAttendeeRes = await c.env.DB.prepare(\`
+      const insertAttendeeRes = await c.env.DB.prepare(`
         INSERT INTO attendees (event_id, user_id, name, email, is_guest, status, gear_bringing, management_token)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      \`).bind(eventId, userId, name, email, isGuest, status, cleanGear, mgmtToken).run();
+      `).bind(eventId, userId, name, email, isGuest, status, cleanGear, mgmtToken).run();
       attendeeId = insertAttendeeRes.meta.last_row_id;
     }
 
@@ -1662,18 +1792,18 @@ app.post('/events/:id/rsvp', async (c) => {
         ).bind(dId, eventId).first();
 
         if (duty) {
-          const countRow = await c.env.DB.prepare(\`
+          const countRow = await c.env.DB.prepare(`
             SELECT COUNT(*) as count FROM duty_assignments da
             JOIN attendees a ON da.attendee_id = a.id
             WHERE da.duty_id = ? AND a.status = 'attending' AND a.id != ?
-          \`).bind(dId, attendeeId).first();
+          `).bind(dId, attendeeId).first();
 
           const currentCount = countRow ? countRow.count : 0;
           if (currentCount < duty.slots_needed) {
-            await c.env.DB.prepare(\`
+            await c.env.DB.prepare(`
               INSERT OR IGNORE INTO duty_assignments (duty_id, attendee_id)
               VALUES (?, ?)
-            \`).bind(dId, attendeeId).run();
+            `).bind(dId, attendeeId).run();
             assignedDutyNames.push(duty.title);
           }
         }
@@ -1703,7 +1833,7 @@ app.post('/events/:id/rsvp', async (c) => {
       status,
       managementToken: existingAttendee ? (existingAttendee.management_token || mgmtToken) : mgmtToken,
       message: status === 'attending'
-        ? \`You're on the roster! A confirmation email has been sent to \${email}.\`
+        ? `You're on the roster! A confirmation email has been sent to ${email}.`
         : 'Your RSVP has been cancelled.'
     });
   } catch (err) {
@@ -1718,7 +1848,7 @@ app.post('/events/:id/comments', async (c) => {
     const user = c.get('user');
 
     const clientIp = getClientIp(c);
-    const commentLimit = await checkRateLimit(c.env.DB, \`comment_ip:\${clientIp}\`, 10, 600);
+    const commentLimit = await checkRateLimit(c.env.DB, `comment_ip:${clientIp}`, 10, 600);
     if (!commentLimit.allowed) {
       return c.json({ error: 'Too many comments posted recently. Please wait a few minutes.' }, 429);
     }
@@ -1764,10 +1894,10 @@ app.post('/events/:id/comments', async (c) => {
 
     const cleanContent = String(content).trim().slice(0, 2000);
 
-    const insertCommentRes = await c.env.DB.prepare(\`
+    const insertCommentRes = await c.env.DB.prepare(`
       INSERT INTO comments (event_id, user_id, author_name, author_email, content)
       VALUES (?, ?, ?, ?, ?)
-    \`).bind(eventId, userId, name, email || 'guest', cleanContent).run();
+    `).bind(eventId, userId, name, email || 'guest', cleanContent).run();
 
     const commentId = insertCommentRes.meta.last_row_id;
     // Never return author_email in the public response payload
@@ -1839,10 +1969,10 @@ app.post('/events/:id/duties', async (c) => {
     const maxSortRow = await c.env.DB.prepare('SELECT MAX(sort_order) as max_sort FROM event_duties WHERE event_id = ?').bind(eventId).first();
     const nextSort = (maxSortRow && maxSortRow.max_sort !== null) ? maxSortRow.max_sort + 1 : 0;
 
-    const res = await c.env.DB.prepare(\`
+    const res = await c.env.DB.prepare(`
       INSERT INTO event_duties (event_id, title, description, slots_needed, sort_order)
       VALUES (?, ?, ?, ?, ?)
-    \`).bind(
+    `).bind(
       eventId,
       String(title).trim().slice(0, 120),
       String(description || '').trim().slice(0, 300),
@@ -1873,13 +2003,13 @@ app.put('/events/:id/duties/:dutyId', async (c) => {
       return c.json({ error: 'Duty title cannot be empty.' }, 400);
     }
 
-    const res = await c.env.DB.prepare(\`
+    const res = await c.env.DB.prepare(`
       UPDATE event_duties
       SET title = COALESCE(?, title),
           description = COALESCE(?, description),
           slots_needed = COALESCE(?, slots_needed)
       WHERE id = ? AND event_id = ?
-    \`).bind(
+    `).bind(
       title ? String(title).trim().slice(0, 120) : null,
       description !== undefined ? String(description).trim().slice(0, 300) : null,
       slots_needed ? parseInt(slots_needed, 10) : null,
@@ -1934,13 +2064,13 @@ app.post('/events/:id/send-reminders', async (c) => {
       return c.json({ error: 'Event not found.' }, 404);
     }
 
-    const { results: attendees } = await c.env.DB.prepare(\`
+    const { results: attendees } = await c.env.DB.prepare(`
       SELECT a.*, d.title as duty_name
       FROM attendees a
       LEFT JOIN duty_assignments da ON a.id = da.attendee_id
       LEFT JOIN event_duties d ON da.duty_id = d.id
       WHERE a.event_id = ? AND a.status = 'attending'
-    \`).bind(eventId).all();
+    `).bind(eventId).all();
 
     const origin = new URL(c.req.url).origin;
     const totalCount = attendees ? attendees.length : 0;
@@ -1970,8 +2100,162 @@ app.post('/events/:id/send-reminders', async (c) => {
   }
 });
 
-export const onRequest = handle(app);
-`;
+app.post('/events/:id/rainout', async (c) => {
+  const user = c.get('user');
+  if (!user || (!user.isAdmin && !user.canManageEvents)) {
+    return c.json({ error: 'Organizer or administrator access required.' }, 403);
+  }
 
-fs.writeFileSync(targetPath, code, 'utf8');
-console.log('Successfully written functions/api/[[route]].js');
+  try {
+    const eventId = parseInt(c.req.param('id'), 10);
+    const event = await c.env.DB.prepare('SELECT * FROM events WHERE id = ?').bind(eventId).first();
+    if (!event) {
+      return c.json({ error: 'Event not found.' }, 404);
+    }
+
+    const body = await c.req.json().catch(() => ({}));
+    const cleanNote = body.note ? String(body.note).trim() : null;
+    const shouldEmail = Boolean(body.sendEmail);
+
+    await c.env.DB.prepare(`
+      UPDATE events
+      SET status = 'rainout',
+          rainout_note = ?,
+          rainout_at = CURRENT_TIMESTAMP,
+          rainout_email_sent = CASE WHEN ? = 1 THEN 1 ELSE rainout_email_sent END
+      WHERE id = ?
+    `).bind(cleanNote, shouldEmail ? 1 : 0, eventId).run();
+
+    if (shouldEmail) {
+      const { results: attendees } = await c.env.DB.prepare(`
+        SELECT a.*
+        FROM attendees a
+        WHERE a.event_id = ? AND a.status = 'attending'
+      `).bind(eventId).all();
+
+      const origin = new URL(c.req.url).origin;
+      for (const att of (attendees || [])) {
+        try {
+          await sendRainoutEmail(c.env, origin, {
+            email: att.email,
+            name: att.name,
+            event: { ...event, title: event.title, event_date: event.event_date, location: event.location, id: event.id },
+            note: cleanNote,
+            managementToken: att.management_token
+          });
+        } catch (e) {
+          console.error('[Rainout] Error sending email to ' + att.email + ':', e);
+        }
+      }
+    }
+
+    return c.json({ success: true, message: 'Game has been marked as rained out.' });
+  } catch (err) {
+    console.error('[Events] Error marking rainout:', err);
+    return c.json({ error: 'Failed to mark game as rained out.' }, 500);
+  }
+});
+
+app.post('/events/:id/reopen', async (c) => {
+  const user = c.get('user');
+  if (!user || (!user.isAdmin && !user.canManageEvents)) {
+    return c.json({ error: 'Organizer or administrator access required.' }, 403);
+  }
+
+  try {
+    const eventId = parseInt(c.req.param('id'), 10);
+    const event = await c.env.DB.prepare('SELECT * FROM events WHERE id = ?').bind(eventId).first();
+    if (!event) {
+      return c.json({ error: 'Event not found.' }, 404);
+    }
+
+    const body = await c.req.json().catch(() => ({}));
+    const cleanNote = body.note ? String(body.note).trim() : null;
+    const shouldEmail = Boolean(body.sendEmail);
+
+    await c.env.DB.prepare(`
+      UPDATE events
+      SET status = 'active',
+          rainout_note = NULL,
+          rainout_at = NULL,
+          rainout_email_sent = 0
+      WHERE id = ?
+    `).bind(eventId).run();
+
+    if (shouldEmail) {
+      const { results: attendees } = await c.env.DB.prepare(`
+        SELECT a.*
+        FROM attendees a
+        WHERE a.event_id = ? AND a.status = 'attending'
+      `).bind(eventId).all();
+
+      const origin = new URL(c.req.url).origin;
+      for (const att of (attendees || [])) {
+        try {
+          await sendReopenEmail(c.env, origin, {
+            email: att.email,
+            name: att.name,
+            event: { ...event, title: event.title, event_date: event.event_date, location: event.location, id: event.id },
+            note: cleanNote,
+            managementToken: att.management_token
+          });
+        } catch (e) {
+          console.error('[Reopen] Error sending email to ' + att.email + ':', e);
+        }
+      }
+    }
+
+    return c.json({ success: true, message: 'Game has been reopened and is back on!' });
+  } catch (err) {
+    console.error('[Events] Error reopening event:', err);
+    return c.json({ error: 'Failed to reopen game.' }, 500);
+  }
+});
+
+app.post('/events/:id/send-rainout-email', async (c) => {
+  const user = c.get('user');
+  if (!user || (!user.isAdmin && !user.canManageEvents)) {
+    return c.json({ error: 'Organizer or administrator access required.' }, 403);
+  }
+
+  try {
+    const eventId = parseInt(c.req.param('id'), 10);
+    const event = await c.env.DB.prepare('SELECT * FROM events WHERE id = ?').bind(eventId).first();
+    if (!event) {
+      return c.json({ error: 'Event not found.' }, 404);
+    }
+
+    const body = await c.req.json().catch(() => ({}));
+    const cleanNote = body.note !== undefined ? (body.note ? String(body.note).trim() : null) : event.rainout_note;
+
+    const { results: attendees } = await c.env.DB.prepare(`
+      SELECT a.*
+      FROM attendees a
+      WHERE a.event_id = ? AND a.status = 'attending'
+    `).bind(eventId).all();
+
+    const origin = new URL(c.req.url).origin;
+    for (const att of (attendees || [])) {
+      try {
+        await sendRainoutEmail(c.env, origin, {
+          email: att.email,
+          name: att.name,
+          event: { ...event, title: event.title, event_date: event.event_date, location: event.location, id: event.id },
+          note: cleanNote,
+          managementToken: att.management_token
+        });
+      } catch (e) {
+        console.error('[Rainout] Error sending email to ' + att.email + ':', e);
+      }
+    }
+
+    await c.env.DB.prepare('UPDATE events SET rainout_email_sent = 1 WHERE id = ?').bind(eventId).run();
+
+    return c.json({ success: true, message: 'Rainout email sent to confirmed attendees.' });
+  } catch (err) {
+    console.error('[Events] Error sending rainout email:', err);
+    return c.json({ error: 'Failed to send rainout email.' }, 500);
+  }
+});
+
+export const onRequest = handle(app);

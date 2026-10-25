@@ -504,8 +504,9 @@ async function loadAdminGames() {
           <div class="card" style="margin-bottom: 0; padding: 18px; border-left: 4px solid var(--secondary);">
             <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px;">
               <div>
-                <div style="font-weight: 700; font-size: 1.15rem; color: var(--secondary);">
-                  ${API.escapeHtml(ev.title)}
+                <div style="font-weight: 700; font-size: 1.15rem; color: var(--secondary); display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                  <span>${API.escapeHtml(ev.title)}</span>
+                  ${ev.status === 'rainout' ? '<span class="badge badge-rainout" style="font-size: 0.72rem;">🌧️ Rained Out</span>' : ''}
                 </div>
                 <div style="font-size: 0.9rem; color: var(--text-main); margin-top: 3px;">
                   📅 ${API.formatDateTime(ev.event_date)} | 📍 ${API.escapeHtml(ev.location)}
@@ -524,6 +525,9 @@ async function loadAdminGames() {
                 </button>
                 <a href="/event.html?id=${ev.id}" class="btn btn-outline btn-sm" target="_blank">
                   View Page ↗
+                </a>
+                <a href="/event.html?id=${ev.id}" class="btn ${ev.status === 'rainout' ? 'btn-danger' : 'btn-outline'} btn-sm">
+                  ${ev.status === 'rainout' ? '🌧️ Manage Rainout' : '🌧️ Rainout'}
                 </a>
                 ${currentAdminUser && currentAdminUser.isAdmin ? `
                   <button onclick="sendReminders(${ev.id})" class="btn btn-outline btn-sm">

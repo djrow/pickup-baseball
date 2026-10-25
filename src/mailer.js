@@ -258,9 +258,135 @@ See you tomorrow at the field!
   return dispatchEmail({ to: email, subject, text, html });
 }
 
+/**
+ * Send rainout cancellation notification email to confirmed attendee
+ */
+async function sendRainoutEmail({ email, name, event, note, managementToken }) {
+  const manageLink = `${APP_URL}/event.html?id=${event.id}&token=${encodeURIComponent(managementToken || '')}`;
+  const eventDateFormatted = new Date(event.event_date).toLocaleString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: 'America/Los_Angeles',
+    timeZoneName: 'short'
+  });
+
+  const subject = `🌧️ Sunday Pickup Baseball Rained Out: ${event.title}`;
+  const text = `Hi ${name},
+
+Today's pickup baseball game has been called due to rain and field conditions.
+
+Event: ${event.title}
+Originally Scheduled: ${eventDateFormatted}
+Location: ${event.location}
+${note ? `Organizer Note:\n"${note}"\n\n` : ''}Any volunteer duty or equipment commitments you made for today are excused.
+
+The discussion board on the event page remains open if you'd like to chat with the team or coordinate alternate plans:
+${manageLink}
+
+Stay dry, and see you on the field next Sunday!
+- ${APP_NAME}`;
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 26px; border: 1px solid #cbd5e1; border-top: 5px solid #0284c7; border-radius: 8px; background: #ffffff;">
+      <h2 style="color: #0f172a; margin-top: 0; font-size: 22px;">🌧️ Game Called Due to Rain</h2>
+      <p style="color: #0c1f1a; font-size: 16px;">Hi <strong>${name}</strong>,</p>
+      <p style="color: #475569; font-size: 15px;">Today's pickup baseball game (<strong>${event.title}</strong>) has been called due to rain and wet field conditions.</p>
+      
+      ${note ? `
+      <div style="background: #f1f5f9; border-left: 4px solid #0284c7; padding: 14px 18px; margin: 18px 0; border-radius: 6px;">
+        <strong style="color: #0f172a; display: block; font-size: 13px; text-transform: uppercase; margin-bottom: 4px;">Organizer Note:</strong>
+        <p style="margin: 0; color: #334155; font-size: 15px; font-style: italic;">"${note}"</p>
+      </div>` : ''}
+
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; margin: 18px 0; border-radius: 6px;">
+        <p style="margin: 3px 0; color: #64748b; font-size: 14px;"><strong>📅 Scheduled:</strong> ${eventDateFormatted}</p>
+        <p style="margin: 3px 0; color: #64748b; font-size: 14px;"><strong>📍 Field:</strong> ${event.location}</p>
+        <p style="margin: 6px 0 0; color: #0284c7; font-weight: 600; font-size: 14px;">✓ Your duty and equipment commitments are excused for today.</p>
+      </div>
+
+      <p style="text-align: center; margin: 26px 0;">
+        <a href="${manageLink}" style="background: #0f172a; color: #ffffff; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 700; font-size: 14px; display: inline-block;">
+          Open Event Discussion Board →
+        </a>
+      </p>
+
+      <p style="color: #64748b; font-size: 13px; border-top: 1px solid #e2e8f0; padding-top: 14px; margin-bottom: 0;">
+        The discussion board is still active if you want to chat with teammates, coordinate batting cages, or catch up before next Sunday.
+      </p>
+    </div>
+  `;
+
+  return dispatchEmail({ to: email, subject, text, html });
+}
+
+/**
+ * Send reopening / back-on notification email to confirmed attendee
+ */
+async function sendReopenEmail({ email, name, event, note, managementToken }) {
+  const manageLink = `${APP_URL}/event.html?id=${event.id}&token=${encodeURIComponent(managementToken || '')}`;
+  const eventDateFormatted = new Date(event.event_date).toLocaleString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: 'America/Los_Angeles',
+    timeZoneName: 'short'
+  });
+
+  const subject = `⚾ Game is BACK ON! Sunday Pickup Baseball: ${event.title}`;
+  const text = `Hi ${name},
+
+Great news! The field or weather conditions have cleared up and today's pickup baseball game is BACK ON!
+
+Event: ${event.title}
+When: ${eventDateFormatted}
+Where: ${event.location}
+${note ? `Organizer Note:\n"${note}"\n\n` : ''}Your roster spot is active. Grab your gear and see you on the field!
+
+Check the live roster & event page:
+${manageLink}
+
+Play ball!
+- ${APP_NAME}`;
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 26px; border: 1px solid #dbe4e0; border-top: 5px solid #FD5A1E; border-radius: 8px; background: #ffffff;">
+      <h2 style="color: #003831; margin-top: 0; font-size: 22px;">⚾ Game is BACK ON!</h2>
+      <p style="color: #0c1f1a; font-size: 16px;">Hi <strong>${name}</strong>,</p>
+      <p style="color: #546e66; font-size: 15px;">Great news! Weather or field conditions have cleared up and today's game (<strong>${event.title}</strong>) is officially BACK ON!</p>
+      
+      ${note ? `
+      <div style="background: #fff7ed; border-left: 4px solid #FD5A1E; padding: 14px 18px; margin: 18px 0; border-radius: 6px;">
+        <strong style="color: #9a3412; display: block; font-size: 13px; text-transform: uppercase; margin-bottom: 4px;">Organizer Note:</strong>
+        <p style="margin: 0; color: #7c2d12; font-size: 15px; font-style: italic;">"${note}"</p>
+      </div>` : ''}
+
+      <div style="background: #f5f8f7; border-left: 4px solid #003831; border: 1px solid #dbe4e0; padding: 16px; margin: 18px 0; border-radius: 6px;">
+        <p style="margin: 3px 0; color: #0c1f1a; font-size: 14px;"><strong>📅 When:</strong> ${eventDateFormatted}</p>
+        <p style="margin: 3px 0; color: #0c1f1a; font-size: 14px;"><strong>📍 Where:</strong> ${event.location}</p>
+        <p style="margin: 6px 0 0; color: #003831; font-weight: 700; font-size: 14px;">✓ Your roster spot is active. Grab your glove and head out!</p>
+      </div>
+
+      <p style="text-align: center; margin: 26px 0;">
+        <a href="${manageLink}" style="background: #FD5A1E; color: #ffffff; padding: 13px 26px; border-radius: 6px; text-decoration: none; font-weight: 700; font-size: 15px; display: inline-block;">
+          Check Live Roster & Duties →
+        </a>
+      </p>
+    </div>
+  `;
+
+  return dispatchEmail({ to: email, subject, text, html });
+}
+
 module.exports = {
   dispatchEmail,
   sendAuthCode,
   sendRsvpConfirmation,
-  sendEventReminder
+  sendEventReminder,
+  sendRainoutEmail,
+  sendReopenEmail
 };

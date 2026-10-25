@@ -57,6 +57,7 @@ function applyLoadedEventToDom(res) {
   renderAttendeesRoster();
   renderComments();
   setupRsvpState();
+  renderOrganizerRainoutPanel();
 
   document.getElementById('event-loading').style.display = 'none';
   document.getElementById('event-container').style.display = 'block';
@@ -136,6 +137,45 @@ function renderEventDetails() {
   document.getElementById('event-datetime').textContent = API.formatDateTime(ev.event_date);
   document.getElementById('event-location').textContent = ev.location;
 
+  const statusBadge = document.getElementById('event-status-badge');
+  const rainoutBanner = document.getElementById('rainout-banner');
+
+  if (ev.status === 'rainout') {
+    if (statusBadge) {
+      statusBadge.className = 'badge badge-rainout';
+      statusBadge.textContent = '🌧️ ' + API.t('event.rained_out_badge', 'Rained Out');
+    }
+
+    if (rainoutBanner) {
+      rainoutBanner.style.display = 'block';
+      rainoutBanner.innerHTML = `
+        <div class="rainout-banner-inner">
+          <div class="rainout-icon">🌧️</div>
+          <div class="rainout-content">
+            <h2 class="rainout-title">Game Called Due to Rain &amp; Wet Field Conditions</h2>
+            <p class="rainout-subtitle">This game has been called for weather. Volunteer duties and gear commitments are excused for today.</p>
+            ${ev.rainout_note ? `
+              <div class="rainout-note-box">
+                <span class="rainout-note-label">Organizer Update:</span>
+                <p class="rainout-note-text">"${API.escapeHtml(ev.rainout_note)}"</p>
+              </div>
+            ` : ''}
+            ${ev.rainout_at ? `<div class="rainout-timestamp">Called by organizer on ${API.formatDateTime(ev.rainout_at)}</div>` : ''}
+          </div>
+        </div>
+      `;
+    }
+  } else {
+    if (statusBadge) {
+      statusBadge.className = 'badge badge-green';
+      statusBadge.textContent = API.t('event.upcoming_badge', 'Upcoming Game');
+    }
+    if (rainoutBanner) {
+      rainoutBanner.style.display = 'none';
+      rainoutBanner.innerHTML = '';
+    }
+  }
+
   const mapLink = document.getElementById('event-map-link');
   const safeMapUrl = API.safeUrl(ev.location_url);
   if (safeMapUrl) {
@@ -173,26 +213,34 @@ function renderDutiesBoard() {
     return;
   }
 
+  const isRainout = eventData.event.status === 'rainout';
+
   grid.innerHTML = duties.map(d => {
     const isFilled = d.assigned_players.length >= d.slots_needed;
     const names = d.assigned_players.map(p => API.escapeHtml(p.name)).join(', ');
     const translatedTitle = API.translatePhrase(d.title);
     const translatedDesc = API.translatePhrase(d.description || '');
 
+    const badgeHtml = isRainout
+      ? `<span class="badge badge-gray">🌧️ Excused</span>`
+      : `<span class="badge ${isFilled ? 'badge-green' : 'badge-orange'}">${API.escapeHtml(isFilled ? API.t('event.duty_filled') : API.t('event.duty_needed'))}</span>`;
+
+    const statusHtml = isRainout
+      ? `<span style="color: var(--text-muted);"><em>Duties excused due to rainout${names ? ` (${names})` : ''}</em></span>`
+      : (isFilled
+        ? `<span style="color: var(--as-green);">${API.escapeHtml(API.t('event.duty_volunteers'))} <strong>${names}</strong></span>`
+        : `<span style="color: var(--giants-orange);">${API.escapeHtml(API.t('event.duty_needs_count', { count: d.slots_needed - d.assigned_players.length }))}${names ? ` (${names})` : ''}</span>`
+      );
+
     return `
-      <div class="duty-card ${isFilled ? 'filled' : 'needed'}">
+      <div class="duty-card ${isRainout ? 'needed' : (isFilled ? 'filled' : 'needed')}" style="${isRainout ? 'opacity: 0.82;' : ''}">
         <div style="display: flex; justify-content: space-between; align-items: flex-start;">
           <h3 class="duty-title">${API.escapeHtml(translatedTitle)}</h3>
-          <span class="badge ${isFilled ? 'badge-green' : 'badge-orange'}">
-            ${API.escapeHtml(isFilled ? API.t('event.duty_filled') : API.t('event.duty_needed'))}
-          </span>
+          ${badgeHtml}
         </div>
         <div class="duty-desc">${API.escapeHtml(translatedDesc)}</div>
         <div class="duty-status">
-          ${isFilled
-            ? `<span style="color: var(--as-green);">${API.escapeHtml(API.t('event.duty_volunteers'))} <strong>${names}</strong></span>`
-            : `<span style="color: var(--giants-orange);">${API.escapeHtml(API.t('event.duty_needs_count', { count: d.slots_needed - d.assigned_players.length }))}${names ? ` (${names})` : ''}</span>`
-          }
+          ${statusHtml}
         </div>
       </div>
     `;
@@ -454,6 +502,214 @@ async function setupRsvpState() {
       </label>
     `;
   }).join('');
+
+  const rainoutNotice = document.getElementById('rsvp-rainout-notice');
+  const isRainout = eventData.event.status === 'rainout';
+
+  if (isRainout) {
+    if (loginPrompt) loginPrompt.style.display = 'none';
+    if (rsvpForm) rsvpForm.style.display = 'none';
+    if (rainoutNotice) {
+      rainoutNotice.style.display = 'block';
+      if (myRsvp && myRsvp.status === 'attending') {
+        rainoutNotice.className = 'alert alert-rainout';
+        rainoutNotice.innerHTML = `
+          <strong>🌧️ Game Called for Rain</strong>
+          <p style="margin: 6px 0 0 0;">You were on the confirmed roster for this game. Your volunteer duty and gear commitments are excused for today. Stay tuned to the discussion board below for updates!</p>
+        `;
+      } else {
+        rainoutNotice.className = 'alert alert-rainout';
+        rainoutNotice.innerHTML = `
+          <strong>🌧️ RSVPs Closed</strong>
+          <p style="margin: 6px 0 0 0;">RSVPs and duty signups are closed because this game has been called for rain.</p>
+        `;
+      }
+    }
+  } else {
+    if (rainoutNotice) {
+      rainoutNotice.style.display = 'none';
+      rainoutNotice.innerHTML = '';
+    }
+    if (rsvpForm) rsvpForm.style.display = 'block';
+  }
+}
+
+function renderOrganizerRainoutPanel() {
+  const panel = document.getElementById('organizer-rainout-panel');
+  if (!panel) return;
+
+  const user = API.currentUser;
+  if (!user || (!user.canManageEvents && !user.isAdmin)) {
+    panel.style.display = 'none';
+    panel.innerHTML = '';
+    return;
+  }
+
+  const ev = eventData.event;
+  const isRainout = ev.status === 'rainout';
+  const attendeeCount = (eventData.attendees || []).length;
+
+  panel.style.display = 'block';
+  panel.className = `organizer-inline-panel${isRainout ? ' rainout-active' : ''}`;
+
+  if (!isRainout) {
+    panel.innerHTML = `
+      <div class="panel-header">
+        <span class="panel-icon">🌦️</span>
+        <div>
+          <h3 class="panel-title">Organizer Weather &amp; Rainout Controls</h3>
+          <p class="panel-desc">If rain or poor field conditions force a cancellation, mark the game as rained out below.</p>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label for="rainout-note-input" style="font-size: 0.85rem; font-weight: 700; margin-bottom: 4px; display: block;">
+            Rainout Note for Players (Optional):
+          </label>
+          <input type="text" id="rainout-note-input" class="form-control" style="width: 100%; box-sizing: border-box; padding: 8px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border);" placeholder="e.g. Infield is underwater and dugout is flooded at Bushrod">
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 0.88rem; cursor: pointer;">
+            <input type="checkbox" id="rainout-send-email-check" checked>
+            <span>Send cancellation email to all confirmed attendees (<strong>${attendeeCount}</strong> player${attendeeCount === 1 ? '' : 's'})</span>
+          </label>
+          <button type="button" id="btn-call-rainout" class="btn btn-danger btn-sm" style="font-weight: 700; padding: 7px 16px;">
+            🌧️ Call Rainout
+          </button>
+        </div>
+      </div>
+    `;
+
+    const callBtn = document.getElementById('btn-call-rainout');
+    if (callBtn) {
+      callBtn.onclick = async () => {
+        const note = document.getElementById('rainout-note-input').value.trim();
+        const sendEmail = document.getElementById('rainout-send-email-check').checked;
+
+        if (!confirm(`Are you sure you want to call this game for rain?${sendEmail ? ` An email will be sent to ${attendeeCount} confirmed attendee(s).` : ''}`)) {
+          return;
+        }
+
+        callBtn.disabled = true;
+        callBtn.textContent = 'Calling Rainout...';
+        try {
+          const res = await API.callRainout(eventId, { note, sendEmail });
+          if (res.error) {
+            alert(res.error);
+            callBtn.disabled = false;
+            callBtn.textContent = '🌧️ Call Rainout';
+          } else {
+            await loadEventData();
+          }
+        } catch (err) {
+          alert('Failed to call rainout.');
+          callBtn.disabled = false;
+          callBtn.textContent = '🌧️ Call Rainout';
+        }
+      };
+    }
+  } else {
+    // Game is already rained out
+    panel.innerHTML = `
+      <div class="panel-header">
+        <span class="panel-icon">🌧️</span>
+        <div>
+          <h3 class="panel-title" style="color: #ef4444;">Game is Currently Marked as Rained Out</h3>
+          <p class="panel-desc">RSVPs and duty commitments are excused. You can send the email to attendees now or reopen the game if conditions improve.</p>
+        </div>
+      </div>
+      <div class="panel-body">
+        ${ev.rainout_email_sent ? `
+          <div style="font-size: 0.85rem; color: #16a34a; margin-bottom: 14px; font-weight: 700;">
+            ✓ Confirmed attendees have been notified via rainout email.
+          </div>
+        ` : `
+          <div style="background: #fffbeb; border: 1px solid #fef3c7; padding: 10px 14px; border-radius: 6px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <span style="font-size: 0.85rem; color: #92400e; font-weight: 600;">
+              ⚠️ Confirmed attendees have not been emailed about this rainout yet.
+            </span>
+            <button type="button" id="btn-send-rainout-email" class="btn btn-outline btn-sm" style="font-weight: 700;">
+              📧 Send Email to Attendees (${attendeeCount})
+            </button>
+          </div>
+        `}
+
+        <div style="border-top: 1px solid var(--border); padding-top: 14px; margin-top: 6px;">
+          <h4 style="font-size: 0.95rem; margin: 0 0 8px; color: var(--secondary); font-weight: 800;">
+            Un-Cancel / Reopen Game (Weather Cleared Up):
+          </h4>
+          <div class="form-group" style="margin-bottom: 10px;">
+            <label for="reopen-note-input" style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 4px; display: block;">
+              Optional reopening message:
+            </label>
+            <input type="text" id="reopen-note-input" class="form-control" style="width: 100%; box-sizing: border-box; padding: 8px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border);" placeholder="e.g. Sun dried out the field, game is back on at noon!">
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 0.88rem; cursor: pointer;">
+              <input type="checkbox" id="reopen-send-email-check" checked>
+              <span>Send &quot;Game Back On&quot; email to confirmed attendees (<strong>${attendeeCount}</strong> player${attendeeCount === 1 ? '' : 's'})</span>
+            </label>
+            <button type="button" id="btn-reopen-game" class="btn btn-primary btn-sm" style="font-weight: 700; padding: 7px 16px;">
+              ⚾ Reopen Game (Back On)
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const sendEmailBtn = document.getElementById('btn-send-rainout-email');
+    if (sendEmailBtn) {
+      sendEmailBtn.onclick = async () => {
+        if (!confirm(`Send rainout notification email to all ${attendeeCount} attendee(s)?`)) return;
+        sendEmailBtn.disabled = true;
+        sendEmailBtn.textContent = 'Sending Emails...';
+        try {
+          const res = await API.sendRainoutEmail(eventId, { note: ev.rainout_note });
+          if (res.error) {
+            alert(res.error);
+            sendEmailBtn.disabled = false;
+            sendEmailBtn.textContent = '📧 Send Email to Attendees';
+          } else {
+            alert('Rainout emails have been sent to attendees.');
+            await loadEventData();
+          }
+        } catch (err) {
+          alert('Failed to send rainout email.');
+          sendEmailBtn.disabled = false;
+          sendEmailBtn.textContent = '📧 Send Email to Attendees';
+        }
+      };
+    }
+
+    const reopenBtn = document.getElementById('btn-reopen-game');
+    if (reopenBtn) {
+      reopenBtn.onclick = async () => {
+        const note = document.getElementById('reopen-note-input').value.trim();
+        const sendEmail = document.getElementById('reopen-send-email-check').checked;
+
+        if (!confirm(`Reopen this game and restore it as active?${sendEmail ? ` A "Game Back On" email will be sent to ${attendeeCount} confirmed player(s).` : ''}`)) {
+          return;
+        }
+
+        reopenBtn.disabled = true;
+        reopenBtn.textContent = 'Reopening Game...';
+        try {
+          const res = await API.reopenEvent(eventId, { note, sendEmail });
+          if (res.error) {
+            alert(res.error);
+            reopenBtn.disabled = false;
+            reopenBtn.textContent = '⚾ Reopen Game (Back On)';
+          } else {
+            await loadEventData();
+          }
+        } catch (err) {
+          alert('Failed to reopen game.');
+          reopenBtn.disabled = false;
+          reopenBtn.textContent = '⚾ Reopen Game (Back On)';
+        }
+      };
+    }
+  }
 }
 
 function setupRsvpForm() {

@@ -6,7 +6,7 @@ const fs = require('fs');
 const os = require('os');
 const { db, DEFAULT_BASEBALL_DUTIES, getDefaultDuties, saveDefaultDuties } = require('../db');
 const { optionalUser, requireAdmin, requireEventCreator } = require('../auth');
-const { sendRsvpConfirmation } = require('../mailer');
+const { sendRsvpConfirmation, sendRainoutEmail, sendReopenEmail } = require('../mailer');
 const { sendRemindersForEvent } = require('../reminders');
 
 /**
@@ -15,7 +15,7 @@ const { sendRemindersForEvent } = require('../reminders');
 router.get('/', optionalUser, (req, res) => {
   try {
     const { filter } = req.query; // 'upcoming', 'past', 'all'
-    let whereClause = "WHERE status = 'active'";
+    let whereClause = "WHERE status IN ('active', 'rainout')";
     const nowIso = new Date().toISOString();
 
     if (filter === 'past') {
@@ -225,6 +225,10 @@ router.post('/:id/rsvp', optionalUser, async (req, res) => {
 
     let { name, email, gear_bringing, duty_ids, management_token, status } = req.body;
     status = status === 'declined' ? 'declined' : 'attending';
+
+    if (event.status === 'rainout' && status === 'attending') {
+      return res.status(400).json({ error: 'RSVPs are closed because this game has been called for rain.' });
+    }
 
     let userId = req.user ? req.user.id : null;
     let isGuest = req.user ? 0 : 1;
@@ -673,6 +677,155 @@ router.post('/:id/send-reminders', requireAdmin, async (req, res) => {
   } catch (err) {
     console.error('[Events] Error sending reminders manually:', err);
     res.status(500).json({ error: 'Failed to send reminders.' });
+  }
+});
+
+/**
+ * Mark event as rained out (Organizer or Admin)
+ */
+router.post('/:id/rainout', requireEventCreator, async (req, res) => {
+  try {
+    const eventId = req.params.id;
+    const event = db.prepare('SELECT * FROM events WHERE id = ?').get(eventId);
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found.' });
+    }
+
+    const { note, sendEmail } = req.body;
+    const cleanNote = note ? String(note).trim() : null;
+    const shouldEmail = Boolean(sendEmail);
+
+    db.prepare(`
+      UPDATE events
+      SET status = 'rainout',
+          rainout_note = ?,
+          rainout_at = CURRENT_TIMESTAMP,
+          rainout_email_sent = CASE WHEN ? = 1 THEN 1 ELSE rainout_email_sent END
+      WHERE id = ?
+    `).run(cleanNote, shouldEmail ? 1 : 0, eventId);
+
+    if (shouldEmail) {
+      const attendees = db.prepare(`
+        SELECT a.*
+        FROM attendees a
+        WHERE a.event_id = ? AND a.status = 'attending'
+      `).all(eventId);
+
+      for (const att of attendees) {
+        try {
+          await sendRainoutEmail({
+            email: att.email,
+            name: att.name,
+            event: { ...event, title: event.title, event_date: event.event_date, location: event.location, id: event.id },
+            note: cleanNote,
+            managementToken: att.management_token
+          });
+        } catch (e) {
+          console.error('[Rainout] Error sending email to ' + att.email + ':', e);
+        }
+      }
+    }
+
+    res.json({ success: true, message: 'Game has been marked as rained out.' });
+  } catch (err) {
+    console.error('[Events] Error marking rainout:', err);
+    res.status(500).json({ error: 'Failed to mark game as rained out.' });
+  }
+});
+
+/**
+ * Reopen a rained-out event (Organizer or Admin)
+ */
+router.post('/:id/reopen', requireEventCreator, async (req, res) => {
+  try {
+    const eventId = req.params.id;
+    const event = db.prepare('SELECT * FROM events WHERE id = ?').get(eventId);
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found.' });
+    }
+
+    const { note, sendEmail } = req.body;
+    const cleanNote = note ? String(note).trim() : null;
+    const shouldEmail = Boolean(sendEmail);
+
+    db.prepare(`
+      UPDATE events
+      SET status = 'active',
+          rainout_note = NULL,
+          rainout_at = NULL,
+          rainout_email_sent = 0
+      WHERE id = ?
+    `).run(eventId);
+
+    if (shouldEmail) {
+      const attendees = db.prepare(`
+        SELECT a.*
+        FROM attendees a
+        WHERE a.event_id = ? AND a.status = 'attending'
+      `).all(eventId);
+
+      for (const att of attendees) {
+        try {
+          await sendReopenEmail({
+            email: att.email,
+            name: att.name,
+            event: { ...event, title: event.title, event_date: event.event_date, location: event.location, id: event.id },
+            note: cleanNote,
+            managementToken: att.management_token
+          });
+        } catch (e) {
+          console.error('[Reopen] Error sending email to ' + att.email + ':', e);
+        }
+      }
+    }
+
+    res.json({ success: true, message: 'Game has been reopened and is back on!' });
+  } catch (err) {
+    console.error('[Events] Error reopening event:', err);
+    res.status(500).json({ error: 'Failed to reopen game.' });
+  }
+});
+
+/**
+ * Send rainout email manually to attendees (Organizer or Admin)
+ */
+router.post('/:id/send-rainout-email', requireEventCreator, async (req, res) => {
+  try {
+    const eventId = req.params.id;
+    const event = db.prepare('SELECT * FROM events WHERE id = ?').get(eventId);
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found.' });
+    }
+
+    const { note } = req.body;
+    const cleanNote = note !== undefined ? (note ? String(note).trim() : null) : event.rainout_note;
+
+    const attendees = db.prepare(`
+      SELECT a.*
+      FROM attendees a
+      WHERE a.event_id = ? AND a.status = 'attending'
+    `).all(eventId);
+
+    for (const att of attendees) {
+      try {
+        await sendRainoutEmail({
+          email: att.email,
+          name: att.name,
+          event: { ...event, title: event.title, event_date: event.event_date, location: event.location, id: event.id },
+          note: cleanNote,
+          managementToken: att.management_token
+        });
+      } catch (e) {
+        console.error('[Rainout] Error sending email to ' + att.email + ':', e);
+      }
+    }
+
+    db.prepare('UPDATE events SET rainout_email_sent = 1 WHERE id = ?').run(eventId);
+
+    res.json({ success: true, message: 'Rainout email sent to confirmed attendees.' });
+  } catch (err) {
+    console.error('[Events] Error sending rainout email:', err);
+    res.status(500).json({ error: 'Failed to send rainout email.' });
   }
 });
 

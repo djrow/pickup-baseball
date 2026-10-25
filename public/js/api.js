@@ -200,17 +200,17 @@ const API = {
   SUPPORTED_LANGUAGES: [
     { code: 'en', label: 'English', short: 'EN', locale: 'en-US', rtl: false },
     { code: 'es', label: 'Español', short: 'ES', locale: 'es-US', rtl: false },
-    { code: 'zh', label: '中文', short: 'ZH', locale: 'zh-CN', rtl: false },
+    { code: 'zh', label: '中文', short: '中', locale: 'zh-CN', rtl: false },
     { code: 'tl', label: 'Tagalog', short: 'TL', locale: 'fil-PH', rtl: false },
     { code: 'vi', label: 'Tiếng Việt', short: 'VI', locale: 'vi-VN', rtl: false },
-    { code: 'ko', label: '한국어', short: 'KO', locale: 'ko-KR', rtl: false },
-    { code: 'fa', label: 'فارسی', short: 'FA', locale: 'fa-IR', rtl: true },
-    { code: 'hy', label: 'Հայերեն', short: 'HY', locale: 'hy-AM', rtl: false },
-    { code: 'ar', label: 'العربية', short: 'AR', locale: 'ar', rtl: true },
-    { code: 'ru', label: 'Русский', short: 'RU', locale: 'ru-RU', rtl: false },
-    { code: 'hi', label: 'हिन्दी', short: 'HI', locale: 'hi-IN', rtl: false },
-    { code: 'pa', label: 'ਪੰਜਾਬੀ', short: 'PA', locale: 'pa-IN', rtl: false },
-    { code: 'ja', label: '日本語', short: 'JA', locale: 'ja-JP', rtl: false },
+    { code: 'ko', label: '한국어', short: '한', locale: 'ko-KR', rtl: false },
+    { code: 'fa', label: 'فارسی', short: 'فا', locale: 'fa-IR', rtl: true },
+    { code: 'hy', label: 'Հայերեն', short: 'Հայ', locale: 'hy-AM', rtl: false },
+    { code: 'ar', label: 'العربية', short: 'عرب', locale: 'ar', rtl: true },
+    { code: 'ru', label: 'Русский', short: 'РУ', locale: 'ru-RU', rtl: false },
+    { code: 'hi', label: 'हिन्दी', short: 'हि', locale: 'hi-IN', rtl: false },
+    { code: 'pa', label: 'ਪੰਜਾਬੀ', short: 'ਪੰ', locale: 'pa-IN', rtl: false },
+    { code: 'ja', label: '日本語', short: '日', locale: 'ja-JP', rtl: false },
     { code: 'fr', label: 'Français', short: 'FR', locale: 'fr-FR', rtl: false },
     { code: 'pt', label: 'Português', short: 'PT', locale: 'pt-BR', rtl: false }
   ],
@@ -509,6 +509,45 @@ const API = {
       localStorage.removeItem(`pickup_cached_event_${id}`);
     } catch (e) {}
     return data;
+  },
+
+  async callRainout(id, payload) {
+    const res = await fetch(`/api/events/${id}/rainout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {})
+    });
+    const data = await res.json();
+    try {
+      localStorage.removeItem(`pickup_cached_event_${id}`);
+      localStorage.removeItem('pickup_cached_events_upcoming');
+      localStorage.removeItem('pickup_cached_events_all');
+    } catch (e) {}
+    return data;
+  },
+
+  async reopenEvent(id, payload) {
+    const res = await fetch(`/api/events/${id}/reopen`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {})
+    });
+    const data = await res.json();
+    try {
+      localStorage.removeItem(`pickup_cached_event_${id}`);
+      localStorage.removeItem('pickup_cached_events_upcoming');
+      localStorage.removeItem('pickup_cached_events_all');
+    } catch (e) {}
+    return data;
+  },
+
+  async sendRainoutEmail(id, payload) {
+    const res = await fetch(`/api/events/${id}/send-rainout-email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {})
+    });
+    return res.json();
   },
 
   async sendLoginCode(email, name = '') {

@@ -546,6 +546,161 @@ header.site-header {
   border: 1px solid var(--border);
 }
 
+.badge-rainout {
+  background: #334155;
+  color: #f8fafc;
+  border: 1px solid #64748b;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.2);
+}
+
+[data-theme="dark"] .badge-rainout {
+  background: #1e293b;
+  color: #e2e8f0;
+  border-color: #475569;
+}
+
+/* Rainout Banner & Styling */
+#rainout-banner {
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.15);
+  animation: rainoutFadeIn 0.3s ease-out;
+}
+
+@keyframes rainoutFadeIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.rainout-banner-inner {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+  padding: 22px 24px;
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  color: #f8fafc;
+  border: 2px solid #38bdf8;
+  border-radius: var(--radius-md);
+}
+
+.rainout-icon {
+  font-size: 2.4rem;
+  line-height: 1;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.rainout-content {
+  flex: 1;
+}
+
+.rainout-title {
+  margin: 0 0 6px 0;
+  color: #ffffff;
+  font-size: 1.45rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+
+.rainout-subtitle {
+  margin: 0 0 12px 0;
+  color: #cbd5e1;
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.rainout-note-box {
+  background: rgba(255, 255, 255, 0.08);
+  border-left: 4px solid #38bdf8;
+  padding: 10px 14px;
+  border-radius: 4px;
+  margin: 10px 0;
+}
+
+.rainout-note-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #38bdf8;
+  margin-bottom: 2px;
+}
+
+.rainout-note-text {
+  margin: 0;
+  font-size: 0.98rem;
+  color: #f1f5f9;
+  font-style: italic;
+}
+
+.rainout-timestamp {
+  font-size: 0.78rem;
+  color: #94a3b8;
+  margin-top: 8px;
+}
+
+/* Organizer Inline Weather & Rainout Controls */
+.organizer-inline-panel {
+  background: var(--bg-subtle);
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius-md);
+  padding: 16px 20px;
+  margin-bottom: 18px;
+  transition: border-color 0.2s;
+}
+
+.organizer-inline-panel.rainout-active {
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.04);
+}
+
+.organizer-inline-panel .panel-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.organizer-inline-panel .panel-icon {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.organizer-inline-panel .panel-title {
+  margin: 0 0 2px 0;
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--secondary);
+}
+
+.organizer-inline-panel .panel-desc {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.organizer-inline-panel .panel-body {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+/* Rainout RSVP alert notice */
+.alert-rainout {
+  background: #f1f5f9;
+  border: 1.5px solid #cbd5e1;
+  color: #334155;
+  border-radius: var(--radius-sm);
+  padding: 14px 18px;
+  font-size: 0.92rem;
+}
+
+[data-theme="dark"] .alert-rainout {
+  background: #1e293b;
+  border-color: #475569;
+  color: #e2e8f0;
+}
+
 /* Event Details & Grid */
 .event-meta-grid {
   display: grid;

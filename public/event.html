@@ -48,6 +48,9 @@
     <!-- Main Event Container -->
     <div id="event-container" style="display: none;">
 
+      <!-- Rainout Banner (Shown when event is rained out) -->
+      <div id="rainout-banner" style="display: none; margin-bottom: 20px;"></div>
+
       <!-- Event Header Card -->
       <div class="card" style="border-top: 5px solid var(--secondary);">
         <div class="card-header">
@@ -59,6 +62,7 @@
         </div>
 
         <div id="edit-event-panel" style="display: none; margin-bottom: 18px;"></div>
+        <div id="organizer-rainout-panel" style="display: none; margin-bottom: 18px;"></div>
 
         <div class="event-meta-grid">
           <div class="meta-item">
@@ -122,6 +126,7 @@
         </div>
 
         <div id="rsvp-alert"></div>
+        <div id="rsvp-rainout-notice" style="display: none; margin-bottom: 20px;"></div>
 
         <!-- Registered Player Login Prompt -->
         <div id="rsvp-login-prompt" style="background: #f0fdf4; border: 1.5px solid #bbf7d0; border-radius: var(--radius-sm); padding: 12px 16px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">

@@ -162,16 +162,25 @@ function renderFeaturedGame(ev, container) {
     : '';
   const translatedTitle = API.translateEventTitle(ev);
   const translatedDesc = ev.description ? API.translatePhrase(ev.description) : '';
+  const isRainout = ev.status === 'rainout';
+  const statusBadge = isRainout
+    ? `<span class="badge badge-rainout">🌧️ ${API.escapeHtml(API.t('event.rained_out_badge', 'Rained Out'))}</span>`
+    : `<span class="badge badge-orange">${API.escapeHtml(API.t('home.next_sunday_badge'))}</span>`;
+  const borderTopColor = isRainout ? '#38bdf8' : 'var(--giants-orange)';
+  const rainoutNoteHtml = isRainout && ev.rainout_note
+    ? `<div style="background: rgba(56, 189, 248, 0.12); border-left: 3px solid #38bdf8; padding: 8px 12px; border-radius: 4px; margin-top: 10px; font-size: 0.9rem; color: var(--text-main);"><strong>🌧️ Rainout Update:</strong> <em>"${API.escapeHtml(ev.rainout_note)}"</em></div>`
+    : '';
 
   container.innerHTML = `
-    <div class="card" style="border-top: 5px solid var(--giants-orange); box-shadow: var(--shadow-md);">
+    <div class="card" style="border-top: 5px solid ${borderTopColor}; box-shadow: var(--shadow-md);">
       <div class="card-header">
         <div>
-          <span class="badge badge-orange">${API.escapeHtml(API.t('home.next_sunday_badge'))}</span>
+          ${statusBadge}
           ${myRsvpBadge}
           <h2 style="font-size: 1.7rem; color: var(--as-green); margin-top: 8px;">
             ${API.escapeHtml(translatedTitle)}
           </h2>
+          ${rainoutNoteHtml}
         </div>
         <a href="/event.html?id=${ev.id}" class="btn btn-primary btn-lg">
           ${API.escapeHtml(API.t('home.rsvp_view_details'))}
@@ -244,12 +253,16 @@ function renderGamesList(events, container) {
           ? `<span class="badge badge-green">${API.escapeHtml(API.t('home.you_are_attending'))}</span>`
           : '';
         const translatedTitle = API.translateEventTitle(ev);
+        const isRainout = ev.status === 'rainout';
+        const statusBadge = isRainout
+          ? `<span class="badge badge-rainout">🌧️ ${API.escapeHtml(API.t('event.rained_out_badge', 'Rained Out'))}</span>`
+          : `<span class="badge badge-blue">${API.escapeHtml(API.t('home.sunday_game_badge'))}</span>`;
 
         return `
-          <div class="card" style="display: flex; flex-direction: column; justify-content: space-between; margin-bottom: 0;">
+          <div class="card" style="display: flex; flex-direction: column; justify-content: space-between; margin-bottom: 0; ${isRainout ? 'border-left: 4px solid #38bdf8;' : ''}">
             <div>
               <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
-                <span class="badge badge-blue">${API.escapeHtml(API.t('home.sunday_game_badge'))}</span>
+                ${statusBadge}
                 ${myRsvpBadge}
               </div>
               <h3 style="font-size: 1.15rem; color: var(--secondary); margin-bottom: 6px;">
