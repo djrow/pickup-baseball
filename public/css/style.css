@@ -830,10 +830,10 @@ select:focus {
   gap: 8px;
   text-decoration: none;
   height: 34px;
-  padding: 0 12px 0 3px;
+  padding: 0 12px 0 0;
   border-radius: var(--radius-full);
   background: var(--as-green-subtle);
-  border: 1.5px solid transparent;
+  border: none;
   box-sizing: border-box;
   flex-shrink: 0;
   transition: background-color 0.15s;
@@ -844,8 +844,8 @@ select:focus {
 }
 
 .nav-avatar {
-  width: 26px;
-  height: 26px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   object-fit: cover;
   border: 1.5px solid var(--as-green);
@@ -854,13 +854,13 @@ select:focus {
 }
 
 .nav-avatar-placeholder {
-  width: 26px;
-  height: 26px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   background-color: var(--as-green);
   color: var(--crisp-white);
   font-weight: 800;
-  font-size: 0.82rem;
+  font-size: 0.95rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1018,12 +1018,12 @@ footer.site-footer strong {
 .lang-select {
   width: auto;
   height: 34px;
-  padding: 0 12px 0 10px;
+  padding: 0 10px;
   border-radius: var(--radius-full);
   background: var(--bg-subtle);
   border: 1.5px solid var(--border);
   color: var(--text-main);
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   font-weight: 700;
   cursor: pointer;
   flex-shrink: 0;
@@ -1138,8 +1138,16 @@ footer.site-footer strong {
     display: none;
   }
   .nav-user-badge {
-    padding: 2px;
+    height: 30px;
+    padding: 0;
     background: transparent;
+    border: none;
+  }
+  .nav-avatar,
+  .nav-avatar-placeholder {
+    width: 30px;
+    height: 30px;
+    font-size: 0.85rem;
   }
   .nav-links {
     gap: 8px;
@@ -1168,15 +1176,6 @@ footer.site-footer strong {
     height: 30px;
     padding: 0 6px;
     font-size: 0.74rem;
-  }
-  .nav-user-badge {
-    height: 30px;
-    padding: 0 8px 0 2px;
-  }
-  .nav-avatar,
-  .nav-avatar-placeholder {
-    width: 24px;
-    height: 24px;
   }
   .hero {
     padding: 28px 0;
@@ -1210,7 +1209,7 @@ footer.site-footer strong {
     font-size: 0.76rem;
   }
   .lang-select {
-    width: 68px;
+    width: auto;
     height: 30px;
     padding: 0 4px;
     font-size: 0.72rem;

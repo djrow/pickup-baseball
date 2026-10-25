@@ -200,7 +200,7 @@ const API = {
   SUPPORTED_LANGUAGES: [
     { code: 'en', label: 'English', short: 'EN', locale: 'en-US', rtl: false },
     { code: 'es', label: 'Español', short: 'ES', locale: 'es-US', rtl: false },
-    { code: 'zh', label: '中文', short: '中文', locale: 'zh-CN', rtl: false },
+    { code: 'zh', label: '中文', short: 'ZH', locale: 'zh-CN', rtl: false },
     { code: 'tl', label: 'Tagalog', short: 'TL', locale: 'fil-PH', rtl: false },
     { code: 'vi', label: 'Tiếng Việt', short: 'VI', locale: 'vi-VN', rtl: false },
     { code: 'ko', label: '한국어', short: 'KO', locale: 'ko-KR', rtl: false },
@@ -766,7 +766,7 @@ const API = {
     const donateLinkHtml = `<a href="/donate.html" class="nav-link-donate${isDonatePage ? ' active' : ''}">${this.t('nav.donate')}</a>`;
 
     const langOptionsHtml = this.SUPPORTED_LANGUAGES.map(l =>
-      `<option value="${l.code}" ${l.code === currentLang ? 'selected' : ''}>🌐 ${l.short} — ${l.label}</option>`
+      `<option value="${l.code}" ${l.code === currentLang ? 'selected' : ''} title="${this.escapeHtml(l.label)}">${l.short}</option>`
     ).join('');
     const langSelectHtml = `<select id="lang-select" class="lang-select" aria-label="Language" title="Language / Idioma / 语言">${langOptionsHtml}</select>`;
 
