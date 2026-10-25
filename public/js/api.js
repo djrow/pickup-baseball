@@ -762,6 +762,9 @@ const API = {
     const isDark = this.getTheme() === 'dark';
     const themeBtnHtml = `<button type="button" id="theme-toggle-btn" class="btn-theme-toggle" title="${isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}" aria-label="${isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}">${isDark ? '☀️' : '🌙'}</button>`;
 
+    const isDonatePage = typeof window !== 'undefined' && (window.location.pathname.endsWith('donate.html') || window.location.pathname === '/donate');
+    const donateLinkHtml = `<a href="/donate.html" class="nav-link-donate${isDonatePage ? ' active' : ''}">${this.t('nav.donate')}</a>`;
+
     const langOptionsHtml = this.SUPPORTED_LANGUAGES.map(l =>
       `<option value="${l.code}" ${l.code === currentLang ? 'selected' : ''}>🌐 ${l.short} — ${l.label}</option>`
     ).join('');
@@ -776,9 +779,9 @@ const API = {
           <span class="brand-tag">${this.t('nav.community')}</span>
         </a>
         <div class="nav-links">
+          ${donateLinkHtml}
           ${langSelectHtml}
           ${themeBtnHtml}
-          <a href="/donate.html">${this.t('nav.donate')}</a>
           ${authHtml}
         </div>
       </div>

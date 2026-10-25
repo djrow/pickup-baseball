@@ -215,7 +215,7 @@ header.site-header {
   flex-wrap: nowrap;
   white-space: nowrap;
   flex-shrink: 0;
-  gap: 12px;
+  gap: 10px;
   margin-inline-start: auto;
 }
 
@@ -229,6 +229,53 @@ header.site-header {
 
 .nav-links a:hover {
   color: var(--giants-orange);
+}
+
+.nav-link-donate {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: var(--radius-full);
+  font-size: 0.88rem;
+  font-weight: 700;
+  text-decoration: none !important;
+  color: var(--text-main) !important;
+  background: var(--bg-subtle);
+  border: 1.5px solid var(--border);
+  box-sizing: border-box;
+  flex-shrink: 0;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s, transform 0.05s;
+}
+
+.nav-link-donate:hover {
+  color: var(--giants-orange) !important;
+  border-color: var(--giants-orange);
+  background: var(--giants-orange-light);
+}
+
+.nav-link-donate.active {
+  background: var(--as-green-subtle);
+  border-color: var(--as-green);
+  color: var(--as-green) !important;
+}
+
+[data-theme="dark"] .nav-link-donate {
+  color: #e2e8f0 !important;
+}
+
+[data-theme="dark"] .nav-link-donate:hover {
+  color: var(--mint-green) !important;
+  background: rgba(52, 211, 153, 0.12);
+  border-color: rgba(52, 211, 153, 0.4);
+}
+
+[data-theme="dark"] .nav-link-donate.active {
+  background: rgba(52, 211, 153, 0.18);
+  border-color: rgba(52, 211, 153, 0.5);
+  color: var(--mint-green) !important;
 }
 
 /* Buttons */
@@ -289,15 +336,19 @@ header.site-header {
   background-color: var(--giants-orange);
   color: var(--crisp-white) !important;
   font-weight: 700;
-  padding: 8px 18px;
-  border-radius: var(--radius-sm);
+  height: 34px;
+  padding: 0 16px;
+  border-radius: var(--radius-full);
   box-shadow: 0 2px 8px rgba(253, 90, 30, 0.3);
   text-decoration: none;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  font-size: 0.92rem;
-  border: 1px solid transparent;
+  font-size: 0.88rem;
+  border: 1.5px solid transparent;
+  box-sizing: border-box;
+  flex-shrink: 0;
   transition: background-color 0.15s, transform 0.05s, box-shadow 0.15s;
 }
 
@@ -759,15 +810,32 @@ select:focus {
   line-height: 1.5;
 }
 
+.nav-links .btn-sm {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: var(--radius-full);
+  font-size: 0.82rem;
+  font-weight: 700;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
 /* User Avatars & Profile Styles */
 .nav-user-badge {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   text-decoration: none;
-  padding: 4px 10px;
+  height: 34px;
+  padding: 0 12px 0 3px;
   border-radius: var(--radius-full);
   background: var(--as-green-subtle);
+  border: 1.5px solid transparent;
+  box-sizing: border-box;
+  flex-shrink: 0;
   transition: background-color 0.15s;
 }
 
@@ -776,24 +844,28 @@ select:focus {
 }
 
 .nav-avatar {
-  width: 32px;
-  height: 32px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   object-fit: cover;
   border: 1.5px solid var(--as-green);
+  box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 .nav-avatar-placeholder {
-  width: 32px;
-  height: 32px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   background-color: var(--as-green);
   color: var(--crisp-white);
   font-weight: 800;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 .roster-avatar {
@@ -925,7 +997,7 @@ footer.site-footer strong {
   color: var(--text-main);
   width: 34px;
   height: 34px;
-  border-radius: var(--radius-full);
+  border-radius: 50%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -934,6 +1006,7 @@ footer.site-footer strong {
   line-height: 1;
   padding: 0;
   flex-shrink: 0;
+  box-sizing: border-box;
   transition: background-color 0.15s, border-color 0.15s, transform 0.1s;
 }
 
@@ -945,7 +1018,7 @@ footer.site-footer strong {
 .lang-select {
   width: auto;
   height: 34px;
-  padding: 0 8px;
+  padding: 0 12px 0 10px;
   border-radius: var(--radius-full);
   background: var(--bg-subtle);
   border: 1.5px solid var(--border);
@@ -954,6 +1027,9 @@ footer.site-footer strong {
   font-weight: 700;
   cursor: pointer;
   flex-shrink: 0;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
   transition: border-color 0.15s, background-color 0.15s;
 }
 
@@ -1068,26 +1144,39 @@ footer.site-footer strong {
   .nav-links {
     gap: 8px;
   }
-  .nav-links a {
-    font-size: 0.85rem;
+  .nav-link-donate {
+    height: 30px;
+    padding: 0 10px;
+    font-size: 0.8rem;
   }
   .nav-links .btn-sm {
-    padding: 4px 8px;
-    font-size: 0.78rem;
+    height: 30px;
+    padding: 0 8px;
+    font-size: 0.76rem;
   }
   .btn-login {
-    padding: 5px 10px;
-    font-size: 0.82rem;
+    height: 30px;
+    padding: 0 10px;
+    font-size: 0.8rem;
   }
   .btn-theme-toggle {
     width: 30px;
     height: 30px;
-    font-size: 0.9rem;
+    font-size: 0.88rem;
   }
   .lang-select {
     height: 30px;
     padding: 0 6px;
     font-size: 0.74rem;
+  }
+  .nav-user-badge {
+    height: 30px;
+    padding: 0 8px 0 2px;
+  }
+  .nav-avatar,
+  .nav-avatar-placeholder {
+    width: 24px;
+    height: 24px;
   }
   .hero {
     padding: 28px 0;
@@ -1104,15 +1193,42 @@ footer.site-footer strong {
   #main-nav.container {
     padding: 0 10px;
   }
-  .nav-links {
-    gap: 6px;
+  .brand-text {
+    display: none;
   }
-  .nav-links a {
-    font-size: 0.8rem;
+  .brand-short {
+    display: inline;
+    font-size: 0.95rem;
+    font-weight: 800;
+  }
+  .nav-links {
+    gap: 5px;
+  }
+  .nav-link-donate {
+    height: 30px;
+    padding: 0 8px;
+    font-size: 0.76rem;
+  }
+  .lang-select {
+    width: 68px;
+    height: 30px;
+    padding: 0 4px;
+    font-size: 0.72rem;
+  }
+  .btn-theme-toggle {
+    width: 30px;
+    height: 30px;
+    font-size: 0.85rem;
   }
   .nav-links .btn-sm {
-    padding: 4px 6px;
-    font-size: 0.75rem;
+    height: 30px;
+    padding: 0 8px;
+    font-size: 0.74rem;
+  }
+  .btn-login {
+    height: 30px;
+    padding: 0 9px;
+    font-size: 0.76rem;
   }
   .btn-login-icon {
     display: none;
@@ -1120,12 +1236,19 @@ footer.site-footer strong {
 }
 
 @media (max-width: 21.25em) {
-  .brand-text {
-    display: none;
+  #main-nav.container {
+    padding: 0 6px;
   }
-  .brand-short {
-    display: inline;
-    font-size: 0.95rem;
+  .nav-links {
+    gap: 4px;
+  }
+  .nav-link-donate,
+  .btn-login {
+    padding: 0 6px;
+    font-size: 0.72rem;
+  }
+  .lang-select {
+    max-width: 65px;
   }
 }
 
