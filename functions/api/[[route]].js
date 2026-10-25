@@ -552,6 +552,131 @@ Play ball!
   return dispatchEmail(env, { to: email, subject, text, html });
 }
 
+async function sendWaitlistConfirmation(env, origin, { email, name, event, waitlistPosition, managementToken }) {
+  const appName = env.APP_NAME || 'Sunday Pickup Baseball';
+  const manageLink = `${origin}/event.html?id=${event.id}&token=${encodeURIComponent(managementToken || '')}`;
+  const eventDateFormatted = new Date(event.event_date).toLocaleString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: 'America/Los_Angeles',
+    timeZoneName: 'short'
+  });
+
+  const safeName = escapeHtml(name);
+  const safeTitle = escapeHtml(event.title);
+  const safeLocation = escapeHtml(event.location);
+
+  const subject = `⏳ Waitlist Confirmed: ${event.title} (Position #${waitlistPosition})`;
+  const text = `Hi ${name},
+
+The active playing roster for ${event.title} is currently full at ${event.max_players || 'maximum'} players.
+
+You are on the waitlist at position #${waitlistPosition}.
+
+If an active player cancels their RSVP, you will be automatically promoted to the playing roster and notified immediately by email!
+
+Check your waitlist status and view event details here:
+${manageLink}
+
+- ${appName}`;
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 26px; border: 1px solid #dbe4e0; border-top: 5px solid #003831; border-radius: 8px; background: #ffffff;">
+      <h2 style="color: #003831; margin-top: 0; font-size: 22px;"><img src="${origin}/logo.svg" alt="" style="width: 30px; height: 30px; vertical-align: middle; margin-right: 6px;">⏳ Waitlist Confirmed</h2>
+      <p style="color: #0c1f1a; font-size: 16px;">Hi <strong>${safeName}</strong>,</p>
+      <p style="color: #546e66; font-size: 15px;">The playing roster for <strong>${safeTitle}</strong> is currently full. You have been placed on the waitlist.</p>
+      
+      <div style="background: #f5f8f7; border-left: 4px solid #FD5A1E; border: 1px solid #dbe4e0; padding: 18px; margin: 20px 0; border-radius: 6px;">
+        <p style="margin: 4px 0; color: #003831; font-size: 17px;"><strong>Your Waitlist Position:</strong> <span style="background: #FD5A1E; color: #fff; padding: 3px 10px; border-radius: 20px; font-weight: 700;">#${waitlistPosition}</span></p>
+        <p style="margin: 8px 0 4px 0; color: #0c1f1a;"><strong>📅 Game Date:</strong> ${escapeHtml(eventDateFormatted)}</p>
+        <p style="margin: 4px 0; color: #0c1f1a;"><strong>📍 Location:</strong> ${safeLocation}</p>
+      </div>
+
+      <p style="color: #0c1f1a; font-size: 14px; line-height: 1.5;">
+        <strong>How it works:</strong> Whenever a confirmed player cancels, the system automatically promotes the next waitlisted player and sends an immediate email alert. Keep an eye on your inbox!
+      </p>
+
+      <p style="text-align: center; margin: 28px 0;">
+        <a href="${manageLink}" style="background: #003831; color: #ffffff; padding: 13px 26px; border-radius: 6px; text-decoration: none; font-weight: 700; font-size: 15px; display: inline-block;">
+          Check Waitlist Status & Event Page →
+        </a>
+      </p>
+    </div>
+  `;
+
+  return dispatchEmail(env, { to: email, subject, text, html });
+}
+
+async function sendWaitlistPromotionEmail(env, origin, { email, name, event, managementToken }) {
+  const appName = env.APP_NAME || 'Sunday Pickup Baseball';
+  const manageLink = `${origin}/event.html?id=${event.id}&token=${encodeURIComponent(managementToken || '')}`;
+  const eventDateFormatted = new Date(event.event_date).toLocaleString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: 'America/Los_Angeles',
+    timeZoneName: 'short'
+  });
+
+  const safeName = escapeHtml(name);
+  const safeTitle = escapeHtml(event.title);
+  const safeLocation = escapeHtml(event.location);
+  const safeLocationUrl = sanitizeHttpUrl(event.location_url);
+
+  const subject = `⚾ A spot opened up! You're in for ${event.title} (${eventDateFormatted})`;
+  const text = `Hi ${name},
+
+Great news! A spot just opened up for pickup baseball!
+
+You have been automatically promoted from the waitlist to the ACTIVE ROSTER for:
+${event.title}
+
+Date & Time: ${eventDateFormatted}
+Location: ${event.location}
+
+Visit the event page to coordinate gear, sign up for duties, or view the roster:
+${manageLink}
+
+If your plans have changed and you can no longer attend, please cancel your RSVP on the page so another player from the waitlist can take your spot.
+
+See you on the field!
+- ${appName}`;
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 26px; border: 1px solid #dbe4e0; border-top: 5px solid #003831; border-radius: 8px; background: #ffffff;">
+      <h2 style="color: #003831; margin-top: 0; font-size: 22px;"><img src="${origin}/logo.svg" alt="" style="width: 30px; height: 30px; vertical-align: middle; margin-right: 6px;">⚾ You're Off the Waitlist — You're In!</h2>
+      <p style="color: #0c1f1a; font-size: 16px;">Hi <strong>${safeName}</strong>,</p>
+      <p style="color: #546e66; font-size: 15px;">A spot just opened up! You have been <strong>automatically promoted from the waitlist to the confirmed roster</strong> for <strong>${safeTitle}</strong>.</p>
+      
+      <div style="background: #f5f8f7; border-left: 4px solid #003831; border: 1px solid #dbe4e0; padding: 18px; margin: 20px 0; border-radius: 6px;">
+        <p style="margin: 4px 0; color: #0c1f1a;"><strong>📅 When:</strong> ${escapeHtml(eventDateFormatted)}</p>
+        <p style="margin: 4px 0; color: #0c1f1a;"><strong>📍 Where:</strong> ${safeLocation}</p>
+        ${safeLocationUrl ? `<p style="margin: 4px 0;"><a href="${escapeHtml(safeLocationUrl)}" target="_blank" rel="noopener noreferrer" style="color: #FD5A1E; font-weight: 700;">View Map / Directions ↗</a></p>` : ''}
+        <p style="margin: 6px 0 0 0; color: #003831; font-weight: 700;">Status: Confirmed Player</p>
+      </div>
+
+      <p style="text-align: center; margin: 28px 0;">
+        <a href="${manageLink}" style="background: #FD5A1E; color: #ffffff; padding: 13px 26px; border-radius: 6px; text-decoration: none; font-weight: 700; font-size: 15px; display: inline-block;">
+          View Roster & Sign Up for Duties →
+        </a>
+      </p>
+
+      <p style="color: #546e66; font-size: 13px; border-top: 1px solid #dbe4e0; padding-top: 14px;">
+        Can't make it after all? Please click the button above to cancel your RSVP so the next person on the waitlist gets their chance to play!
+      </p>
+    </div>
+  `;
+
+  return dispatchEmail(env, { to: email, subject, text, html });
+}
+
 // Auth, RBAC & Security Headers Middleware
 // -----------------------------------------------------------------------------
 
@@ -1256,6 +1381,49 @@ app.post('/auth/logout', async (c) => {
 // -----------------------------------------------------------------------------
 // Events Routes
 // -----------------------------------------------------------------------------
+
+async function promoteNextWaitlistedPlayer(env, origin, eventId) {
+  try {
+    const event = await env.DB.prepare('SELECT * FROM events WHERE id = ?').bind(eventId).first();
+    if (!event || event.status === 'rainout') return null;
+
+    const countRow = await env.DB.prepare(`
+      SELECT COUNT(*) as count FROM attendees WHERE event_id = ? AND status = 'attending'
+    `).bind(eventId).first();
+    const activeCount = countRow ? countRow.count : 0;
+
+    if (event.max_players && activeCount >= event.max_players) {
+      return null;
+    }
+
+    const nextWaitlisted = await env.DB.prepare(`
+      SELECT * FROM attendees
+      WHERE event_id = ? AND status = 'waitlist'
+      ORDER BY created_at ASC, id ASC
+      LIMIT 1
+    `).bind(eventId).first();
+
+    if (!nextWaitlisted) return null;
+
+    await env.DB.prepare(`
+      UPDATE attendees SET status = 'attending' WHERE id = ?
+    `).bind(nextWaitlisted.id).run();
+
+    console.log(`[Waitlist Promotion:D1] Automatically promoted ${nextWaitlisted.name} (${nextWaitlisted.email}) for event ${eventId}`);
+
+    const p = sendWaitlistPromotionEmail(env, origin, {
+      email: nextWaitlisted.email,
+      name: nextWaitlisted.name,
+      event,
+      managementToken: nextWaitlisted.management_token
+    }).catch(e => console.error('[Waitlist Promotion Email Error]:', e));
+
+    return nextWaitlisted;
+  } catch (err) {
+    console.error('[Waitlist Promotion Helper Error]:', err);
+    return null;
+  }
+}
 
 app.get('/events', async (c) => {
   try {

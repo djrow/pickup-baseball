@@ -6,7 +6,7 @@ const fs = require('fs');
 const os = require('os');
 const { db, DEFAULT_BASEBALL_DUTIES, getDefaultDuties, saveDefaultDuties } = require('../db');
 const { optionalUser, requireAdmin, requireEventCreator } = require('../auth');
-const { sendRsvpConfirmation, sendRainoutEmail, sendReopenEmail } = require('../mailer');
+const { sendRsvpConfirmation, sendWaitlistConfirmation, sendWaitlistPromotionEmail, sendRainoutEmail, sendReopenEmail } = require('../mailer');
 const { sendRemindersForEvent } = require('../reminders');
 
 /**
@@ -166,6 +166,16 @@ router.get('/:id', optionalUser, (req, res) => {
       ORDER BY a.created_at ASC
     `).all(eventId);
 
+    // Fetch waitlisted attendees in signup order
+    const waitlist = db.prepare(`
+      SELECT a.id, a.name, a.status, a.is_guest, a.created_at,
+        u.bio, u.avatar_url
+      FROM attendees a
+      LEFT JOIN users u ON a.user_id = u.id
+      WHERE a.event_id = ? AND a.status = 'waitlist'
+      ORDER BY a.created_at ASC, a.id ASC
+    `).all(eventId);
+
     // Fetch comments
     const comments = db.prepare(`
       SELECT c.id, c.author_name, c.content, c.created_at, c.user_id,
@@ -202,15 +212,63 @@ router.get('/:id', optionalUser, (req, res) => {
       event,
       duties,
       attendees,
+      waitlist,
       comments,
       myRsvp,
-      totalAttendees: attendees.length
+      totalAttendees: attendees.length,
+      totalWaitlist: waitlist.length
     });
   } catch (err) {
     console.error('[Events] Error fetching event details:', err);
     res.status(500).json({ error: 'Failed to fetch event details.' });
   }
 });
+
+/**
+ * Helper: Automatically promote the next waitlisted player if capacity allows.
+ */
+function promoteNextWaitlistedPlayer(eventId) {
+  const event = db.prepare('SELECT * FROM events WHERE id = ?').get(eventId);
+  if (!event || event.status === 'rainout') return null;
+
+  // Check current confirmed attendees count
+  const activeCount = db.prepare(`
+    SELECT COUNT(*) as count FROM attendees WHERE event_id = ? AND status = 'attending'
+  `).get(eventId).count;
+
+  if (event.max_players && activeCount >= event.max_players) {
+    return null; // Roster is still full
+  }
+
+  // Get the earliest waitlisted attendee
+  const nextWaitlisted = db.prepare(`
+    SELECT * FROM attendees
+    WHERE event_id = ? AND status = 'waitlist'
+    ORDER BY created_at ASC, id ASC
+    LIMIT 1
+  `).get(eventId);
+
+  if (!nextWaitlisted) return null;
+
+  // Promote to attending
+  db.prepare(`
+    UPDATE attendees SET status = 'attending' WHERE id = ?
+  `).run(nextWaitlisted.id);
+
+  console.log(`[Waitlist Promotion] Automatically promoted ${nextWaitlisted.name} (${nextWaitlisted.email}) for event ${eventId}`);
+
+  // Send promotion email
+  sendWaitlistPromotionEmail({
+    email: nextWaitlisted.email,
+    name: nextWaitlisted.name,
+    event,
+    managementToken: nextWaitlisted.management_token
+  }).catch(err => {
+    console.error('[Waitlist] Failed to dispatch promotion email:', err);
+  });
+
+  return nextWaitlisted;
+}
 
 /**
  * RSVP for an event (handles both logged-in users and guests)
@@ -262,6 +320,25 @@ router.post('/:id/rsvp', optionalUser, async (req, res) => {
       SELECT * FROM attendees WHERE event_id = ? AND email = ?
     `).get(eventId, email);
 
+    const wasAttending = existingAttendee && existingAttendee.status === 'attending';
+
+    let finalStatus = status;
+    let waitlistPos = 0;
+
+    if (status === 'attending') {
+      // If user was not already confirmed as attending, check if roster reached capacity
+      if (!wasAttending && event.max_players && event.max_players > 0) {
+        const activeCount = db.prepare(`
+          SELECT COUNT(*) as count FROM attendees
+          WHERE event_id = ? AND status = 'attending' AND email != ?
+        `).get(eventId, email).count;
+
+        if (activeCount >= event.max_players) {
+          finalStatus = 'waitlist';
+        }
+      }
+    }
+
     let attendeeId;
     if (existingAttendee) {
       attendeeId = existingAttendee.id;
@@ -269,25 +346,23 @@ router.post('/:id/rsvp', optionalUser, async (req, res) => {
         UPDATE attendees
         SET name = ?, status = ?, gear_bringing = ?, user_id = COALESCE(?, user_id), is_guest = ?
         WHERE id = ?
-      `).run(name, status, (gear_bringing || '').trim(), userId, isGuest, attendeeId);
+      `).run(name, finalStatus, (gear_bringing || '').trim(), userId, isGuest, attendeeId);
     } else {
       const result = db.prepare(`
         INSERT INTO attendees (event_id, user_id, name, email, is_guest, status, gear_bringing, management_token)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(eventId, userId, name, email, isGuest, status, (gear_bringing || '').trim(), mgmtToken);
+      `).run(eventId, userId, name, email, isGuest, finalStatus, (gear_bringing || '').trim(), mgmtToken);
       attendeeId = result.lastInsertRowid;
     }
 
-    // Handle duty assignments if attending
+    // Handle duty assignments: only confirmed attending players hold duty slots
     const assignedDutyNames = [];
-    if (status === 'attending' && Array.isArray(duty_ids)) {
-      // Clear previous duty assignments for this attendee
+    if (finalStatus === 'attending' && Array.isArray(duty_ids)) {
       db.prepare('DELETE FROM duty_assignments WHERE attendee_id = ?').run(attendeeId);
 
       for (const dId of duty_ids) {
         const duty = db.prepare('SELECT * FROM event_duties WHERE id = ? AND event_id = ?').get(dId, eventId);
         if (duty) {
-          // Check slot count
           const currentCount = db.prepare(`
             SELECT COUNT(*) as count FROM duty_assignments da
             JOIN attendees a ON da.attendee_id = a.id
@@ -303,32 +378,68 @@ router.post('/:id/rsvp', optionalUser, async (req, res) => {
           }
         }
       }
-    } else if (status === 'declined') {
-      // Clear duties if declined
+    } else {
+      // Clear duties if declined or waitlisted
       db.prepare('DELETE FROM duty_assignments WHERE attendee_id = ?').run(attendeeId);
     }
 
-    // Send confirmation email asynchronously if attending
-    if (status === 'attending') {
+    // If active player declined/cancelled, trigger automatic waitlist promotion!
+    if (status === 'declined' && wasAttending) {
+      promoteNextWaitlistedPlayer(eventId);
+    }
+
+    // Send notifications
+    if (finalStatus === 'waitlist') {
+      waitlistPos = db.prepare(`
+        SELECT COUNT(*) as count FROM attendees
+        WHERE event_id = ? AND status = 'waitlist' AND (created_at < (SELECT created_at FROM attendees WHERE id = ?) OR (created_at = (SELECT created_at FROM attendees WHERE id = ?) AND id <= ?))
+      `).get(eventId, attendeeId, attendeeId, attendeeId).count;
+
+      sendWaitlistConfirmation({
+        email,
+        name,
+        event,
+        waitlistPosition: waitlistPos,
+        managementToken: existingAttendee ? (existingAttendee.management_token || mgmtToken) : mgmtToken
+      }).catch(err => {
+        console.error('[Waitlist] Failed to dispatch confirmation email:', err);
+      });
+
+      return res.json({
+        success: true,
+        status: 'waitlist',
+        waitlistPosition: waitlistPos,
+        managementToken: existingAttendee ? (existingAttendee.management_token || mgmtToken) : mgmtToken,
+        message: `The roster is full (${event.max_players} players), but you're #${waitlistPos} on the waitlist! If a spot opens up, you will be automatically promoted and notified immediately.`
+      });
+    }
+
+    if (finalStatus === 'attending') {
       sendRsvpConfirmation({
         email,
         name,
         event,
         dutyName: assignedDutyNames.join(', '),
         gearBringing: (gear_bringing || '').trim(),
-        managementToken: mgmtToken
+        managementToken: existingAttendee ? (existingAttendee.management_token || mgmtToken) : mgmtToken
       }).catch(err => {
         console.error('[RSVP] Failed to dispatch confirmation email:', err);
       });
+
+      return res.json({
+        success: true,
+        status: 'attending',
+        managementToken: existingAttendee ? (existingAttendee.management_token || mgmtToken) : mgmtToken,
+        message: `You're on the roster! A confirmation email has been sent to ${email}.`
+      });
     }
 
+    // Declined
     res.json({
       success: true,
-      status,
-      managementToken: mgmtToken,
-      message: status === 'attending'
-        ? `You're on the roster! A confirmation email has been sent to ${email}.`
-        : 'Your RSVP has been cancelled.'
+      status: 'declined',
+      managementToken: existingAttendee ? (existingAttendee.management_token || mgmtToken) : mgmtToken,
+      message: 'Your RSVP has been cancelled.'
     });
   } catch (err) {
     console.error('[RSVP] Error updating RSVP:', err);
@@ -570,6 +681,33 @@ router.delete('/:id', requireAdmin, (req, res) => {
   } catch (err) {
     console.error('[Events] Error deleting event:', err);
     res.status(500).json({ error: 'Failed to delete event.' });
+  }
+});
+
+/**
+ * Remove attendee from event (Organizer or Admin)
+ */
+router.delete('/:id/attendees/:attendeeId', requireEventCreator, (req, res) => {
+  try {
+    const eventId = req.params.id;
+    const attendeeId = req.params.attendeeId;
+    const attendee = db.prepare('SELECT * FROM attendees WHERE id = ? AND event_id = ?').get(attendeeId, eventId);
+    if (!attendee) {
+      return res.status(404).json({ error: 'Attendee not found.' });
+    }
+
+    const wasAttending = attendee.status === 'attending';
+    db.prepare('DELETE FROM duty_assignments WHERE attendee_id = ?').run(attendeeId);
+    db.prepare('DELETE FROM attendees WHERE id = ? AND event_id = ?').run(attendeeId, eventId);
+
+    if (wasAttending) {
+      promoteNextWaitlistedPlayer(eventId);
+    }
+
+    res.json({ success: true, message: 'Attendee removed from roster.' });
+  } catch (err) {
+    console.error('[RSVP] Error removing attendee:', err);
+    res.status(500).json({ error: 'Failed to remove attendee.' });
   }
 });
 

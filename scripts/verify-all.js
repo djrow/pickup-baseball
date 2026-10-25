@@ -884,4 +884,54 @@ test('T7: Error Boundaries', async (t) => {
     const invalidToken = await apiReq('GET', '/api/auth/verify-magic?token=nonexistent_token_0000000000000000');
     assert.equal(invalidToken.status, 400, 'Invalid magic link token must return HTTP 400');
   });
+
+  // ---------------------------------------------------------------------------
+  // T8: Waitlist Capacity Enforcement & Automatic Promotion
+  // ---------------------------------------------------------------------------
+  await t.test('T8: Waitlist Capacity Enforcement & Automatic Promotion', async (t8) => {
+    await t8.test('T8.1: RSVP 2 players up to capacity -> attending', async () => {
+      const createRes = await apiReq('POST', '/api/events', seedOrgCookie, {
+        title: 'T8 Capacity Capped Game',
+        description: 'Capacity test',
+        location: 'Field 4',
+        event_date: '2026-12-20T12:00:00.000Z',
+        max_players: 2
+      });
+      assert.equal(createRes.status, 200);
+      const eventId = createRes.data.event.id;
+
+      const r1 = await apiReq('POST', `/api/events/${eventId}/rsvp`, null, { name: 'P1', email: 't8_p1@test.org', status: 'attending' });
+      assert.equal(r1.data.status, 'attending');
+      const r2 = await apiReq('POST', `/api/events/${eventId}/rsvp`, null, { name: 'P2', email: 't8_p2@test.org', status: 'attending' });
+      assert.equal(r2.data.status, 'attending');
+
+      // Player 3 RSVPs -> waitlisted
+      const r3 = await apiReq('POST', `/api/events/${eventId}/rsvp`, null, { name: 'P3', email: 't8_p3@test.org', status: 'attending' });
+      assert.equal(r3.data.status, 'waitlist');
+      assert.equal(r3.data.waitlistPosition, 1);
+
+      // Verify event details
+      const details = await apiReq('GET', `/api/events/${eventId}`);
+      assert.equal(details.data.totalAttendees, 2);
+      assert.equal(details.data.totalWaitlist, 1);
+    });
+
+    await t8.test('T8.2: Attendee cancellation triggers instant promotion of waitlisted player', async () => {
+      // Find event
+      const event = db.prepare("SELECT id FROM events WHERE title = 'T8 Capacity Capped Game'").get();
+      assert.ok(event);
+
+      // Player 1 cancels
+      const cancelRes = await apiReq('POST', `/api/events/${event.id}/rsvp`, null, { name: 'P1', email: 't8_p1@test.org', status: 'declined' });
+      assert.equal(cancelRes.data.status, 'declined');
+
+      // Verify Player 3 was promoted to attending
+      const details = await apiReq('GET', `/api/events/${event.id}`);
+      assert.equal(details.data.totalAttendees, 2);
+      assert.equal(details.data.totalWaitlist, 0);
+      const attendeeNames = details.data.attendees.map(a => a.name);
+      assert.ok(attendeeNames.includes('P3'), 'P3 must be promoted to confirmed attendee');
+      assert.ok(attendeeNames.includes('P2'), 'P2 must remain attending');
+    });
+  });
 });

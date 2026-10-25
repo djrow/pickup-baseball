@@ -104,6 +104,12 @@ const EN_DICT = {
   "event.roster_title": "👥 Player Roster & Equipment",
   "event.roster_desc": "See who is playing, what gear is covered, and team duties.",
   "event.confirmed_badge": "{count} Confirmed",
+  "event.waitlist_heading": "Waitlist",
+  "event.waitlist_badge": "Waitlist #{pos}",
+  "event.on_waitlist_badge": "On Waitlist",
+  "event.waitlist_pos_badge": "Waitlist #{pos}",
+  "event.join_waitlist_btn": "Join Waitlist (Auto-Promote)",
+  "event.update_waitlist_btn": "Update Waitlist Info",
   "event.no_players_yet": "No players on the roster yet. Be the first to mark yourself attending!",
   "event.playing_badge": "Playing",
   "event.guest_tag": "(Guest)",
@@ -896,4 +902,29 @@ if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => API.initI18n());
 } else {
   API.initI18n();
+}
+
+// Register PWA Service Worker
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').then((reg) => {
+      reg.addEventListener('updatefound', () => {
+        const newWorker = reg.installing;
+        if (newWorker) {
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              console.log('[PWA] New version cached and ready.');
+            }
+          });
+        }
+      });
+    }).catch((err) => {
+      console.warn('[PWA] Service worker registration error:', err);
+    });
+  });
+
+  // Track install prompt event for custom install triggers if needed
+  window.addEventListener('beforeinstallprompt', (e) => {
+    window.deferredPwaPrompt = e;
+  });
 }

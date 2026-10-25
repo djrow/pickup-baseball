@@ -250,54 +250,102 @@ function renderDutiesBoard() {
 function renderAttendeesRoster() {
   const container = document.getElementById('attendees-container');
   const attendees = eventData.attendees || [];
+  const waitlist = eventData.waitlist || [];
   const rosterBadge = document.getElementById('roster-badge');
+  const maxPlayers = eventData.event.max_players;
 
-  rosterBadge.textContent = API.t('event.confirmed_badge', { count: attendees.length });
+  if (maxPlayers && maxPlayers > 0) {
+    rosterBadge.textContent = `${attendees.length}/${maxPlayers} ${API.t('event.confirmed_badge', { count: attendees.length })}`;
+  } else {
+    rosterBadge.textContent = API.t('event.confirmed_badge', { count: attendees.length });
+  }
 
+  const canMod = API.currentUser && API.currentUser.canManageEvents;
+
+  let rosterHtml = '';
   if (attendees.length === 0) {
-    container.innerHTML = `
+    rosterHtml = `
       <p style="color: var(--text-muted); font-style: italic; padding: 12px 0;">
         ${API.escapeHtml(API.t('event.no_players_yet'))}
       </p>
     `;
-    return;
+  } else {
+    rosterHtml = `
+      <ul class="roster-list">
+        ${attendees.map(a => {
+          const safeAvatar = API.safeAvatarUrl(a.avatar_url);
+          const avatarImg = safeAvatar
+            ? `<img src="${API.escapeHtml(safeAvatar)}" alt="${API.escapeHtml(a.name)}" class="roster-avatar" loading="lazy" decoding="async">`
+            : `<span class="roster-avatar-placeholder">${API.escapeHtml((a.name || 'P').charAt(0).toUpperCase())}</span>`;
+          const translatedDuties = a.duties_assigned
+            ? a.duties_assigned.split(',').map(part => API.translatePhrase(part.trim())).join(', ')
+            : '';
+
+          return `
+            <li class="roster-item" style="display: flex; gap: 12px; align-items: flex-start;">
+              ${avatarImg}
+              <div style="flex: 1; min-width: 0;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <div class="roster-name">
+                    ${API.escapeHtml(a.name)}
+                    ${a.is_guest ? `<span style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal;">${API.escapeHtml(API.t('event.guest_tag'))}</span>` : ''}
+                  </div>
+                  <div style="display: flex; gap: 6px; align-items: center;">
+                    <span class="badge badge-green" style="font-size: 0.7rem;">${API.escapeHtml(API.t('event.playing_badge'))}</span>
+                    ${canMod ? `<button type="button" onclick="removeRosterAttendee(${a.id})" title="Remove from roster" style="background:none;border:none;cursor:pointer;font-size:0.85rem;color:var(--danger);padding:0 2px;">🗑️</button>` : ''}
+                  </div>
+                </div>
+                ${a.bio ? `<div class="player-bio-text">"${API.escapeHtml(a.bio)}"</div>` : ''}
+                ${a.gear_bringing ? `<div class="roster-gear">🎒 <em>${API.escapeHtml(a.gear_bringing)}</em></div>` : ''}
+                ${translatedDuties ? `<div style="font-size: 0.78rem; color: var(--primary); font-weight: 600; margin-top: 2px;">🛡️ ${API.escapeHtml(translatedDuties)}</div>` : ''}
+              </div>
+            </li>
+          `;
+        }).join('')}
+      </ul>
+    `;
   }
 
-  container.innerHTML = `
-    <ul class="roster-list">
-      ${attendees.map(a => {
-        const safeAvatar = API.safeAvatarUrl(a.avatar_url);
-        const avatarImg = safeAvatar
-          ? `<img src="${API.escapeHtml(safeAvatar)}" alt="${API.escapeHtml(a.name)}" class="roster-avatar" loading="lazy" decoding="async">`
-          : `<span class="roster-avatar-placeholder">${API.escapeHtml((a.name || 'P').charAt(0).toUpperCase())}</span>`;
-        const canMod = API.currentUser && API.currentUser.canManageEvents;
-        const translatedDuties = a.duties_assigned
-          ? a.duties_assigned.split(',').map(part => API.translatePhrase(part.trim())).join(', ')
-          : '';
+  let waitlistHtml = '';
+  if (waitlist.length > 0) {
+    waitlistHtml = `
+      <div style="margin-top: 26px; padding-top: 18px; border-top: 1.5px dashed var(--border);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h4 style="margin: 0; font-size: 0.95rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
+            <span>⏳</span> <span>${API.escapeHtml(API.t('event.waitlist_heading', 'Waitlist'))}</span>
+          </h4>
+          <span class="badge badge-gray" style="font-size: 0.72rem;">${waitlist.length} waiting</span>
+        </div>
+        <ul class="roster-list" style="opacity: 0.95;">
+          ${waitlist.map((w, idx) => {
+            const safeAvatar = API.safeAvatarUrl(w.avatar_url);
+            const avatarImg = safeAvatar
+              ? `<img src="${API.escapeHtml(safeAvatar)}" alt="${API.escapeHtml(w.name)}" class="roster-avatar" loading="lazy" decoding="async">`
+              : `<span class="roster-avatar-placeholder" style="background: var(--bg-subtle); color: var(--text-muted);">${API.escapeHtml((w.name || 'W').charAt(0).toUpperCase())}</span>`;
+            return `
+              <li class="roster-item" style="display: flex; gap: 12px; align-items: center; padding: 8px 0;">
+                ${avatarImg}
+                <div style="flex: 1; min-width: 0;">
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div class="roster-name" style="font-size: 0.9rem;">
+                      ${API.escapeHtml(w.name)}
+                      ${w.is_guest ? `<span style="font-size: 0.72rem; color: var(--text-muted); font-weight: normal;">${API.escapeHtml(API.t('event.guest_tag'))}</span>` : ''}
+                    </div>
+                    <div style="display: flex; gap: 6px; align-items: center;">
+                      <span class="badge badge-orange" style="font-size: 0.68rem; font-weight: 700;">Waitlist #${idx + 1}</span>
+                      ${canMod ? `<button type="button" onclick="removeRosterAttendee(${w.id})" title="Remove from waitlist" style="background:none;border:none;cursor:pointer;font-size:0.85rem;color:var(--danger);padding:0 2px;">🗑️</button>` : ''}
+                    </div>
+                  </div>
+                </div>
+              </li>
+            `;
+          }).join('')}
+        </ul>
+      </div>
+    `;
+  }
 
-        return `
-          <li class="roster-item" style="display: flex; gap: 12px; align-items: flex-start;">
-            ${avatarImg}
-            <div style="flex: 1; min-width: 0;">
-              <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div class="roster-name">
-                  ${API.escapeHtml(a.name)}
-                  ${a.is_guest ? `<span style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal;">${API.escapeHtml(API.t('event.guest_tag'))}</span>` : ''}
-                </div>
-                <div style="display: flex; gap: 6px; align-items: center;">
-                  <span class="badge badge-green" style="font-size: 0.7rem;">${API.escapeHtml(API.t('event.playing_badge'))}</span>
-                  ${canMod ? `<button type="button" onclick="removeRosterAttendee(${a.id})" title="Remove from roster" style="background:none;border:none;cursor:pointer;font-size:0.85rem;color:var(--danger);padding:0 2px;">🗑️</button>` : ''}
-                </div>
-              </div>
-              ${a.bio ? `<div class="player-bio-text">"${API.escapeHtml(a.bio)}"</div>` : ''}
-              ${a.gear_bringing ? `<div class="roster-gear">🎒 <em>${API.escapeHtml(a.gear_bringing)}</em></div>` : ''}
-              ${translatedDuties ? `<div style="font-size: 0.78rem; color: var(--primary); font-weight: 600; margin-top: 2px;">🛡️ ${API.escapeHtml(translatedDuties)}</div>` : ''}
-            </div>
-          </li>
-        `;
-      }).join('')}
-    </ul>
-  `;
+  container.innerHTML = rosterHtml + waitlistHtml;
 }
 
 function renderComments() {
@@ -446,12 +494,42 @@ async function setupRsvpState() {
     document.getElementById('comment-author-name').required = true;
   }
 
+  const isFull = eventData.event.max_players && (eventData.attendees.length >= eventData.event.max_players);
+  const submitBtn = rsvpForm ? rsvpForm.querySelector('button[type="submit"]') : null;
+  const alertDiv = document.getElementById('rsvp-alert');
+
   // Pre-fill existing RSVP if present
   if (myRsvp) {
     if (myRsvp.status === 'attending') {
       rsvpBadge.innerHTML = `<span class="badge badge-green">${API.escapeHtml(API.t('home.you_are_attending'))}</span>`;
+      if (submitBtn) {
+        submitBtn.removeAttribute('data-i18n');
+        submitBtn.innerText = API.t('event.update_rsvp_btn', 'Update RSVP & Duties');
+      }
+    } else if (myRsvp.status === 'waitlist') {
+      const waitlist = eventData.waitlist || [];
+      const myPos = (waitlist.findIndex(w => w.id === myRsvp.id) + 1) || 1;
+      rsvpBadge.innerHTML = `<span class="badge badge-orange">⏳ ${API.escapeHtml(API.t('event.waitlist_pos_badge', { pos: myPos }))}</span>`;
+      if (alertDiv) {
+        alertDiv.innerHTML = `
+          <div class="alert alert-info" style="border-left: 4px solid var(--giants-orange); background: var(--bg-subtle); margin-bottom: 16px;">
+            <strong>⏳ You're #${myPos} on the Waitlist</strong>
+            <p style="margin: 4px 0 0 0; font-size: 0.88rem; color: var(--text-muted);">
+              The playing roster is currently at capacity. If a confirmed player cancels, you will automatically be promoted to the active roster and notified by email!
+            </p>
+          </div>
+        `;
+      }
+      if (submitBtn) {
+        submitBtn.removeAttribute('data-i18n');
+        submitBtn.innerText = API.t('event.update_waitlist_btn', 'Update Waitlist Info');
+      }
     } else {
       rsvpBadge.innerHTML = `<span class="badge badge-gray">${API.escapeHtml(API.t('event.cant_make_it_badge'))}</span>`;
+      if (submitBtn) {
+        submitBtn.removeAttribute('data-i18n');
+        submitBtn.innerText = isFull ? API.t('event.join_waitlist_btn', 'Join Waitlist (Auto-Promote)') : API.t('event.submit_rsvp_btn', 'Confirm RSVP & Duty Signup');
+      }
     }
 
     if (myRsvp.name) document.getElementById('rsvp-name').value = myRsvp.name;
@@ -467,6 +545,24 @@ async function setupRsvpState() {
     }
   } else {
     rsvpBadge.innerHTML = '';
+    if (submitBtn) {
+      submitBtn.removeAttribute('data-i18n');
+      if (isFull) {
+        submitBtn.innerText = API.t('event.join_waitlist_btn', 'Join Waitlist (Auto-Promote)');
+      } else {
+        submitBtn.innerText = API.t('event.submit_rsvp_btn', 'Confirm RSVP & Duty Signup');
+      }
+    }
+    if (isFull && alertDiv) {
+      alertDiv.innerHTML = `
+        <div class="alert alert-warning" style="border-left: 4px solid var(--giants-orange); background: var(--bg-subtle); margin-bottom: 16px;">
+          <strong>⚠️ Active Roster Full (${eventData.attendees.length}/${eventData.event.max_players})</strong>
+          <p style="margin: 4px 0 0 0; font-size: 0.88rem; color: var(--text-muted);">
+            The confirmed roster has reached capacity. RSVP below to join the waitlist — you will be automatically promoted as soon as a player cancels!
+          </p>
+        </div>
+      `;
+    }
   }
 
   // Populate duties selection checkboxes

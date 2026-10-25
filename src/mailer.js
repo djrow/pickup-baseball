@@ -382,10 +382,132 @@ Play ball!
   return dispatchEmail({ to: email, subject, text, html });
 }
 
+/**
+ * Send confirmation that attendee is placed on waitlist
+ */
+async function sendWaitlistConfirmation({ email, name, event, waitlistPosition, managementToken }) {
+  const manageLink = `${APP_URL}/event.html?id=${event.id}&token=${encodeURIComponent(managementToken || '')}`;
+  const eventDateFormatted = new Date(event.event_date).toLocaleString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: 'America/Los_Angeles',
+    timeZoneName: 'short'
+  });
+
+  const subject = `⏳ Waitlist Confirmed: ${event.title} (Position #${waitlistPosition})`;
+  const text = `Hi ${name},
+
+The active playing roster for ${event.title} is currently full at ${event.max_players || 'maximum'} players.
+
+You are on the waitlist at position #${waitlistPosition}.
+
+If an active player cancels their RSVP, you will be automatically promoted to the playing roster and notified immediately by email!
+
+Check your waitlist status and view event details here:
+${manageLink}
+
+- ${APP_NAME}`;
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 26px; border: 1px solid #dbe4e0; border-top: 5px solid #003831; border-radius: 8px; background: #ffffff;">
+      <h2 style="color: #003831; margin-top: 0; font-size: 22px;">⏳ Waitlist Confirmed</h2>
+      <p style="color: #0c1f1a; font-size: 16px;">Hi <strong>${name}</strong>,</p>
+      <p style="color: #546e66; font-size: 15px;">The playing roster for <strong>${event.title}</strong> is currently full. You have been placed on the waitlist.</p>
+      
+      <div style="background: #f5f8f7; border-left: 4px solid #FD5A1E; border: 1px solid #dbe4e0; padding: 18px; margin: 20px 0; border-radius: 6px;">
+        <p style="margin: 4px 0; color: #003831; font-size: 17px;"><strong>Your Waitlist Position:</strong> <span style="background: #FD5A1E; color: #fff; padding: 3px 10px; border-radius: 20px; font-weight: 700;">#${waitlistPosition}</span></p>
+        <p style="margin: 8px 0 4px 0; color: #0c1f1a;"><strong>📅 Game Date:</strong> ${eventDateFormatted}</p>
+        <p style="margin: 4px 0; color: #0c1f1a;"><strong>📍 Location:</strong> ${event.location}</p>
+      </div>
+
+      <p style="color: #0c1f1a; font-size: 14px; line-height: 1.5;">
+        <strong>How it works:</strong> Whenever a confirmed player cancels, the system automatically promotes the next waitlisted player and sends an immediate email alert. Keep an eye on your inbox!
+      </p>
+
+      <p style="text-align: center; margin: 28px 0;">
+        <a href="${manageLink}" style="background: #003831; color: #ffffff; padding: 13px 26px; border-radius: 6px; text-decoration: none; font-weight: 700; font-size: 15px; display: inline-block;">
+          Check Waitlist Status & Event Page →
+        </a>
+      </p>
+    </div>
+  `;
+
+  return dispatchEmail({ to: email, subject, text, html });
+}
+
+/**
+ * Send notification that player was promoted from waitlist to active roster
+ */
+async function sendWaitlistPromotionEmail({ email, name, event, managementToken }) {
+  const manageLink = `${APP_URL}/event.html?id=${event.id}&token=${encodeURIComponent(managementToken || '')}`;
+  const eventDateFormatted = new Date(event.event_date).toLocaleString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: 'America/Los_Angeles',
+    timeZoneName: 'short'
+  });
+
+  const subject = `⚾ A spot opened up! You're in for ${event.title} (${eventDateFormatted})`;
+  const text = `Hi ${name},
+
+Great news! A spot just opened up for pickup baseball!
+
+You have been automatically promoted from the waitlist to the ACTIVE ROSTER for:
+${event.title}
+
+Date & Time: ${eventDateFormatted}
+Location: ${event.location}
+
+Visit the event page to coordinate gear, sign up for duties, or view the roster:
+${manageLink}
+
+If your plans have changed and you can no longer attend, please cancel your RSVP on the page so another player from the waitlist can take your spot.
+
+See you on the field!
+- ${APP_NAME}`;
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 26px; border: 1px solid #dbe4e0; border-top: 5px solid #003831; border-radius: 8px; background: #ffffff;">
+      <h2 style="color: #003831; margin-top: 0; font-size: 22px;">⚾ You're Off the Waitlist — You're In!</h2>
+      <p style="color: #0c1f1a; font-size: 16px;">Hi <strong>${name}</strong>,</p>
+      <p style="color: #546e66; font-size: 15px;">A spot just opened up! You have been <strong>automatically promoted from the waitlist to the confirmed roster</strong> for <strong>${event.title}</strong>.</p>
+      
+      <div style="background: #f5f8f7; border-left: 4px solid #003831; border: 1px solid #dbe4e0; padding: 18px; margin: 20px 0; border-radius: 6px;">
+        <p style="margin: 4px 0; color: #0c1f1a;"><strong>📅 When:</strong> ${eventDateFormatted}</p>
+        <p style="margin: 4px 0; color: #0c1f1a;"><strong>📍 Where:</strong> ${event.location}</p>
+        ${event.location_url ? `<p style="margin: 4px 0;"><a href="${event.location_url}" target="_blank" style="color: #FD5A1E; font-weight: 700;">View Map / Directions ↗</a></p>` : ''}
+        <p style="margin: 6px 0 0 0; color: #003831; font-weight: 700;">Status: Confirmed Player</p>
+      </div>
+
+      <p style="text-align: center; margin: 28px 0;">
+        <a href="${manageLink}" style="background: #FD5A1E; color: #ffffff; padding: 13px 26px; border-radius: 6px; text-decoration: none; font-weight: 700; font-size: 15px; display: inline-block;">
+          View Roster & Sign Up for Duties →
+        </a>
+      </p>
+
+      <p style="color: #546e66; font-size: 13px; border-top: 1px solid #dbe4e0; padding-top: 14px;">
+        Can't make it after all? Please click the button above to cancel your RSVP so the next person on the waitlist gets their chance to play!
+      </p>
+    </div>
+  `;
+
+  return dispatchEmail({ to: email, subject, text, html });
+}
+
 module.exports = {
   dispatchEmail,
   sendAuthCode,
   sendRsvpConfirmation,
+  sendWaitlistConfirmation,
+  sendWaitlistPromotionEmail,
   sendEventReminder,
   sendRainoutEmail,
   sendReopenEmail
