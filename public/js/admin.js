@@ -402,6 +402,14 @@ function setupQuickSundayButton() {
 
 function setupCreateForm() {
   const form = document.getElementById('create-event-form');
+  const capToggle = document.getElementById('event-cap-toggle');
+  const capWrap = document.getElementById('event-max-players-wrap');
+  if (capToggle && capWrap) {
+    capToggle.addEventListener('change', () => {
+      capWrap.style.display = capToggle.checked ? 'block' : 'none';
+    });
+  }
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const submitBtn = document.getElementById('create-event-btn');
@@ -429,6 +437,11 @@ function setupCreateForm() {
       const locationUrl = document.getElementById('event-map-input').value.trim();
       const description = document.getElementById('event-desc-input').value.trim();
 
+      const hasCap = capToggle && capToggle.checked;
+      const maxPlayers = hasCap
+        ? (parseInt(document.getElementById('event-max-players-input').value, 10) || 28)
+        : null;
+
       const res = await fetch('/api/events', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -438,6 +451,7 @@ function setupCreateForm() {
           location,
           location_url: locationUrl,
           description,
+          max_players: maxPlayers,
           custom_duties: builderDuties
         })
       });
@@ -449,6 +463,7 @@ function setupCreateForm() {
         const newId = data.eventId || (data.event && data.event.id);
         showAlert(`Game "${title}" published with ${builderDuties.length} volunteer tasks! Redirecting...`, false);
         form.reset();
+        if (capWrap) capWrap.style.display = 'none';
         document.getElementById('event-title-input').value = 'Sunday Pickup Baseball';
         document.getElementById('event-location-input').value = 'Bushrod Park Field 1';
         builderDuties = JSON.parse(JSON.stringify(orgDefaultDuties));

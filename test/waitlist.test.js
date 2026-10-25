@@ -214,4 +214,58 @@ test('Waitlist & Automatic Promotion Test Suite', async (t) => {
     assert.ok(names.includes('Player Three'));
     assert.ok(names.includes('Player Four'));
   });
+
+  await t.test('8. Create event with capacity cap turned off (unlimited)', async () => {
+    const res = await request('/api/events', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Cookie': orgCookie
+      },
+      body: {
+        title: 'Unlimited Players Game',
+        description: 'No capacity cap',
+        location: 'Bushrod Park Field 1',
+        event_date: new Date(Date.now() + 86400000 * 7).toISOString(),
+        max_players: null
+      }
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.event.max_players, null);
+  });
+
+  await t.test('9. Edit event to turn ON roster size cap', async () => {
+    const editRes = await request(`/api/events/${eventId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Cookie': orgCookie
+      },
+      body: {
+        max_players: 24
+      }
+    });
+
+    assert.equal(editRes.status, 200);
+    const updated = db.prepare('SELECT max_players FROM events WHERE id = ?').get(eventId);
+    assert.equal(updated.max_players, 24);
+  });
+
+  await t.test('10. Edit event to turn OFF roster size cap (unlimited)', async () => {
+    const editRes = await request(`/api/events/${eventId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Cookie': orgCookie
+      },
+      body: {
+        max_players: null
+      }
+    });
+
+    assert.equal(editRes.status, 200);
+    const updated = db.prepare('SELECT max_players FROM events WHERE id = ?').get(eventId);
+    assert.equal(updated.max_players, null);
+  });
 });

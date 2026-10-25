@@ -64,6 +64,21 @@ window.initAuthenticatedDashboard = function(user) {
               <textarea id="event-desc-input" rows="2" placeholder="Field conditions, parking tips, cleats vs flats, etc."></textarea>
             </div>
 
+            <!-- Roster Size Cap Toggle -->
+            <div class="form-group" style="background: var(--bg-card); padding: 12px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 14px;">
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; margin: 0;">
+                <input type="checkbox" id="dashboard-event-cap-toggle" style="width: 17px; height: 17px; accent-color: var(--primary);">
+                <span>Limit Playing Roster Size (Auto-Waitlist when full)</span>
+              </label>
+              <div id="dashboard-event-max-players-wrap" style="display: none; margin-top: 10px; padding-left: 25px;">
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                  <label for="dashboard-event-max-players-input" style="font-size: 0.88rem; color: var(--text-muted); margin: 0;">Maximum Confirmed Players:</label>
+                  <input type="number" id="dashboard-event-max-players-input" value="28" min="2" max="100" style="width: 80px; padding: 4px 8px;">
+                  <span style="font-size: 0.78rem; color: var(--text-muted);">Additional signups automatically go to waitlist.</span>
+                </div>
+              </div>
+            </div>
+
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
               <button type="submit" id="submit-event-btn" class="btn btn-primary">
                 Publish Game &amp; Roster
@@ -239,6 +254,14 @@ function setupEventCreationTool(user) {
     });
   }
 
+  const dashCapToggle = document.getElementById('dashboard-event-cap-toggle');
+  const dashCapWrap = document.getElementById('dashboard-event-max-players-wrap');
+  if (dashCapToggle && dashCapWrap) {
+    dashCapToggle.addEventListener('change', () => {
+      dashCapWrap.style.display = dashCapToggle.checked ? 'block' : 'none';
+    });
+  }
+
   if (quickBtn) {
     quickBtn.addEventListener('click', async () => {
       const defaultLoc = 'Bushrod Park Field 1';
@@ -294,13 +317,18 @@ function setupEventCreationTool(user) {
         const desc = document.getElementById('event-desc-input').value.trim();
 
         const eventDate = API.localToPacificIso(rawDate);
+        const hasCap = dashCapToggle && dashCapToggle.checked;
+        const maxPlayers = hasCap
+          ? (parseInt(document.getElementById('dashboard-event-max-players-input').value, 10) || 28)
+          : null;
+
         const res = await API.createEvent({
           title,
           event_date: eventDate,
           location,
           location_url: locationUrl,
           description: desc,
-          max_players: 30
+          max_players: maxPlayers
         });
 
         if (res.error) {

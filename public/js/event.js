@@ -929,6 +929,8 @@ window.toggleEditEventPanel = function() {
   const pacificLocal = API.isoToPacificLocalInput
     ? API.isoToPacificLocalInput(ev.event_date)
     : (ev.event_date ? ev.event_date.slice(0, 16) : '');
+  const hasCap = Boolean(ev.max_players && ev.max_players > 0);
+  const capVal = hasCap ? ev.max_players : 28;
 
   panel.innerHTML = `
     <div id="edit-event-alert"></div>
@@ -958,6 +960,22 @@ window.toggleEditEventPanel = function() {
         <label for="edit-event-desc">Game Details &amp; Announcements</label>
         <textarea id="edit-event-desc" rows="2">${API.escapeHtml(ev.description || '')}</textarea>
       </div>
+
+      <!-- Maximum Roster Size Cap Toggle -->
+      <div class="form-group" style="background: var(--bg-card); padding: 12px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 14px;">
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; margin: 0;">
+          <input type="checkbox" id="edit-event-cap-toggle" ${hasCap ? 'checked' : ''} style="width: 17px; height: 17px; accent-color: var(--primary);">
+          <span>Limit Playing Roster Size (Auto-Waitlist when full)</span>
+        </label>
+        <div id="edit-event-max-players-wrap" style="display: ${hasCap ? 'block' : 'none'}; margin-top: 10px; padding-left: 25px;">
+          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <label for="edit-event-max-players" style="font-size: 0.88rem; color: var(--text-muted); margin: 0;">Maximum Confirmed Players:</label>
+            <input type="number" id="edit-event-max-players" value="${capVal}" min="2" max="100" style="width: 80px; padding: 4px 8px;">
+            <span style="font-size: 0.78rem; color: var(--text-muted);">Additional signups automatically go to waitlist.</span>
+          </div>
+        </div>
+      </div>
+
       <datalist id="common-locations-list">
         <option value="Bushrod Park Field 1">
         <option value="Bushrod Park Field 2">
@@ -972,6 +990,14 @@ window.toggleEditEventPanel = function() {
   panel.style.display = 'block';
   if (editBtn) editBtn.textContent = '✕ Close Editor';
   document.getElementById('edit-event-title').focus();
+
+  const capToggle = document.getElementById('edit-event-cap-toggle');
+  const capWrap = document.getElementById('edit-event-max-players-wrap');
+  if (capToggle && capWrap) {
+    capToggle.onchange = () => {
+      capWrap.style.display = capToggle.checked ? 'block' : 'none';
+    };
+  }
 
   const cancelBtn = document.getElementById('cancel-edit-event-btn');
   if (cancelBtn) {
@@ -994,12 +1020,18 @@ window.toggleEditEventPanel = function() {
 
       try {
         const rawDate = document.getElementById('edit-event-date').value;
+        const capEnabled = document.getElementById('edit-event-cap-toggle').checked;
+        const maxPlayers = capEnabled
+          ? (parseInt(document.getElementById('edit-event-max-players').value, 10) || 28)
+          : null;
+
         const payload = {
           title: document.getElementById('edit-event-title').value.trim(),
           event_date: API.localToPacificIso(rawDate),
           location: document.getElementById('edit-event-location').value.trim(),
           location_url: document.getElementById('edit-event-map').value.trim(),
-          description: document.getElementById('edit-event-desc').value.trim()
+          description: document.getElementById('edit-event-desc').value.trim(),
+          max_players: maxPlayers
         };
 
         let res;

@@ -96,6 +96,21 @@
           <textarea id="event-desc-input" rows="3" placeholder="Field condition, parking details, whether to bring cleats or flats..."></textarea>
         </div>
 
+        <!-- Roster Size Cap Settings -->
+        <div class="form-group" style="background: var(--bg-card); padding: 14px 16px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 16px;">
+          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 600; margin: 0;">
+            <input type="checkbox" id="event-cap-toggle" style="width: 18px; height: 18px; accent-color: var(--primary);">
+            <span>Limit Playing Roster Size (Auto-Waitlist when full)</span>
+          </label>
+          <div id="event-max-players-wrap" style="display: none; margin-top: 12px; padding-left: 28px;">
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+              <label for="event-max-players-input" style="font-size: 0.88rem; color: var(--text-muted); margin: 0;">Maximum Confirmed Players:</label>
+              <input type="number" id="event-max-players-input" value="28" min="2" max="100" style="width: 85px; padding: 6px 10px;">
+              <span style="font-size: 0.8rem; color: var(--text-muted);">Additional signups will automatically be placed on the waitlist.</span>
+            </div>
+          </div>
+        </div>
+
         <!-- Duties / Task Builder Setup -->
         <div class="form-group" style="background: var(--bg-subtle); padding: 20px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
