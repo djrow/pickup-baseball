@@ -168,5 +168,9 @@
   "phrase.duty_balls": "Bóng Thi Đấu",
   "phrase.duty_balls_desc": "Mang theo xô bóng thi đấu.",
   "phrase.duty_drag": "Cào Phẳng Mặt Sân",
-  "phrase.duty_drag_desc": "Đến sớm 20 phút để kéo lưới làm phẳng mặt sân đất nện."
+  "phrase.duty_drag_desc": "Đến sớm 20 phút để kéo lưới làm phẳng mặt sân đất nện.",
+  "event.roster_private_title": "Danh sách cầu thủ được bảo mật",
+  "event.roster_private_desc": "Để bảo vệ quyền riêng tư, danh sách cầu thủ chỉ hiển thị cho người đã đăng ký. Vui lòng phản hồi tham gia bên dưới để xem danh sách!",
+  "event.roster_private_cta": "Phản hồi để xem danh sách",
+  "event.duty_covered": "Đã có người nhận"
 }

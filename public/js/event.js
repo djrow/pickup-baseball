@@ -9,7 +9,7 @@ let eventData = null;
 async function initEvent() {
   const params = new URLSearchParams(window.location.search);
   eventId = params.get('id');
-  guestToken = params.get('token') || '';
+  guestToken = params.get('token') || (eventId ? localStorage.getItem('guest_token_' + eventId) : '') || '';
 
   if (!eventId) {
     showError('No event ID specified in URL.');
@@ -217,7 +217,7 @@ function renderDutiesBoard() {
 
   grid.innerHTML = duties.map(d => {
     const isFilled = d.assigned_players.length >= d.slots_needed;
-    const names = d.assigned_players.map(p => API.escapeHtml(p.name)).join(', ');
+    const names = (d.assigned_players || []).map(p => API.escapeHtml(p.name)).filter(Boolean).join(', ');
     const translatedTitle = API.translatePhrase(d.title);
     const translatedDesc = API.translatePhrase(d.description || '');
 
@@ -228,8 +228,8 @@ function renderDutiesBoard() {
     const statusHtml = isRainout
       ? `<span style="color: var(--text-muted);"><em>Duties excused due to rainout${names ? ` (${names})` : ''}</em></span>`
       : (isFilled
-        ? `<span style="color: var(--as-green);">${API.escapeHtml(API.t('event.duty_volunteers'))} <strong>${names}</strong></span>`
-        : `<span style="color: var(--giants-orange);">${API.escapeHtml(API.t('event.duty_needs_count', { count: d.slots_needed - d.assigned_players.length }))}${names ? ` (${names})` : ''}</span>`
+        ? `<span style="color: var(--as-green);">${API.escapeHtml(API.t('event.duty_volunteers'))} <strong>${names || API.t('event.duty_covered', 'Covered')}</strong></span>`
+        : `<span style="color: var(--giants-orange);">${API.escapeHtml(API.t('event.duty_needs_count', { count: d.slots_needed - (d.assigned_players || []).length }))}${names ? ` (${names})` : ''}</span>`
       );
 
     return `
@@ -254,13 +254,35 @@ function renderAttendeesRoster() {
   const rosterBadge = document.getElementById('roster-badge');
   const maxPlayers = eventData.event.max_players;
 
+  const confirmedCount = eventData.totalAttendees != null ? eventData.totalAttendees : attendees.length;
+
   if (maxPlayers && maxPlayers > 0) {
-    rosterBadge.textContent = `${attendees.length}/${maxPlayers} ${API.t('event.confirmed_badge', { count: attendees.length })}`;
+    rosterBadge.textContent = `${confirmedCount}/${maxPlayers} ${API.t('event.confirmed_badge', { count: confirmedCount })}`;
   } else {
-    rosterBadge.textContent = API.t('event.confirmed_badge', { count: attendees.length });
+    rosterBadge.textContent = API.t('event.confirmed_badge', { count: confirmedCount });
   }
 
   const canMod = API.currentUser && API.currentUser.canManageEvents;
+  const canViewRoster = Boolean(eventData.canViewRoster || eventData.myRsvp || canMod);
+
+  // If viewer has not RSVP'd and is not an organizer, roster is locked for player privacy
+  if (!canViewRoster) {
+    container.innerHTML = `
+      <div class="roster-private-card" style="text-align: center; padding: 28px 20px; background: var(--surface-2, #f5f8f7); border: 1.5px dashed var(--border); border-radius: 12px; margin-top: 8px;">
+        <div style="font-size: 2.2rem; margin-bottom: 10px;">🔒</div>
+        <h3 style="margin: 0 0 8px 0; color: var(--text); font-size: 1.15rem; font-weight: 700;">
+          ${API.escapeHtml(API.t('event.roster_private_title', 'Player Roster is Private'))}
+        </h3>
+        <p style="margin: 0 auto 16px auto; max-width: 440px; color: var(--text-muted); font-size: 0.92rem; line-height: 1.5;">
+          ${API.escapeHtml(API.t('event.roster_private_desc', "To protect player privacy, individual names and gear assignments are only visible to attendees. Please RSVP (attending or can't make it) below to view who's playing!"))}
+        </p>
+        <a href="#rsvp-section" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 8px; text-decoration: none; padding: 9px 18px; font-size: 0.9rem; font-weight: 600; border-radius: 8px;">
+          <span>⚾</span> <span>${API.escapeHtml(API.t('event.roster_private_cta', 'RSVP to View Roster'))}</span>
+        </a>
+      </div>
+    `;
+    return;
+  }
 
   let rosterHtml = '';
   if (attendees.length === 0) {
@@ -542,6 +564,7 @@ async function setupRsvpState() {
     // Save token if guest returned via link
     if (myRsvp.management_token) {
       guestToken = myRsvp.management_token;
+      try { localStorage.setItem('guest_token_' + eventId, guestToken); } catch (e) {}
     }
   } else {
     rsvpBadge.innerHTML = '';
@@ -847,6 +870,7 @@ function setupRsvpForm() {
         alertBox.innerHTML = `<div class="alert alert-success">${API.escapeHtml(res.message)}</div>`;
         if (res.managementToken) {
           guestToken = res.managementToken;
+          try { localStorage.setItem('guest_token_' + eventId, guestToken); } catch (e) {}
         }
         submitBtn.disabled = false;
         submitBtn.textContent = 'Update RSVP & Duties';

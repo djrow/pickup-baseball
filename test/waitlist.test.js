@@ -153,8 +153,19 @@ test('Waitlist & Automatic Promotion Test Suite', async (t) => {
   });
 
   await t.test('5. Verify Event Details returns 2 attending and 2 waitlist', async () => {
-    const res = await request(`/api/events/${eventId}`);
+    // Unauthenticated: roster is hidden for privacy, counts are visible
+    const unauthRes = await request(`/api/events/${eventId}`);
+    assert.equal(unauthRes.status, 200);
+    assert.equal(unauthRes.body.canViewRoster, false);
+    assert.equal(unauthRes.body.totalAttendees, 2);
+    assert.equal(unauthRes.body.totalWaitlist, 2);
+    assert.equal(unauthRes.body.attendees.length, 0);
+    assert.equal(unauthRes.body.waitlist.length, 0);
+
+    // Organizer or authorized: roster is visible
+    const res = await request(`/api/events/${eventId}`, { headers: { 'Cookie': orgCookie } });
     assert.equal(res.status, 200);
+    assert.equal(res.body.canViewRoster, true);
     assert.equal(res.body.totalAttendees, 2);
     assert.equal(res.body.totalWaitlist, 2);
     assert.equal(res.body.attendees.length, 2);
@@ -180,8 +191,9 @@ test('Waitlist & Automatic Promotion Test Suite', async (t) => {
     const p3 = db.prepare('SELECT * FROM attendees WHERE event_id = ? AND email = ?').get(eventId, 'p3@waitlisttest.org');
     assert.equal(p3.status, 'attending', 'Player 3 should now be attending');
 
-    // Check Event Details
-    const details = await request(`/api/events/${eventId}`);
+    // Check Event Details via Organizer or RSVP token (Player 1 has declined RSVP, so Player 1 can view the roster!)
+    const details = await request(`/api/events/${eventId}?token=${cancelRes.body.managementToken}`);
+    assert.equal(details.body.canViewRoster, true);
     assert.equal(details.body.totalAttendees, 2);
     assert.equal(details.body.totalWaitlist, 1);
     const names = details.body.attendees.map(a => a.name);
@@ -207,7 +219,8 @@ test('Waitlist & Automatic Promotion Test Suite', async (t) => {
     assert.equal(p4.status, 'attending', 'Player 4 should now be attending');
 
     // Check Event Details: waitlist should now be 0
-    const details = await request(`/api/events/${eventId}`);
+    const details = await request(`/api/events/${eventId}`, { headers: { 'Cookie': orgCookie } });
+    assert.equal(details.body.canViewRoster, true);
     assert.equal(details.body.totalAttendees, 2);
     assert.equal(details.body.totalWaitlist, 0);
     const names = details.body.attendees.map(a => a.name);
@@ -267,5 +280,39 @@ test('Waitlist & Automatic Promotion Test Suite', async (t) => {
     assert.equal(editRes.status, 200);
     const updated = db.prepare('SELECT max_players FROM events WHERE id = ?').get(eventId);
     assert.equal(updated.max_players, null);
+  });
+
+  await t.test('11. Roster Privacy: Only users who RSVP (attending or declined) or organizers can view roster names', async () => {
+    // 1. Unregistered visitor: canViewRoster false, empty attendees & waitlist, counts intact
+    const anonRes = await request(`/api/events/${eventId}`);
+    assert.equal(anonRes.body.canViewRoster, false);
+    assert.equal(anonRes.body.attendees.length, 0);
+    assert.equal(anonRes.body.waitlist.length, 0);
+    assert.equal(anonRes.body.totalAttendees, 2);
+
+    // Duties volunteer names are stripped for un-RSVP'd visitor
+    for (const d of anonRes.body.duties) {
+      for (const p of d.assigned_players) {
+        assert.equal(p.name, '', 'Assigned player name should be blanked for visitor');
+      }
+    }
+
+    // 2. Player who marked 'declined' (can\'t make it) CAN view roster names
+    const declineRes = await request(`/api/events/${eventId}/rsvp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: { name: 'Player Decline', email: 'decline@test.org', status: 'declined' }
+    });
+    assert.equal(declineRes.status, 200);
+
+    const declinedViewerRes = await request(`/api/events/${eventId}?token=${declineRes.body.managementToken}`);
+    assert.equal(declinedViewerRes.body.canViewRoster, true);
+    assert.equal(declinedViewerRes.body.attendees.length, 2);
+    assert.ok(declinedViewerRes.body.attendees.some(a => a.name === 'Player Three'));
+
+    // 3. Organizer CAN view roster names
+    const orgViewerRes = await request(`/api/events/${eventId}`, { headers: { 'Cookie': orgCookie } });
+    assert.equal(orgViewerRes.body.canViewRoster, true);
+    assert.equal(orgViewerRes.body.attendees.length, 2);
   });
 });

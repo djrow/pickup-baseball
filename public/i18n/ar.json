@@ -168,5 +168,9 @@
   "phrase.duty_balls": "كرات المباراة",
   "phrase.duty_balls_desc": "إحضار دلو كرات البيسبول.",
   "phrase.duty_drag": "تمهيد أرضية الملعب",
-  "phrase.duty_drag_desc": "الحضور قبل 20 دقيقة لتمهيد تراب الملعب الداخلي."
+  "phrase.duty_drag_desc": "الحضور قبل 20 دقيقة لتمهيد تراب الملعب الداخلي.",
+  "event.roster_private_title": "قائمة اللاعبين خاصة",
+  "event.roster_private_desc": "لحماية خصوصية اللاعبين، تظهر الأسماء وتوزيع المعدات فقط للحاضرين. يرجى تأكيد الحضور أدناه لمشاهدة القائمة!",
+  "event.roster_private_cta": "تأكيد الحضور لعرض القائمة",
+  "event.duty_covered": "مغطى"
 }

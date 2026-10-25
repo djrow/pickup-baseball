@@ -168,5 +168,9 @@
   "phrase.duty_balls": "Mga Bola ng Baseball",
   "phrase.duty_balls_desc": "Magdala ng isang timba ng bola para sa laro.",
   "phrase.duty_drag": "Pag-aayos ng Field",
-  "phrase.duty_drag_desc": "Dumating nang 20 minuto nang mas maaga para i-drag at ayusin ang infield."
+  "phrase.duty_drag_desc": "Dumating nang 20 minuto nang mas maaga para i-drag at ayusin ang infield.",
+  "event.roster_private_title": "Pribado ang Listahan ng Manlalaro",
+  "event.roster_private_desc": "Upang protektahan ang privacy, ang mga pangalan ng manlalaro ay makikita lamang ng mga nag-RSVP. Mangyaring mag-RSVP sa ibaba upang makita ang roster!",
+  "event.roster_private_cta": "Mag-RSVP para Makita ang Roster",
+  "event.duty_covered": "May Nag-asikaso"
 }

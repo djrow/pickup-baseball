@@ -208,13 +208,26 @@ router.get('/:id', optionalUser, (req, res) => {
       myRsvp.duty_ids = JSON.parse(myRsvp.duty_ids || '[]');
     }
 
+    const isOrganizer = Boolean(req.user && (req.user.canManageEvents || req.user.isAdmin));
+    const hasRsvpd = Boolean(myRsvp && (myRsvp.status === 'attending' || myRsvp.status === 'declined' || myRsvp.status === 'waitlist'));
+    const canViewRoster = Boolean(hasRsvpd || isOrganizer);
+
+    // Sanitize duties: hide volunteer names if viewer is not authorized to view the roster, but preserve slot counts
+    const sanitizedDuties = duties.map(d => ({
+      ...d,
+      assigned_players: canViewRoster
+        ? d.assigned_players
+        : (d.assigned_players || []).map(p => ({ attendee_id: p.attendee_id, name: '' }))
+    }));
+
     res.json({
       event,
-      duties,
-      attendees,
-      waitlist,
+      duties: sanitizedDuties,
+      attendees: canViewRoster ? attendees : [],
+      waitlist: canViewRoster ? waitlist : [],
       comments,
       myRsvp,
+      canViewRoster,
       totalAttendees: attendees.length,
       totalWaitlist: waitlist.length
     });

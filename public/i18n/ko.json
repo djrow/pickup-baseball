@@ -168,5 +168,9 @@
   "phrase.duty_balls": "경기용 야구공",
   "phrase.duty_balls_desc": "경기용 야구공 양동이 가져오기.",
   "phrase.duty_drag": "내야 그라운드 정리",
-  "phrase.duty_drag_desc": "20분 일찍 도착하여 끌개로 내야 흙 고르기."
+  "phrase.duty_drag_desc": "20분 일찍 도착하여 끌개로 내야 흙 고르기.",
+  "event.roster_private_title": "선수 명단 비공개",
+  "event.roster_private_desc": "개인 정보 보호를 위해 선수 명단과 장비 분담은 참석 응답자에게만 공개됩니다. 아래에서 참석 또는 불참을 선택하여 명단을 확인하세요!",
+  "event.roster_private_cta": "참석 응답하고 명단 보기",
+  "event.duty_covered": "완료"
 }

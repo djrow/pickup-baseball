@@ -168,5 +168,9 @@
   "phrase.duty_balls": "توپ‌های بازی",
   "phrase.duty_balls_desc": "آوردن سطل توپ‌های بیسبال.",
   "phrase.duty_drag": "صاف کردن خاک زمین",
-  "phrase.duty_drag_desc": "۲۰ دقیقه زودتر آمدن برای صاف کردن خاک اینفیلد با کشنده."
+  "phrase.duty_drag_desc": "۲۰ دقیقه زودتر آمدن برای صاف کردن خاک اینفیلد با کشنده.",
+  "event.roster_private_title": "لیست بازیکنان خصوصی است",
+  "event.roster_private_desc": "برای محافظت از حریم خصوصی، اسامی بازیکنان فقط برای شرکت‌کنندگان قابل مشاهده است. لطفاً برای مشاهده لیست در زیر پاسخ دهید!",
+  "event.roster_private_cta": "ثبت پاسخ برای مشاهده لیست",
+  "event.duty_covered": "تکمیل شده"
 }

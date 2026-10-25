@@ -168,5 +168,9 @@
   "phrase.duty_balls": "Bolas de Jogo",
   "phrase.duty_balls_desc": "Trazer balde de bolas de beisebol.",
   "phrase.duty_drag": "Nivelamento do Campo",
-  "phrase.duty_drag_desc": "Chegar 20 min mais cedo para nivelar a terra do campo interno (infield)."
+  "phrase.duty_drag_desc": "Chegar 20 min mais cedo para nivelar a terra do campo interno (infield).",
+  "event.roster_private_title": "A lista de jogadores é privada",
+  "event.roster_private_desc": "Para proteger a privacidade dos jogadores, os nomes e equipamentos são visíveis apenas para os participantes. Confirme sua presença abaixo para ver quem vai jogar!",
+  "event.roster_private_cta": "Confirmar presença para ver a lista",
+  "event.duty_covered": "Coberto"
 }

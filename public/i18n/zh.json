@@ -168,5 +168,9 @@
   "phrase.duty_balls": "比赛用球",
   "phrase.duty_balls_desc": "携带一桶比赛棒球。",
   "phrase.duty_drag": "场地平整",
-  "phrase.duty_drag_desc": "提前20分钟到场，用拖耙平整内野沙土。"
+  "phrase.duty_drag_desc": "提前20分钟到场，用拖耙平整内野沙土。",
+  "event.roster_private_title": "球员名单未公开",
+  "event.roster_private_desc": "为保护球员隐私，球员姓名与装备分工仅对已回复报名的球友开放。请在下方选择参加或无法参加以查看完整名单！",
+  "event.roster_private_cta": "回复报名查看名单",
+  "event.duty_covered": "已认领"
 }

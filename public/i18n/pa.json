@@ -168,5 +168,9 @@
   "phrase.duty_balls": "ਖੇਡ ਦੀਆਂ ਗੇਂਦਾਂ",
   "phrase.duty_balls_desc": "ਬੇਸਬਾਲ ਦੀਆਂ ਗੇਂਦਾਂ ਦੀ ਬਾਲਟੀ ਲਿਆਓ।",
   "phrase.duty_drag": "ਮੈਦਾਨ ਪੱਧਰਾ ਕਰਨਾ",
-  "phrase.duty_drag_desc": "ਇਨਫੀਲਡ ਨੂੰ ਪੱਧਰਾ ਕਰਨ ਲਈ 20 ਮਿੰਟ ਪਹਿਲਾਂ ਪਹੁੰਚੋ।"
+  "phrase.duty_drag_desc": "ਇਨਫੀਲਡ ਨੂੰ ਪੱਧਰਾ ਕਰਨ ਲਈ 20 ਮਿੰਟ ਪਹਿਲਾਂ ਪਹੁੰਚੋ।",
+  "event.roster_private_title": "ਖਿਡਾਰੀਆਂ ਦੀ ਸੂਚੀ ਨਿੱਜੀ ਹੈ",
+  "event.roster_private_desc": "ਖਿਡਾਰੀਆਂ ਦੀ ਗੋਪਨੀਯਤਾ ਲਈ, ਨਾਮ ਕੇਵਲ ਹਾਜ਼ਰੀਨ ਨੂੰ ਹੀ ਦਿਖਾਈ ਦਿੰਦੇ ਹਨ। ਸੂਚੀ ਦੇਖਣ ਲਈ ਕਿਰਪਾ ਕਰਕੇ ਹੇਠਾਂ RSVP ਕਰੋ!",
+  "event.roster_private_cta": "ਸੂਚੀ ਦੇਖਣ ਲਈ RSVP ਕਰੋ",
+  "event.duty_covered": "ਪੂਰਾ ਹੋਇਆ"
 }

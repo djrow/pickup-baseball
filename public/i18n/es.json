@@ -168,5 +168,9 @@
   "phrase.duty_balls": "Pelotas de Juego",
   "phrase.duty_balls_desc": "Traer cubeta de pelotas de béisbol.",
   "phrase.duty_drag": "Acondicionamiento del Campo",
-  "phrase.duty_drag_desc": "Llegar 20 min antes para pasar el rastrillo al cuadro interior."
+  "phrase.duty_drag_desc": "Llegar 20 min antes para pasar el rastrillo al cuadro interior.",
+  "event.roster_private_title": "La lista de jugadores es privada",
+  "event.roster_private_desc": "Para proteger la privacidad de los jugadores, los nombres y la asignación de equipo solo son visibles para los asistentes. ¡Confirma tu asistencia (asistiendo o no puedes ir) abajo para ver quién juega!",
+  "event.roster_private_cta": "Confirmar asistencia para ver la lista",
+  "event.duty_covered": "Cubierto"
 }

@@ -925,8 +925,15 @@ test('T7: Error Boundaries', async (t) => {
       const cancelRes = await apiReq('POST', `/api/events/${event.id}/rsvp`, null, { name: 'P1', email: 't8_p1@test.org', status: 'declined' });
       assert.equal(cancelRes.data.status, 'declined');
 
-      // Verify Player 3 was promoted to attending
-      const details = await apiReq('GET', `/api/events/${event.id}`);
+      // Unauthenticated visitor: roster names are private
+      const publicDetails = await apiReq('GET', `/api/events/${event.id}`);
+      assert.equal(publicDetails.data.canViewRoster, false);
+      assert.equal(publicDetails.data.attendees.length, 0);
+      assert.equal(publicDetails.data.totalAttendees, 2);
+
+      // Organizer or RSVP'd attendee: roster names visible
+      const details = await apiReq('GET', `/api/events/${event.id}`, seedOrgCookie);
+      assert.equal(details.data.canViewRoster, true);
       assert.equal(details.data.totalAttendees, 2);
       assert.equal(details.data.totalWaitlist, 0);
       const attendeeNames = details.data.attendees.map(a => a.name);

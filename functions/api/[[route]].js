@@ -1609,6 +1609,15 @@ app.get('/events/:id', async (c) => {
         ORDER BY a.created_at ASC
       `).bind(eventId),
       c.env.DB.prepare(`
+        SELECT a.id, a.name, a.status, a.is_guest, a.created_at,
+          u.bio,
+          CASE WHEN u.avatar_url IS NOT NULL AND u.avatar_url != '' THEN '/api/users/' || u.id || '/avatar?v=' || length(u.avatar_url) ELSE '' END as avatar_url
+        FROM attendees a
+        LEFT JOIN users u ON a.user_id = u.id
+        WHERE a.event_id = ? AND a.status = 'waitlist'
+        ORDER BY a.created_at ASC, a.id ASC
+      `).bind(eventId),
+      c.env.DB.prepare(`
         SELECT c.id, c.author_name, c.content, c.created_at, c.user_id,
           CASE WHEN u.avatar_url IS NOT NULL AND u.avatar_url != '' THEN '/api/users/' || u.id || '/avatar?v=' || length(u.avatar_url) ELSE '' END as avatar_url,
           u.bio
@@ -1653,22 +1662,38 @@ app.get('/events/:id', async (c) => {
     }));
 
     const attendees = batchRes[2].results || [];
-    const comments = batchRes[3].results || [];
-    const settingRow = (batchRes[4].results && batchRes[4].results[0]) || null;
+    const waitlist = batchRes[3].results || [];
+    const comments = batchRes[4].results || [];
+    const settingRow = (batchRes[5].results && batchRes[5].results[0]) || null;
     const requireLogin = settingRow ? settingRow.value === 'true' : true;
 
-    let myRsvp = (batchRes[5] && batchRes[5].results && batchRes[5].results[0]) || null;
+    let myRsvp = (batchRes[6] && batchRes[6].results && batchRes[6].results[0]) || null;
     if (myRsvp) {
       myRsvp.duty_ids = JSON.parse(myRsvp.duty_ids || '[]');
     }
 
+    const isOrganizer = Boolean(user && (user.canManageEvents || user.isAdmin));
+    const hasRsvpd = Boolean(myRsvp && (myRsvp.status === 'attending' || myRsvp.status === 'declined' || myRsvp.status === 'waitlist'));
+    const canViewRoster = Boolean(hasRsvpd || isOrganizer);
+
+    // Sanitize duties: hide volunteer names if viewer is not authorized to view the roster, but preserve slot counts
+    const sanitizedDuties = duties.map(d => ({
+      ...d,
+      assigned_players: canViewRoster
+        ? d.assigned_players
+        : (d.assigned_players || []).map(p => ({ attendee_id: p.attendee_id, name: '' }))
+    }));
+
     return c.json({
       event,
-      duties: duties || [],
-      attendees: attendees || [],
+      duties: sanitizedDuties || [],
+      attendees: canViewRoster ? (attendees || []) : [],
+      waitlist: canViewRoster ? (waitlist || []) : [],
       comments: comments || [],
       myRsvp,
+      canViewRoster,
       totalAttendees: (attendees || []).length,
+      totalWaitlist: (waitlist || []).length,
       user: user || null,
       require_login_to_rsvp: requireLogin
     });

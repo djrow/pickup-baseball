@@ -168,5 +168,9 @@
   "phrase.duty_balls": "試合球（ボール）",
   "phrase.duty_balls_desc": "試合用ボールのバケツを持参する。",
   "phrase.duty_drag": "グラウンド整備（トンボがけ）",
-  "phrase.duty_drag_desc": "20分前に到着して内野にブラシ・レーキをかける。"
+  "phrase.duty_drag_desc": "20分前に到着して内野にブラシ・レーキをかける。",
+  "event.roster_private_title": "選手名簿は非公開です",
+  "event.roster_private_desc": "プライバシー保護のため、参加者名簿および用具の分担は参加登録者のみに表示されます。参加または不参加を選択して名簿をご確認ください。",
+  "event.roster_private_cta": "出欠を登録して名簿を見る",
+  "event.duty_covered": "担当者決定済"
 }

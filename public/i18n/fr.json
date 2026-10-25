@@ -168,5 +168,9 @@
   "phrase.duty_balls": "Balles de Match",
   "phrase.duty_balls_desc": "Apporter un seau de balles de baseball.",
   "phrase.duty_drag": "Préparation du Terrain",
-  "phrase.duty_drag_desc": "Arriver 20 min en avance pour passer le filet/râteau sur l'avant-champ."
+  "phrase.duty_drag_desc": "Arriver 20 min en avance pour passer le filet/râteau sur l'avant-champ.",
+  "event.roster_private_title": "La liste des joueurs est privée",
+  "event.roster_private_desc": "Pour protéger la vie privée des joueurs, les noms et le matériel sont visibles uniquement par les participants. Veuillez répondre ci-dessous pour voir qui joue !",
+  "event.roster_private_cta": "Répondre pour voir la liste",
+  "event.duty_covered": "Couvert"
 }
