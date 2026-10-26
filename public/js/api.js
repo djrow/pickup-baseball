@@ -391,11 +391,13 @@ const API = {
 
   COLOR_THEMES: [
     { id: 'bay-area', name: 'Bay Area Heritage', market: "SF Giants & Oakland A's", primaryColor: '#FD5A1E', secondaryColor: '#003831' },
+    { id: 'seattle-mariners', name: 'Seattle Mariners', market: 'Northwest Green & Navy', primaryColor: '#005C5C', secondaryColor: '#0C2340' },
+    { id: 'white-sox', name: 'Chicago White Sox', market: 'South Side Black & Silver', primaryColor: '#27251F', secondaryColor: '#94a3b8' },
+    { id: 'milwaukee-brewers', name: 'Milwaukee Brewers', market: 'Glove Navy & Harvest Gold', primaryColor: '#B6891A', secondaryColor: '#12284C' },
     { id: 'dodger-blue', name: 'Dodger Blue & Silver', market: 'Los Angeles Dodgers', primaryColor: '#005A9C', secondaryColor: '#0B2341' },
     { id: 'pinstripe-navy', name: 'Pinstripe Navy & Silver', market: 'New York Yankees', primaryColor: '#1E3A5F', secondaryColor: '#0C2340' },
     { id: 'fenway-red', name: 'Fenway Crimson & Navy', market: 'Boston Red Sox', primaryColor: '#BD3039', secondaryColor: '#0C2340' },
     { id: 'wrigley-royal', name: 'Wrigley Royal & Red', market: 'Chicago Cubs', primaryColor: '#0E3386', secondaryColor: '#CC3433' },
-    { id: 'pacific-teal', name: 'Pacific Teal & Navy', market: 'Seattle Mariners', primaryColor: '#0C6F75', secondaryColor: '#0C2340' },
     { id: 'camden-orange', name: 'Camden Orange & Black', market: 'Baltimore Orioles', primaryColor: '#DF4601', secondaryColor: '#212322' },
     { id: 'friar-gold', name: 'Friar Brown & Sungold', market: 'San Diego Padres', primaryColor: '#C48200', secondaryColor: '#2F241D' },
     { id: 'sedona-red', name: 'Sedona Red & Desert Teal', market: 'Arizona Diamondbacks', primaryColor: '#A71930', secondaryColor: '#26696D' },

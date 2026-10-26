@@ -324,12 +324,13 @@
   --text-muted: #8fa4c7;
 }
 
-/* 5. Pacific Teal & Navy (Seattle Mariners) */
+/* 5. Northwest Green & Navy (Seattle Mariners) */
+[data-color-theme="seattle-mariners"],
 [data-color-theme="pacific-teal"] {
-  --hero-bg: linear-gradient(140deg, #04101a 0%, #063136 50%, #0C6F75 100%);
-  --hero-glow: radial-gradient(circle at 50% 0%, rgba(45, 212, 191, 0.25) 0%, transparent 62%);
-  --hero-border: #0C6F75;
-  --hero-subtitle-bg: rgba(12, 111, 117, 0.35);
+  --hero-bg: linear-gradient(140deg, #04101a 0%, #062b2e 50%, #005C5C 100%);
+  --hero-glow: radial-gradient(circle at 50% 0%, rgba(45, 212, 191, 0.26) 0%, transparent 62%);
+  --hero-border: #005C5C;
+  --hero-subtitle-bg: rgba(0, 92, 92, 0.32);
   --hero-subtitle-text: #ccfbf1;
   --as-green: #0C2340;
   --as-green-hover: #061324;
@@ -337,11 +338,11 @@
   --as-green-subtle: #edf2f8;
   --as-green-border: #c0d2e5;
 
-  --giants-orange: #0C6F75;
-  --giants-orange-hover: #075156;
-  --giants-orange-light: #e6f5f6;
-  --giants-orange-border: #b0e0e3;
-  --giants-orange-glow: rgba(12, 111, 117, 0.22);
+  --giants-orange: #005C5C;
+  --giants-orange-hover: #004545;
+  --giants-orange-light: #e6f5f5;
+  --giants-orange-border: #a3d9d9;
+  --giants-orange-glow: rgba(0, 92, 92, 0.22);
 
   --bg-page: #f4f8f8;
   --bg-card: #ffffff;
@@ -350,8 +351,9 @@
   --text-main: #081a1c;
   --text-muted: #4a686b;
 }
+[data-color-theme="seattle-mariners"][data-theme="dark"],
 [data-color-theme="pacific-teal"][data-theme="dark"] {
-  --hero-bg: linear-gradient(140deg, #02090b 0%, #061e21 50%, #09373b 100%);
+  --hero-bg: linear-gradient(140deg, #02090b 0%, #061e21 50%, #004848 100%);
   --hero-glow: radial-gradient(circle at 50% 0%, rgba(45, 212, 191, 0.35) 0%, transparent 62%);
   --hero-border: #2dd4bf;
   --hero-subtitle-bg: rgba(45, 212, 191, 0.22);
@@ -375,6 +377,112 @@
   --border: #193d45;
   --text-main: #f0fdfa;
   --text-muted: #82a8ab;
+}
+
+/* 6. South Side Black & Silver (Chicago White Sox) */
+[data-color-theme="white-sox"] {
+  --hero-bg: linear-gradient(140deg, #08090a 0%, #15181b 50%, #252a30 100%);
+  --hero-glow: radial-gradient(circle at 50% 0%, rgba(248, 250, 252, 0.22) 0%, transparent 62%);
+  --hero-border: #1E2227;
+  --hero-subtitle-bg: rgba(255, 255, 255, 0.18);
+  --hero-subtitle-text: #f8fafc;
+  --as-green: #4A5568;
+  --as-green-hover: #2D3748;
+  --as-green-light: #1A202C;
+  --as-green-subtle: #edf2f7;
+  --as-green-border: #cbd5e1;
+
+  --giants-orange: #1E2227;
+  --giants-orange-hover: #0B0C0E;
+  --giants-orange-light: #f1f3f5;
+  --giants-orange-border: #94a3b8;
+  --giants-orange-glow: rgba(30, 34, 39, 0.22);
+
+  --bg-page: #f4f6f8;
+  --bg-card: #ffffff;
+  --bg-subtle: #f8fafc;
+  --border: #cbd5e1;
+  --text-main: #0f172a;
+  --text-muted: #475569;
+}
+[data-color-theme="white-sox"][data-theme="dark"] {
+  --hero-bg: linear-gradient(140deg, #050607 0%, #0d1012 50%, #1a1e22 100%);
+  --hero-glow: radial-gradient(circle at 50% 0%, rgba(248, 250, 252, 0.28) 0%, transparent 62%);
+  --hero-border: #f1f5f9;
+  --hero-subtitle-bg: rgba(255, 255, 255, 0.12);
+  --hero-subtitle-text: #f8fafc;
+  --as-green: #94a3b8;
+  --as-green-hover: #cbd5e1;
+  --as-green-light: #334155;
+  --as-green-subtle: rgba(148, 163, 184, 0.14);
+  --as-green-border: rgba(148, 163, 184, 0.32);
+
+  --giants-orange: #f1f5f9;
+  --giants-orange-hover: #ffffff;
+  --giants-orange-light: rgba(241, 245, 249, 0.16);
+  --giants-orange-border: rgba(241, 245, 249, 0.4);
+  --giants-orange-glow: rgba(241, 245, 249, 0.35);
+
+  --bg-page: #090b0d;
+  --bg-card: #13161a;
+  --bg-subtle: #1a1e23;
+  --bg-input: #0a0c0e;
+  --border: #2e343d;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+}
+
+/* 7. Glove Navy & Harvest Gold (Milwaukee Brewers) */
+[data-color-theme="milwaukee-brewers"] {
+  --hero-bg: linear-gradient(140deg, #060e18 0%, #0f2240 50%, #1a3866 100%);
+  --hero-glow: radial-gradient(circle at 50% 0%, rgba(250, 204, 21, 0.3) 0%, transparent 62%);
+  --hero-border: #B6891A;
+  --hero-subtitle-bg: rgba(182, 137, 26, 0.28);
+  --hero-subtitle-text: #fffbeb;
+  --as-green: #12284C;
+  --as-green-hover: #091830;
+  --as-green-light: #1a3b6f;
+  --as-green-subtle: #ebf2fc;
+  --as-green-border: #b9d0f2;
+
+  --giants-orange: #B6891A;
+  --giants-orange-hover: #8f6b10;
+  --giants-orange-light: #fdf9eb;
+  --giants-orange-border: #fae5a7;
+  --giants-orange-glow: rgba(182, 137, 26, 0.22);
+
+  --bg-page: #f5f7fb;
+  --bg-card: #ffffff;
+  --bg-subtle: #f8fafd;
+  --border: #d2dfec;
+  --text-main: #0a1626;
+  --text-muted: #4a5f78;
+}
+[data-color-theme="milwaukee-brewers"][data-theme="dark"] {
+  --hero-bg: linear-gradient(140deg, #030810 0%, #09172c 50%, #112847 100%);
+  --hero-glow: radial-gradient(circle at 50% 0%, rgba(250, 204, 21, 0.35) 0%, transparent 62%);
+  --hero-border: #facc15;
+  --hero-subtitle-bg: rgba(250, 204, 21, 0.22);
+  --hero-subtitle-text: #fef08a;
+  --as-green: #60a5fa;
+  --as-green-hover: #93c5fd;
+  --as-green-light: #1e40af;
+  --as-green-subtle: rgba(96, 165, 250, 0.14);
+  --as-green-border: rgba(96, 165, 250, 0.32);
+
+  --giants-orange: #facc15;
+  --giants-orange-hover: #fde047;
+  --giants-orange-light: rgba(250, 204, 21, 0.16);
+  --giants-orange-border: rgba(250, 204, 21, 0.38);
+  --giants-orange-glow: rgba(250, 204, 21, 0.35);
+
+  --bg-page: #070e18;
+  --bg-card: #0d1a2d;
+  --bg-subtle: #13253d;
+  --bg-input: #070d17;
+  --border: #1d3759;
+  --text-main: #f0f7ff;
+  --text-muted: #8da6c4;
 }
 
 /* 6. Camden Orange & Black (Baltimore Orioles) */
@@ -955,7 +1063,7 @@ header.site-header {
 .privacy-accordion summary {
   cursor: pointer;
   font-weight: 700;
-  color: var(--as-green);
+  color: var(--giants-orange);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1740,16 +1848,69 @@ footer.site-footer strong {
   border-color: rgba(248, 113, 113, 0.4);
 }
 
-[data-theme="dark"] #privacy-policy {
-  background: rgba(17, 34, 30, 0.94) !important;
-  color: var(--text-main) !important;
-  border: 1px solid var(--border);
+/* Hero Section Action Buttons (Mailing List & View Games) */
+#hero-actions .btn-outline {
+  background: rgba(255, 255, 255, 0.94) !important;
+  color: var(--giants-orange) !important;
+  border: 1.5px solid var(--giants-orange) !important;
+  font-weight: 700 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  transition: all 0.2s ease;
 }
 
+#hero-actions .btn-outline:hover {
+  background: var(--giants-orange) !important;
+  color: #ffffff !important;
+  border-color: var(--giants-orange) !important;
+  box-shadow: 0 4px 14px var(--giants-orange-glow);
+  transform: translateY(-1px);
+}
+
+/* Privacy Promise Accordion */
+#privacy-policy.privacy-accordion {
+  background: rgba(255, 255, 255, 0.94);
+  border: 1.5px solid var(--border);
+  color: var(--text-main);
+  transition: all 0.2s ease;
+}
+
+#privacy-policy summary {
+  color: var(--giants-orange);
+  font-weight: 700;
+  transition: color 0.15s ease;
+}
+
+#privacy-policy summary:hover {
+  color: var(--giants-orange-hover);
+}
+
+/* Dark Mode Overrides for Hero Actions & Privacy Promise */
 [data-theme="dark"] #hero-actions .btn-outline {
-  background: rgba(17, 34, 30, 0.9) !important;
-  color: var(--as-green) !important;
-  border-color: var(--as-green) !important;
+  background: var(--bg-card) !important;
+  color: var(--giants-orange) !important;
+  border-color: var(--giants-orange) !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+}
+
+[data-theme="dark"] #hero-actions .btn-outline:hover {
+  background: var(--giants-orange) !important;
+  color: var(--bg-page) !important;
+  box-shadow: 0 4px 16px var(--giants-orange-glow);
+}
+
+[data-theme="dark"] #privacy-policy.privacy-accordion {
+  background: var(--bg-card) !important;
+  color: var(--text-main) !important;
+  border-color: var(--border) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] #privacy-policy summary {
+  color: var(--giants-orange) !important;
+}
+
+[data-theme="dark"] #privacy-policy summary:hover {
+  color: var(--giants-orange-hover) !important;
 }
 
 [data-theme="dark"] #rsvp-login-prompt {
