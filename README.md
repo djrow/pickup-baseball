@@ -32,6 +32,8 @@ Designed with a **10+ year longevity philosophy**:
    - Role-based access control (`Admin`, `Organizer`, `Player`).
    - One-click **📥 Backup Database (`.sql`)** download directly from the Admin Dashboard.
    - User account removal, email ban list (`banned_emails`), guest RSVP policy toggle, and one-click roster/comment moderation.
+6. **Detailed Development Narrative**:
+   - A complete chronicle of all development phases, architectural philosophy, edge migrations, security hardening, visual redesigns, PWA implementation, reverse compatibility passes, and MLB theme engines is maintained in **[`DEVELOPMENT_NARRATIVE.md`](DEVELOPMENT_NARRATIVE.md)**.
 
 ---
 

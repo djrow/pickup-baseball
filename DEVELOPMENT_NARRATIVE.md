@@ -79,5 +79,70 @@ To make the site look and feel like a modern, cohesive community sports platform
 
 ---
 
-## 7. Future Roadmap Notes
+## 7. Phase 6: Multi-Language i18n & RTL Typography
+To serve the diverse baseball community across the East Bay and California, we engineered a zero-dependency internationalization system:
+- **15 California Languages Supported:** Added full localization for English (`en`), Spanish (`es`), Chinese Simplified (`zh`), Tagalog (`tl`), Vietnamese (`vi`), Korean (`ko`), Arabic (`ar`), Russian (`ru`), Persian/Farsi (`fa`), Japanese (`ja`), Punjabi (`pa`), Armenian (`hy`), Portuguese (`pt`), Hindi (`hi`), and French (`fr`).
+- **Dynamic Translation Engine (`public/js/api.js` & `public/i18n/*.json`):** Created lightweight JSON translation dictionaries with automatic browser locale detection, date/time formatting via `Intl.DateTimeFormat`, and reactive DOM translation via `data-i18n` and `data-i18n-placeholder` attributes.
+- **Bi-Directional RTL Support:** Toggles `dir="rtl"` dynamically on `<html>` for Arabic and Persian, applying RTL-aware layout flipping and physical margin fallbacks.
+- **Compact Native Selector:** Replaced bulky dropdowns with a sleek top bar abbreviation selector (`EN`, `ES`, `ZH`, `TL`, etc.) with zero-reload switching and persistent `localStorage` preference.
+
+---
+
+## 8. Phase 7: Rainout Incident Management & Weather Broadcasts
+Given Sunday weather unpredictability, organizers needed a rapid response tool when rain makes fields unplayable:
+- **1-Click "Call Rainout" Incident Flow:** Organizers can click *"🌧️ Call Rainout"* directly on any game page and enter custom field notes (e.g. mud conditions, rescheduled makeup dates).
+- **Automated Weather Notification Dispatch:** Instantly broadcasts cancellation emails via Resend to all confirmed roster players and volunteers, explicitly noting that equipment and volunteer commitments are excused for the day.
+- **Clear Weather State & Reopening:** Replaces standard status badges with a prominent sky-blue rainout banner and provides an organizer *"☀️ Reopen Game"* tool if weather clears.
+
+---
+
+## 9. Phase 8: Roster Size Capping, Auto-Promoting Waitlist, Guest Parties, & Player Privacy
+As pickup baseball games grew in popularity, we built capacity controls and privacy safeguards:
+- **Roster Capacity Limits (`max_players`):** Organizers can cap games at a target roster size (e.g. 18 or 20 players) with automated waitlist activation when capacity is reached.
+- **Instant Automatic Waitlist Promotion:** When a confirmed player cancels or an organizer removes someone, the queue promotes the next waitlisted player to the active playing roster and immediately dispatches an automated promotion confirmation email.
+- **Additional Guests (+1 to +5):** Players can reserve slots for friends and family in a single RSVP submission, decrementing available roster slots accurately.
+- **Privacy Shield for Player Rosters:** Unauthenticated visitors and non-attendees see a privacy notice (`🔒 Player Roster is Private. RSVP to View Roster`), protecting individual player names, bio details, and gear commitments until an RSVP is submitted or an organizer signs in.
+- **Past Games Archive (`archive.html`) & Turnout Recording:** Split historic game turnouts from upcoming schedules with a dedicated archive page, and gave organizers a quick tool to record actual Sunday turnout numbers for historical records.
+
+---
+
+## 10. Phase 9: Progressive Web App (PWA) & Offline Shell
+To deliver an app-like mobile experience without app store overhead:
+- **Installable Web App Manifest (`manifest.webmanifest`):** Configured standalone display mode, baseball theme colors, and responsive icons (`192×192` and `512×512`) on transparent 1:1 canvas for clean Android, iOS, and desktop home-screen pinning.
+- **Service Worker (`public/sw.js`):** Built a resilient caching strategy that serves static app shell assets (HTML, CSS, JS, logo) instantly offline while fetching live rosters over the network with fallback. Enhanced cache matching with `{ ignoreSearch: true }` to eliminate cache misses from version query strings.
+- **Desktop & Firefox Pinning:** Added high-res `favicon.ico` and standard shortcut links so taskbar and bookmark icons render crisp without blur.
+
+---
+
+## 11. Phase 10: Reverse Compatibility Audit & Cross-Era Browser/Hardware Hardening
+To guarantee access on older smartphones, legacy desktop browsers, and weak municipal or cellular networks:
+- **Legacy Syntax & API Modernization:** Replaced modern ECMAScript optional chaining (`?.`) with explicit defensive checks (`&&`) across frontend scripts, and replaced `Promise.allSettled` with ES6-compliant `Promise.all` mapping.
+- **Dual CSS Logical & Physical Fallbacks:** Paired all CSS Logical Properties (`margin-inline-start`, `border-inline-start`) with physical fallbacks (`margin-left`, `border-left`), and added flex child margins for browsers lacking flexbox `gap` support.
+- **Mobile Safari Auto-Zoom Fix:** Enforced `font-size: 16px` minimum on all form inputs to prevent iOS Mobile Safari from jarringly zooming the viewport on focus.
+
+---
+
+## 12. Phase 11: Floating Bottom Theme Dock & 12-Market Major League Baseball Theming
+To celebrate baseball heritage across different markets while optimizing thumb reachability:
+- **Fixed Floating Theme Dock (`#theme-dock`):** Moved the theme toggle out of the crowded top navbar into an ergonomic floating pill dock fixed at the bottom of the screen. Features an immediate light/dark toggle and an expandable palette popover (`#theme-picker-panel`) with light, dark, and system modes. Added an accessible keyboard/screen-reader trigger in the site footer (`#footer-theme-trigger`).
+- **12 Authentic MLB Team Market Palettes:**
+  1. **Bay Area Heritage** (SF Giants Orange `#FD5A1E` & Oakland A's Dark Forest Green `#003831`)
+  2. **Seattle Mariners** (Northwest Green `#005C5C` & Navy `#0C2340`)
+  3. **Chicago White Sox** (South Side Black `#27251F`, Slate `#334155`, & Silver `#94a3b8`)
+  4. **Milwaukee Brewers** (Harvest Gold `#B6891A` & Glove Navy `#12284C`)
+  5. **Los Angeles Dodgers** (Dodger Blue `#005A9C` & Silver `#0B2341`)
+  6. **New York Yankees** (Pinstripe Navy `#1E3A5F` & Silver `#0C2340`)
+  7. **Boston Red Sox** (Fenway Crimson `#BD3039` & Navy `#0C2340`)
+  8. **Chicago Cubs** (Wrigley Royal `#0E3386` & Cubbie Red `#CC3433`)
+  9. **Baltimore Orioles** (Camden Orange `#DF4601` & Black `#212322`)
+  10. **San Diego Padres** (Friar Brown `#2F241D` & Sungold `#C48200`)
+  11. **Arizona Diamondbacks** (Sedona Red `#A71930` & Desert Teal `#26696D`)
+  12. **Classic 1980s Retro** (Powder Blue `#0284c7` & Royal Navy `#004687`)
+- **Dynamic Top Hero Gradient Banners:** Refactored hero banner backgrounds (`--hero-bg`, `--hero-glow`, `--hero-border`) and action buttons so the entire page header smoothly morphs with the chosen team palette.
+- **Accessibility & Contrast Hardening for Monochrome/Dark Palettes:** Specifically engineered the White Sox dark mode button system with deep charcoal buttons (`#262b32`), metallic silver borders (`#64748b`), and bright white text (`#ffffff`), elevating contrast from an unreadable 1.09:1 up to **12.5:1** (exceeding WCAG AAA requirements).
+- **Logo Integrity:** Guaranteed that the official home-plate shield logo (`/logo.svg`) preserves its designed colors in all modes without CSS inversion filters.
+
+---
+
+## 13. Future Roadmap Notes
 - **Pinned Full-Stack Rust / WebAssembly Migration:** Evaluated a future 4-phase rewrite of the Cloudflare Pages Functions backend (and optional frontend interactivity) to Rust (`workers-rs` compiling to WebAssembly) for compile-time type safety, zero-dependency binary durability, and strict edge memory safety—kept as a guiding north star when designing new features and data models.
