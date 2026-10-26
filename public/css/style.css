@@ -112,6 +112,60 @@
    MLB Market Themes & Color Palettes (Light & Dark Variants)
    ========================================================================== */
 
+/* 0. Bay Area Heritage (SF Giants & Oakland A's) */
+[data-color-theme="bay-area"] {
+  --hero-bg: linear-gradient(140deg, #002621 0%, #003831 60%, #004d43 100%);
+  --hero-glow: radial-gradient(circle at 50% 0%, rgba(253, 90, 30, 0.16) 0%, transparent 62%);
+  --hero-border: #FD5A1E;
+  --hero-subtitle-bg: rgba(253, 90, 30, 0.22);
+  --hero-subtitle-text: #ffeedb;
+  --as-green: #003831;
+  --as-green-hover: #002823;
+  --as-green-light: #00544a;
+  --as-green-subtle: #e6f0ed;
+  --as-green-border: #b8d7cf;
+
+  --giants-orange: #FD5A1E;
+  --giants-orange-hover: #e04a11;
+  --giants-orange-light: #fff2ed;
+  --giants-orange-border: #fed3c4;
+  --giants-orange-glow: rgba(253, 90, 30, 0.22);
+
+  --bg-page: #f5f8f7;
+  --bg-card: #ffffff;
+  --bg-subtle: #f7faf9;
+  --bg-input: #ffffff;
+  --border: #dbe4e0;
+  --text-main: #0c1f1a;
+  --text-muted: #546e66;
+}
+[data-color-theme="bay-area"][data-theme="dark"] {
+  --hero-bg: linear-gradient(140deg, #051410 0%, #0c2621 60%, #11362e 100%);
+  --hero-glow: radial-gradient(circle at 50% 0%, rgba(255, 107, 53, 0.28) 0%, transparent 62%);
+  --hero-border: #ff6b35;
+  --hero-subtitle-bg: rgba(255, 107, 53, 0.2);
+  --hero-subtitle-text: #ffe0d4;
+  --as-green: #34d399;
+  --as-green-hover: #6ee7b7;
+  --as-green-light: #00544a;
+  --as-green-subtle: rgba(16, 185, 129, 0.14);
+  --as-green-border: rgba(52, 211, 153, 0.32);
+
+  --giants-orange: #ff6b35;
+  --giants-orange-hover: #ff8252;
+  --giants-orange-light: rgba(253, 90, 30, 0.16);
+  --giants-orange-border: rgba(253, 90, 30, 0.38);
+  --giants-orange-glow: rgba(253, 90, 30, 0.35);
+
+  --bg-page: #0a1412;
+  --bg-card: #11221e;
+  --bg-subtle: #162b26;
+  --bg-input: #0d1b18;
+  --border: #23423b;
+  --text-main: #ecfdf5;
+  --text-muted: #94b8af;
+}
+
 /* 1. Dodger Blue & Silver (Los Angeles Dodgers) */
 [data-color-theme="dodger-blue"] {
   --hero-bg: linear-gradient(140deg, #041224 0%, #003865 55%, #005A9C 100%);
