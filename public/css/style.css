@@ -96,6 +96,397 @@
   --shadow-lg: 0 14px 30px -4px rgba(0, 0, 0, 0.6), 0 6px 12px -3px rgba(0, 0, 0, 0.4);
 }
 
+/* ==========================================================================
+   MLB Market Themes & Color Palettes (Light & Dark Variants)
+   ========================================================================== */
+
+/* 1. Dodger Blue & Silver (Los Angeles Dodgers) */
+[data-color-theme="dodger-blue"] {
+  --as-green: #0B2341;
+  --as-green-hover: #051324;
+  --as-green-light: #163963;
+  --as-green-subtle: #eaf1f8;
+  --as-green-border: #c0d6eb;
+
+  --giants-orange: #005A9C;
+  --giants-orange-hover: #004578;
+  --giants-orange-light: #e6f0fa;
+  --giants-orange-border: #b6d5f2;
+  --giants-orange-glow: rgba(0, 90, 156, 0.22);
+
+  --bg-page: #f4f7fb;
+  --bg-card: #ffffff;
+  --bg-subtle: #f8fafd;
+  --border: #d2dfec;
+  --text-main: #081626;
+  --text-muted: #4d657d;
+}
+[data-color-theme="dodger-blue"][data-theme="dark"] {
+  --as-green: #93c5fd;
+  --as-green-hover: #bfdbfe;
+  --as-green-light: #1e3a8a;
+  --as-green-subtle: rgba(59, 130, 246, 0.14);
+  --as-green-border: rgba(147, 197, 253, 0.32);
+
+  --giants-orange: #38bdf8;
+  --giants-orange-hover: #60a5fa;
+  --giants-orange-light: rgba(56, 189, 248, 0.16);
+  --giants-orange-border: rgba(56, 189, 248, 0.38);
+  --giants-orange-glow: rgba(56, 189, 248, 0.35);
+
+  --bg-page: #070f1a;
+  --bg-card: #0d1b2e;
+  --bg-subtle: #13263f;
+  --bg-input: #091322;
+  --border: #1d3759;
+  --text-main: #f0f7ff;
+  --text-muted: #8da6c4;
+}
+
+/* 2. Pinstripe Navy & Silver (New York Yankees) */
+[data-color-theme="pinstripe-navy"] {
+  --as-green: #0C2340;
+  --as-green-hover: #061324;
+  --as-green-light: #1a3b63;
+  --as-green-subtle: #edf2f7;
+  --as-green-border: #cbd5e1;
+
+  --giants-orange: #1E3A5F;
+  --giants-orange-hover: #122540;
+  --giants-orange-light: #edf3fa;
+  --giants-orange-border: #c4d6eb;
+  --giants-orange-glow: rgba(30, 58, 95, 0.22);
+
+  --bg-page: #f5f7fa;
+  --bg-card: #ffffff;
+  --bg-subtle: #f8fafc;
+  --border: #d5dee7;
+  --text-main: #0c1d33;
+  --text-muted: #50647b;
+}
+[data-color-theme="pinstripe-navy"][data-theme="dark"] {
+  --as-green: #cbd5e1;
+  --as-green-hover: #e2e8f0;
+  --as-green-light: #334155;
+  --as-green-subtle: rgba(148, 163, 184, 0.14);
+  --as-green-border: rgba(203, 213, 225, 0.32);
+
+  --giants-orange: #60a5fa;
+  --giants-orange-hover: #93c5fd;
+  --giants-orange-light: rgba(96, 165, 250, 0.16);
+  --giants-orange-border: rgba(96, 165, 250, 0.38);
+  --giants-orange-glow: rgba(96, 165, 250, 0.35);
+
+  --bg-page: #070c14;
+  --bg-card: #0f1826;
+  --bg-subtle: #162235;
+  --bg-input: #0a111c;
+  --border: #22344d;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+}
+
+/* 3. Fenway Crimson & Navy (Boston Red Sox) */
+[data-color-theme="fenway-red"] {
+  --as-green: #0C2340;
+  --as-green-hover: #061426;
+  --as-green-light: #18365d;
+  --as-green-subtle: #edf2f8;
+  --as-green-border: #c2d2e4;
+
+  --giants-orange: #BD3039;
+  --giants-orange-hover: #9c242c;
+  --giants-orange-light: #fdf0f1;
+  --giants-orange-border: #f8c8cb;
+  --giants-orange-glow: rgba(189, 48, 57, 0.22);
+
+  --bg-page: #fbf8f8;
+  --bg-card: #ffffff;
+  --bg-subtle: #fcf9f9;
+  --border: #e4dede;
+  --text-main: #1e0f11;
+  --text-muted: #695255;
+}
+[data-color-theme="fenway-red"][data-theme="dark"] {
+  --as-green: #38bdf8;
+  --as-green-hover: #7dd3fc;
+  --as-green-light: #0369a1;
+  --as-green-subtle: rgba(56, 189, 248, 0.14);
+  --as-green-border: rgba(56, 189, 248, 0.32);
+
+  --giants-orange: #f87171;
+  --giants-orange-hover: #fca5a5;
+  --giants-orange-light: rgba(239, 68, 68, 0.16);
+  --giants-orange-border: rgba(239, 68, 68, 0.38);
+  --giants-orange-glow: rgba(239, 68, 68, 0.35);
+
+  --bg-page: #13090b;
+  --bg-card: #1e1014;
+  --bg-subtle: #2c171c;
+  --bg-input: #150b0e;
+  --border: #3f2128;
+  --text-main: #fef2f2;
+  --text-muted: #b99ca1;
+}
+
+/* 4. Wrigley Royal & Red (Chicago Cubs) */
+[data-color-theme="wrigley-royal"] {
+  --as-green: #CC3433;
+  --as-green-hover: #a82625;
+  --as-green-light: #8c1b1a;
+  --as-green-subtle: #fdf1f1;
+  --as-green-border: #f7c6c6;
+
+  --giants-orange: #0E3386;
+  --giants-orange-hover: #09225c;
+  --giants-orange-light: #edf2fc;
+  --giants-orange-border: #bcd2f8;
+  --giants-orange-glow: rgba(14, 51, 134, 0.22);
+
+  --bg-page: #f5f7fc;
+  --bg-card: #ffffff;
+  --bg-subtle: #f8f9fd;
+  --border: #d3dbee;
+  --text-main: #0b1730;
+  --text-muted: #4f5f84;
+}
+[data-color-theme="wrigley-royal"][data-theme="dark"] {
+  --as-green: #f87171;
+  --as-green-hover: #fca5a5;
+  --as-green-light: #991b1b;
+  --as-green-subtle: rgba(248, 113, 113, 0.14);
+  --as-green-border: rgba(248, 113, 113, 0.32);
+
+  --giants-orange: #60a5fa;
+  --giants-orange-hover: #93c5fd;
+  --giants-orange-light: rgba(96, 165, 250, 0.16);
+  --giants-orange-border: rgba(96, 165, 250, 0.38);
+  --giants-orange-glow: rgba(96, 165, 250, 0.35);
+
+  --bg-page: #070b14;
+  --bg-card: #0e1626;
+  --bg-subtle: #142036;
+  --bg-input: #09101c;
+  --border: #1f3150;
+  --text-main: #f0f5ff;
+  --text-muted: #8fa4c7;
+}
+
+/* 5. Pacific Teal & Navy (Seattle Mariners) */
+[data-color-theme="pacific-teal"] {
+  --as-green: #0C2340;
+  --as-green-hover: #061324;
+  --as-green-light: #18385e;
+  --as-green-subtle: #edf2f8;
+  --as-green-border: #c0d2e5;
+
+  --giants-orange: #0C6F75;
+  --giants-orange-hover: #075156;
+  --giants-orange-light: #e6f5f6;
+  --giants-orange-border: #b0e0e3;
+  --giants-orange-glow: rgba(12, 111, 117, 0.22);
+
+  --bg-page: #f4f8f8;
+  --bg-card: #ffffff;
+  --bg-subtle: #f7fbfb;
+  --border: #cfe0e1;
+  --text-main: #081a1c;
+  --text-muted: #4a686b;
+}
+[data-color-theme="pacific-teal"][data-theme="dark"] {
+  --as-green: #38bdf8;
+  --as-green-hover: #7dd3fc;
+  --as-green-light: #0284c7;
+  --as-green-subtle: rgba(56, 189, 248, 0.14);
+  --as-green-border: rgba(56, 189, 248, 0.32);
+
+  --giants-orange: #2dd4bf;
+  --giants-orange-hover: #5eead4;
+  --giants-orange-light: rgba(45, 212, 191, 0.16);
+  --giants-orange-border: rgba(45, 212, 191, 0.38);
+  --giants-orange-glow: rgba(45, 212, 191, 0.35);
+
+  --bg-page: #061214;
+  --bg-card: #0c1d21;
+  --bg-subtle: #11282d;
+  --bg-input: #081619;
+  --border: #193d45;
+  --text-main: #f0fdfa;
+  --text-muted: #82a8ab;
+}
+
+/* 6. Camden Orange & Black (Baltimore Orioles) */
+[data-color-theme="camden-orange"] {
+  --as-green: #212322;
+  --as-green-hover: #111211;
+  --as-green-light: #393b3a;
+  --as-green-subtle: #f0f1f0;
+  --as-green-border: #cfd1cf;
+
+  --giants-orange: #DF4601;
+  --giants-orange-hover: #ba3900;
+  --giants-orange-light: #fef2ec;
+  --giants-orange-border: #fbcbb4;
+  --giants-orange-glow: rgba(223, 70, 1, 0.22);
+
+  --bg-page: #faf7f5;
+  --bg-card: #ffffff;
+  --bg-subtle: #fcfaf8;
+  --border: #e3deda;
+  --text-main: #191411;
+  --text-muted: #665c56;
+}
+[data-color-theme="camden-orange"][data-theme="dark"] {
+  --as-green: #fef08a;
+  --as-green-hover: #fef9c3;
+  --as-green-light: #854d0e;
+  --as-green-subtle: rgba(254, 240, 138, 0.14);
+  --as-green-border: rgba(254, 240, 138, 0.32);
+
+  --giants-orange: #fb923c;
+  --giants-orange-hover: #fdba74;
+  --giants-orange-light: rgba(251, 146, 60, 0.16);
+  --giants-orange-border: rgba(251, 146, 60, 0.38);
+  --giants-orange-glow: rgba(251, 146, 60, 0.35);
+
+  --bg-page: #0f0e0d;
+  --bg-card: #191715;
+  --bg-subtle: #23201d;
+  --bg-input: #12100f;
+  --border: #38332d;
+  --text-main: #fff7ed;
+  --text-muted: #b3a598;
+}
+
+/* 7. Friar Brown & Sungold (San Diego Padres) */
+[data-color-theme="friar-gold"] {
+  --as-green: #2F241D;
+  --as-green-hover: #1e1712;
+  --as-green-light: #4a3a30;
+  --as-green-subtle: #f5f2ef;
+  --as-green-border: #dad1ca;
+
+  --giants-orange: #C48200;
+  --giants-orange-hover: #a36c00;
+  --giants-orange-light: #fef8e7;
+  --giants-orange-border: #fae3a1;
+  --giants-orange-glow: rgba(196, 130, 0, 0.22);
+
+  --bg-page: #f9f7f4;
+  --bg-card: #ffffff;
+  --bg-subtle: #fcfaf8;
+  --border: #e3ded7;
+  --text-main: #1a1410;
+  --text-muted: #685950;
+}
+[data-color-theme="friar-gold"][data-theme="dark"] {
+  --as-green: #fde047;
+  --as-green-hover: #fef08a;
+  --as-green-light: #854d0e;
+  --as-green-subtle: rgba(253, 224, 71, 0.14);
+  --as-green-border: rgba(253, 224, 71, 0.32);
+
+  --giants-orange: #eab308;
+  --giants-orange-hover: #facc15;
+  --giants-orange-light: rgba(234, 179, 8, 0.16);
+  --giants-orange-border: rgba(234, 179, 8, 0.38);
+  --giants-orange-glow: rgba(234, 179, 8, 0.35);
+
+  --bg-page: #120e0b;
+  --bg-card: #1d1612;
+  --bg-subtle: #271e19;
+  --bg-input: #140f0c;
+  --border: #3d2f26;
+  --text-main: #fefce8;
+  --text-muted: #b3a496;
+}
+
+/* 8. Sedona Red & Desert Teal (Arizona Diamondbacks) */
+[data-color-theme="sedona-red"] {
+  --as-green: #26696D;
+  --as-green-hover: #194a4d;
+  --as-green-light: #368489;
+  --as-green-subtle: #eaf4f4;
+  --as-green-border: #b9dedf;
+
+  --giants-orange: #A71930;
+  --giants-orange-hover: #851023;
+  --giants-orange-light: #fdf0f2;
+  --giants-orange-border: #f6c4cc;
+  --giants-orange-glow: rgba(167, 25, 48, 0.22);
+
+  --bg-page: #faf6f6;
+  --bg-card: #ffffff;
+  --bg-subtle: #fcf9f9;
+  --border: #e3dede;
+  --text-main: #1e0e11;
+  --text-muted: #685154;
+}
+[data-color-theme="sedona-red"][data-theme="dark"] {
+  --as-green: #2dd4bf;
+  --as-green-hover: #5eead4;
+  --as-green-light: #0f766e;
+  --as-green-subtle: rgba(45, 212, 191, 0.14);
+  --as-green-border: rgba(45, 212, 191, 0.32);
+
+  --giants-orange: #fb7185;
+  --giants-orange-hover: #fda4af;
+  --giants-orange-light: rgba(251, 113, 133, 0.16);
+  --giants-orange-border: rgba(251, 113, 133, 0.38);
+  --giants-orange-glow: rgba(251, 113, 133, 0.35);
+
+  --bg-page: #12090c;
+  --bg-card: #1e0f14;
+  --bg-subtle: #2b151d;
+  --bg-input: #150a0d;
+  --border: #3f202b;
+  --text-main: #fff1f2;
+  --text-muted: #b59da1;
+}
+
+/* 9. Powder Blue & Royal (Classic 1980s Retro) */
+[data-color-theme="powder-blue"] {
+  --as-green: #004687;
+  --as-green-hover: #00315e;
+  --as-green-light: #1463ab;
+  --as-green-subtle: #e8f2fc;
+  --as-green-border: #b6d7f7;
+
+  --giants-orange: #0284c7;
+  --giants-orange-hover: #0369a1;
+  --giants-orange-light: #edf8fd;
+  --giants-orange-border: #bce5f8;
+  --giants-orange-glow: rgba(2, 132, 199, 0.22);
+
+  --bg-page: #f3f8fc;
+  --bg-card: #ffffff;
+  --bg-subtle: #f7fbfe;
+  --border: #cfdfec;
+  --text-main: #081726;
+  --text-muted: #4a637a;
+}
+[data-color-theme="powder-blue"][data-theme="dark"] {
+  --as-green: #7dd3fc;
+  --as-green-hover: #bae6fd;
+  --as-green-light: #0369a1;
+  --as-green-subtle: rgba(125, 211, 252, 0.14);
+  --as-green-border: rgba(125, 211, 252, 0.32);
+
+  --giants-orange: #38bdf8;
+  --giants-orange-hover: #60a5fa;
+  --giants-orange-light: rgba(56, 189, 248, 0.16);
+  --giants-orange-border: rgba(56, 189, 248, 0.38);
+  --giants-orange-glow: rgba(56, 189, 248, 0.35);
+
+  --bg-page: #070e17;
+  --bg-card: #0d1a29;
+  --bg-subtle: #13253a;
+  --bg-input: #08121e;
+  --border: #1c3654;
+  --text-main: #f0f9ff;
+  --text-muted: #88a2bc;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -1438,5 +1829,311 @@ footer.site-footer strong {
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* ==========================================================================
+   Fixed Bottom Theme & Mode Controls Dock + Picker Popover
+   ========================================================================== */
+
+/* Pad page body bottom slightly so floating dock never obscures footer links */
+body {
+  padding-bottom: 32px;
+}
+
+.theme-dock {
+  position: fixed;
+  bottom: 18px;
+  inset-inline-end: 18px;
+  z-index: 1000;
+  font-family: var(--font-sans);
+}
+
+.theme-dock-pill {
+  display: inline-flex;
+  align-items: center;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  box-shadow: var(--shadow-md);
+  border-radius: var(--radius-full);
+  padding: 4px 6px;
+  gap: 4px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.theme-dock-pill:hover {
+  box-shadow: var(--shadow-lg);
+  border-color: var(--giants-orange-border);
+}
+
+.theme-dock-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-full);
+  color: var(--text-main);
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  line-height: 1;
+}
+
+.theme-dock-btn:hover {
+  background: var(--bg-subtle);
+  color: var(--giants-orange);
+}
+
+.theme-dock-divider {
+  display: inline-block;
+  width: 1px;
+  height: 18px;
+  background: var(--border);
+}
+
+.theme-dock-swatches {
+  display: inline-flex;
+  align-items: center;
+}
+
+.theme-dock-swatches .swatch-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1.5px solid var(--bg-card);
+}
+
+.theme-dock-swatches .swatch-dot.primary {
+  z-index: 2;
+}
+
+.theme-dock-swatches .swatch-dot.secondary {
+  margin-left: -4px;
+  margin-inline-start: -4px;
+  z-index: 1;
+}
+
+/* Theme Picker Popover Panel */
+.theme-picker-panel {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  inset-inline-end: 0;
+  width: 320px;
+  max-width: calc(100vw - 32px);
+  max-height: 440px;
+  overflow-y: auto;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: 14px;
+  display: none;
+  flex-direction: column;
+  gap: 12px;
+  animation: themeFadeIn 0.15s ease-out;
+}
+
+.theme-picker-panel.open {
+  display: flex;
+}
+
+@keyframes themeFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.theme-picker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+}
+
+.theme-picker-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.95rem;
+  color: var(--as-green);
+}
+
+.theme-picker-close {
+  background: transparent;
+  border: none;
+  font-size: 1.1rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  line-height: 1;
+}
+
+.theme-picker-close:hover {
+  background: var(--bg-subtle);
+  color: var(--text-main);
+}
+
+.theme-mode-tabs {
+  display: flex;
+  background: var(--bg-subtle);
+  padding: 3px;
+  border-radius: var(--radius-sm);
+  gap: 3px;
+}
+
+.theme-mode-tab {
+  flex: 1;
+  border: none;
+  background: transparent;
+  padding: 6px 4px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.theme-mode-tab:hover {
+  color: var(--text-main);
+}
+
+.theme-mode-tab.active {
+  background: var(--bg-card);
+  color: var(--giants-orange);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.theme-palette-heading {
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.theme-palette-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.theme-palette-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  cursor: pointer;
+  text-align: start;
+  transition: all 0.15s ease;
+  width: 100%;
+}
+
+.theme-palette-card:hover {
+  background: var(--bg-subtle);
+  border-color: var(--giants-orange-border);
+}
+
+.theme-palette-card.selected {
+  border-color: var(--giants-orange);
+  background: var(--giants-orange-light);
+}
+
+.palette-swatches {
+  display: inline-flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.swatch-preview {
+  display: inline-block;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+}
+
+.palette-info {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  min-width: 0;
+}
+
+.palette-name {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.palette-sub {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.palette-check {
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: var(--giants-orange);
+  width: 14px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.footer-theme-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #94a3b8;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s ease;
+}
+
+.footer-theme-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+@media (max-width: 34em) {
+  .theme-dock {
+    bottom: 12px;
+    inset-inline-end: 12px;
+  }
+  .theme-dock-btn {
+    padding: 5px 9px;
+    font-size: 0.78rem;
+  }
+  .theme-picker-panel {
+    width: 290px;
+    max-height: 380px;
   }
 }

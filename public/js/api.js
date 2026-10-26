@@ -389,15 +389,69 @@ const API = {
     }
   },
 
-  getTheme() {
+  COLOR_THEMES: [
+    { id: 'bay-area', name: 'Bay Area Heritage', market: "SF Giants & Oakland A's", primaryColor: '#FD5A1E', secondaryColor: '#003831' },
+    { id: 'dodger-blue', name: 'Dodger Blue & Silver', market: 'Los Angeles Dodgers', primaryColor: '#005A9C', secondaryColor: '#0B2341' },
+    { id: 'pinstripe-navy', name: 'Pinstripe Navy & Silver', market: 'New York Yankees', primaryColor: '#1E3A5F', secondaryColor: '#0C2340' },
+    { id: 'fenway-red', name: 'Fenway Crimson & Navy', market: 'Boston Red Sox', primaryColor: '#BD3039', secondaryColor: '#0C2340' },
+    { id: 'wrigley-royal', name: 'Wrigley Royal & Red', market: 'Chicago Cubs', primaryColor: '#0E3386', secondaryColor: '#CC3433' },
+    { id: 'pacific-teal', name: 'Pacific Teal & Navy', market: 'Seattle Mariners', primaryColor: '#0C6F75', secondaryColor: '#0C2340' },
+    { id: 'camden-orange', name: 'Camden Orange & Black', market: 'Baltimore Orioles', primaryColor: '#DF4601', secondaryColor: '#212322' },
+    { id: 'friar-gold', name: 'Friar Brown & Sungold', market: 'San Diego Padres', primaryColor: '#C48200', secondaryColor: '#2F241D' },
+    { id: 'sedona-red', name: 'Sedona Red & Desert Teal', market: 'Arizona Diamondbacks', primaryColor: '#A71930', secondaryColor: '#26696D' },
+    { id: 'powder-blue', name: 'Powder Blue & Royal', market: 'Classic 1980s Retro', primaryColor: '#0284c7', secondaryColor: '#004687' }
+  ],
+
+  getThemeMode() {
     try {
-      const saved = localStorage.getItem('pickup_theme');
-      if (saved === 'dark' || saved === 'light') return saved;
+      const saved = localStorage.getItem('pickup_theme_mode');
+      if (saved === 'light' || saved === 'dark' || saved === 'system') return saved;
+      const legacy = localStorage.getItem('pickup_theme');
+      if (legacy === 'light' || legacy === 'dark') return legacy;
     } catch (e) {}
-    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    return 'system';
+  },
+
+  getEffectiveTheme() {
+    const mode = this.getThemeMode();
+    if (mode === 'dark') return 'dark';
+    if (mode === 'light') return 'light';
+    if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
       return 'dark';
     }
     return 'light';
+  },
+
+  getTheme() {
+    return this.getEffectiveTheme();
+  },
+
+  getColorTheme() {
+    try {
+      const saved = localStorage.getItem('pickup_color_theme');
+      if (saved && this.COLOR_THEMES.some(t => t.id === saved)) {
+        return saved;
+      }
+    } catch (e) {}
+    return 'bay-area';
+  },
+
+  applyColorTheme(colorThemeId) {
+    const valid = this.COLOR_THEMES.some(t => t.id === colorThemeId) ? colorThemeId : 'bay-area';
+    if (valid === 'bay-area') {
+      document.documentElement.removeAttribute('data-color-theme');
+    } else {
+      document.documentElement.setAttribute('data-color-theme', valid);
+    }
+  },
+
+  setColorTheme(themeId) {
+    if (!this.COLOR_THEMES.some(t => t.id === themeId)) return;
+    try {
+      localStorage.setItem('pickup_color_theme', themeId);
+    } catch (e) {}
+    this.applyColorTheme(themeId);
+    this.updateThemeDockUi();
   },
 
   applyTheme(theme) {
@@ -406,40 +460,248 @@ const API = {
     } else {
       document.documentElement.removeAttribute('data-theme');
     }
-    const btn = document.getElementById('theme-toggle-btn');
-    if (btn) {
-      btn.textContent = theme === 'dark' ? '☀️' : '🌙';
-      btn.title = theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode';
-      btn.setAttribute('aria-label', btn.title);
-    }
+  },
+
+  setThemeMode(mode) {
+    if (mode !== 'light' && mode !== 'dark' && mode !== 'system') return;
+    try {
+      localStorage.setItem('pickup_theme_mode', mode);
+      localStorage.setItem('pickup_theme', this.getEffectiveTheme());
+    } catch (e) {}
+    this.applyTheme(this.getEffectiveTheme());
+    this.updateThemeDockUi();
   },
 
   toggleTheme() {
-    const next = this.getTheme() === 'dark' ? 'light' : 'dark';
-    try {
-      localStorage.setItem('pickup_theme', next);
-    } catch (e) {}
-    this.applyTheme(next);
+    const current = this.getEffectiveTheme();
+    const next = current === 'dark' ? 'light' : 'dark';
+    this.setThemeMode(next);
   },
 
   initTheme() {
-    this.applyTheme(this.getTheme());
-    const btn = document.getElementById('theme-toggle-btn');
-    if (btn && !btn.dataset.bound) {
-      btn.dataset.bound = '1';
-      btn.addEventListener('click', () => API.toggleTheme());
-    }
-    if (window.matchMedia) {
+    // 1. Immediately apply color theme and light/dark theme attributes
+    this.applyColorTheme(this.getColorTheme());
+    this.applyTheme(this.getEffectiveTheme());
+
+    // 2. Listen to system preference changes if in system mode
+    if (typeof window !== 'undefined' && window.matchMedia) {
       try {
-        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-          try {
-            if (!localStorage.getItem('pickup_theme')) {
-              this.applyTheme(e.matches ? 'dark' : 'light');
-            }
-          } catch (err) {}
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+          if (this.getThemeMode() === 'system') {
+            this.applyTheme(this.getEffectiveTheme());
+            this.updateThemeDockUi();
+          }
         });
       } catch (e) {}
     }
+
+    // 3. Mount fixed theme dock when DOM is interactive
+    const mount = () => {
+      this.renderThemeDock();
+    };
+    if (typeof document !== 'undefined') {
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', mount);
+      } else {
+        mount();
+      }
+    }
+  },
+
+  updateThemeDockUi() {
+    const currentMode = this.getThemeMode();
+    const effectiveTheme = this.getEffectiveTheme();
+    const currentColor = this.getColorTheme();
+    const isDark = effectiveTheme === 'dark';
+
+    const modeBtn = document.getElementById('theme-dock-mode-btn');
+    if (modeBtn) {
+      modeBtn.title = isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode';
+      modeBtn.setAttribute('aria-label', modeBtn.title);
+      const icon = modeBtn.querySelector('.theme-dock-icon');
+      const text = modeBtn.querySelector('.theme-dock-text');
+      if (icon) icon.textContent = isDark ? '☀️' : '🌙';
+      if (text) text.textContent = isDark ? 'Light' : 'Dark';
+    }
+
+    // Update swatches on dock trigger button
+    const activeThemeObj = this.COLOR_THEMES.find(t => t.id === currentColor) || this.COLOR_THEMES[0];
+    const swatches = document.getElementById('theme-active-swatches');
+    if (swatches) {
+      const primaryDot = swatches.querySelector('.swatch-dot.primary');
+      const secondaryDot = swatches.querySelector('.swatch-dot.secondary');
+      if (primaryDot) primaryDot.style.background = activeThemeObj.primaryColor;
+      if (secondaryDot) secondaryDot.style.background = activeThemeObj.secondaryColor;
+    }
+
+    // Update active mode tab in popover
+    document.querySelectorAll('.theme-mode-tab').forEach(tab => {
+      const m = tab.dataset.mode;
+      tab.classList.toggle('active', m === currentMode);
+    });
+
+    // Update selected palette card in popover
+    document.querySelectorAll('.theme-palette-card').forEach(card => {
+      const c = card.dataset.colorTheme;
+      const isSelected = c === currentColor;
+      card.classList.toggle('selected', isSelected);
+      const check = card.querySelector('.palette-check');
+      if (check) check.textContent = isSelected ? '✓' : '';
+    });
+  },
+
+  renderThemeDock() {
+    if (typeof document === 'undefined' || !document.body) return;
+    if (document.getElementById('theme-dock')) {
+      this.updateThemeDockUi();
+      return;
+    }
+
+    const dock = document.createElement('div');
+    dock.id = 'theme-dock';
+    dock.className = 'theme-dock';
+    dock.setAttribute('role', 'region');
+    dock.setAttribute('aria-label', 'Theme & Appearance');
+
+    const currentMode = this.getThemeMode();
+    const currentColor = this.getColorTheme();
+    const isDark = this.getEffectiveTheme() === 'dark';
+    const activeThemeObj = this.COLOR_THEMES.find(t => t.id === currentColor) || this.COLOR_THEMES[0];
+
+    dock.innerHTML = `
+      <div class="theme-dock-pill">
+        <button type="button" id="theme-dock-mode-btn" class="theme-dock-btn" title="${isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}" aria-label="${isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}">
+          <span class="theme-dock-icon">${isDark ? '☀️' : '🌙'}</span>
+          <span class="theme-dock-text">${isDark ? 'Light' : 'Dark'}</span>
+        </button>
+        <span class="theme-dock-divider"></span>
+        <button type="button" id="theme-dock-picker-btn" class="theme-dock-btn" title="Choose Baseball Colors & Team Themes" aria-label="Choose Baseball Colors & Team Themes" aria-expanded="false" aria-controls="theme-picker-panel">
+          <span class="theme-dock-swatches" id="theme-active-swatches">
+            <span class="swatch-dot primary" style="background: ${activeThemeObj.primaryColor};"></span>
+            <span class="swatch-dot secondary" style="background: ${activeThemeObj.secondaryColor};"></span>
+          </span>
+          <span class="theme-dock-text">Theme</span>
+        </button>
+      </div>
+
+      <div id="theme-picker-panel" class="theme-picker-panel" aria-hidden="true">
+        <div class="theme-picker-header">
+          <div class="theme-picker-title">
+            <span>⚾</span> <strong>Baseball Colors & Mode</strong>
+          </div>
+          <button type="button" id="theme-picker-close-btn" class="theme-picker-close" aria-label="Close theme picker">✕</button>
+        </div>
+
+        <div class="theme-mode-tabs" role="tablist">
+          <button type="button" class="theme-mode-tab ${currentMode === 'light' ? 'active' : ''}" data-mode="light">☀️ Light</button>
+          <button type="button" class="theme-mode-tab ${currentMode === 'dark' ? 'active' : ''}" data-mode="dark">🌙 Dark</button>
+          <button type="button" class="theme-mode-tab ${currentMode === 'system' ? 'active' : ''}" data-mode="system">💻 System</button>
+        </div>
+
+        <div class="theme-palette-heading">Select Market Palette</div>
+        <div class="theme-palette-grid">
+          ${this.COLOR_THEMES.map(th => `
+            <button type="button" class="theme-palette-card ${th.id === currentColor ? 'selected' : ''}" data-color-theme="${th.id}">
+              <span class="palette-swatches">
+                <span class="swatch-preview" style="background: ${th.primaryColor};"></span>
+                <span class="swatch-preview" style="background: ${th.secondaryColor};"></span>
+              </span>
+              <span class="palette-info">
+                <span class="palette-name">${this.escapeHtml(th.name)}</span>
+                <span class="palette-sub">${this.escapeHtml(th.market)}</span>
+              </span>
+              <span class="palette-check">${th.id === currentColor ? '✓' : ''}</span>
+            </button>
+          `).join('')}
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(dock);
+    this.bindThemeDockEvents();
+  },
+
+  bindThemeDockEvents() {
+    const modeBtn = document.getElementById('theme-dock-mode-btn');
+    if (modeBtn && !modeBtn.dataset.bound) {
+      modeBtn.dataset.bound = '1';
+      modeBtn.addEventListener('click', () => this.toggleTheme());
+    }
+
+    const pickerBtn = document.getElementById('theme-dock-picker-btn');
+    const panel = document.getElementById('theme-picker-panel');
+    const closeBtn = document.getElementById('theme-picker-close-btn');
+
+    const togglePanel = (force) => {
+      if (!panel) return;
+      const isOpen = force !== undefined ? force : !panel.classList.contains('open');
+      panel.classList.toggle('open', isOpen);
+      panel.setAttribute('aria-hidden', String(!isOpen));
+      if (pickerBtn) pickerBtn.setAttribute('aria-expanded', String(isOpen));
+    };
+
+    if (pickerBtn && !pickerBtn.dataset.bound) {
+      pickerBtn.dataset.bound = '1';
+      pickerBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        togglePanel();
+      });
+    }
+
+    if (closeBtn && !closeBtn.dataset.bound) {
+      closeBtn.dataset.bound = '1';
+      closeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        togglePanel(false);
+      });
+    }
+
+    // Footer trigger if present
+    const footerTrigger = document.getElementById('footer-theme-trigger');
+    if (footerTrigger && !footerTrigger.dataset.bound) {
+      footerTrigger.dataset.bound = '1';
+      footerTrigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        togglePanel(true);
+      });
+    }
+
+    // Dismiss on outside click
+    document.addEventListener('click', (e) => {
+      if (panel && panel.classList.contains('open')) {
+        const dock = document.getElementById('theme-dock');
+        if (dock && !dock.contains(e.target) && e.target !== footerTrigger) {
+          togglePanel(false);
+        }
+      }
+    });
+
+    // Dismiss on Escape
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && panel && panel.classList.contains('open')) {
+        togglePanel(false);
+      }
+    });
+
+    // Mode tabs
+    document.querySelectorAll('.theme-mode-tab').forEach(tab => {
+      if (!tab.dataset.bound) {
+        tab.dataset.bound = '1';
+        tab.addEventListener('click', () => {
+          this.setThemeMode(tab.dataset.mode);
+        });
+      }
+    });
+
+    // Palette cards
+    document.querySelectorAll('.theme-palette-card').forEach(card => {
+      if (!card.dataset.bound) {
+        card.dataset.bound = '1';
+        card.addEventListener('click', () => {
+          this.setColorTheme(card.dataset.colorTheme);
+        });
+      }
+    });
   },
 
   getCachedUser() {
@@ -832,9 +1094,6 @@ const API = {
       `;
     }
 
-    const isDark = this.getTheme() === 'dark';
-    const themeBtnHtml = `<button type="button" id="theme-toggle-btn" class="btn-theme-toggle" title="${isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}" aria-label="${isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}">${isDark ? '☀️' : '🌙'}</button>`;
-
     const isDonatePage = typeof window !== 'undefined' && (window.location.pathname.endsWith('donate.html') || window.location.pathname === '/donate');
     const donateLinkHtml = `<a href="/donate.html" class="nav-link-donate${isDonatePage ? ' active' : ''}">${this.t('nav.donate')}</a>`;
 
@@ -854,7 +1113,6 @@ const API = {
         <div class="nav-links">
           ${donateLinkHtml}
           ${langSelectHtml}
-          ${themeBtnHtml}
           ${authHtml}
         </div>
       </div>
@@ -863,11 +1121,6 @@ const API = {
     const logoutBtn = document.getElementById('nav-logout-btn');
     if (logoutBtn) {
       logoutBtn.addEventListener('click', () => API.logout());
-    }
-
-    const themeBtn = document.getElementById('theme-toggle-btn');
-    if (themeBtn) {
-      themeBtn.addEventListener('click', () => API.toggleTheme());
     }
 
     const langSelect = document.getElementById('lang-select');
