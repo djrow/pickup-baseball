@@ -386,6 +386,15 @@ function main() {
   fs.writeFileSync(path.join(iconsDir, 'apple-touch-icon.png'), appleIconPng);
 
   // 4. Favicon icons (32x32, 16x16, 48x48, and multi-res favicon.ico)
+  const res256 = resampleAndCenter(srcImg, 256, 0.88, 0.48);
+  const png256 = encodePng(res256.outRgba, 256, 256);
+
+  const res128 = resampleAndCenter(srcImg, 128, 0.88, 0.48);
+  const png128 = encodePng(res128.outRgba, 128, 128);
+
+  const res64 = resampleAndCenter(srcImg, 64, 0.88, 0.48);
+  const png64 = encodePng(res64.outRgba, 64, 64);
+
   const res48 = resampleAndCenter(srcImg, 48, 0.90, 0.48);
   const png48 = encodePng(res48.outRgba, 48, 48);
 
@@ -400,7 +409,10 @@ function main() {
   const icoBuf = makeIco([
     { width: 16, height: 16, buffer: png16 },
     { width: 32, height: 32, buffer: png32 },
-    { width: 48, height: 48, buffer: png48 }
+    { width: 48, height: 48, buffer: png48 },
+    { width: 64, height: 64, buffer: png64 },
+    { width: 128, height: 128, buffer: png128 },
+    { width: 256, height: 256, buffer: png256 }
   ]);
   fs.writeFileSync(path.join(__dirname, '../public/favicon.ico'), icoBuf);
 
