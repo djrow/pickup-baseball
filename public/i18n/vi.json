@@ -181,5 +181,13 @@
   "event.turnout_count_sub": "({count} đăng ký online)",
   "event.record_turnout": "Ghi nhận số lượng thực tế",
   "event.record_turnout_desc": "{count} người đăng ký online. Thực tế có bao nhiêu người tham gia?",
-  "event.save_turnout": "Lưu số lượng"
+  "event.save_turnout": "Lưu số lượng",
+  "nav.archive": "Lưu trữ",
+  "home.future_games": "Các Trận Đấu Tiếp Theo",
+  "home.view_past_archive": "Lưu Trữ Trận Đấu Trước →",
+  "home.archive_prompt": "Tìm kiếm tóm tắt trận đấu trước, ghi nhận số người tham gia và thảo luận?",
+  "archive.title": "Lưu Trữ Các Trận Đấu Trước",
+  "archive.subtitle": "Xem lại các trận đấu Chủ Nhật trước đây, đóng góp tình nguyện, sĩ số thực tế và thảo luận.",
+  "archive.back_to_upcoming": "← Quay Lại Trận Đấu Sắp Tới",
+  "archive.no_games": "Chưa có trận đấu trước nào trong kho lưu trữ."
 }

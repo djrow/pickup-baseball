@@ -181,5 +181,13 @@
   "event.turnout_count_sub": "({count}人线上报名)",
   "event.record_turnout": "记录实际出赛人数",
   "event.record_turnout_desc": "线上报名 {count} 人。今天球场实际出赛多少人？",
-  "event.save_turnout": "保存出赛人数"
+  "event.save_turnout": "保存出赛人数",
+  "nav.archive": "档案",
+  "home.future_games": "未来赛程",
+  "home.view_past_archive": "往期比赛档案 →",
+  "home.archive_prompt": "寻找往期比赛回顾、出勤记录和讨论区？",
+  "archive.title": "往期比赛档案",
+  "archive.subtitle": "浏览往期周日比赛、志愿服务记录、实际到场人数和球场讨论。",
+  "archive.back_to_upcoming": "← 返回即将举行的比赛",
+  "archive.no_games": "档案中暂无往期比赛。"
 }

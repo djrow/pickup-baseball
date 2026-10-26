@@ -181,5 +181,13 @@
   "event.turnout_count_sub": "({count} ثبت‌نام آنلاین)",
   "event.record_turnout": "ثبت تعداد واقعی بازیکنان",
   "event.record_turnout_desc": "{count} نفر آنلاین ثبت‌نام کردند. چند نفر واقعاً بازی کردند؟",
-  "event.save_turnout": "ذخیره حضور"
+  "event.save_turnout": "ذخیره حضور",
+  "nav.archive": "بایگانی",
+  "home.future_games": "بازی‌های آینده برنامه‌ریزی‌شده",
+  "home.view_past_archive": "بایگانی بازی‌های گذشته →",
+  "home.archive_prompt": "به دنبال خلاصه بازی‌های گذشته، آمار حضور و تالارهای گفتگو هستید؟",
+  "archive.title": "بایگانی بازی‌های گذشته",
+  "archive.subtitle": "مرور بازی‌های یکشنبه گذشته، سوابق داوطلبان، آمار حضور واقعی و گفتگوهای زمین بازی.",
+  "archive.back_to_upcoming": "← بازگشت به بازی‌های آینده",
+  "archive.no_games": "هنوز هیچ بازی گذشته‌ای در بایگانی وجود ندارد."
 }

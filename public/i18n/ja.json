@@ -181,5 +181,13 @@
   "event.turnout_count_sub": "(オンライン登録: {count}名)",
   "event.record_turnout": "実際の参加人数を記録",
   "event.record_turnout_desc": "オンライン出欠: {count}名。実際にグラウンドでプレイした人数は何名でしたか？",
-  "event.save_turnout": "人数を保存"
+  "event.save_turnout": "人数を保存",
+  "nav.archive": "アーカイブ",
+  "home.future_games": "今後の予定試合",
+  "home.view_past_archive": "過去の試合アーカイブ →",
+  "home.archive_prompt": "過去の試合結果、参加人数記録、掲示板をお探しですか？",
+  "archive.title": "過去の試合アーカイブ",
+  "archive.subtitle": "過去の日曜試合、ボランティア記録、実参加人数、フィールド掲示板を閲覧できます。",
+  "archive.back_to_upcoming": "← 今後の試合一覧に戻る",
+  "archive.no_games": "アーカイブにはまだ過去の試合がありません。"
 }

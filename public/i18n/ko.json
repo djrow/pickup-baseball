@@ -181,5 +181,13 @@
   "event.turnout_count_sub": "(온라인 신청 {count}명)",
   "event.record_turnout": "실제 출전 인원 기록",
   "event.record_turnout_desc": "온라인 신청 {count}명. 실제로 경기한 인원은 몇 명인가요?",
-  "event.save_turnout": "인원 저장"
+  "event.save_turnout": "인원 저장",
+  "nav.archive": "아카이브",
+  "home.future_games": "예정된 경기 일정",
+  "home.view_past_archive": "지난 경기 아카이브 →",
+  "home.archive_prompt": "지난 경기 요약, 출석 기록 및 토론 게시판을 찾고 계신가요?",
+  "archive.title": "지난 경기 아카이브",
+  "archive.subtitle": "지난 일요일 경기, 자원봉사 기록, 실제 출석 인원 및 구장 토론을 확인하세요.",
+  "archive.back_to_upcoming": "← 예정된 경기 목록으로 돌아가기",
+  "archive.no_games": "아카이브에 아직 지난 경기가 없습니다."
 }

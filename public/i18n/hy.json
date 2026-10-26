@@ -181,5 +181,13 @@
   "event.turnout_count_sub": "({count} օնլայն գրանցված)",
   "event.record_turnout": "Գրանցել փաստացի մասնակցությունը",
   "event.record_turnout_desc": "{count} հոգի գրանցվել էր: Քանի՞սը իրականում խաղացին:",
-  "event.save_turnout": "Պահպանել"
+  "event.save_turnout": "Պահպանել",
+  "nav.archive": "Արխիվ",
+  "home.future_games": "Ապագա նախատեսված խաղեր",
+  "home.view_past_archive": "Անցած խաղերի արխիվ →",
+  "home.archive_prompt": "Փնտրո՞ւմ եք անցած խաղերի ամփոփումներ, հաճախելիության գրառումներ և քննարկումներ:",
+  "archive.title": "Անցած խաղերի արխիվ",
+  "archive.subtitle": "Դիտեք անցած կիրակնօրյա խաղերը, կամավորների գրառումները, իրական հաճախելիությունը և քննարկումները:",
+  "archive.back_to_upcoming": "← Վերադառնալ առաջիկա խաղերին",
+  "archive.no_games": "Արխիվում դեռևս անցած խաղեր չկան:"
 }

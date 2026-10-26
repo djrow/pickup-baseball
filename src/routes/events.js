@@ -18,13 +18,15 @@ router.get('/', optionalUser, (req, res) => {
     let whereClause = "WHERE status IN ('active', 'rainout')";
     const nowIso = new Date().toISOString();
 
+    let orderBy = 'ORDER BY e.event_date ASC';
     if (filter === 'past') {
-      whereClause += ` AND event_date < '${nowIso}'`;
+      whereClause += " AND datetime(e.event_date) < datetime('now', '-4 hours')";
+      orderBy = 'ORDER BY e.event_date DESC';
     } else if (filter === 'all') {
-      // no date restriction
+      orderBy = 'ORDER BY e.event_date ASC';
     } else {
-      // Default: upcoming (from today onwards)
-      whereClause += ` AND event_date >= date('now', '-1 day')`;
+      whereClause += " AND datetime(e.event_date) >= datetime('now', '-4 hours')";
+      orderBy = 'ORDER BY e.event_date ASC';
     }
 
     const events = db.prepare(`
@@ -33,7 +35,7 @@ router.get('/', optionalUser, (req, res) => {
         (SELECT COUNT(*) FROM event_duties d WHERE d.event_id = e.id) as duty_count
       FROM events e
       ${whereClause}
-      ORDER BY e.event_date ASC
+      ${orderBy}
     `).all();
 
     // If user is logged in, attach their personal RSVP status to each event

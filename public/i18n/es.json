@@ -181,5 +181,13 @@
   "event.turnout_count_sub": "({count} confirmados en línea)",
   "event.record_turnout": "Registrar asistencia real",
   "event.record_turnout_desc": "{count} confirmaron en línea. ¿Cuántos jugaron realmente?",
-  "event.save_turnout": "Guardar asistencia"
+  "event.save_turnout": "Guardar asistencia",
+  "nav.archive": "Archivo",
+  "home.future_games": "Próximos Juegos Programados",
+  "home.view_past_archive": "Archivo de Juegos Pasados →",
+  "home.archive_prompt": "¿Buscas resúmenes de juegos anteriores, registros de asistencia y debates?",
+  "archive.title": "Archivo de Juegos Pasados",
+  "archive.subtitle": "Explora juegos dominicales anteriores, registros de voluntarios, asistencia y debates de campo.",
+  "archive.back_to_upcoming": "← Volver a Próximos Juegos",
+  "archive.no_games": "Aún no hay juegos anteriores en el archivo."
 }

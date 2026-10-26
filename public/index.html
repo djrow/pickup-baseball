@@ -91,18 +91,27 @@
       <!-- Rendered dynamically -->
     </div>
 
-    <!-- Upcoming Games List -->
+    <!-- Future Scheduled Games List -->
     <section style="margin-top: 36px;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
-        <h2 style="color: var(--secondary); font-size: 1.4rem;" data-i18n="home.scheduled_games">Scheduled Games</h2>
-        <div style="display: flex; gap: 8px;">
-          <button id="filter-upcoming-btn" class="btn btn-outline btn-sm active" style="font-weight: 700;" data-i18n="home.filter_upcoming">Upcoming</button>
-          <button id="filter-past-btn" class="btn btn-outline btn-sm" data-i18n="home.filter_past">Past Archive</button>
-        </div>
+        <h2 style="color: var(--secondary); font-size: 1.4rem;" data-i18n="home.future_games">Future Scheduled Games</h2>
+        <a href="/archive.html" class="btn btn-outline btn-sm" style="font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">
+          <span>📜</span> <span data-i18n="home.view_past_archive">Past Games Archive →</span>
+        </a>
       </div>
 
       <div id="games-list-container">
         <p style="color: var(--text-muted);" data-i18n="home.loading_games">Loading scheduled games...</p>
+      </div>
+
+      <!-- Past Games Archive Prompt Card -->
+      <div class="card" style="margin-top: 28px; background: var(--bg-card); border: 1px dashed var(--border); text-align: center; padding: 24px 16px;">
+        <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 12px;" data-i18n="home.archive_prompt">
+          Looking for past game recaps, turnout records, and discussion boards?
+        </p>
+        <a href="/archive.html" class="btn btn-outline btn-sm" style="font-weight: 700; display: inline-flex; align-items: center; gap: 6px;">
+          <span>📜</span> <span data-i18n="home.view_past_archive">Past Games Archive →</span>
+        </a>
       </div>
     </section>
 

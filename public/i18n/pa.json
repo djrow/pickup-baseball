@@ -181,5 +181,13 @@
   "event.turnout_count_sub": "({count} ਔਨਲਾਈਨ RSVP)",
   "event.record_turnout": "ਅਸਲ ਹਾਜ਼ਰੀ ਦਰਜ ਕਰੋ",
   "event.record_turnout_desc": "{count} ਔਨਲਾਈਨ ਰਜਿਸਟਰ ਸਨ। ਅਸਲ ਵਿੱਚ ਕਿੰਨੇ ਖੇਡੇ?",
-  "event.save_turnout": "ਹਾਜ਼ਰੀ ਸੰਭਾਲੋ"
+  "event.save_turnout": "ਹਾਜ਼ਰੀ ਸੰਭਾਲੋ",
+  "nav.archive": "ਆਰਕਾਈਵ",
+  "home.future_games": "ਭਵਿੱਖ ਦੇ ਨਿਰਧਾਰਤ ਮੈਚ",
+  "home.view_past_archive": "ਪਿਛਲੇ ਮੈਚਾਂ ਦਾ ਆਰਕਾਈਵ →",
+  "home.archive_prompt": "ਕੀ ਤੁਸੀਂ ਪਿਛਲੇ ਮੈਚਾਂ ਦੇ ਵੇਰਵੇ, ਹਾਜ਼ਰੀ ਰਿਕਾਰਡ ਅਤੇ ਚਰਚਾ ਬੋਰਡ ਲੱਭ ਰਹੇ ਹੋ?",
+  "archive.title": "ਪਿਛਲੇ ਮੈਚਾਂ ਦਾ ਆਰਕਾਈਵ",
+  "archive.subtitle": "ਪਿਛਲੇ ਐਤਵਾਰ ਦੇ ਮੈਚ, ਵਲੰਟੀਅਰ ਰਿਕਾਰਡ, ਅਸਲ ਹਾਜ਼ਰੀ ਅਤੇ ਮੈਦਾਨੀ ਵਿਚਾਰ-ਵਟਾਂਦਰੇ ਵੇਖੋ।",
+  "archive.back_to_upcoming": "← ਆਗਾਮੀ ਮੈਚਾਂ 'ਤੇ ਵਾਪਸ ਜਾਓ",
+  "archive.no_games": "ਆਰਕਾਈਵ ਵਿੱਚ ਅਜੇ ਕੋਈ ਪਿਛਲਾ ਮੈਚ ਨਹੀਂ ਹੈ।"
 }

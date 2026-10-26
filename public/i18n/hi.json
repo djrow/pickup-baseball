@@ -181,5 +181,13 @@
   "event.turnout_count_sub": "({count} ऑनलाइन RSVP)",
   "event.record_turnout": "वास्तविक उपस्थिति दर्ज करें",
   "event.record_turnout_desc": "{count} ऑनलाइन RSVP थे। वास्तव में कितने खिलाड़ियों ने खेला?",
-  "event.save_turnout": "उपस्थिति सहेजें"
+  "event.save_turnout": "उपस्थिति सहेजें",
+  "nav.archive": "अभिलेखागार",
+  "home.future_games": "भविष्य के निर्धारित मैच",
+  "home.view_past_archive": "पिछले मैचों का अभिलेखागार →",
+  "home.archive_prompt": "क्या आप पिछले मैच के विवरण, उपस्थिति रिकॉर्ड और चर्चा बोर्ड ढूंढ रहे हैं?",
+  "archive.title": "पिछले मैचों का अभिलेखागार",
+  "archive.subtitle": "पिछले रविवार के मैच, स्वयंसेवक रिकॉर्ड, उपस्थिति और मैदान चर्चाएं देखें।",
+  "archive.back_to_upcoming": "← आगामी मैचों पर वापस जाएं",
+  "archive.no_games": "अभिलेखागार में अभी कोई पिछला मैच नहीं है।"
 }

@@ -181,5 +181,13 @@
   "event.turnout_count_sub": "({count} онлайн записей)",
   "event.record_turnout": "Записать фактическую явку",
   "event.record_turnout_desc": "{count} записались онлайн. Сколько человек реально играло?",
-  "event.save_turnout": "Сохранить явку"
+  "event.save_turnout": "Сохранить явку",
+  "nav.archive": "Архив",
+  "home.future_games": "Будущие запланированные игры",
+  "home.view_past_archive": "Архив прошедших игр →",
+  "home.archive_prompt": "Ищете отчеты о прошедших играх, статистику посещаемости и обсуждения?",
+  "archive.title": "Архив прошедших игр",
+  "archive.subtitle": "Просматривайте прошедшие воскресные игры, записи волонтеров, явку и обсуждения.",
+  "archive.back_to_upcoming": "← Назад к предстоящим играм",
+  "archive.no_games": "В архиве пока нет прошедших игр."
 }

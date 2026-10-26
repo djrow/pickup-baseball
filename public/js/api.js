@@ -5,6 +5,7 @@
 
 const EN_DICT = {
   "nav.community": "Community",
+  "nav.archive": "Archive",
   "nav.donate": "Donate",
   "nav.login": "Log In",
   "nav.logout": "Log Out",
@@ -30,6 +31,9 @@ const EN_DICT = {
   "privacy.contact_prefix": "Questions or want your info removed? Email",
   "home.welcome_signed_in": "Welcome, {name}! You are signed in.",
   "home.scheduled_games": "Scheduled Games",
+  "home.future_games": "Future Scheduled Games",
+  "home.view_past_archive": "Past Games Archive →",
+  "home.archive_prompt": "Looking for past game recaps, turnout records, and discussion boards?",
   "home.filter_upcoming": "Upcoming",
   "home.filter_past": "Past Archive",
   "home.loading_games": "Loading scheduled games...",
@@ -37,6 +41,10 @@ const EN_DICT = {
   "home.no_upcoming_desc": "Check back soon! Our Sunday pickup games are posted throughout the season.",
   "home.no_past": "No past games in the archive yet.",
   "home.no_additional": "No additional games scheduled right now.",
+  "archive.title": "Past Games Archive",
+  "archive.subtitle": "Browse past Sunday games, volunteer records, attendance turnouts, and field discussions.",
+  "archive.back_to_upcoming": "← Back to Upcoming Games",
+  "archive.no_games": "No past games found in the archive yet.",
   "home.next_sunday_badge": "Next Sunday Pickup",
   "home.sunday_game_badge": "Sunday Game",
   "home.you_are_attending": "✓ You are Attending",
@@ -820,6 +828,9 @@ const API = {
     const isDark = this.getTheme() === 'dark';
     const themeBtnHtml = `<button type="button" id="theme-toggle-btn" class="btn-theme-toggle" title="${isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}" aria-label="${isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}">${isDark ? '☀️' : '🌙'}</button>`;
 
+    const isArchivePage = typeof window !== 'undefined' && (window.location.pathname.endsWith('archive.html') || window.location.pathname === '/archive');
+    const archiveLinkHtml = `<a href="/archive.html" class="nav-link-donate${isArchivePage ? ' active' : ''}" style="margin-right: 2px;"><span data-i18n="nav.archive">${this.t('nav.archive')}</span></a>`;
+
     const isDonatePage = typeof window !== 'undefined' && (window.location.pathname.endsWith('donate.html') || window.location.pathname === '/donate');
     const donateLinkHtml = `<a href="/donate.html" class="nav-link-donate${isDonatePage ? ' active' : ''}">${this.t('nav.donate')}</a>`;
 
@@ -837,6 +848,7 @@ const API = {
           <span class="brand-tag">${this.t('nav.community')}</span>
         </a>
         <div class="nav-links">
+          ${archiveLinkHtml}
           ${donateLinkHtml}
           ${langSelectHtml}
           ${themeBtnHtml}

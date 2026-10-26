@@ -1440,16 +1440,18 @@ app.get('/events', async (c) => {
     `;
     const params = [];
 
+    let orderBy = ' ORDER BY e.event_date ASC';
     if (filter === 'past') {
-      query += ' AND e.event_date < ?';
-      params.push(nowIso);
+      query += " AND datetime(e.event_date) < datetime('now', '-4 hours')";
+      orderBy = ' ORDER BY e.event_date DESC';
     } else if (filter === 'all') {
-      // no restriction
+      orderBy = ' ORDER BY e.event_date ASC';
     } else {
-      query += " AND e.event_date >= date('now', '-1 day')";
+      query += " AND datetime(e.event_date) >= datetime('now', '-4 hours')";
+      orderBy = ' ORDER BY e.event_date ASC';
     }
 
-    query += ' ORDER BY e.event_date ASC';
+    query += orderBy;
 
     const stmt = c.env.DB.prepare(query);
     const { results: events } = params.length > 0 ? await stmt.bind(...params).all() : await stmt.all();

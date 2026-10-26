@@ -181,5 +181,13 @@
   "event.turnout_count_sub": "({count} online RSVPs)",
   "event.record_turnout": "Itala ang Tunay na Attendance",
   "event.record_turnout_desc": "{count} ang nag-RSVP online. Ilan ang totoong naglaro sa field?",
-  "event.save_turnout": "I-save ang Turnout"
+  "event.save_turnout": "I-save ang Turnout",
+  "nav.archive": "Archive",
+  "home.future_games": "Mga Susunod na Nakaiskedyul na Laro",
+  "home.view_past_archive": "Archive ng Nakaraang Laro →",
+  "home.archive_prompt": "Naghahanap ng mga recap ng nakaraang laro, talaan ng attendance, at talakayan?",
+  "archive.title": "Archive ng mga Nakaraang Laro",
+  "archive.subtitle": "Tingnan ang mga nakaraang laro ng Linggo, mga talaan ng boluntaryo, attendance, at talakayan.",
+  "archive.back_to_upcoming": "← Bumalik sa mga Susunod na Laro",
+  "archive.no_games": "Wala pang mga nakaraang laro sa archive."
 }

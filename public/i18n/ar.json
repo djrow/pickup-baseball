@@ -181,5 +181,13 @@
   "event.turnout_count_sub": "({count} تأكيد عبر الإنترنت)",
   "event.record_turnout": "تسجيل الحضور الفعلي",
   "event.record_turnout_desc": "سجل {count} عبر الإنترنت. كم عدد من لعب بالفعل؟",
-  "event.save_turnout": "حفظ الحضور"
+  "event.save_turnout": "حفظ الحضور",
+  "nav.archive": "الأرشيف",
+  "home.future_games": "المباريات القادمة المجدولة",
+  "home.view_past_archive": "أرشيف المباريات السابقة →",
+  "home.archive_prompt": "هل تبحث عن ملخصات المباريات السابقة، سجلات الحضور ولوحات النقاش؟",
+  "archive.title": "أرشيف المباريات السابقة",
+  "archive.subtitle": "تصفح مباريات الأحد السابقة وسجلات المتطوعين ونسب الحضور ومناقشات الملعب.",
+  "archive.back_to_upcoming": "← العودة إلى المباريات القادمة",
+  "archive.no_games": "لا توجد مباريات سابقة في الأرشيف حتى الآن."
 }

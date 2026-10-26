@@ -54,56 +54,32 @@ async function initHome() {
 }
 
 function setupFilters() {
-  const upcomingBtn = document.getElementById('filter-upcoming-btn');
-  const pastBtn = document.getElementById('filter-past-btn');
-
-  if (upcomingBtn && pastBtn) {
-    upcomingBtn.addEventListener('click', () => {
-      currentFilter = 'upcoming';
-      upcomingBtn.classList.add('active');
-      upcomingBtn.style.fontWeight = '700';
-      pastBtn.classList.remove('active');
-      pastBtn.style.fontWeight = '500';
-      loadGames();
-    });
-
-    pastBtn.addEventListener('click', () => {
-      currentFilter = 'past';
-      pastBtn.classList.add('active');
-      pastBtn.style.fontWeight = '700';
-      upcomingBtn.classList.remove('active');
-      upcomingBtn.style.fontWeight = '500';
-      loadGames();
-    });
+  // If user navigated with legacy filter=past or #archive, redirect to the dedicated archive page
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('filter') === 'past' || window.location.hash === '#archive') {
+    window.location.href = '/archive.html';
   }
 }
 
 function renderEventsView(events, featuredContainer, listContainer) {
   lastLoadedEvents = events || [];
-  if (currentFilter === 'upcoming') {
-    if (events.length > 0) {
-      renderFeaturedGame(events[0], featuredContainer);
-      renderGamesList(events.slice(1), listContainer);
-    } else {
-      featuredContainer.innerHTML = '';
-      listContainer.innerHTML = `
-        <div class="card" style="text-align: center; padding: 40px 20px;">
-          <div style="font-size: 2.5rem; margin-bottom: 12px;">⚾</div>
-          <h3 style="color: var(--secondary); margin-bottom: 8px;">${API.escapeHtml(API.t('home.no_upcoming_title'))}</h3>
-          <p style="color: var(--text-muted); max-width: 480px; margin: 0 auto 20px;">
-            ${API.escapeHtml(API.t('home.no_upcoming_desc'))}
-          </p>
-          ${API.currentUser && API.currentUser.canManageEvents ? '<a href="/admin.html" class="btn btn-primary">Create Next Sunday Game</a>' : ''}
-        </div>
-      `;
-    }
+  if (events.length > 0) {
+    // Next upcoming game is rendered at the top
+    renderFeaturedGame(events[0], featuredContainer);
+    // Future upcoming games are rendered below
+    renderGamesList(events.slice(1), listContainer);
   } else {
     featuredContainer.innerHTML = '';
-    if (events.length === 0) {
-      listContainer.innerHTML = `<p style="color: var(--text-muted);">${API.escapeHtml(API.t('home.no_past'))}</p>`;
-    } else {
-      renderGamesList(events, listContainer);
-    }
+    listContainer.innerHTML = `
+      <div class="card" style="text-align: center; padding: 40px 20px;">
+        <div style="font-size: 2.5rem; margin-bottom: 12px;">⚾</div>
+        <h3 style="color: var(--secondary); margin-bottom: 8px;">${API.escapeHtml(API.t('home.no_upcoming_title'))}</h3>
+        <p style="color: var(--text-muted); max-width: 480px; margin: 0 auto 20px;">
+          ${API.escapeHtml(API.t('home.no_upcoming_desc'))}
+        </p>
+        ${API.currentUser && API.currentUser.canManageEvents ? '<a href="/admin.html" class="btn btn-primary">Create Next Sunday Game</a>' : ''}
+      </div>
+    `;
   }
 }
 

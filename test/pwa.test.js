@@ -92,6 +92,7 @@ test('Progressive Web App (PWA) Verification Suite', async (t) => {
   await t.test('4. All primary HTML pages contain PWA manifest & mobile meta tags', () => {
     const htmlFiles = [
       'index.html',
+      'archive.html',
       'event.html',
       'admin.html',
       'donate.html',

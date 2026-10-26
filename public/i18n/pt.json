@@ -181,5 +181,13 @@
   "event.turnout_count_sub": "({count} confirmados online)",
   "event.record_turnout": "Registrar presença real",
   "event.record_turnout_desc": "{count} confirmaram online. Quantos realmente jogaram?",
-  "event.save_turnout": "Salvar presença"
+  "event.save_turnout": "Salvar presença",
+  "nav.archive": "Arquivo",
+  "home.future_games": "Próximos Jogos Agendados",
+  "home.view_past_archive": "Arquivo de Jogos Passados →",
+  "home.archive_prompt": "Procurando resumos de jogos anteriores, registros de presença e fóruns de discussão?",
+  "archive.title": "Arquivo de Jogos Passados",
+  "archive.subtitle": "Navegue pelos jogos de domingo passados, registros de voluntários, comparecimento e discussões.",
+  "archive.back_to_upcoming": "← Voltar aos Próximos Jogos",
+  "archive.no_games": "Nenhum jogo anterior encontrado no arquivo ainda."
 }

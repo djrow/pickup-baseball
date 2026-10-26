@@ -181,5 +181,13 @@
   "event.turnout_count_sub": "({count} inscrits en ligne)",
   "event.record_turnout": "Enregistrer la participation réelle",
   "event.record_turnout_desc": "{count} inscrits en ligne. Combien ont réellement joué ?",
-  "event.save_turnout": "Enregistrer"
+  "event.save_turnout": "Enregistrer",
+  "nav.archive": "Archives",
+  "home.future_games": "Matchs Futurs Programmés",
+  "home.view_past_archive": "Archives des Matchs Passés →",
+  "home.archive_prompt": "Vous cherchez les récapitulatifs, la participation et les discussions des matchs passés ?",
+  "archive.title": "Archives des Matchs Passés",
+  "archive.subtitle": "Parcourez les matchs du dimanche passés, les bénévoles, la participation et les discussions de terrain.",
+  "archive.back_to_upcoming": "← Retour aux Matchs à Venir",
+  "archive.no_games": "Aucun match passé dans les archives pour l'instant."
 }
