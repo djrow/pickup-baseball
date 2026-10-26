@@ -112,10 +112,9 @@ test('Event sorting and archive API verification', async (t) => {
     assert.ok(content.includes('games-list-container'), 'index.html must have future games container');
   });
 
-  await t.test('5. Navigation in api.js includes Archive link', () => {
+  await t.test('5. Top bar navigation does not include Archive link (clean nav bar)', () => {
     const apiJsPath = path.join(__dirname, '../public/js/api.js');
     const content = fs.readFileSync(apiJsPath, 'utf8');
-    assert.ok(content.includes('/archive.html'), 'api.js renderNav must link to /archive.html');
-    assert.ok(content.includes('nav.archive'), 'api.js must have translation for nav.archive');
+    assert.ok(!content.includes('archiveLinkHtml'), 'api.js renderNav must not include archiveLinkHtml in top bar');
   });
 });

@@ -835,9 +835,6 @@ const API = {
     const isDark = this.getTheme() === 'dark';
     const themeBtnHtml = `<button type="button" id="theme-toggle-btn" class="btn-theme-toggle" title="${isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}" aria-label="${isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}">${isDark ? '☀️' : '🌙'}</button>`;
 
-    const isArchivePage = typeof window !== 'undefined' && (window.location.pathname.endsWith('archive.html') || window.location.pathname === '/archive');
-    const archiveLinkHtml = `<a href="/archive.html" class="nav-link-donate${isArchivePage ? ' active' : ''}" style="margin-right: 2px;"><span data-i18n="nav.archive">${this.t('nav.archive')}</span></a>`;
-
     const isDonatePage = typeof window !== 'undefined' && (window.location.pathname.endsWith('donate.html') || window.location.pathname === '/donate');
     const donateLinkHtml = `<a href="/donate.html" class="nav-link-donate${isDonatePage ? ' active' : ''}">${this.t('nav.donate')}</a>`;
 
@@ -855,7 +852,6 @@ const API = {
           <span class="brand-tag">${this.t('nav.community')}</span>
         </a>
         <div class="nav-links">
-          ${archiveLinkHtml}
           ${donateLinkHtml}
           ${langSelectHtml}
           ${themeBtnHtml}
