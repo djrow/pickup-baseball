@@ -211,7 +211,7 @@ function renderFeaturedGame(ev, container) {
         <span style="font-size: 0.88rem; color: var(--text-muted);">
           ${API.escapeHtml(API.t('home.skill_levels_note'))}
         </span>
-        <a href="/event.html?id=${ev.id}" class="btn btn-secondary">
+        <a href="/event.html?id=${ev.id}" class="btn btn-primary" style="font-weight: 700;">
           ${API.escapeHtml(API.t('home.join_roster_btn'))}
         </a>
       </div>

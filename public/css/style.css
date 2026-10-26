@@ -1814,17 +1814,17 @@ footer.site-footer strong {
 
 [data-theme="dark"] .btn-secondary,
 [data-theme="dark"] .nav-avatar-placeholder {
-  background-color: #00544a;
+  background-color: var(--as-green-light);
   color: #ffffff;
 }
 
 [data-theme="dark"] .btn-secondary:hover {
-  background-color: #006b5e;
+  background-color: var(--as-green);
 }
 
 [data-theme="dark"] .btn-outline:hover,
 [data-theme="dark"] .btn-outline.active {
-  background-color: #00544a;
+  background-color: var(--as-green-light);
   border-color: var(--as-green);
   color: #ffffff;
 }
