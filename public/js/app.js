@@ -208,9 +208,11 @@ function renderFeaturedGame(ev, container) {
         <div class="meta-item">
           <span class="meta-icon">${API.icon('users', 20)}</span>
           <div>
-            <div class="meta-label">${API.escapeHtml(API.t('home.confirmed_players'))}</div>
+            <div class="meta-label">${ev.actual_attendance != null ? API.escapeHtml(API.t('event.actual_turnout')) : API.escapeHtml(API.t('home.confirmed_players'))}</div>
             <div class="meta-value" style="color: var(--as-green); font-size: 1.15rem; font-weight: 800;">
-              ${API.escapeHtml(API.t('home.players_count', { count: ev.attendee_count }))}
+              ${ev.actual_attendance != null
+                ? `${API.escapeHtml(API.t('home.players_played', { count: ev.actual_attendance }))} <span style="font-size: 0.78rem; font-weight: normal; color: var(--text-muted);">${API.escapeHtml(API.t('home.online_rsvps_sub', { count: ev.attendee_count }))}</span>`
+                : API.escapeHtml(API.t('home.players_count', { count: ev.attendee_count }))}
             </div>
           </div>
         </div>
@@ -279,11 +281,28 @@ function renderGamesList(events, container) {
             </div>
 
             <div style="border-top: 1px solid var(--border); padding-top: 12px; margin-top: 12px; display: flex; justify-content: space-between; align-items: center;">
-              <span style="font-weight: 700; color: var(--primary); font-size: 0.9rem; display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums;">
-                ${API.icon('users', 16)} ${API.escapeHtml(API.t('home.on_roster_count', { count: ev.attendee_count }))}
-              </span>
+              ${ev.status === 'rainout'
+                ? `<span style="font-weight: 700; color: #0284c7; font-size: 0.88rem;">🌧️ ${API.escapeHtml(API.t('event.rained_out_badge', 'Rained Out'))}</span>`
+                : (ev.actual_attendance != null
+                  ? `
+                    <div style="display: flex; flex-direction: column;">
+                      <span style="font-weight: 800; color: var(--as-green); font-size: 0.95rem; display: inline-flex; align-items: center; gap: 5px; font-variant-numeric: tabular-nums;">
+                        <span>⚾</span> <span>${API.escapeHtml(API.t('home.players_played', { count: ev.actual_attendance }))}</span>
+                      </span>
+                      <span style="font-size: 0.74rem; color: var(--text-muted); font-weight: 500;">
+                        ${API.escapeHtml(API.t('home.online_rsvps_sub', { count: ev.attendee_count }))}
+                      </span>
+                    </div>
+                  `
+                  : `
+                    <span style="font-weight: 700; color: var(--primary); font-size: 0.9rem; display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums;">
+                      ${API.icon('users', 16)} ${API.escapeHtml(API.t('home.on_roster_count', { count: ev.attendee_count }))}
+                    </span>
+                  `
+                )
+              }
               <a href="/event.html?id=${ev.id}" class="btn btn-outline btn-sm">
-                ${API.escapeHtml(API.t('home.view_rsvp'))}
+                ${API.escapeHtml(currentFilter === 'past' ? API.t('home.view_game') : API.t('home.view_rsvp'))}
               </a>
             </div>
           </div>

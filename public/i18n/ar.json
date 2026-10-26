@@ -172,5 +172,14 @@
   "event.roster_private_title": "قائمة اللاعبين خاصة",
   "event.roster_private_desc": "لحماية خصوصية اللاعبين، تظهر الأسماء وتوزيع المعدات فقط للحاضرين. يرجى تأكيد الحضور أدناه لمشاهدة القائمة!",
   "event.roster_private_cta": "تأكيد الحضور لعرض القائمة",
-  "event.duty_covered": "مغطى"
+  "event.duty_covered": "مغطى",
+  "home.players_played": "{count} لعبوا",
+  "home.online_rsvps_sub": "({count} عبر الإنترنت)",
+  "home.view_game": "عرض المباراة ←",
+  "event.actual_turnout": "الحضور الفعلي",
+  "event.turnout_badge": "{count} لعبوا",
+  "event.turnout_count_sub": "({count} تأكيد عبر الإنترنت)",
+  "event.record_turnout": "تسجيل الحضور الفعلي",
+  "event.record_turnout_desc": "سجل {count} عبر الإنترنت. كم عدد من لعب بالفعل؟",
+  "event.save_turnout": "حفظ الحضور"
 }

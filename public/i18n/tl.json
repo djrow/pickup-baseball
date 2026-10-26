@@ -172,5 +172,14 @@
   "event.roster_private_title": "Pribado ang Listahan ng Manlalaro",
   "event.roster_private_desc": "Upang protektahan ang privacy, ang mga pangalan ng manlalaro ay makikita lamang ng mga nag-RSVP. Mangyaring mag-RSVP sa ibaba upang makita ang roster!",
   "event.roster_private_cta": "Mag-RSVP para Makita ang Roster",
-  "event.duty_covered": "May Nag-asikaso"
+  "event.duty_covered": "May Nag-asikaso",
+  "home.players_played": "{count} Naglaro",
+  "home.online_rsvps_sub": "({count} online)",
+  "home.view_game": "Tingnan ang Laro →",
+  "event.actual_turnout": "Tunay na Dami ng Naglaro",
+  "event.turnout_badge": "{count} Naglaro",
+  "event.turnout_count_sub": "({count} online RSVPs)",
+  "event.record_turnout": "Itala ang Tunay na Attendance",
+  "event.record_turnout_desc": "{count} ang nag-RSVP online. Ilan ang totoong naglaro sa field?",
+  "event.save_turnout": "I-save ang Turnout"
 }

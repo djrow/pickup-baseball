@@ -522,6 +522,7 @@ router.post('/', requireEventCreator, (req, res) => {
       location_url,
       event_date,
       max_players,
+      actual_attendance,
       use_default_duties,
       custom_duties
     } = req.body;
@@ -552,8 +553,8 @@ router.post('/', requireEventCreator, (req, res) => {
     // Wrap event creation and duty insertions in an atomic SQLite transaction
     const createEventTxn = db.transaction((eventData, duties) => {
       const result = db.prepare(`
-        INSERT INTO events (title, description, location, location_url, event_date, max_players, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO events (title, description, location, location_url, event_date, max_players, actual_attendance, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         eventData.title.trim(),
         (eventData.description || '').trim(),
@@ -561,6 +562,7 @@ router.post('/', requireEventCreator, (req, res) => {
         (eventData.location_url || '').trim(),
         eventData.event_date,
         eventData.max_players ? parseInt(eventData.max_players, 10) : null,
+        eventData.actual_attendance !== undefined && eventData.actual_attendance !== null && eventData.actual_attendance !== '' ? parseInt(eventData.actual_attendance, 10) : null,
         eventData.userId
       );
 
@@ -591,6 +593,7 @@ router.post('/', requireEventCreator, (req, res) => {
       location_url,
       event_date,
       max_players,
+      actual_attendance,
       userId: req.user.id
     }, dutiesToInsert);
 
@@ -614,7 +617,7 @@ router.post('/', requireEventCreator, (req, res) => {
 router.put('/:id', requireEventCreator, (req, res) => {
   try {
     const eventId = req.params.id;
-    const { title, description, location, location_url, event_date, max_players, status } = req.body;
+    const { title, description, location, location_url, event_date, max_players, actual_attendance, status } = req.body;
 
     const existingEvent = db.prepare('SELECT * FROM events WHERE id = ?').get(eventId);
     if (!existingEvent) {
@@ -646,6 +649,17 @@ router.put('/:id', requireEventCreator, (req, res) => {
       newMaxPlayers = isNaN(parsed) ? existingEvent.max_players : parsed;
     }
 
+    // Preserve existing actual_attendance if not provided (undefined)
+    let newActualAttendance;
+    if (actual_attendance === undefined) {
+      newActualAttendance = existingEvent.actual_attendance;
+    } else if (actual_attendance === null || actual_attendance === '') {
+      newActualAttendance = null;
+    } else {
+      const parsed = parseInt(actual_attendance, 10);
+      newActualAttendance = isNaN(parsed) || parsed < 0 ? null : parsed;
+    }
+
     const result = db.prepare(`
       UPDATE events
       SET title = COALESCE(?, title),
@@ -654,6 +668,7 @@ router.put('/:id', requireEventCreator, (req, res) => {
           location_url = COALESCE(?, location_url),
           event_date = COALESCE(?, event_date),
           max_players = ?,
+          actual_attendance = ?,
           status = COALESCE(?, status)
       WHERE id = ?
     `).run(
@@ -663,6 +678,7 @@ router.put('/:id', requireEventCreator, (req, res) => {
       location_url !== undefined ? location_url.trim() : null,
       event_date || null,
       newMaxPlayers,
+      newActualAttendance,
       status || null,
       eventId
     );

@@ -172,5 +172,14 @@
   "event.roster_private_title": "La liste des joueurs est privée",
   "event.roster_private_desc": "Pour protéger la vie privée des joueurs, les noms et le matériel sont visibles uniquement par les participants. Veuillez répondre ci-dessous pour voir qui joue !",
   "event.roster_private_cta": "Répondre pour voir la liste",
-  "event.duty_covered": "Couvert"
+  "event.duty_covered": "Couvert",
+  "home.players_played": "{count} Ont joué",
+  "home.online_rsvps_sub": "({count} en ligne)",
+  "home.view_game": "Voir le match →",
+  "event.actual_turnout": "Participation réelle",
+  "event.turnout_badge": "{count} Ont joué",
+  "event.turnout_count_sub": "({count} inscrits en ligne)",
+  "event.record_turnout": "Enregistrer la participation réelle",
+  "event.record_turnout_desc": "{count} inscrits en ligne. Combien ont réellement joué ?",
+  "event.save_turnout": "Enregistrer"
 }

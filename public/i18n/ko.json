@@ -172,5 +172,14 @@
   "event.roster_private_title": "선수 명단 비공개",
   "event.roster_private_desc": "개인 정보 보호를 위해 선수 명단과 장비 분담은 참석 응답자에게만 공개됩니다. 아래에서 참석 또는 불참을 선택하여 명단을 확인하세요!",
   "event.roster_private_cta": "참석 응답하고 명단 보기",
-  "event.duty_covered": "완료"
+  "event.duty_covered": "완료",
+  "home.players_played": "{count}명 출전",
+  "home.online_rsvps_sub": "(온라인 신청 {count}명)",
+  "home.view_game": "경기 보기 →",
+  "event.actual_turnout": "실제 참가 인원",
+  "event.turnout_badge": "{count}명 출전",
+  "event.turnout_count_sub": "(온라인 신청 {count}명)",
+  "event.record_turnout": "실제 출전 인원 기록",
+  "event.record_turnout_desc": "온라인 신청 {count}명. 실제로 경기한 인원은 몇 명인가요?",
+  "event.save_turnout": "인원 저장"
 }

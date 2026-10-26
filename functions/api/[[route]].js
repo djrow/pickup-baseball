@@ -1717,6 +1717,7 @@ app.post('/events', async (c) => {
       location_url,
       event_date,
       max_players,
+      actual_attendance,
       use_default_duties,
       custom_duties
     } = await c.req.json();
@@ -1749,8 +1750,8 @@ app.post('/events', async (c) => {
     }
 
     const insertEventRes = await c.env.DB.prepare(`
-      INSERT INTO events (title, description, location, location_url, event_date, max_players, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO events (title, description, location, location_url, event_date, max_players, actual_attendance, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       String(title).trim().slice(0, 150),
       String(description || '').trim().slice(0, 2000),
@@ -1758,6 +1759,7 @@ app.post('/events', async (c) => {
       safeLocUrl,
       event_date,
       max_players ? parseInt(max_players, 10) : null,
+      actual_attendance !== undefined && actual_attendance !== null && actual_attendance !== '' ? parseInt(actual_attendance, 10) : null,
       user.id
     ).run();
 
@@ -1801,7 +1803,7 @@ app.put('/events/:id', async (c) => {
 
   try {
     const eventId = parseInt(c.req.param('id'), 10);
-    const { title, description, location, location_url, event_date, max_players, status } = await c.req.json();
+    const { title, description, location, location_url, event_date, max_players, actual_attendance, status } = await c.req.json();
 
     const existingEvent = await c.env.DB.prepare('SELECT * FROM events WHERE id = ?').bind(eventId).first();
     if (!existingEvent) {
@@ -1838,7 +1840,17 @@ app.put('/events/:id', async (c) => {
       newMaxPlayers = isNaN(parsed) ? existingEvent.max_players : parsed;
     }
 
-    await c.env.DB.prepare(`
+    let newActualAttendance;
+    if (actual_attendance === undefined) {
+      newActualAttendance = existingEvent.actual_attendance;
+    } else if (actual_attendance === null || actual_attendance === '') {
+      newActualAttendance = null;
+    } else {
+      const parsed = parseInt(actual_attendance, 10);
+      newActualAttendance = isNaN(parsed) || parsed < 0 ? null : parsed;
+    }
+
+    const executeEventUpdate = () => c.env.DB.prepare(`
       UPDATE events
       SET title = COALESCE(?, title),
           description = COALESCE(?, description),
@@ -1846,6 +1858,7 @@ app.put('/events/:id', async (c) => {
           location_url = COALESCE(?, location_url),
           event_date = COALESCE(?, event_date),
           max_players = ?,
+          actual_attendance = ?,
           status = COALESCE(?, status)
       WHERE id = ?
     `).bind(
@@ -1855,9 +1868,25 @@ app.put('/events/:id', async (c) => {
       location_url !== undefined ? safeLocUrl : null,
       event_date || null,
       newMaxPlayers,
+      newActualAttendance,
       status || null,
       eventId
     ).run();
+
+    try {
+      await executeEventUpdate();
+    } catch (updateErr) {
+      if (String(updateErr).includes('actual_attendance') || String(updateErr).includes('no such column')) {
+        try {
+          await c.env.DB.exec('ALTER TABLE events ADD COLUMN actual_attendance INTEGER DEFAULT NULL;');
+          await executeEventUpdate();
+        } catch (innerErr) {
+          throw updateErr;
+        }
+      } else {
+        throw updateErr;
+      }
+    }
 
     const updated = await c.env.DB.prepare('SELECT * FROM events WHERE id = ?').bind(eventId).first();
     return c.json({ success: true, event: updated, message: 'Event updated.' });

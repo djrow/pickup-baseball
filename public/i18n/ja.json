@@ -172,5 +172,14 @@
   "event.roster_private_title": "選手名簿は非公開です",
   "event.roster_private_desc": "プライバシー保護のため、参加者名簿および用具の分担は参加登録者のみに表示されます。参加または不参加を選択して名簿をご確認ください。",
   "event.roster_private_cta": "出欠を登録して名簿を見る",
-  "event.duty_covered": "担当者決定済"
+  "event.duty_covered": "担当者決定済",
+  "home.players_played": "参加人数: {count}名",
+  "home.online_rsvps_sub": "(オンライン出欠: {count}名)",
+  "home.view_game": "詳細を見る →",
+  "event.actual_turnout": "当日の実参加人数",
+  "event.turnout_badge": "{count}名 参加",
+  "event.turnout_count_sub": "(オンライン登録: {count}名)",
+  "event.record_turnout": "実際の参加人数を記録",
+  "event.record_turnout_desc": "オンライン出欠: {count}名。実際にグラウンドでプレイした人数は何名でしたか？",
+  "event.save_turnout": "人数を保存"
 }

@@ -172,5 +172,14 @@
   "event.roster_private_title": "ਖਿਡਾਰੀਆਂ ਦੀ ਸੂਚੀ ਨਿੱਜੀ ਹੈ",
   "event.roster_private_desc": "ਖਿਡਾਰੀਆਂ ਦੀ ਗੋਪਨੀਯਤਾ ਲਈ, ਨਾਮ ਕੇਵਲ ਹਾਜ਼ਰੀਨ ਨੂੰ ਹੀ ਦਿਖਾਈ ਦਿੰਦੇ ਹਨ। ਸੂਚੀ ਦੇਖਣ ਲਈ ਕਿਰਪਾ ਕਰਕੇ ਹੇਠਾਂ RSVP ਕਰੋ!",
   "event.roster_private_cta": "ਸੂਚੀ ਦੇਖਣ ਲਈ RSVP ਕਰੋ",
-  "event.duty_covered": "ਪੂਰਾ ਹੋਇਆ"
+  "event.duty_covered": "ਪੂਰਾ ਹੋਇਆ",
+  "home.players_played": "{count} ਖਿਡਾਰੀ ਖੇਡੇ",
+  "home.online_rsvps_sub": "({count} ਔਨਲਾਈਨ)",
+  "home.view_game": "ਮੈਚ ਦੇਖੋ →",
+  "event.actual_turnout": "ਅਸਲ ਹਾਜ਼ਰੀ",
+  "event.turnout_badge": "{count} ਖਿਡਾਰੀ ਖੇਡੇ",
+  "event.turnout_count_sub": "({count} ਔਨਲਾਈਨ RSVP)",
+  "event.record_turnout": "ਅਸਲ ਹਾਜ਼ਰੀ ਦਰਜ ਕਰੋ",
+  "event.record_turnout_desc": "{count} ਔਨਲਾਈਨ ਰਜਿਸਟਰ ਸਨ। ਅਸਲ ਵਿੱਚ ਕਿੰਨੇ ਖੇਡੇ?",
+  "event.save_turnout": "ਹਾਜ਼ਰੀ ਸੰਭਾਲੋ"
 }

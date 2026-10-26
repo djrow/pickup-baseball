@@ -172,5 +172,14 @@
   "event.roster_private_title": "لیست بازیکنان خصوصی است",
   "event.roster_private_desc": "برای محافظت از حریم خصوصی، اسامی بازیکنان فقط برای شرکت‌کنندگان قابل مشاهده است. لطفاً برای مشاهده لیست در زیر پاسخ دهید!",
   "event.roster_private_cta": "ثبت پاسخ برای مشاهده لیست",
-  "event.duty_covered": "تکمیل شده"
+  "event.duty_covered": "تکمیل شده",
+  "home.players_played": "{count} نفر بازی کردند",
+  "home.online_rsvps_sub": "({count} ثبت‌نام آنلاین)",
+  "home.view_game": "مشاهده بازی ←",
+  "event.actual_turnout": "حضور واقعی",
+  "event.turnout_badge": "{count} نفر بازی کردند",
+  "event.turnout_count_sub": "({count} ثبت‌نام آنلاین)",
+  "event.record_turnout": "ثبت تعداد واقعی بازیکنان",
+  "event.record_turnout_desc": "{count} نفر آنلاین ثبت‌نام کردند. چند نفر واقعاً بازی کردند؟",
+  "event.save_turnout": "ذخیره حضور"
 }

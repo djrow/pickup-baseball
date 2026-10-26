@@ -527,7 +527,9 @@ async function loadAdminGames() {
                   📅 ${API.formatDateTime(ev.event_date)} | 📍 ${API.escapeHtml(ev.location)}
                 </div>
                 <div style="font-size: 0.82rem; color: var(--primary); font-weight: 600; margin-top: 5px;">
-                  👥 ${ev.attendee_count} players on roster | 🛡️ ${ev.duty_count} volunteer tasks configured
+                  ${ev.actual_attendance != null
+                    ? `⚾ <strong>${ev.actual_attendance} played</strong> (${ev.attendee_count} online RSVPs)`
+                    : `👥 ${ev.attendee_count} players on roster`} | 🛡️ ${ev.duty_count} volunteer tasks configured
                 </div>
               </div>
 
@@ -584,6 +586,17 @@ async function loadAdminGames() {
                   <label>Game Details &amp; Announcements</label>
                   <textarea id="edit-desc-${ev.id}" rows="2">${API.escapeHtml(ev.description || '')}</textarea>
                 </div>
+                <div class="form-group" style="background: var(--bg-card); padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 12px;">
+                  <label style="font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                    <span>⚾</span> <span>Actual Attendance (Headcount Who Played)</span>
+                  </label>
+                  <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <input type="number" id="edit-actual-attendance-${ev.id}" value="${ev.actual_attendance != null ? ev.actual_attendance : ''}" min="0" max="200" placeholder="e.g. 18" style="width: 90px; padding: 5px 8px; font-weight: 700;">
+                    <span style="font-size: 0.82rem; color: var(--text-muted);">
+                      Record actual turnout from the field. Shown in past games archive!
+                    </span>
+                  </div>
+                </div>
                 <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                   <button type="button" id="save-game-btn-${ev.id}" onclick="saveEditedGame(${ev.id})" class="btn btn-primary btn-sm">💾 Save Changes</button>
                   <button type="button" onclick="toggleEditGamePanel(${ev.id})" class="btn btn-outline btn-sm">Cancel</button>
@@ -632,6 +645,9 @@ window.saveEditedGame = async function(eventId) {
   const location = document.getElementById(`edit-location-${eventId}`).value.trim();
   const locationUrl = document.getElementById(`edit-map-${eventId}`).value.trim();
   const description = document.getElementById(`edit-desc-${eventId}`).value.trim();
+  const attendanceInput = document.getElementById(`edit-actual-attendance-${eventId}`);
+  const actualVal = attendanceInput ? attendanceInput.value.trim() : '';
+  const actualAttendance = actualVal === '' ? null : parseInt(actualVal, 10);
 
   if (!title || !rawDate || !location) {
     alertBox.innerHTML = '<div class="alert alert-error">Title, Date/Time, and Field Location are required.</div>';
@@ -648,7 +664,8 @@ window.saveEditedGame = async function(eventId) {
       event_date: API.localToPacificIso(rawDate),
       location,
       location_url: locationUrl,
-      description
+      description,
+      actual_attendance: isNaN(actualAttendance) ? null : actualAttendance
     });
     if (res.error) {
       alertBox.innerHTML = `<div class="alert alert-error">${API.escapeHtml(res.error)}</div>`;

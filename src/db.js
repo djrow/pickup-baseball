@@ -53,6 +53,7 @@ function initDatabase() {
       location_url TEXT,
       event_date DATETIME NOT NULL,
       max_players INTEGER DEFAULT NULL,
+      actual_attendance INTEGER DEFAULT NULL,
       status TEXT DEFAULT 'active',
       created_by INTEGER REFERENCES users(id),
       reminder_sent INTEGER DEFAULT 0,
@@ -136,6 +137,9 @@ function initDatabase() {
   }
   if (!eventCols.includes('rainout_email_sent')) {
     db.exec('ALTER TABLE events ADD COLUMN rainout_email_sent INTEGER DEFAULT 0');
+  }
+  if (!eventCols.includes('actual_attendance')) {
+    db.exec('ALTER TABLE events ADD COLUMN actual_attendance INTEGER DEFAULT NULL');
   }
 
   // Ensure role synchronization

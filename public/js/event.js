@@ -58,6 +58,7 @@ function applyLoadedEventToDom(res) {
   renderComments();
   setupRsvpState();
   renderOrganizerRainoutPanel();
+  renderOrganizerAttendancePanel();
 
   document.getElementById('event-loading').style.display = 'none';
   document.getElementById('event-container').style.display = 'block';
@@ -168,7 +169,9 @@ function renderEventDetails() {
   } else {
     if (statusBadge) {
       statusBadge.className = 'badge badge-green';
-      statusBadge.textContent = API.t('event.upcoming_badge', 'Upcoming Game');
+      statusBadge.textContent = ev.actual_attendance != null
+        ? `⚾ ${API.t('home.players_played', { count: ev.actual_attendance })}`
+        : API.t('event.upcoming_badge', 'Upcoming Game');
     }
     if (rainoutBanner) {
       rainoutBanner.style.display = 'none';
@@ -186,7 +189,24 @@ function renderEventDetails() {
 
   const rawDesc = ev.description || 'No special announcements for this pickup game. Bring your glove and enthusiasm!';
   document.getElementById('event-description').textContent = API.translatePhrase(rawDesc);
-  document.getElementById('event-attendee-count').textContent = API.t('home.players_count', { count: eventData.totalAttendees });
+
+  const rosterLabel = document.querySelector('[data-i18n="event.roster_count"]');
+  if (ev.actual_attendance != null) {
+    if (rosterLabel) rosterLabel.textContent = API.t('event.actual_turnout', 'Actual Turnout');
+    document.getElementById('event-attendee-count').innerHTML = `
+      <div style="display: flex; flex-direction: column;">
+        <span style="color: var(--as-green); font-size: 1.25rem; font-weight: 800; display: inline-flex; align-items: center; gap: 6px;">
+          <span>⚾</span> <span>${API.escapeHtml(API.t('home.players_played', { count: ev.actual_attendance }))}</span>
+        </span>
+        <span style="font-size: 0.78rem; font-weight: 500; color: var(--text-muted); margin-top: 2px;">
+          ${API.escapeHtml(API.t('event.turnout_count_sub', { count: eventData.totalAttendees }))}
+        </span>
+      </div>
+    `;
+  } else {
+    if (rosterLabel) rosterLabel.textContent = API.t('event.roster_count', 'Roster Count');
+    document.getElementById('event-attendee-count').textContent = API.t('home.players_count', { count: eventData.totalAttendees });
+  }
 
   // Total duties filled calculation
   let totalSlots = 0;
@@ -831,6 +851,138 @@ function renderOrganizerRainoutPanel() {
   }
 }
 
+function renderOrganizerAttendancePanel() {
+  const panel = document.getElementById('organizer-attendance-panel');
+  if (!panel) return;
+
+  const user = API.currentUser;
+  if (!user || (!user.canManageEvents && !user.isAdmin)) {
+    panel.style.display = 'none';
+    panel.innerHTML = '';
+    return;
+  }
+
+  const ev = eventData.event;
+  if (ev.status === 'rainout' && ev.actual_attendance == null) {
+    panel.style.display = 'none';
+    panel.innerHTML = '';
+    return;
+  }
+
+  panel.style.display = 'block';
+
+  if (ev.actual_attendance != null) {
+    panel.innerHTML = `
+      <div style="background: var(--bg-card); border: 1.5px solid var(--border); border-left: 4px solid var(--as-green); border-radius: 8px; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; box-shadow: var(--shadow-sm);">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 1.5rem;">⚾</span>
+          <div>
+            <div style="font-weight: 700; color: var(--as-green); font-size: 0.98rem;">
+              Game Turnout: ${ev.actual_attendance} Players Played
+            </div>
+            <div style="font-size: 0.8rem; color: var(--text-muted);">
+              ${API.t('event.turnout_count_sub', { count: eventData.totalAttendees })} — Recorded for the Past Games archive!
+            </div>
+          </div>
+        </div>
+        <div id="attendance-edit-controls-${ev.id}">
+          <button type="button" onclick="showInlineAttendanceEdit()" class="btn btn-outline btn-sm">
+            ✏️ Edit Headcount
+          </button>
+        </div>
+      </div>
+    `;
+  } else {
+    panel.innerHTML = `
+      <div style="background: var(--bg-card); border: 1.5px solid var(--border); border-left: 4px solid var(--primary); border-radius: 8px; padding: 12px 16px; box-shadow: var(--shadow-sm);">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 1.5rem;">⚾</span>
+            <div>
+              <div style="font-weight: 700; color: var(--secondary); font-size: 0.98rem;">
+                Record Actual Game Attendance
+              </div>
+              <div style="font-size: 0.82rem; color: var(--text-muted);">
+                ${eventData.totalAttendees} signed up online. How many players actually showed up and played?
+              </div>
+            </div>
+          </div>
+          <form id="quick-attendance-form" style="display: flex; align-items: center; gap: 8px; margin: 0;" onsubmit="saveQuickAttendance(event)">
+            <input type="number" id="quick-attendance-input" min="0" max="200" placeholder="e.g. 18" required style="width: 85px; padding: 6px 10px; font-weight: 700; font-size: 1rem; border-radius: 6px; border: 1.5px solid var(--border);">
+            <button type="submit" id="quick-attendance-save-btn" class="btn btn-primary btn-sm">💾 Save Turnout</button>
+          </form>
+        </div>
+        <div id="quick-attendance-alert" style="margin-top: 6px;"></div>
+      </div>
+    `;
+  }
+}
+
+window.showInlineAttendanceEdit = function() {
+  const panel = document.getElementById('organizer-attendance-panel');
+  if (!panel || !eventData) return;
+  const ev = eventData.event;
+
+  panel.innerHTML = `
+    <div style="background: var(--bg-card); border: 1.5px solid var(--border); border-left: 4px solid var(--primary); border-radius: 8px; padding: 12px 16px; box-shadow: var(--shadow-sm);">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 1.5rem;">⚾</span>
+          <div>
+            <div style="font-weight: 700; color: var(--secondary); font-size: 0.98rem;">
+              Update Actual Game Attendance
+            </div>
+            <div style="font-size: 0.82rem; color: var(--text-muted);">
+              Current headcount: <strong>${ev.actual_attendance != null ? ev.actual_attendance : 'Not set'}</strong> (${eventData.totalAttendees} online RSVPs)
+            </div>
+          </div>
+        </div>
+        <form id="quick-attendance-form" style="display: flex; align-items: center; gap: 8px; margin: 0;" onsubmit="saveQuickAttendance(event)">
+          <input type="number" id="quick-attendance-input" value="${ev.actual_attendance != null ? ev.actual_attendance : ''}" min="0" max="200" placeholder="e.g. 18" required style="width: 85px; padding: 6px 10px; font-weight: 700; font-size: 1rem; border-radius: 6px; border: 1.5px solid var(--border);">
+          <button type="submit" id="quick-attendance-save-btn" class="btn btn-primary btn-sm">💾 Save</button>
+          <button type="button" onclick="renderOrganizerAttendancePanel()" class="btn btn-outline btn-sm">Cancel</button>
+        </form>
+      </div>
+      <div id="quick-attendance-alert" style="margin-top: 6px;"></div>
+    </div>
+  `;
+  const input = document.getElementById('quick-attendance-input');
+  if (input) input.focus();
+};
+
+window.saveQuickAttendance = async function(e) {
+  e.preventDefault();
+  const saveBtn = document.getElementById('quick-attendance-save-btn');
+  const alertBox = document.getElementById('quick-attendance-alert');
+  const input = document.getElementById('quick-attendance-input');
+  if (!input) return;
+
+  const count = parseInt(input.value.trim(), 10);
+  if (isNaN(count) || count < 0) {
+    alertBox.innerHTML = '<div class="alert alert-error" style="font-size: 0.82rem;">Please enter a valid number of players.</div>';
+    return;
+  }
+
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving...';
+  alertBox.innerHTML = '';
+
+  try {
+    const res = await API.updateEvent(eventId, { actual_attendance: count });
+    if (res.error) {
+      alertBox.innerHTML = `<div class="alert alert-error" style="font-size: 0.82rem;">${API.escapeHtml(res.error)}</div>`;
+      saveBtn.disabled = false;
+      saveBtn.textContent = '💾 Save Turnout';
+    } else {
+      await loadEventData();
+    }
+  } catch (err) {
+    alertBox.innerHTML = '<div class="alert alert-error" style="font-size: 0.82rem;">Failed to save attendance. Please try again.</div>';
+    saveBtn.disabled = false;
+    saveBtn.textContent = '💾 Save Turnout';
+  }
+};
+
 function setupRsvpForm() {
   const form = document.getElementById('rsvp-form');
   const alertBox = document.getElementById('rsvp-alert');
@@ -985,6 +1137,19 @@ window.toggleEditEventPanel = function() {
         <textarea id="edit-event-desc" rows="2">${API.escapeHtml(ev.description || '')}</textarea>
       </div>
 
+      <!-- Actual Game Attendance Field -->
+      <div class="form-group" style="background: var(--bg-card); padding: 12px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 14px;">
+        <label for="edit-event-actual-attendance" style="font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+          <span>⚾</span> <span>Actual Attendance (Players who played)</span>
+        </label>
+        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+          <input type="number" id="edit-event-actual-attendance" value="${ev.actual_attendance != null ? ev.actual_attendance : ''}" min="0" max="200" placeholder="e.g. 18" style="width: 95px; padding: 6px 10px; font-size: 1rem; font-weight: 700;">
+          <span style="font-size: 0.82rem; color: var(--text-muted);">
+            Record actual turnout from the field. Displayed in the Past Games archive!
+          </span>
+        </div>
+      </div>
+
       <!-- Maximum Roster Size Cap Toggle -->
       <div class="form-group" style="background: var(--bg-card); padding: 12px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 14px;">
         <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; margin: 0;">
@@ -1049,13 +1214,17 @@ window.toggleEditEventPanel = function() {
           ? (parseInt(document.getElementById('edit-event-max-players').value, 10) || 28)
           : null;
 
+        const actualAttendanceVal = document.getElementById('edit-event-actual-attendance').value.trim();
+        const actualAttendance = actualAttendanceVal === '' ? null : parseInt(actualAttendanceVal, 10);
+
         const payload = {
           title: document.getElementById('edit-event-title').value.trim(),
           event_date: API.localToPacificIso(rawDate),
           location: document.getElementById('edit-event-location').value.trim(),
           location_url: document.getElementById('edit-event-map').value.trim(),
           description: document.getElementById('edit-event-desc').value.trim(),
-          max_players: maxPlayers
+          max_players: maxPlayers,
+          actual_attendance: isNaN(actualAttendance) ? null : actualAttendance
         };
 
         let res;

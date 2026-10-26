@@ -172,5 +172,14 @@
   "event.roster_private_title": "球员名单未公开",
   "event.roster_private_desc": "为保护球员隐私，球员姓名与装备分工仅对已回复报名的球友开放。请在下方选择参加或无法参加以查看完整名单！",
   "event.roster_private_cta": "回复报名查看名单",
-  "event.duty_covered": "已认领"
+  "event.duty_covered": "已认领",
+  "home.players_played": "{count}人出赛",
+  "home.online_rsvps_sub": "({count}人线上报名)",
+  "home.view_game": "查看球局 →",
+  "event.actual_turnout": "实际到场人数",
+  "event.turnout_badge": "{count}人出赛",
+  "event.turnout_count_sub": "({count}人线上报名)",
+  "event.record_turnout": "记录实际出赛人数",
+  "event.record_turnout_desc": "线上报名 {count} 人。今天球场实际出赛多少人？",
+  "event.save_turnout": "保存出赛人数"
 }

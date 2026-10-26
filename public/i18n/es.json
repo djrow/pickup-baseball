@@ -172,5 +172,14 @@
   "event.roster_private_title": "La lista de jugadores es privada",
   "event.roster_private_desc": "Para proteger la privacidad de los jugadores, los nombres y la asignación de equipo solo son visibles para los asistentes. ¡Confirma tu asistencia (asistiendo o no puedes ir) abajo para ver quién juega!",
   "event.roster_private_cta": "Confirmar asistencia para ver la lista",
-  "event.duty_covered": "Cubierto"
+  "event.duty_covered": "Cubierto",
+  "home.players_played": "{count} Jugaron",
+  "home.online_rsvps_sub": "({count} en línea)",
+  "home.view_game": "Ver partido →",
+  "event.actual_turnout": "Asistencia real",
+  "event.turnout_badge": "{count} Jugaron",
+  "event.turnout_count_sub": "({count} confirmados en línea)",
+  "event.record_turnout": "Registrar asistencia real",
+  "event.record_turnout_desc": "{count} confirmaron en línea. ¿Cuántos jugaron realmente?",
+  "event.save_turnout": "Guardar asistencia"
 }

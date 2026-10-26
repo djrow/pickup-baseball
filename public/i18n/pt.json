@@ -172,5 +172,14 @@
   "event.roster_private_title": "A lista de jogadores é privada",
   "event.roster_private_desc": "Para proteger a privacidade dos jogadores, os nomes e equipamentos são visíveis apenas para os participantes. Confirme sua presença abaixo para ver quem vai jogar!",
   "event.roster_private_cta": "Confirmar presença para ver a lista",
-  "event.duty_covered": "Coberto"
+  "event.duty_covered": "Coberto",
+  "home.players_played": "{count} Jogaram",
+  "home.online_rsvps_sub": "({count} online)",
+  "home.view_game": "Ver jogo →",
+  "event.actual_turnout": "Presença real",
+  "event.turnout_badge": "{count} Jogaram",
+  "event.turnout_count_sub": "({count} confirmados online)",
+  "event.record_turnout": "Registrar presença real",
+  "event.record_turnout_desc": "{count} confirmaram online. Quantos realmente jogaram?",
+  "event.save_turnout": "Salvar presença"
 }

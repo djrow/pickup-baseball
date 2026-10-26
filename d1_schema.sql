@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS events (
   location_url TEXT,
   event_date DATETIME NOT NULL,
   max_players INTEGER DEFAULT NULL,
+  actual_attendance INTEGER DEFAULT NULL,
   status TEXT DEFAULT 'active',
   created_by INTEGER REFERENCES users(id),
   reminder_sent INTEGER DEFAULT 0,

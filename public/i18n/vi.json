@@ -172,5 +172,14 @@
   "event.roster_private_title": "Danh sách cầu thủ được bảo mật",
   "event.roster_private_desc": "Để bảo vệ quyền riêng tư, danh sách cầu thủ chỉ hiển thị cho người đã đăng ký. Vui lòng phản hồi tham gia bên dưới để xem danh sách!",
   "event.roster_private_cta": "Phản hồi để xem danh sách",
-  "event.duty_covered": "Đã có người nhận"
+  "event.duty_covered": "Đã có người nhận",
+  "home.players_played": "{count} Cầu thủ đã chơi",
+  "home.online_rsvps_sub": "({count} đăng ký online)",
+  "home.view_game": "Xem trận đấu →",
+  "event.actual_turnout": "Số lượng thực tế",
+  "event.turnout_badge": "{count} Cầu thủ đã chơi",
+  "event.turnout_count_sub": "({count} đăng ký online)",
+  "event.record_turnout": "Ghi nhận số lượng thực tế",
+  "event.record_turnout_desc": "{count} người đăng ký online. Thực tế có bao nhiêu người tham gia?",
+  "event.save_turnout": "Lưu số lượng"
 }

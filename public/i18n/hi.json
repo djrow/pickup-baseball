@@ -172,5 +172,14 @@
   "event.roster_private_title": "खिलाड़ियों की सूची निजी है",
   "event.roster_private_desc": "गोपनीयता के लिए, खिलाड़ियों के नाम केवल उपस्थित लोगों को दिखाई देते हैं। सूची देखने के लिए कृपया नीचे RSVP करें!",
   "event.roster_private_cta": "सूची देखने के लिए RSVP करें",
-  "event.duty_covered": "पूर्ण"
+  "event.duty_covered": "पूर्ण",
+  "home.players_played": "{count} खिलाड़ियों ने खेला",
+  "home.online_rsvps_sub": "({count} ऑनलाइन)",
+  "home.view_game": "मैच देखें →",
+  "event.actual_turnout": "वास्तविक उपस्थिति",
+  "event.turnout_badge": "{count} खिलाड़ियों ने खेला",
+  "event.turnout_count_sub": "({count} ऑनलाइन RSVP)",
+  "event.record_turnout": "वास्तविक उपस्थिति दर्ज करें",
+  "event.record_turnout_desc": "{count} ऑनलाइन RSVP थे। वास्तव में कितने खिलाड़ियों ने खेला?",
+  "event.save_turnout": "उपस्थिति सहेजें"
 }

@@ -172,5 +172,14 @@
   "event.roster_private_title": "Список игроков скрыт",
   "event.roster_private_desc": "Для защиты конфиденциальности имена игроков и распределение инвентаря видны только участникам. Ответьте на приглашение ниже, чтобы увидеть список!",
   "event.roster_private_cta": "Ответить на приглашение",
-  "event.duty_covered": "Закрыто"
+  "event.duty_covered": "Закрыто",
+  "home.players_played": "Играли: {count}",
+  "home.online_rsvps_sub": "({count} онлайн)",
+  "home.view_game": "Посмотреть игру →",
+  "event.actual_turnout": "Фактическая явка",
+  "event.turnout_badge": "Играли: {count}",
+  "event.turnout_count_sub": "({count} онлайн записей)",
+  "event.record_turnout": "Записать фактическую явку",
+  "event.record_turnout_desc": "{count} записались онлайн. Сколько человек реально играло?",
+  "event.save_turnout": "Сохранить явку"
 }

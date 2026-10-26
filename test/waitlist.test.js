@@ -4,7 +4,8 @@ const http = require('http');
 const express = require('express');
 const cookieParser = require('cookie-parser');
 
-const { db } = require('../src/db');
+const { db, initDatabase } = require('../src/db');
+initDatabase();
 const eventsRouter = require('../src/routes/events');
 const authRouter = require('../src/routes/auth');
 const { createSession } = require('../src/auth');
@@ -314,5 +315,47 @@ test('Waitlist & Automatic Promotion Test Suite', async (t) => {
     const orgViewerRes = await request(`/api/events/${eventId}`, { headers: { 'Cookie': orgCookie } });
     assert.equal(orgViewerRes.body.canViewRoster, true);
     assert.equal(orgViewerRes.body.attendees.length, 2);
+  });
+
+  await t.test('12. Actual Attendance: Record post-game turnout (e.g. 18 played with 2 RSVPd)', async () => {
+    // 1. Organizer records actual attendance
+    const updateRes = await request(`/api/events/${eventId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Cookie': orgCookie
+      },
+      body: {
+        actual_attendance: 18
+      }
+    });
+    assert.equal(updateRes.status, 200);
+    assert.equal(updateRes.body.event.actual_attendance, 18);
+
+    // 2. Fetching event details returns actual_attendance
+    const details = await request(`/api/events/${eventId}`);
+    assert.equal(details.status, 200);
+    assert.equal(details.body.event.actual_attendance, 18);
+
+    // 3. Fetching events list returns actual_attendance on the event
+    const listRes = await request('/api/events');
+    assert.equal(listRes.status, 200);
+    const evInList = listRes.body.events.find(e => e.id === eventId);
+    assert.ok(evInList);
+    assert.equal(evInList.actual_attendance, 18);
+
+    // 4. Clearing actual attendance with null or ''
+    const clearRes = await request(`/api/events/${eventId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Cookie': orgCookie
+      },
+      body: {
+        actual_attendance: null
+      }
+    });
+    assert.equal(clearRes.status, 200);
+    assert.equal(clearRes.body.event.actual_attendance, null);
   });
 });

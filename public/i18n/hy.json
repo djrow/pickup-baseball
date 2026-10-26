@@ -172,5 +172,14 @@
   "event.roster_private_title": "Խաղացողների ցուցակը գաղտնի է",
   "event.roster_private_desc": "Գաղտնիության պաշտպանության համար խաղացողների անունները տեսանելի են միայն գրանցվածներին: Խնդրում ենք նշել ձեր մասնակցությունը՝ ցուցակը տեսնելու համար:",
   "event.roster_private_cta": "Գրանցվել՝ ցուցակը տեսնելու համար",
-  "event.duty_covered": "Կատարված"
+  "event.duty_covered": "Կատարված",
+  "home.players_played": "{count} Խաղացել են",
+  "home.online_rsvps_sub": "({count} օնլայն)",
+  "home.view_game": "Դիտել խաղը →",
+  "event.actual_turnout": "Փաստացի մասնակցություն",
+  "event.turnout_badge": "{count} Խաղացել են",
+  "event.turnout_count_sub": "({count} օնլայն գրանցված)",
+  "event.record_turnout": "Գրանցել փաստացի մասնակցությունը",
+  "event.record_turnout_desc": "{count} հոգի գրանցվել էր: Քանի՞սը իրականում խաղացին:",
+  "event.save_turnout": "Պահպանել"
 }
