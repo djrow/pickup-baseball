@@ -57,6 +57,13 @@
   --shadow-lg: 0 14px 30px -4px rgba(0, 56, 49, 0.12), 0 6px 12px -3px rgba(0, 56, 49, 0.06);
   --shadow-orange: 0 4px 14px rgba(253, 90, 30, 0.32);
 
+  /* Hero Banner Theme Tokens */
+  --hero-bg: linear-gradient(140deg, #002621 0%, #003831 60%, #004d43 100%);
+  --hero-glow: radial-gradient(circle at 50% 0%, rgba(253, 90, 30, 0.16) 0%, transparent 62%);
+  --hero-border: var(--giants-orange);
+  --hero-subtitle-bg: rgba(253, 90, 30, 0.22);
+  --hero-subtitle-text: #ffeedb;
+
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
@@ -93,6 +100,11 @@
 
   --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.35);
   --shadow-md: 0 4px 16px -2px rgba(0, 0, 0, 0.45), 0 2px 6px -1px rgba(0, 0, 0, 0.3);
+  --hero-bg: linear-gradient(140deg, #051410 0%, #0c2621 60%, #11362e 100%);
+  --hero-glow: radial-gradient(circle at 50% 0%, rgba(255, 107, 53, 0.28) 0%, transparent 62%);
+  --hero-border: var(--giants-orange);
+  --hero-subtitle-bg: rgba(255, 107, 53, 0.2);
+  --hero-subtitle-text: #ffe0d4;
   --shadow-lg: 0 14px 30px -4px rgba(0, 0, 0, 0.6), 0 6px 12px -3px rgba(0, 0, 0, 0.4);
 }
 
@@ -102,6 +114,11 @@
 
 /* 1. Dodger Blue & Silver (Los Angeles Dodgers) */
 [data-color-theme="dodger-blue"] {
+  --hero-bg: linear-gradient(140deg, #041224 0%, #003865 55%, #005A9C 100%);
+  --hero-glow: radial-gradient(circle at 50% 0%, rgba(56, 189, 248, 0.28) 0%, transparent 62%);
+  --hero-border: #005A9C;
+  --hero-subtitle-bg: rgba(0, 90, 156, 0.35);
+  --hero-subtitle-text: #e0f2fe;
   --as-green: #0B2341;
   --as-green-hover: #051324;
   --as-green-light: #163963;
@@ -122,6 +139,11 @@
   --text-muted: #4d657d;
 }
 [data-color-theme="dodger-blue"][data-theme="dark"] {
+  --hero-bg: linear-gradient(140deg, #030a14 0%, #071a33 55%, #0d2e57 100%);
+  --hero-glow: radial-gradient(circle at 50% 0%, rgba(56, 189, 248, 0.35) 0%, transparent 62%);
+  --hero-border: #38bdf8;
+  --hero-subtitle-bg: rgba(56, 189, 248, 0.22);
+  --hero-subtitle-text: #f0f9ff;
   --as-green: #93c5fd;
   --as-green-hover: #bfdbfe;
   --as-green-light: #1e3a8a;
@@ -145,6 +167,11 @@
 
 /* 2. Pinstripe Navy & Silver (New York Yankees) */
 [data-color-theme="pinstripe-navy"] {
+  --hero-bg: linear-gradient(140deg, #050d18 0%, #0C2340 60%, #17375e 100%);
+  --hero-glow: radial-gradient(circle at 50% 0%, rgba(96, 165, 250, 0.2) 0%, transparent 62%);
+  --hero-border: #1E3A5F;
+  --hero-subtitle-bg: rgba(30, 58, 95, 0.35);
+  --hero-subtitle-text: #f1f5f9;
   --as-green: #0C2340;
   --as-green-hover: #061324;
   --as-green-light: #1a3b63;
@@ -165,6 +192,11 @@
   --text-muted: #50647b;
 }
 [data-color-theme="pinstripe-navy"][data-theme="dark"] {
+  --hero-bg: linear-gradient(140deg, #04080e 0%, #091728 60%, #122842 100%);
+  --hero-glow: radial-gradient(circle at 50% 0%, rgba(96, 165, 250, 0.3) 0%, transparent 62%);
+  --hero-border: #60a5fa;
+  --hero-subtitle-bg: rgba(96, 165, 250, 0.22);
+  --hero-subtitle-text: #f8fafc;
   --as-green: #cbd5e1;
   --as-green-hover: #e2e8f0;
   --as-green-light: #334155;
@@ -188,6 +220,11 @@
 
 /* 3. Fenway Crimson & Navy (Boston Red Sox) */
 [data-color-theme="fenway-red"] {
+  --hero-bg: linear-gradient(140deg, #06111e 0%, #0C2340 50%, #63171e 100%);
+  --hero-glow: radial-gradient(circle at 50% 0%, rgba(189, 48, 57, 0.3) 0%, transparent 62%);
+  --hero-border: #BD3039;
+  --hero-subtitle-bg: rgba(189, 48, 57, 0.35);
+  --hero-subtitle-text: #fee2e2;
   --as-green: #0C2340;
   --as-green-hover: #061426;
   --as-green-light: #18365d;
@@ -208,6 +245,11 @@
   --text-muted: #695255;
 }
 [data-color-theme="fenway-red"][data-theme="dark"] {
+  --hero-bg: linear-gradient(140deg, #0c0507 0%, #1f0b0f 50%, #3d1217 100%);
+  --hero-glow: radial-gradient(circle at 50% 0%, rgba(248, 113, 113, 0.35) 0%, transparent 62%);
+  --hero-border: #f87171;
+  --hero-subtitle-bg: rgba(248, 113, 113, 0.22);
+  --hero-subtitle-text: #fef2f2;
   --as-green: #38bdf8;
   --as-green-hover: #7dd3fc;
   --as-green-light: #0369a1;
@@ -231,6 +273,11 @@
 
 /* 4. Wrigley Royal & Red (Chicago Cubs) */
 [data-color-theme="wrigley-royal"] {
+  --hero-bg: linear-gradient(140deg, #05102b 0%, #0E3386 60%, #661a19 100%);
+  --hero-glow: radial-gradient(circle at 50% 0%, rgba(204, 52, 51, 0.28) 0%, transparent 62%);
+  --hero-border: #0E3386;
+  --hero-subtitle-bg: rgba(204, 52, 51, 0.32);
+  --hero-subtitle-text: #fef2f2;
   --as-green: #CC3433;
   --as-green-hover: #a82625;
   --as-green-light: #8c1b1a;
@@ -251,6 +298,11 @@
   --text-muted: #4f5f84;
 }
 [data-color-theme="wrigley-royal"][data-theme="dark"] {
+  --hero-bg: linear-gradient(140deg, #030814 0%, #091c47 60%, #3b1010 100%);
+  --hero-glow: radial-gradient(circle at 50% 0%, rgba(96, 165, 250, 0.32) 0%, transparent 62%);
+  --hero-border: #60a5fa;
+  --hero-subtitle-bg: rgba(96, 165, 250, 0.22);
+  --hero-subtitle-text: #f0f5ff;
   --as-green: #f87171;
   --as-green-hover: #fca5a5;
   --as-green-light: #991b1b;
@@ -274,6 +326,11 @@
 
 /* 5. Pacific Teal & Navy (Seattle Mariners) */
 [data-color-theme="pacific-teal"] {
+  --hero-bg: linear-gradient(140deg, #04101a 0%, #063136 50%, #0C6F75 100%);
+  --hero-glow: radial-gradient(circle at 50% 0%, rgba(45, 212, 191, 0.25) 0%, transparent 62%);
+  --hero-border: #0C6F75;
+  --hero-subtitle-bg: rgba(12, 111, 117, 0.35);
+  --hero-subtitle-text: #ccfbf1;
   --as-green: #0C2340;
   --as-green-hover: #061324;
   --as-green-light: #18385e;
@@ -294,6 +351,11 @@
   --text-muted: #4a686b;
 }
 [data-color-theme="pacific-teal"][data-theme="dark"] {
+  --hero-bg: linear-gradient(140deg, #02090b 0%, #061e21 50%, #09373b 100%);
+  --hero-glow: radial-gradient(circle at 50% 0%, rgba(45, 212, 191, 0.35) 0%, transparent 62%);
+  --hero-border: #2dd4bf;
+  --hero-subtitle-bg: rgba(45, 212, 191, 0.22);
+  --hero-subtitle-text: #f0fdfa;
   --as-green: #38bdf8;
   --as-green-hover: #7dd3fc;
   --as-green-light: #0284c7;
@@ -317,6 +379,11 @@
 
 /* 6. Camden Orange & Black (Baltimore Orioles) */
 [data-color-theme="camden-orange"] {
+  --hero-bg: linear-gradient(140deg, #0d0e0d 0%, #1a1a1a 50%, #4a1d08 100%);
+  --hero-glow: radial-gradient(circle at 50% 0%, rgba(223, 70, 1, 0.3) 0%, transparent 62%);
+  --hero-border: #DF4601;
+  --hero-subtitle-bg: rgba(223, 70, 1, 0.32);
+  --hero-subtitle-text: #ffedd5;
   --as-green: #212322;
   --as-green-hover: #111211;
   --as-green-light: #393b3a;
@@ -337,6 +404,11 @@
   --text-muted: #665c56;
 }
 [data-color-theme="camden-orange"][data-theme="dark"] {
+  --hero-bg: linear-gradient(140deg, #080706 0%, #141210 50%, #2e1305 100%);
+  --hero-glow: radial-gradient(circle at 50% 0%, rgba(251, 146, 60, 0.35) 0%, transparent 62%);
+  --hero-border: #fb923c;
+  --hero-subtitle-bg: rgba(251, 146, 60, 0.22);
+  --hero-subtitle-text: #fff7ed;
   --as-green: #fef08a;
   --as-green-hover: #fef9c3;
   --as-green-light: #854d0e;
@@ -360,6 +432,11 @@
 
 /* 7. Friar Brown & Sungold (San Diego Padres) */
 [data-color-theme="friar-gold"] {
+  --hero-bg: linear-gradient(140deg, #120d0a 0%, #2F241D 60%, #523b28 100%);
+  --hero-glow: radial-gradient(circle at 50% 0%, rgba(196, 130, 0, 0.3) 0%, transparent 62%);
+  --hero-border: #C48200;
+  --hero-subtitle-bg: rgba(196, 130, 0, 0.3);
+  --hero-subtitle-text: #fef9c3;
   --as-green: #2F241D;
   --as-green-hover: #1e1712;
   --as-green-light: #4a3a30;
@@ -380,6 +457,11 @@
   --text-muted: #685950;
 }
 [data-color-theme="friar-gold"][data-theme="dark"] {
+  --hero-bg: linear-gradient(140deg, #0a0705 0%, #17110e 60%, #291d14 100%);
+  --hero-glow: radial-gradient(circle at 50% 0%, rgba(234, 179, 8, 0.35) 0%, transparent 62%);
+  --hero-border: #eab308;
+  --hero-subtitle-bg: rgba(234, 179, 8, 0.22);
+  --hero-subtitle-text: #fefce8;
   --as-green: #fde047;
   --as-green-hover: #fef08a;
   --as-green-light: #854d0e;
@@ -403,6 +485,11 @@
 
 /* 8. Sedona Red & Desert Teal (Arizona Diamondbacks) */
 [data-color-theme="sedona-red"] {
+  --hero-bg: linear-gradient(140deg, #0b1516 0%, #18383a 50%, #541923 100%);
+  --hero-glow: radial-gradient(circle at 50% 0%, rgba(167, 25, 48, 0.28) 0%, transparent 62%);
+  --hero-border: #A71930;
+  --hero-subtitle-bg: rgba(167, 25, 48, 0.32);
+  --hero-subtitle-text: #ffe4e6;
   --as-green: #26696D;
   --as-green-hover: #194a4d;
   --as-green-light: #368489;
@@ -423,6 +510,11 @@
   --text-muted: #685154;
 }
 [data-color-theme="sedona-red"][data-theme="dark"] {
+  --hero-bg: linear-gradient(140deg, #090506 0%, #170b0e 50%, #2c0e14 100%);
+  --hero-glow: radial-gradient(circle at 50% 0%, rgba(251, 113, 133, 0.35) 0%, transparent 62%);
+  --hero-border: #fb7185;
+  --hero-subtitle-bg: rgba(251, 113, 133, 0.22);
+  --hero-subtitle-text: #fff1f2;
   --as-green: #2dd4bf;
   --as-green-hover: #5eead4;
   --as-green-light: #0f766e;
@@ -446,6 +538,11 @@
 
 /* 9. Powder Blue & Royal (Classic 1980s Retro) */
 [data-color-theme="powder-blue"] {
+  --hero-bg: linear-gradient(140deg, #021426 0%, #002f59 50%, #004687 100%);
+  --hero-glow: radial-gradient(circle at 50% 0%, rgba(56, 189, 248, 0.3) 0%, transparent 62%);
+  --hero-border: #0284c7;
+  --hero-subtitle-bg: rgba(2, 132, 199, 0.32);
+  --hero-subtitle-text: #e0f2fe;
   --as-green: #004687;
   --as-green-hover: #00315e;
   --as-green-light: #1463ab;
@@ -466,6 +563,11 @@
   --text-muted: #4a637a;
 }
 [data-color-theme="powder-blue"][data-theme="dark"] {
+  --hero-bg: linear-gradient(140deg, #020912 0%, #05162b 50%, #092647 100%);
+  --hero-glow: radial-gradient(circle at 50% 0%, rgba(56, 189, 248, 0.35) 0%, transparent 62%);
+  --hero-border: #38bdf8;
+  --hero-subtitle-bg: rgba(56, 189, 248, 0.22);
+  --hero-subtitle-text: #f0f9ff;
   --as-green: #7dd3fc;
   --as-green-hover: #bae6fd;
   --as-green-light: #0369a1;
@@ -517,12 +619,12 @@ body {
 /* Header & Nav */
 header.site-header {
   background: var(--bg-card);
-  border-top: 3px solid var(--as-green);
+  border-top: 3.5px solid var(--giants-orange);
   border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
   z-index: 100;
-  box-shadow: 0 2px 8px rgba(0, 56, 49, 0.04);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .nav-wrap {
@@ -793,22 +895,22 @@ header.site-header {
 
 /* Hero Section */
 .hero {
-  background: radial-gradient(circle at 50% 0%, rgba(253, 90, 30, 0.16) 0%, transparent 62%),
-              linear-gradient(140deg, #002621 0%, #003831 60%, #004d43 100%);
+  background: var(--hero-glow), var(--hero-bg);
   color: var(--crisp-white);
   padding: 32px 0 28px;
   text-align: center;
   position: relative;
-  border-bottom: 4px solid var(--giants-orange);
+  border-bottom: 4px solid var(--hero-border, var(--giants-orange));
+  transition: background 0.3s ease, border-color 0.3s ease;
 }
 
 .hero-subtitle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #ffeedb;
-  background: rgba(253, 90, 30, 0.22);
-  border: 1px solid rgba(253, 90, 30, 0.45);
+  color: var(--hero-subtitle-text, #ffeedb);
+  background: var(--hero-subtitle-bg, rgba(253, 90, 30, 0.22));
+  border: 1px solid var(--hero-border, rgba(253, 90, 30, 0.45));
   padding: 4px 14px;
   border-radius: var(--radius-full);
   text-transform: uppercase;
@@ -853,7 +955,7 @@ header.site-header {
 .privacy-accordion summary {
   cursor: pointer;
   font-weight: 700;
-  color: #003831;
+  color: var(--as-green);
   display: flex;
   align-items: center;
   justify-content: space-between;
