@@ -319,8 +319,6 @@ async function sendRsvpConfirmation(env, origin, { email, name, event, dutyName,
   const safeName = escapeHtml(name);
   const safeTitle = escapeHtml(event.title);
   const safeLocation = escapeHtml(event.location);
-  const guestsCount = Number(additionalGuests) || 0;
-  const totalParty = 1 + guestsCount;
   const safeLocationUrl = sanitizeHttpUrl(event.location_url);
   const safeDutyName = escapeHtml(dutyName);
   const safeGear = escapeHtml(gearBringing);
