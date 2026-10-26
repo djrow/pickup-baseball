@@ -9,7 +9,11 @@ let eventData = null;
 async function initEvent() {
   const params = new URLSearchParams(window.location.search);
   eventId = params.get('id');
-  guestToken = params.get('token') || (eventId ? localStorage.getItem('guest_token_' + eventId) : '') || '';
+  let storedGuestToken = '';
+  try {
+    storedGuestToken = eventId ? (localStorage.getItem('guest_token_' + eventId) || '') : '';
+  } catch (e) {}
+  guestToken = params.get('token') || storedGuestToken || '';
 
   if (!eventId) {
     showError('No event ID specified in URL.');
@@ -546,7 +550,8 @@ async function setupRsvpState() {
 
   const isFull = eventData.event.max_players && (eventData.attendees.length >= eventData.event.max_players);
   const updateGuestsVisibility = () => {
-    const isAttending = document.querySelector('input[name="rsvp-status"]:checked')?.value === 'attending';
+    const checkedStatus = document.querySelector('input[name="rsvp-status"]:checked');
+    const isAttending = checkedStatus && checkedStatus.value === 'attending';
     const guestGroup = document.getElementById('additional-guests-group');
     if (guestGroup) {
       guestGroup.style.display = isAttending ? 'block' : 'none';
@@ -1043,8 +1048,10 @@ function setupRsvpForm() {
     const name = document.getElementById('rsvp-name').value;
     const email = document.getElementById('rsvp-email').value;
     const gear = document.getElementById('rsvp-gear').value;
-    const additionalGuests = parseInt(document.getElementById('rsvp-additional-guests')?.value || '0', 10) || 0;
-    const guestNames = (document.getElementById('rsvp-guest-names')?.value || '').trim();
+    const guestsEl = document.getElementById('rsvp-additional-guests');
+    const additionalGuests = parseInt((guestsEl && guestsEl.value) || '0', 10) || 0;
+    const guestNamesEl = document.getElementById('rsvp-guest-names');
+    const guestNames = ((guestNamesEl && guestNamesEl.value) || '').trim();
 
     const checkedDuties = Array.from(document.querySelectorAll('input[name="duty_id"]:checked'))
       .map(cb => parseInt(cb.value, 10));

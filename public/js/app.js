@@ -127,14 +127,16 @@ async function loadGames(justLoggedIn = false) {
     renderEventsView(events, featuredContainer, listContainer);
   } catch (err) {
     console.error('Error loading games:', err);
-    listContainer.innerHTML = '<div class="alert alert-error">Unable to load games at this time.</div>';
+    if (!renderedFromCache) {
+      listContainer.innerHTML = `<div class="alert alert-error">${API.escapeHtml(API.t('home.load_error', 'Unable to load games at this time.'))}</div>`;
+    }
   }
 }
 
 function renderFeaturedGame(ev, container) {
   const dateFormatted = API.formatDateTime(ev.event_date);
   const myRsvpBadge = ev.my_rsvp && ev.my_rsvp.status === 'attending'
-    ? `<span class="badge badge-green" style="margin-inline-start: 8px;">${API.escapeHtml(API.t('home.you_are_attending'))}</span>`
+    ? `<span class="badge badge-green" style="margin-left: 8px; margin-inline-start: 8px;">${API.escapeHtml(API.t('home.you_are_attending'))}</span>`
     : '';
   const translatedTitle = API.translateEventTitle(ev);
   const translatedDesc = ev.description ? API.translatePhrase(ev.description) : '';

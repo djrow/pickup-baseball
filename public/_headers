@@ -19,6 +19,9 @@
   Content-Type: application/manifest+json; charset=utf-8
   Cache-Control: public, max-age=3600
 
+/i18n/*
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+
 /sw.js
   Cache-Control: public, max-age=0, must-revalidate
 

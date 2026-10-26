@@ -104,7 +104,9 @@
 
 body {
   font-family: var(--font-sans);
+  background-color: #f5f8f7;
   background-color: var(--bg-page);
+  color: #0c1f1a;
   color: var(--text-main);
   line-height: 1.6;
   min-height: 100vh;
@@ -194,6 +196,7 @@ header.site-header {
   height: 22px;
   object-fit: contain;
   vertical-align: middle;
+  margin-right: 4px;
   margin-inline-end: 4px;
 }
 
@@ -216,7 +219,20 @@ header.site-header {
   white-space: nowrap;
   flex-shrink: 0;
   gap: 10px;
+  margin-left: auto;
   margin-inline-start: auto;
+}
+
+/* Flex gap fallback for legacy browsers (Safari < 14.5, Chrome < 84) */
+.nav-links > * + * {
+  margin-left: 10px;
+  margin-inline-start: 10px;
+}
+@supports (gap: 10px) {
+  .nav-links > * + * {
+    margin-left: 0;
+    margin-inline-start: 0;
+  }
 }
 
 .nav-links a {
@@ -820,11 +836,13 @@ header.site-header {
 
 .duty-card.filled {
   background: var(--bg-subtle);
+  border-left: 5px solid var(--as-green);
   border-inline-start: 5px solid var(--as-green);
 }
 
 .duty-card.needed {
   background: var(--bg-card);
+  border-left: 5px solid var(--giants-orange);
   border-inline-start: 5px solid var(--giants-orange);
 }
 
@@ -870,7 +888,7 @@ select {
   padding: 11px 14px;
   border: 1.5px solid var(--border);
   border-radius: var(--radius-sm);
-  font-size: 0.95rem;
+  font-size: 16px; /* 16px prevents iOS Safari from auto-zooming on focus */
   font-family: inherit;
   transition: border-color 0.15s, box-shadow 0.15s;
   background: var(--bg-input);
@@ -1410,5 +1428,15 @@ footer.site-footer strong {
 @media (max-height: 34em) {
   header.site-header {
     position: relative;
+  }
+}
+
+/* Accessibility & Low-Power Hardware: Prefers Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
   }
 }

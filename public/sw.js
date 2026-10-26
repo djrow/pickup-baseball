@@ -1,5 +1,5 @@
 // Service Worker for Pickup Baseball Foundation PWA
-const CACHE_NAME = 'pbf-cache-v3';
+const CACHE_NAME = 'pbf-cache-v4';
 
 const STATIC_ASSETS = [
   '/',
@@ -11,11 +11,11 @@ const STATIC_ASSETS = [
   '/profile.html',
   '/admin.html',
   '/404.html',
-  '/css/style.css?v=4',
+  '/css/style.css',
   '/js/api.js',
   '/js/app.js',
   '/js/archive.js',
-  '/js/auth.js',
+  '/js/account-dashboard.js',
   '/js/event.js',
   '/logo.svg',
   '/favicon.ico',
@@ -47,8 +47,8 @@ const STATIC_ASSETS = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      // Use cache.addAll with individual catch so missing optional files don't fail install
-      return Promise.allSettled(
+      // Use Promise.all with individual catch so missing optional files don't fail install (ES6 compatible)
+      return Promise.all(
         STATIC_ASSETS.map((url) => cache.add(url).catch((err) => console.warn('[SW] Failed to precache:', url, err)))
       );
     }).then(() => self.skipWaiting())
@@ -108,8 +108,9 @@ self.addEventListener('fetch', (event) => {
   }
 
   // 3. Static Assets (CSS, JS, Images, i18n JSON): Stale-While-Revalidate
+  // ignoreSearch: true allows versioned queries (?v=4) to match precached shell assets
   event.respondWith(
-    caches.match(req).then((cachedRes) => {
+    caches.match(req, { ignoreSearch: true }).then((cachedRes) => {
       const fetchPromise = fetch(req)
         .then((networkRes) => {
           if (networkRes && networkRes.status === 200) {
