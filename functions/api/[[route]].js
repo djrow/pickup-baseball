@@ -1462,6 +1462,7 @@ async function promoteNextWaitlistedPlayer(env, origin, eventId) {
 
 app.get('/events', async (c) => {
   try {
+    await ensureAttendeesGuestColumns(c.env.DB);
     const filter = c.req.query('filter');
     const user = c.get('user');
     const nowIso = new Date().toISOString();
@@ -1612,6 +1613,7 @@ app.get('/events/admin/backup-db', async (c) => {
 
 app.get('/events/:id', async (c) => {
   try {
+    await ensureAttendeesGuestColumns(c.env.DB);
     const eventId = parseInt(c.req.param('id'), 10);
     const token = c.req.query('token');
     const user = c.get('user');
