@@ -7,6 +7,9 @@ Designed with a **10+ year longevity philosophy**:
 - **100% Free-Tier Serverless Edge Stack**: Hosted on **Cloudflare Pages** (static assets + global CDN), **Cloudflare Pages Functions / Workers** (`functions/api/[[route]].js` powered by Hono), **Cloudflare D1** (serverless SQLite in the cloud), and **Resend** (transactional email).
 - **Passwordless Email Authentication**: Players sign in with a 6-digit verification code or 1-click magic link sent to their email (SHA-256 hashed in D1, 10-minute expiration, 5-attempt lockout, and 90-day `HttpOnly; Secure; SameSite=Lax` session cookies).
 - **Defense-in-Depth Security**: Parameterized D1 prepared statements, server-side + Cloudflare WAF rate limiting, CSRF `Origin` checks, strict CSP/HSTS headers (`public/_headers`), automatic client- and server-side EXIF/GPS metadata stripping on profile photos, and configurable guest access controls.
+- **Progressive Web App (PWA) & Offline Shell**: Installable on Android, iOS, and Desktop with offline app shell caching, `{ ignoreSearch: true }` cache matching, and instant `0ms` stale-while-revalidate local caching.
+- **15 California Languages & RTL Support**: Zero-dependency internationalization supporting English, Spanish, Chinese, Tagalog, Vietnamese, Korean, Arabic, Russian, Persian/Farsi, Japanese, Punjabi, Armenian, Portuguese, Hindi, and French with dynamic right-to-left layout support.
+- **12 MLB Market Color Themes**: Comprehensive theme system featuring 12 Major League Baseball team palettes, an inline footer theme picker beside the foundation motto, and rigorous contrast-ratio tuning.
 
 ---
 
@@ -16,48 +19,115 @@ Designed with a **10+ year longevity philosophy**:
    - Live player roster showing confirmed headcount, player bios, and shared equipment.
    - Instant RSVP confirmation email with game details and a personal management link.
    - 1-Click **"Post Next Sunday @ Noon"** scheduler normalized to `America/Los_Angeles` (Pacific Time).
+   - Inline **Edit Game Details** tool for organizers with smart location autocomplete.
+
 2. **Volunteer Duty Coordination**:
    - Customizable default task template pre-configured with the 4 essential game-day duties:
      - **Bases** (1 slot) — *Bring 3 throw-down bases.*
      - **Pitching machine and power** (1 slot) — *Bring a pitching machine and a way to run it on the field.*
      - **Game Baseballs** (1 slot) — *Bring game balls bucket.*
      - **Field Dragging** (2 slots) — *Arrive 20 mins early to drag the infield with the pull rake.*
-   - Real-time slot availability prevents double-booking.
+   - Real-time slot availability, duty progress bar, and volunteer attribution (`✓ Covered by [Name]`).
+
 3. **Equipment Sharing & Game Discussion Board**:
    - Players list what gear they can bring (bats, catcher's gear, spare gloves) and coordinate field conditions or carpools on the per-game discussion board.
-4. **Donations & Plain-Language Privacy**:
-   - Dedicated **[Donate page](https://www.pickupbaseballfoundation.org/donate.html)** with PayPal Giving Fund, Every.org, and IRS tax-receipt instructions.
-   - Plain-English privacy notice on the homepage explaining exactly what is collected (names and emails only) and that data is never shared.
-5. **Admin & Moderation Tools**:
-   - Role-based access control (`Admin`, `Organizer`, `Player`).
-   - One-click **📥 Backup Database (`.sql`)** download directly from the Admin Dashboard.
-   - User account removal, email ban list (`banned_emails`), guest RSVP policy toggle, and one-click roster/comment moderation.
-6. **Detailed Development Narrative**:
-   - A complete chronicle of all development phases, architectural philosophy, edge migrations, security hardening, visual redesigns, PWA implementation, reverse compatibility passes, and MLB theme engines is maintained in **[`DEVELOPMENT_NARRATIVE.md`](DEVELOPMENT_NARRATIVE.md)**.
+
+4. **Roster Capacity, Waitlist & Player Privacy**:
+   - Automated roster capacity capping (`max_players`) with instant waitlist activation.
+   - Automatic queue promotion upon cancellations with instant email dispatch.
+   - Multi-guest reservation support (+1 to +5 guests per RSVP).
+   - **Privacy Shield for Player Rosters**: Unauthenticated visitors see a privacy notice protecting player identities until an RSVP is submitted or an organizer signs in.
+   - Dedicated **[Past Games Archive](https://www.pickupbaseballfoundation.org/archive.html)** with Sunday turnout recording.
+
+5. **Weather & Rainout Incident Broadcasts**:
+   - 1-Click **"🌧️ Call Rainout"** workflow with custom field conditions and makeup notes.
+   - Automated cancellation email blast via Resend to all confirmed attendees and volunteers, explicitly releasing gear and duty commitments.
+   - Prominent sky-blue rainout banner and 1-click **"☀️ Reopen Game"** tool if fields dry up.
+
+6. **12 Major League Baseball Color Themes & Light/Dark Mode**:
+   - Integrated theme trigger located in the page footer alongside the organization motto (*"Building community through America's pastime."*).
+   - 12 authentic team market palettes with adaptive hero gradient banners:
+     1. **Bay Area Heritage** (SF Giants Orange `#FD5A1E` & Oakland A's Forest Green `#003831`)
+     2. **Seattle Mariners** (Northwest Green `#005C5C` & Navy `#0C2340`)
+     3. **Chicago White Sox** (South Side Black `#27251F`, Slate `#334155`, & Silver `#94a3b8`)
+     4. **Milwaukee Brewers** (Harvest Gold `#B6891A` & Glove Navy `#12284C`)
+     5. **Los Angeles Dodgers** (Dodger Blue `#005A9C` & Silver `#0B2341`)
+     6. **New York Yankees** (Pinstripe Navy `#1E3A5F` & Silver `#0C2340`)
+     7. **Boston Red Sox** (Fenway Crimson `#C8102E` & Navy `#0C2340`)
+     8. **Chicago Cubs** (Wrigley Royal `#0E3386` & Cubbie Red `#CC3433`)
+     9. **Baltimore Orioles** (Camden Orange `#DF4601` & Black `#212322`)
+     10. **San Diego Padres** (Friar Brown `#2F241D` & Sungold `#C48200`)
+     11. **Arizona Diamondbacks** (Sedona Red `#A71930` & Desert Teal `#26696D`)
+     12. **Classic 1980s Retro** (Powder Blue `#0284c7` & Royal Navy `#004687`)
+   - High-contrast accessibility tuning: White Sox dark mode button contrast at **12.5:1**; Fenway Crimson dark mode contrast at **4.60:1** (eliminating washed-out salmon/pastel tones); uniform light-colored selection cards across all 12 teams in dark mode.
+   - Home-plate shield logo (`/logo.svg`) preserves designed colors in all modes without CSS inversion filters.
+
+7. **15 California Languages & RTL Support**:
+   - Zero-dependency client-side translation engine in `public/js/api.js` powered by lightweight JSON dictionaries (`public/i18n/*.json`).
+   - Supports English (`en`), Spanish (`es`), Chinese Simplified (`zh`), Tagalog (`tl`), Vietnamese (`vi`), Korean (`ko`), Arabic (`ar`), Russian (`ru`), Persian/Farsi (`fa`), Japanese (`ja`), Punjabi (`pa`), Armenian (`hy`), Portuguese (`pt`), Hindi (`hi`), and French (`fr`).
+   - Automatic browser locale detection, `Intl.DateTimeFormat` date localization, compact navbar selector, and dynamic `dir="rtl"` layout flipping for Arabic and Persian.
+
+8. **Progressive Web App (PWA) & Offline Shell**:
+   - Web App Manifest (`manifest.webmanifest`) supporting standalone display mode, responsive icons, and transparent 1:1 home-screen badges.
+   - Offline Service Worker (`public/sw.js`) serving static app shell assets instantly offline.
+   - Instant `0ms` stale-while-revalidate local caching (`localStorage`) for schedules and user profiles.
+
+9. **Reverse Compatibility & Low-Bandwidth Optimizations**:
+   - Pure ES6-compatible JavaScript without modern syntax dependencies (no optional chaining or unpolyfilled APIs).
+   - Dual CSS Logical & Physical property fallbacks (`margin-inline-start` + `margin-left`, `border-inline-start` + `border-left`) and flex child margin fallbacks.
+   - **99.99% JSON payload reduction** (`25.07 MB` → `2.9 KB`) via dedicated cached avatar endpoint (`GET /api/users/:id/avatar?v=...`) with automated 256×256 compression and EXIF metadata stripping.
+   - Collapsed network waterfalls: single batched D1 database round-trip per page load.
+   - Enforced 16px minimum font size on form inputs to prevent iOS Mobile Safari auto-zooming.
+
+10. **Donations & Plain-Language Privacy Promise**:
+    - Dedicated **[Donate page](https://www.pickupbaseballfoundation.org/donate.html)** with PayPal Giving Fund, Every.org, and IRS tax-receipt instructions.
+    - Plain-English privacy notice on the homepage explaining that only names and emails are collected and data is never shared or sold.
+
+11. **Admin, Moderation, & Database Backups**:
+    - Role-based access control (`Admin`, `Organizer`, `Player`).
+    - One-click **📥 Backup Database (.sql)** download directly from the Admin Dashboard.
+    - User account removal, email ban list (`banned_emails`), guest RSVP policy toggle, and one-click roster/comment moderation.
+
+12. **Detailed Development Narrative & Open Source**:
+    - Complete chronicle of all architectural decisions, edge migrations, and technical phases in **[`DEVELOPMENT_NARRATIVE.md`](DEVELOPMENT_NARRATIVE.md)**.
+    - Direct GitHub repository link in the site footer beside *"Free & open-source"*.
 
 ---
 
 ## 🏗️ Project Structure
 
 ```text
-├── public/                     # Static frontend served by Cloudflare Pages
-│   ├── index.html              # Homepage, privacy promise, & upcoming/past games
+├── public/                     # Static frontend served by Cloudflare Pages CDN
+│   ├── index.html              # Homepage, hero schedule, & privacy promise
 │   ├── event.html              # Game details, RSVP form, duty board, & discussion
+│   ├── archive.html            # Past games archive & historic turnout records
 │   ├── login.html              # Passwordless email sign-in / registration
-│   ├── profile.html            # Player profile, bio, & EXIF-stripping avatar uploader
+│   ├── profile.html            # Player profile, bio, & avatar uploader
 │   ├── admin.html              # Organizer & Admin dashboard
 │   ├── donate.html             # Charity donation options & IRS receipt notice
 │   ├── 404.html                # Custom 404 page
+│   ├── manifest.webmanifest    # PWA installable web app manifest
+│   ├── sw.js                   # Service Worker for offline shell caching
 │   ├── _headers                # Cloudflare Pages security headers (CSP, HSTS, etc.)
 │   ├── _redirects              # Enforces canonical custom domain over *.pages.dev
 │   ├── _routes.json            # Routes /api/* and /health to Cloudflare Pages Functions
-│   ├── css/style.css           # Stylesheet
-│   └── js/                     # Vanilla JS modules (api.js, app.js, event.js, admin.js, account-dashboard.js)
+│   ├── css/style.css           # Core stylesheet with 12 MLB market color palettes
+│   ├── i18n/                   # Translation dictionaries (15 languages: en, es, zh, tl, vi, ko, ar, ru, fa, ja, pa, hy, pt, hi, fr)
+│   ├── icons/                  # Favicons and PWA application icons
+│   ├── js/                     # Vanilla JS modules
+│   │   ├── api.js              # REST client, i18n engine, themes, & auth
+│   │   ├── app.js              # Homepage schedules & game listing
+│   │   ├── event.js            # Game roster, duty board, & discussion logic
+│   │   ├── archive.js          # Past games listing & turnout recording
+│   │   ├── admin.js            # Admin dashboard logic & database backups
+│   │   └── account-dashboard.js# Organizer panels & role-based dashboard views
+│   └── logo.svg                # Vector home-plate shield logo
 ├── functions/
 │   ├── api/[[route]].js        # Hono REST API running on Cloudflare Pages Functions / Workers
 │   └── health.js               # Health check endpoint (/health)
 ├── scripts/
 │   └── write-route.js          # Generator script for functions/api/[[route]].js
+├── DEVELOPMENT_NARRATIVE.md    # Comprehensive chronicle of all development phases
 ├── d1_schema.sql               # Cloudflare D1 SQLite database schema (DDL + default duties)
 └── wrangler.toml               # Cloudflare Pages, environment vars, & D1 binding configuration
 ```

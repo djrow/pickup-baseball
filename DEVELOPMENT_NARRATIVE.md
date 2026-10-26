@@ -122,9 +122,9 @@ To guarantee access on older smartphones, legacy desktop browsers, and weak muni
 
 ---
 
-## 12. Phase 11: Floating Bottom Theme Dock & 12-Market Major League Baseball Theming
-To celebrate baseball heritage across different markets while optimizing thumb reachability:
-- **Fixed Floating Theme Dock (`#theme-dock`):** Moved the theme toggle out of the crowded top navbar into an ergonomic floating pill dock fixed at the bottom of the screen. Features an immediate light/dark toggle and an expandable palette popover (`#theme-picker-panel`) with light, dark, and system modes. Added an accessible keyboard/screen-reader trigger in the site footer (`#footer-theme-trigger`).
+## 12. Phase 11: Fixed Footer Theme Controls, 12-Market Major League Baseball Theming, & Open Source
+To celebrate baseball heritage across different markets while maintaining uncluttered navigation and clean thumb accessibility:
+- **Fixed Footer Theme Controls & Org Motto Integration:** Replaced intrusive floating action pills with an elegant, inline theme trigger (`#footer-theme-trigger`) situated directly in the global page footer alongside the organization motto (*"Building community through America's pastime."*). Clicking the trigger smoothly reveals an accessible, expandable palette and mode selector (`#footer-theme-panel`) without obstructing game cards or navigation.
 - **12 Authentic MLB Team Market Palettes:**
   1. **Bay Area Heritage** (SF Giants Orange `#FD5A1E` & Oakland A's Dark Forest Green `#003831`)
   2. **Seattle Mariners** (Northwest Green `#005C5C` & Navy `#0C2340`)
@@ -132,7 +132,7 @@ To celebrate baseball heritage across different markets while optimizing thumb r
   4. **Milwaukee Brewers** (Harvest Gold `#B6891A` & Glove Navy `#12284C`)
   5. **Los Angeles Dodgers** (Dodger Blue `#005A9C` & Silver `#0B2341`)
   6. **New York Yankees** (Pinstripe Navy `#1E3A5F` & Silver `#0C2340`)
-  7. **Boston Red Sox** (Fenway Crimson `#BD3039` & Navy `#0C2340`)
+  7. **Boston Red Sox** (Fenway Crimson `#C8102E` & Navy `#0C2340`)
   8. **Chicago Cubs** (Wrigley Royal `#0E3386` & Cubbie Red `#CC3433`)
   9. **Baltimore Orioles** (Camden Orange `#DF4601` & Black `#212322`)
   10. **San Diego Padres** (Friar Brown `#2F241D` & Sungold `#C48200`)
@@ -140,9 +140,20 @@ To celebrate baseball heritage across different markets while optimizing thumb r
   12. **Classic 1980s Retro** (Powder Blue `#0284c7` & Royal Navy `#004687`)
 - **Dynamic Top Hero Gradient Banners:** Refactored hero banner backgrounds (`--hero-bg`, `--hero-glow`, `--hero-border`) and action buttons so the entire page header smoothly morphs with the chosen team palette.
 - **Accessibility & Contrast Hardening for Monochrome/Dark Palettes:** Specifically engineered the White Sox dark mode button system with deep charcoal buttons (`#262b32`), metallic silver borders (`#64748b`), and bright white text (`#ffffff`), elevating contrast from an unreadable 1.09:1 up to **12.5:1** (exceeding WCAG AAA requirements).
+- **GitHub Repository Link in Footer:** Added a direct link to the project's public GitHub repository (`https://github.com/djrow/pickup-baseball`) in the footer text beside *"Free & open-source"*.
 - **Logo Integrity:** Guaranteed that the official home-plate shield logo (`/logo.svg`) preserves its designed colors in all modes without CSS inversion filters.
 
 ---
 
-## 13. Future Roadmap Notes
+## 13. Phase 12: Theme Palette Uniformity & Fenway Crimson Overhaul
+Following community feedback on dark mode button aesthetics and color accuracy:
+- **Uniform Light Theme Palette Cards in Dark Mode:** Diagnosed and fixed an asymmetry where the Bay Area Heritage button in the theme picker was rendering dark in dark mode while all other 11 team cards were light buttons. Defined scoped `[data-color-theme="bay-area"]` CSS variables (`--bg-card: #ffffff`, `--text-main: #0c1f1a`, `--border: #dbe4e0`), guaranteeing that all 12 market cards remain consistently light with dark text and sharp swatches regardless of active mode.
+- **Fenway Crimson Color Overhaul:** Replaced washed-out, salmon-like coral pink (`#f87171` at 71% lightness) and cyan accents with authentic Boston Red Sox Crimson:
+  - **Light Mode:** Upgraded primary crimson to **Official Red Sox Scarlet** (`#C8102E` / PMS 186 C) with `#9B0A22` hover and soft ruby mist borders (`#f5b0ba`), eliminating rusty/salmon tones (contrast with white: **5.88:1**).
+  - **Dark Mode:** Deployed **Stadium Vivid Crimson** (`#E6193C` / hover `#ff2d55`, HSL 350°, 80%, 50%) paired with **Boston Navy Slate** (`#7aa2f7`), eliminating the Miami pastel look and providing an authentic, dignified Fenway night experience (contrast with white: **4.60:1**, exceeding WCAG AA).
+  - Updated the primary palette swatch dot in `public/js/api.js` to `#C8102E`.
+
+---
+
+## 14. Future Roadmap Notes
 - **Pinned Full-Stack Rust / WebAssembly Migration:** Evaluated a future 4-phase rewrite of the Cloudflare Pages Functions backend (and optional frontend interactivity) to Rust (`workers-rs` compiling to WebAssembly) for compile-time type safety, zero-dependency binary durability, and strict edge memory safety—kept as a guiding north star when designing new features and data models.
