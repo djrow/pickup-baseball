@@ -189,5 +189,12 @@
   "archive.title": "Lưu Trữ Các Trận Đấu Trước",
   "archive.subtitle": "Xem lại các trận đấu Chủ Nhật trước đây, đóng góp tình nguyện, sĩ số thực tế và thảo luận.",
   "archive.back_to_upcoming": "← Quay Lại Trận Đấu Sắp Tới",
-  "archive.no_games": "Chưa có trận đấu trước nào trong kho lưu trữ."
+  "archive.no_games": "Chưa có trận đấu trước nào trong kho lưu trữ.",
+  "event.additional_guests_label": "Bạn có dẫn thêm khách đi cùng không?",
+  "event.additional_guests_help": "Bạn bè hoặc người thân muốn chơi cùng? Hãy cho chúng tôi biết số lượng người đi cùng bạn.",
+  "event.guest_names_placeholder": "Tên người đi cùng (vd: Alex, Jordan)",
+  "event.just_me": "0 (Chỉ mình tôi)",
+  "event.guests_badge": "khách",
+  "event.guests_badge_plural": "khách",
+  "event.guests_prefix": "Khách đi cùng:"
 }

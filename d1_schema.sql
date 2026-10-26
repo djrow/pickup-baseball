@@ -73,6 +73,8 @@ CREATE TABLE IF NOT EXISTS attendees (
   status TEXT DEFAULT 'attending',
   gear_bringing TEXT,
   notes TEXT,
+  additional_guests INTEGER DEFAULT 0,
+  guest_names TEXT,
   management_token TEXT UNIQUE,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(event_id, email)

@@ -189,5 +189,12 @@
   "archive.title": "Անցած խաղերի արխիվ",
   "archive.subtitle": "Դիտեք անցած կիրակնօրյա խաղերը, կամավորների գրառումները, իրական հաճախելիությունը և քննարկումները:",
   "archive.back_to_upcoming": "← Վերադառնալ առաջիկա խաղերին",
-  "archive.no_games": "Արխիվում դեռևս անցած խաղեր չկան:"
+  "archive.no_games": "Արխիվում դեռևս անցած խաղեր չկան:",
+  "event.additional_guests_label": "Լրացուցիչ հյուրեր բերո՞ւմ եք:",
+  "event.additional_guests_help": "Ընկերները կամ ընտանիքը ցանկանո՞ւմ են խաղալ: Նշեք, թե քանի լրացուցիչ խաղացող է գալիս ձեզ հետ:",
+  "event.guest_names_placeholder": "Հյուրերի անունները (օր.՝ Ալեքਸ, Ջորդան)",
+  "event.just_me": "0 (Միայն ես)",
+  "event.guests_badge": "հյուր",
+  "event.guests_badge_plural": "հյուրեր",
+  "event.guests_prefix": "Հյուրեր:"
 }

@@ -79,6 +79,8 @@ function initDatabase() {
       status TEXT DEFAULT 'attending',
       gear_bringing TEXT,
       notes TEXT,
+      additional_guests INTEGER DEFAULT 0,
+      guest_names TEXT,
       management_token TEXT UNIQUE,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(event_id, email)
@@ -140,6 +142,15 @@ function initDatabase() {
   }
   if (!eventCols.includes('actual_attendance')) {
     db.exec('ALTER TABLE events ADD COLUMN actual_attendance INTEGER DEFAULT NULL');
+  }
+
+  // Migrate attendees table columns for additional guests
+  const attendeeCols = db.pragma('table_info(attendees)').map(c => c.name);
+  if (!attendeeCols.includes('additional_guests')) {
+    db.exec('ALTER TABLE attendees ADD COLUMN additional_guests INTEGER DEFAULT 0');
+  }
+  if (!attendeeCols.includes('guest_names')) {
+    db.exec('ALTER TABLE attendees ADD COLUMN guest_names TEXT');
   }
 
   // Ensure role synchronization

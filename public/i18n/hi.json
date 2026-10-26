@@ -189,5 +189,12 @@
   "archive.title": "पिछले मैचों का अभिलेखागार",
   "archive.subtitle": "पिछले रविवार के मैच, स्वयंसेवक रिकॉर्ड, उपस्थिति और मैदान चर्चाएं देखें।",
   "archive.back_to_upcoming": "← आगामी मैचों पर वापस जाएं",
-  "archive.no_games": "अभिलेखागार में अभी कोई पिछला मैच नहीं है।"
+  "archive.no_games": "अभिलेखागार में अभी कोई पिछला मैच नहीं है।",
+  "event.additional_guests_label": "क्या आप अतिरिक्त मेहमान ला रहे हैं?",
+  "event.additional_guests_help": "क्या कोई मित्र या परिवार खेलना चाहता है? हमें बताएं कि आपके साथ कितने अतिरिक्त खिलाड़ी आ रहे हैं।",
+  "event.guest_names_placeholder": "मेहमानों के नाम (उदा. एलेक्स, जॉर्डन)",
+  "event.just_me": "0 (केवल मैं)",
+  "event.guests_badge": "अतिथि",
+  "event.guests_badge_plural": "अतिथि",
+  "event.guests_prefix": "मेहमान:"
 }

@@ -189,5 +189,12 @@
   "archive.title": "過去の試合アーカイブ",
   "archive.subtitle": "過去の日曜試合、ボランティア記録、実参加人数、フィールド掲示板を閲覧できます。",
   "archive.back_to_upcoming": "← 今後の試合一覧に戻る",
-  "archive.no_games": "アーカイブにはまだ過去の試合がありません。"
+  "archive.no_games": "アーカイブにはまだ過去の試合がありません。",
+  "event.additional_guests_label": "同伴者はいますか？",
+  "event.additional_guests_help": "一緒にプレーしたい友人や家族はいらっしゃいますか？同伴人数をお知らせください。",
+  "event.guest_names_placeholder": "同伴者の名前（例：アレックス、ジョーダン）",
+  "event.just_me": "0（本人のみ）",
+  "event.guests_badge": "名の同伴",
+  "event.guests_badge_plural": "名の同伴",
+  "event.guests_prefix": "同伴者:"
 }

@@ -189,5 +189,12 @@
   "archive.title": "Archivo de Juegos Pasados",
   "archive.subtitle": "Explora juegos dominicales anteriores, registros de voluntarios, asistencia y debates de campo.",
   "archive.back_to_upcoming": "← Volver a Próximos Juegos",
-  "archive.no_games": "Aún no hay juegos anteriores en el archivo."
+  "archive.no_games": "Aún no hay juegos anteriores en el archivo.",
+  "event.additional_guests_label": "¿Traes invitados adicionales?",
+  "event.additional_guests_help": "¿Vienen amigos o familiares que quieran jugar? Cuéntanos cuántos jugadores extra vienen contigo.",
+  "event.guest_names_placeholder": "Nombres de invitados (ej. Alex, Jordan)",
+  "event.just_me": "0 (Solo yo)",
+  "event.guests_badge": "invitado",
+  "event.guests_badge_plural": "invitados",
+  "event.guests_prefix": "Invitados:"
 }

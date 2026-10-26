@@ -140,7 +140,7 @@ Play ball!
 /**
  * Send instant RSVP confirmation email
  */
-async function sendRsvpConfirmation({ email, name, event, dutyName, gearBringing, managementToken }) {
+async function sendRsvpConfirmation({ email, name, event, dutyName, gearBringing, additionalGuests, guestNames, managementToken }) {
   const manageLink = `${APP_URL}/event.html?id=${event.id}&token=${encodeURIComponent(managementToken || '')}`;
   const eventDateFormatted = new Date(event.event_date).toLocaleString('en-US', {
     weekday: 'long',
@@ -153,6 +153,9 @@ async function sendRsvpConfirmation({ email, name, event, dutyName, gearBringing
     timeZoneName: 'short'
   });
 
+  const guestsCount = Number(additionalGuests) || 0;
+  const totalParty = 1 + guestsCount;
+
   const subject = `Confirmed: You're playing in ${event.title} (${eventDateFormatted})`;
   const text = `Hi ${name},
 
@@ -161,7 +164,7 @@ You're confirmed for pickup baseball!
 Event: ${event.title}
 Date & Time: ${eventDateFormatted}
 Location: ${event.location}
-${dutyName ? `Duty Signed Up For: ${dutyName}\n` : ''}${gearBringing ? `Gear You're Bringing: ${gearBringing}\n` : ''}
+${guestsCount > 0 ? `Additional Guests: +${guestsCount}${guestNames ? ` (${guestNames})` : ''}\nTotal in Your Party: ${totalParty} players\n` : ''}${dutyName ? `Duty Signed Up For: ${dutyName}\n` : ''}${gearBringing ? `Gear You're Bringing: ${gearBringing}\n` : ''}
 Need to coordinate gear, check who else is coming, or change your RSVP?
 Visit the event page here:
 ${manageLink}
@@ -178,6 +181,7 @@ See you on the field!
       <div style="background: #f5f8f7; border-left: 4px solid #003831; border: 1px solid #dbe4e0; padding: 18px; margin: 20px 0; border-radius: 6px;">
         <p style="margin: 4px 0; color: #0c1f1a;"><strong>📅 When:</strong> ${eventDateFormatted}</p>
         <p style="margin: 4px 0; color: #0c1f1a;"><strong>📍 Where:</strong> ${event.location}</p>
+        ${guestsCount > 0 ? `<p style="margin: 4px 0; color: #003831;"><strong>👥 Additional Guests:</strong> +${guestsCount} ${guestNames ? `<em>(${guestNames})</em>` : ''} (${totalParty} players total in your party)</p>` : ''}
         ${event.location_url ? `<p style="margin: 4px 0;"><a href="${event.location_url}" target="_blank" style="color: #FD5A1E; font-weight: 700;">View Map / Directions ↗</a></p>` : ''}
         ${dutyName ? `<p style="margin: 6px 0 4px 0; color: #003831;"><strong>🛡️ Your Duty:</strong> <span style="background: #e6f0ed; padding: 2px 8px; border-radius: 4px; font-weight: 700;">${dutyName}</span></p>` : ''}
         ${gearBringing ? `<p style="margin: 4px 0; color: #0c1f1a;"><strong>🎒 Gear You're Bringing:</strong> <em>${gearBringing}</em></p>` : ''}
@@ -385,7 +389,7 @@ Play ball!
 /**
  * Send confirmation that attendee is placed on waitlist
  */
-async function sendWaitlistConfirmation({ email, name, event, waitlistPosition, managementToken }) {
+async function sendWaitlistConfirmation({ email, name, event, waitlistPosition, additionalGuests, guestNames, managementToken }) {
   const manageLink = `${APP_URL}/event.html?id=${event.id}&token=${encodeURIComponent(managementToken || '')}`;
   const eventDateFormatted = new Date(event.event_date).toLocaleString('en-US', {
     weekday: 'long',
@@ -398,14 +402,17 @@ async function sendWaitlistConfirmation({ email, name, event, waitlistPosition, 
     timeZoneName: 'short'
   });
 
+  const guestsCount = Number(additionalGuests) || 0;
+  const totalParty = 1 + guestsCount;
+
   const subject = `⏳ Waitlist Confirmed: ${event.title} (Position #${waitlistPosition})`;
   const text = `Hi ${name},
 
 The active playing roster for ${event.title} is currently full at ${event.max_players || 'maximum'} players.
 
-You are on the waitlist at position #${waitlistPosition}.
+You are on the waitlist at position #${waitlistPosition}${guestsCount > 0 ? ` with your party of ${totalParty} players` : ''}.
 
-If an active player cancels their RSVP, you will be automatically promoted to the playing roster and notified immediately by email!
+If active roster spots open up, you will be automatically promoted to the playing roster and notified immediately by email!
 
 Check your waitlist status and view event details here:
 ${manageLink}
@@ -420,6 +427,7 @@ ${manageLink}
       
       <div style="background: #f5f8f7; border-left: 4px solid #FD5A1E; border: 1px solid #dbe4e0; padding: 18px; margin: 20px 0; border-radius: 6px;">
         <p style="margin: 4px 0; color: #003831; font-size: 17px;"><strong>Your Waitlist Position:</strong> <span style="background: #FD5A1E; color: #fff; padding: 3px 10px; border-radius: 20px; font-weight: 700;">#${waitlistPosition}</span></p>
+        ${guestsCount > 0 ? `<p style="margin: 6px 0 4px 0; color: #0c1f1a;"><strong>👥 Party Size:</strong> ${totalParty} players (+${guestsCount} guests)</p>` : ''}
         <p style="margin: 8px 0 4px 0; color: #0c1f1a;"><strong>📅 Game Date:</strong> ${eventDateFormatted}</p>
         <p style="margin: 4px 0; color: #0c1f1a;"><strong>📍 Location:</strong> ${event.location}</p>
       </div>

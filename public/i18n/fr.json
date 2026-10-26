@@ -189,5 +189,12 @@
   "archive.title": "Archives des Matchs Passés",
   "archive.subtitle": "Parcourez les matchs du dimanche passés, les bénévoles, la participation et les discussions de terrain.",
   "archive.back_to_upcoming": "← Retour aux Matchs à Venir",
-  "archive.no_games": "Aucun match passé dans les archives pour l'instant."
+  "archive.no_games": "Aucun match passé dans les archives pour l'instant.",
+  "event.additional_guests_label": "Amenez-vous des invités supplémentaires ?",
+  "event.additional_guests_help": "Des amis ou des proches souhaitent jouer ? Indiquez combien de joueurs supplémentaires vous accompagnent.",
+  "event.guest_names_placeholder": "Noms des invités (ex. Alex, Jordan)",
+  "event.just_me": "0 (Moi seulement)",
+  "event.guests_badge": "invité",
+  "event.guests_badge_plural": "invités",
+  "event.guests_prefix": "Invités :"
 }

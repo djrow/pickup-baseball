@@ -189,5 +189,12 @@
   "archive.title": "أرشيف المباريات السابقة",
   "archive.subtitle": "تصفح مباريات الأحد السابقة وسجلات المتطوعين ونسب الحضور ومناقشات الملعب.",
   "archive.back_to_upcoming": "← العودة إلى المباريات القادمة",
-  "archive.no_games": "لا توجد مباريات سابقة في الأرشيف حتى الآن."
+  "archive.no_games": "لا توجد مباريات سابقة في الأرشيف حتى الآن.",
+  "event.additional_guests_label": "هل تحضر ضيوفاً إضافيين؟",
+  "event.additional_guests_help": "هل يرغب أصدقاء أو أفراد من عائلتك في اللعب؟ يرجى إخبارنا بعدد اللاعبين الإضافيين القادمين معك.",
+  "event.guest_names_placeholder": "أسماء الضيوف (مثل: أليكس، جوردان)",
+  "event.just_me": "0 (أنا فقط)",
+  "event.guests_badge": "ضيف",
+  "event.guests_badge_plural": "ضيوف",
+  "event.guests_prefix": "الضيوف:"
 }

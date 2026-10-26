@@ -189,5 +189,12 @@
   "archive.title": "Arquivo de Jogos Passados",
   "archive.subtitle": "Navegue pelos jogos de domingo passados, registros de voluntários, comparecimento e discussões.",
   "archive.back_to_upcoming": "← Voltar aos Próximos Jogos",
-  "archive.no_games": "Nenhum jogo anterior encontrado no arquivo ainda."
+  "archive.no_games": "Nenhum jogo anterior encontrado no arquivo ainda.",
+  "event.additional_guests_label": "Vai trazer convidados adicionais?",
+  "event.additional_guests_help": "Amigos ou familiares querem jogar? Diga-nos quantos jogadores extras virão com você.",
+  "event.guest_names_placeholder": "Nomes dos convidados (ex. Alex, Jordan)",
+  "event.just_me": "0 (Apenas eu)",
+  "event.guests_badge": "convidado",
+  "event.guests_badge_plural": "convidados",
+  "event.guests_prefix": "Convidados:"
 }

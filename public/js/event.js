@@ -330,6 +330,9 @@ function renderAttendeesRoster() {
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                   <div class="roster-name">
                     ${API.escapeHtml(a.name)}
+                    ${(a.additional_guests && a.additional_guests > 0)
+                      ? `<span class="badge badge-subtle" style="font-weight: 700; margin-left: 6px; font-size: 0.74rem; background: var(--as-green-subtle); color: var(--as-green); border: 1px solid rgba(0, 56, 49, 0.2);">+${a.additional_guests} ${a.additional_guests > 1 ? API.t('event.guests_badge_plural', 'guests') : API.t('event.guests_badge', 'guest')}</span>`
+                      : ''}
                     ${a.is_guest ? `<span style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal;">${API.escapeHtml(API.t('event.guest_tag'))}</span>` : ''}
                   </div>
                   <div style="display: flex; gap: 6px; align-items: center;">
@@ -337,6 +340,7 @@ function renderAttendeesRoster() {
                     ${canMod ? `<button type="button" onclick="removeRosterAttendee(${a.id})" title="Remove from roster" style="background:none;border:none;cursor:pointer;font-size:0.85rem;color:var(--danger);padding:0 2px;">🗑️</button>` : ''}
                   </div>
                 </div>
+                ${a.guest_names ? `<div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">👥 <em>${API.escapeHtml(API.t('event.guests_prefix', 'Guests:'))} ${API.escapeHtml(a.guest_names)}</em></div>` : ''}
                 ${a.bio ? `<div class="player-bio-text">"${API.escapeHtml(a.bio)}"</div>` : ''}
                 ${a.gear_bringing ? `<div class="roster-gear">🎒 <em>${API.escapeHtml(a.gear_bringing)}</em></div>` : ''}
                 ${translatedDuties ? `<div style="font-size: 0.78rem; color: var(--primary); font-weight: 600; margin-top: 2px;">🛡️ ${API.escapeHtml(translatedDuties)}</div>` : ''}
@@ -371,6 +375,9 @@ function renderAttendeesRoster() {
                   <div style="display: flex; justify-content: space-between; align-items: center;">
                     <div class="roster-name" style="font-size: 0.9rem;">
                       ${API.escapeHtml(w.name)}
+                      ${(w.additional_guests && w.additional_guests > 0)
+                        ? `<span class="badge badge-subtle" style="font-weight: 700; margin-left: 6px; font-size: 0.72rem; background: rgba(253, 90, 30, 0.12); color: var(--giants-orange); border: 1px solid rgba(253, 90, 30, 0.25);">+${w.additional_guests} ${w.additional_guests > 1 ? API.t('event.guests_badge_plural', 'guests') : API.t('event.guests_badge', 'guest')}</span>`
+                        : ''}
                       ${w.is_guest ? `<span style="font-size: 0.72rem; color: var(--text-muted); font-weight: normal;">${API.escapeHtml(API.t('event.guest_tag'))}</span>` : ''}
                     </div>
                     <div style="display: flex; gap: 6px; align-items: center;">
@@ -378,6 +385,7 @@ function renderAttendeesRoster() {
                       ${canMod ? `<button type="button" onclick="removeRosterAttendee(${w.id})" title="Remove from waitlist" style="background:none;border:none;cursor:pointer;font-size:0.85rem;color:var(--danger);padding:0 2px;">🗑️</button>` : ''}
                     </div>
                   </div>
+                  ${w.guest_names ? `<div style="font-size: 0.76rem; color: var(--text-muted); margin-top: 2px;">👥 <em>${API.escapeHtml(API.t('event.guests_prefix', 'Guests:'))} ${API.escapeHtml(w.guest_names)}</em></div>` : ''}
                 </div>
               </li>
             `;
@@ -537,6 +545,30 @@ async function setupRsvpState() {
   }
 
   const isFull = eventData.event.max_players && (eventData.attendees.length >= eventData.event.max_players);
+  const updateGuestsVisibility = () => {
+    const isAttending = document.querySelector('input[name="rsvp-status"]:checked')?.value === 'attending';
+    const guestGroup = document.getElementById('additional-guests-group');
+    if (guestGroup) {
+      guestGroup.style.display = isAttending ? 'block' : 'none';
+    }
+  };
+  document.querySelectorAll('input[name="rsvp-status"]').forEach(r => {
+    r.removeEventListener('change', updateGuestsVisibility);
+    r.addEventListener('change', updateGuestsVisibility);
+  });
+  updateGuestsVisibility();
+
+  const guestSelect = document.getElementById('rsvp-additional-guests');
+  const guestNamesInput = document.getElementById('rsvp-guest-names');
+  if (guestSelect && guestNamesInput && !guestSelect.dataset.listenerAttached) {
+    guestSelect.dataset.listenerAttached = 'true';
+    guestSelect.addEventListener('change', () => {
+      const count = parseInt(guestSelect.value, 10) || 0;
+      guestNamesInput.style.display = count > 0 ? 'block' : 'none';
+      if (count === 0) guestNamesInput.value = '';
+    });
+  }
+
   const submitBtn = rsvpForm ? rsvpForm.querySelector('button[type="submit"]') : null;
   const alertDiv = document.getElementById('rsvp-alert');
 
@@ -577,6 +609,18 @@ async function setupRsvpState() {
     if (myRsvp.name) document.getElementById('rsvp-name').value = myRsvp.name;
     if (myRsvp.email) document.getElementById('rsvp-email').value = myRsvp.email;
     if (myRsvp.gear_bringing) document.getElementById('rsvp-gear').value = myRsvp.gear_bringing;
+
+    if (myRsvp.additional_guests !== undefined && myRsvp.additional_guests !== null) {
+      const guestSelect = document.getElementById('rsvp-additional-guests');
+      if (guestSelect) {
+        guestSelect.value = String(myRsvp.additional_guests);
+        const guestNamesInput = document.getElementById('rsvp-guest-names');
+        if (guestNamesInput) {
+          guestNamesInput.style.display = myRsvp.additional_guests > 0 ? 'block' : 'none';
+          guestNamesInput.value = myRsvp.guest_names || '';
+        }
+      }
+    }
 
     const statusRadio = document.querySelector(`input[name="rsvp-status"][value="${myRsvp.status}"]`);
     if (statusRadio) statusRadio.checked = true;
@@ -999,6 +1043,8 @@ function setupRsvpForm() {
     const name = document.getElementById('rsvp-name').value;
     const email = document.getElementById('rsvp-email').value;
     const gear = document.getElementById('rsvp-gear').value;
+    const additionalGuests = parseInt(document.getElementById('rsvp-additional-guests')?.value || '0', 10) || 0;
+    const guestNames = (document.getElementById('rsvp-guest-names')?.value || '').trim();
 
     const checkedDuties = Array.from(document.querySelectorAll('input[name="duty_id"]:checked'))
       .map(cb => parseInt(cb.value, 10));
@@ -1008,6 +1054,8 @@ function setupRsvpForm() {
       name,
       email,
       gear_bringing: gear,
+      additional_guests: status === 'declined' ? 0 : additionalGuests,
+      guest_names: status === 'declined' ? '' : guestNames,
       duty_ids: checkedDuties,
       management_token: guestToken
     };

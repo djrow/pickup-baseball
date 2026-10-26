@@ -189,5 +189,12 @@
   "archive.title": "往期比赛档案",
   "archive.subtitle": "浏览往期周日比赛、志愿服务记录、实际到场人数和球场讨论。",
   "archive.back_to_upcoming": "← 返回即将举行的比赛",
-  "archive.no_games": "档案中暂无往期比赛。"
+  "archive.no_games": "档案中暂无往期比赛。",
+  "event.additional_guests_label": "是否有随行球友/嘉宾？",
+  "event.additional_guests_help": "有朋友或家人想一起打球吗？请告诉我们有多少额外球友与您同行。",
+  "event.guest_names_placeholder": "随行球友姓名（如：Alex、Jordan）",
+  "event.just_me": "0（仅限本人）",
+  "event.guests_badge": "位随行",
+  "event.guests_badge_plural": "位随行",
+  "event.guests_prefix": "随行人员:"
 }

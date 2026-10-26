@@ -189,5 +189,12 @@
   "archive.title": "ਪਿਛਲੇ ਮੈਚਾਂ ਦਾ ਆਰਕਾਈਵ",
   "archive.subtitle": "ਪਿਛਲੇ ਐਤਵਾਰ ਦੇ ਮੈਚ, ਵਲੰਟੀਅਰ ਰਿਕਾਰਡ, ਅਸਲ ਹਾਜ਼ਰੀ ਅਤੇ ਮੈਦਾਨੀ ਵਿਚਾਰ-ਵਟਾਂਦਰੇ ਵੇਖੋ।",
   "archive.back_to_upcoming": "← ਆਗਾਮੀ ਮੈਚਾਂ 'ਤੇ ਵਾਪਸ ਜਾਓ",
-  "archive.no_games": "ਆਰਕਾਈਵ ਵਿੱਚ ਅਜੇ ਕੋਈ ਪਿਛਲਾ ਮੈਚ ਨਹੀਂ ਹੈ।"
+  "archive.no_games": "ਆਰਕਾਈਵ ਵਿੱਚ ਅਜੇ ਕੋਈ ਪਿਛਲਾ ਮੈਚ ਨਹੀਂ ਹੈ।",
+  "event.additional_guests_label": "ਕੀ ਤੁਸੀਂ ਵਾਧੂ ਮਹਿਮਾਨ ਲਿਆ ਰਹੇ ਹੋ?",
+  "event.additional_guests_help": "ਕੀ ਕੋਈ ਦੋਸਤ ਜਾਂ ਪਰਿਵਾਰ ਖੇਡਣਾ ਚਾਹੁੰਦਾ ਹੈ? ਸਾਨੂੰ ਦੱਸੋ ਕਿ ਤੁਹਾਡੇ ਨਾਲ ਕਿੰਨੇ ਵਾਧੂ ਖਿਡਾਰੀ ਆ ਰਹੇ ਹਨ।",
+  "event.guest_names_placeholder": "ਮਹਿਮਾਨਾਂ ਦੇ ਨਾਮ (ਜਿਵੇਂ ਕਿ ਅਲੈਕਸ, ਜਾਰਡਨ)",
+  "event.just_me": "0 (ਸਿਰਫ ਮੈਂ)",
+  "event.guests_badge": "ਮਹਿਮਾਨ",
+  "event.guests_badge_plural": "ਮਹਿਮਾਨ",
+  "event.guests_prefix": "ਮਹਿਮਾਨ:"
 }

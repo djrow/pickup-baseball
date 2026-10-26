@@ -189,5 +189,12 @@
   "archive.title": "بایگانی بازی‌های گذشته",
   "archive.subtitle": "مرور بازی‌های یکشنبه گذشته، سوابق داوطلبان، آمار حضور واقعی و گفتگوهای زمین بازی.",
   "archive.back_to_upcoming": "← بازگشت به بازی‌های آینده",
-  "archive.no_games": "هنوز هیچ بازی گذشته‌ای در بایگانی وجود ندارد."
+  "archive.no_games": "هنوز هیچ بازی گذشته‌ای در بایگانی وجود ندارد.",
+  "event.additional_guests_label": "آیا مهمان اضافی به همراه دارید؟",
+  "event.additional_guests_help": "آیا دوستان یا خانواده می‌خواهند بازی کنند؟ تعداد بازیکنان اضافی همراه خود را مشخص کنید.",
+  "event.guest_names_placeholder": "نام مهمانان (مثلاً الکس، جردن)",
+  "event.just_me": "0 (فقط خودم)",
+  "event.guests_badge": "مهمان",
+  "event.guests_badge_plural": "مهمان",
+  "event.guests_prefix": "مهمانان:"
 }

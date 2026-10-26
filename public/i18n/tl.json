@@ -189,5 +189,12 @@
   "archive.title": "Archive ng mga Nakaraang Laro",
   "archive.subtitle": "Tingnan ang mga nakaraang laro ng Linggo, mga talaan ng boluntaryo, attendance, at talakayan.",
   "archive.back_to_upcoming": "← Bumalik sa mga Susunod na Laro",
-  "archive.no_games": "Wala pang mga nakaraang laro sa archive."
+  "archive.no_games": "Wala pang mga nakaraang laro sa archive.",
+  "event.additional_guests_label": "May kasama ka bang karagdagang bisita?",
+  "event.additional_guests_help": "Gusto bang maglaro ng mga kaibigan o pamilya? Ipaalam sa amin kung ilang karagdagang manlalaro ang sasama sa iyo.",
+  "event.guest_names_placeholder": "Pangalan ng mga bisita (hal. Alex, Jordan)",
+  "event.just_me": "0 (Ako lang)",
+  "event.guests_badge": "bisita",
+  "event.guests_badge_plural": "mga bisita",
+  "event.guests_prefix": "Mga Bisita:"
 }

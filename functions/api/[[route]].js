@@ -1,3 +1,15 @@
+let attendeesGuestColsEnsured = false;
+async function ensureAttendeesGuestColumns(db) {
+  if (attendeesGuestColsEnsured) return;
+  try {
+    await db.exec('ALTER TABLE attendees ADD COLUMN additional_guests INTEGER DEFAULT 0;');
+  } catch (e) {}
+  try {
+    await db.exec('ALTER TABLE attendees ADD COLUMN guest_names TEXT;');
+  } catch (e) {}
+  attendeesGuestColsEnsured = true;
+}
+
 import { Hono } from 'hono';
 import { handle } from 'hono/cloudflare-pages';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
@@ -290,7 +302,7 @@ Play ball!
   return dispatchEmail(env, { to: email, subject, text, html });
 }
 
-async function sendRsvpConfirmation(env, origin, { email, name, event, dutyName, gearBringing, managementToken }) {
+async function sendRsvpConfirmation(env, origin, { email, name, event, dutyName, gearBringing, additionalGuests, guestNames, managementToken }) {
   const appName = env.APP_NAME || 'Sunday Pickup Baseball';
   const manageLink = `${origin}/event.html?id=${event.id}&token=${encodeURIComponent(managementToken || '')}`;
   const eventDateFormatted = new Date(event.event_date).toLocaleString('en-US', {
@@ -307,9 +319,14 @@ async function sendRsvpConfirmation(env, origin, { email, name, event, dutyName,
   const safeName = escapeHtml(name);
   const safeTitle = escapeHtml(event.title);
   const safeLocation = escapeHtml(event.location);
+  const guestsCount = Number(additionalGuests) || 0;
+  const totalParty = 1 + guestsCount;
   const safeLocationUrl = sanitizeHttpUrl(event.location_url);
   const safeDutyName = escapeHtml(dutyName);
   const safeGear = escapeHtml(gearBringing);
+  const guestsCount = Number(additionalGuests) || 0;
+  const totalParty = 1 + guestsCount;
+  const safeGuestNames = escapeHtml(guestNames || '');
 
   const subject = `Confirmed: You're playing in ${event.title} (${eventDateFormatted})`;
   const text = `Hi ${name},
@@ -319,7 +336,7 @@ You're confirmed for pickup baseball!
 Event: ${event.title}
 Date & Time: ${eventDateFormatted}
 Location: ${event.location}
-${dutyName ? `Duty Signed Up For: ${dutyName}\n` : ''}${gearBringing ? `Gear You're Bringing: ${gearBringing}\n` : ''}
+${guestsCount > 0 ? `Additional Guests: +${guestsCount}${guestNames ? ` (${guestNames})` : ''}\nTotal in Your Party: ${totalParty} players\n` : ''}${dutyName ? `Duty Signed Up For: ${dutyName}\n` : ''}${gearBringing ? `Gear You're Bringing: ${gearBringing}\n` : ''}
 Need to coordinate gear, check who else is coming, or change your RSVP?
 Visit the event page here:
 ${manageLink}
@@ -336,6 +353,7 @@ See you on the field!
       <div style="background: #f5f8f7; border-left: 4px solid #003831; border: 1px solid #dbe4e0; padding: 18px; margin: 20px 0; border-radius: 6px;">
         <p style="margin: 4px 0; color: #0c1f1a;"><strong>📅 When:</strong> ${escapeHtml(eventDateFormatted)}</p>
         <p style="margin: 4px 0; color: #0c1f1a;"><strong>📍 Where:</strong> ${safeLocation}</p>
+        ${guestsCount > 0 ? `<p style="margin: 4px 0; color: #003831;"><strong>👥 Additional Guests:</strong> +${guestsCount} ${safeGuestNames ? `<em>(${safeGuestNames})</em>` : ''} (${totalParty} players total in your party)</p>` : ''}
         ${safeLocationUrl ? `<p style="margin: 4px 0;"><a href="${escapeHtml(safeLocationUrl)}" target="_blank" rel="noopener noreferrer" style="color: #FD5A1E; font-weight: 700;">View Map / Directions ↗</a></p>` : ''}
         ${safeDutyName ? `<p style="margin: 6px 0 4px 0; color: #003831;"><strong>🛡️ Your Duty:</strong> <span style="background: #e6f0ed; padding: 2px 8px; border-radius: 4px; font-weight: 700;">${safeDutyName}</span></p>` : ''}
         ${safeGear ? `<p style="margin: 4px 0; color: #0c1f1a;"><strong>🎒 Gear You're Bringing:</strong> <em>${safeGear}</em></p>` : ''}
@@ -552,7 +570,7 @@ Play ball!
   return dispatchEmail(env, { to: email, subject, text, html });
 }
 
-async function sendWaitlistConfirmation(env, origin, { email, name, event, waitlistPosition, managementToken }) {
+async function sendWaitlistConfirmation(env, origin, { email, name, event, waitlistPosition, additionalGuests, guestNames, managementToken }) {
   const appName = env.APP_NAME || 'Sunday Pickup Baseball';
   const manageLink = `${origin}/event.html?id=${event.id}&token=${encodeURIComponent(managementToken || '')}`;
   const eventDateFormatted = new Date(event.event_date).toLocaleString('en-US', {
@@ -575,7 +593,7 @@ async function sendWaitlistConfirmation(env, origin, { email, name, event, waitl
 
 The active playing roster for ${event.title} is currently full at ${event.max_players || 'maximum'} players.
 
-You are on the waitlist at position #${waitlistPosition}.
+You are on the waitlist at position #${waitlistPosition}${guestsCount > 0 ? ` with your party of ${totalParty} players` : ''}.
 
 If an active player cancels their RSVP, you will be automatically promoted to the playing roster and notified immediately by email!
 
@@ -592,6 +610,7 @@ ${manageLink}
       
       <div style="background: #f5f8f7; border-left: 4px solid #FD5A1E; border: 1px solid #dbe4e0; padding: 18px; margin: 20px 0; border-radius: 6px;">
         <p style="margin: 4px 0; color: #003831; font-size: 17px;"><strong>Your Waitlist Position:</strong> <span style="background: #FD5A1E; color: #fff; padding: 3px 10px; border-radius: 20px; font-weight: 700;">#${waitlistPosition}</span></p>
+        ${guestsCount > 0 ? `<p style="margin: 6px 0 4px 0; color: #0c1f1a;"><strong>👥 Party Size:</strong> ${totalParty} players (+${guestsCount} guests)</p>` : ''}
         <p style="margin: 8px 0 4px 0; color: #0c1f1a;"><strong>📅 Game Date:</strong> ${escapeHtml(eventDateFormatted)}</p>
         <p style="margin: 4px 0; color: #0c1f1a;"><strong>📍 Location:</strong> ${safeLocation}</p>
       </div>
@@ -1384,41 +1403,59 @@ app.post('/auth/logout', async (c) => {
 
 async function promoteNextWaitlistedPlayer(env, origin, eventId) {
   try {
+    await ensureAttendeesGuestColumns(env.DB);
     const event = await env.DB.prepare('SELECT * FROM events WHERE id = ?').bind(eventId).first();
     if (!event || event.status === 'rainout') return null;
 
-    const countRow = await env.DB.prepare(`
-      SELECT COUNT(*) as count FROM attendees WHERE event_id = ? AND status = 'attending'
-    `).bind(eventId).first();
-    const activeCount = countRow ? countRow.count : 0;
+    let firstPromoted = null;
+    while (true) {
+      const activeRow = await env.DB.prepare(`
+        SELECT COALESCE(SUM(1 + COALESCE(additional_guests, 0)), 0) as total
+        FROM attendees WHERE event_id = ? AND status = 'attending'
+      `).bind(eventId).first();
+      const activeCount = activeRow ? activeRow.total : 0;
 
-    if (event.max_players && activeCount >= event.max_players) {
-      return null;
+      if (event.max_players && activeCount >= event.max_players) {
+        break;
+      }
+
+      const availableSlots = event.max_players ? (event.max_players - activeCount) : 999;
+
+      const nextWaitlisted = await env.DB.prepare(`
+        SELECT * FROM attendees
+        WHERE event_id = ? AND status = 'waitlist'
+        ORDER BY created_at ASC, id ASC
+        LIMIT 1
+      `).bind(eventId).first();
+
+      if (!nextWaitlisted) break;
+
+      const partySize = 1 + (nextWaitlisted.additional_guests || 0);
+      if (event.max_players && partySize > availableSlots) {
+        break;
+      }
+
+      await env.DB.prepare(`
+        UPDATE attendees SET status = 'attending' WHERE id = ?
+      `).bind(nextWaitlisted.id).run();
+
+      if (!firstPromoted) firstPromoted = nextWaitlisted;
+
+      console.log(`[Waitlist Promotion:D1] Automatically promoted ${nextWaitlisted.name} (${nextWaitlisted.email}) for event ${eventId}`);
+
+      const p = sendWaitlistPromotionEmail(env, origin, {
+        email: nextWaitlisted.email,
+        name: nextWaitlisted.name,
+        event,
+        managementToken: nextWaitlisted.management_token
+      }).catch(e => console.error('[Waitlist Promotion Email Error]:', e));
+
+      if (env.executionCtx && env.executionCtx.waitUntil) {
+        env.executionCtx.waitUntil(p);
+      }
     }
 
-    const nextWaitlisted = await env.DB.prepare(`
-      SELECT * FROM attendees
-      WHERE event_id = ? AND status = 'waitlist'
-      ORDER BY created_at ASC, id ASC
-      LIMIT 1
-    `).bind(eventId).first();
-
-    if (!nextWaitlisted) return null;
-
-    await env.DB.prepare(`
-      UPDATE attendees SET status = 'attending' WHERE id = ?
-    `).bind(nextWaitlisted.id).run();
-
-    console.log(`[Waitlist Promotion:D1] Automatically promoted ${nextWaitlisted.name} (${nextWaitlisted.email}) for event ${eventId}`);
-
-    const p = sendWaitlistPromotionEmail(env, origin, {
-      email: nextWaitlisted.email,
-      name: nextWaitlisted.name,
-      event,
-      managementToken: nextWaitlisted.management_token
-    }).catch(e => console.error('[Waitlist Promotion Email Error]:', e));
-
-    return nextWaitlisted;
+    return firstPromoted;
   } catch (err) {
     console.error('[Waitlist Promotion Helper Error]:', err);
     return null;
@@ -1433,7 +1470,7 @@ app.get('/events', async (c) => {
 
     let query = `
       SELECT e.*,
-        (SELECT COUNT(*) FROM attendees a WHERE a.event_id = e.id AND a.status = 'attending') as attendee_count,
+        (SELECT COALESCE(SUM(1 + COALESCE(a.additional_guests, 0)), 0) FROM attendees a WHERE a.event_id = e.id AND a.status = 'attending') as attendee_count,
         (SELECT COUNT(*) FROM event_duties d WHERE d.event_id = e.id) as duty_count
       FROM events e
       WHERE e.status IN ('active', 'rainout')
@@ -1596,7 +1633,7 @@ app.get('/events/:id', async (c) => {
         ORDER BY d.sort_order ASC, d.id ASC
       `).bind(eventId),
       c.env.DB.prepare(`
-        SELECT a.id, a.name, a.status, a.gear_bringing, a.is_guest, a.created_at,
+        SELECT a.id, a.name, a.status, a.gear_bringing, a.additional_guests, a.guest_names, a.is_guest, a.created_at,
           u.bio,
           CASE WHEN u.avatar_url IS NOT NULL AND u.avatar_url != '' THEN '/api/users/' || u.id || '/avatar?v=' || length(u.avatar_url) ELSE '' END as avatar_url,
           (
@@ -1611,7 +1648,7 @@ app.get('/events/:id', async (c) => {
         ORDER BY a.created_at ASC
       `).bind(eventId),
       c.env.DB.prepare(`
-        SELECT a.id, a.name, a.status, a.is_guest, a.created_at,
+        SELECT a.id, a.name, a.status, a.additional_guests, a.guest_names, a.is_guest, a.created_at,
           u.bio,
           CASE WHEN u.avatar_url IS NOT NULL AND u.avatar_url != '' THEN '/api/users/' || u.id || '/avatar?v=' || length(u.avatar_url) ELSE '' END as avatar_url
         FROM attendees a
@@ -1634,7 +1671,7 @@ app.get('/events/:id', async (c) => {
     if (user) {
       batchStmts.push(
         c.env.DB.prepare(`
-          SELECT a.id, a.event_id, a.user_id, a.name, a.status, a.gear_bringing,
+          SELECT a.id, a.event_id, a.user_id, a.name, a.status, a.gear_bringing, a.additional_guests, a.guest_names,
             (SELECT json_group_array(duty_id) FROM duty_assignments WHERE attendee_id = a.id) as duty_ids
           FROM attendees a
           WHERE a.event_id = ? AND (a.user_id = ? OR a.email = ?)
@@ -1919,13 +1956,14 @@ app.delete('/events/:id', async (c) => {
 
 app.post('/events/:id/rsvp', async (c) => {
   try {
+    await ensureAttendeesGuestColumns(c.env.DB);
     const eventId = parseInt(c.req.param('id'), 10);
     const user = c.get('user');
 
     const clientIp = getClientIp(c);
-    const rsvpLimit = await checkRateLimit(c.env.DB, `rsvp_ip:${clientIp}`, 10, 600);
+    const rsvpLimit = await checkRateLimit(c.env.DB, `rsvp_ip:${clientIp}`, 15, 600);
     if (!rsvpLimit.allowed) {
-      return c.json({ error: 'Too many RSVP requests. Please wait a few minutes and try again.' }, 429);
+      return c.json({ error: 'Too many RSVPs submitted recently. Please wait a few minutes.' }, 429);
     }
 
     const event = await c.env.DB.prepare('SELECT * FROM events WHERE id = ?').bind(eventId).first();
@@ -1933,18 +1971,22 @@ app.post('/events/:id/rsvp', async (c) => {
       return c.json({ error: 'Event not found.' }, 404);
     }
 
-    let { name, email, gear_bringing, duty_ids, management_token, status, cf_turnstile_response } = await c.req.json();
+    let { name, email, gear_bringing, duty_ids, management_token, status, additional_guests, guest_names } = await c.req.json();
     status = status === 'declined' ? 'declined' : 'attending';
+
+    let additionalGuests = parseInt(additional_guests, 10);
+    if (isNaN(additionalGuests) || additionalGuests < 0) {
+      additionalGuests = 0;
+    } else if (additionalGuests > 20) {
+      additionalGuests = 20;
+    }
+    if (status === 'declined') {
+      additionalGuests = 0;
+    }
+    const cleanGuestNames = String(guest_names || '').trim().slice(0, 500);
 
     if (event.status === 'rainout' && status === 'attending') {
       return c.json({ error: 'RSVPs are closed because this game has been called for rain.' }, 400);
-    }
-
-    if (!user) {
-      const turnstileOk = await verifyTurnstileIfConfigured(c.env, cf_turnstile_response, clientIp);
-      if (!turnstileOk) {
-        return c.json({ error: 'Bot verification failed. Please refresh and try again.' }, 403);
-      }
     }
 
     const settingRow = await c.env.DB.prepare("SELECT value FROM app_settings WHERE key = 'require_login_to_rsvp'").first();
@@ -1990,6 +2032,27 @@ app.post('/events/:id/rsvp', async (c) => {
       'SELECT * FROM attendees WHERE event_id = ? AND email = ?'
     ).bind(eventId, email).first();
 
+    const wasAttending = existingAttendee && existingAttendee.status === 'attending';
+    let finalStatus = status;
+    let waitlistPos = 0;
+
+    const requestedPartySize = 1 + additionalGuests;
+
+    if (status === 'attending') {
+      if (event.max_players && event.max_players > 0) {
+        const activeRow = await c.env.DB.prepare(`
+          SELECT COALESCE(SUM(1 + COALESCE(additional_guests, 0)), 0) as total
+          FROM attendees
+          WHERE event_id = ? AND status = 'attending' AND email != ?
+        `).bind(eventId, email).first();
+
+        const currentOtherPlayers = activeRow ? activeRow.total : 0;
+        if (currentOtherPlayers + requestedPartySize > event.max_players) {
+          finalStatus = 'waitlist';
+        }
+      }
+    }
+
     let attendeeId;
     if (existingAttendee) {
       if (!user && existingAttendee.management_token && management_token && management_token !== existingAttendee.management_token) {
@@ -1998,19 +2061,19 @@ app.post('/events/:id/rsvp', async (c) => {
       attendeeId = existingAttendee.id;
       await c.env.DB.prepare(`
         UPDATE attendees
-        SET name = ?, status = ?, gear_bringing = ?, user_id = COALESCE(?, user_id), is_guest = ?
+        SET name = ?, status = ?, gear_bringing = ?, additional_guests = ?, guest_names = ?, user_id = COALESCE(?, user_id), is_guest = ?
         WHERE id = ?
-      `).bind(name, status, cleanGear, userId, isGuest, attendeeId).run();
+      `).bind(name, finalStatus, cleanGear, additionalGuests, cleanGuestNames, userId, isGuest, attendeeId).run();
     } else {
       const insertAttendeeRes = await c.env.DB.prepare(`
-        INSERT INTO attendees (event_id, user_id, name, email, is_guest, status, gear_bringing, management_token)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).bind(eventId, userId, name, email, isGuest, status, cleanGear, mgmtToken).run();
+        INSERT INTO attendees (event_id, user_id, name, email, is_guest, status, gear_bringing, additional_guests, guest_names, management_token)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(eventId, userId, name, email, isGuest, finalStatus, cleanGear, additionalGuests, cleanGuestNames, mgmtToken).run();
       attendeeId = insertAttendeeRes.meta.last_row_id;
     }
 
     const assignedDutyNames = [];
-    if (status === 'attending' && Array.isArray(duty_ids)) {
+    if (finalStatus === 'attending' && Array.isArray(duty_ids)) {
       await c.env.DB.prepare('DELETE FROM duty_assignments WHERE attendee_id = ?').bind(attendeeId).run();
 
       for (const dId of duty_ids) {
@@ -2035,11 +2098,48 @@ app.post('/events/:id/rsvp', async (c) => {
           }
         }
       }
-    } else if (status === 'declined') {
+    } else {
       await c.env.DB.prepare('DELETE FROM duty_assignments WHERE attendee_id = ?').bind(attendeeId).run();
     }
 
-    if (status === 'attending') {
+    // Automatic waitlist promotion on decline or reduced party size
+    if (wasAttending && (status === 'declined' || finalStatus === 'waitlist' || (existingAttendee.additional_guests || 0) > additionalGuests)) {
+      const origin = new URL(c.req.url).origin;
+      await promoteNextWaitlistedPlayer(c.env, origin, eventId);
+    }
+
+    if (finalStatus === 'waitlist') {
+      const posRow = await c.env.DB.prepare(`
+        SELECT COUNT(*) as count FROM attendees
+        WHERE event_id = ? AND status = 'waitlist' AND (created_at < (SELECT created_at FROM attendees WHERE id = ?) OR (created_at = (SELECT created_at FROM attendees WHERE id = ?) AND id <= ?))
+      `).bind(eventId, attendeeId, attendeeId, attendeeId).first();
+      waitlistPos = posRow ? posRow.count : 1;
+
+      const origin = new URL(c.req.url).origin;
+      const sendPromise = sendWaitlistConfirmation(c.env, origin, {
+        email,
+        name,
+        event,
+        waitlistPosition: waitlistPos,
+        additionalGuests,
+        guestNames: cleanGuestNames,
+        managementToken: existingAttendee ? (existingAttendee.management_token || mgmtToken) : mgmtToken
+      }).catch(e => console.error('[Waitlist Email Error]:', e));
+
+      if (c.executionCtx && c.executionCtx.waitUntil) {
+        c.executionCtx.waitUntil(sendPromise);
+      }
+
+      return c.json({
+        success: true,
+        status: 'waitlist',
+        waitlistPosition: waitlistPos,
+        managementToken: existingAttendee ? (existingAttendee.management_token || mgmtToken) : mgmtToken,
+        message: `The roster is full (${event.max_players} players), but you're #${waitlistPos} on the waitlist! If a spot opens up, you will be automatically promoted and notified immediately.`
+      });
+    }
+
+    if (finalStatus === 'attending') {
       const origin = new URL(c.req.url).origin;
       const sendPromise = sendRsvpConfirmation(c.env, origin, {
         email,
@@ -2047,21 +2147,28 @@ app.post('/events/:id/rsvp', async (c) => {
         event,
         dutyName: assignedDutyNames.join(', '),
         gearBringing: cleanGear,
+        additionalGuests,
+        guestNames: cleanGuestNames,
         managementToken: existingAttendee ? (existingAttendee.management_token || mgmtToken) : mgmtToken
       }).catch(e => console.error('[RSVP Email Error]:', e));
 
       if (c.executionCtx && c.executionCtx.waitUntil) {
         c.executionCtx.waitUntil(sendPromise);
       }
+
+      return c.json({
+        success: true,
+        status: 'attending',
+        managementToken: existingAttendee ? (existingAttendee.management_token || mgmtToken) : mgmtToken,
+        message: `You're on the roster! A confirmation email has been sent to ${email}.`
+      });
     }
 
     return c.json({
       success: true,
-      status,
+      status: 'declined',
       managementToken: existingAttendee ? (existingAttendee.management_token || mgmtToken) : mgmtToken,
-      message: status === 'attending'
-        ? `You're on the roster! A confirmation email has been sent to ${email}.`
-        : 'Your RSVP has been cancelled.'
+      message: 'Your RSVP has been cancelled.'
     });
   } catch (err) {
     console.error('[RSVP] Error updating RSVP:', err);

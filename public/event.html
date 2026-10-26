@@ -178,6 +178,25 @@
             </div>
           </div>
 
+          <!-- Additional Guests -->
+          <div class="form-group" id="additional-guests-group">
+            <label for="rsvp-additional-guests" data-i18n="event.additional_guests_label">Bringing Additional Guests?</label>
+            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+              <select id="rsvp-additional-guests" style="min-width: 170px; padding: 8px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border); font-size: 0.92rem; font-weight: 600; background: var(--bg-card); color: var(--text-main);">
+                <option value="0" data-i18n="event.just_me">0 (Just me)</option>
+                <option value="1">+1 Guest</option>
+                <option value="2">+2 Guests</option>
+                <option value="3">+3 Guests</option>
+                <option value="4">+4 Guests</option>
+                <option value="5">+5 Guests</option>
+              </select>
+              <input type="text" id="rsvp-guest-names" placeholder="Guest names (e.g. Alex, Jordan)" style="flex: 1; min-width: 200px; display: none;" data-i18n-placeholder="event.guest_names_placeholder">
+            </div>
+            <div class="help-text" data-i18n="event.additional_guests_help">
+              Each guest reserves an active roster slot so we have an accurate head count for game day.
+            </div>
+          </div>
+
           <!-- Gear Coordination -->
           <div class="form-group" id="gear-group">
             <label for="rsvp-gear" data-i18n="event.gear_label">Gear You Can Bring (Optional)</label>

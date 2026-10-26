@@ -189,5 +189,12 @@
   "archive.title": "Архив прошедших игр",
   "archive.subtitle": "Просматривайте прошедшие воскресные игры, записи волонтеров, явку и обсуждения.",
   "archive.back_to_upcoming": "← Назад к предстоящим играм",
-  "archive.no_games": "В архиве пока нет прошедших игр."
+  "archive.no_games": "В архиве пока нет прошедших игр.",
+  "event.additional_guests_label": "Берете с собой дополнительных гостей?",
+  "event.additional_guests_help": "Друзья или семья хотят сыграть? Укажите, сколько дополнительных игроков придет с вами.",
+  "event.guest_names_placeholder": "Имена гостей (например, Алекс, Джордан)",
+  "event.just_me": "0 (Только я)",
+  "event.guests_badge": "гость",
+  "event.guests_badge_plural": "гостей",
+  "event.guests_prefix": "Гости:"
 }
