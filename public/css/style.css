@@ -274,55 +274,55 @@
 
 /* 3. Fenway Crimson & Navy (Boston Red Sox) */
 [data-color-theme="fenway-red"] {
-  --hero-bg: linear-gradient(140deg, #06111e 0%, #0C2340 50%, #63171e 100%);
-  --hero-glow: radial-gradient(circle at 50% 0%, rgba(189, 48, 57, 0.3) 0%, transparent 62%);
-  --hero-border: #BD3039;
-  --hero-subtitle-bg: rgba(189, 48, 57, 0.35);
-  --hero-subtitle-text: #fee2e2;
+  --hero-bg: linear-gradient(140deg, #06101c 0%, #0C2340 52%, #580d19 100%);
+  --hero-glow: radial-gradient(circle at 50% 0%, rgba(200, 16, 46, 0.35) 0%, transparent 62%);
+  --hero-border: #C8102E;
+  --hero-subtitle-bg: rgba(200, 16, 46, 0.35);
+  --hero-subtitle-text: #ffe4e8;
   --as-green: #0C2340;
-  --as-green-hover: #061426;
+  --as-green-hover: #07172b;
   --as-green-light: #18365d;
-  --as-green-subtle: #edf2f8;
-  --as-green-border: #c2d2e4;
+  --as-green-subtle: #edf3f9;
+  --as-green-border: #bfd3e8;
 
-  --giants-orange: #BD3039;
-  --giants-orange-hover: #9c242c;
-  --giants-orange-light: #fdf0f1;
-  --giants-orange-border: #f8c8cb;
-  --giants-orange-glow: rgba(189, 48, 57, 0.22);
+  --giants-orange: #C8102E;
+  --giants-orange-hover: #9B0A22;
+  --giants-orange-light: #fdf2f4;
+  --giants-orange-border: #f5b0ba;
+  --giants-orange-glow: rgba(200, 16, 46, 0.26);
 
-  --bg-page: #fbf8f8;
+  --bg-page: #faf6f7;
   --bg-card: #ffffff;
-  --bg-subtle: #fcf9f9;
-  --border: #e4dede;
-  --text-main: #1e0f11;
-  --text-muted: #695255;
+  --bg-subtle: #fbf8f9;
+  --border: #e2d9dc;
+  --text-main: #160a0d;
+  --text-muted: #5e4c51;
 }
 [data-color-theme="fenway-red"][data-theme="dark"] {
-  --hero-bg: linear-gradient(140deg, #0c0507 0%, #1f0b0f 50%, #3d1217 100%);
-  --hero-glow: radial-gradient(circle at 50% 0%, rgba(248, 113, 113, 0.35) 0%, transparent 62%);
-  --hero-border: #f87171;
-  --hero-subtitle-bg: rgba(248, 113, 113, 0.22);
-  --hero-subtitle-text: #fef2f2;
-  --as-green: #38bdf8;
-  --as-green-hover: #7dd3fc;
-  --as-green-light: #0369a1;
-  --as-green-subtle: rgba(56, 189, 248, 0.14);
-  --as-green-border: rgba(56, 189, 248, 0.32);
+  --hero-bg: linear-gradient(140deg, #050b14 0%, #0d1e36 50%, #3d0c15 100%);
+  --hero-glow: radial-gradient(circle at 50% 0%, rgba(230, 25, 60, 0.38) 0%, transparent 62%);
+  --hero-border: #E6193C;
+  --hero-subtitle-bg: rgba(230, 25, 60, 0.24);
+  --hero-subtitle-text: #ffe4e8;
+  --as-green: #7aa2f7;
+  --as-green-hover: #9bbbf9;
+  --as-green-light: #1e3a8a;
+  --as-green-subtle: rgba(122, 162, 247, 0.14);
+  --as-green-border: rgba(122, 162, 247, 0.32);
 
-  --giants-orange: #f87171;
-  --giants-orange-hover: #fca5a5;
-  --giants-orange-light: rgba(239, 68, 68, 0.16);
-  --giants-orange-border: rgba(239, 68, 68, 0.38);
-  --giants-orange-glow: rgba(239, 68, 68, 0.35);
+  --giants-orange: #E6193C;
+  --giants-orange-hover: #ff2d55;
+  --giants-orange-light: rgba(230, 25, 60, 0.18);
+  --giants-orange-border: rgba(230, 25, 60, 0.42);
+  --giants-orange-glow: rgba(230, 25, 60, 0.38);
 
-  --bg-page: #13090b;
-  --bg-card: #1e1014;
-  --bg-subtle: #2c171c;
-  --bg-input: #150b0e;
-  --border: #3f2128;
-  --text-main: #fef2f2;
-  --text-muted: #b99ca1;
+  --bg-page: #0f0709;
+  --bg-card: #1a0e12;
+  --bg-subtle: #25141a;
+  --bg-input: #12090c;
+  --border: #3d1c25;
+  --text-main: #fff0f3;
+  --text-muted: #c2a3ab;
 }
 
 /* 4. Wrigley Royal & Red (Chicago Cubs) */
