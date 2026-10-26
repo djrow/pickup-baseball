@@ -432,6 +432,41 @@
   --text-muted: #94a3b8;
 }
 
+/* White Sox Dark Mode Button Readability (Authentic South Side dark charcoal buttons with silver borders & crisp white text) */
+[data-color-theme="white-sox"][data-theme="dark"] .btn-primary,
+[data-color-theme="white-sox"][data-theme="dark"] .btn-login {
+  background-color: #262b32 !important;
+  color: #ffffff !important;
+  border: 1.5px solid #64748b !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45) !important;
+}
+
+[data-color-theme="white-sox"][data-theme="dark"] .btn-primary:hover,
+[data-color-theme="white-sox"][data-theme="dark"] .btn-login:hover {
+  background-color: #38404b !important;
+  border-color: #cbd5e1 !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.65) !important;
+}
+
+[data-color-theme="white-sox"][data-theme="dark"] .btn-primary:active,
+[data-color-theme="white-sox"][data-theme="dark"] .btn-login:active {
+  background-color: #1e2227 !important;
+  transform: translateY(1px);
+}
+
+[data-color-theme="white-sox"][data-theme="dark"] #hero-actions .btn-outline {
+  background: #181c22 !important;
+  color: #f1f5f9 !important;
+  border: 1.5px solid #64748b !important;
+}
+
+[data-color-theme="white-sox"][data-theme="dark"] #hero-actions .btn-outline:hover {
+  background: #2b333e !important;
+  border-color: #cbd5e1 !important;
+  color: #ffffff !important;
+}
+
 /* 7. Glove Navy & Harvest Gold (Milwaukee Brewers) */
 [data-color-theme="milwaukee-brewers"] {
   --hero-bg: linear-gradient(140deg, #060e18 0%, #0f2240 50%, #1a3866 100%);
