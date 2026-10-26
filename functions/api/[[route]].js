@@ -1990,6 +1990,9 @@ app.post('/events/:id/rsvp', async (c) => {
 
     let attendeeId;
     if (existingAttendee) {
+      if (!user && existingAttendee.management_token && management_token && management_token !== existingAttendee.management_token) {
+        return c.json({ error: 'Invalid management token provided for this RSVP.' }, 403);
+      }
       attendeeId = existingAttendee.id;
       await c.env.DB.prepare(`
         UPDATE attendees
@@ -2163,10 +2166,19 @@ app.delete('/events/:id/attendees/:attendeeId', async (c) => {
   try {
     const eventId = parseInt(c.req.param('id'), 10);
     const attendeeId = parseInt(c.req.param('attendeeId'), 10);
+    const attendee = await c.env.DB.prepare('SELECT * FROM attendees WHERE id = ? AND event_id = ?').bind(attendeeId, eventId).first();
+    if (!attendee) {
+      return c.json({ error: 'Attendee not found.' }, 404);
+    }
+    const wasAttending = attendee.status === 'attending';
     await c.env.DB.batch([
       c.env.DB.prepare('DELETE FROM duty_assignments WHERE attendee_id = ?').bind(attendeeId),
       c.env.DB.prepare('DELETE FROM attendees WHERE id = ? AND event_id = ?').bind(attendeeId, eventId)
     ]);
+    if (wasAttending) {
+      const origin = new URL(c.req.url).origin;
+      await promoteNextWaitlistedPlayer(c.env, origin, eventId);
+    }
     return c.json({ success: true, message: 'Player removed from roster.' });
   } catch (err) {
     console.error('[RSVP] Error removing attendee:', err);

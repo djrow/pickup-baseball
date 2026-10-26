@@ -354,6 +354,9 @@ router.post('/:id/rsvp', optionalUser, async (req, res) => {
 
     let attendeeId;
     if (existingAttendee) {
+      if (!req.user && existingAttendee.management_token && management_token && management_token !== existingAttendee.management_token) {
+        return res.status(403).json({ error: 'Invalid management token provided for this RSVP.' });
+      }
       attendeeId = existingAttendee.id;
       db.prepare(`
         UPDATE attendees
