@@ -199,7 +199,7 @@ function renderEventDetails() {
     if (rosterLabel) rosterLabel.textContent = API.t('event.actual_turnout', 'Actual Turnout');
     document.getElementById('event-attendee-count').innerHTML = `
       <div style="display: flex; flex-direction: column;">
-        <span style="color: var(--as-green); font-size: 1.25rem; font-weight: 800; display: inline-flex; align-items: center; gap: 6px;">
+        <span style="color: var(--secondary); font-size: 1.25rem; font-weight: 800; display: inline-flex; align-items: center; gap: 6px;">
           <span>⚾</span> <span>${API.escapeHtml(API.t('home.players_played', { count: ev.actual_attendance }))}</span>
         </span>
         <span style="font-size: 0.78rem; font-weight: 500; color: var(--text-muted); margin-top: 2px;">
@@ -252,8 +252,8 @@ function renderDutiesBoard() {
     const statusHtml = isRainout
       ? `<span style="color: var(--text-muted);"><em>Duties excused due to rainout${names ? ` (${names})` : ''}</em></span>`
       : (isFilled
-        ? `<span style="color: var(--as-green);">${API.escapeHtml(API.t('event.duty_volunteers'))} <strong>${names || API.t('event.duty_covered', 'Covered')}</strong></span>`
-        : `<span style="color: var(--giants-orange);">${API.escapeHtml(API.t('event.duty_needs_count', { count: d.slots_needed - (d.assigned_players || []).length }))}${names ? ` (${names})` : ''}</span>`
+        ? `<span style="color: var(--secondary);">${API.escapeHtml(API.t('event.duty_volunteers'))} <strong>${names || API.t('event.duty_covered', 'Covered')}</strong></span>`
+        : `<span style="color: var(--primary);">${API.escapeHtml(API.t('event.duty_needs_count', { count: d.slots_needed - (d.assigned_players || []).length }))}${names ? ` (${names})` : ''}</span>`
       );
 
     return `
@@ -335,7 +335,7 @@ function renderAttendeesRoster() {
                   <div class="roster-name">
                     ${API.escapeHtml(a.name)}
                     ${(a.additional_guests && a.additional_guests > 0)
-                      ? `<span class="badge badge-subtle" style="font-weight: 700; margin-left: 6px; font-size: 0.74rem; background: var(--as-green-subtle); color: var(--as-green); border: 1px solid rgba(0, 56, 49, 0.2);">+${a.additional_guests} ${a.additional_guests > 1 ? API.t('event.guests_badge_plural', 'guests') : API.t('event.guests_badge', 'guest')}</span>`
+                      ? `<span class="badge badge-subtle" style="font-weight: 700; margin-left: 6px; font-size: 0.74rem; background: var(--secondary-light); color: var(--secondary); border: 1px solid var(--border);">+${a.additional_guests} ${a.additional_guests > 1 ? API.t('event.guests_badge_plural', 'guests') : API.t('event.guests_badge', 'guest')}</span>`
                       : ''}
                     ${a.is_guest ? `<span style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal;">${API.escapeHtml(API.t('event.guest_tag'))}</span>` : ''}
                   </div>
@@ -380,7 +380,7 @@ function renderAttendeesRoster() {
                     <div class="roster-name" style="font-size: 0.9rem;">
                       ${API.escapeHtml(w.name)}
                       ${(w.additional_guests && w.additional_guests > 0)
-                        ? `<span class="badge badge-subtle" style="font-weight: 700; margin-left: 6px; font-size: 0.72rem; background: rgba(253, 90, 30, 0.12); color: var(--giants-orange); border: 1px solid rgba(253, 90, 30, 0.25);">+${w.additional_guests} ${w.additional_guests > 1 ? API.t('event.guests_badge_plural', 'guests') : API.t('event.guests_badge', 'guest')}</span>`
+                        ? `<span class="badge badge-subtle" style="font-weight: 700; margin-left: 6px; font-size: 0.72rem; background: var(--primary-light); color: var(--primary); border: 1px solid var(--border);">+${w.additional_guests} ${w.additional_guests > 1 ? API.t('event.guests_badge_plural', 'guests') : API.t('event.guests_badge', 'guest')}</span>`
                         : ''}
                       ${w.is_guest ? `<span style="font-size: 0.72rem; color: var(--text-muted); font-weight: normal;">${API.escapeHtml(API.t('event.guest_tag'))}</span>` : ''}
                     </div>
@@ -591,7 +591,7 @@ async function setupRsvpState() {
       rsvpBadge.innerHTML = `<span class="badge badge-orange">⏳ ${API.escapeHtml(API.t('event.waitlist_pos_badge', { pos: myPos }))}</span>`;
       if (alertDiv) {
         alertDiv.innerHTML = `
-          <div class="alert alert-info" style="border-left: 4px solid var(--giants-orange); background: var(--bg-subtle); margin-bottom: 16px;">
+          <div class="alert alert-info" style="border-left: 4px solid var(--primary); border-inline-start: 4px solid var(--primary); background: var(--bg-subtle); margin-bottom: 16px;">
             <strong>⏳ You're #${myPos} on the Waitlist</strong>
             <p style="margin: 4px 0 0 0; font-size: 0.88rem; color: var(--text-muted);">
               The playing roster is currently at capacity. If a confirmed player cancels, you will automatically be promoted to the active roster and notified by email!
@@ -647,7 +647,7 @@ async function setupRsvpState() {
     }
     if (isFull && alertDiv) {
       alertDiv.innerHTML = `
-        <div class="alert alert-warning" style="border-left: 4px solid var(--giants-orange); background: var(--bg-subtle); margin-bottom: 16px;">
+        <div class="alert alert-warning" style="border-left: 4px solid var(--primary); border-inline-start: 4px solid var(--primary); background: var(--bg-subtle); margin-bottom: 16px;">
           <strong>⚠️ Active Roster Full (${eventData.attendees.length}/${eventData.event.max_players})</strong>
           <p style="margin: 4px 0 0 0; font-size: 0.88rem; color: var(--text-muted);">
             The confirmed roster has reached capacity. RSVP below to join the waitlist — you will be automatically promoted as soon as a player cancels!
@@ -683,7 +683,7 @@ async function setupRsvpState() {
           <strong style="color: ${disabledAttr ? 'var(--text-muted)' : 'var(--text-main)'};">${API.escapeHtml(translatedTitle)}</strong>
           <div style="font-size: 0.78rem; color: var(--text-muted);">${API.escapeHtml(translatedDesc)}</div>
           ${disabledAttr
-            ? `<div style="font-size: 0.76rem; color: var(--as-green); font-weight: 700; margin-top: 3px;">${API.escapeHtml(API.t('event.duty_covered_by', { names: volunteerNames || 'Volunteer' }))}</div>`
+            ? `<div style="font-size: 0.76rem; color: var(--secondary); font-weight: 700; margin-top: 3px;">${API.escapeHtml(API.t('event.duty_covered_by', { names: volunteerNames || 'Volunteer' }))}</div>`
             : (volunteerNames ? `<div style="font-size: 0.76rem; color: var(--primary); font-weight: 600; margin-top: 3px;">${API.escapeHtml(API.t('event.duty_current_open', { names: volunteerNames, count: d.slots_needed - d.assigned_players.length }))}</div>` : '')
           }
         </div>
@@ -808,12 +808,12 @@ function renderOrganizerRainoutPanel() {
       </div>
       <div class="panel-body">
         ${ev.rainout_email_sent ? `
-          <div style="font-size: 0.85rem; color: #16a34a; margin-bottom: 14px; font-weight: 700;">
+          <div style="font-size: 0.85rem; color: var(--success); margin-bottom: 14px; font-weight: 700;">
             ✓ Confirmed attendees have been notified via rainout email.
           </div>
         ` : `
-          <div style="background: #fffbeb; border: 1px solid #fef3c7; padding: 10px 14px; border-radius: 6px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
-            <span style="font-size: 0.85rem; color: #92400e; font-weight: 600;">
+          <div style="background: var(--bg-subtle); border: 1px solid var(--border); border-left: 4px solid var(--primary); padding: 10px 14px; border-radius: 6px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <span style="font-size: 0.85rem; color: var(--text-main); font-weight: 600;">
               ⚠️ Confirmed attendees have not been emailed about this rainout yet.
             </span>
             <button type="button" id="btn-send-rainout-email" class="btn btn-outline btn-sm" style="font-weight: 700;">
@@ -922,11 +922,11 @@ function renderOrganizerAttendancePanel() {
 
   if (ev.actual_attendance != null) {
     panel.innerHTML = `
-      <div style="background: var(--bg-card); border: 1.5px solid var(--border); border-left: 4px solid var(--as-green); border-radius: 8px; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; box-shadow: var(--shadow-sm);">
+      <div style="background: var(--bg-card); border: 1.5px solid var(--border); border-left: 4px solid var(--secondary); border-inline-start: 4px solid var(--secondary); border-radius: 8px; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; box-shadow: var(--shadow-sm);">
         <div style="display: flex; align-items: center; gap: 10px;">
           <span style="font-size: 1.5rem;">⚾</span>
           <div>
-            <div style="font-weight: 700; color: var(--as-green); font-size: 0.98rem;">
+            <div style="font-weight: 700; color: var(--secondary); font-size: 0.98rem;">
               Game Turnout: ${ev.actual_attendance} Players Played
             </div>
             <div style="font-size: 0.8rem; color: var(--text-muted);">

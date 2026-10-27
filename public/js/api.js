@@ -438,6 +438,36 @@ const API = {
     return 'bay-area';
   },
 
+  updateThemeColorMeta() {
+    if (typeof document === 'undefined') return;
+    const isDark = this.getEffectiveTheme() === 'dark';
+    let bg = '#ffffff';
+    if (isDark) {
+      try {
+        const computed = getComputedStyle(document.documentElement).getPropertyValue('--bg-card').trim();
+        bg = computed || '#11221e';
+      } catch (e) {
+        bg = '#11221e';
+      }
+    } else {
+      try {
+        const computed = getComputedStyle(document.documentElement).getPropertyValue('--bg-card').trim();
+        bg = computed || '#ffffff';
+      } catch (e) {
+        bg = '#ffffff';
+      }
+    }
+    const metaTags = document.querySelectorAll('meta[name="theme-color"]');
+    if (metaTags.length > 0) {
+      metaTags.forEach(m => m.setAttribute('content', bg));
+    } else {
+      const meta = document.createElement('meta');
+      meta.name = 'theme-color';
+      meta.content = bg;
+      document.head.appendChild(meta);
+    }
+  },
+
   applyColorTheme(colorThemeId) {
     const valid = this.COLOR_THEMES.some(t => t.id === colorThemeId) ? colorThemeId : 'bay-area';
     if (valid === 'bay-area') {
@@ -445,6 +475,7 @@ const API = {
     } else {
       document.documentElement.setAttribute('data-color-theme', valid);
     }
+    this.updateThemeColorMeta();
   },
 
   setColorTheme(themeId) {
@@ -462,6 +493,7 @@ const API = {
     } else {
       document.documentElement.removeAttribute('data-theme');
     }
+    this.updateThemeColorMeta();
   },
 
   setThemeMode(mode) {
@@ -484,6 +516,7 @@ const API = {
     // 1. Immediately apply color theme and light/dark theme attributes
     this.applyColorTheme(this.getColorTheme());
     this.applyTheme(this.getEffectiveTheme());
+    this.updateThemeColorMeta();
 
     // 2. Listen to system preference changes if in system mode
     if (typeof window !== 'undefined' && window.matchMedia) {

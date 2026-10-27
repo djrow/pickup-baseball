@@ -525,7 +525,7 @@ function setupUserManagementScreen(currentUser) {
         if (res.error) {
           settingsAlert.innerHTML = `<span style="font-size: 0.8rem; color: var(--danger);">${API.escapeHtml(res.error)}</span>`;
         } else {
-          settingsAlert.innerHTML = `<span style="font-size: 0.8rem; color: var(--as-green); font-weight: 700;">✓ Policy updated: ${isChecked ? 'Sign-in required for all RSVPs (Guests disabled)' : 'Guest RSVPs permitted'}</span>`;
+          settingsAlert.innerHTML = `<span style="font-size: 0.8rem; color: var(--success); font-weight: 700;">✓ Policy updated: ${isChecked ? 'Sign-in required for all RSVPs (Guests disabled)' : 'Guest RSVPs permitted'}</span>`;
         }
       } catch (err) {
         settingsAlert.innerHTML = '<span style="font-size: 0.8rem; color: var(--danger);">Failed to save policy.</span>';

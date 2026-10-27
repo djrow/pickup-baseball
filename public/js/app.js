@@ -144,7 +144,7 @@ function renderFeaturedGame(ev, container) {
   const statusBadge = isRainout
     ? `<span class="badge badge-rainout">🌧️ ${API.escapeHtml(API.t('event.rained_out_badge', 'Rained Out'))}</span>`
     : `<span class="badge badge-orange">${API.escapeHtml(API.t('home.next_sunday_badge'))}</span>`;
-  const borderTopColor = isRainout ? '#38bdf8' : 'var(--giants-orange)';
+  const borderTopColor = isRainout ? '#38bdf8' : 'var(--primary)';
   const rainoutNoteHtml = isRainout && ev.rainout_note
     ? `<div style="background: rgba(56, 189, 248, 0.12); border-left: 3px solid #38bdf8; padding: 8px 12px; border-radius: 4px; margin-top: 10px; font-size: 0.9rem; color: var(--text-main);"><strong>🌧️ Rainout Update:</strong> <em>"${API.escapeHtml(ev.rainout_note)}"</em></div>`
     : '';
@@ -155,7 +155,7 @@ function renderFeaturedGame(ev, container) {
         <div>
           ${statusBadge}
           ${myRsvpBadge}
-          <h2 style="font-size: 1.7rem; color: var(--as-green); margin-top: 8px;">
+          <h2 style="font-size: 1.7rem; color: var(--secondary); margin-top: 8px;">
             ${API.escapeHtml(translatedTitle)}
           </h2>
           ${rainoutNoteHtml}
@@ -179,7 +179,7 @@ function renderFeaturedGame(ev, container) {
             <div class="meta-label">${API.escapeHtml(API.t('home.field_location'))}</div>
             <div class="meta-value">
               ${API.escapeHtml(ev.location)}
-              ${API.safeUrl(ev.location_url) ? `<a href="${API.escapeHtml(API.safeUrl(ev.location_url))}" target="_blank" rel="noopener noreferrer" style="color: var(--giants-orange); font-size: 0.82rem; font-weight: 700; display: block;">${API.escapeHtml(API.t('home.map_link'))}</a>` : ''}
+              ${API.safeUrl(ev.location_url) ? `<a href="${API.escapeHtml(API.safeUrl(ev.location_url))}" target="_blank" rel="noopener noreferrer" style="color: var(--primary); font-size: 0.82rem; font-weight: 700; display: block;">${API.escapeHtml(API.t('home.map_link'))}</a>` : ''}
             </div>
           </div>
         </div>
@@ -187,7 +187,7 @@ function renderFeaturedGame(ev, container) {
           <span class="meta-icon">${API.icon('users', 20)}</span>
           <div>
             <div class="meta-label">${ev.actual_attendance != null ? API.escapeHtml(API.t('event.actual_turnout')) : API.escapeHtml(API.t('home.confirmed_players'))}</div>
-            <div class="meta-value" style="color: var(--as-green); font-size: 1.15rem; font-weight: 800;">
+            <div class="meta-value" style="color: var(--secondary); font-size: 1.15rem; font-weight: 800;">
               ${ev.actual_attendance != null
                 ? `${API.escapeHtml(API.t('home.players_played', { count: ev.actual_attendance }))} <span style="font-size: 0.78rem; font-weight: normal; color: var(--text-muted);">${API.escapeHtml(API.t('home.online_rsvps_sub', { count: ev.attendee_count }))}</span>`
                 : API.escapeHtml(API.t('home.players_count', { count: ev.attendee_count }))}
@@ -251,10 +251,10 @@ function renderGamesList(events, container) {
                 </a>
               </h3>
               <p style="font-size: 0.88rem; font-weight: 600; color: var(--text-main); margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
-                <span style="color: var(--as-green);">${API.icon('calendar', 15)}</span> ${dateFormatted}
+                <span style="color: var(--secondary);">${API.icon('calendar', 15)}</span> ${dateFormatted}
               </p>
               <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
-                <span style="color: var(--giants-orange);">${API.icon('pin', 15)}</span> ${API.escapeHtml(ev.location)}
+                <span style="color: var(--primary);">${API.icon('pin', 15)}</span> ${API.escapeHtml(ev.location)}
               </p>
             </div>
 
@@ -264,7 +264,7 @@ function renderGamesList(events, container) {
                 : (ev.actual_attendance != null
                   ? `
                     <div style="display: flex; flex-direction: column;">
-                      <span style="font-weight: 800; color: var(--as-green); font-size: 0.95rem; display: inline-flex; align-items: center; gap: 5px; font-variant-numeric: tabular-nums;">
+                      <span style="font-weight: 800; color: var(--secondary); font-size: 0.95rem; display: inline-flex; align-items: center; gap: 5px; font-variant-numeric: tabular-nums;">
                         <span>⚾</span> <span>${API.escapeHtml(API.t('home.players_played', { count: ev.actual_attendance }))}</span>
                       </span>
                       <span style="font-size: 0.74rem; color: var(--text-muted); font-weight: 500;">

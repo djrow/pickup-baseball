@@ -18,7 +18,7 @@ test('Progressive Web App (PWA) Verification Suite', async (t) => {
     assert.ok(manifest.short_name, 'Manifest must have a short_name');
     assert.equal(manifest.display, 'standalone', 'Manifest display must be standalone');
     assert.ok(manifest.start_url, 'Manifest must have a start_url');
-    assert.equal(manifest.theme_color, '#003831', 'Manifest theme_color must be A\'s forest green (#003831)');
+    assert.equal(manifest.theme_color, '#ffffff', 'Manifest theme_color must be light theme background (#ffffff)');
     assert.ok(Array.isArray(manifest.icons) && manifest.icons.length >= 2, 'Manifest must declare at least 2 icons');
 
     const sizes = manifest.icons.map(i => i.sizes);
@@ -106,7 +106,7 @@ test('Progressive Web App (PWA) Verification Suite', async (t) => {
       const html = fs.readFileSync(filePath, 'utf8');
 
       assert.ok(html.includes('rel="manifest" href="/manifest.webmanifest"'), `${file} must link manifest`);
-      assert.ok(html.includes('name="theme-color" content="#003831"'), `${file} must declare theme-color`);
+      assert.ok(html.includes('name="theme-color" content="#ffffff"'), `${file} must declare theme-color`);
       assert.ok(html.includes('rel="apple-touch-icon"'), `${file} must declare apple-touch-icon`);
     }
   });

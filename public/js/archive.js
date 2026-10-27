@@ -121,10 +121,10 @@ function renderArchiveList(events, container) {
                 </a>
               </h3>
               <p style="font-size: 0.88rem; font-weight: 600; color: var(--text-main); margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
-                <span style="color: var(--as-green);">${API.icon('calendar', 15)}</span> ${dateFormatted}
+                <span style="color: var(--secondary);">${API.icon('calendar', 15)}</span> ${dateFormatted}
               </p>
               <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
-                <span style="color: var(--giants-orange);">${API.icon('pin', 15)}</span> ${API.escapeHtml(ev.location)}
+                <span style="color: var(--primary);">${API.icon('pin', 15)}</span> ${API.escapeHtml(ev.location)}
               </p>
             </div>
 
@@ -134,7 +134,7 @@ function renderArchiveList(events, container) {
                 : (ev.actual_attendance != null
                   ? `
                     <div style="display: flex; flex-direction: column;">
-                      <span style="font-weight: 800; color: var(--as-green); font-size: 0.95rem; display: inline-flex; align-items: center; gap: 5px; font-variant-numeric: tabular-nums;">
+                      <span style="font-weight: 800; color: var(--secondary); font-size: 0.95rem; display: inline-flex; align-items: center; gap: 5px; font-variant-numeric: tabular-nums;">
                         <span>⚾</span> <span>${API.escapeHtml(API.t('home.players_played', { count: ev.actual_attendance }))}</span>
                       </span>
                       <span style="font-size: 0.74rem; color: var(--text-muted); font-weight: 500;">
