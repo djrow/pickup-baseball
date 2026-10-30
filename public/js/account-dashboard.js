@@ -15,7 +15,7 @@ window.initAuthenticatedDashboard = function(user) {
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
           <div>
             <h3 style="color: var(--secondary); font-size: 1.25rem; margin: 0;">⚾ Schedule &amp; Post a Game</h3>
-            <p style="color: var(--text-muted); font-size: 0.85rem; margin: 2px 0 0 0;">Create a game page for community players to RSVP and reserve equipment duties.</p>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin: 2px 0 0 0;">Create a game page for community players to RSVP and reserve equipment tasks.</p>
           </div>
           <button type="button" id="quick-sunday-btn" class="btn btn-primary btn-sm" style="font-weight: 700;">
             ⚡ 1-Click: Post Next Sunday @ Noon
@@ -83,7 +83,7 @@ window.initAuthenticatedDashboard = function(user) {
               <button type="submit" id="submit-event-btn" class="btn btn-primary">
                 Publish Game &amp; Roster
               </button>
-              <span style="font-size: 0.8rem; color: var(--text-muted);">Standard duties template (bases, balls, gear) will be attached automatically.</span>
+              <span style="font-size: 0.8rem; color: var(--text-muted);">Standard tasks template (bases, balls, gear) will be attached automatically.</span>
             </div>
           </form>
         </div>
@@ -93,7 +93,7 @@ window.initAuthenticatedDashboard = function(user) {
     html += `
       <div id="player-notice-section" style="background: var(--bg-subtle); border: 1px dashed var(--border); border-radius: var(--radius-sm); padding: 16px; text-align: center;">
         <p style="margin: 0; font-size: 0.88rem; color: var(--text-muted);">
-          ℹ️ You have a standard <strong>Player</strong> account. You can RSVP for games, volunteer for game-day duties, and participate in event discussions.
+          ℹ️ You have a standard <strong>Player</strong> account. You can RSVP for games, volunteer for game-day tasks, and participate in event discussions.
           To schedule new games, ask a community administrator to grant your account the <strong>Organizer</strong> role.
         </p>
       </div>
@@ -153,7 +153,7 @@ window.initAuthenticatedDashboard = function(user) {
             Require Email Sign-In to RSVP (Disable Anonymous Guest RSVPs)
           </label>
           <p style="margin: 0 0 0 28px; font-size: 0.85rem; color: var(--text-muted);">
-            When checked, players must verify their email and sign in before they can RSVP or claim volunteer equipment duties. Anonymous guest RSVP forms will be disabled.
+            When checked, players must verify their email and sign in before they can RSVP or claim volunteer equipment tasks. Anonymous guest RSVP forms will be disabled.
           </p>
           <div id="settings-alert" style="margin-top: 8px;"></div>
         </div>

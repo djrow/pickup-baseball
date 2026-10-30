@@ -156,7 +156,7 @@ function setupTaskBuilder() {
   });
 
   clearBtn.addEventListener('click', () => {
-    if (confirm('Remove all tasks from this game? Players will only RSVP without volunteer duty signups.')) {
+    if (confirm('Remove all tasks from this game? Players will only RSVP without volunteer task signups.')) {
       builderDuties = [];
       renderTaskBuilder();
     }
@@ -379,7 +379,7 @@ function setupQuickSundayButton() {
           title: `Sunday Pickup Baseball (${dateFormatted})`,
           event_date: nextSundayIso,
           location: location.trim(),
-          description: 'Weekly community pickup baseball game. All skill levels welcome! Bring your glove and enthusiasm. Please check off any gear you can share or duties you can take.',
+          description: 'Weekly community pickup baseball game. All skill levels welcome! Bring your glove and enthusiasm. Please check off any gear you can share or tasks you can take.',
           use_default_duties: true
         })
       });

@@ -158,7 +158,7 @@ function renderEventDetails() {
           <div class="rainout-icon">🌧️</div>
           <div class="rainout-content">
             <h2 class="rainout-title">Game Called Due to Rain &amp; Wet Field Conditions</h2>
-            <p class="rainout-subtitle">This game has been called for weather. Volunteer duties and gear commitments are excused for today.</p>
+            <p class="rainout-subtitle">This game has been called for weather. Volunteer tasks and gear commitments are excused for today.</p>
             ${ev.rainout_note ? `
               <div class="rainout-note-box">
                 <span class="rainout-note-label">Organizer Update:</span>
@@ -233,7 +233,7 @@ function renderDutiesBoard() {
   const duties = eventData.duties || [];
 
   if (duties.length === 0) {
-    grid.innerHTML = '<p style="color: var(--text-muted);">No duties assigned to this event.</p>';
+    grid.innerHTML = '<p style="color: var(--text-muted);">No tasks assigned to this event.</p>';
     return;
   }
 
@@ -250,7 +250,7 @@ function renderDutiesBoard() {
       : `<span class="badge ${isFilled ? 'badge-green' : 'badge-orange'}">${API.escapeHtml(isFilled ? API.t('event.duty_filled') : API.t('event.duty_needed'))}</span>`;
 
     const statusHtml = isRainout
-      ? `<span style="color: var(--text-muted);"><em>Duties excused due to rainout${names ? ` (${names})` : ''}</em></span>`
+      ? `<span style="color: var(--text-muted);"><em>Tasks excused due to rainout${names ? ` (${names})` : ''}</em></span>`
       : (isFilled
         ? `<span style="color: var(--secondary);">${API.escapeHtml(API.t('event.duty_volunteers'))} <strong>${names || API.t('event.duty_covered', 'Covered')}</strong></span>`
         : `<span style="color: var(--primary);">${API.escapeHtml(API.t('event.duty_needs_count', { count: d.slots_needed - (d.assigned_players || []).length }))}${names ? ` (${names})` : ''}</span>`
@@ -583,7 +583,7 @@ async function setupRsvpState() {
       rsvpBadge.innerHTML = `<span class="badge badge-green">${API.escapeHtml(API.t('home.you_are_attending'))}</span>`;
       if (submitBtn) {
         submitBtn.removeAttribute('data-i18n');
-        submitBtn.innerText = API.t('event.update_rsvp_btn', 'Update RSVP & Duties');
+        submitBtn.innerText = API.t('event.update_rsvp_btn', 'Update RSVP & Tasks');
       }
     } else if (myRsvp.status === 'waitlist') {
       const waitlist = eventData.waitlist || [];
@@ -607,7 +607,7 @@ async function setupRsvpState() {
       rsvpBadge.innerHTML = `<span class="badge badge-gray">${API.escapeHtml(API.t('event.cant_make_it_badge'))}</span>`;
       if (submitBtn) {
         submitBtn.removeAttribute('data-i18n');
-        submitBtn.innerText = isFull ? API.t('event.join_waitlist_btn', 'Join Waitlist (Auto-Promote)') : API.t('event.submit_rsvp_btn', 'Confirm RSVP & Duty Signup');
+        submitBtn.innerText = isFull ? API.t('event.join_waitlist_btn', 'Join Waitlist (Auto-Promote)') : API.t('event.submit_rsvp_btn', 'Confirm RSVP & Task Signup');
       }
     }
 
@@ -642,7 +642,7 @@ async function setupRsvpState() {
       if (isFull) {
         submitBtn.innerText = API.t('event.join_waitlist_btn', 'Join Waitlist (Auto-Promote)');
       } else {
-        submitBtn.innerText = API.t('event.submit_rsvp_btn', 'Confirm RSVP & Duty Signup');
+        submitBtn.innerText = API.t('event.submit_rsvp_btn', 'Confirm RSVP & Task Signup');
       }
     }
     if (isFull && alertDiv) {
@@ -703,13 +703,13 @@ async function setupRsvpState() {
         rainoutNotice.className = 'alert alert-rainout';
         rainoutNotice.innerHTML = `
           <strong>🌧️ Game Called for Rain</strong>
-          <p style="margin: 6px 0 0 0;">You were on the confirmed roster for this game. Your volunteer duty and gear commitments are excused for today. Stay tuned to the discussion board below for updates!</p>
+          <p style="margin: 6px 0 0 0;">You were on the confirmed roster for this game. Your volunteer task and gear commitments are excused for today. Stay tuned to the discussion board below for updates!</p>
         `;
       } else {
         rainoutNotice.className = 'alert alert-rainout';
         rainoutNotice.innerHTML = `
           <strong>🌧️ RSVPs Closed</strong>
-          <p style="margin: 6px 0 0 0;">RSVPs and duty signups are closed because this game has been called for rain.</p>
+          <p style="margin: 6px 0 0 0;">RSVPs and task signups are closed because this game has been called for rain.</p>
         `;
       }
     }
@@ -803,7 +803,7 @@ function renderOrganizerRainoutPanel() {
         <span class="panel-icon">🌧️</span>
         <div>
           <h3 class="panel-title" style="color: #ef4444;">Game is Currently Marked as Rained Out</h3>
-          <p class="panel-desc">RSVPs and duty commitments are excused. You can send the email to attendees now or reopen the game if conditions improve.</p>
+          <p class="panel-desc">RSVPs and task commitments are excused. You can send the email to attendees now or reopen the game if conditions improve.</p>
         </div>
       </div>
       <div class="panel-body">
@@ -1072,7 +1072,7 @@ function setupRsvpForm() {
       if (res.error) {
         alertBox.innerHTML = `<div class="alert alert-error">${API.escapeHtml(res.error)}</div>`;
         submitBtn.disabled = false;
-        submitBtn.textContent = 'Confirm RSVP & Duty Signup';
+        submitBtn.textContent = 'Confirm RSVP & Task Signup';
       } else {
         alertBox.innerHTML = `<div class="alert alert-success">${API.escapeHtml(res.message)}</div>`;
         if (res.managementToken) {
@@ -1080,14 +1080,14 @@ function setupRsvpForm() {
           try { localStorage.setItem('guest_token_' + eventId, guestToken); } catch (e) {}
         }
         submitBtn.disabled = false;
-        submitBtn.textContent = 'Update RSVP & Duties';
-        // Reload details to reflect new headcount and duty assignments
+        submitBtn.textContent = 'Update RSVP & Tasks';
+        // Reload details to reflect new headcount and task assignments
         await loadEventData();
       }
     } catch (err) {
       alertBox.innerHTML = '<div class="alert alert-error">Network error. Please try again.</div>';
       submitBtn.disabled = false;
-      submitBtn.textContent = 'Confirm RSVP & Duty Signup';
+      submitBtn.textContent = 'Confirm RSVP & Task Signup';
     }
   });
 }

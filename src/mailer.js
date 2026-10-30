@@ -164,7 +164,7 @@ You're confirmed for pickup baseball!
 Event: ${event.title}
 Date & Time: ${eventDateFormatted}
 Location: ${event.location}
-${guestsCount > 0 ? `Additional Guests: +${guestsCount}${guestNames ? ` (${guestNames})` : ''}\nTotal in Your Party: ${totalParty} players\n` : ''}${dutyName ? `Duty Signed Up For: ${dutyName}\n` : ''}${gearBringing ? `Gear You're Bringing: ${gearBringing}\n` : ''}
+${guestsCount > 0 ? `Additional Guests: +${guestsCount}${guestNames ? ` (${guestNames})` : ''}\nTotal in Your Party: ${totalParty} players\n` : ''}${dutyName ? `Task Signed Up For: ${dutyName}\n` : ''}${gearBringing ? `Gear You're Bringing: ${gearBringing}\n` : ''}
 Need to coordinate gear, check who else is coming, or change your RSVP?
 Visit the event page here:
 ${manageLink}
@@ -183,7 +183,7 @@ See you on the field!
         <p style="margin: 4px 0; color: #0c1f1a;"><strong>📍 Where:</strong> ${event.location}</p>
         ${guestsCount > 0 ? `<p style="margin: 4px 0; color: #003831;"><strong>👥 Additional Guests:</strong> +${guestsCount} ${guestNames ? `<em>(${guestNames})</em>` : ''} (${totalParty} players total in your party)</p>` : ''}
         ${event.location_url ? `<p style="margin: 4px 0;"><a href="${event.location_url}" target="_blank" style="color: #FD5A1E; font-weight: 700;">View Map / Directions ↗</a></p>` : ''}
-        ${dutyName ? `<p style="margin: 6px 0 4px 0; color: #003831;"><strong>🛡️ Your Duty:</strong> <span style="background: #e6f0ed; padding: 2px 8px; border-radius: 4px; font-weight: 700;">${dutyName}</span></p>` : ''}
+        ${dutyName ? `<p style="margin: 6px 0 4px 0; color: #003831;"><strong>🛡️ Your Task:</strong> <span style="background: #e6f0ed; padding: 2px 8px; border-radius: 4px; font-weight: 700;">${dutyName}</span></p>` : ''}
         ${gearBringing ? `<p style="margin: 4px 0; color: #0c1f1a;"><strong>🎒 Gear You're Bringing:</strong> <em>${gearBringing}</em></p>` : ''}
       </div>
 
@@ -226,7 +226,7 @@ Event: ${event.title}
 When: ${eventDateFormatted}
 Where: ${event.location}
 Current Count: ${totalAttendees} players confirmed
-${dutyName ? `Your Assigned Duty: ${dutyName}\n` : ''}${gearBringing ? `Gear You Promised: ${gearBringing}\n` : ''}
+${dutyName ? `Your Assigned Task: ${dutyName}\n` : ''}${gearBringing ? `Gear You Promised: ${gearBringing}\n` : ''}
 Check the discussion board for weather updates and carpools, or update your attendance:
 ${manageLink}
 
@@ -243,7 +243,7 @@ See you tomorrow at the field!
         <p style="margin: 4px 0; color: #0c1f1a;"><strong>📅 When:</strong> ${eventDateFormatted}</p>
         <p style="margin: 4px 0; color: #0c1f1a;"><strong>📍 Where:</strong> ${event.location}</p>
         <p style="margin: 4px 0; color: #003831;"><strong>👥 Headcount:</strong> <strong style="font-size: 16px; color: #FD5A1E;">${totalAttendees}</strong> players confirmed</p>
-        ${dutyName ? `<p style="margin: 6px 0 4px 0; color: #003831;"><strong>🛡️ Your Duty:</strong> <span style="background: #e6f0ed; padding: 2px 8px; border-radius: 4px; font-weight: 700;">${dutyName}</span></p>` : ''}
+        ${dutyName ? `<p style="margin: 6px 0 4px 0; color: #003831;"><strong>🛡️ Your Task:</strong> <span style="background: #e6f0ed; padding: 2px 8px; border-radius: 4px; font-weight: 700;">${dutyName}</span></p>` : ''}
         ${gearBringing ? `<p style="margin: 4px 0; color: #0c1f1a;"><strong>🎒 Gear You Promised:</strong> <em>${gearBringing}</em></p>` : ''}
       </div>
 
@@ -285,7 +285,7 @@ Today's pickup baseball game has been called due to rain and field conditions.
 Event: ${event.title}
 Originally Scheduled: ${eventDateFormatted}
 Location: ${event.location}
-${note ? `Organizer Note:\n"${note}"\n\n` : ''}Any volunteer duty or equipment commitments you made for today are excused.
+${note ? `Organizer Note:\n"${note}"\n\n` : ''}Any volunteer task or equipment commitments you made for today are excused.
 
 The discussion board on the event page remains open if you'd like to chat with the team or coordinate alternate plans:
 ${manageLink}
@@ -308,7 +308,7 @@ Stay dry, and see you on the field next Sunday!
       <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; margin: 18px 0; border-radius: 6px;">
         <p style="margin: 3px 0; color: #64748b; font-size: 14px;"><strong>📅 Scheduled:</strong> ${eventDateFormatted}</p>
         <p style="margin: 3px 0; color: #64748b; font-size: 14px;"><strong>📍 Field:</strong> ${event.location}</p>
-        <p style="margin: 6px 0 0; color: #0284c7; font-weight: 600; font-size: 14px;">✓ Your duty and equipment commitments are excused for today.</p>
+        <p style="margin: 6px 0 0; color: #0284c7; font-weight: 600; font-size: 14px;">✓ Your task and equipment commitments are excused for today.</p>
       </div>
 
       <p style="text-align: center; margin: 26px 0;">
@@ -377,7 +377,7 @@ Play ball!
 
       <p style="text-align: center; margin: 26px 0;">
         <a href="${manageLink}" style="background: #FD5A1E; color: #ffffff; padding: 13px 26px; border-radius: 6px; text-decoration: none; font-weight: 700; font-size: 15px; display: inline-block;">
-          Check Live Roster & Duties →
+          Check Live Roster & Tasks →
         </a>
       </p>
     </div>
@@ -474,7 +474,7 @@ ${event.title}
 Date & Time: ${eventDateFormatted}
 Location: ${event.location}
 
-Visit the event page to coordinate gear, sign up for duties, or view the roster:
+Visit the event page to coordinate gear, sign up for tasks, or view the roster:
 ${manageLink}
 
 If your plans have changed and you can no longer attend, please cancel your RSVP on the page so another player from the waitlist can take your spot.
@@ -497,7 +497,7 @@ See you on the field!
 
       <p style="text-align: center; margin: 28px 0;">
         <a href="${manageLink}" style="background: #FD5A1E; color: #ffffff; padding: 13px 26px; border-radius: 6px; text-decoration: none; font-weight: 700; font-size: 15px; display: inline-block;">
-          View Roster & Sign Up for Duties →
+          View Roster & Sign Up for Tasks →
         </a>
       </p>
 

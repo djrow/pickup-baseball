@@ -4,7 +4,7 @@ import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 
 const app = new Hono().basePath('/api');
 
-const CURRENT_APP_VERSION = '18';
+const CURRENT_APP_VERSION = '19';
 
 app.use('*', async (c, next) => {
   await next();
@@ -330,7 +330,7 @@ You're confirmed for pickup baseball!
 Event: ${event.title}
 Date & Time: ${eventDateFormatted}
 Location: ${event.location}
-${dutyName ? `Duty Signed Up For: ${dutyName}\n` : ''}${gearBringing ? `Gear You're Bringing: ${gearBringing}\n` : ''}
+${dutyName ? `Task Signed Up For: ${dutyName}\n` : ''}${gearBringing ? `Gear You're Bringing: ${gearBringing}\n` : ''}
 Need to coordinate gear, check who else is coming, or change your RSVP?
 Visit the event page here:
 ${manageLink}
@@ -348,7 +348,7 @@ See you on the field!
         <p style="margin: 4px 0; color: #0c1f1a;"><strong>📅 When:</strong> ${escapeHtml(eventDateFormatted)}</p>
         <p style="margin: 4px 0; color: #0c1f1a;"><strong>📍 Where:</strong> ${safeLocation}</p>
         ${safeLocationUrl ? `<p style="margin: 4px 0;"><a href="${escapeHtml(safeLocationUrl)}" target="_blank" rel="noopener noreferrer" style="color: #FD5A1E; font-weight: 700;">View Map / Directions ↗</a></p>` : ''}
-        ${safeDutyName ? `<p style="margin: 6px 0 4px 0; color: #003831;"><strong>🛡️ Your Duty:</strong> <span style="background: #e6f0ed; padding: 2px 8px; border-radius: 4px; font-weight: 700;">${safeDutyName}</span></p>` : ''}
+        ${safeDutyName ? `<p style="margin: 6px 0 4px 0; color: #003831;"><strong>🛡️ Your Task:</strong> <span style="background: #e6f0ed; padding: 2px 8px; border-radius: 4px; font-weight: 700;">${safeDutyName}</span></p>` : ''}
         ${safeGear ? `<p style="margin: 4px 0; color: #0c1f1a;"><strong>🎒 Gear You're Bringing:</strong> <em>${safeGear}</em></p>` : ''}
       </div>
 
@@ -396,7 +396,7 @@ This is a reminder that you're signed up for pickup baseball:
 Event: ${event.title}
 Date & Time: ${eventDateFormatted}
 Location: ${event.location}
-${dutyName ? `Your Assigned Duty: ${dutyName}\n` : ''}${gearBringing ? `Gear You're Bringing: ${gearBringing}\n` : ''}Total Players Confirmed: ${totalAttendees}
+${dutyName ? `Your Assigned Task: ${dutyName}\n` : ''}${gearBringing ? `Gear You're Bringing: ${gearBringing}\n` : ''}Total Players Confirmed: ${totalAttendees}
 
 View details & live roster:
 ${manageLink}
@@ -415,7 +415,7 @@ See you on the diamond!
         <p style="margin: 4px 0; color: #0c1f1a;"><strong>📍 Where:</strong> ${safeLocation}</p>
         <p style="margin: 4px 0; color: #0c1f1a;"><strong>👥 Confirmed Players:</strong> ${Number(totalAttendees) || 0}</p>
         ${safeLocationUrl ? `<p style="margin: 4px 0;"><a href="${escapeHtml(safeLocationUrl)}" target="_blank" rel="noopener noreferrer" style="color: #FD5A1E; font-weight: 700;">View Map / Directions ↗</a></p>` : ''}
-        ${safeDutyName ? `<p style="margin: 6px 0 4px 0; color: #003831;"><strong>🛡️ Your Duty:</strong> <span style="background: #e6f0ed; padding: 2px 8px; border-radius: 4px; font-weight: 700;">${safeDutyName}</span></p>` : ''}
+        ${safeDutyName ? `<p style="margin: 6px 0 4px 0; color: #003831;"><strong>🛡️ Your Task:</strong> <span style="background: #e6f0ed; padding: 2px 8px; border-radius: 4px; font-weight: 700;">${safeDutyName}</span></p>` : ''}
         ${safeGear ? `<p style="margin: 4px 0; color: #0c1f1a;"><strong>🎒 Gear You're Bringing:</strong> <em>${safeGear}</em></p>` : ''}
       </div>
 
@@ -458,7 +458,7 @@ Today's pickup baseball game has been called due to rain and field conditions.
 Event: ${event.title}
 Originally Scheduled: ${eventDateFormatted}
 Location: ${event.location}
-${note ? `Organizer Note:\n"${note}"\n\n` : ''}Any volunteer duty or equipment commitments you made for today are excused.
+${note ? `Organizer Note:\n"${note}"\n\n` : ''}Any volunteer task or equipment commitments you made for today are excused.
 
 The discussion board on the event page remains open if you'd like to chat with teammates or coordinate alternate plans:
 ${manageLink}
@@ -481,7 +481,7 @@ Stay dry, and see you on the field next Sunday!
       <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; margin: 18px 0; border-radius: 6px;">
         <p style="margin: 3px 0; color: #64748b; font-size: 14px;"><strong>📅 Scheduled:</strong> ${escapeHtml(eventDateFormatted)}</p>
         <p style="margin: 3px 0; color: #64748b; font-size: 14px;"><strong>📍 Field:</strong> ${safeLocation}</p>
-        <p style="margin: 6px 0 0; color: #0284c7; font-weight: 600; font-size: 14px;">✓ Your duty and equipment commitments are excused for today.</p>
+        <p style="margin: 6px 0 0; color: #0284c7; font-weight: 600; font-size: 14px;">✓ Your task and equipment commitments are excused for today.</p>
       </div>
 
       <p style="text-align: center; margin: 26px 0;">
@@ -554,7 +554,7 @@ Play ball!
 
       <p style="text-align: center; margin: 26px 0;">
         <a href="${manageLink}" style="background: #FD5A1E; color: #ffffff; padding: 13px 26px; border-radius: 6px; text-decoration: none; font-weight: 700; font-size: 15px; display: inline-block;">
-          Check Live Roster & Duties →
+          Check Live Roster & Tasks →
         </a>
       </p>
     </div>
@@ -1385,7 +1385,7 @@ app.put('/events/default-duties', async (c) => {
     return c.json({ success: true, duties: updated, message: 'Default task template updated successfully!' });
   } catch (err) {
     console.error('[Events] Error saving default duties:', err);
-    return c.json({ error: 'Failed to update default duties template.' }, 500);
+    return c.json({ error: 'Failed to update default tasks template.' }, 500);
   }
 });
 
@@ -2043,7 +2043,7 @@ app.post('/events/:id/duties', async (c) => {
     const { title, description, slots_needed } = await c.req.json();
 
     if (!title || !String(title).trim()) {
-      return c.json({ error: 'Duty title is required.' }, 400);
+      return c.json({ error: 'Task title is required.' }, 400);
     }
 
     const maxSortRow = await c.env.DB.prepare('SELECT MAX(sort_order) as max_sort FROM event_duties WHERE event_id = ?').bind(eventId).first();
@@ -2063,8 +2063,8 @@ app.post('/events/:id/duties', async (c) => {
     const duty = await c.env.DB.prepare('SELECT * FROM event_duties WHERE id = ?').bind(res.meta.last_row_id).first();
     return c.json({ success: true, duty });
   } catch (err) {
-    console.error('[Events] Error adding duty:', err);
-    return c.json({ error: 'Failed to add duty.' }, 500);
+    console.error('[Events] Error adding task:', err);
+    return c.json({ error: 'Failed to add task.' }, 500);
   }
 });
 
@@ -2080,7 +2080,7 @@ app.put('/events/:id/duties/:dutyId', async (c) => {
     const { title, description, slots_needed } = await c.req.json();
 
     if (title !== undefined && (!title || !String(title).trim())) {
-      return c.json({ error: 'Duty title cannot be empty.' }, 400);
+      return c.json({ error: 'Task title cannot be empty.' }, 400);
     }
 
     const res = await c.env.DB.prepare(`
@@ -2098,14 +2098,14 @@ app.put('/events/:id/duties/:dutyId', async (c) => {
     ).run();
 
     if (res.meta.changes === 0) {
-      return c.json({ error: 'Duty not found.' }, 404);
+      return c.json({ error: 'Task not found.' }, 404);
     }
 
     const updated = await c.env.DB.prepare('SELECT * FROM event_duties WHERE id = ?').bind(dutyId).first();
     return c.json({ success: true, duty: updated });
   } catch (err) {
-    console.error('[Events] Error updating duty:', err);
-    return c.json({ error: 'Failed to update duty.' }, 500);
+    console.error('[Events] Error updating task:', err);
+    return c.json({ error: 'Failed to update task.' }, 500);
   }
 });
 
@@ -2121,13 +2121,13 @@ app.delete('/events/:id/duties/:dutyId', async (c) => {
 
     const res = await c.env.DB.prepare('DELETE FROM event_duties WHERE id = ? AND event_id = ?').bind(dutyId, eventId).run();
     if (res.meta.changes === 0) {
-      return c.json({ error: 'Duty not found.' }, 404);
+      return c.json({ error: 'Task not found.' }, 404);
     }
 
-    return c.json({ success: true, message: 'Duty removed.' });
+    return c.json({ success: true, message: 'Task removed.' });
   } catch (err) {
-    console.error('[Events] Error deleting duty:', err);
-    return c.json({ error: 'Failed to delete duty.' }, 500);
+    console.error('[Events] Error deleting task:', err);
+    return c.json({ error: 'Failed to delete task.' }, 500);
   }
 });
 

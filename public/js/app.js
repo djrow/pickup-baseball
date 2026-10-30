@@ -161,9 +161,6 @@ function renderFeaturedGame(ev, container) {
           </h2>
           ${rainoutNoteHtml}
         </div>
-        <a href="/event.html?id=${ev.id}" class="btn btn-primary btn-lg">
-          ${API.escapeHtml(API.t('home.rsvp_view_details'))}
-        </a>
       </div>
 
       <div class="event-meta-grid">
@@ -348,7 +345,7 @@ function getGoogleCalendarUrl(ev) {
   const endDate = new Date(startDate.getTime() + 3 * 60 * 60 * 1000);
   const formatGCal = (d) => d.toISOString().replace(/-|:|.\d\d\d/g, '');
   const title = encodeURIComponent(ev.title || 'Sunday Pickup Baseball - Noon Game');
-  const details = encodeURIComponent(`Free community pickup baseball. Check headcount, coordinate gear & volunteer for duties at https://www.pickupbaseballfoundation.org/event.html?id=${ev.id}`);
+  const details = encodeURIComponent(`Free community pickup baseball. Check headcount, coordinate gear & volunteer for tasks at https://www.pickupbaseballfoundation.org/event.html?id=${ev.id}`);
   const location = encodeURIComponent(ev.location || 'Bushrod Park Field 1, Oakland, CA');
   return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${formatGCal(startDate)}/${formatGCal(endDate)}&details=${details}&location=${location}`;
 }

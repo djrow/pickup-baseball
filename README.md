@@ -19,7 +19,7 @@ Designed with a **10+ year longevity philosophy**:
    - High-density, space-efficient Sunday Game Calendar mounted prominently at the top of the homepage (`public/index.html`) above the game feed.
    - Designed specifically for weekly pickup baseball: eliminates the 6/7ths empty Monday–Saturday space of traditional 30-day grids, focusing 100% of the viewable area on Sunday game days (reducing vertical footprint by ~75%).
    - Month-by-month navigation (prev/next month, today jump), localized Pacific Time (`America/Los_Angeles`) day alignment, and visual game indicators (player counts, rainout pills, attending status, and today highlight).
-   - Interactive date drawer showing full game info, location, attendance, duty coverage, and direct RSVP links.
+   - Interactive date drawer showing full game info, location, attendance, task coverage, and direct RSVP links.
    - Quick **1-Click `.ics` Export Download** (`pickup-baseball-schedule.ics`) compatible with Apple Calendar, Microsoft Outlook, and Google Calendar, plus direct 1-click **Add to Google Calendar** links for every game.
 
 2. **Game Scheduling & Roster Tracking**:
@@ -28,15 +28,15 @@ Designed with a **10+ year longevity philosophy**:
    - 1-Click **"Post Next Sunday @ Noon"** scheduler normalized to `America/Los_Angeles` (Pacific Time).
    - Inline **Edit Game Details** tool for organizers and facilitators with smart location autocomplete.
 
-3. **Volunteer Duty Coordination & Game Day Roles**:
-   - Customizable default task template pre-configured with the 6 essential game-day duties:
+3. **Volunteer Task Coordination & Game Day Roles**:
+   - Customizable default task template pre-configured with the 6 essential game-day tasks:
      - **Game Facilitator** (1 slot) — *Help coordinate teams, batting order, and fair play throughout the game.*
      - **Water / Food** (1 slot) — *Bring drinking water, ice, and dugout snacks or fruit for players.*
      - **Bases** (1 slot) — *Bring 3 throw-down bases.*
      - **Pitching machine and power** (1 slot) — *Bring a pitching machine and a way to run it on the field.*
      - **Game Baseballs** (1 slot) — *Bring game balls bucket.*
      - **Field Dragging** (2 slots) — *Arrive 20 mins early to drag the infield with the pull rake.*
-   - Real-time slot availability, duty progress bar, and volunteer attribution (`✓ Covered by [Name]`).
+   - Real-time slot availability, task progress bar, and volunteer attribution (`✓ Covered by [Name]`).
 
 4. **Equipment Sharing & Game Discussion Board**:
    - Players list what gear they can bring (bats, catcher's gear, spare gloves) and coordinate field conditions or carpools on the per-game discussion board.
@@ -50,7 +50,7 @@ Designed with a **10+ year longevity philosophy**:
 
 6. **Weather & Rainout Incident Broadcasts**:
    - 1-Click **"🌧️ Call Rainout"** workflow with custom field conditions and makeup notes.
-   - Automated cancellation email blast via Resend to all confirmed attendees and volunteers, explicitly releasing gear and duty commitments.
+   - Automated cancellation email blast via Resend to all confirmed attendees and volunteers, explicitly releasing gear and task commitments.
    - Prominent sky-blue rainout banner and 1-click **"☀️ Reopen Game"** tool if fields dry up.
 
 7. **12 Major League Baseball Color Themes & Light/Dark Mode**:
@@ -110,7 +110,7 @@ Designed with a **10+ year longevity philosophy**:
 ```text
 ├── public/                     # Static frontend served by Cloudflare Pages CDN
 │   ├── index.html              # Homepage, hero schedule, & privacy promise
-│   ├── event.html              # Game details, RSVP form, duty board, & discussion
+│   ├── event.html              # Game details, RSVP form, task board, & discussion
 │   ├── archive.html            # Past games archive & historic turnout records
 │   ├── login.html              # Passwordless email sign-in / registration
 │   ├── profile.html            # Player profile, bio, & avatar uploader
@@ -128,7 +128,7 @@ Designed with a **10+ year longevity philosophy**:
 │   ├── js/                     # Vanilla JS modules
 │   │   ├── api.js              # REST client, i18n engine, themes, & auth
 │   │   ├── app.js              # Homepage schedules & game listing
-│   │   ├── event.js            # Game roster, duty board, & discussion logic
+│   │   ├── event.js            # Game roster, task board, & discussion logic
 │   │   ├── archive.js          # Past games listing & turnout recording
 │   │   ├── admin.js            # Admin dashboard logic & database backups
 │   │   └── account-dashboard.js# Organizer panels & role-based dashboard views

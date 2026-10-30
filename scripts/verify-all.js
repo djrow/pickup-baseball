@@ -55,7 +55,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-const CURRENT_APP_VERSION = '18';
+const CURRENT_APP_VERSION = '19';
 app.use((req, res, next) => {
   res.setHeader('X-App-Version', CURRENT_APP_VERSION);
   next();
@@ -1000,8 +1000,8 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
   await t9.test('T9.5: Server sends X-App-Version header and /api/version endpoint responds', async () => {
     const res = await apiReq('GET', '/api/version');
     assert.equal(res.status, 200);
-    assert.equal(res.data.version, '18');
-    assert.equal(res.headers.get('x-app-version'), '18');
+    assert.equal(res.data.version, CURRENT_APP_VERSION);
+    assert.equal(res.headers.get('x-app-version'), CURRENT_APP_VERSION);
   });
 
   await t9.test('T9.6: Compact Sunday-focused game calendar replaces 35-cell month grid', () => {
@@ -1038,5 +1038,39 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     const appJsPath = path.join(publicDir, 'js/app.js');
     const appJs = fs.readFileSync(appJsPath, 'utf8');
     assert.ok(appJs.includes("heroBtn.style.display = 'none'"), 'app.js must hide hero profile button when user is logged in');
+  });
+
+  await t9.test('T9.8: Site-wide task terminology and removal of redundant featured game button', () => {
+    const appJsPath = path.join(publicDir, 'js/app.js');
+    const appJs = fs.readFileSync(appJsPath, 'utf8');
+    // Ensure redundant header button is removed in renderFeaturedGame
+    assert.ok(!appJs.includes("btn btn-primary btn-lg\">\\n          ${API.escapeHtml(API.t('home.rsvp_view_details'))}"), 'Featured game card must not contain duplicate RSVP & View Details button');
+
+    const apiJsPath = path.join(publicDir, 'js/api.js');
+    const apiJs = fs.readFileSync(apiJsPath, 'utf8');
+    assert.ok(apiJs.includes('"home.duty_coordination": "Task Coordination"'), 'api.js must define Task Coordination');
+    assert.ok(apiJs.includes('"home.duties_configured": "{count} Tasks Configured"'), 'api.js must define Tasks Configured');
+    assert.ok(apiJs.includes('"home.join_roster_btn": "Join Roster / Volunteer for Tasks"'), 'api.js must define Volunteer for Tasks');
+    assert.ok(apiJs.includes('"how.s2_title": "2. Coordinate Gear & Tasks"'), 'api.js must define Coordinate Gear & Tasks');
+    assert.ok(apiJs.includes('"event.duties_status": "Tasks Status"'), 'api.js must define Tasks Status');
+    assert.ok(apiJs.includes('"event.rsvp_heading": "Mark Attendance & Sign Up for Tasks"'), 'api.js must define Sign Up for Tasks');
+    assert.ok(apiJs.includes('"event.duty_board_title": "🛡️ Game Day Task Board"'), 'api.js must define Task Board');
+
+    const eventHtmlPath = path.join(publicDir, 'event.html');
+    const eventHtml = fs.readFileSync(eventHtmlPath, 'utf8');
+    assert.ok(eventHtml.includes('Tasks Status'), 'event.html must show Tasks Status');
+    assert.ok(eventHtml.includes('Mark Attendance & Sign Up for Tasks'), 'event.html must show Sign Up for Tasks');
+    assert.ok(eventHtml.includes('🛡️ Game Day Task Board'), 'event.html must show Task Board');
+    assert.ok(!eventHtml.includes('Game Day Duty Board'), 'event.html must not contain Game Day Duty Board');
+
+    const indexHtmlPath = path.join(publicDir, 'index.html');
+    const indexHtml = fs.readFileSync(indexHtmlPath, 'utf8');
+    assert.ok(indexHtml.includes('volunteer for game-day tasks'), 'index.html must use game-day tasks');
+    assert.ok(!indexHtml.includes('volunteer for game-day duties'), 'index.html must not use game-day duties');
+
+    const adminHtmlPath = path.join(publicDir, 'admin.html');
+    const adminHtml = fs.readFileSync(adminHtmlPath, 'utf8');
+    assert.ok(adminHtml.includes('Game Day Volunteer Tasks'), 'admin.html must show Game Day Volunteer Tasks');
+    assert.ok(!adminHtml.includes('Game Day Duty Board'), 'admin.html must not contain Game Day Duty Board');
   });
 });

@@ -239,5 +239,21 @@ Streamlined site navigation and eliminated redundant buttons across the top head
 
 ---
 
-## 20. Future Roadmap Notes
+## 20. Phase 19: Site-Wide Task Terminology & Featured Game Streamlining
+Refined user experience and vocabulary consistency across the entire web application and notification system:
+- **Site-Wide Transition from "Duty/Duties" to "Task/Tasks":**
+  - Updated all user-facing copy, labels, placeholders, tooltips, alert messages, and translations (`EN_DICT` in `public/js/api.js`) to use "task" and "tasks" instead of "duty" and "duties" (e.g., `Task Coordination`, `Tasks Configured`, `Join Roster / Volunteer for Tasks`, `Mark Attendance & Sign Up for Tasks`, `Volunteer for Game Tasks`, `Confirm RSVP & Task Signup`, `Update RSVP & Tasks`, `🛡️ Game Day Task Board`, `team tasks`).
+  - Updated all transactional email notifications (`src/mailer.js` and `functions/api/[[route]].js`) for RSVP confirmations, 24h game day reminders, waitlist promotions, and weather rainouts to use task terminology (`🛡️ Your Task:`, `Task Signed Up For:`, `Your Assigned Task:`, `View Roster & Sign Up for Tasks →`).
+  - Preserved full backward compatibility for internal database tables (`event_duties`, `duty_assignments`, `default_duties`) and API endpoints (`/api/events/default-duties`, `duty_ids`, etc.) ensuring zero disruption to existing data rows.
+- **Removed Redundant Featured Game Action Button:**
+  - In `renderFeaturedGame` (`public/js/app.js`), removed the duplicate "RSVP & View Details" button from the card header.
+  - The card already features a primary, full-width call-to-action button at the bottom (`Join Roster / Volunteer for Tasks →`), eliminating user confusion from having two identical navigation buttons stacked within the same viewport.
+- **Added Automated Test Assertions:**
+  - Added unit test assertion `T9.8` in `scripts/verify-all.js` verifying the removal of duplicate header buttons and asserting task terminology across all core HTML templates and translation dictionaries.
+  - Bumped application cache bust version to `v19` across `public/js/api.js`, `functions/api/[[route]].js`, `src/server.js`, `public/sw.js`, and all HTML asset links.
+  - All 47 test cases pass cleanly.
+
+---
+
+## 21. Future Roadmap Notes
 - **Pinned Full-Stack Rust / WebAssembly Migration:** Evaluated a future 4-phase rewrite of the Cloudflare Pages Functions backend (and optional frontend interactivity) to Rust (`workers-rs` compiling to WebAssembly) for compile-time type safety, zero-dependency binary durability, and strict edge memory safety—kept as a guiding north star when designing new features and data models.
