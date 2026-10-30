@@ -196,5 +196,7 @@
   "event.just_me": "0 (Только я)",
   "event.guests_badge": "гость",
   "event.guests_badge_plural": "гостей",
-  "event.guests_prefix": "Гости:"
+  "event.guests_prefix": "Гости:",
+  "footer.update_app": "Обновить приложение",
+  "footer.update_available": "Доступно обновление — нажмите для перезагрузки"
 }

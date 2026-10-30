@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Game Details & RSVP - Sunday Pickup Baseball</title>
-  <link rel="stylesheet" href="/css/style.css?v=14">
+  <link rel="stylesheet" href="/css/style.css?v=15">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png">
@@ -311,13 +311,22 @@
       <p style="margin-top: 6px; font-size: 0.8rem; color: #94a3b8;">
         <span data-i18n="footer.subtext">Built for simplicity and durability. Free &amp; open-source</span> on <a href="https://github.com/djrow/pickup-baseball" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">GitHub</a>.
       </p>
-      <div style="margin-top: 10px;">
-        <button type="button" id="footer-theme-trigger" class="footer-theme-btn" aria-label="Change Appearance Theme">🎨 Theme &amp; Colors</button>
+      <div class="footer-controls">
+        <div class="footer-theme-wrapper">
+          <button type="button" id="footer-theme-trigger" class="footer-theme-btn" aria-label="Change Appearance Theme">🎨 Theme &amp; Colors</button>
+        </div>
+        <div id="footer-theme-panel-slot"></div>
+        <div class="footer-update-wrapper">
+          <button type="button" id="footer-update-btn" class="footer-update-btn" aria-label="Update app to latest version">
+            <span class="update-icon">🔄</span> <span class="update-label" data-i18n="footer.update_app">Update App</span>
+          </button>
+        </div>
+        <div id="footer-update-status" class="footer-update-status" style="display: none;" role="status" aria-live="polite"></div>
       </div>
     </div>
   </footer>
 
-  <script src="/js/api.js?v=14"></script>
-  <script src="/js/event.js?v=14"></script>
+  <script src="/js/api.js?v=15"></script>
+  <script src="/js/event.js?v=15"></script>
 </body>
 </html>

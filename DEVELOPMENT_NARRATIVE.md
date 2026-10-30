@@ -179,5 +179,14 @@ To give players an immediate visual overview of upcoming Sunday games and expand
   - Granted facilitators event management capabilities (`canManageEvents`) so designated community leaders can post games, edit details, and broadcast weather rainouts.
   - Added visual badges (`📋 Game Facilitator`), role selectors, and permission controls across the Admin Dashboard, Account Management, Login, and User Profile pages.
 
-## 15. Future Roadmap Notes
+---
+
+## 15. Phase 14: Fixed-in-Place App Update Button Beneath Theme Picker
+To ensure players and organizers can immediately update to the latest site release and clear cached assets without fighting aggressive PWA/Service Worker stale-while-revalidate caching:
+- **Fixed-in-Place Update Button Placement:** Mounted the `#footer-update-btn` (`🔄 Update App`) at the bottom of the page in the global footer controls directly beneath the Theme & Colors picker across all 8 site pages (`index.html`, `event.html`, `archive.html`, `admin.html`, `profile.html`, `login.html`, `donate.html`, and `404.html`).
+- **PWA Service Worker Update Pipeline:** Integrated with the Service Worker (`public/sw.js`, cache `pbf-cache-v14`) with an explicit `SKIP_WAITING` message listener. Clicking triggers `reg.update()`, notifies waiting workers, purges stale browser `caches` and local storage keys, and reloads with cache-busting timestamp queries.
+- **Background Update Auto-Detection:** Automatically monitors Service Worker `updatefound` and `waiting` states, styling the button with a pulsing accent badge (`✨ Update Available — Click to Refresh`) and status descriptions when a new edge build is ready.
+- **Full 15-Language Internationalization & Theme Sync:** Fully localized across English, Spanish, Chinese, Tagalog, Vietnamese, Korean, Arabic, Russian, Persian/Farsi, Japanese, Punjabi, Armenian, Portuguese, Hindi, and French with dynamic CSS custom property styling matching all 12 MLB market color palettes in light and dark modes.
+
+## 16. Future Roadmap Notes
 - **Pinned Full-Stack Rust / WebAssembly Migration:** Evaluated a future 4-phase rewrite of the Cloudflare Pages Functions backend (and optional frontend interactivity) to Rust (`workers-rs` compiling to WebAssembly) for compile-time type safety, zero-dependency binary durability, and strict edge memory safety—kept as a guiding north star when designing new features and data models.

@@ -196,5 +196,7 @@
   "event.just_me": "0 (أنا فقط)",
   "event.guests_badge": "ضيف",
   "event.guests_badge_plural": "ضيوف",
-  "event.guests_prefix": "الضيوف:"
+  "event.guests_prefix": "الضيوف:",
+  "footer.update_app": "تحديث التطبيق",
+  "footer.update_available": "تحديث متاح — انقر للتحديث"
 }

@@ -2196,6 +2196,122 @@ footer.site-footer strong {
    ========================================================================== */
 
 /* Footer Theme & Colors Inline Panel */
+
+/* Footer Controls & Fixed In Place Update Button */
+.footer-controls {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.footer-theme-wrapper {
+  display: flex;
+  justify-content: center;
+}
+
+#footer-theme-panel-slot {
+  width: 100%;
+}
+
+.footer-update-wrapper {
+  display: flex;
+  justify-content: center;
+  margin-top: 2px;
+}
+
+.footer-update-btn {
+  background: var(--bg-subtle);
+  border: 1.5px solid var(--border);
+  color: var(--text-main);
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 6px 16px;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  transition: all 0.15s ease;
+  box-shadow: var(--shadow-sm);
+  line-height: 1.2;
+}
+
+.footer-update-btn:hover {
+  background: var(--giants-orange-light);
+  border-color: var(--giants-orange);
+  color: var(--giants-orange);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.footer-update-btn:active {
+  transform: translateY(0);
+}
+
+.footer-update-btn .update-icon {
+  font-size: 0.95rem;
+  line-height: 1;
+  display: inline-block;
+  transition: transform 0.2s ease;
+}
+
+.footer-update-btn.updating {
+  opacity: 0.85;
+  cursor: wait;
+}
+
+.footer-update-btn.updating .update-icon {
+  animation: spinUpdateIcon 0.8s linear infinite;
+}
+
+@keyframes spinUpdateIcon {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.footer-update-btn.update-available {
+  background: var(--giants-orange);
+  color: #ffffff;
+  border-color: var(--giants-orange);
+  animation: pulseUpdateBtn 2s infinite;
+}
+
+@keyframes pulseUpdateBtn {
+  0% { box-shadow: 0 0 0 0 rgba(253, 90, 30, 0.45); }
+  70% { box-shadow: 0 0 0 8px rgba(253, 90, 30, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(253, 90, 30, 0); }
+}
+
+.footer-update-status {
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: var(--radius-sm);
+  margin-top: 4px;
+  text-align: center;
+  max-width: 420px;
+}
+
+.footer-update-status.status-checking {
+  color: var(--text-muted);
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+}
+
+.footer-update-status.status-ready {
+  color: var(--success);
+  background: var(--success-bg);
+  border: 1px solid var(--success-border);
+}
+
+.footer-update-status.status-available {
+  color: var(--giants-orange);
+  background: var(--giants-orange-light);
+  border: 1px solid var(--giants-orange-border);
+}
+
 .footer-theme-btn {
   background: var(--bg-subtle);
   border: 1.5px solid var(--border);

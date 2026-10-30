@@ -196,5 +196,7 @@
   "event.just_me": "0 (Apenas eu)",
   "event.guests_badge": "convidado",
   "event.guests_badge_plural": "convidados",
-  "event.guests_prefix": "Convidados:"
+  "event.guests_prefix": "Convidados:",
+  "footer.update_app": "Atualizar Aplicativo",
+  "footer.update_available": "Atualização Disponível — Clique para Recarregar"
 }

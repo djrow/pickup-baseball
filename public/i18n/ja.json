@@ -196,5 +196,7 @@
   "event.just_me": "0（本人のみ）",
   "event.guests_badge": "名の同伴",
   "event.guests_badge_plural": "名の同伴",
-  "event.guests_prefix": "同伴者:"
+  "event.guests_prefix": "同伴者:",
+  "footer.update_app": "アプリを更新",
+  "footer.update_available": "最新版が利用可能 — クリックして更新"
 }

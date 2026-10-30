@@ -196,5 +196,7 @@
   "event.just_me": "0 (Ako lang)",
   "event.guests_badge": "bisita",
   "event.guests_badge_plural": "mga bisita",
-  "event.guests_prefix": "Mga Bisita:"
+  "event.guests_prefix": "Mga Bisita:",
+  "footer.update_app": "I-update ang App",
+  "footer.update_available": "May Bagong Update — I-click para I-refresh"
 }

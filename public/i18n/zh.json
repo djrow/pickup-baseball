@@ -196,5 +196,7 @@
   "event.just_me": "0（仅限本人）",
   "event.guests_badge": "位随行",
   "event.guests_badge_plural": "位随行",
-  "event.guests_prefix": "随行人员:"
+  "event.guests_prefix": "随行人员:",
+  "footer.update_app": "更新应用",
+  "footer.update_available": "新版本已就绪 — 点击刷新"
 }

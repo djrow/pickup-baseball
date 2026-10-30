@@ -196,5 +196,7 @@
   "event.just_me": "0 (Միայն ես)",
   "event.guests_badge": "հյուր",
   "event.guests_badge_plural": "հյուրեր",
-  "event.guests_prefix": "Հյուրեր:"
+  "event.guests_prefix": "Հյուրեր:",
+  "footer.update_app": "Թարմացնել Հավելվածը",
+  "footer.update_available": "Հասանելի է թարմացում — սեղմեք թարմացնելու համար"
 }

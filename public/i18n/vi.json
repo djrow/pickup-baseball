@@ -196,5 +196,7 @@
   "event.just_me": "0 (Chỉ mình tôi)",
   "event.guests_badge": "khách",
   "event.guests_badge_plural": "khách",
-  "event.guests_prefix": "Khách đi cùng:"
+  "event.guests_prefix": "Khách đi cùng:",
+  "footer.update_app": "Cập Nhật Ứng Dụng",
+  "footer.update_available": "Bản Cập Nhật Mới — Nhấn để Tải lại"
 }

@@ -196,5 +196,7 @@
   "event.just_me": "0 (ਸਿਰਫ ਮੈਂ)",
   "event.guests_badge": "ਮਹਿਮਾਨ",
   "event.guests_badge_plural": "ਮਹਿਮਾਨ",
-  "event.guests_prefix": "ਮਹਿਮਾਨ:"
+  "event.guests_prefix": "ਮਹਿਮਾਨ:",
+  "footer.update_app": "ਐਪ ਅੱਪਡੇਟ ਕਰੋ",
+  "footer.update_available": "ਨਵਾਂ ਅੱਪਡੇਟ ਉਪਲਬਧ ਹੈ — ਰਿਫ੍ਰੈਸ਼ ਕਰਨ ਲਈ ਕਲਿੱਕ ਕਰੋ"
 }

@@ -196,5 +196,7 @@
   "event.just_me": "0 (본인만)",
   "event.guests_badge": "명 동반",
   "event.guests_badge_plural": "명 동반",
-  "event.guests_prefix": "동반 게스트:"
+  "event.guests_prefix": "동반 게스트:",
+  "footer.update_app": "앱 업데이트",
+  "footer.update_available": "새 버전 준비됨 — 클릭하여 새로고침"
 }

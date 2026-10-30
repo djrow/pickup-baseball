@@ -1,5 +1,5 @@
 // Service Worker for Pickup Baseball Foundation PWA
-const CACHE_NAME = 'pbf-cache-v13';
+const CACHE_NAME = 'pbf-cache-v14';
 
 const STATIC_ASSETS = [
   '/',
@@ -124,4 +124,11 @@ self.addEventListener('fetch', (event) => {
       return cachedRes || fetchPromise;
     })
   );
+});
+
+// Message listener for manual app update
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });

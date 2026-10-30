@@ -196,5 +196,7 @@
   "event.just_me": "0 (केवल मैं)",
   "event.guests_badge": "अतिथि",
   "event.guests_badge_plural": "अतिथि",
-  "event.guests_prefix": "मेहमान:"
+  "event.guests_prefix": "मेहमान:",
+  "footer.update_app": "ऐप अपडेट करें",
+  "footer.update_available": "नया अपडेट उपलब्ध — रिफ्रेश करने के लिए क्लिक करें"
 }

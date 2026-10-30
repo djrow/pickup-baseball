@@ -27,6 +27,11 @@ const EN_DICT = {
   "calendar.view_details": "RSVP & View Game Details →",
   "footer.tagline": "Building community through America's pastime.",
   "footer.subtext": "Built for simplicity and durability. Free & open-source.",
+  "footer.update_app": "Update App",
+  "footer.update_available": "Update Available — Click to Refresh",
+  "footer.update_checking": "Checking for updates and clearing cache...",
+  "footer.update_reloading": "✓ App updated! Reloading with latest version...",
+  "footer.update_available_desc": "A new version of Sunday Pickup Baseball is ready.",
   "hero.title": "Free Pickup Baseball Every Sunday at Noon",
   "hero.desc": "We provide accessible, friendly Sunday baseball games for everyone in the community. Check the head count, coordinate gear, volunteer for game-day duties, and play ball!",
   "hero.notice": "NOTICE: This site is new and few people know about it. Published in October 2026.",
@@ -555,6 +560,7 @@ const API = {
     // 3. Mount footer theme picker when DOM is interactive
     const mount = () => {
       this.initFooterThemePicker();
+      this.initAppUpdater();
     };
     if (typeof document !== 'undefined') {
       if (document.readyState === 'loading') {
@@ -643,7 +649,10 @@ const API = {
         </div>
       `;
 
-      if (trigger.parentElement) {
+      const slot = document.getElementById('footer-theme-panel-slot');
+      if (slot) {
+        slot.appendChild(panel);
+      } else if (trigger.parentElement) {
         trigger.parentElement.insertAdjacentElement('afterend', panel);
       }
     }
@@ -714,6 +723,126 @@ const API = {
     });
 
     this.updateFooterThemeUi();
+  },
+
+
+  initAppUpdater() {
+    if (typeof document === 'undefined') return;
+    const updateBtn = document.getElementById('footer-update-btn');
+    const statusEl = document.getElementById('footer-update-status');
+    if (!updateBtn || updateBtn.dataset.bound) return;
+    updateBtn.dataset.bound = '1';
+
+    let waitingWorker = null;
+
+    if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
+      navigator.serviceWorker.getRegistration().then((reg) => {
+        if (!reg) return;
+
+        if (reg.waiting) {
+          waitingWorker = reg.waiting;
+          this.setUpdateAvailableUi(updateBtn, statusEl);
+        }
+
+        reg.addEventListener('updatefound', () => {
+          const installingWorker = reg.installing;
+          if (installingWorker) {
+            installingWorker.addEventListener('statechange', () => {
+              if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                waitingWorker = installingWorker;
+                this.setUpdateAvailableUi(updateBtn, statusEl);
+              }
+            });
+          }
+        });
+      }).catch((err) => {
+        console.warn('[PWA] Service worker lookup error:', err);
+      });
+
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!refreshing) {
+          refreshing = true;
+          window.location.reload();
+        }
+      });
+    }
+
+    updateBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      await this.triggerAppUpdate(updateBtn, statusEl, waitingWorker);
+    });
+  },
+
+  setUpdateAvailableUi(btn, statusEl) {
+    if (!btn) return;
+    btn.classList.add('update-available');
+    const label = btn.querySelector('.update-label');
+    if (label) {
+      label.textContent = this.t('footer.update_available', 'Update Available — Click to Refresh');
+    }
+    if (statusEl) {
+      statusEl.style.display = 'block';
+      statusEl.className = 'footer-update-status status-available';
+      statusEl.textContent = this.t('footer.update_available_desc', 'A new version of Sunday Pickup Baseball is ready.');
+    }
+  },
+
+  async triggerAppUpdate(btn, statusEl, waitingWorker) {
+    if (btn) {
+      btn.classList.add('updating');
+      btn.disabled = true;
+      const label = btn.querySelector('.update-label');
+      if (label) {
+        label.textContent = this.t('footer.update_checking', 'Checking for updates...');
+      }
+    }
+    if (statusEl) {
+      statusEl.style.display = 'block';
+      statusEl.className = 'footer-update-status status-checking';
+      statusEl.textContent = this.t('footer.update_checking', 'Checking for updates and clearing cache...');
+    }
+
+    try {
+      if (waitingWorker) {
+        waitingWorker.postMessage({ type: 'SKIP_WAITING' });
+      }
+
+      if ('serviceWorker' in navigator) {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (reg) {
+          if (reg.waiting) {
+            reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+          }
+          await reg.update().catch(() => {});
+        }
+      }
+
+      if ('caches' in window) {
+        const cacheNames = await caches.keys();
+        await Promise.all(cacheNames.map(k => caches.delete(k)));
+      }
+
+      try {
+        localStorage.removeItem('pbf_events_cache');
+        localStorage.removeItem('pbf_cached_user');
+      } catch (err) {}
+
+      if (statusEl) {
+        statusEl.className = 'footer-update-status status-ready';
+        statusEl.textContent = this.t('footer.update_reloading', '✓ App updated! Reloading with latest version...');
+      }
+
+      setTimeout(() => {
+        const currentUrl = new URL(window.location.href);
+        currentUrl.searchParams.set('updated', String(Date.now()));
+        window.location.href = currentUrl.toString();
+      }, 450);
+
+    } catch (err) {
+      console.error('[Update Error]', err);
+      window.location.reload();
+    }
   },
 
   getCachedUser() {
