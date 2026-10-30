@@ -181,7 +181,7 @@ function initDatabase() {
     WHERE event_date = '2026-11-01T12:00:00.000Z'
   `);
 
-  // Seed default duties if table is empty
+  // Seed default duties if table is empty or missing facilitator/water-food
   const defaultDutiesCount = db.prepare('SELECT COUNT(*) as c FROM default_duties').get().c;
   if (defaultDutiesCount === 0) {
     const insertDefault = db.prepare(`
@@ -192,6 +192,19 @@ function initDatabase() {
       insertDefault.run(d.title, d.description || '', d.slots_needed || 1, idx);
     });
     console.log(`[Database] Initialized default duties template (${DEFAULT_BASEBALL_DUTIES.length} tasks).`);
+  } else {
+    const hasFacilitator = db.prepare("SELECT COUNT(*) as c FROM default_duties WHERE title LIKE '%facilitator%'").get().c > 0;
+    if (!hasFacilitator) {
+      db.prepare("INSERT INTO default_duties (title, description, slots_needed, sort_order) VALUES (?, ?, ?, ?)").run(
+        'Game Facilitator', 'Help coordinate teams, batting order, and fair play throughout the game.', 1, 4
+      );
+    }
+    const hasWaterFood = db.prepare("SELECT COUNT(*) as c FROM default_duties WHERE title LIKE '%water%' OR title LIKE '%food%'").get().c > 0;
+    if (!hasWaterFood) {
+      db.prepare("INSERT INTO default_duties (title, description, slots_needed, sort_order) VALUES (?, ?, ?, ?)").run(
+        'Water / Food', 'Bring drinking water, ice, and dugout snacks or fruit for players.', 1, 5
+      );
+    }
   }
 
   // Check if admin email is defined in env and ensure they exist
@@ -214,7 +227,9 @@ const DEFAULT_BASEBALL_DUTIES = [
   { title: "Bases", description: "Bring 3 throw-down bases.", slots_needed: 1 },
   { title: "Pitching machine and power", description: "Bring a pitching machine and a way to run it on the field.", slots_needed: 1 },
   { title: "Game Baseballs", description: "Bring game balls bucket.", slots_needed: 1 },
-  { title: "Field Dragging", description: "Arrive 20 mins early to drag the infield with the pull rake.", slots_needed: 2 }
+  { title: "Field Dragging", description: "Arrive 20 mins early to drag the infield with the pull rake.", slots_needed: 2 },
+  { title: "Game Facilitator", description: "Help coordinate teams, batting order, and fair play throughout the game.", slots_needed: 1 },
+  { title: "Water / Food", description: "Bring drinking water, ice, and dugout snacks or fruit for players.", slots_needed: 1 }
 ];
 
 function getDefaultDuties() {

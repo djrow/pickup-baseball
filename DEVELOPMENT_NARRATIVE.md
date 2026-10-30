@@ -155,5 +155,29 @@ Following community feedback on dark mode button aesthetics and color accuracy:
 
 ---
 
-## 14. Future Roadmap Notes
+---
+
+## 14. Phase 13: Interactive Top Game Calendar & Facilitator + Water/Food Roles
+To give players an immediate visual overview of upcoming Sunday games and expand game-day community participation:
+- **Interactive Top Game Calendar:**
+  - Placed an interactive monthly calendar module directly at the top of the homepage (`public/index.html`) above the game feed, accessible via a `📅 Calendar` navbar link and `📅 Game Calendar ↓` hero anchor.
+  - Aligned date calculations to California Pacific Time (`America/Los_Angeles`), correctly displaying Sunday game days, current day badge (`TODAY`), attendee counts, and rainout badges without time zone drift.
+  - Interactive date drawer: Clicking any day reveals detailed game data (time, location, player headcount, duty coverage) and 1-click RSVP / view links.
+  - Standard RFC 5545 `.ics` Export & Google Calendar Integration: Added a client-side Blob generator to download `pickup-baseball-schedule.ics` for importing into Apple Calendar, Outlook, or Google Calendar, alongside per-game 1-click Google Calendar web event links (`calendar.google.com/calendar/render?action=TEMPLATE...`).
+  - Seamlessly adapted to all 12 MLB market color palettes and light/dark modes with clean responsive grid rendering on mobile and desktop.
+- **Expanded Volunteer Game Duties:**
+  - Upgraded default game task templates and auto-seeding routines in D1 to include 6 essential volunteer roles:
+    1. **Game Facilitator** (1 slot) — *Help coordinate teams, batting order, and fair play throughout the game.*
+    2. **Water / Food** (1 slot) — *Bring drinking water, ice, and dugout snacks or fruit for players.*
+    3. **Bases** (1 slot) — *Bring 3 throw-down bases.*
+    4. **Pitching machine and power** (1 slot) — *Bring a pitching machine and a way to run it on the field.*
+    5. **Game Baseballs** (1 slot) — *Bring game balls bucket.*
+    6. **Field Dragging** (2 slots) — *Arrive 20 mins early to drag the infield with the pull rake.*
+  - Built self-healing auto-migration in Cloudflare Pages Functions (`functions/api/[[route]].js`) so active events and default templates automatically inherit the new roles.
+- **Four-Tier Role-Based Access Control (`facilitator` Account Role):**
+  - Expanded user authorization tiers from 3 to 4: `admin`, `organizer`, `facilitator`, `player`.
+  - Granted facilitators event management capabilities (`canManageEvents`) so designated community leaders can post games, edit details, and broadcast weather rainouts.
+  - Added visual badges (`📋 Game Facilitator`), role selectors, and permission controls across the Admin Dashboard, Account Management, Login, and User Profile pages.
+
+## 15. Future Roadmap Notes
 - **Pinned Full-Stack Rust / WebAssembly Migration:** Evaluated a future 4-phase rewrite of the Cloudflare Pages Functions backend (and optional frontend interactivity) to Rust (`workers-rs` compiling to WebAssembly) for compile-time type safety, zero-dependency binary durability, and strict edge memory safety—kept as a guiding north star when designing new features and data models.

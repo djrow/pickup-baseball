@@ -337,7 +337,8 @@ router.get('/users', requireAdmin, (req, res) => {
       ORDER BY 
         CASE WHEN u.role = 'admin' OR u.is_admin = 1 THEN 1 
              WHEN u.role = 'organizer' THEN 2 
-             ELSE 3 END,
+             WHEN u.role = 'facilitator' THEN 3
+             ELSE 4 END,
         u.name COLLATE NOCASE ASC
     `).all();
 
@@ -356,7 +357,7 @@ router.put('/users/:id/role', requireAdmin, (req, res) => {
   try {
     const targetId = parseInt(req.params.id, 10);
     const { role } = req.body;
-    const validRoles = ['admin', 'organizer', 'player'];
+    const validRoles = ['admin', 'organizer', 'facilitator', 'player'];
 
     if (!validRoles.includes(role)) {
       return res.status(400).json({ error: `Invalid role. Must be one of: ${validRoles.join(', ')}` });
@@ -382,7 +383,7 @@ router.put('/users/:id/role', requireAdmin, (req, res) => {
     if (req.user && req.user.id === targetId) {
       req.user.role = role;
       req.user.isAdmin = Boolean(isAdminFlag);
-      req.user.canManageEvents = role === 'admin' || role === 'organizer' || Boolean(isAdminFlag);
+      req.user.canManageEvents = role === 'admin' || role === 'organizer' || role === 'facilitator' || Boolean(isAdminFlag);
     }
 
     res.json({

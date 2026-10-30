@@ -32,6 +32,7 @@ async function initHome() {
   }
 
   setupFilters();
+  setupCalendarControls();
 
   window.addEventListener('pickup:langchange', () => {
     applyUserToHomeUi(API.currentUser);
@@ -63,6 +64,7 @@ function setupFilters() {
 
 function renderEventsView(events, featuredContainer, listContainer) {
   lastLoadedEvents = events || [];
+  renderCalendar(lastLoadedEvents);
   if (events.length > 0) {
     // Next upcoming game is rendered at the top
     renderFeaturedGame(events[0], featuredContainer);
@@ -291,3 +293,297 @@ function renderGamesList(events, container) {
 }
 
 document.addEventListener('DOMContentLoaded', initHome);
+
+
+// =============================================================================
+// Interactive Game Calendar Module
+// =============================================================================
+
+let currentCalDate = new Date();
+let selectedCalendarDateKey = null;
+let calendarEventsCache = [];
+let calendarControlsBound = false;
+
+function setupCalendarControls() {
+  if (calendarControlsBound) return;
+  const prevBtn = document.getElementById('calendar-prev-btn');
+  const nextBtn = document.getElementById('calendar-next-btn');
+  const todayBtn = document.getElementById('calendar-today-btn');
+  const exportBtn = document.getElementById('calendar-export-ics-btn');
+
+  if (prevBtn) {
+    prevBtn.addEventListener('click', () => {
+      currentCalDate.setMonth(currentCalDate.getMonth() - 1);
+      renderCalendar();
+    });
+  }
+  if (nextBtn) {
+    nextBtn.addEventListener('click', () => {
+      currentCalDate.setMonth(currentCalDate.getMonth() + 1);
+      renderCalendar();
+    });
+  }
+  if (todayBtn) {
+    todayBtn.addEventListener('click', () => {
+      currentCalDate = new Date();
+      selectedCalendarDateKey = null;
+      renderCalendar();
+    });
+  }
+  if (exportBtn) {
+    exportBtn.addEventListener('click', () => {
+      downloadCalendarIcs(calendarEventsCache);
+    });
+  }
+  calendarControlsBound = true;
+}
+
+function getPacificDateKey(dateInput) {
+  const d = new Date(dateInput);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+}
+
+function getGoogleCalendarUrl(ev) {
+  const startDate = new Date(ev.event_date);
+  const endDate = new Date(startDate.getTime() + 3 * 60 * 60 * 1000);
+  const formatGCal = (d) => d.toISOString().replace(/-|:|.\d\d\d/g, '');
+  const title = encodeURIComponent(ev.title || 'Sunday Pickup Baseball - Noon Game');
+  const details = encodeURIComponent(`Free community pickup baseball. Check headcount, coordinate gear & volunteer for duties at https://www.pickupbaseballfoundation.org/event.html?id=${ev.id}`);
+  const location = encodeURIComponent(ev.location || 'Bushrod Park Field 1, Oakland, CA');
+  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${formatGCal(startDate)}/${formatGCal(endDate)}&details=${details}&location=${location}`;
+}
+
+function downloadCalendarIcs(events) {
+  const upcoming = (events || []).filter(e => e.status !== 'cancelled');
+  if (upcoming.length === 0) {
+    alert('No upcoming games scheduled to export.');
+    return;
+  }
+
+  const pad = n => String(n).padStart(2, '0');
+  const formatIcsDate = (d) => {
+    return d.getUTCFullYear() +
+      pad(d.getUTCMonth() + 1) +
+      pad(d.getUTCDate()) + 'T' +
+      pad(d.getUTCHours()) +
+      pad(d.getUTCMinutes()) +
+      pad(d.getUTCSeconds()) + 'Z';
+  };
+
+  const icsLines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Pickup Baseball Foundation//NONSGML Pickup Baseball Calendar//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    'X-WR-CALNAME:Sunday Pickup Baseball',
+    'X-WR-TIMEZONE:America/Los_Angeles'
+  ];
+
+  for (const ev of upcoming) {
+    const startDate = new Date(ev.event_date);
+    const endDate = new Date(startDate.getTime() + 3 * 60 * 60 * 1000);
+
+    icsLines.push('BEGIN:VEVENT');
+    icsLines.push(`UID:pickup-baseball-event-${ev.id}@pickupbaseballfoundation.org`);
+    icsLines.push(`DTSTAMP:${formatIcsDate(new Date())}`);
+    icsLines.push(`DTSTART:${formatIcsDate(startDate)}`);
+    icsLines.push(`DTEND:${formatIcsDate(endDate)}`);
+    icsLines.push(`SUMMARY:${(ev.title || 'Sunday Pickup Baseball - Noon Game').replace(/,/g, '\\,')}`);
+    icsLines.push(`LOCATION:${(ev.location || 'Bushrod Park Field 1, Oakland, CA').replace(/,/g, '\\,')}`);
+    icsLines.push(`DESCRIPTION:Free community pickup baseball. Check headcount and volunteer at https://www.pickupbaseballfoundation.org/event.html?id=${ev.id}`);
+    icsLines.push('STATUS:CONFIRMED');
+    icsLines.push('END:VEVENT');
+  }
+
+  icsLines.push('END:VCALENDAR');
+
+  const blob = new Blob([icsLines.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'pickup-baseball-schedule.ics';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function renderCalendarDrawer(dateKey, game) {
+  const drawer = document.getElementById('calendar-date-drawer');
+  if (!drawer) return;
+  if (!dateKey) {
+    drawer.style.display = 'none';
+    return;
+  }
+  drawer.style.display = 'flex';
+  if (game) {
+    const isRainout = game.status === 'rainout';
+    const dateFormatted = API.formatDateTime(game.event_date);
+    const translatedTitle = API.translateEventTitle(game);
+    const gCalUrl = getGoogleCalendarUrl(game);
+    drawer.innerHTML = `
+      <div class="drawer-info" style="flex: 1; min-width: 250px;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+          ${isRainout ? '<span class="badge badge-rainout">🌧️ Rained Out</span>' : '<span class="badge badge-orange">⚾ Game Day</span>'}
+          ${game.my_rsvp && game.my_rsvp.status === 'attending' ? '<span class="badge badge-green">✓ You\'re Attending</span>' : ''}
+        </div>
+        <h3 style="font-size: 1.15rem; color: var(--secondary); margin: 0 0 4px 0;">${API.escapeHtml(translatedTitle)}</h3>
+        <div class="drawer-meta" style="margin-top: 6px;">
+          <span class="drawer-meta-item"><span>📅</span> <strong>${API.escapeHtml(dateFormatted)}</strong></span>
+          <span class="drawer-meta-item"><span>📍</span> ${API.escapeHtml(game.location)}</span>
+          <span class="drawer-meta-item" style="color: var(--secondary); font-weight: 700;"><span>👥</span> ${API.escapeHtml(API.t('home.players_count', { count: game.attendee_count }))}</span>
+          <span class="drawer-meta-item"><span>🛡️</span> ${API.escapeHtml(API.t('home.duties_configured', { count: game.duty_count }))}</span>
+        </div>
+        ${game.rainout_note ? `<div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 6px;"><em>Rainout note: "${API.escapeHtml(game.rainout_note)}"</em></div>` : ''}
+      </div>
+      <div class="drawer-actions" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+        <a href="${gCalUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm" style="font-size: 0.82rem;" title="Add this game to Google Calendar">
+          📅 Google Cal ↗
+        </a>
+        <a href="/event.html?id=${game.id}" class="btn btn-primary" style="font-weight: 700; font-size: 0.88rem;">
+          ${API.escapeHtml(API.t('calendar.view_details', 'RSVP & View Game Details →'))}
+        </a>
+      </div>
+    `;
+  } else {
+    drawer.innerHTML = `
+      <div class="drawer-info" style="flex: 1;">
+        <h3 style="font-size: 1rem; color: var(--secondary); margin: 0 0 4px 0;">${API.escapeHtml(API.t('calendar.no_game', 'No game scheduled on this date.'))}</h3>
+        <p style="margin: 0; font-size: 0.85rem; color: var(--text-muted);">${API.escapeHtml(API.t('calendar.pickup_reminder', 'Free community pickup baseball is every Sunday at Noon at Bushrod Park!'))}</p>
+      </div>
+    `;
+  }
+}
+
+function renderCalendar(events) {
+  if (events) {
+    calendarEventsCache = events;
+  }
+  const gridContainer = document.getElementById('calendar-grid-container');
+  const monthLabel = document.getElementById('calendar-month-label');
+  if (!gridContainer || !monthLabel) return;
+
+  const year = currentCalDate.getFullYear();
+  const month = currentCalDate.getMonth();
+
+  const lang = API.getLang();
+  try {
+    const formatter = new Intl.DateTimeFormat(lang, { month: 'long', year: 'numeric' });
+    monthLabel.textContent = formatter.format(new Date(year, month, 1));
+  } catch (e) {
+    monthLabel.textContent = new Date(year, month, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  }
+
+  const eventsByDate = {};
+  for (const ev of calendarEventsCache) {
+    const key = getPacificDateKey(ev.event_date);
+    if (key) {
+      eventsByDate[key] = ev;
+    }
+  }
+
+  const today = new Date();
+  const todayKey = getPacificDateKey(today);
+
+  const dayHeaders = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  let headersHtml = dayHeaders.map((dh, idx) => {
+    let localizedDay = dh;
+    try {
+      const refDay = new Date(2026, 9, 25 + idx);
+      localizedDay = new Intl.DateTimeFormat(lang, { weekday: 'short' }).format(refDay);
+    } catch (e) {}
+    return `<div class="calendar-day-header ${idx === 0 ? 'sun-header' : ''}">${API.escapeHtml(localizedDay)}</div>`;
+  }).join('');
+
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const daysInPrevMonth = new Date(year, month, 0).getDate();
+
+  let cellsHtml = '';
+
+  for (let p = firstDay - 1; p >= 0; p--) {
+    const prevDayNum = daysInPrevMonth - p;
+    cellsHtml += `
+      <div class="calendar-day-cell other-month">
+        <div class="calendar-day-num">${prevDayNum}</div>
+      </div>
+    `;
+  }
+
+  const pad = n => String(n).padStart(2, '0');
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateKey = `${year}-${pad(month + 1)}-${pad(d)}`;
+    const dayOfWeek = (firstDay + d - 1) % 7;
+    const isSunday = dayOfWeek === 0;
+    const isToday = dateKey === todayKey;
+    const game = eventsByDate[dateKey];
+    const isSelected = dateKey === selectedCalendarDateKey;
+
+    let cellClasses = ['calendar-day-cell'];
+    if (isSunday) cellClasses.push('is-sunday');
+    if (isToday) cellClasses.push('is-today');
+    if (isSelected) cellClasses.push('selected-day');
+
+    let gameHtml = '';
+    if (game) {
+      cellClasses.push('has-game');
+      if (game.status === 'rainout') cellClasses.push('game-rainout');
+      if (game.my_rsvp && game.my_rsvp.status === 'attending') cellClasses.push('is-attending');
+
+      const isRainout = game.status === 'rainout';
+      gameHtml = `
+        <div class="cal-game-pill" title="${API.escapeHtml(game.title || 'Sunday Pickup Baseball')}">
+          <span class="time-title">${isRainout ? '🌧️ Rainout' : '⚾ 12:00 PM'}</span>
+          <span class="loc-title">${API.escapeHtml(game.location || 'Bushrod Park')}</span>
+          <span class="players-count">👥 ${game.attendee_count}</span>
+        </div>
+      `;
+    }
+
+    cellsHtml += `
+      <div class="${cellClasses.join(' ')}" data-date-key="${dateKey}">
+        <div class="calendar-day-num">
+          <span class="${isToday ? 'num-badge' : ''}">${d}</span>
+          ${isSunday && !game ? '<span style="font-size: 0.68rem; color: var(--giants-orange); font-weight: 800;">SUN</span>' : ''}
+        </div>
+        ${gameHtml}
+      </div>
+    `;
+  }
+
+  const totalCells = firstDay + daysInMonth;
+  const remainingCells = (7 - (totalCells % 7)) % 7;
+  for (let n = 1; n <= remainingCells; n++) {
+    cellsHtml += `
+      <div class="calendar-day-cell other-month">
+        <div class="calendar-day-num">${n}</div>
+      </div>
+    `;
+  }
+
+  gridContainer.innerHTML = `
+    <div class="calendar-grid">
+      ${headersHtml}
+      ${cellsHtml}
+    </div>
+  `;
+
+  gridContainer.querySelectorAll('.calendar-day-cell[data-date-key]').forEach(cell => {
+    cell.addEventListener('click', () => {
+      const dateKey = cell.getAttribute('data-date-key');
+      selectedCalendarDateKey = dateKey;
+      gridContainer.querySelectorAll('.calendar-day-cell').forEach(c => c.classList.remove('selected-day'));
+      cell.classList.add('selected-day');
+      const game = eventsByDate[dateKey];
+      renderCalendarDrawer(dateKey, game);
+    });
+  });
+
+  if (selectedCalendarDateKey) {
+    const game = eventsByDate[selectedCalendarDateKey];
+    renderCalendarDrawer(selectedCalendarDateKey, game);
+  }
+}

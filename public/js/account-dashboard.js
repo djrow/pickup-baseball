@@ -383,6 +383,8 @@ function setupUserManagementScreen(currentUser) {
           roleBadge = '<span class="badge badge-orange">👑 Admin</span>';
         } else if (u.role === 'organizer') {
           roleBadge = '<span class="badge badge-green">🛡️ Organizer</span>';
+        } else if (u.role === 'facilitator') {
+          roleBadge = '<span class="badge badge-blue">📋 Facilitator</span>';
         }
 
         return `
@@ -403,6 +405,7 @@ function setupUserManagementScreen(currentUser) {
             <td>
               <select class="role-selector" data-user-id="${u.id}" data-user-name="${API.escapeHtml(u.name)}" style="padding: 4px 8px; border-radius: var(--radius-sm); border: 1.5px solid var(--border); font-size: 0.85rem; font-weight: 600; background: var(--bg-input); color: var(--text-main); cursor: pointer;">
                 <option value="player" ${u.role === 'player' ? 'selected' : ''}>👤 Player</option>
+                <option value="facilitator" ${u.role === 'facilitator' ? 'selected' : ''}>📋 Facilitator (Game Day Lead)</option>
                 <option value="organizer" ${u.role === 'organizer' ? 'selected' : ''}>🛡️ Organizer (Can Post Games)</option>
                 <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>👑 Admin (Full Access)</option>
               </select>

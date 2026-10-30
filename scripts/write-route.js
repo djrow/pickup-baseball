@@ -580,7 +580,7 @@ async function getUserFromSession(db, sessionId) {
 
   const role = session.role || (session.is_admin === 1 ? 'admin' : 'player');
   const isAdmin = role === 'admin' || Boolean(session.is_admin);
-  const canManageEvents = role === 'admin' || role === 'organizer' || isAdmin;
+  const canManageEvents = role === 'admin' || role === 'organizer' || role === 'facilitator' || isAdmin;
 
   return {
     id: session.id,
@@ -647,14 +647,42 @@ const DEFAULT_BASEBALL_DUTIES = [
   { title: "Bases", description: "Bring 3 throw-down bases.", slots_needed: 1 },
   { title: "Pitching machine and power", description: "Bring a pitching machine and a way to run it on the field.", slots_needed: 1 },
   { title: "Game Baseballs", description: "Bring game balls bucket.", slots_needed: 1 },
-  { title: "Field Dragging", description: "Arrive 20 mins early to drag the infield with the pull rake.", slots_needed: 2 }
+  { title: "Field Dragging", description: "Arrive 20 mins early to drag the infield with the pull rake.", slots_needed: 2 },
+  { title: "Game Facilitator", description: "Help coordinate teams, batting order, and fair play throughout the game.", slots_needed: 1 },
+  { title: "Water / Food", description: "Bring drinking water, ice, and dugout snacks or fruit for players.", slots_needed: 1 }
 ];
 
 async function getDefaultDuties(db) {
-  const { results } = await db.prepare(
+  let { results } = await db.prepare(
     'SELECT title, description, slots_needed, sort_order FROM default_duties ORDER BY sort_order ASC, id ASC'
   ).all();
-  return results && results.length > 0 ? results : DEFAULT_BASEBALL_DUTIES;
+  if (!results || results.length === 0) {
+    return DEFAULT_BASEBALL_DUTIES;
+  }
+  const hasFacilitator = results.some(r => r.title && r.title.toLowerCase().includes('facilitator'));
+  const hasWaterFood = results.some(r => r.title && (r.title.toLowerCase().includes('water') || r.title.toLowerCase().includes('food')));
+  if (!hasFacilitator || !hasWaterFood) {
+    try {
+      const maxSort = results.reduce((m, r) => Math.max(m, r.sort_order || 0), 0);
+      if (!hasFacilitator) {
+        await db.prepare('INSERT INTO default_duties (title, description, slots_needed, sort_order) VALUES (?, ?, ?, ?)').bind(
+          'Game Facilitator', 'Help coordinate teams, batting order, and fair play throughout the game.', 1, maxSort + 1
+        ).run();
+      }
+      if (!hasWaterFood) {
+        await db.prepare('INSERT INTO default_duties (title, description, slots_needed, sort_order) VALUES (?, ?, ?, ?)').bind(
+          'Water / Food', 'Bring drinking water, ice, and dugout snacks or fruit for players.', 1, maxSort + 2
+        ).run();
+      }
+      const refetched = await db.prepare('SELECT title, description, slots_needed, sort_order FROM default_duties ORDER BY sort_order ASC, id ASC').all();
+      if (refetched && refetched.results && refetched.results.length > 0) {
+        results = refetched.results;
+      }
+    } catch (e) {
+      console.warn('[getDefaultDuties] Auto-seed error:', e);
+    }
+  }
+  return results;
 }
 
 // -----------------------------------------------------------------------------
@@ -1089,7 +1117,8 @@ app.get('/auth/users', async (c) => {
       ORDER BY 
         CASE WHEN u.role = 'admin' OR u.is_admin = 1 THEN 1 
              WHEN u.role = 'organizer' THEN 2 
-             ELSE 3 END,
+             WHEN u.role = 'facilitator' THEN 3
+             ELSE 4 END,
         u.name COLLATE NOCASE ASC
     `).all();
 
@@ -1109,8 +1138,8 @@ app.put('/auth/users/:id/role', async (c) => {
   const targetId = parseInt(c.req.param('id'), 10);
   const { role } = await c.req.json();
 
-  if (!['admin', 'organizer', 'player'].includes(role)) {
-    return c.json({ error: 'Invalid role. Must be admin, organizer, or player.' }, 400);
+  if (!['admin', 'organizer', 'facilitator', 'player'].includes(role)) {
+    return c.json({ error: 'Invalid role. Must be admin, organizer, facilitator, or player.' }, 400);
   }
 
   const targetUser = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(targetId).first();
@@ -1479,10 +1508,50 @@ app.get('/events/:id', async (c) => {
     }
 
     const rawDuties = batchRes[1].results || [];
-    const duties = rawDuties.map(d => ({
+    let duties = rawDuties.map(d => ({
       ...d,
       assigned_players: JSON.parse(d.assigned_players || '[]')
     }));
+
+    if (event.status !== 'cancelled' && duties.length > 0) {
+      const hasFacilitator = duties.some(d => d.title && d.title.toLowerCase().includes('facilitator'));
+      const hasWaterFood = duties.some(d => d.title && (d.title.toLowerCase().includes('water') || d.title.toLowerCase().includes('food')));
+      if (!hasFacilitator || !hasWaterFood) {
+        try {
+          const maxSort = duties.reduce((m, d) => Math.max(m, d.sort_order || 0), 0);
+          if (!hasFacilitator) {
+            const insRes = await c.env.DB.prepare('INSERT INTO event_duties (event_id, title, description, slots_needed, sort_order) VALUES (?, ?, ?, ?, ?)').bind(
+              eventId, 'Game Facilitator', 'Help coordinate teams, batting order, and fair play throughout the game.', 1, maxSort + 1
+            ).run();
+            duties.push({
+              id: insRes.meta.last_row_id,
+              event_id: eventId,
+              title: 'Game Facilitator',
+              description: 'Help coordinate teams, batting order, and fair play throughout the game.',
+              slots_needed: 1,
+              sort_order: maxSort + 1,
+              assigned_players: []
+            });
+          }
+          if (!hasWaterFood) {
+            const insRes = await c.env.DB.prepare('INSERT INTO event_duties (event_id, title, description, slots_needed, sort_order) VALUES (?, ?, ?, ?, ?)').bind(
+              eventId, 'Water / Food', 'Bring drinking water, ice, and dugout snacks or fruit for players.', 1, maxSort + 2
+            ).run();
+            duties.push({
+              id: insRes.meta.last_row_id,
+              event_id: eventId,
+              title: 'Water / Food',
+              description: 'Bring drinking water, ice, and dugout snacks or fruit for players.',
+              slots_needed: 1,
+              sort_order: maxSort + 2,
+              assigned_players: []
+            });
+          }
+        } catch (e) {
+          console.warn('[EventDuties] Auto-seed error:', e);
+        }
+      }
+    }
 
     const attendees = batchRes[2].results || [];
     const comments = batchRes[3].results || [];

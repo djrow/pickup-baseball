@@ -15,36 +15,45 @@ Designed with a **10+ year longevity philosophy**:
 
 ## 🌟 Key Features
 
-1. **Game Scheduling & Roster Tracking**:
+1. **Interactive Game Calendar & Schedule Export**:
+   - Monthly interactive Game Calendar mounted right at the top of the homepage (`public/index.html`) above the game feed.
+   - Month-by-month navigation (prev/next month, today jump), localized Pacific Time (`America/Los_Angeles`) day alignment, and visual game indicators (player counts, rainout pills, Sunday game day highlights).
+   - Interactive date drawer showing game info, location, attendance, duty coverage, and direct RSVP links.
+   - Quick **1-Click `.ics` Export Download** (`pickup-baseball-schedule.ics`) compatible with Apple Calendar, Microsoft Outlook, and Google Calendar, plus direct 1-click **Add to Google Calendar** links for every game.
+   - Fast-scroll anchor links (`📅 Calendar` in the top navigation bar and `📅 Game Calendar ↓` in the hero banner).
+
+2. **Game Scheduling & Roster Tracking**:
    - Live player roster showing confirmed headcount, player bios, and shared equipment.
    - Instant RSVP confirmation email with game details and a personal management link.
    - 1-Click **"Post Next Sunday @ Noon"** scheduler normalized to `America/Los_Angeles` (Pacific Time).
-   - Inline **Edit Game Details** tool for organizers with smart location autocomplete.
+   - Inline **Edit Game Details** tool for organizers and facilitators with smart location autocomplete.
 
-2. **Volunteer Duty Coordination**:
-   - Customizable default task template pre-configured with the 4 essential game-day duties:
+3. **Volunteer Duty Coordination & Game Day Roles**:
+   - Customizable default task template pre-configured with the 6 essential game-day duties:
+     - **Game Facilitator** (1 slot) — *Help coordinate teams, batting order, and fair play throughout the game.*
+     - **Water / Food** (1 slot) — *Bring drinking water, ice, and dugout snacks or fruit for players.*
      - **Bases** (1 slot) — *Bring 3 throw-down bases.*
      - **Pitching machine and power** (1 slot) — *Bring a pitching machine and a way to run it on the field.*
      - **Game Baseballs** (1 slot) — *Bring game balls bucket.*
      - **Field Dragging** (2 slots) — *Arrive 20 mins early to drag the infield with the pull rake.*
    - Real-time slot availability, duty progress bar, and volunteer attribution (`✓ Covered by [Name]`).
 
-3. **Equipment Sharing & Game Discussion Board**:
+4. **Equipment Sharing & Game Discussion Board**:
    - Players list what gear they can bring (bats, catcher's gear, spare gloves) and coordinate field conditions or carpools on the per-game discussion board.
 
-4. **Roster Capacity, Waitlist & Player Privacy**:
+5. **Roster Capacity, Waitlist & Player Privacy**:
    - Automated roster capacity capping (`max_players`) with instant waitlist activation.
    - Automatic queue promotion upon cancellations with instant email dispatch.
    - Multi-guest reservation support (+1 to +5 guests per RSVP).
    - **Privacy Shield for Player Rosters**: Unauthenticated visitors see a privacy notice protecting player identities until an RSVP is submitted or an organizer signs in.
    - Dedicated **[Past Games Archive](https://www.pickupbaseballfoundation.org/archive.html)** with Sunday turnout recording.
 
-5. **Weather & Rainout Incident Broadcasts**:
+6. **Weather & Rainout Incident Broadcasts**:
    - 1-Click **"🌧️ Call Rainout"** workflow with custom field conditions and makeup notes.
    - Automated cancellation email blast via Resend to all confirmed attendees and volunteers, explicitly releasing gear and duty commitments.
    - Prominent sky-blue rainout banner and 1-click **"☀️ Reopen Game"** tool if fields dry up.
 
-6. **12 Major League Baseball Color Themes & Light/Dark Mode**:
+7. **12 Major League Baseball Color Themes & Light/Dark Mode**:
    - Integrated theme trigger located in the page footer alongside the organization motto (*"Building community through America's pastime."*).
    - 12 authentic team market palettes with adaptive hero gradient banners:
      1. **Bay Area Heritage** (SF Giants Orange `#FD5A1E` & Oakland A's Forest Green `#003831`)
@@ -62,33 +71,34 @@ Designed with a **10+ year longevity philosophy**:
    - High-contrast accessibility tuning: White Sox dark mode button contrast at **12.5:1**; Fenway Crimson dark mode contrast at **4.60:1** (eliminating washed-out salmon/pastel tones); uniform light-colored selection cards across all 12 teams in dark mode.
    - Home-plate shield logo (`/logo.svg`) preserves designed colors in all modes without CSS inversion filters.
 
-7. **15 California Languages & RTL Support**:
+8. **15 California Languages & RTL Support**:
    - Zero-dependency client-side translation engine in `public/js/api.js` powered by lightweight JSON dictionaries (`public/i18n/*.json`).
    - Supports English (`en`), Spanish (`es`), Chinese Simplified (`zh`), Tagalog (`tl`), Vietnamese (`vi`), Korean (`ko`), Arabic (`ar`), Russian (`ru`), Persian/Farsi (`fa`), Japanese (`ja`), Punjabi (`pa`), Armenian (`hy`), Portuguese (`pt`), Hindi (`hi`), and French (`fr`).
    - Automatic browser locale detection, `Intl.DateTimeFormat` date localization, compact navbar selector, and dynamic `dir="rtl"` layout flipping for Arabic and Persian.
 
-8. **Progressive Web App (PWA) & Offline Shell**:
+9. **Progressive Web App (PWA) & Offline Shell**:
    - Web App Manifest (`manifest.webmanifest`) supporting standalone display mode, responsive icons, and transparent 1:1 home-screen badges.
    - Offline Service Worker (`public/sw.js`) serving static app shell assets instantly offline.
    - Instant `0ms` stale-while-revalidate local caching (`localStorage`) for schedules and user profiles.
 
-9. **Reverse Compatibility & Low-Bandwidth Optimizations**:
+10. **Reverse Compatibility & Low-Bandwidth Optimizations**:
    - Pure ES6-compatible JavaScript without modern syntax dependencies (no optional chaining or unpolyfilled APIs).
    - Dual CSS Logical & Physical property fallbacks (`margin-inline-start` + `margin-left`, `border-inline-start` + `border-left`) and flex child margin fallbacks.
    - **99.99% JSON payload reduction** (`25.07 MB` → `2.9 KB`) via dedicated cached avatar endpoint (`GET /api/users/:id/avatar?v=...`) with automated 256×256 compression and EXIF metadata stripping.
    - Collapsed network waterfalls: single batched D1 database round-trip per page load.
    - Enforced 16px minimum font size on form inputs to prevent iOS Mobile Safari auto-zooming.
 
-10. **Donations & Plain-Language Privacy Promise**:
+11. **Donations & Plain-Language Privacy Promise**:
     - Dedicated **[Donate page](https://www.pickupbaseballfoundation.org/donate.html)** with PayPal Giving Fund, Every.org, and IRS tax-receipt instructions.
     - Plain-English privacy notice on the homepage explaining that only names and emails are collected and data is never shared or sold.
 
-11. **Admin, Moderation, & Database Backups**:
-    - Role-based access control (`Admin`, `Organizer`, `Player`).
+12. **Four-Tier RBAC, Facilitator Role, & Database Backups**:
+    - Role-based access control with 4 distinct tiers: `Admin`, `Organizer`, `Facilitator`, and `Player`.
+    - Dedicated **Game Facilitator** role (`📋 Game Facilitator`) with event creation, editing, and rainout management privileges.
     - One-click **📥 Backup Database (.sql)** download directly from the Admin Dashboard.
     - User account removal, email ban list (`banned_emails`), guest RSVP policy toggle, and one-click roster/comment moderation.
 
-12. **Detailed Development Narrative & Open Source**:
+13. **Detailed Development Narrative & Open Source**:
     - Complete chronicle of all architectural decisions, edge migrations, and technical phases in **[`DEVELOPMENT_NARRATIVE.md`](DEVELOPMENT_NARRATIVE.md)**.
     - Direct GitHub repository link in the site footer beside *"Free & open-source"*.
 

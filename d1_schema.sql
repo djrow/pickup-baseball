@@ -127,4 +127,6 @@ INSERT OR IGNORE INTO default_duties (title, description, slots_needed, sort_ord
   ('Bases', 'Bring 3 throw-down bases.', 1, 0),
   ('Pitching machine and power', 'Bring a pitching machine and a way to run it on the field.', 1, 1),
   ('Game Baseballs', 'Bring game balls bucket.', 1, 2),
-  ('Field Dragging', 'Arrive 20 mins early to drag the infield with the pull rake.', 2, 3);
+  ('Field Dragging', 'Arrive 20 mins early to drag the infield with the pull rake.', 2, 3),
+  ('Game Facilitator', 'Help coordinate teams, batting order, and fair play throughout the game.', 1, 4),
+  ('Water / Food', 'Bring drinking water, ice, and dugout snacks or fruit for players.', 1, 5);

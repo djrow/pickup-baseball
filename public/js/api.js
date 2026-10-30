@@ -5,12 +5,26 @@
 
 const EN_DICT = {
   "nav.community": "Community",
+  "nav.calendar": "Calendar",
   "nav.archive": "Archive",
   "nav.donate": "Donate",
   "nav.login": "Log In",
   "nav.logout": "Log Out",
   "nav.admin": "⚙️ Admin",
   "nav.org": "⚾ Org",
+  "calendar.title": "Game Calendar",
+  "calendar.subtitle": "Sunday Pickup Games • 12:00 PM • Bushrod Park",
+  "calendar.today": "Today",
+  "calendar.add_to_calendar": "Export (.ics)",
+  "calendar.export_btn": "📥 Export Schedule (.ics)",
+  "calendar.noon_game": "12:00 PM Game",
+  "calendar.legend_game": "Sunday Game (12:00 PM)",
+  "calendar.legend_rainout": "Rainout",
+  "calendar.legend_today": "Today",
+  "calendar.legend_attending": "You're Attending",
+  "calendar.no_game": "No game scheduled on this date.",
+  "calendar.pickup_reminder": "Free community pickup baseball is every Sunday at Noon at Bushrod Park!",
+  "calendar.view_details": "RSVP & View Game Details →",
   "footer.tagline": "Building community through America's pastime.",
   "footer.subtext": "Built for simplicity and durability. Free & open-source.",
   "hero.title": "Free Pickup Baseball Every Sunday at Noon",
@@ -207,7 +221,11 @@ const EN_DICT = {
   "phrase.duty_balls": "Game Baseballs",
   "phrase.duty_balls_desc": "Bring game balls bucket.",
   "phrase.duty_drag": "Field Dragging",
-  "phrase.duty_drag_desc": "Arrive 20 mins early to drag the infield with the pull rake."
+  "phrase.duty_drag_desc": "Arrive 20 mins early to drag the infield with the pull rake.",
+  "phrase.duty_facilitator": "Game Facilitator",
+  "phrase.duty_facilitator_desc": "Help coordinate teams, batting order, and fair play throughout the game.",
+  "phrase.duty_water_food": "Water / Food",
+  "phrase.duty_water_food_desc": "Bring drinking water, ice, and dugout snacks or fruit for players."
 };
 
 const KNOWN_PHRASE_KEYS = {
@@ -223,7 +241,11 @@ const KNOWN_PHRASE_KEYS = {
   "Game Baseballs": "phrase.duty_balls",
   "Bring game balls bucket.": "phrase.duty_balls_desc",
   "Field Dragging": "phrase.duty_drag",
-  "Arrive 20 mins early to drag the infield with the pull rake.": "phrase.duty_drag_desc"
+  "Arrive 20 mins early to drag the infield with the pull rake.": "phrase.duty_drag_desc",
+  "Game Facilitator": "phrase.duty_facilitator",
+  "Help coordinate teams, batting order, and fair play throughout the game.": "phrase.duty_facilitator_desc",
+  "Water / Food": "phrase.duty_water_food",
+  "Bring drinking water, ice, and dugout snacks or fruit for players.": "phrase.duty_water_food_desc"
 };
 
 const API = {
@@ -1086,6 +1108,7 @@ const API = {
 
     const isDonatePage = typeof window !== 'undefined' && (window.location.pathname.endsWith('donate.html') || window.location.pathname === '/donate');
     const donateLinkHtml = `<a href="/donate.html" class="nav-link-donate${isDonatePage ? ' active' : ''}">${this.t('nav.donate')}</a>`;
+    const calendarLinkHtml = `<a href="/index.html#site-calendar-section" class="nav-link-calendar" title="${this.escapeHtml(this.t('calendar.title', 'Game Calendar'))}">📅 <span class="nav-text-calendar">${this.escapeHtml(this.t('nav.calendar', 'Calendar'))}</span></a>`;
 
     const langOptionsHtml = this.SUPPORTED_LANGUAGES.map(l =>
       `<option value="${l.code}" ${l.code === currentLang ? 'selected' : ''} title="${this.escapeHtml(l.label)}">${l.short}</option>`
@@ -1101,6 +1124,7 @@ const API = {
           <span class="brand-tag">${this.t('nav.community')}</span>
         </a>
         <div class="nav-links">
+          ${calendarLinkHtml}
           ${donateLinkHtml}
           ${langSelectHtml}
           ${authHtml}

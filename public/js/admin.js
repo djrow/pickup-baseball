@@ -35,10 +35,15 @@ function applyRoleUI(user) {
     if (defaultTemplateCard) defaultTemplateCard.style.display = 'block';
     if (saveAsDefaultsBtn) saveAsDefaultsBtn.style.display = 'inline-block';
   } else if (user && user.canManageEvents) {
-    // Organizer Control
+    // Organizer or Facilitator Control
     if (badgeEl) {
-      badgeEl.className = 'badge badge-green';
-      badgeEl.innerHTML = '🛡️ Organizer Control';
+      if (user.role === 'facilitator') {
+        badgeEl.className = 'badge badge-blue';
+        badgeEl.innerHTML = '📋 Facilitator Control';
+      } else {
+        badgeEl.className = 'badge badge-green';
+        badgeEl.innerHTML = '🛡️ Organizer Control';
+      }
     }
     if (backupBtn) backupBtn.style.display = 'none';
     if (defaultTemplateCard) defaultTemplateCard.style.display = 'none';
@@ -88,7 +93,9 @@ async function loadDefaultDuties() {
       { title: "Bases", description: "Bring 3 throw-down bases.", slots_needed: 1 },
       { title: "Pitching machine and power", description: "Bring a pitching machine and a way to run it on the field.", slots_needed: 1 },
       { title: "Game Baseballs", description: "Bring game balls bucket.", slots_needed: 1 },
-      { title: "Field Dragging", description: "Arrive 20 mins early to drag the infield with the pull rake.", slots_needed: 2 }
+      { title: "Field Dragging", description: "Arrive 20 mins early to drag the infield with the pull rake.", slots_needed: 2 },
+      { title: "Game Facilitator", description: "Help coordinate teams, batting order, and fair play throughout the game.", slots_needed: 1 },
+      { title: "Water / Food", description: "Bring drinking water, ice, and dugout snacks or fruit for players.", slots_needed: 1 }
     ];
   }
   builderDuties = JSON.parse(JSON.stringify(orgDefaultDuties));
@@ -926,6 +933,8 @@ function setupAdminUserManagement(currentUser) {
           roleBadge = '<span class="badge badge-orange">👑 Admin</span>';
         } else if (u.role === 'organizer') {
           roleBadge = '<span class="badge badge-green">🛡️ Organizer</span>';
+        } else if (u.role === 'facilitator') {
+          roleBadge = '<span class="badge badge-blue">📋 Facilitator</span>';
         }
 
         return `
@@ -946,6 +955,7 @@ function setupAdminUserManagement(currentUser) {
             <td>
               <select class="admin-role-selector" data-user-id="${u.id}" data-user-name="${API.escapeHtml(u.name)}" style="padding: 4px 8px; border-radius: var(--radius-sm); border: 1.5px solid var(--border); font-size: 0.85rem; font-weight: 600; background: var(--bg-input); color: var(--text-main); cursor: pointer;">
                 <option value="player" ${u.role === 'player' ? 'selected' : ''}>👤 Player</option>
+                <option value="facilitator" ${u.role === 'facilitator' ? 'selected' : ''}>📋 Facilitator (Game Day Lead)</option>
                 <option value="organizer" ${u.role === 'organizer' ? 'selected' : ''}>🛡️ Organizer (Can Post Games)</option>
                 <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>👑 Admin (Full Access)</option>
               </select>

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sign In / Register - Sunday Pickup Baseball</title>
-  <link rel="stylesheet" href="/css/style.css?v=13">
+  <link rel="stylesheet" href="/css/style.css?v=14">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png">
@@ -156,7 +156,7 @@
     </div>
   </footer>
 
-  <script src="/js/api.js?v=13"></script>
+  <script src="/js/api.js?v=14"></script>
   <script>
     function getSafeRedirectUrl() {
       const params = new URLSearchParams(window.location.search);
@@ -198,6 +198,8 @@
               roleBadge.innerHTML = '<span class="badge badge-orange" style="font-size: 0.85rem; padding: 4px 10px;">👑 Administrator</span>';
             } else if (user.role === 'organizer') {
               roleBadge.innerHTML = '<span class="badge badge-green" style="font-size: 0.85rem; padding: 4px 10px;">🛡️ Event Organizer</span>';
+            } else if (user.role === 'facilitator') {
+              roleBadge.innerHTML = '<span class="badge badge-blue" style="font-size: 0.85rem; padding: 4px 10px;">📋 Game Facilitator</span>';
             } else {
               roleBadge.innerHTML = '<span class="badge badge-gray" style="font-size: 0.85rem; padding: 4px 10px;">👤 Player</span>';
             }
