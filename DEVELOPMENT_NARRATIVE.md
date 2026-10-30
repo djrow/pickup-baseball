@@ -271,5 +271,20 @@ Clarified schedule status for future Sunday dates to prevent user confusion betw
 
 ---
 
-## 22. Future Roadmap Notes
+## 22. Phase 21: Homepage Streamlining (Calendar-First Architecture)
+Eliminated the redundant "Future Scheduled Games" list below the featured game card, establishing the interactive Sunday game calendar as the single, authoritative schedule:
+- **Removed Redundant Future Games Section:**
+  - Removed `<section>` (`#games-list-container`) and heading `Future Scheduled Games` from `public/index.html`.
+  - Deleted ~70 lines of dead rendering code (`renderGamesList`) from `public/js/app.js`.
+  - The interactive Sunday game calendar already displays all upcoming Sunday games across any month with rich attendee counts, rainout pills, attendance badges, and 1-click details drawers, making a secondary list view unnecessary and duplicative.
+- **Relocated Past Games Archive Shortcut:**
+  - Placed a dedicated `📜 Past Archive →` link in the calendar header action controls (`.calendar-header-actions` in `public/index.html`) alongside `📥 Export (.ics)` and month navigation controls, providing immediate access to historic recaps and turnout.
+- **Automated Verification & Version Bump:**
+  - Added test assertion `T9.9` to `scripts/verify-all.js` ensuring `games-list-container` and `renderGamesList` are absent and the calendar archive shortcut is present.
+  - Bumped application cache bust version to `v21` across all client and server files.
+  - All 48 tests pass cleanly.
+
+---
+
+## 23. Future Roadmap Notes
 - **Pinned Full-Stack Rust / WebAssembly Migration:** Evaluated a future 4-phase rewrite of the Cloudflare Pages Functions backend (and optional frontend interactivity) to Rust (`workers-rs` compiling to WebAssembly) for compile-time type safety, zero-dependency binary durability, and strict edge memory safety—kept as a guiding north star when designing new features and data models.

@@ -35,10 +35,9 @@ async function initHome() {
 
   window.addEventListener('pickup:langchange', () => {
     applyUserToHomeUi(API.currentUser);
-    const listContainer = document.getElementById('games-list-container');
     const featuredContainer = document.getElementById('featured-game-container');
-    if (listContainer && featuredContainer) {
-      renderEventsView(lastLoadedEvents, featuredContainer, listContainer);
+    if (featuredContainer) {
+      renderEventsView(lastLoadedEvents, featuredContainer);
     }
   });
 
@@ -61,17 +60,16 @@ function setupFilters() {
   }
 }
 
-function renderEventsView(events, featuredContainer, listContainer) {
+function renderEventsView(events, featuredContainer) {
   lastLoadedEvents = events || [];
   renderCalendar(lastLoadedEvents);
+  if (!featuredContainer) return;
+
   if (events.length > 0) {
-    // Next upcoming game is rendered at the top
+    // Next upcoming game is rendered in featured container
     renderFeaturedGame(events[0], featuredContainer);
-    // Future upcoming games are rendered below
-    renderGamesList(events.slice(1), listContainer);
   } else {
-    featuredContainer.innerHTML = '';
-    listContainer.innerHTML = `
+    featuredContainer.innerHTML = `
       <div class="card" style="text-align: center; padding: 40px 20px;">
         <div style="font-size: 2.5rem; margin-bottom: 12px;">⚾</div>
         <h3 style="color: var(--secondary); margin-bottom: 8px;">${API.escapeHtml(API.t('home.no_upcoming_title'))}</h3>
@@ -85,7 +83,6 @@ function renderEventsView(events, featuredContainer, listContainer) {
 }
 
 async function loadGames(justLoggedIn = false) {
-  const listContainer = document.getElementById('games-list-container');
   const featuredContainer = document.getElementById('featured-game-container');
   const cacheKey = `pickup_cached_events_${currentFilter}`;
 
@@ -95,14 +92,14 @@ async function loadGames(justLoggedIn = false) {
     if (cachedRaw) {
       const cachedEvents = JSON.parse(cachedRaw);
       if (Array.isArray(cachedEvents) && cachedEvents.length > 0) {
-        renderEventsView(cachedEvents, featuredContainer, listContainer);
+        renderEventsView(cachedEvents, featuredContainer);
         renderedFromCache = true;
       }
     }
   } catch (e) {}
 
-  if (!renderedFromCache) {
-    listContainer.innerHTML = `<p style="color: var(--text-muted);">${API.escapeHtml(API.t('home.loading_games'))}</p>`;
+  if (!renderedFromCache && featuredContainer && !featuredContainer.innerHTML.trim()) {
+    featuredContainer.innerHTML = `<p style="color: var(--text-muted); text-align: center; padding: 20px;">${API.escapeHtml(API.t('home.loading_games'))}</p>`;
   }
 
   try {
@@ -125,11 +122,11 @@ async function loadGames(justLoggedIn = false) {
       localStorage.setItem(cacheKey, JSON.stringify(events));
     } catch (e) {}
 
-    renderEventsView(events, featuredContainer, listContainer);
+    renderEventsView(events, featuredContainer);
   } catch (err) {
     console.error('Error loading games:', err);
-    if (!renderedFromCache) {
-      listContainer.innerHTML = `<div class="alert alert-error">${API.escapeHtml(API.t('home.load_error', 'Unable to load games at this time.'))}</div>`;
+    if (!renderedFromCache && featuredContainer) {
+      featuredContainer.innerHTML = `<div class="alert alert-error">${API.escapeHtml(API.t('home.load_error', 'Unable to load games at this time.'))}</div>`;
     }
   }
 }
@@ -213,77 +210,6 @@ function renderFeaturedGame(ev, container) {
           ${API.escapeHtml(API.t('home.join_roster_btn'))}
         </a>
       </div>
-    </div>
-  `;
-}
-
-function renderGamesList(events, container) {
-  if (events.length === 0) {
-    container.innerHTML = `<p style="color: var(--text-muted);">${API.escapeHtml(API.t('home.no_additional'))}</p>`;
-    return;
-  }
-
-  container.innerHTML = `
-    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 18px;">
-      ${events.map(ev => {
-        const dateFormatted = API.formatDateTime(ev.event_date);
-        const myRsvpBadge = ev.my_rsvp && ev.my_rsvp.status === 'attending'
-          ? `<span class="badge badge-green">${API.escapeHtml(API.t('home.you_are_attending'))}</span>`
-          : '';
-        const translatedTitle = API.translateEventTitle(ev);
-        const isRainout = ev.status === 'rainout';
-        const statusBadge = isRainout
-          ? `<span class="badge badge-rainout">🌧️ ${API.escapeHtml(API.t('event.rained_out_badge', 'Rained Out'))}</span>`
-          : `<span class="badge badge-blue">${API.escapeHtml(API.t('home.sunday_game_badge'))}</span>`;
-
-        return `
-          <div class="card" style="display: flex; flex-direction: column; justify-content: space-between; margin-bottom: 0; ${isRainout ? 'border-left: 4px solid #38bdf8;' : ''}">
-            <div>
-              <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
-                ${statusBadge}
-                ${myRsvpBadge}
-              </div>
-              <h3 style="font-size: 1.15rem; color: var(--secondary); margin-bottom: 6px;">
-                <a href="/event.html?id=${ev.id}" style="color: inherit; text-decoration: none;">
-                  ${API.escapeHtml(translatedTitle)}
-                </a>
-              </h3>
-              <p style="font-size: 0.88rem; font-weight: 600; color: var(--text-main); margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
-                <span style="color: var(--secondary);">${API.icon('calendar', 15)}</span> ${dateFormatted}
-              </p>
-              <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
-                <span style="color: var(--primary);">${API.icon('pin', 15)}</span> ${API.escapeHtml(ev.location)}
-              </p>
-            </div>
-
-            <div style="border-top: 1px solid var(--border); padding-top: 12px; margin-top: 12px; display: flex; justify-content: space-between; align-items: center;">
-              ${ev.status === 'rainout'
-                ? `<span style="font-weight: 700; color: #0284c7; font-size: 0.88rem;">🌧️ ${API.escapeHtml(API.t('event.rained_out_badge', 'Rained Out'))}</span>`
-                : (ev.actual_attendance != null
-                  ? `
-                    <div style="display: flex; flex-direction: column;">
-                      <span style="font-weight: 800; color: var(--secondary); font-size: 0.95rem; display: inline-flex; align-items: center; gap: 5px; font-variant-numeric: tabular-nums;">
-                        <span>⚾</span> <span>${API.escapeHtml(API.t('home.players_played', { count: ev.actual_attendance }))}</span>
-                      </span>
-                      <span style="font-size: 0.74rem; color: var(--text-muted); font-weight: 500;">
-                        ${API.escapeHtml(API.t('home.online_rsvps_sub', { count: ev.attendee_count }))}
-                      </span>
-                    </div>
-                  `
-                  : `
-                    <span style="font-weight: 700; color: var(--primary); font-size: 0.9rem; display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums;">
-                      ${API.icon('users', 16)} ${API.escapeHtml(API.t('home.on_roster_count', { count: ev.attendee_count }))}
-                    </span>
-                  `
-                )
-              }
-              <a href="/event.html?id=${ev.id}" class="btn btn-outline btn-sm">
-                ${API.escapeHtml(currentFilter === 'past' ? API.t('home.view_game') : API.t('home.view_rsvp'))}
-              </a>
-            </div>
-          </div>
-        `;
-      }).join('')}
     </div>
   `;
 }

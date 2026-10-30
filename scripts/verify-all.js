@@ -55,7 +55,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-const CURRENT_APP_VERSION = '20';
+const CURRENT_APP_VERSION = '21';
 app.use((req, res, next) => {
   res.setHeader('X-App-Version', CURRENT_APP_VERSION);
   next();
@@ -1082,5 +1082,20 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     const adminHtml = fs.readFileSync(adminHtmlPath, 'utf8');
     assert.ok(adminHtml.includes('Game Day Volunteer Tasks'), 'admin.html must show Game Day Volunteer Tasks');
     assert.ok(!adminHtml.includes('Game Day Duty Board'), 'admin.html must not contain Game Day Duty Board');
+  });
+
+  await t9.test('T9.9: Removal of future scheduled games section (streamlined calendar-only view)', () => {
+    const indexHtmlPath = path.join(publicDir, 'index.html');
+    const indexHtml = fs.readFileSync(indexHtmlPath, 'utf8');
+    assert.ok(!indexHtml.includes('id="games-list-container"'), 'index.html must not contain games-list-container');
+    assert.ok(!indexHtml.includes('home.future_games'), 'index.html must not contain future_games section header');
+    assert.ok(!indexHtml.includes('Future Scheduled Games'), 'index.html must not contain Future Scheduled Games heading');
+    assert.ok(indexHtml.includes('calendar-header-actions'), 'index.html must contain calendar-header-actions');
+    assert.ok(indexHtml.includes('href="/archive.html"'), 'index.html must provide link to archive in calendar actions');
+
+    const appJsPath = path.join(publicDir, 'js/app.js');
+    const appJs = fs.readFileSync(appJsPath, 'utf8');
+    assert.ok(!appJs.includes('renderGamesList'), 'app.js must not define or call renderGamesList');
+    assert.ok(!appJs.includes("document.getElementById('games-list-container')"), 'app.js must not query games-list-container');
   });
 });

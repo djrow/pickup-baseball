@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pickup Baseball Foundation</title>
-  <link rel="stylesheet" href="/css/style.css?v=20">
+  <link rel="stylesheet" href="/css/style.css?v=21">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png">
@@ -95,6 +95,9 @@
           </p>
         </div>
         <div class="calendar-header-actions">
+          <a href="/archive.html" class="btn btn-outline btn-sm" style="font-weight: 600; display: inline-flex; align-items: center; gap: 5px;" title="View past Sunday game recaps and turnout">
+            <span>📜</span> <span data-i18n="home.view_past_archive">Past Archive →</span>
+          </a>
           <button type="button" id="calendar-export-ics-btn" class="btn btn-outline btn-sm" title="Download .ics schedule for Google, Apple, or Outlook Calendar">
             <span>📥</span> <span data-i18n="calendar.add_to_calendar">Export (.ics)</span>
           </button>
@@ -131,20 +134,6 @@
     <div id="featured-game-container">
       <!-- Rendered dynamically -->
     </div>
-
-    <!-- Future Scheduled Games List -->
-    <section style="margin-top: 36px;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
-        <h2 style="color: var(--secondary); font-size: 1.4rem;" data-i18n="home.future_games">Future Scheduled Games</h2>
-        <a href="/archive.html" class="btn btn-outline btn-sm" style="font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">
-          <span>📜</span> <span data-i18n="home.view_past_archive">Past Games Archive →</span>
-        </a>
-      </div>
-
-      <div id="games-list-container">
-        <p style="color: var(--text-muted);" data-i18n="home.loading_games">Loading scheduled games...</p>
-      </div>
-    </section>
 
     <!-- How It Works Section -->
     <section class="card" style="margin-top: 48px; background: var(--bg-card);">
@@ -196,7 +185,7 @@
   <!-- Site Footer -->
   <footer id="site-footer" class="site-footer"></footer>
 
-  <script src="/js/api.js?v=20"></script>
-  <script src="/js/app.js?v=20"></script>
+  <script src="/js/api.js?v=21"></script>
+  <script src="/js/app.js?v=21"></script>
 </body>
 </html>
