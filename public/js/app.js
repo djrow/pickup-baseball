@@ -2,7 +2,7 @@
  * Homepage application logic
  */
 
-let currentFilter = 'upcoming';
+let currentFilter = 'all';
 let lastLoadedEvents = [];
 
 function applyUserToHomeUi(user) {
@@ -589,7 +589,7 @@ function renderCalendar(events) {
         card.classList.add('selected-sunday');
         const game = eventsByDate[dateKey];
         const item = gameDates.find(g => g.dateKey === dateKey);
-        renderCalendarDrawer(dateKey, game, item && item.isPast);
+        renderCalendarDrawer(dateKey, game, dateKey < todayKey);
       }
     };
 
@@ -607,7 +607,6 @@ function renderCalendar(events) {
     renderCalendarDrawer(null, null);
   } else if (selectedCalendarDateKey) {
     const game = eventsByDate[selectedCalendarDateKey];
-    const item = gameDates.find(g => g.dateKey === selectedCalendarDateKey);
-    renderCalendarDrawer(selectedCalendarDateKey, game, item && item.isPast);
+    renderCalendarDrawer(selectedCalendarDateKey, game, selectedCalendarDateKey < todayKey);
   }
 }

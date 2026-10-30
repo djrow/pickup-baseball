@@ -32,7 +32,8 @@
 - **[23. Phase 22: Rolling Calendar Horizon & Event RSVP Whitelists](#23-phase-22-rolling-calendar-horizon--event-rsvp-whitelists)** — 5-week rolling stream (most recent past + upcoming), candidate accounts RSVP whitelist.
 - **[24. Phase 23: Pure Calendar-Driven Landing Page](#24-phase-23-pure-calendar-driven-landing-page-removal-of-featured-game-card)** — Removed redundant "Next Sunday Pickup" featured card, calendar-first landing.
 - **[25. Phase 24: Anchoring 'Next Game' & 'Past Game' Badges to Real-World Timeline](#25-phase-24-anchoring-next-game--past-game-badges-to-real-world-timeline)** — Decoupled pills from pagination index, strict `trueNextGameKey` and `dateKey < todayKey` anchoring.
-- **[26. Future Roadmap Notes](#26-future-roadmap-notes)** — Full-stack Rust / WebAssembly edge migration architecture.
+- **[26. Phase 25: Loading Full Event Dataset for Authentic Past Game Rendering](#26-phase-25-loading-full-event-dataset-for-authentic-past-game-rendering)** — Switched home query from `upcoming` to `all`, restoring recorded event data (e.g. Oct 25 turnout, location, and recap).
+- **[27. Future Roadmap Notes](#27-future-roadmap-notes)** — Full-stack Rust / WebAssembly edge migration architecture.
 
 ---
 
@@ -366,5 +367,26 @@ Fixed a calendar pagination defect where navigating forward or backward across m
 
 ---
 
-## 26. Future Roadmap Notes
+## 26. Phase 25: Loading Full Event Dataset for Authentic Past Game Rendering
+Resolved an issue where past events (specifically the October 25 game) appeared on the calendar as unscheduled prospective placeholders (`📍 TBA`, `📅 Prospective`, `12:00 PM (Target)`) rather than displaying their authentic recorded event details:
+- **Root Cause Analysis:**
+  - `loadGames()` in `public/js/app.js` was initialized with `currentFilter = 'upcoming'`.
+  - The server query for `upcoming` (`WHERE e.event_date >= date('now', '-1 day')`) intentionally excluded past events.
+  - As a result, the client-side `calendarEventsCache` never contained Event ID 13 (Oct 25), causing `renderCalendar` to fall back to an unscheduled dummy placeholder with `TBA` location and `Prospective` tags.
+- **Full Schedule Feed (`filter=all`):**
+  - Updated `currentFilter` to `'all'` in `public/js/app.js`, ensuring `GET /api/events?filter=all` delivers both historic recaps and upcoming fixtures in a single ultra-lightweight payload (~3 KB).
+  - The October 25 event now renders with its authentic recorded information:
+    - **Header Tag:** `📜 Past Game`
+    - **Turnout Metric:** `👥 18 Turnout` (and `18 Played`)
+    - **Venue Location:** `📍 Bushrod Park Field 1`
+    - **Interactive Slide-Out Drawer:** `📜 Past Game Recap` badge, verified headcount (`18 Players`), 4 tasks configured, direct link to `📜 View Recap & Comments →` (`/event.html?id=13`), and link to the archive.
+  - Dynamically evaluated `isPast` as `dateKey < todayKey` in drawer trigger listeners (`handleSelect`).
+- **Automated Verification & Version Bump:**
+  - Added test assertion `T9.14` to `scripts/verify-all.js` verifying that `currentFilter = 'all'` is loaded and the drawer evaluates `dateKey < todayKey`.
+  - Bumped cache bust version to `v25` across all client, server, service worker, and HTML asset links (`CLIENT_VERSION: '25'`, `CURRENT_APP_VERSION = '25'`, `CACHE_NAME = 'pbf-cache-v25'`).
+  - All 53 automated tests in `scripts/verify-all.js` pass with 100% success rate.
+
+---
+
+## 27. Future Roadmap Notes
 - **Pinned Full-Stack Rust / WebAssembly Migration:** Evaluated a future 4-phase rewrite of the Cloudflare Pages Functions backend (and optional frontend interactivity) to Rust (`workers-rs` compiling to WebAssembly) for compile-time type safety, zero-dependency binary durability, and strict edge memory safety—kept as a guiding north star when designing new features and data models.

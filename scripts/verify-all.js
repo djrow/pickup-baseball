@@ -55,7 +55,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-const CURRENT_APP_VERSION = '24';
+const CURRENT_APP_VERSION = '25';
 app.use((req, res, next) => {
   res.setHeader('X-App-Version', CURRENT_APP_VERSION);
   next();
@@ -1193,5 +1193,11 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(appJs.includes('dateKey === trueNextGameKey'), 'app.js must anchor sunday-next-pill strictly to trueNextGameKey');
     assert.ok(!appJs.includes('item === selectedUpcoming[0]'), 'app.js must not falsely assign next game to whatever item is at index 0 of selectedUpcoming');
     assert.ok(appJs.includes('const isPast = (dateKey < todayKey);'), 'app.js must evaluate isPast strictly against actual todayKey');
+  });
+
+  await t9.test('T9.14: Calendar loads complete schedule dataset (all events) ensuring past events display authentic record data', () => {
+    const appJs = fs.readFileSync(path.join(publicDir, 'js/app.js'), 'utf8');
+    assert.ok(appJs.includes("let currentFilter = 'all';"), 'app.js must initialize currentFilter to all to include past event records in calendar track');
+    assert.ok(appJs.includes('renderCalendarDrawer(dateKey, game, dateKey < todayKey);'), 'app.js must evaluate isPast dynamically against todayKey for drawer details');
   });
 });
