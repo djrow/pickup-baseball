@@ -55,7 +55,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-const CURRENT_APP_VERSION = '19';
+const CURRENT_APP_VERSION = '20';
 app.use((req, res, next) => {
   res.setHeader('X-App-Version', CURRENT_APP_VERSION);
   next();
@@ -1009,6 +1009,9 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     const css = fs.readFileSync(cssPath, 'utf8');
     assert.ok(css.includes('.calendar-sunday-track'), 'CSS must define .calendar-sunday-track');
     assert.ok(css.includes('.calendar-sunday-card'), 'CSS must define .calendar-sunday-card');
+    assert.ok(css.includes('.calendar-sunday-card.is-prospective'), 'CSS must define .calendar-sunday-card.is-prospective');
+    assert.ok(css.includes('.sunday-prospective-pill'), 'CSS must define .sunday-prospective-pill');
+    assert.ok(css.includes('.legend-dot.prospective'), 'CSS must define .legend-dot.prospective');
 
     const appJsPath = path.join(publicDir, 'js/app.js');
     const appJs = fs.readFileSync(appJsPath, 'utf8');
@@ -1016,6 +1019,13 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(appJs.includes('calendar-sunday-card'), 'app.js must render .calendar-sunday-card');
     assert.ok(appJs.includes('dateObj.getDay() === 0'), 'app.js must filter for Sunday game days');
     assert.ok(!appJs.includes('class="calendar-grid"'), 'app.js must not render old 35-cell grid');
+    assert.ok(appJs.includes("locationName = (game && game.location) ? game.location.split(',')[0].trim() : 'TBA'"), 'app.js must set unscheduled location to TBA');
+    assert.ok(appJs.includes('Location: TBA'), 'app.js drawer must display Location: TBA for unscheduled dates');
+    assert.ok(appJs.includes('Prospective Date • Unscheduled'), 'app.js drawer must clearly label prospective unscheduled dates');
+
+    const indexPath = path.join(publicDir, 'index.html');
+    const indexHtml = fs.readFileSync(indexPath, 'utf8');
+    assert.ok(indexHtml.includes('calendar.legend_prospective'), 'index.html must include prospective legend item');
   });
 
   await t9.test('T9.7: Top bar & landing page decluttering: calendar and hero buttons removed, logout in profile', () => {

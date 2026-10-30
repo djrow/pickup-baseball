@@ -2727,6 +2727,41 @@ footer.site-footer strong {
   box-shadow: 0 4px 12px var(--giants-orange-glow);
 }
 
+.calendar-sunday-card.is-prospective {
+  border: 1.5px dashed var(--border);
+  background: var(--bg-subtle);
+  opacity: 0.92;
+}
+
+.calendar-sunday-card.is-prospective:hover {
+  border-color: var(--secondary);
+  background: var(--bg-card);
+  opacity: 1;
+}
+
+.sunday-prospective-pill {
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+[data-theme="dark"] .sunday-prospective-pill {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.sunday-player-badge.prospective-badge {
+  color: var(--text-muted);
+  font-weight: 600;
+  font-style: italic;
+}
+
 .calendar-sunday-card.game-rainout {
   background: rgba(56, 189, 248, 0.12);
   border-color: rgba(56, 189, 248, 0.4);
@@ -2899,6 +2934,7 @@ footer.site-footer strong {
 }
 
 .legend-dot.game-day { background: var(--giants-orange); }
+.legend-dot.prospective { border: 1.5px dashed var(--text-muted); background: var(--bg-subtle); }
 .legend-dot.rainout { background: #38bdf8; }
 .legend-dot.today { border: 2px solid var(--giants-orange); background: transparent; }
 .legend-dot.attending { background: var(--as-green); }

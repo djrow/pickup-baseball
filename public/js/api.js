@@ -18,11 +18,14 @@ const EN_DICT = {
   "calendar.add_to_calendar": "Export (.ics)",
   "calendar.export_btn": "📥 Export Schedule (.ics)",
   "calendar.noon_game": "12:00 PM Game",
-  "calendar.legend_game": "Sunday Game (12:00 PM)",
+  "calendar.legend_game": "Confirmed Game (12:00 PM)",
+  "calendar.legend_prospective": "Prospective (TBA)",
   "calendar.legend_rainout": "Rainout",
   "calendar.legend_today": "Today",
   "calendar.legend_attending": "You're Attending",
   "calendar.no_game": "No game scheduled on this date.",
+  "calendar.prospective_pill": "Prospective",
+  "calendar.prospective_badge": "📅 Prospective",
   "calendar.pickup_reminder": "Free community pickup baseball is every Sunday at Noon at Bushrod Park!",
   "calendar.view_details": "RSVP & View Game Details →",
   "footer.tagline": "Building community through America's pastime.",
@@ -256,7 +259,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '19',
+  CLIENT_VERSION: '20',
 
   // Current user cache
   currentUser: null,

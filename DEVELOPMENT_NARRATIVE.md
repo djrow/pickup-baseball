@@ -255,5 +255,21 @@ Refined user experience and vocabulary consistency across the entire web applica
 
 ---
 
-## 21. Future Roadmap Notes
+## 21. Phase 20: Prospective Unscheduled Calendar Events & TBA Location Tagging
+Clarified schedule status for future Sunday dates to prevent user confusion between confirmed games and unscheduled prospective dates:
+- **TBA Location Tagging for Unscheduled Events:**
+  - In `renderCalendar` (`public/js/app.js`), unscheduled Sunday placeholder cards now display `📍 TBA` (with tooltip `Location: TBA (Unscheduled)`) instead of assuming a default venue.
+  - In the calendar event drawer (`renderCalendarDrawer`), unscheduled prospective dates display `📍 Location: TBA` and explicitly note that RSVPs are not yet open.
+- **Explicit 'Prospective' Status Labeling:**
+  - Applied dashed border styling (`.calendar-sunday-card.is-prospective`) and badge tag (`.sunday-prospective-pill` / `.prospective-badge`) to visually contrast prospective dates against confirmed games.
+  - Labeled card time as `12:00 PM (Target)` with calendar icon `📅` rather than baseball emoji `⚾`.
+  - Added calendar legend entry `📅 Prospective (TBA)` to differentiate confirmed games (`⚾ Confirmed Game (12:00 PM)`) from unscheduled prospective dates.
+  - Explanatory drawer notice clarifies that only near-future events with active rosters are guaranteed, with a direct 1-click shortcut for logged-in organizers to schedule the date when field permits are secured.
+- **Automated Verification:**
+  - Extended test suite assertion `T9.6` in `scripts/verify-all.js` to assert `TBA` location fallback, prospective card styling, drawer labeling, and legend synchronization.
+  - Bumped cache bust version to `v20` across client, server, service worker, and HTML asset links.
+
+---
+
+## 22. Future Roadmap Notes
 - **Pinned Full-Stack Rust / WebAssembly Migration:** Evaluated a future 4-phase rewrite of the Cloudflare Pages Functions backend (and optional frontend interactivity) to Rust (`workers-rs` compiling to WebAssembly) for compile-time type safety, zero-dependency binary durability, and strict edge memory safety—kept as a guiding north star when designing new features and data models.

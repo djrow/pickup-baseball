@@ -460,19 +460,24 @@ function renderCalendarDrawer(dateKey, game) {
     drawer.innerHTML = `
       <div class="drawer-info" style="flex: 1; min-width: 250px;">
         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-          <span class="badge badge-orange">⚾ Scheduled Sunday Pickup Game</span>
+          <span class="badge badge-gray" style="font-weight: 700; border: 1px dashed var(--border); background: var(--bg-card); color: var(--text-muted);">📅 Prospective Date • Unscheduled</span>
         </div>
-        <h3 style="font-size: 1.15rem; color: var(--secondary); margin: 0 0 4px 0;">${API.escapeHtml(API.t('phrase.sunday_pickup_noon', 'Sunday Pickup Baseball - Noon Game'))}</h3>
+        <h3 style="font-size: 1.15rem; color: var(--secondary); margin: 0 0 4px 0;">Sunday Pickup Baseball (Prospective)</h3>
         <div class="drawer-meta" style="margin-top: 6px;">
-          <span class="drawer-meta-item"><span>📅</span> <strong>${API.escapeHtml(dateFormatted)} at 12:00 PM</strong></span>
-          <span class="drawer-meta-item"><span>📍</span> Bushrod Park Field 1, Oakland, CA</span>
-          <span class="drawer-meta-item"><span>⚾</span> All skill levels welcome</span>
+          <span class="drawer-meta-item"><span>📅</span> <strong>${API.escapeHtml(dateFormatted)} (Target: 12:00 PM)</strong></span>
+          <span class="drawer-meta-item"><span>📍</span> <strong>Location: TBA</strong></span>
+          <span class="drawer-meta-item" style="color: var(--text-muted);"><span>ℹ️</span> <em>RSVP not yet open</em></span>
         </div>
-        <p style="margin: 8px 0 0 0; font-size: 0.85rem; color: var(--text-muted);">
-          ${API.escapeHtml(API.t('calendar.pickup_reminder', 'Free community pickup baseball is every Sunday at Noon at Bushrod Park!'))}
+        <p style="margin: 8px 0 0 0; font-size: 0.86rem; color: var(--text-muted); line-height: 1.45;">
+          This Sunday date is prospective and not yet officially scheduled. Only near-future games with confirmed rosters are guaranteed. Organizers confirm field availability and publish official games as dates approach.
         </p>
       </div>
       <div class="drawer-actions" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+        ${(API.currentUser && API.currentUser.canManageEvents) ? `
+          <a href="/admin.html" class="btn btn-primary btn-sm" style="font-size: 0.82rem; font-weight: 700;">
+            ⚡ Schedule This Game →
+          </a>
+        ` : ''}
         <button type="button" class="calendar-drawer-close-btn" aria-label="Close details" title="Close">✕ Close</button>
       </div>
     `;
@@ -560,9 +565,13 @@ function renderCalendar(events) {
     let cardClasses = ['calendar-sunday-card'];
     if (isToday) cardClasses.push('is-today');
     if (isSelected) cardClasses.push('selected-sunday');
-    if (game) cardClasses.push('has-game');
-    if (isRainout) cardClasses.push('game-rainout');
-    if (isAttending) cardClasses.push('is-attending');
+    if (game) {
+      cardClasses.push('has-game');
+      if (isRainout) cardClasses.push('game-rainout');
+      if (isAttending) cardClasses.push('is-attending');
+    } else {
+      cardClasses.push('is-prospective');
+    }
 
     let weekdayShort = item.isSunday ? 'Sun' : 'Game';
     let monthShort = '';
@@ -574,21 +583,31 @@ function renderCalendar(events) {
     }
 
     const attendeeCount = game ? (game.attendee_count || 0) : 0;
-    const locationName = (game && game.location) ? game.location.split(',')[0].trim() : 'Bushrod Park';
+    const locationName = (game && game.location) ? game.location.split(',')[0].trim() : 'TBA';
+    const locationTitle = game ? (game.location || 'Location: TBA') : 'Location: TBA (Unscheduled)';
+
+    const timeIcon = game ? (isRainout ? '🌧️' : '⚾') : '📅';
+    const timeText = game
+      ? (isRainout ? API.escapeHtml(API.t('calendar.legend_rainout', 'Rainout')) : '12:00 PM')
+      : '12:00 PM (Target)';
+
+    const topPillHtml = isToday
+      ? `<span class="sunday-today-pill">${API.escapeHtml(API.t('calendar.today', 'Today'))}</span>`
+      : (!game ? `<span class="sunday-prospective-pill">${API.escapeHtml(API.t('calendar.prospective_pill', 'Prospective'))}</span>` : '');
 
     cardsHtml += `
       <div class="${cardClasses.join(' ')}" data-date-key="${dateKey}" role="button" tabindex="0" aria-label="${API.escapeHtml(weekdayShort)}, ${API.escapeHtml(monthShort)} ${item.day}">
         <div class="sunday-card-top">
           <span class="sunday-day-tag">${API.escapeHtml(weekdayShort)}</span>
           <span class="sunday-date-tag">${API.escapeHtml(monthShort)} ${item.day}</span>
-          ${isToday ? `<span class="sunday-today-pill">${API.escapeHtml(API.t('calendar.today', 'Today'))}</span>` : ''}
+          ${topPillHtml}
         </div>
         <div class="sunday-card-body">
           <div class="sunday-game-time">
-            <span class="sunday-time-icon">${isRainout ? '🌧️' : '⚾'}</span>
-            <span class="sunday-time-text">${isRainout ? API.escapeHtml(API.t('calendar.legend_rainout', 'Rainout')) : '12:00 PM'}</span>
+            <span class="sunday-time-icon">${timeIcon}</span>
+            <span class="sunday-time-text">${timeText}</span>
           </div>
-          <div class="sunday-game-location" title="${API.escapeHtml(game ? game.location : 'Bushrod Park')}">
+          <div class="sunday-game-location" title="${API.escapeHtml(locationTitle)}">
             📍 ${API.escapeHtml(locationName)}
           </div>
         </div>
@@ -597,7 +616,7 @@ function renderCalendar(events) {
             <span class="sunday-player-badge">👥 ${attendeeCount} ${attendeeCount === 1 ? 'Player' : 'Players'}</span>
             ${isAttending ? `<span class="sunday-attending-pill" title="You're attending this game">✓ In</span>` : ''}
           ` : `
-            <span class="sunday-player-badge open-badge">⚾ Pickup Game</span>
+            <span class="sunday-player-badge prospective-badge">📅 ${API.escapeHtml(API.t('calendar.prospective_pill', 'Prospective'))}</span>
           `}
         </div>
       </div>
