@@ -198,5 +198,20 @@ To reduce cognitive load, accelerate comprehension, and eliminate architectural 
 - **Unified Client-Side Footer Shell:** Implemented `API.renderFooter()` in `public/js/api.js`, dynamically populating the organization motto, GitHub repository link, theme picker, and app update button into standard `<footer id="site-footer" class="site-footer"></footer>` containers. This removed repeated 25-line HTML boilerplate across all 8 static pages.
 - **Total Codebase Reduction:** Reduced active codebase lines from **36,177** down to **27,465**—a net reduction of **8,712 lines of code (-24.1% of entire repository, -42.1% of JavaScript)**—with 100% of features, performance characteristics, and security controls intact.
 
-## 17. Future Roadmap Notes
+---
+
+## 17. Phase 16: Smart Invisible Update Button & Real-Time Version Comparison Engine
+Following community guidance on minimizing UI clutter while guaranteeing that out-of-date cached PWA clients always receive fresh edge releases:
+- **Invisible by Default:** The update button (`#footer-update-wrapper`) is configured with `display: none` when the application is running the latest version, keeping the page footer clean and unobtrusive.
+- **Real-Time Version Comparison Pipeline:**
+  - Added an `X-App-Version: 16` HTTP header returned on every Cloudflare Pages Functions API response and Express route.
+  - Added a dedicated, non-blocking `GET /api/version` endpoint.
+  - The client (`public/js/api.js`) compares the server's `X-App-Version` header against its local `CLIENT_VERSION: '16'` on every background API request (e.g. `/api/auth/me` and `/api/events`) as well as on a 1.5s post-load heartbeat check.
+- **Dual-Trigger Activation:**
+  - If the server's version differs from the cached client, OR if the Service Worker installs a new build in the background (`reg.waiting` / `reg.updatefound`), the update button smoothly fades into view directly beneath the theme picker with an active pulsing accent badge (`✨ Update Available — Click to Refresh`).
+- **One-Click Refresh & Auto-Hide:**
+  - Clicking triggers `SKIP_WAITING`, purges obsolete browser `caches` and local storage entries, and reloads the window.
+  - Upon reload, the newly downloaded `CLIENT_VERSION` matches the server, automatically returning the button to its invisible state.
+
+## 18. Future Roadmap Notes
 - **Pinned Full-Stack Rust / WebAssembly Migration:** Evaluated a future 4-phase rewrite of the Cloudflare Pages Functions backend (and optional frontend interactivity) to Rust (`workers-rs` compiling to WebAssembly) for compile-time type safety, zero-dependency binary durability, and strict edge memory safety—kept as a guiding north star when designing new features and data models.

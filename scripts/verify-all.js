@@ -54,6 +54,15 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+
+const CURRENT_APP_VERSION = '16';
+app.use((req, res, next) => {
+  res.setHeader('X-App-Version', CURRENT_APP_VERSION);
+  next();
+});
+app.get('/api/version', (req, res) => {
+  res.json({ version: CURRENT_APP_VERSION });
+});
 app.use(express.static(path.join(__dirname, '..', 'public')));
 app.use('/api/auth', authRoutes);
 app.use('/api/events', eventRoutes);
@@ -986,5 +995,12 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     const apiCode = fs.readFileSync(apiJsPath, 'utf8');
     assert.ok(apiCode.includes('serviceWorker.register'), 'api.js must register service worker');
     assert.ok(apiCode.includes('/sw.js'), 'api.js must point to /sw.js');
+  });
+
+  await t9.test('T9.5: Server sends X-App-Version header and /api/version endpoint responds', async () => {
+    const res = await apiReq('GET', '/api/version');
+    assert.equal(res.status, 200);
+    assert.equal(res.data.version, '16');
+    assert.equal(res.headers.get('x-app-version'), '16');
   });
 });

@@ -80,7 +80,7 @@ Designed with a **10+ year longevity philosophy**:
    - Web App Manifest (`manifest.webmanifest`) supporting standalone display mode, responsive icons, and transparent 1:1 home-screen badges.
    - Offline Service Worker (`public/sw.js`) serving static app shell assets instantly offline.
    - Instant `0ms` stale-while-revalidate local caching (`localStorage`) for schedules and user profiles.
-   - **One-Click Fixed-in-Place Update Button (`🔄 Update App`):** Prominently anchored at the bottom of the page directly beneath the Theme & Colors picker across all pages. Clicking immediately checks for Service Worker updates, purges stale browser and localStorage caches, triggers `SKIP_WAITING`, and performs a clean reload with latest application code. Automatically badges with an active pulse (`✨ Update Available — Click to Refresh`) when a background update is detected.
+   - **Smart Conditional Update Button (`✨ Update Available`):** Kept completely invisible (`display: none`) when the app is up to date, eliminating all visual clutter. Powered by a dual-detection engine: (1) every API response transmits an `X-App-Version` HTTP header compared against the client's version, and (2) Service Worker `waiting` and `updatefound` listeners monitor background downloads. When a discrepancy or new edge build is detected, the button smoothly fades in beneath the theme picker with a pulsing badge. Clicking purges stale caches, triggers `SKIP_WAITING`, and reloads into the fresh version, immediately restoring the button to its invisible state.
 
 10. **Reverse Compatibility & Low-Bandwidth Optimizations**:
    - Pure ES6-compatible JavaScript without modern syntax dependencies (no optional chaining or unpolyfilled APIs).

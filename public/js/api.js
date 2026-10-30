@@ -254,6 +254,9 @@ const KNOWN_PHRASE_KEYS = {
 };
 
 const API = {
+  // Installed Client Application Version
+  CLIENT_VERSION: '16',
+
   // Current user cache
   currentUser: null,
 
@@ -619,7 +622,7 @@ const API = {
               <button type="button" id="footer-theme-trigger" class="footer-theme-btn" aria-label="Change Appearance Theme">🎨 Theme &amp; Colors</button>
             </div>
             <div id="footer-theme-panel-slot"></div>
-            <div class="footer-update-wrapper">
+            <div id="footer-update-wrapper" class="footer-update-wrapper">
               <button type="button" id="footer-update-btn" class="footer-update-btn" aria-label="Update app to latest version">
                 <span class="update-icon">🔄</span> <span class="update-label" data-i18n="footer.update_app">${this.escapeHtml(this.t('footer.update_app', 'Update App'))}</span>
               </button>
@@ -757,6 +760,31 @@ const API = {
   },
 
 
+  checkResponseVersion(res) {
+    if (!res || !res.headers) return;
+    try {
+      const serverVersion = res.headers.get('x-app-version');
+      if (serverVersion && serverVersion !== this.CLIENT_VERSION) {
+        this.setUpdateAvailableUi(null, null, serverVersion);
+      }
+    } catch (e) {}
+  },
+
+  async checkForUpdates() {
+    try {
+      const res = await fetch('/api/version?t=' + Date.now());
+      if (res.ok) {
+        this.checkResponseVersion(res);
+        const data = await res.json();
+        if (data && data.version && data.version !== this.CLIENT_VERSION) {
+          this.setUpdateAvailableUi(null, null, data.version);
+          return true;
+        }
+      }
+    } catch (e) {}
+    return false;
+  },
+
   initAppUpdater() {
     if (typeof document === 'undefined') return;
     const updateBtn = document.getElementById('footer-update-btn');
@@ -766,6 +794,7 @@ const API = {
 
     let waitingWorker = null;
 
+    // 1. Service Worker updatefound & waiting lifecycle detection
     if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
       navigator.serviceWorker.getRegistration().then((reg) => {
         if (!reg) return;
@@ -799,18 +828,32 @@ const API = {
       });
     }
 
+    // 2. Non-blocking heartbeat version check (compares server X-App-Version against client version)
+    setTimeout(() => {
+      this.checkForUpdates();
+    }, 1500);
+
+    // 3. User update action
     updateBtn.addEventListener('click', async (e) => {
       e.preventDefault();
       await this.triggerAppUpdate(updateBtn, statusEl, waitingWorker);
     });
   },
 
-  setUpdateAvailableUi(btn, statusEl) {
-    if (!btn) return;
-    btn.classList.add('update-available');
-    const label = btn.querySelector('.update-label');
-    if (label) {
-      label.textContent = this.t('footer.update_available', 'Update Available — Click to Refresh');
+  setUpdateAvailableUi(btn, statusEl, newVersion) {
+    if (!btn) btn = document.getElementById('footer-update-btn');
+    if (!statusEl) statusEl = document.getElementById('footer-update-status');
+    const wrapper = document.getElementById('footer-update-wrapper') || (btn ? btn.closest('.footer-update-wrapper') : null);
+    if (wrapper) {
+      wrapper.classList.add('visible');
+      wrapper.style.display = 'flex';
+    }
+    if (btn) {
+      btn.classList.add('update-available');
+      const label = btn.querySelector('.update-label');
+      if (label) {
+        label.textContent = this.t('footer.update_available', 'Update Available — Click to Refresh');
+      }
     }
     if (statusEl) {
       statusEl.style.display = 'block';
@@ -912,6 +955,7 @@ const API = {
   async getMe() {
     try {
       const res = await fetch('/api/auth/me');
+      this.checkResponseVersion(res);
       const data = await res.json();
       API.currentUser = data.user || null;
       API.setCachedUser(API.currentUser);
@@ -933,6 +977,7 @@ const API = {
 
   async getEvents(filter = 'upcoming') {
     const res = await fetch(`/api/events?filter=${filter}`);
+    this.checkResponseVersion(res);
     const data = await res.json();
     if (data && data.user !== undefined) {
       API.currentUser = data.user || null;
@@ -944,6 +989,7 @@ const API = {
   async getEvent(id, token = '') {
     const url = `/api/events/${id}${token ? `?token=${encodeURIComponent(token)}` : ''}`;
     const res = await fetch(url);
+    this.checkResponseVersion(res);
     const data = await res.json();
     if (data && data.user !== undefined) {
       API.currentUser = data.user || null;

@@ -4,6 +4,17 @@ import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 
 const app = new Hono().basePath('/api');
 
+const CURRENT_APP_VERSION = '16';
+
+app.use('*', async (c, next) => {
+  await next();
+  c.header('X-App-Version', CURRENT_APP_VERSION);
+});
+
+app.get('/version', (c) => {
+  return c.json({ version: CURRENT_APP_VERSION });
+});
+
 const SESSION_COOKIE_NAME = 'baseball_session';
 const SESSION_DURATION_SECONDS = 90 * 24 * 60 * 60; // 90 days
 const AUTH_CODE_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes

@@ -27,6 +27,15 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
+const CURRENT_APP_VERSION = '16';
+app.use((req, res, next) => {
+  res.setHeader('X-App-Version', CURRENT_APP_VERSION);
+  next();
+});
+app.get('/api/version', (req, res) => {
+  res.json({ version: CURRENT_APP_VERSION });
+});
+
 // Serve static frontend assets and persistent user uploaded avatars
 app.use(express.static(path.join(__dirname, '..', 'public')));
 app.use('/uploads/avatars', express.static(avatarsDir));
