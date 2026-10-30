@@ -2756,6 +2756,40 @@ footer.site-footer strong {
   border-color: rgba(255, 255, 255, 0.12);
 }
 
+.calendar-sunday-card.is-past-card {
+  background: var(--bg-subtle);
+  border-color: var(--border);
+  opacity: 0.88;
+}
+
+.calendar-sunday-card.is-past-card:hover {
+  opacity: 1;
+  border-color: var(--text-muted);
+}
+
+.sunday-past-pill {
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.sunday-next-pill {
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--as-green);
+  color: #ffffff;
+  letter-spacing: 0.04em;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
 .sunday-player-badge.prospective-badge {
   color: var(--text-muted);
   font-weight: 600;

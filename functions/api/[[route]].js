@@ -4,9 +4,23 @@ import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 
 const app = new Hono().basePath('/api');
 
-const CURRENT_APP_VERSION = '21';
+const CURRENT_APP_VERSION = '22';
+
+let d1Migrated = false;
+async function ensureD1Schema(db) {
+  if (d1Migrated || !db) return;
+  try {
+    await db.prepare('ALTER TABLE events ADD COLUMN allowed_emails TEXT DEFAULT NULL').run();
+  } catch (e) {
+    // Column already exists
+  }
+  d1Migrated = true;
+}
 
 app.use('*', async (c, next) => {
+  if (c.env && c.env.DB) {
+    await ensureD1Schema(c.env.DB);
+  }
   await next();
   c.header('X-App-Version', CURRENT_APP_VERSION);
 });
@@ -1346,6 +1360,14 @@ app.get('/events', async (c) => {
       });
     }
 
+    if (events && events.length > 0) {
+      events.forEach(ev => {
+        const allowed = parseAllowedEmails(ev.allowed_emails);
+        ev.is_restricted = allowed.length > 0;
+        ev.allowed_emails_list = allowed;
+      });
+    }
+
     return c.json({ events: events || [], user: user || null });
   } catch (err) {
     console.error('[Events] Error listing events:', err);
@@ -1442,6 +1464,37 @@ app.get('/events/admin/backup-db', async (c) => {
   } catch (err) {
     console.error('[Backup] Error creating SQL dump:', err);
     return c.text('Failed to generate database backup: ' + err.message, 500);
+  }
+});
+
+function parseAllowedEmails(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    return [...new Set(raw.map(e => String(e).trim().toLowerCase()).filter(e => e.includes('@')))];
+  }
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return [...new Set(parsed.map(e => String(e).trim().toLowerCase()).filter(e => e.includes('@')))];
+      }
+    } catch (e) {}
+    return [...new Set(raw.split(/[,\n;]/).map(e => String(e).trim().toLowerCase()).filter(e => e.includes('@')))];
+  }
+  return [];
+}
+
+app.get('/events/attendee-candidates', async (c) => {
+  const user = c.get('user');
+  if (!user || !user.canManageEvents) {
+    return c.json({ error: 'Organizer or Admin permissions required.' }, 403);
+  }
+  try {
+    const { results: users } = await c.env.DB.prepare('SELECT id, name, email FROM users ORDER BY name ASC').all();
+    return c.json({ users: users || [] });
+  } catch (err) {
+    console.error('[Events] Error fetching candidate attendees:', err);
+    return c.json({ error: 'Failed to fetch candidate accounts.' }, 500);
   }
 });
 
@@ -1574,8 +1627,28 @@ app.get('/events/:id', async (c) => {
       myRsvp.duty_ids = JSON.parse(myRsvp.duty_ids || '[]');
     }
 
+    const allowedList = parseAllowedEmails(event.allowed_emails);
+    const isRestricted = allowedList.length > 0;
+    let isAllowedToRsvp = true;
+    if (isRestricted) {
+      if (user && user.canManageEvents) {
+        isAllowedToRsvp = true;
+      } else if (user && user.email) {
+        isAllowedToRsvp = allowedList.includes(user.email.toLowerCase());
+      } else if (myRsvp && myRsvp.email) {
+        isAllowedToRsvp = allowedList.includes(myRsvp.email.toLowerCase());
+      } else {
+        isAllowedToRsvp = false;
+      }
+    }
+
     return c.json({
-      event,
+      event: {
+        ...event,
+        allowed_emails_list: allowedList,
+        is_restricted: isRestricted,
+        is_allowed_to_rsvp: isAllowedToRsvp
+      },
       duties: duties || [],
       attendees: attendees || [],
       comments: comments || [],
@@ -1605,7 +1678,8 @@ app.post('/events', async (c) => {
       event_date,
       max_players,
       use_default_duties,
-      custom_duties
+      custom_duties,
+      allowed_emails
     } = await c.req.json();
 
     if (!title || !String(title).trim() || !location || !String(location).trim() || !event_date) {
@@ -1635,9 +1709,12 @@ app.post('/events', async (c) => {
       dutiesToInsert = await getDefaultDuties(c.env.DB);
     }
 
+    const allowedList = parseAllowedEmails(allowed_emails);
+    const allowedEmailsJson = allowedList.length > 0 ? JSON.stringify(allowedList) : null;
+
     const insertEventRes = await c.env.DB.prepare(`
-      INSERT INTO events (title, description, location, location_url, event_date, max_players, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO events (title, description, location, location_url, event_date, max_players, allowed_emails, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       String(title).trim().slice(0, 150),
       String(description || '').trim().slice(0, 2000),
@@ -1645,6 +1722,7 @@ app.post('/events', async (c) => {
       safeLocUrl,
       event_date,
       max_players ? parseInt(max_players, 10) : null,
+      allowedEmailsJson,
       user.id
     ).run();
 
@@ -1688,7 +1766,7 @@ app.put('/events/:id', async (c) => {
 
   try {
     const eventId = parseInt(c.req.param('id'), 10);
-    const { title, description, location, location_url, event_date, max_players, status } = await c.req.json();
+    const { title, description, location, location_url, event_date, max_players, status, allowed_emails } = await c.req.json();
 
     const existingEvent = await c.env.DB.prepare('SELECT * FROM events WHERE id = ?').bind(eventId).first();
     if (!existingEvent) {
@@ -1725,6 +1803,16 @@ app.put('/events/:id', async (c) => {
       newMaxPlayers = isNaN(parsed) ? existingEvent.max_players : parsed;
     }
 
+    let newAllowedEmails = existingEvent.allowed_emails;
+    if (allowed_emails !== undefined) {
+      if (allowed_emails === null || allowed_emails === '') {
+        newAllowedEmails = null;
+      } else {
+        const allowedList = parseAllowedEmails(allowed_emails);
+        newAllowedEmails = allowedList.length > 0 ? JSON.stringify(allowedList) : null;
+      }
+    }
+
     await c.env.DB.prepare(`
       UPDATE events
       SET title = COALESCE(?, title),
@@ -1733,6 +1821,7 @@ app.put('/events/:id', async (c) => {
           location_url = COALESCE(?, location_url),
           event_date = COALESCE(?, event_date),
           max_players = ?,
+          allowed_emails = ?,
           status = COALESCE(?, status)
       WHERE id = ?
     `).bind(
@@ -1742,6 +1831,7 @@ app.put('/events/:id', async (c) => {
       location_url !== undefined ? safeLocUrl : null,
       event_date || null,
       newMaxPlayers,
+      newAllowedEmails,
       status || null,
       eventId
     ).run();
@@ -1836,6 +1926,14 @@ app.post('/events/:id/rsvp', async (c) => {
       const banRecord = await c.env.DB.prepare('SELECT id FROM banned_emails WHERE email = ?').bind(email).first();
       if (banRecord) {
         return c.json({ error: 'This email address has been restricted from registering.' }, 403);
+      }
+    }
+
+    const allowedList = parseAllowedEmails(event.allowed_emails);
+    if (allowedList.length > 0 && status === 'attending') {
+      const isOrganizer = Boolean(user && user.canManageEvents);
+      if (!isOrganizer && !allowedList.includes(email.toLowerCase())) {
+        return c.json({ error: 'RSVP for this game is restricted to invited player accounts. Your email is not on the allowed list.' }, 403);
       }
     }
 

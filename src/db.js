@@ -57,6 +57,10 @@ function initDatabase() {
       status TEXT DEFAULT 'active',
       created_by INTEGER REFERENCES users(id),
       reminder_sent INTEGER DEFAULT 0,
+      rainout_note TEXT,
+      rainout_at DATETIME,
+      rainout_email_sent INTEGER DEFAULT 0,
+      allowed_emails TEXT DEFAULT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -139,6 +143,9 @@ function initDatabase() {
   }
   if (!eventCols.includes('rainout_email_sent')) {
     db.exec('ALTER TABLE events ADD COLUMN rainout_email_sent INTEGER DEFAULT 0');
+  }
+  if (!eventCols.includes('allowed_emails')) {
+    db.exec('ALTER TABLE events ADD COLUMN allowed_emails TEXT DEFAULT NULL');
   }
   if (!eventCols.includes('actual_attendance')) {
     db.exec('ALTER TABLE events ADD COLUMN actual_attendance INTEGER DEFAULT NULL');

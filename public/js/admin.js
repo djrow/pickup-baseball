@@ -407,6 +407,49 @@ function setupQuickSundayButton() {
   });
 }
 
+let candidatePlayersCache = [];
+
+async function loadCandidatePlayers() {
+  const container = document.getElementById('allowed-players-list');
+  if (!container) return;
+  try {
+    const res = await API.getAttendeeCandidates();
+    candidatePlayersCache = res.users || [];
+    renderCandidatePlayers(candidatePlayersCache);
+  } catch (err) {
+    container.innerHTML = '<span style="color: var(--danger); font-size: 0.85rem;">Failed to load player accounts.</span>';
+  }
+}
+
+function renderCandidatePlayers(players) {
+  const container = document.getElementById('allowed-players-list');
+  if (!container) return;
+  if (!players || players.length === 0) {
+    container.innerHTML = '<span style="color: var(--text-muted); font-size: 0.85rem;">No user accounts found.</span>';
+    return;
+  }
+  container.innerHTML = players.map(p => `
+    <label class="allowed-player-row" style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; cursor: pointer; margin: 0; padding: 2px 0;">
+      <input type="checkbox" class="allowed-player-cb" value="${API.escapeHtml(p.email)}" style="accent-color: var(--primary);">
+      <span style="font-weight: 600; color: var(--secondary);">${API.escapeHtml(p.name)}</span>
+      <span style="color: var(--text-muted); font-size: 0.78rem;">(${API.escapeHtml(p.email)})</span>
+    </label>
+  `).join('');
+
+  container.querySelectorAll('.allowed-player-cb').forEach(cb => {
+    cb.addEventListener('change', updateSelectedPlayersCount);
+  });
+  updateSelectedPlayersCount();
+}
+
+function updateSelectedPlayersCount() {
+  const countEl = document.getElementById('selected-players-count');
+  const checked = document.querySelectorAll('.allowed-player-cb:checked');
+  if (countEl) {
+    countEl.textContent = `${checked.length} player${checked.length === 1 ? '' : 's'} selected`;
+  }
+}
+
 function setupCreateForm() {
   const form = document.getElementById('create-event-form');
   const capToggle = document.getElementById('event-cap-toggle');
@@ -414,6 +457,50 @@ function setupCreateForm() {
   if (capToggle && capWrap) {
     capToggle.addEventListener('change', () => {
       capWrap.style.display = capToggle.checked ? 'block' : 'none';
+    });
+  }
+
+  const restrictToggle = document.getElementById('event-restrict-toggle');
+  const restrictWrap = document.getElementById('event-restrict-wrap');
+  if (restrictToggle && restrictWrap) {
+    restrictToggle.addEventListener('change', () => {
+      restrictWrap.style.display = restrictToggle.checked ? 'block' : 'none';
+      if (restrictToggle.checked && candidatePlayersCache.length === 0) {
+        loadCandidatePlayers();
+      }
+    });
+  }
+
+  const searchInput = document.getElementById('allowed-player-search');
+  if (searchInput) {
+    searchInput.addEventListener('input', () => {
+      const q = searchInput.value.trim().toLowerCase();
+      const rows = document.querySelectorAll('.allowed-player-row');
+      rows.forEach(r => {
+        const text = r.textContent.toLowerCase();
+        r.style.display = text.includes(q) ? 'flex' : 'none';
+      });
+    });
+  }
+
+  const selectAllBtn = document.getElementById('btn-select-all-players');
+  if (selectAllBtn) {
+    selectAllBtn.addEventListener('click', () => {
+      document.querySelectorAll('.allowed-player-row').forEach(r => {
+        if (r.style.display !== 'none') {
+          const cb = r.querySelector('.allowed-player-cb');
+          if (cb) cb.checked = true;
+        }
+      });
+      updateSelectedPlayersCount();
+    });
+  }
+
+  const deselectAllBtn = document.getElementById('btn-deselect-all-players');
+  if (deselectAllBtn) {
+    deselectAllBtn.addEventListener('click', () => {
+      document.querySelectorAll('.allowed-player-cb').forEach(cb => cb.checked = false);
+      updateSelectedPlayersCount();
     });
   }
 
@@ -430,6 +517,8 @@ function setupCreateForm() {
       const invalidDuty = builderDuties.find(d => !d.title.trim());
       if (invalidDuty) {
         showAlert('Please enter a name for all tasks, or click the trash can to delete empty rows.', true);
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Publish Game';
         return;
       }
 
@@ -437,6 +526,8 @@ function setupCreateForm() {
       const rawDate = document.getElementById('event-date-input').value;
       if (!rawDate) {
         showAlert('Please enter a valid date and time for the game.', true);
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Publish Game';
         return;
       }
       const eventDate = API.localToPacificIso(rawDate);
@@ -449,6 +540,23 @@ function setupCreateForm() {
         ? (parseInt(document.getElementById('event-max-players-input').value, 10) || 28)
         : null;
 
+      let allowedEmails = null;
+      if (restrictToggle && restrictToggle.checked) {
+        const checkedBoxes = Array.from(document.querySelectorAll('.allowed-player-cb:checked')).map(cb => cb.value);
+        const extraEmails = (document.getElementById('event-extra-allowed-emails')?.value || '')
+          .split(/[,\n;]/)
+          .map(s => s.trim().toLowerCase())
+          .filter(s => s.includes('@'));
+        const combined = [...new Set([...checkedBoxes, ...extraEmails])];
+        if (combined.length === 0) {
+          showAlert('Please select or enter at least one allowed player email, or uncheck the restricted RSVP box.', true);
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Publish Game';
+          return;
+        }
+        allowedEmails = combined;
+      }
+
       const res = await fetch('/api/events', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -459,6 +567,7 @@ function setupCreateForm() {
           location_url: locationUrl,
           description,
           max_players: maxPlayers,
+          allowed_emails: allowedEmails,
           custom_duties: builderDuties
         })
       });
@@ -529,6 +638,7 @@ async function loadAdminGames() {
                 <div style="font-weight: 700; font-size: 1.15rem; color: var(--secondary); display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                   <span>${API.escapeHtml(ev.title)}</span>
                   ${ev.status === 'rainout' ? '<span class="badge badge-rainout" style="font-size: 0.72rem;">🌧️ Rained Out</span>' : ''}
+                  ${ev.is_restricted ? '<span class="badge badge-orange" style="font-size: 0.72rem;">🔒 Invited Roster</span>' : ''}
                 </div>
                 <div style="font-size: 0.9rem; color: var(--text-main); margin-top: 3px;">
                   📅 ${API.formatDateTime(ev.event_date)} | 📍 ${API.escapeHtml(ev.location)}
@@ -604,6 +714,15 @@ async function loadAdminGames() {
                     </span>
                   </div>
                 </div>
+                <div class="form-group" style="background: var(--bg-card); padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 12px;">
+                  <label style="font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                    <span>🔒</span> <span>Allowed Player Emails (Whitelist)</span>
+                  </label>
+                  <textarea id="edit-allowed-emails-${ev.id}" rows="2" placeholder="Leave blank to allow all players; or enter emails separated by commas or lines">${API.escapeHtml(((ev.allowed_emails_list) || (ev.allowed_emails ? (typeof ev.allowed_emails === 'string' ? JSON.parse(ev.allowed_emails) : ev.allowed_emails) : [])).join(', '))}</textarea>
+                  <span style="font-size: 0.8rem; color: var(--text-muted);">
+                    Leave blank to allow any registered player or guest to RSVP. Enter specific email addresses to restrict access.
+                  </span>
+                </div>
                 <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                   <button type="button" id="save-game-btn-${ev.id}" onclick="saveEditedGame(${ev.id})" class="btn btn-primary btn-sm">💾 Save Changes</button>
                   <button type="button" onclick="toggleEditGamePanel(${ev.id})" class="btn btn-outline btn-sm">Cancel</button>
@@ -656,6 +775,10 @@ window.saveEditedGame = async function(eventId) {
   const actualVal = attendanceInput ? attendanceInput.value.trim() : '';
   const actualAttendance = actualVal === '' ? null : parseInt(actualVal, 10);
 
+  const allowedEmailsRaw = document.getElementById(`edit-allowed-emails-${eventId}`)?.value || '';
+  const allowedList = allowedEmailsRaw.split(/[,\n;]/).map(s => s.trim().toLowerCase()).filter(s => s.includes('@'));
+  const allowed_emails = allowedList.length > 0 ? allowedList : null;
+
   if (!title || !rawDate || !location) {
     alertBox.innerHTML = '<div class="alert alert-error">Title, Date/Time, and Field Location are required.</div>';
     return;
@@ -672,7 +795,8 @@ window.saveEditedGame = async function(eventId) {
       location,
       location_url: locationUrl,
       description,
-      actual_attendance: isNaN(actualAttendance) ? null : actualAttendance
+      actual_attendance: isNaN(actualAttendance) ? null : actualAttendance,
+      allowed_emails
     });
     if (res.error) {
       alertBox.innerHTML = `<div class="alert alert-error">${API.escapeHtml(res.error)}</div>`;

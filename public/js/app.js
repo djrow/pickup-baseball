@@ -235,13 +235,13 @@ function setupCalendarControls() {
 
   if (prevBtn) {
     prevBtn.addEventListener('click', () => {
-      currentCalDate.setMonth(currentCalDate.getMonth() - 1);
+      currentCalDate.setDate(currentCalDate.getDate() - 28);
       renderCalendar();
     });
   }
   if (nextBtn) {
     nextBtn.addEventListener('click', () => {
-      currentCalDate.setMonth(currentCalDate.getMonth() + 1);
+      currentCalDate.setDate(currentCalDate.getDate() + 28);
       renderCalendar();
     });
   }
@@ -332,7 +332,7 @@ function downloadCalendarIcs(events) {
   URL.revokeObjectURL(url);
 }
 
-function renderCalendarDrawer(dateKey, game) {
+function renderCalendarDrawer(dateKey, game, isPast) {
   const drawer = document.getElementById('calendar-date-drawer');
   if (!drawer) return;
   if (!dateKey) {
@@ -340,7 +340,37 @@ function renderCalendarDrawer(dateKey, game) {
     return;
   }
   drawer.style.display = 'flex';
-  if (game) {
+  if (game && isPast) {
+    const isRainout = game.status === 'rainout';
+    const dateFormatted = API.formatDateTime(game.event_date);
+    const translatedTitle = API.translateEventTitle(game);
+    const turnoutCount = game.actual_attendance != null ? game.actual_attendance : (game.attendee_count || 0);
+    drawer.innerHTML = `
+      <div class="drawer-info" style="flex: 1; min-width: 250px;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+          ${isRainout ? '<span class="badge badge-rainout">🌧️ Rained Out</span>' : '<span class="badge badge-gray">📜 Past Game Recap</span>'}
+          ${game.my_rsvp && game.my_rsvp.status === 'attending' ? '<span class="badge badge-green">✓ You Attended</span>' : ''}
+        </div>
+        <h3 style="font-size: 1.15rem; color: var(--secondary); margin: 0 0 4px 0;">${API.escapeHtml(translatedTitle)}</h3>
+        <div class="drawer-meta" style="margin-top: 6px;">
+          <span class="drawer-meta-item"><span>📅</span> <strong>${API.escapeHtml(dateFormatted)}</strong></span>
+          <span class="drawer-meta-item"><span>📍</span> ${API.escapeHtml(game.location)}</span>
+          <span class="drawer-meta-item" style="color: var(--secondary); font-weight: 700;"><span>👥</span> ${turnoutCount} Players</span>
+          <span class="drawer-meta-item"><span>🛡️</span> ${API.escapeHtml(API.t('home.duties_configured', { count: game.duty_count }))}</span>
+        </div>
+        ${game.rainout_note ? `<div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 6px;"><em>Rainout note: "${API.escapeHtml(game.rainout_note)}"</em></div>` : ''}
+      </div>
+      <div class="drawer-actions" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+        <a href="/event.html?id=${game.id}" class="btn btn-primary" style="font-weight: 700; font-size: 0.88rem;">
+          📜 View Recap &amp; Comments →
+        </a>
+        <a href="/archive.html" class="btn btn-outline btn-sm" style="font-size: 0.82rem;">
+          Past Archive →
+        </a>
+        <button type="button" class="calendar-drawer-close-btn" aria-label="Close details" title="Close">✕</button>
+      </div>
+    `;
+  } else if (game) {
     const isRainout = game.status === 'rainout';
     const dateFormatted = API.formatDateTime(game.event_date);
     const translatedTitle = API.translateEventTitle(game);
@@ -430,16 +460,14 @@ function renderCalendar(events) {
   const monthLabel = document.getElementById('calendar-month-label');
   if (!gridContainer || !monthLabel) return;
 
-  const year = currentCalDate.getFullYear();
-  const month = currentCalDate.getMonth();
-
   const lang = API.getLang();
-  try {
-    const formatter = new Intl.DateTimeFormat(lang, { month: 'long', year: 'numeric' });
-    monthLabel.textContent = formatter.format(new Date(year, month, 1));
-  } catch (e) {
-    monthLabel.textContent = new Date(year, month, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-  }
+  const now = new Date();
+  const todayKey = getPacificDateKey(now);
+  const pad = n => String(n).padStart(2, '0');
+
+  // Anchor date for pagination (defaults to today)
+  const anchorDate = new Date(currentCalDate);
+  const anchorKey = getPacificDateKey(anchorDate);
 
   const eventsByDate = {};
   for (const ev of calendarEventsCache) {
@@ -449,35 +477,117 @@ function renderCalendar(events) {
     }
   }
 
-  const today = new Date();
-  const todayKey = getPacificDateKey(today);
-  const pad = n => String(n).padStart(2, '0');
+  // 1. Identify the most recent past event or past Sunday relative to the anchor
+  let pastItem = null;
+  const pastEvents = (calendarEventsCache || [])
+    .filter(e => e.status !== 'cancelled' && getPacificDateKey(e.event_date) < anchorKey)
+    .sort((a, b) => new Date(b.event_date).getTime() - new Date(a.event_date).getTime());
 
-  // Identify all Sundays in the selected month
-  const gameDates = [];
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  for (let d = 1; d <= daysInMonth; d++) {
-    const dateObj = new Date(year, month, d);
-    if (dateObj.getDay() === 0) { // Sunday
-      const dateKey = `${year}-${pad(month + 1)}-${pad(d)}`;
-      gameDates.push({ day: d, dateKey, dateObj, isSunday: true });
-    }
+  if (pastEvents.length > 0) {
+    const ev = pastEvents[0];
+    const pKey = getPacificDateKey(ev.event_date);
+    const [py, pm, pd] = pKey.split('-').map(Number);
+    const pDateObj = new Date(py, pm - 1, pd, 12, 0, 0);
+    pastItem = {
+      day: pd,
+      dateKey: pKey,
+      dateObj: pDateObj,
+      isSunday: (pDateObj.getDay() === 0),
+      isPast: true
+    };
+  } else {
+    // Fallback: previous Sunday before anchorDate
+    const pDate = new Date(anchorDate);
+    const dow = pDate.getDay();
+    const daysBack = (dow === 0) ? 7 : dow;
+    pDate.setDate(pDate.getDate() - daysBack);
+    const pKey = getPacificDateKey(pDate);
+    const [py, pm, pd] = pKey.split('-').map(Number);
+    const pDateObj = new Date(py, pm - 1, pd, 12, 0, 0);
+    pastItem = {
+      day: pd,
+      dateKey: pKey,
+      dateObj: pDateObj,
+      isSunday: true,
+      isPast: true
+    };
   }
 
-  // Include any non-Sunday event in calendarEventsCache that falls in this month
+  // 2. Identify upcoming events and prospective Sundays starting from anchor
+  const upcomingMap = new Map();
+
+  // Add all scheduled events on or after anchorKey (including non-Sunday games!)
   for (const ev of calendarEventsCache) {
+    if (ev.status === 'cancelled') continue;
     const key = getPacificDateKey(ev.event_date);
-    if (!key) continue;
-    const parts = key.split('-').map(Number);
-    if (parts[0] === year && parts[1] === (month + 1)) {
-      if (!gameDates.some(g => g.dateKey === key)) {
-        const dObj = new Date(year, month, parts[2]);
-        gameDates.push({ day: parts[2], dateKey: key, dateObj: dObj, isSunday: dObj.getDay() === 0 });
+    if (!key || key < anchorKey) continue;
+    const [ey, em, ed] = key.split('-').map(Number);
+    const dObj = new Date(ey, em - 1, ed, 12, 0, 0);
+    upcomingMap.set(key, {
+      day: ed,
+      dateKey: key,
+      dateObj: dObj,
+      isSunday: (dObj.getDay() === 0),
+      isPast: false
+    });
+  }
+
+  // Generate prospective Sundays for at least 8 weeks out from anchorDate
+  const prospectiveSunday = new Date(anchorDate);
+  if (prospectiveSunday.getDay() !== 0) { // Sunday
+    prospectiveSunday.setDate(prospectiveSunday.getDate() + (7 - prospectiveSunday.getDay()));
+  }
+  for (let i = 0; i < 8; i++) {
+    const key = getPacificDateKey(prospectiveSunday);
+    if (key >= anchorKey && !upcomingMap.has(key)) {
+      const [sy, sm, sd] = key.split('-').map(Number);
+      const dateObj = new Date(sy, sm - 1, sd, 12, 0, 0);
+      if (dateObj.getDay() === 0) {
+        upcomingMap.set(key, {
+          day: sd,
+          dateKey: key,
+          dateObj,
+          isSunday: true,
+          isPast: false
+        });
       }
     }
+    prospectiveSunday.setDate(prospectiveSunday.getDate() + 7);
   }
 
-  gameDates.sort((a, b) => a.day - b.day);
+  // Sort upcoming dates chronologically
+  const upcomingItems = Array.from(upcomingMap.values()).sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+
+  // Take the next 5 upcoming dates
+  const selectedUpcoming = upcomingItems.slice(0, 5);
+
+  // Combine: 1 most recent past event + next 5 upcoming dates
+  const gameDates = [pastItem, ...selectedUpcoming];
+
+  // Update header label with visible month range (e.g. "Oct – Nov 2026" or "November 2026")
+  if (gameDates.length > 0) {
+    const firstDate = gameDates[0].dateObj;
+    const lastDate = gameDates[gameDates.length - 1].dateObj;
+    const firstMonth = firstDate.getMonth();
+    const lastMonth = lastDate.getMonth();
+    const firstYear = firstDate.getFullYear();
+    const lastYear = lastDate.getFullYear();
+
+    try {
+      if (firstMonth === lastMonth && firstYear === lastYear) {
+        const fullFormatter = new Intl.DateTimeFormat(lang, { month: 'long', year: 'numeric' });
+        monthLabel.textContent = fullFormatter.format(firstDate);
+      } else if (firstYear === lastYear) {
+        const shortFormatter = new Intl.DateTimeFormat(lang, { month: 'short' });
+        monthLabel.textContent = `${shortFormatter.format(firstDate)} – ${shortFormatter.format(lastDate)} ${firstYear}`;
+      } else {
+        const shortYearFormatter = new Intl.DateTimeFormat(lang, { month: 'short', year: 'numeric' });
+        monthLabel.textContent = `${shortYearFormatter.format(firstDate)} – ${shortYearFormatter.format(lastDate)}`;
+      }
+    } catch (e) {
+      monthLabel.textContent = `${firstDate.toLocaleDateString('en-US', { month: 'short' })} – ${lastDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`;
+    }
+  }
 
   let cardsHtml = '';
   for (const item of gameDates) {
@@ -487,8 +597,10 @@ function renderCalendar(events) {
     const isSelected = (dateKey === selectedCalendarDateKey);
     const isRainout = game && game.status === 'rainout';
     const isAttending = game && game.my_rsvp && game.my_rsvp.status === 'attending';
+    const isPast = item.isPast;
 
     let cardClasses = ['calendar-sunday-card'];
+    if (isPast) cardClasses.push('is-past-card');
     if (isToday) cardClasses.push('is-today');
     if (isSelected) cardClasses.push('selected-sunday');
     if (game) {
@@ -508,18 +620,25 @@ function renderCalendar(events) {
       monthShort = item.dateObj.toLocaleDateString('en-US', { month: 'short' });
     }
 
-    const attendeeCount = game ? (game.attendee_count || 0) : 0;
+    const attendeeCount = game ? (game.actual_attendance != null ? game.actual_attendance : (game.attendee_count || 0)) : 0;
     const locationName = (game && game.location) ? game.location.split(',')[0].trim() : 'TBA';
     const locationTitle = game ? (game.location || 'Location: TBA') : 'Location: TBA (Unscheduled)';
 
-    const timeIcon = game ? (isRainout ? '🌧️' : '⚾') : '📅';
+    const timeIcon = game ? (isRainout ? '🌧️' : (isPast ? '📜' : '⚾')) : '📅';
     const timeText = game
-      ? (isRainout ? API.escapeHtml(API.t('calendar.legend_rainout', 'Rainout')) : '12:00 PM')
+      ? (isRainout ? API.escapeHtml(API.t('calendar.legend_rainout', 'Rainout')) : (isPast ? `${attendeeCount} Played` : '12:00 PM'))
       : '12:00 PM (Target)';
 
-    const topPillHtml = isToday
-      ? `<span class="sunday-today-pill">${API.escapeHtml(API.t('calendar.today', 'Today'))}</span>`
-      : (!game ? `<span class="sunday-prospective-pill">${API.escapeHtml(API.t('calendar.prospective_pill', 'Prospective'))}</span>` : '');
+    let topPillHtml = '';
+    if (isPast) {
+      topPillHtml = `<span class="sunday-past-pill">📜 Past Game</span>`;
+    } else if (isToday) {
+      topPillHtml = `<span class="sunday-today-pill">${API.escapeHtml(API.t('calendar.today', 'Today'))}</span>`;
+    } else if (selectedUpcoming.length > 0 && item === selectedUpcoming[0]) {
+      topPillHtml = `<span class="sunday-next-pill">⚾ Next Game</span>`;
+    } else if (!game) {
+      topPillHtml = `<span class="sunday-prospective-pill">${API.escapeHtml(API.t('calendar.prospective_pill', 'Prospective'))}</span>`;
+    }
 
     cardsHtml += `
       <div class="${cardClasses.join(' ')}" data-date-key="${dateKey}" role="button" tabindex="0" aria-label="${API.escapeHtml(weekdayShort)}, ${API.escapeHtml(monthShort)} ${item.day}">
@@ -539,8 +658,8 @@ function renderCalendar(events) {
         </div>
         <div class="sunday-card-footer">
           ${game ? `
-            <span class="sunday-player-badge">👥 ${attendeeCount} ${attendeeCount === 1 ? 'Player' : 'Players'}</span>
-            ${isAttending ? `<span class="sunday-attending-pill" title="You're attending this game">✓ In</span>` : ''}
+            <span class="sunday-player-badge">${isPast ? `👥 ${attendeeCount} Turnout` : `👥 ${attendeeCount} ${attendeeCount === 1 ? 'Player' : 'Players'}`}</span>
+            ${isAttending ? `<span class="sunday-attending-pill" title="You attended / are attending this game">✓ In</span>` : ''}
           ` : `
             <span class="sunday-player-badge prospective-badge">📅 ${API.escapeHtml(API.t('calendar.prospective_pill', 'Prospective'))}</span>
           `}
@@ -567,7 +686,8 @@ function renderCalendar(events) {
         gridContainer.querySelectorAll('.calendar-sunday-card').forEach(c => c.classList.remove('selected-sunday'));
         card.classList.add('selected-sunday');
         const game = eventsByDate[dateKey];
-        renderCalendarDrawer(dateKey, game);
+        const item = gameDates.find(g => g.dateKey === dateKey);
+        renderCalendarDrawer(dateKey, game, item && item.isPast);
       }
     };
 
@@ -585,6 +705,7 @@ function renderCalendar(events) {
     renderCalendarDrawer(null, null);
   } else if (selectedCalendarDateKey) {
     const game = eventsByDate[selectedCalendarDateKey];
-    renderCalendarDrawer(selectedCalendarDateKey, game);
+    const item = gameDates.find(g => g.dateKey === selectedCalendarDateKey);
+    renderCalendarDrawer(selectedCalendarDateKey, game, item && item.isPast);
   }
 }

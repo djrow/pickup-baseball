@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS events (
   rainout_note TEXT,
   rainout_at DATETIME,
   rainout_email_sent INTEGER DEFAULT 0,
+  allowed_emails TEXT DEFAULT NULL,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 

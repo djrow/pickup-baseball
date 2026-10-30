@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Dashboard - Sunday Pickup Baseball</title>
-  <link rel="stylesheet" href="/css/style.css?v=21">
+  <link rel="stylesheet" href="/css/style.css?v=22">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png">
@@ -113,6 +113,32 @@
           </div>
         </div>
 
+        <!-- RSVP Access & Allowed Players Whitelist -->
+        <div class="form-group" style="background: var(--bg-card); padding: 14px 16px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 16px;">
+          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 600; margin: 0;">
+            <input type="checkbox" id="event-restrict-toggle" style="width: 18px; height: 18px; accent-color: var(--primary);">
+            <span>🔒 Restrict RSVPs to Specific Invited Players</span>
+          </label>
+          <div id="event-restrict-wrap" style="display: none; margin-top: 14px; padding-left: 28px;">
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 10px;">
+              Only player accounts with selected email addresses will be permitted to RSVP. The list below shows all registered user accounts.
+            </p>
+            <div style="display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; align-items: center;">
+              <input type="text" id="allowed-player-search" placeholder="Search player name or email..." style="max-width: 260px; padding: 6px 10px; font-size: 0.85rem;">
+              <button type="button" id="btn-select-all-players" class="btn btn-outline btn-sm">Select All</button>
+              <button type="button" id="btn-deselect-all-players" class="btn btn-outline btn-sm">Deselect All</button>
+              <span id="selected-players-count" style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">0 players selected</span>
+            </div>
+            <div id="allowed-players-list" style="max-height: 200px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 12px; background: var(--bg-subtle); display: flex; flex-direction: column; gap: 6px;">
+              <span style="color: var(--text-muted); font-size: 0.85rem;">Loading player accounts...</span>
+            </div>
+            <div style="margin-top: 12px;">
+              <label for="event-extra-allowed-emails" style="font-size: 0.85rem; font-weight: 600; color: var(--text-muted);">Additional Allowed Emails (one per line or comma-separated):</label>
+              <textarea id="event-extra-allowed-emails" rows="2" placeholder="e.g. guestplayer@gmail.com, coach@example.com" style="margin-top: 4px; font-size: 0.85rem;"></textarea>
+            </div>
+          </div>
+        </div>
+
         <!-- Task Builder Setup -->
         <div class="form-group" style="background: var(--bg-subtle); padding: 20px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
@@ -211,7 +237,7 @@
 
   <footer id="site-footer" class="site-footer"></footer>
 
-  <script src="/js/api.js?v=21"></script>
-  <script src="/js/admin.js?v=21"></script>
+  <script src="/js/api.js?v=22"></script>
+  <script src="/js/admin.js?v=22"></script>
 </body>
 </html>

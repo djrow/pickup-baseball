@@ -52,6 +52,12 @@ router.get('/', optionalUser, (req, res) => {
       });
     }
 
+    events.forEach(ev => {
+      const allowed = parseAllowedEmails(ev.allowed_emails);
+      ev.is_restricted = allowed.length > 0;
+      ev.allowed_emails_list = allowed;
+    });
+
     res.json({ events });
   } catch (err) {
     console.error('[Events] Error listing events:', err);
@@ -118,6 +124,39 @@ router.all('/reminders/check', async (req, res) => {
   } catch (err) {
     console.error('[Reminders] Error during check endpoint:', err);
     res.status(500).json({ error: 'Failed to process reminders.' });
+  }
+});
+
+/**
+ * Helper: Parse allowed email addresses from JSON or delimited text
+ */
+function parseAllowedEmails(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    return [...new Set(raw.map(e => String(e).trim().toLowerCase()).filter(e => e.includes('@')))];
+  }
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return [...new Set(parsed.map(e => String(e).trim().toLowerCase()).filter(e => e.includes('@')))];
+      }
+    } catch (e) {}
+    return [...new Set(raw.split(/[,\n;]/).map(e => String(e).trim().toLowerCase()).filter(e => e.includes('@')))];
+  }
+  return [];
+}
+
+/**
+ * Get potential allowed players (registered user accounts) for event whitelist
+ */
+router.get('/attendee-candidates', requireEventCreator, (req, res) => {
+  try {
+    const users = db.prepare('SELECT id, name, email FROM users ORDER BY name ASC').all();
+    res.json({ users });
+  } catch (err) {
+    console.error('[Events] Error fetching candidate accounts:', err);
+    res.status(500).json({ error: 'Failed to fetch candidate accounts.' });
   }
 });
 
@@ -222,11 +261,31 @@ router.get('/:id', optionalUser, (req, res) => {
         : (d.assigned_players || []).map(p => ({ attendee_id: p.attendee_id, name: '' }))
     }));
 
+    const allowedList = parseAllowedEmails(event.allowed_emails);
+    const isRestricted = allowedList.length > 0;
+    let isAllowedToRsvp = true;
+    if (isRestricted) {
+      if (req.user && (req.user.canManageEvents || req.user.isAdmin)) {
+        isAllowedToRsvp = true;
+      } else if (req.user && req.user.email) {
+        isAllowedToRsvp = allowedList.includes(req.user.email.toLowerCase());
+      } else if (myRsvp && myRsvp.email) {
+        isAllowedToRsvp = allowedList.includes(myRsvp.email.toLowerCase());
+      } else {
+        isAllowedToRsvp = false;
+      }
+    }
+
     const totalConfirmedPlayers = attendees.reduce((sum, a) => sum + 1 + (a.additional_guests || 0), 0);
     const totalWaitlistPlayers = waitlist.reduce((sum, w) => sum + 1 + (w.additional_guests || 0), 0);
 
     res.json({
-      event,
+      event: {
+        ...event,
+        allowed_emails_list: allowedList,
+        is_restricted: isRestricted,
+        is_allowed_to_rsvp: isAllowedToRsvp
+      },
       duties: sanitizedDuties,
       attendees: canViewRoster ? attendees : [],
       waitlist: canViewRoster ? waitlist : [],
@@ -352,6 +411,14 @@ router.post('/:id/rsvp', optionalUser, async (req, res) => {
       if (existingUser) {
         userId = existingUser.id;
         isGuest = 0;
+      }
+    }
+
+    const allowedList = parseAllowedEmails(event.allowed_emails);
+    if (allowedList.length > 0 && status === 'attending') {
+      const isOrganizer = Boolean(req.user && (req.user.canManageEvents || req.user.isAdmin));
+      if (!isOrganizer && !allowedList.includes(email.toLowerCase())) {
+        return res.status(403).json({ error: 'RSVP for this game is restricted to invited player accounts. Your email is not on the allowed list.' });
       }
     }
 
@@ -566,7 +633,8 @@ router.post('/', requireEventCreator, (req, res) => {
       max_players,
       actual_attendance,
       use_default_duties,
-      custom_duties
+      custom_duties,
+      allowed_emails
     } = req.body;
 
     if (!title || !title.trim() || !location || !location.trim() || !event_date) {
@@ -592,11 +660,14 @@ router.post('/', requireEventCreator, (req, res) => {
       dutiesToInsert = getDefaultDuties();
     }
 
+    const allowedList = parseAllowedEmails(allowed_emails);
+    const allowedEmailsJson = allowedList.length > 0 ? JSON.stringify(allowedList) : null;
+
     // Wrap event creation and duty insertions in an atomic SQLite transaction
     const createEventTxn = db.transaction((eventData, duties) => {
       const result = db.prepare(`
-        INSERT INTO events (title, description, location, location_url, event_date, max_players, actual_attendance, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO events (title, description, location, location_url, event_date, max_players, actual_attendance, allowed_emails, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         eventData.title.trim(),
         (eventData.description || '').trim(),
@@ -605,6 +676,7 @@ router.post('/', requireEventCreator, (req, res) => {
         eventData.event_date,
         eventData.max_players ? parseInt(eventData.max_players, 10) : null,
         eventData.actual_attendance !== undefined && eventData.actual_attendance !== null && eventData.actual_attendance !== '' ? parseInt(eventData.actual_attendance, 10) : null,
+        eventData.allowed_emails || null,
         eventData.userId
       );
 
@@ -636,6 +708,7 @@ router.post('/', requireEventCreator, (req, res) => {
       event_date,
       max_players,
       actual_attendance,
+      allowed_emails: allowedEmailsJson,
       userId: req.user.id
     }, dutiesToInsert);
 
@@ -659,7 +732,7 @@ router.post('/', requireEventCreator, (req, res) => {
 router.put('/:id', requireEventCreator, (req, res) => {
   try {
     const eventId = req.params.id;
-    const { title, description, location, location_url, event_date, max_players, actual_attendance, status } = req.body;
+    const { title, description, location, location_url, event_date, max_players, actual_attendance, status, allowed_emails } = req.body;
 
     const existingEvent = db.prepare('SELECT * FROM events WHERE id = ?').get(eventId);
     if (!existingEvent) {
@@ -702,6 +775,16 @@ router.put('/:id', requireEventCreator, (req, res) => {
       newActualAttendance = isNaN(parsed) || parsed < 0 ? null : parsed;
     }
 
+    let newAllowedEmails = existingEvent.allowed_emails;
+    if (allowed_emails !== undefined) {
+      if (allowed_emails === null || allowed_emails === '') {
+        newAllowedEmails = null;
+      } else {
+        const allowedList = parseAllowedEmails(allowed_emails);
+        newAllowedEmails = allowedList.length > 0 ? JSON.stringify(allowedList) : null;
+      }
+    }
+
     const result = db.prepare(`
       UPDATE events
       SET title = COALESCE(?, title),
@@ -711,6 +794,7 @@ router.put('/:id', requireEventCreator, (req, res) => {
           event_date = COALESCE(?, event_date),
           max_players = ?,
           actual_attendance = ?,
+          allowed_emails = ?,
           status = COALESCE(?, status)
       WHERE id = ?
     `).run(
@@ -721,6 +805,7 @@ router.put('/:id', requireEventCreator, (req, res) => {
       event_date || null,
       newMaxPlayers,
       newActualAttendance,
+      newAllowedEmails,
       status || null,
       eventId
     );

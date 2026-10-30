@@ -286,5 +286,25 @@ Eliminated the redundant "Future Scheduled Games" list below the featured game c
 
 ---
 
-## 23. Future Roadmap Notes
+## 23. Phase 22: Rolling Calendar Horizon & Event RSVP Whitelists
+Upgraded the calendar from rigid calendar-month boundaries to a continuous rolling event horizon, and added granular per-event RSVP permission controls:
+- **Rolling 5-Week Continuous Schedule Track (Option A):**
+  - **Most Recent Past Event Context:** The calendar now displays position #1 as the most recent past event (or previous Sunday), clearly distinguished with a `📜 Past Game` pill and turnout recap (`👥 X Turnout`). Clicking opens a dedicated recap drawer linking to event comments and archive.
+  - **Next Game Prominence:** Position #2 automatically highlights the next immediate game (`⚾ Next Game` or `Today`), followed by 4 prospective/scheduled dates spanning seamlessly across month boundaries.
+  - **End-of-Month Cliff Eliminated:** Visitors visiting on late-month days (e.g. Oct 30) are never stranded on a stale, all-past month view; the schedule stream always surfaces actionable upcoming opportunities.
+  - **Non-Sunday Event Support:** Any non-Sunday event (Saturday clinics, holiday tournaments, weekday batting practice) naturally slots into chronological order with its weekday tag (e.g. `Sat, Nov 7`).
+  - **Dynamic Range Month Header:** Header label dynamically formats visible month boundaries (e.g. `Oct – Nov 2026`), and `‹` / `›` navigates the schedule forward/back by 4 weeks.
+- **Per-Event RSVP Whitelisting (Allowed Player Emails):**
+  - Added `allowed_emails TEXT DEFAULT NULL` column to SQLite (`src/db.js`) and Cloudflare D1 (`d1_schema.sql`).
+  - Created `GET /api/events/attendee-candidates` endpoint for Event Creators (Admins and Organizers) to select from active registered user accounts.
+  - **Admin & Organizer Controls:** Integrated an "RSVP Access & Player Whitelist" section into game creation and editing forms (`public/admin.html`, `public/js/admin.js`) featuring real-time account search, checkbox multi-selection, select/deselect all, and custom email entries.
+  - **Roster Protection & Enforcement:** `POST /api/events/:id/rsvp` rejects unauthorized signups with HTTP 403 Forbidden. On the event page (`public/js/event.js`), unauthorized accounts are greeted with a polite invitation notice explaining roster restrictions.
+- **Automated Verification & Version Bump:**
+  - Added test assertions `T9.10` and `T9.11` to `scripts/verify-all.js` verifying the rolling schedule and full RSVP whitelist lifecycle (permission guards, 403 on restricted signups, 200 on whitelisted signups, and lifting restrictions).
+  - Bumped cache bust version to `v22` across all client, server, service worker, and HTML asset links.
+  - All 50 tests pass cleanly.
+
+---
+
+## 24. Future Roadmap Notes
 - **Pinned Full-Stack Rust / WebAssembly Migration:** Evaluated a future 4-phase rewrite of the Cloudflare Pages Functions backend (and optional frontend interactivity) to Rust (`workers-rs` compiling to WebAssembly) for compile-time type safety, zero-dependency binary durability, and strict edge memory safety—kept as a guiding north star when designing new features and data models.

@@ -183,6 +183,10 @@ function renderEventDetails() {
     }
   }
 
+  if (ev.is_restricted && statusBadge) {
+    statusBadge.insertAdjacentHTML('afterend', ' <span class="badge badge-orange" style="display: inline-flex; align-items: center; gap: 4px;">🔒 Invited Roster</span>');
+  }
+
   const mapLink = document.getElementById('event-map-link');
   const safeMapUrl = API.safeUrl(ev.location_url);
   if (safeMapUrl) {
@@ -491,6 +495,45 @@ async function setupRsvpState() {
   const loginPrompt = document.getElementById('rsvp-login-prompt');
   const commentGuestFields = document.getElementById('comment-guest-fields');
   const commentForm = document.getElementById('comment-form');
+
+  const isRestricted = Boolean(eventData && eventData.event && eventData.event.is_restricted);
+  const isAllowed = Boolean(eventData && eventData.event && eventData.event.is_allowed_to_rsvp);
+
+  if (isRestricted && !isAllowed) {
+    if (guestFields) guestFields.style.display = 'none';
+    if (rsvpForm) rsvpForm.style.display = 'none';
+    if (loginPrompt) {
+      loginPrompt.className = 'alert alert-warning';
+      loginPrompt.style.display = 'block';
+      loginPrompt.style.textAlign = 'center';
+      if (!user) {
+        loginPrompt.innerHTML = `
+          <h4 style="margin: 0 0 6px 0; color: var(--secondary); font-size: 1.05rem;">🔒 Private / Invited Players Only</h4>
+          <p style="margin: 0 0 12px 0; font-size: 0.88rem; color: var(--text-muted);">
+            RSVP for this pickup game is restricted to an invited player roster. Please sign in with your invited email address to RSVP.
+          </p>
+          <a href="/login.html?redirect=${encodeURIComponent(window.location.href)}" class="btn btn-primary" style="font-weight: 700;">
+            Sign In with Invited Email
+          </a>
+        `;
+      } else {
+        loginPrompt.innerHTML = `
+          <h4 style="margin: 0 0 6px 0; color: var(--secondary); font-size: 1.05rem;">🔒 Restricted Roster</h4>
+          <p style="margin: 0; font-size: 0.88rem; color: var(--text-muted);">
+            RSVP for this game is restricted to an invited player list. Your account (<strong>${API.escapeHtml(user.email)}</strong>) is not on the roster for this event. Please contact the event organizer if you should be included.
+          </p>
+        `;
+      }
+    }
+    return;
+  }
+
+  if (isRestricted && isAllowed && user) {
+    const alertDiv = document.getElementById('rsvp-alert');
+    if (alertDiv && (!myRsvp || myRsvp.status !== 'attending')) {
+      alertDiv.innerHTML = '<div class="alert alert-success" style="font-size: 0.85rem; padding: 8px 12px; margin-bottom: 12px;">✓ Your account is on the invited player list for this game.</div>';
+    }
+  }
 
   if (user) {
     if (loginPrompt) loginPrompt.style.display = 'none';

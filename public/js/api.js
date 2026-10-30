@@ -259,7 +259,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '21',
+  CLIENT_VERSION: '22',
 
   // Current user cache
   currentUser: null,
@@ -1142,6 +1142,11 @@ const API = {
       } catch (e) {}
     }
     return data;
+  },
+
+  async getAttendeeCandidates() {
+    const res = await fetch('/api/events/attendee-candidates');
+    return res.json();
   },
 
   async getUsers() {

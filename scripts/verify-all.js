@@ -55,7 +55,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-const CURRENT_APP_VERSION = '21';
+const CURRENT_APP_VERSION = '22';
 app.use((req, res, next) => {
   res.setHeader('X-App-Version', CURRENT_APP_VERSION);
   next();
@@ -1097,5 +1097,85 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     const appJs = fs.readFileSync(appJsPath, 'utf8');
     assert.ok(!appJs.includes('renderGamesList'), 'app.js must not define or call renderGamesList');
     assert.ok(!appJs.includes("document.getElementById('games-list-container')"), 'app.js must not query games-list-container');
+  });
+
+  await t9.test('T9.10: Rolling 5-week schedule view: shows most recent past event alongside upcoming games', () => {
+    const appJsPath = path.join(publicDir, 'js/app.js');
+    const appJs = fs.readFileSync(appJsPath, 'utf8');
+    assert.ok(appJs.includes('is-past-card'), 'app.js must classify past event card with is-past-card');
+    assert.ok(appJs.includes('sunday-past-pill'), 'app.js must render past game pill');
+    assert.ok(appJs.includes('sunday-next-pill'), 'app.js must render next game pill');
+    assert.ok(appJs.includes('selectedUpcoming'), 'app.js must compute rolling upcoming schedule stream');
+
+    const cssPath = path.join(publicDir, 'css/style.css');
+    const css = fs.readFileSync(cssPath, 'utf8');
+    assert.ok(css.includes('.calendar-sunday-card.is-past-card'), 'style.css must style past event card');
+    assert.ok(css.includes('.sunday-past-pill'), 'style.css must style past game pill');
+    assert.ok(css.includes('.sunday-next-pill'), 'style.css must style next game pill');
+
+    const adminHtmlPath = path.join(publicDir, 'admin.html');
+    const adminHtml = fs.readFileSync(adminHtmlPath, 'utf8');
+    assert.ok(adminHtml.includes('event-restrict-toggle'), 'admin.html must contain RSVP restriction toggle');
+    assert.ok(adminHtml.includes('allowed-players-list'), 'admin.html must contain allowed players whitelist container');
+  });
+
+  await t9.test('T9.11: Restricted RSVP whitelist per event & candidate accounts', async () => {
+    // 1. Candidate accounts endpoint permission check
+    const unauthCandidates = await apiReq('GET', '/api/events/attendee-candidates', null);
+    assert.equal(unauthCandidates.status, 401, 'Unauthenticated candidate query must receive 401');
+
+    const playerCandidates = await apiReq('GET', '/api/events/attendee-candidates', seedPlayerCookie);
+    assert.equal(playerCandidates.status, 403, 'Player role accessing candidate directory must receive 403');
+
+    const orgCandidates = await apiReq('GET', '/api/events/attendee-candidates', seedOrgCookie);
+    assert.equal(orgCandidates.status, 200, 'Organizer querying candidate directory must receive 200');
+    assert.ok(Array.isArray(orgCandidates.data.users), 'Candidate query must return users array');
+    assert.ok(orgCandidates.data.users.length > 0, 'Candidate query must return registered accounts');
+
+    // 2. Create restricted event with allowed_emails
+    const createRes = await apiReq('POST', '/api/events', seedOrgCookie, {
+      title: 'Invitational Restricted Game',
+      location: 'Bushrod Park Field 2',
+      event_date: '2026-11-22T20:00:00.000Z',
+      allowed_emails: ['special_invitee@sundaypickup.org']
+    });
+    assert.equal(createRes.status, 200, 'Organizer creating restricted event must receive 200');
+    const restrictedEventId = createRes.data.eventId;
+
+    // Check event details return is_restricted and allowed_emails_list
+    const detailsRes = await apiReq('GET', `/api/events/${restrictedEventId}`, seedOrgCookie);
+    assert.equal(detailsRes.status, 200);
+    assert.equal(detailsRes.data.event.is_restricted, true, 'Event must be flagged as restricted');
+    assert.ok(detailsRes.data.event.allowed_emails_list.includes('special_invitee@sundaypickup.org'), 'Allowed list must contain invited email');
+
+    // 3. Non-invited player attempts to RSVP -> 403 Forbidden
+    const blockedRsvp = await apiReq('POST', `/api/events/${restrictedEventId}/rsvp`, seedPlayerCookie, {
+      name: 'Player One',
+      gear_bringing: 'Glove'
+    });
+    assert.equal(blockedRsvp.status, 403, 'Non-invited player must receive 403 Forbidden on restricted event');
+    assert.ok(blockedRsvp.data.error.includes('restricted to invited player accounts'), 'Error must specify restricted RSVP');
+
+    // 4. Invited player RSVPs -> 200 OK
+    const allowedRsvp = await apiReq('POST', `/api/events/${restrictedEventId}/rsvp`, null, {
+      name: 'Special Invitee',
+      email: 'special_invitee@sundaypickup.org',
+      gear_bringing: 'Catcher gear'
+    });
+    assert.equal(allowedRsvp.status, 200, 'Invited player must successfully RSVP with 200 OK');
+    assert.equal(allowedRsvp.data.status, 'attending', 'RSVP response status must be attending');
+
+    // 5. Organizer updates event whitelist to open to all (allowed_emails: null)
+    const updateRes = await apiReq('PUT', `/api/events/${restrictedEventId}`, seedOrgCookie, {
+      allowed_emails: null
+    });
+    assert.equal(updateRes.status, 200, 'Updating event to clear whitelist must receive 200');
+
+    // 6. Previously blocked player can now RSVP -> 200 OK
+    const previouslyBlockedRsvp = await apiReq('POST', `/api/events/${restrictedEventId}/rsvp`, seedPlayerCookie, {
+      name: 'Player One',
+      gear_bringing: 'Glove'
+    });
+    assert.equal(previouslyBlockedRsvp.status, 200, 'Player can now RSVP after whitelist is lifted');
   });
 });
