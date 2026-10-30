@@ -320,5 +320,21 @@ Removed the redundant "Next Sunday Pickup" featured game card located after the 
 
 ---
 
-## 25. Future Roadmap Notes
+## 25. Phase 24: Anchoring 'Next Game' & 'Past Game' Badges to Real-World Timeline
+Fixed a calendar pagination defect where navigating forward or backward across month boundaries caused subsequent dates (e.g. Nov 29 in a Nov–Dec view) to falsely display the `⚾ Next Game` badge simply because they occupied index position 1 in the paginated 6-card array:
+- **True Next Game Identification:**
+  - Decoupled the `⚾ Next Game` badge (`sunday-next-pill`) from the local array index (`selectedUpcoming[0]`).
+  - Added global `trueNextGameKey` calculation in `renderCalendar()` ([public/js/app.js](file:///c:/Users/david/Documents/antigravity/lucid-maxwell/public/js/app.js)) that scans scheduled events on or after real-world today (`todayKey`) in chronological order.
+  - The `⚾ Next Game` badge now appears exclusively on the actual next game (e.g. Nov 1). When the user advances to future months (Nov–Dec, Dec–Jan), future dates (like Nov 29 or Dec 27) are displayed as regular confirmed or prospective games without false "Next Game" labels.
+- **Strict Real-World Past Event Determination:**
+  - Evaluated `isPast` strictly against real-world `todayKey` (`dateKey < todayKey`) rather than the paged window's anchor key (`dateKey < anchorKey`).
+  - When users advance forward, upcoming games (e.g. Nov 22) are no longer erroneously styled with `.is-past-card`, `📜 Past Game`, and `0 Played`.
+- **Automated Verification & Version Bump:**
+  - Added acceptance test `T9.13` in `scripts/verify-all.js` validating that `trueNextGameKey` is computed, `sunday-next-pill` is conditioned on `dateKey === trueNextGameKey`, and `isPast` is anchored to `dateKey < todayKey`.
+  - Bumped cache bust version to `v24` across all client, server, service worker, and HTML asset links (`CLIENT_VERSION: '24'`, `CURRENT_APP_VERSION = '24'`, `CACHE_NAME = 'pbf-cache-v24'`).
+  - All 52 automated tests in `scripts/verify-all.js` pass with 100% success rate.
+
+---
+
+## 26. Future Roadmap Notes
 - **Pinned Full-Stack Rust / WebAssembly Migration:** Evaluated a future 4-phase rewrite of the Cloudflare Pages Functions backend (and optional frontend interactivity) to Rust (`workers-rs` compiling to WebAssembly) for compile-time type safety, zero-dependency binary durability, and strict edge memory safety—kept as a guiding north star when designing new features and data models.

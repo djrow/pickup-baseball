@@ -354,6 +354,23 @@ function renderCalendar(events) {
   const todayKey = getPacificDateKey(now);
   const pad = n => String(n).padStart(2, '0');
 
+  // Identify the true next scheduled or prospective game relative to actual today
+  const upcomingScheduled = (calendarEventsCache || [])
+    .filter(e => e.status !== 'cancelled' && getPacificDateKey(e.event_date) >= todayKey)
+    .sort((a, b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime());
+
+  let trueNextGameKey = null;
+  if (upcomingScheduled.length > 0) {
+    trueNextGameKey = getPacificDateKey(upcomingScheduled[0].event_date);
+  } else {
+    // If no scheduled events exist, the immediate upcoming Sunday from today is the target
+    const nextSun = new Date(now);
+    const dow = nextSun.getDay();
+    const daysUntil = (dow === 0) ? 0 : (7 - dow);
+    nextSun.setDate(nextSun.getDate() + daysUntil);
+    trueNextGameKey = getPacificDateKey(nextSun);
+  }
+
   // Anchor date for pagination (defaults to today)
   const anchorDate = new Date(currentCalDate);
   const anchorKey = getPacificDateKey(anchorDate);
@@ -381,8 +398,7 @@ function renderCalendar(events) {
       day: pd,
       dateKey: pKey,
       dateObj: pDateObj,
-      isSunday: (pDateObj.getDay() === 0),
-      isPast: true
+      isSunday: (pDateObj.getDay() === 0)
     };
   } else {
     // Fallback: previous Sunday before anchorDate
@@ -397,8 +413,7 @@ function renderCalendar(events) {
       day: pd,
       dateKey: pKey,
       dateObj: pDateObj,
-      isSunday: true,
-      isPast: true
+      isSunday: true
     };
   }
 
@@ -416,8 +431,7 @@ function renderCalendar(events) {
       day: ed,
       dateKey: key,
       dateObj: dObj,
-      isSunday: (dObj.getDay() === 0),
-      isPast: false
+      isSunday: (dObj.getDay() === 0)
     });
   }
 
@@ -436,8 +450,7 @@ function renderCalendar(events) {
           day: sd,
           dateKey: key,
           dateObj,
-          isSunday: true,
-          isPast: false
+          isSunday: true
         });
       }
     }
@@ -481,12 +494,12 @@ function renderCalendar(events) {
   let cardsHtml = '';
   for (const item of gameDates) {
     const dateKey = item.dateKey;
+    const isPast = (dateKey < todayKey);
     const isToday = (dateKey === todayKey);
     const game = eventsByDate[dateKey];
     const isSelected = (dateKey === selectedCalendarDateKey);
     const isRainout = game && game.status === 'rainout';
     const isAttending = game && game.my_rsvp && game.my_rsvp.status === 'attending';
-    const isPast = item.isPast;
 
     let cardClasses = ['calendar-sunday-card'];
     if (isPast) cardClasses.push('is-past-card');
@@ -523,7 +536,7 @@ function renderCalendar(events) {
       topPillHtml = `<span class="sunday-past-pill">📜 Past Game</span>`;
     } else if (isToday) {
       topPillHtml = `<span class="sunday-today-pill">${API.escapeHtml(API.t('calendar.today', 'Today'))}</span>`;
-    } else if (selectedUpcoming.length > 0 && item === selectedUpcoming[0]) {
+    } else if (dateKey === trueNextGameKey) {
       topPillHtml = `<span class="sunday-next-pill">⚾ Next Game</span>`;
     } else if (!game) {
       topPillHtml = `<span class="sunday-prospective-pill">${API.escapeHtml(API.t('calendar.prospective_pill', 'Prospective'))}</span>`;

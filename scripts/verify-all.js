@@ -55,7 +55,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-const CURRENT_APP_VERSION = '23';
+const CURRENT_APP_VERSION = '24';
 app.use((req, res, next) => {
   res.setHeader('X-App-Version', CURRENT_APP_VERSION);
   next();
@@ -1185,5 +1185,13 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     const appJs = fs.readFileSync(path.join(publicDir, 'js/app.js'), 'utf8');
     assert.ok(!appJs.includes('renderFeaturedGame'), 'app.js must not contain renderFeaturedGame');
     assert.ok(!appJs.includes('featured-game-container'), 'app.js must not reference featured-game-container');
+  });
+
+  await t9.test("T9.13: 'Next Game' badge anchored strictly to actual upcoming game across month pagination", () => {
+    const appJs = fs.readFileSync(path.join(publicDir, 'js/app.js'), 'utf8');
+    assert.ok(appJs.includes('trueNextGameKey'), 'app.js must compute trueNextGameKey');
+    assert.ok(appJs.includes('dateKey === trueNextGameKey'), 'app.js must anchor sunday-next-pill strictly to trueNextGameKey');
+    assert.ok(!appJs.includes('item === selectedUpcoming[0]'), 'app.js must not falsely assign next game to whatever item is at index 0 of selectedUpcoming');
+    assert.ok(appJs.includes('const isPast = (dateKey < todayKey);'), 'app.js must evaluate isPast strictly against actual todayKey');
   });
 });
