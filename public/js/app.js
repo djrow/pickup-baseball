@@ -445,15 +445,53 @@ function renderCalendarDrawer(dateKey, game) {
         <a href="/event.html?id=${game.id}" class="btn btn-primary" style="font-weight: 700; font-size: 0.88rem;">
           ${API.escapeHtml(API.t('calendar.view_details', 'RSVP & View Game Details →'))}
         </a>
+        <button type="button" class="calendar-drawer-close-btn" aria-label="Close details" title="Close">✕</button>
       </div>
     `;
   } else {
+    const [y, m, d] = dateKey.split('-').map(Number);
+    const dateObj = new Date(y, m - 1, d, 12, 0, 0);
+    let dateFormatted = dateKey;
+    try {
+      dateFormatted = new Intl.DateTimeFormat(API.getLang(), {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric'
+      }).format(dateObj);
+    } catch (e) {}
+
     drawer.innerHTML = `
-      <div class="drawer-info" style="flex: 1;">
-        <h3 style="font-size: 1rem; color: var(--secondary); margin: 0 0 4px 0;">${API.escapeHtml(API.t('calendar.no_game', 'No game scheduled on this date.'))}</h3>
-        <p style="margin: 0; font-size: 0.85rem; color: var(--text-muted);">${API.escapeHtml(API.t('calendar.pickup_reminder', 'Free community pickup baseball is every Sunday at Noon at Bushrod Park!'))}</p>
+      <div class="drawer-info" style="flex: 1; min-width: 250px;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+          <span class="badge badge-orange">⚾ Scheduled Sunday Pickup Game</span>
+        </div>
+        <h3 style="font-size: 1.15rem; color: var(--secondary); margin: 0 0 4px 0;">${API.escapeHtml(API.t('phrase.sunday_pickup_noon', 'Sunday Pickup Baseball - Noon Game'))}</h3>
+        <div class="drawer-meta" style="margin-top: 6px;">
+          <span class="drawer-meta-item"><span>📅</span> <strong>${API.escapeHtml(dateFormatted)} at 12:00 PM</strong></span>
+          <span class="drawer-meta-item"><span>📍</span> Bushrod Park Field 1, Oakland, CA</span>
+          <span class="drawer-meta-item"><span>⚾</span> All skill levels welcome</span>
+        </div>
+        <p style="margin: 8px 0 0 0; font-size: 0.85rem; color: var(--text-muted);">
+          ${API.escapeHtml(API.t('calendar.pickup_reminder', 'Free community pickup baseball is every Sunday at Noon at Bushrod Park!'))}
+        </p>
+      </div>
+      <div class="drawer-actions" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+        <button type="button" class="calendar-drawer-close-btn" aria-label="Close details" title="Close">✕ Close</button>
       </div>
     `;
+  }
+
+  const closeBtn = drawer.querySelector('.calendar-drawer-close-btn');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => {
+      selectedCalendarDateKey = null;
+      drawer.style.display = 'none';
+      const gridContainer = document.getElementById('calendar-grid-container');
+      if (gridContainer) {
+        gridContainer.querySelectorAll('.calendar-sunday-card').forEach(c => c.classList.remove('selected-sunday'));
+      }
+    });
   }
 }
 
@@ -486,103 +524,125 @@ function renderCalendar(events) {
 
   const today = new Date();
   const todayKey = getPacificDateKey(today);
-
-  const dayHeaders = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  let headersHtml = dayHeaders.map((dh, idx) => {
-    let localizedDay = dh;
-    try {
-      const refDay = new Date(2026, 9, 25 + idx);
-      localizedDay = new Intl.DateTimeFormat(lang, { weekday: 'short' }).format(refDay);
-    } catch (e) {}
-    return `<div class="calendar-day-header ${idx === 0 ? 'sun-header' : ''}">${API.escapeHtml(localizedDay)}</div>`;
-  }).join('');
-
-  const firstDay = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const daysInPrevMonth = new Date(year, month, 0).getDate();
-
-  let cellsHtml = '';
-
-  for (let p = firstDay - 1; p >= 0; p--) {
-    const prevDayNum = daysInPrevMonth - p;
-    cellsHtml += `
-      <div class="calendar-day-cell other-month">
-        <div class="calendar-day-num">${prevDayNum}</div>
-      </div>
-    `;
-  }
-
   const pad = n => String(n).padStart(2, '0');
 
+  // Identify all Sundays in the selected month
+  const gameDates = [];
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
   for (let d = 1; d <= daysInMonth; d++) {
-    const dateKey = `${year}-${pad(month + 1)}-${pad(d)}`;
-    const dayOfWeek = (firstDay + d - 1) % 7;
-    const isSunday = dayOfWeek === 0;
-    const isToday = dateKey === todayKey;
-    const game = eventsByDate[dateKey];
-    const isSelected = dateKey === selectedCalendarDateKey;
-
-    let cellClasses = ['calendar-day-cell'];
-    if (isSunday) cellClasses.push('is-sunday');
-    if (isToday) cellClasses.push('is-today');
-    if (isSelected) cellClasses.push('selected-day');
-
-    let gameHtml = '';
-    if (game) {
-      cellClasses.push('has-game');
-      if (game.status === 'rainout') cellClasses.push('game-rainout');
-      if (game.my_rsvp && game.my_rsvp.status === 'attending') cellClasses.push('is-attending');
-
-      const isRainout = game.status === 'rainout';
-      gameHtml = `
-        <div class="cal-game-pill" title="${API.escapeHtml(game.title || 'Sunday Pickup Baseball')}">
-          <span class="time-title">${isRainout ? '🌧️ Rainout' : '⚾ 12:00 PM'}</span>
-          <span class="loc-title">${API.escapeHtml(game.location || 'Bushrod Park')}</span>
-          <span class="players-count">👥 ${game.attendee_count}</span>
-        </div>
-      `;
+    const dateObj = new Date(year, month, d);
+    if (dateObj.getDay() === 0) { // Sunday
+      const dateKey = `${year}-${pad(month + 1)}-${pad(d)}`;
+      gameDates.push({ day: d, dateKey, dateObj, isSunday: true });
     }
-
-    cellsHtml += `
-      <div class="${cellClasses.join(' ')}" data-date-key="${dateKey}">
-        <div class="calendar-day-num">
-          <span class="${isToday ? 'num-badge' : ''}">${d}</span>
-          ${isSunday && !game ? '<span style="font-size: 0.68rem; color: var(--giants-orange); font-weight: 800;">SUN</span>' : ''}
-        </div>
-        ${gameHtml}
-      </div>
-    `;
   }
 
-  const totalCells = firstDay + daysInMonth;
-  const remainingCells = (7 - (totalCells % 7)) % 7;
-  for (let n = 1; n <= remainingCells; n++) {
-    cellsHtml += `
-      <div class="calendar-day-cell other-month">
-        <div class="calendar-day-num">${n}</div>
+  // Include any non-Sunday event in calendarEventsCache that falls in this month
+  for (const ev of calendarEventsCache) {
+    const key = getPacificDateKey(ev.event_date);
+    if (!key) continue;
+    const parts = key.split('-').map(Number);
+    if (parts[0] === year && parts[1] === (month + 1)) {
+      if (!gameDates.some(g => g.dateKey === key)) {
+        const dObj = new Date(year, month, parts[2]);
+        gameDates.push({ day: parts[2], dateKey: key, dateObj: dObj, isSunday: dObj.getDay() === 0 });
+      }
+    }
+  }
+
+  gameDates.sort((a, b) => a.day - b.day);
+
+  let cardsHtml = '';
+  for (const item of gameDates) {
+    const dateKey = item.dateKey;
+    const isToday = (dateKey === todayKey);
+    const game = eventsByDate[dateKey];
+    const isSelected = (dateKey === selectedCalendarDateKey);
+    const isRainout = game && game.status === 'rainout';
+    const isAttending = game && game.my_rsvp && game.my_rsvp.status === 'attending';
+
+    let cardClasses = ['calendar-sunday-card'];
+    if (isToday) cardClasses.push('is-today');
+    if (isSelected) cardClasses.push('selected-sunday');
+    if (game) cardClasses.push('has-game');
+    if (isRainout) cardClasses.push('game-rainout');
+    if (isAttending) cardClasses.push('is-attending');
+
+    let weekdayShort = item.isSunday ? 'Sun' : 'Game';
+    let monthShort = '';
+    try {
+      weekdayShort = new Intl.DateTimeFormat(lang, { weekday: 'short' }).format(item.dateObj);
+      monthShort = new Intl.DateTimeFormat(lang, { month: 'short' }).format(item.dateObj);
+    } catch (e) {
+      monthShort = item.dateObj.toLocaleDateString('en-US', { month: 'short' });
+    }
+
+    const attendeeCount = game ? (game.attendee_count || 0) : 0;
+    const locationName = (game && game.location) ? game.location.split(',')[0].trim() : 'Bushrod Park';
+
+    cardsHtml += `
+      <div class="${cardClasses.join(' ')}" data-date-key="${dateKey}" role="button" tabindex="0" aria-label="${API.escapeHtml(weekdayShort)}, ${API.escapeHtml(monthShort)} ${item.day}">
+        <div class="sunday-card-top">
+          <span class="sunday-day-tag">${API.escapeHtml(weekdayShort)}</span>
+          <span class="sunday-date-tag">${API.escapeHtml(monthShort)} ${item.day}</span>
+          ${isToday ? `<span class="sunday-today-pill">${API.escapeHtml(API.t('calendar.today', 'Today'))}</span>` : ''}
+        </div>
+        <div class="sunday-card-body">
+          <div class="sunday-game-time">
+            <span class="sunday-time-icon">${isRainout ? '🌧️' : '⚾'}</span>
+            <span class="sunday-time-text">${isRainout ? API.escapeHtml(API.t('calendar.legend_rainout', 'Rainout')) : '12:00 PM'}</span>
+          </div>
+          <div class="sunday-game-location" title="${API.escapeHtml(game ? game.location : 'Bushrod Park')}">
+            📍 ${API.escapeHtml(locationName)}
+          </div>
+        </div>
+        <div class="sunday-card-footer">
+          ${game ? `
+            <span class="sunday-player-badge">👥 ${attendeeCount} ${attendeeCount === 1 ? 'Player' : 'Players'}</span>
+            ${isAttending ? `<span class="sunday-attending-pill" title="You're attending this game">✓ In</span>` : ''}
+          ` : `
+            <span class="sunday-player-badge open-badge">⚾ Pickup Game</span>
+          `}
+        </div>
       </div>
     `;
   }
 
   gridContainer.innerHTML = `
-    <div class="calendar-grid">
-      ${headersHtml}
-      ${cellsHtml}
+    <div class="calendar-sunday-track">
+      ${cardsHtml}
     </div>
   `;
 
-  gridContainer.querySelectorAll('.calendar-day-cell[data-date-key]').forEach(cell => {
-    cell.addEventListener('click', () => {
-      const dateKey = cell.getAttribute('data-date-key');
-      selectedCalendarDateKey = dateKey;
-      gridContainer.querySelectorAll('.calendar-day-cell').forEach(c => c.classList.remove('selected-day'));
-      cell.classList.add('selected-day');
-      const game = eventsByDate[dateKey];
-      renderCalendarDrawer(dateKey, game);
+  gridContainer.querySelectorAll('.calendar-sunday-card[data-date-key]').forEach(card => {
+    const handleSelect = () => {
+      const dateKey = card.getAttribute('data-date-key');
+      if (selectedCalendarDateKey === dateKey) {
+        selectedCalendarDateKey = null;
+        card.classList.remove('selected-sunday');
+        renderCalendarDrawer(null, null);
+      } else {
+        selectedCalendarDateKey = dateKey;
+        gridContainer.querySelectorAll('.calendar-sunday-card').forEach(c => c.classList.remove('selected-sunday'));
+        card.classList.add('selected-sunday');
+        const game = eventsByDate[dateKey];
+        renderCalendarDrawer(dateKey, game);
+      }
+    };
+
+    card.addEventListener('click', handleSelect);
+    card.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        handleSelect();
+      }
     });
   });
 
-  if (selectedCalendarDateKey) {
+  if (selectedCalendarDateKey && !gameDates.some(g => g.dateKey === selectedCalendarDateKey)) {
+    selectedCalendarDateKey = null;
+    renderCalendarDrawer(null, null);
+  } else if (selectedCalendarDateKey) {
     const game = eventsByDate[selectedCalendarDateKey];
     renderCalendarDrawer(selectedCalendarDateKey, game);
   }

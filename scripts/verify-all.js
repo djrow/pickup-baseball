@@ -55,7 +55,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-const CURRENT_APP_VERSION = '16';
+const CURRENT_APP_VERSION = '17';
 app.use((req, res, next) => {
   res.setHeader('X-App-Version', CURRENT_APP_VERSION);
   next();
@@ -1000,7 +1000,21 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
   await t9.test('T9.5: Server sends X-App-Version header and /api/version endpoint responds', async () => {
     const res = await apiReq('GET', '/api/version');
     assert.equal(res.status, 200);
-    assert.equal(res.data.version, '16');
-    assert.equal(res.headers.get('x-app-version'), '16');
+    assert.equal(res.data.version, '17');
+    assert.equal(res.headers.get('x-app-version'), '17');
+  });
+
+  await t9.test('T9.6: Compact Sunday-focused game calendar replaces 35-cell month grid', () => {
+    const cssPath = path.join(publicDir, 'css/style.css');
+    const css = fs.readFileSync(cssPath, 'utf8');
+    assert.ok(css.includes('.calendar-sunday-track'), 'CSS must define .calendar-sunday-track');
+    assert.ok(css.includes('.calendar-sunday-card'), 'CSS must define .calendar-sunday-card');
+
+    const appJsPath = path.join(publicDir, 'js/app.js');
+    const appJs = fs.readFileSync(appJsPath, 'utf8');
+    assert.ok(appJs.includes('calendar-sunday-track'), 'app.js must render .calendar-sunday-track');
+    assert.ok(appJs.includes('calendar-sunday-card'), 'app.js must render .calendar-sunday-card');
+    assert.ok(appJs.includes('dateObj.getDay() === 0'), 'app.js must filter for Sunday game days');
+    assert.ok(!appJs.includes('class="calendar-grid"'), 'app.js must not render old 35-cell grid');
   });
 });

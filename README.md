@@ -15,10 +15,11 @@ Designed with a **10+ year longevity philosophy**:
 
 ## 🌟 Key Features
 
-1. **Interactive Game Calendar & Schedule Export**:
-   - Monthly interactive Game Calendar mounted right at the top of the homepage (`public/index.html`) above the game feed.
-   - Month-by-month navigation (prev/next month, today jump), localized Pacific Time (`America/Los_Angeles`) day alignment, and visual game indicators (player counts, rainout pills, Sunday game day highlights).
-   - Interactive date drawer showing game info, location, attendance, duty coverage, and direct RSVP links.
+1. **Compact Sunday Game Calendar & Schedule Export**:
+   - High-density, space-efficient Sunday Game Calendar mounted prominently at the top of the homepage (`public/index.html`) above the game feed.
+   - Designed specifically for weekly pickup baseball: eliminates the 6/7ths empty Monday–Saturday space of traditional 30-day grids, focusing 100% of the viewable area on Sunday game days (reducing vertical footprint by ~75%).
+   - Month-by-month navigation (prev/next month, today jump), localized Pacific Time (`America/Los_Angeles`) day alignment, and visual game indicators (player counts, rainout pills, attending status, and today highlight).
+   - Interactive date drawer showing full game info, location, attendance, duty coverage, and direct RSVP links.
    - Quick **1-Click `.ics` Export Download** (`pickup-baseball-schedule.ics`) compatible with Apple Calendar, Microsoft Outlook, and Google Calendar, plus direct 1-click **Add to Google Calendar** links for every game.
    - Fast-scroll anchor links (`📅 Calendar` in the top navigation bar and `📅 Game Calendar ↓` in the hero banner).
 

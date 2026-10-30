@@ -213,5 +213,22 @@ Following community guidance on minimizing UI clutter while guaranteeing that ou
   - Clicking triggers `SKIP_WAITING`, purges obsolete browser `caches` and local storage entries, and reloads the window.
   - Upon reload, the newly downloaded `CLIENT_VERSION` matches the server, automatically returning the button to its invisible state.
 
-## 18. Future Roadmap Notes
+## 18. Phase 17: Compact Sunday-Focused Game Calendar
+In response to community feedback that all pickup games take place on Sundays—meaning 6 out of 7 days (Monday through Saturday) in a traditional monthly 35-cell grid were completely unused empty space:
+- **Sunday-Focused Game Calendar Reel:** Replaced the tall 7-column × 5-row monthly grid (`.calendar-grid`) with a compact, high-density Sunday Game Strip (`.calendar-sunday-track`).
+- **Eliminated Wasted Screen Footprint:**
+  - Instead of rendering 35 cells where 85.7% (6/7ths) of the viewable area was empty gray boxes, the calendar now renders only the 4 to 5 actual Sunday game days for the selected month (plus any scheduled non-Sunday special events).
+  - Reduced the calendar's vertical height from ~550px down to ~110px (over 75% height reduction).
+  - On mobile screens, cards cleanly organize in a readable 2-to-3 column responsive grid, eliminating cramped, unreadable columns.
+- **Rich Interactive Sunday Cards (`.calendar-sunday-card`):**
+  - Displays day/month header (`SUN • NOV 1`), prominent date numeral, `TODAY` badge, time icon (`⚾ 12:00 PM` or `🌧️ Rainout`), venue (`Bushrod Park`), attendee count (`👥 14 Players`), and attendee status indicator (`✓ In`).
+  - Clicking any card expands the date drawer (`#calendar-date-drawer`) showing full event details, 1-click Google Calendar link, and direct RSVP navigation. Clicking again or pressing `✕ Close` tucks the drawer away.
+  - Preserves 1-click `.ics` schedule export (`📥 Export (.ics)`) for Apple, Google, and Outlook calendars.
+- **Universal Theme & Longevity Preservation:**
+  - Fully compatible with all 12 MLB franchise color palettes and automatic dark mode through pure CSS custom properties.
+  - Added unit test assertion `T9.6` to `scripts/verify-all.js` ensuring the compact Sunday track and cards are validated in CI/CD. All 45 tests pass.
+
+---
+
+## 19. Future Roadmap Notes
 - **Pinned Full-Stack Rust / WebAssembly Migration:** Evaluated a future 4-phase rewrite of the Cloudflare Pages Functions backend (and optional frontend interactivity) to Rust (`workers-rs` compiling to WebAssembly) for compile-time type safety, zero-dependency binary durability, and strict edge memory safety—kept as a guiding north star when designing new features and data models.

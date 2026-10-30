@@ -2685,151 +2685,165 @@ footer.site-footer strong {
   width: 100%;
 }
 
-.calendar-grid {
+/* Compact Sunday-Focused Game Schedule Strip */
+.calendar-sunday-track {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 6px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
   width: 100%;
+  box-sizing: border-box;
 }
 
-.calendar-day-header {
-  text-align: center;
-  font-size: 0.78rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-muted);
-  padding: 8px 4px;
-}
-
-.calendar-day-header.sun-header {
-  color: var(--giants-orange);
-  background: var(--giants-orange-light);
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-}
-
-.calendar-day-cell {
-  min-height: 96px;
-  padding: 7px 8px;
+.calendar-sunday-card {
   background: var(--bg-subtle);
-  border: 1px solid var(--border);
+  border: 1.5px solid var(--border);
   border-radius: var(--radius-sm);
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
-  gap: 4px;
+  justify-content: space-between;
+  gap: 8px;
   cursor: pointer;
-  transition: border-color 0.15s, background-color 0.15s, transform 0.08s, box-shadow 0.15s;
+  transition: transform 0.14s ease, border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+  user-select: none;
+  position: relative;
   box-sizing: border-box;
+  min-height: 106px;
   text-align: start;
 }
 
-.calendar-day-cell:hover {
+.calendar-sunday-card:hover {
   border-color: var(--giants-orange);
   background: var(--bg-card);
-  transform: translateY(-1px);
+  transform: translateY(-2px);
   box-shadow: var(--shadow-sm);
 }
 
-.calendar-day-cell.other-month {
-  opacity: 0.35;
-  background: transparent;
-  border-style: dashed;
+.calendar-sunday-card:focus-visible {
+  outline: 2px solid var(--giants-orange);
+  outline-offset: 2px;
 }
 
-.calendar-day-cell.is-today {
+.calendar-sunday-card.is-today {
   border: 2px solid var(--giants-orange);
   background: var(--bg-card);
 }
 
-.calendar-day-cell.is-sunday {
-  background: rgba(0, 56, 49, 0.025);
-}
-
-[data-theme="dark"] .calendar-day-cell.is-sunday {
-  background: rgba(52, 211, 153, 0.035);
-}
-
-.calendar-day-cell.has-game {
+.calendar-sunday-card.has-game {
   background: var(--giants-orange-light);
   border-color: var(--giants-orange-border);
 }
 
-.calendar-day-cell.has-game:hover {
+.calendar-sunday-card.has-game:hover {
   border-color: var(--giants-orange);
-  box-shadow: 0 3px 10px var(--giants-orange-glow);
+  box-shadow: 0 4px 12px var(--giants-orange-glow);
 }
 
-.calendar-day-cell.game-rainout {
+.calendar-sunday-card.game-rainout {
   background: rgba(56, 189, 248, 0.12);
   border-color: rgba(56, 189, 248, 0.4);
 }
 
-.calendar-day-cell.is-attending {
-  border-left: 3.5px solid var(--as-green);
-  border-inline-start: 3.5px solid var(--as-green);
+.calendar-sunday-card.is-attending {
+  border-left: 4px solid var(--as-green);
+  border-inline-start: 4px solid var(--as-green);
 }
 
-.calendar-day-cell.selected-day {
+.calendar-sunday-card.selected-sunday {
+  border-color: var(--giants-orange);
   outline: 2px solid var(--giants-orange);
   outline-offset: 1px;
+  background: var(--bg-card);
+  box-shadow: 0 4px 14px var(--giants-orange-glow);
 }
 
-.calendar-day-num {
-  font-size: 0.84rem;
-  font-weight: 700;
-  color: var(--text-main);
+.sunday-card-top {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
+  gap: 6px;
 }
 
-.calendar-day-cell.is-today .calendar-day-num span.num-badge {
+.sunday-day-tag {
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--giants-orange);
+}
+
+.sunday-date-tag {
+  font-size: 0.96rem;
+  font-weight: 800;
+  color: var(--text-main);
+}
+
+.sunday-today-pill {
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 999px;
   background: var(--giants-orange);
   color: #ffffff;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
+  letter-spacing: 0.04em;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.sunday-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sunday-game-time {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  font-size: 0.75rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  gap: 6px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-main);
 }
 
-.cal-game-pill {
-  margin-top: 2px;
-  background: var(--bg-card);
-  border: 1px solid var(--giants-orange-border);
-  border-radius: 6px;
-  padding: 4px 6px;
-  font-size: 0.72rem;
-  line-height: 1.25;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-}
-
-.cal-game-pill .time-title {
-  font-weight: 800;
-  color: var(--giants-orange);
-  display: block;
-}
-
-.cal-game-pill .loc-title {
+.sunday-game-location {
+  font-size: 0.76rem;
   color: var(--text-muted);
-  display: block;
-  font-size: 0.68rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  margin-top: 1px;
 }
 
-.cal-game-pill .players-count {
-  display: inline-block;
-  color: var(--as-green);
-  font-weight: 700;
-  font-size: 0.7rem;
+.sunday-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
   margin-top: 2px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border);
+  font-size: 0.75rem;
+}
+
+.sunday-player-badge {
+  font-weight: 700;
+  color: var(--as-green);
+}
+
+.sunday-player-badge.open-badge {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.sunday-attending-pill {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--as-green);
+  background: rgba(0, 56, 49, 0.08);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+[data-theme="dark"] .sunday-attending-pill {
+  background: rgba(52, 211, 153, 0.15);
 }
 
 .calendar-date-drawer {
@@ -2905,19 +2919,19 @@ footer.site-footer strong {
   .calendar-card {
     padding: 16px 14px;
   }
-  .calendar-grid {
-    gap: 3px;
+  .calendar-sunday-track {
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 8px;
   }
-  .calendar-day-cell {
-    min-height: 56px;
-    padding: 4px;
+  .calendar-sunday-card {
+    min-height: 94px;
+    padding: 10px;
   }
-  .cal-game-pill {
-    padding: 2px 3px;
-    font-size: 0.65rem;
+  .sunday-date-tag {
+    font-size: 0.88rem;
   }
-  .cal-game-pill .loc-title {
-    display: none;
+  .sunday-game-time {
+    font-size: 0.82rem;
   }
   .calendar-month-label {
     min-width: 110px;
