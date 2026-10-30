@@ -15,20 +15,26 @@ Designed with a **10+ year longevity philosophy**:
 
 ## 🌟 Key Features
 
-1. **Compact Sunday Game Calendar & Schedule Export**:
-   - High-density, space-efficient Sunday Game Calendar mounted prominently at the top of the homepage (`public/index.html`) above the game feed.
-   - Designed specifically for weekly pickup baseball: eliminates the 6/7ths empty Monday–Saturday space of traditional 30-day grids, focusing 100% of the viewable area on Sunday game days (reducing vertical footprint by ~75%).
-   - Month-by-month navigation (prev/next month, today jump), localized Pacific Time (`America/Los_Angeles`) day alignment, and visual game indicators (player counts, rainout pills, attending status, and today highlight).
-   - Interactive date drawer showing full game info, location, attendance, task coverage, and direct RSVP links.
-   - Quick **1-Click `.ics` Export Download** (`pickup-baseball-schedule.ics`) compatible with Apple Calendar, Microsoft Outlook, and Google Calendar, plus direct 1-click **Add to Google Calendar** links for every game.
+1. **Rolling 5-Week Sunday Game Calendar & Interactive Schedule**:
+   - High-density, space-efficient Sunday Game Calendar mounted prominently as the primary schedule on the homepage (`public/index.html`).
+   - **Continuous Rolling Event Horizon**: Replaces rigid 30-day month boundaries with a dynamic rolling track:
+     - **Card 1: Contextual Past Event**: Displays the most recent past game (or previous Sunday) featuring a `📜 Past Game` badge and turnout recap (`👥 X Turnout`), opening a recap drawer with direct links to comments and the archive.
+     - **Card 2: Anchored Next Game**: Highlights the upcoming game with a prominent `⚾ Next Game` badge strictly anchored to the real-world timeline (`trueNextGameKey`).
+     - **Cards 3–6: Upcoming & Prospective Dates**: Displays subsequent scheduled games or prospective Sundays tagged with `📅 Prospective` and `📍 TBA (Unscheduled)`.
+   - **Dynamic Month Range Header & Multi-Week Step**: Dynamically formats visible month boundaries (e.g. `Oct – Nov 2026`) and steps forward/backward by 4 weeks with `‹` / `›` controls and a 1-click `Today` reset.
+   - **Non-Sunday Event Support**: Mid-week games, clinics, or Saturday tournaments automatically slot into chronological order with custom weekday tags (`Sat, Nov 7`).
+   - **Interactive Preview Drawer**: Selecting any game slides open `#calendar-date-drawer` with Google Calendar export, location map, volunteer task status, and 1-click RSVP.
+   - **1-Click `.ics` Export Download** (`pickup-baseball-schedule.ics`) compatible with Apple Calendar, Microsoft Outlook, and Google Calendar, plus direct access to the **[Past Games Archive](https://www.pickupbaseballfoundation.org/archive.html)**.
 
-2. **Game Scheduling & Roster Tracking**:
+2. **Game Scheduling, Roster Tracking, & RSVP Whitelists**:
    - Live player roster showing confirmed headcount, player bios, and shared equipment.
    - Instant RSVP confirmation email with game details and a personal management link.
    - 1-Click **"Post Next Sunday @ Noon"** scheduler normalized to `America/Los_Angeles` (Pacific Time).
    - Inline **Edit Game Details** tool for organizers and facilitators with smart location autocomplete.
+   - **Per-Event RSVP Whitelists (Allowed Player Emails)**: Event creators (Admins and Organizers) can designate private or invitational games restricted to specific player email addresses. Built with an Organizer candidate accounts search directory (`GET /api/events/attendee-candidates`) featuring checkbox multi-selection and custom email entry, enforced with HTTP 403 Forbidden on unauthorized signups and polite invitation status notices on the event page.
 
 3. **Volunteer Task Coordination & Game Day Roles**:
+   - Standardized site-wide **Task** and **Tasks** coordination (standardized from legacy duty/duties terminology).
    - Customizable default task template pre-configured with the 6 essential game-day tasks:
      - **Game Facilitator** (1 slot) — *Help coordinate teams, batting order, and fair play throughout the game.*
      - **Water / Food** (1 slot) — *Bring drinking water, ice, and dugout snacks or fruit for players.*
@@ -41,7 +47,8 @@ Designed with a **10+ year longevity philosophy**:
 4. **Equipment Sharing & Game Discussion Board**:
    - Players list what gear they can bring (bats, catcher's gear, spare gloves) and coordinate field conditions or carpools on the per-game discussion board.
 
-5. **Roster Capacity, Waitlist & Player Privacy**:
+5. **Streamlined Calendar-First Homepage & Roster Privacy**:
+   - Pure calendar-first landing page: retired redundant lower featured game cards and secondary lists in favor of the unified rolling calendar and slide-out preview drawer.
    - Automated roster capacity capping (`max_players`) with instant waitlist activation.
    - Automatic queue promotion upon cancellations with instant email dispatch.
    - Multi-guest reservation support (+1 to +5 guests per RSVP).
@@ -99,7 +106,11 @@ Designed with a **10+ year longevity philosophy**:
     - One-click **📥 Backup Database (.sql)** download directly from the Admin Dashboard.
     - User account removal, email ban list (`banned_emails`), guest RSVP policy toggle, and one-click roster/comment moderation.
 
-13. **Detailed Development Narrative & Open Source**:
+13. **Comprehensive Zero-Dependency Acceptance Test Suite**:
+    - 52-test automated end-to-end verification suite in `scripts/verify-all.js` using native Node.js v22 test runner (`node:test`, `node:assert/strict`, `fetch`) with zero third-party test dependencies.
+    - Rigorously validates magic link authentication, 4-tier RBAC permission boundaries, task management, RSVP whitelists, waitlist queue promotions, rainout incident notifications, rolling calendar horizons, and version negotiation.
+
+14. **Detailed Development Narrative & Open Source**:
     - Complete chronicle of all architectural decisions, edge migrations, and technical phases in **[`DEVELOPMENT_NARRATIVE.md`](DEVELOPMENT_NARRATIVE.md)**.
     - Direct GitHub repository link in the site footer beside *"Free & open-source"*.
 
@@ -283,6 +294,8 @@ Cloudflare Pages hosts both the static files in `public/` and the serverless Hon
 # Start local Cloudflare Pages + D1 dev server at http://localhost:8788
 npm run dev
 
+# Run comprehensive 52-test automated acceptance verification suite
+npm test
 
 # Deploy static assets and Worker functions to production
 npm run deploy

@@ -6,6 +6,36 @@
 
 ---
 
+### Chronological Phase Directory
+- **[1. Vision & Architectural Philosophy](#1-vision--architectural-philosophy)** — 10+ year longevity, zero build steps, 100% free serverless edge.
+- **[2. Phase 1: Core Community & Game-Day Features](#2-phase-1-core-community--game-day-features)** — Noon Sunday games, 4 essential duties, live rosters, passwordless sign-in.
+- **[3. Phase 2: Serverless Edge Migration](#3-phase-2-serverless-edge-migration-cloudflare-pages--d1--resend)** — Cloudflare Pages Functions (Hono), D1 SQLite, Resend email.
+- **[4. Phase 3: Open-Source Hygiene, Moderation, Donations, & Privacy](#4-phase-3-open-source-hygiene-moderation-donations--plain-english-privacy)** — SQL backups, banned emails, donate page, plain-English privacy promise.
+- **[5. Phase 4: Defense-in-Depth Security Hardening](#5-phase-4-defense-in-depth-security-hardening)** — SHA-256 hashed login codes, D1 rate limiting, CSP/HSTS, EXIF photo stripping.
+- **[6. Phase 5: Brand Refresh, Dark Mode, Navbar, & Visual Modernization](#6-phase-5-brand-refresh-dark-mode-responsive-navbar--screenshot-driven-visual-modernization)** — Home-plate shield logo, 99.99% JSON payload reduction, batched D1 queries, 0ms cache.
+- **[7. Phase 6: Multi-Language i18n & RTL Typography](#7-phase-6-multi-language-i18n--rtl-typography)** — 15 California languages, browser locale detection, dynamic RTL layout.
+- **[8. Phase 7: Rainout Incident Management & Weather Broadcasts](#8-phase-7-rainout-incident-management--weather-broadcasts)** — 1-click rainouts, automated email blast, reopen game tool.
+- **[9. Phase 8: Roster Size Capping, Auto-Promoting Waitlist, Guest Parties, & Privacy](#9-phase-8-roster-size-capping-auto-promoting-waitlist-guest-parties--player-privacy)** — Capacity capping, waitlist queue, +1 to +5 guests, roster privacy shield.
+- **[10. Phase 9: Progressive Web App (PWA) & Offline Shell](#10-phase-9-progressive-web-app-pwa--offline-shell)** — Web app manifest, service worker caching, installable home screen app.
+- **[11. Phase 10: Reverse Compatibility Audit & Cross-Era Browser/Hardware Hardening](#11-phase-10-reverse-compatibility-audit--cross-era-browserhardware-hardening)** — ES6 compatibility, CSS logical/physical fallbacks, 16px iOS input zooming prevention.
+- **[12. Phase 11: Fixed Footer Theme Controls, 12-Market MLB Theming, & Open Source](#12-phase-11-fixed-footer-theme-controls-12-market-major-league-baseball-theming--open-source)** — 12 MLB market team palettes, footer theme trigger.
+- **[13. Phase 12: Theme Palette Uniformity & Fenway Crimson Overhaul](#13-phase-12-theme-palette-uniformity--fenway-crimson-overhaul)** — 12.5:1 / 4.60:1 contrast ratios, dark mode card uniformity.
+- **[14. Phase 13: Interactive Top Game Calendar & Facilitator + Water/Food Roles](#14-phase-13-interactive-top-game-calendar--facilitator--waterfood-roles)** — Top schedule calendar, .ics export download, Game Facilitator & Water/Food tasks.
+- **[15. Phase 14: Fixed-in-Place App Update Button Beneath Theme Picker](#15-phase-14-fixed-in-place-app-update-button-beneath-theme-picker)** — Relocated update button to persistent footer position.
+- **[16. Phase 15: Codebase Shortening & Redundancy Consolidation](#16-phase-15-codebase-shortening--redundancy-consolidation)** — Retired 5 legacy endpoints, deduplicated HTML boilerplates, eliminated redundant buttons.
+- **[17. Phase 16: Smart Invisible Update Button & Real-Time Version Comparison Engine](#17-phase-16-smart-invisible-update-button--real-time-version-comparison-engine)** — Invisible by default, dual-detection engine (`X-App-Version` + Service Worker).
+- **[18. Phase 17: Compact Sunday-Focused Game Calendar](#18-phase-17-compact-sunday-focused-game-calendar)** — 75% vertical reduction, 6/7ths weekday dead space elimination, slide-out drawer.
+- **[19. Phase 18: Navigation & Landing Page Decluttering](#19-phase-18-navigation--landing-page-decluttering)** — Removed calendar/view/profile hero buttons, moved logout to profile page.
+- **[20. Phase 19: Site-Wide Task Terminology & Featured Game Streamlining](#20-phase-19-site-wide-task-terminology--featured-game-streamlining)** — Standardized "task / tasks", removed duplicate RSVP header button.
+- **[21. Phase 20: Prospective Unscheduled Calendar Events & TBA Location Tagging](#21-phase-20-prospective-unscheduled-calendar-events--tba-location-tagging)** — Labeled tentative dates as "Prospective" with "TBA" location.
+- **[22. Phase 21: Homepage Streamlining (Calendar-First Architecture)](#22-phase-21-homepage-streamlining-calendar-first-architecture)** — Removed secondary future games list, moved archive link to calendar header.
+- **[23. Phase 22: Rolling Calendar Horizon & Event RSVP Whitelists](#23-phase-22-rolling-calendar-horizon--event-rsvp-whitelists)** — 5-week rolling stream (most recent past + upcoming), candidate accounts RSVP whitelist.
+- **[24. Phase 23: Pure Calendar-Driven Landing Page](#24-phase-23-pure-calendar-driven-landing-page-removal-of-featured-game-card)** — Removed redundant "Next Sunday Pickup" featured card, calendar-first landing.
+- **[25. Phase 24: Anchoring 'Next Game' & 'Past Game' Badges to Real-World Timeline](#25-phase-24-anchoring-next-game--past-game-badges-to-real-world-timeline)** — Decoupled pills from pagination index, strict `trueNextGameKey` and `dateKey < todayKey` anchoring.
+- **[26. Future Roadmap Notes](#26-future-roadmap-notes)** — Full-stack Rust / WebAssembly edge migration architecture.
+
+---
+
 ## 1. Vision & Architectural Philosophy
 The **Pickup Baseball Foundation** needed a welcoming, fast, and zero-cost web application to organize free weekly Sunday pickup baseball games at Noon. Rather than relying on heavy frontend frameworks that break every few years or paid SaaS platforms that charge monthly fees, the project was designed around two core principles:
 1. **10+ Year Durability:** Built with dependency-free vanilla HTML, CSS, and JavaScript on the frontend and standard SQL on the backend, so there is no fragile build pipeline to maintain.
