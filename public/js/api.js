@@ -255,7 +255,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '17',
+  CLIENT_VERSION: '18',
 
   // Current user cache
   currentUser: null,
@@ -1304,7 +1304,6 @@ const API = {
           </span>
         </a>
         ${user.canManageEvents ? `<a href="/admin.html" class="btn btn-outline btn-sm">${user.isAdmin ? this.t('nav.admin') : this.t('nav.org')}</a>` : ''}
-        <button id="nav-logout-btn" class="btn btn-outline btn-sm">${this.t('nav.logout')}</button>
       `;
     } else {
       authHtml = `
@@ -1314,7 +1313,6 @@ const API = {
 
     const isDonatePage = typeof window !== 'undefined' && (window.location.pathname.endsWith('donate.html') || window.location.pathname === '/donate');
     const donateLinkHtml = `<a href="/donate.html" class="nav-link-donate${isDonatePage ? ' active' : ''}">${this.t('nav.donate')}</a>`;
-    const calendarLinkHtml = `<a href="/index.html#site-calendar-section" class="nav-link-calendar" title="${this.escapeHtml(this.t('calendar.title', 'Game Calendar'))}">📅 <span class="nav-text-calendar">${this.escapeHtml(this.t('nav.calendar', 'Calendar'))}</span></a>`;
 
     const langOptionsHtml = this.SUPPORTED_LANGUAGES.map(l =>
       `<option value="${l.code}" ${l.code === currentLang ? 'selected' : ''} title="${this.escapeHtml(l.label)}">${l.short}</option>`
@@ -1330,7 +1328,6 @@ const API = {
           <span class="brand-tag">${this.t('nav.community')}</span>
         </a>
         <div class="nav-links">
-          ${calendarLinkHtml}
           ${donateLinkHtml}
           ${langSelectHtml}
           ${authHtml}

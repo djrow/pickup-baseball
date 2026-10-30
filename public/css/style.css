@@ -937,8 +937,7 @@ header.site-header {
   color: var(--giants-orange);
 }
 
-.nav-link-donate,
-.nav-link-calendar {
+.nav-link-donate {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -957,29 +956,24 @@ header.site-header {
   transition: background-color 0.15s, border-color 0.15s, color 0.15s, transform 0.05s;
 }
 
-.nav-link-donate:hover,
-.nav-link-calendar:hover {
+.nav-link-donate:hover {
   color: var(--giants-orange) !important;
   border-color: var(--giants-orange);
   background: var(--giants-orange-light);
 }
 
-.nav-link-donate.active,
-.nav-link-calendar.active {
+.nav-link-donate.active {
   background: var(--giants-orange-light);
   border-color: var(--giants-orange);
   color: var(--giants-orange) !important;
 }
 
-[data-theme="dark"] .nav-link-donate,
-[data-theme="dark"] .nav-link-calendar {
+[data-theme="dark"] .nav-link-donate {
   color: var(--text-main) !important;
 }
 
 [data-theme="dark"] .nav-link-donate:hover,
-[data-theme="dark"] .nav-link-donate.active,
-[data-theme="dark"] .nav-link-calendar:hover,
-[data-theme="dark"] .nav-link-calendar.active {
+[data-theme="dark"] .nav-link-donate.active {
   color: var(--giants-orange) !important;
   background: var(--giants-orange-light);
   border-color: var(--giants-orange);
@@ -2069,8 +2063,7 @@ footer.site-footer strong {
   .nav-links {
     gap: 8px;
   }
-  .nav-link-donate,
-  .nav-link-calendar {
+  .nav-link-donate {
     height: 30px;
     padding: 0 10px;
     font-size: 0.8rem;
@@ -2121,14 +2114,10 @@ footer.site-footer strong {
   .nav-links {
     gap: 5px;
   }
-  .nav-link-donate,
-  .nav-link-calendar {
+  .nav-link-donate {
     height: 30px;
     padding: 0 8px;
     font-size: 0.76rem;
-  }
-  .nav-text-calendar {
-    display: none;
   }
   .lang-select {
     width: auto;
@@ -2164,7 +2153,6 @@ footer.site-footer strong {
     gap: 4px;
   }
   .nav-link-donate,
-  .nav-link-calendar,
   .btn-login {
     padding: 0 6px;
     font-size: 0.72rem;

@@ -230,5 +230,14 @@ In response to community feedback that all pickup games take place on Sundays—
 
 ---
 
-## 19. Future Roadmap Notes
+## 19. Phase 18: Navigation & Landing Page Decluttering
+Streamlined site navigation and eliminated redundant buttons across the top header, hero banner, and profile views:
+- **Removed Calendar Button from Top Bar:** Removed the redundant calendar link from the global navigation bar (`public/index.html` and `public/js/api.js`). With the compact Sunday schedule reel mounted prominently at the top of the homepage, a navbar shortcut was unnecessary and occupied limited horizontal space on mobile.
+- **Moved Log Out Button to Profile Page:** Removed `nav-logout-btn` from the top header and placed dedicated, prominent `Log Out` buttons on `public/profile.html` (both in the profile header beside the role badge and at the bottom action bar). This aligns with standard web application architecture where session actions belong inside the user's account management view.
+- **Streamlined Landing Page Main Section:** Removed the redundant `📅 Game Calendar ↓` and `View Games ↓` buttons from the hero action bar in `public/index.html`. Updated `applyUserToHomeUi()` in `public/js/app.js` to hide the player profile button from the hero when logged in (as the profile badge is already permanently accessible in the top bar).
+- **Added Automated Test Assertions:** Added `T9.7` to `scripts/verify-all.js` validating the removal of the top bar calendar/logout buttons, the presence and wiring of the profile logout buttons, and the simplified hero actions. All 46 tests pass.
+
+---
+
+## 20. Future Roadmap Notes
 - **Pinned Full-Stack Rust / WebAssembly Migration:** Evaluated a future 4-phase rewrite of the Cloudflare Pages Functions backend (and optional frontend interactivity) to Rust (`workers-rs` compiling to WebAssembly) for compile-time type safety, zero-dependency binary durability, and strict edge memory safety—kept as a guiding north star when designing new features and data models.

@@ -10,10 +10,9 @@ function applyUserToHomeUi(user) {
   const heroBtn = document.getElementById('hero-login-btn');
   if (heroBtn) {
     if (user) {
-      heroBtn.removeAttribute('data-i18n');
-      heroBtn.textContent = API.t('hero.profile_btn', { name: user.name });
-      heroBtn.href = '/profile.html';
+      heroBtn.style.display = 'none';
     } else {
+      heroBtn.style.display = '';
       heroBtn.setAttribute('data-i18n', 'hero.login_btn');
       heroBtn.textContent = API.t('hero.login_btn');
       heroBtn.href = '/login.html';

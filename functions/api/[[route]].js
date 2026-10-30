@@ -4,7 +4,7 @@ import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 
 const app = new Hono().basePath('/api');
 
-const CURRENT_APP_VERSION = '17';
+const CURRENT_APP_VERSION = '18';
 
 app.use('*', async (c, next) => {
   await next();

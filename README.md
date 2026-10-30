@@ -21,7 +21,6 @@ Designed with a **10+ year longevity philosophy**:
    - Month-by-month navigation (prev/next month, today jump), localized Pacific Time (`America/Los_Angeles`) day alignment, and visual game indicators (player counts, rainout pills, attending status, and today highlight).
    - Interactive date drawer showing full game info, location, attendance, duty coverage, and direct RSVP links.
    - Quick **1-Click `.ics` Export Download** (`pickup-baseball-schedule.ics`) compatible with Apple Calendar, Microsoft Outlook, and Google Calendar, plus direct 1-click **Add to Google Calendar** links for every game.
-   - Fast-scroll anchor links (`📅 Calendar` in the top navigation bar and `📅 Game Calendar ↓` in the hero banner).
 
 2. **Game Scheduling & Roster Tracking**:
    - Live player roster showing confirmed headcount, player bios, and shared equipment.

@@ -55,7 +55,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-const CURRENT_APP_VERSION = '17';
+const CURRENT_APP_VERSION = '18';
 app.use((req, res, next) => {
   res.setHeader('X-App-Version', CURRENT_APP_VERSION);
   next();
@@ -1000,8 +1000,8 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
   await t9.test('T9.5: Server sends X-App-Version header and /api/version endpoint responds', async () => {
     const res = await apiReq('GET', '/api/version');
     assert.equal(res.status, 200);
-    assert.equal(res.data.version, '17');
-    assert.equal(res.headers.get('x-app-version'), '17');
+    assert.equal(res.data.version, '18');
+    assert.equal(res.headers.get('x-app-version'), '18');
   });
 
   await t9.test('T9.6: Compact Sunday-focused game calendar replaces 35-cell month grid', () => {
@@ -1016,5 +1016,27 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(appJs.includes('calendar-sunday-card'), 'app.js must render .calendar-sunday-card');
     assert.ok(appJs.includes('dateObj.getDay() === 0'), 'app.js must filter for Sunday game days');
     assert.ok(!appJs.includes('class="calendar-grid"'), 'app.js must not render old 35-cell grid');
+  });
+
+  await t9.test('T9.7: Top bar & landing page decluttering: calendar and hero buttons removed, logout in profile', () => {
+    const indexPath = path.join(publicDir, 'index.html');
+    const indexHtml = fs.readFileSync(indexPath, 'utf8');
+    assert.ok(!indexHtml.includes('nav-link-calendar'), 'index.html navbar must not contain calendar button');
+    assert.ok(!indexHtml.includes('hero.view_games_btn'), 'index.html hero must not contain view games button');
+    assert.ok(!indexHtml.includes('📅 Game Calendar ↓'), 'index.html hero must not contain calendar button');
+
+    const apiJsPath = path.join(publicDir, 'js/api.js');
+    const apiJs = fs.readFileSync(apiJsPath, 'utf8');
+    assert.ok(!apiJs.includes('nav-link-calendar'), 'api.js renderNav must not contain calendar button');
+    assert.ok(!apiJs.includes('id="nav-logout-btn"'), 'api.js renderNav must not contain logout button in top bar');
+
+    const profilePath = path.join(publicDir, 'profile.html');
+    const profileHtml = fs.readFileSync(profilePath, 'utf8');
+    assert.ok(profileHtml.includes('profile-logout-btn'), 'profile.html must contain logout button');
+    assert.ok(profileHtml.includes('API.logout()'), 'profile.html must bind logout button to API.logout()');
+
+    const appJsPath = path.join(publicDir, 'js/app.js');
+    const appJs = fs.readFileSync(appJsPath, 'utf8');
+    assert.ok(appJs.includes("heroBtn.style.display = 'none'"), 'app.js must hide hero profile button when user is logged in');
   });
 });
