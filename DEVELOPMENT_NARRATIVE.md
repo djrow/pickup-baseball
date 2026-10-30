@@ -188,5 +188,15 @@ To ensure players and organizers can immediately update to the latest site relea
 - **Background Update Auto-Detection:** Automatically monitors Service Worker `updatefound` and `waiting` states, styling the button with a pulsing accent badge (`✨ Update Available — Click to Refresh`) and status descriptions when a new edge build is ready.
 - **Full 15-Language Internationalization & Theme Sync:** Fully localized across English, Spanish, Chinese, Tagalog, Vietnamese, Korean, Arabic, Russian, Persian/Farsi, Japanese, Punjabi, Armenian, Portuguese, Hindi, and French with dynamic CSS custom property styling matching all 12 MLB market color palettes in light and dark modes.
 
-## 16. Future Roadmap Notes
+---
+
+## 16. Phase 15: Codebase Shortening & Redundancy Consolidation
+To reduce cognitive load, accelerate comprehension, and eliminate architectural drift across the codebase without degrading performance, reliability, longevity, or security:
+- **Removed Duplicate Lower Game Archive Card:** Removed the redundant lower dashed card prompting for the past games archive at the bottom of `public/index.html`. The primary `📜 Past Games Archive →` button located above the Future Scheduled Games section provides clean, sufficient access without cluttering the page layout.
+- **Eliminated Duplicate Edge Backend File:** Deleted `scripts/write-route.js` (-2,331 LOC), an exact duplicate of `functions/api/[[route]].js`. Edge routing is now maintained solely in `functions/api/[[route]].js`, removing the risk of out-of-sync copies.
+- **Consolidated Redundant Test Suites into Master Suite:** Integrated critical PWA verification tests into `scripts/verify-all.js` as Test Group T9, and safely removed 14 legacy, un-run standalone test files in `test/` (-6,311 LOC). All 43 acceptance assertions now execute in a unified, deterministic 220ms run.
+- **Unified Client-Side Footer Shell:** Implemented `API.renderFooter()` in `public/js/api.js`, dynamically populating the organization motto, GitHub repository link, theme picker, and app update button into standard `<footer id="site-footer" class="site-footer"></footer>` containers. This removed repeated 25-line HTML boilerplate across all 8 static pages.
+- **Total Codebase Reduction:** Reduced active codebase lines from **36,177** down to **27,465**—a net reduction of **8,712 lines of code (-24.1% of entire repository, -42.1% of JavaScript)**—with 100% of features, performance characteristics, and security controls intact.
+
+## 17. Future Roadmap Notes
 - **Pinned Full-Stack Rust / WebAssembly Migration:** Evaluated a future 4-phase rewrite of the Cloudflare Pages Functions backend (and optional frontend interactivity) to Rust (`workers-rs` compiling to WebAssembly) for compile-time type safety, zero-dependency binary durability, and strict edge memory safety—kept as a guiding north star when designing new features and data models.

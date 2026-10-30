@@ -942,3 +942,49 @@ test('T7: Error Boundaries', async (t) => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// T9: Progressive Web App (PWA) Verification Suite
+// ---------------------------------------------------------------------------
+test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
+  const publicDir = path.join(__dirname, '..', 'public');
+
+  await t9.test('T9.1: Web App Manifest exists and is valid', () => {
+    const manifestPath = path.join(publicDir, 'manifest.webmanifest');
+    assert.ok(fs.existsSync(manifestPath), 'manifest.webmanifest must exist');
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    assert.ok(manifest.name, 'Manifest must have a name');
+    assert.ok(manifest.short_name, 'Manifest must have a short_name');
+    assert.equal(manifest.display, 'standalone', 'Manifest display must be standalone');
+    assert.ok(manifest.start_url, 'Manifest must have a start_url');
+    assert.ok(Array.isArray(manifest.icons) && manifest.icons.length >= 2, 'Manifest must declare at least 2 icons');
+  });
+
+  await t9.test('T9.2: Service worker file exists and has lifecycle listeners', () => {
+    const swPath = path.join(publicDir, 'sw.js');
+    assert.ok(fs.existsSync(swPath), 'sw.js must exist');
+    const swCode = fs.readFileSync(swPath, 'utf8');
+    assert.ok(swCode.includes('install'), 'sw.js must handle install event');
+    assert.ok(swCode.includes('activate'), 'sw.js must handle activate event');
+    assert.ok(swCode.includes('fetch'), 'sw.js must handle fetch event');
+    assert.ok(swCode.includes('/api/'), 'sw.js must bypass dynamic /api/ requests');
+  });
+
+  await t9.test('T9.3: All primary HTML pages contain PWA manifest & mobile meta tags', () => {
+    const htmlFiles = ['index.html', 'archive.html', 'event.html', 'admin.html', 'donate.html', 'login.html', 'profile.html'];
+    for (const file of htmlFiles) {
+      const filePath = path.join(publicDir, file);
+      assert.ok(fs.existsSync(filePath), file + ' must exist');
+      const html = fs.readFileSync(filePath, 'utf8');
+      assert.ok(html.includes('rel="manifest" href="/manifest.webmanifest"'), file + ' must link manifest');
+      assert.ok(html.includes('rel="apple-touch-icon"'), file + ' must declare apple-touch-icon');
+    }
+  });
+
+  await t9.test('T9.4: Service worker registration is wired in public/js/api.js', () => {
+    const apiJsPath = path.join(publicDir, 'js/api.js');
+    const apiCode = fs.readFileSync(apiJsPath, 'utf8');
+    assert.ok(apiCode.includes('serviceWorker.register'), 'api.js must register service worker');
+    assert.ok(apiCode.includes('/sw.js'), 'api.js must point to /sw.js');
+  });
+});

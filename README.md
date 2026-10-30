@@ -137,7 +137,6 @@ Designed with a **10+ year longevity philosophy**:
 │   ├── api/[[route]].js        # Hono REST API running on Cloudflare Pages Functions / Workers
 │   └── health.js               # Health check endpoint (/health)
 ├── scripts/
-│   └── write-route.js          # Generator script for functions/api/[[route]].js
 ├── DEVELOPMENT_NARRATIVE.md    # Comprehensive chronicle of all development phases
 ├── d1_schema.sql               # Cloudflare D1 SQLite database schema (DDL + default duties)
 └── wrangler.toml               # Cloudflare Pages, environment vars, & D1 binding configuration
@@ -240,7 +239,7 @@ Cloudflare Pages hosts both the static files in `public/` and the serverless Hon
 
 - **How the Worker Routing Works**:
   - `public/_routes.json` instructs Cloudflare Pages to serve all static HTML/CSS/JS files directly from the CDN edge (0 Worker invocations) and only invoke the Pages Function Worker for `/api/*` and `/health`.
-  - Because Windows PowerShell treats `[` and `]` in `functions/api/[[route]].js` as wildcard glob characters, the API code is maintained in `scripts/write-route.js`. Running `node scripts/write-route.js` regenerates `functions/api/[[route]].js`.
+  - The Cloudflare Pages Functions edge API is maintained directly in `functions/api/[[route]].js` with zero duplicate wrapper scripts.
 
 1. **Create the Cloudflare Pages Project**:
    ```bash
@@ -284,8 +283,6 @@ Cloudflare Pages hosts both the static files in `public/` and the serverless Hon
 # Start local Cloudflare Pages + D1 dev server at http://localhost:8788
 npm run dev
 
-# Regenerate functions/api/[[route]].js after editing scripts/write-route.js
-node scripts/write-route.js
 
 # Deploy static assets and Worker functions to production
 npm run deploy

@@ -559,8 +559,7 @@ const API = {
 
     // 3. Mount footer theme picker when DOM is interactive
     const mount = () => {
-      this.initFooterThemePicker();
-      this.initAppUpdater();
+      this.renderFooter();
     };
     if (typeof document !== 'undefined') {
       if (document.readyState === 'loading') {
@@ -600,6 +599,38 @@ const API = {
       const check = card.querySelector('.palette-check');
       if (check) check.textContent = isSelected ? '✓' : '';
     });
+  },
+
+
+  renderFooter() {
+    if (typeof document === 'undefined') return;
+    const footer = document.getElementById('site-footer') || document.querySelector('footer.site-footer');
+    if (!footer) return;
+
+    if (!footer.querySelector('.footer-controls')) {
+      footer.innerHTML = `
+        <div class="container">
+          <p><img src="/logo.svg" alt="" class="footer-logo"> <strong>Pickup Baseball Foundation</strong> — <span data-i18n="footer.tagline">${this.escapeHtml(this.t('footer.tagline', "Building community through America's pastime."))}</span></p>
+          <p style="margin-top: 6px; font-size: 0.8rem; color: #94a3b8;">
+            <span data-i18n="footer.subtext">${this.escapeHtml(this.t('footer.subtext', "Built for simplicity and durability. Free & open-source"))}</span> on <a href="https://github.com/djrow/pickup-baseball" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">GitHub</a>.
+          </p>
+          <div class="footer-controls">
+            <div class="footer-theme-wrapper">
+              <button type="button" id="footer-theme-trigger" class="footer-theme-btn" aria-label="Change Appearance Theme">🎨 Theme &amp; Colors</button>
+            </div>
+            <div id="footer-theme-panel-slot"></div>
+            <div class="footer-update-wrapper">
+              <button type="button" id="footer-update-btn" class="footer-update-btn" aria-label="Update app to latest version">
+                <span class="update-icon">🔄</span> <span class="update-label" data-i18n="footer.update_app">${this.escapeHtml(this.t('footer.update_app', 'Update App'))}</span>
+              </button>
+            </div>
+            <div id="footer-update-status" class="footer-update-status" style="display: none;" role="status" aria-live="polite"></div>
+          </div>
+        </div>
+      `;
+    }
+    this.initFooterThemePicker();
+    this.initAppUpdater();
   },
 
   initFooterThemePicker() {
