@@ -306,5 +306,19 @@ Upgraded the calendar from rigid calendar-month boundaries to a continuous rolli
 
 ---
 
-## 24. Future Roadmap Notes
+## 24. Phase 23: Pure Calendar-Driven Landing Page (Removal of Featured Game Card)
+Removed the redundant "Next Sunday Pickup" featured game card located after the calendar, establishing the interactive rolling calendar and its integrated details drawer as the single, uncluttered focal point for discovering and signing up for pickup games:
+- **Removal of Redundant Featured Game Section:**
+  - Removed `#featured-game-container` from `public/index.html`.
+  - Deleted ~85 lines of rendering code (`renderFeaturedGame`) from `public/js/app.js`.
+  - Streamlined `loadGames()` and `renderEventsView()` to feed the rolling calendar directly.
+  - The calendar cards already highlight the next game (`⚾ Next Game`), live headcount, weather/rainout status, and prospective dates; selecting any card seamlessly expands the interactive `#calendar-date-drawer` with Google Calendar export, location map, and 1-click RSVP. Retaining a giant duplicate card beneath the calendar was redundant.
+- **Automated Verification & Version Bump:**
+  - Added test assertion `T9.12` to `scripts/verify-all.js` verifying the absence of `#featured-game-container` in `index.html` and `renderFeaturedGame` in `app.js`.
+  - Bumped cache bust version to `v23` across all client, server, service worker, and HTML asset links (`CLIENT_VERSION: '23'`, `CURRENT_APP_VERSION = '23'`, `CACHE_NAME = 'pbf-cache-v23'`).
+  - All 51 tests in `scripts/verify-all.js` pass with 100% success rate.
+
+---
+
+## 25. Future Roadmap Notes
 - **Pinned Full-Stack Rust / WebAssembly Migration:** Evaluated a future 4-phase rewrite of the Cloudflare Pages Functions backend (and optional frontend interactivity) to Rust (`workers-rs` compiling to WebAssembly) for compile-time type safety, zero-dependency binary durability, and strict edge memory safety—kept as a guiding north star when designing new features and data models.

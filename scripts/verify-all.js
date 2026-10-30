@@ -55,7 +55,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-const CURRENT_APP_VERSION = '22';
+const CURRENT_APP_VERSION = '23';
 app.use((req, res, next) => {
   res.setHeader('X-App-Version', CURRENT_APP_VERSION);
   next();
@@ -1177,5 +1177,13 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
       gear_bringing: 'Glove'
     });
     assert.equal(previouslyBlockedRsvp.status, 200, 'Player can now RSVP after whitelist is lifted');
+  });
+
+  await t9.test('T9.12: Removal of redundant featured game card (calendar-only landing page)', () => {
+    const indexHtml = fs.readFileSync(path.join(publicDir, 'index.html'), 'utf8');
+    assert.ok(!indexHtml.includes('id="featured-game-container"'), 'index.html must not contain featured-game-container');
+    const appJs = fs.readFileSync(path.join(publicDir, 'js/app.js'), 'utf8');
+    assert.ok(!appJs.includes('renderFeaturedGame'), 'app.js must not contain renderFeaturedGame');
+    assert.ok(!appJs.includes('featured-game-container'), 'app.js must not reference featured-game-container');
   });
 });
