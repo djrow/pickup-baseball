@@ -55,7 +55,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-const CURRENT_APP_VERSION = '31';
+const CURRENT_APP_VERSION = '32';
 app.use((req, res, next) => {
   res.setHeader('X-App-Version', CURRENT_APP_VERSION);
   next();
@@ -1552,5 +1552,47 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
         }
       }
     }
+  });
+
+  await test('T9.18: 15-Language i18n Coverage for Calendar Legend, Cloud Sync, and Webapp Build Attribution', async () => {
+    const publicDir = path.join(__dirname, '..', 'public');
+    const i18nDir = path.join(publicDir, 'i18n');
+    const languages = ['ar', 'es', 'fa', 'fr', 'hi', 'hy', 'ja', 'ko', 'pa', 'pt', 'ru', 'tl', 'vi', 'zh'];
+
+    const requiredKeys = [
+      'calendar.legend_game',
+      'calendar.legend_prospective',
+      'calendar.legend_rainout',
+      'calendar.legend_today',
+      'calendar.legend_attending',
+      'footer.about_site',
+      'calendar.title',
+      'calendar.sync_checking',
+      'calendar.sync_just_now',
+      'calendar.subscribe_title',
+      'feed.heading'
+    ];
+
+    for (const lang of languages) {
+      const filePath = path.join(i18nDir, `${lang}.json`);
+      assert.ok(fs.existsSync(filePath), `i18n file for ${lang} must exist`);
+      const dict = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+
+      for (const key of requiredKeys) {
+        assert.ok(key in dict, `Language '${lang}' must have translation key '${key}'`);
+        assert.ok(typeof dict[key] === 'string' && dict[key].trim().length > 0, `Language '${lang}' translation for '${key}' must not be empty`);
+      }
+
+      // Verify footer.about_site mentions 2026 and Gemini
+      assert.ok(
+        dict['footer.about_site'].includes('2026') ||
+        dict['footer.about_site'].includes('٢٠٢٦') ||
+        dict['footer.about_site'].includes('۲۰۲۶'),
+        `Language '${lang}' footer.about_site must include year 2026`
+      );
+    }
+
+    const apiJs = fs.readFileSync(path.join(publicDir, 'js', 'api.js'), 'utf8');
+    assert.ok(apiJs.includes('pickup_i18n_v'), 'api.js loadLangDict must use version-busted localStorage cache key');
   });
 });

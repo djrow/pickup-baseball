@@ -113,8 +113,8 @@ Designed with a **10+ year longevity philosophy**:
     - User account removal, email ban list (`banned_emails`), guest RSVP policy toggle, and one-click roster/comment moderation.
 
 13. **Comprehensive Zero-Dependency Acceptance Test Suite**:
-    - 56-test automated end-to-end verification suite in `scripts/verify-all.js` using native Node.js v22 test runner (`node:test`, `node:assert/strict`, `fetch`) with zero third-party test dependencies.
-    - Rigorously validates magic link authentication, 4-tier RBAC permission boundaries, group RSVPs (players, spectators, and off-field volunteers), group task ownership, RSVP whitelists, waitlist queue promotions, rainout incident notifications, rolling calendar horizons, live cloud `.ics` feeds, RSS 2.0 Media feed, multimedia embeds, and version negotiation.
+    - 57-test automated end-to-end verification suite in `scripts/verify-all.js` using native Node.js v22 test runner (`node:test`, `node:assert/strict`, `fetch`) with zero third-party test dependencies.
+    - Rigorously validates magic link authentication, 4-tier RBAC permission boundaries, group RSVPs (players, spectators, and off-field volunteers), group task ownership, RSVP whitelists, waitlist queue promotions, rainout incident notifications, rolling calendar horizons, live cloud `.ics` feeds, RSS 2.0 Media feed, multimedia embeds, 15-language i18n coverage, and version negotiation.
 
 14. **RSS 2.0 & Media RSS Feed with Zero-Host Multimedia Interpretation**:
     - Standard **RSS 2.0 + Media RSS** feed endpoint (`/feed.xml` and `/api/feed.xml`) equipped with autodiscovery `<link rel="alternate" type="application/rss+xml" href="/feed.xml">` and RFC 822 timestamps.

@@ -36,7 +36,8 @@
 - **[27. Phase 26: Simplified Group RSVPs — Players, Spectators & Group-Owned Volunteer Tasks](#27-phase-26-simplified-group-rsvps--players-spectators--group-owned-volunteer-tasks)** — Mutually exclusive player/spectator headcount model, group-level task ownership, waitlist capacity isolation.
 - **[28. Phase 27: Live Cloud Calendar Sync Indicator, Auto-Refresh & Live .ics Subscription Feed](#28-phase-27-live-cloud-calendar-sync-indicator-auto-refresh--live-ics-subscription-feed)** — Real-time cloud verification pill, visibility/network auto-refresh, live RFC 5545 calendar stream.
 - **[29. Phase 28: RSS 2.0 & Media RSS Community Feed, Zero-Host Multimedia Interpretation & Edge Highlights](#29-phase-28-rss-20--media-rss-community-feed-zero-host-multimedia-interpretation--edge-highlights)** — Standard RSS 2.0 + Media RSS feed, zero-storage Cloudflare external links, rich in-app YouTube/image/video interpretation, live preview.
-- **[30. Future Roadmap Notes](#30-future-roadmap-notes)** — Full-stack Rust / WebAssembly edge migration architecture.
+- **[30. Phase 29: Complete 15-Language i18n Translation for Calendar Demarcation Legend, Live Sync, and Footer Webapp Build Attribution](#30-phase-29-complete-15-language-i18n-translation-for-calendar-demarcation-legend-live-sync-and-footer-webapp-build-attribution)** — Full translation of calendar demarcation legend, live sync states, feed, and footer build statement across all 14 California language dictionaries with cache busting.
+- **[31. Future Roadmap Notes](#31-future-roadmap-notes)** — Full-stack Rust / WebAssembly edge migration architecture.
 
 ---
 
@@ -457,5 +458,20 @@ Implemented a lightweight, zero-storage multimedia publishing and syndication ar
 
 ---
 
-## 30. Future Roadmap Notes
+## 30. Phase 29: Complete 15-Language i18n Translation for Calendar Demarcation Legend, Live Sync, and Footer Webapp Build Attribution
+Resolved missing localization keys across all 14 non-English JSON language dictionaries (`public/i18n/ar.json`, `es.json`, `fa.json`, `fr.json`, `hi.json`, `hy.json`, `ja.json`, `ko.json`, `pa.json`, `pt.json`, `ru.json`, `tl.json`, `vi.json`, `zh.json`) and updated client-side translation cache keys:
+- **Calendar Demarcation Legend & Icon Keys:**
+  - Fully translated all 5 calendar legend items (`calendar.legend_game`, `calendar.legend_prospective`, `calendar.legend_rainout`, `calendar.legend_today`, `calendar.legend_attending`) so visitors switching to any of the 15 California languages immediately see native localized labels for confirmed games, tentative dates, rainouts, current date, and personal RSVP attendance indicators.
+- **Footer Webapp Build Statement:**
+  - Fully translated `"footer.about_site"` (*"Built with Google Gemini in October 2026 for simplicity and durability. Free & open-source"*) across all 14 languages, including native numerals and authentic natural phrasing.
+- **Calendar Sync, Subscription & Feed Keys:**
+  - Fully localized rolling calendar titles, cloud sync status indicators, `.ics` subscription panel buttons, and Community Highlights feed labels across all 14 languages.
+- **Dictionary Cache Invalidation & Version Bump:**
+  - Updated `API.loadLangDict(lang)` in `public/js/api.js` to dynamic version-busted `localStorage` keys (`pickup_i18n_v${CLIENT_VERSION}_${lang}`) and query parameters (`/i18n/${lang}.json?v=${CLIENT_VERSION}`) to guarantee clients immediately fetch the updated translation payloads instead of reading stale local cache.
+  - Bumped version to `v32` across `CLIENT_VERSION`, `CURRENT_APP_VERSION`, `CACHE_NAME = 'pbf-cache-v32'`, and all 8 HTML files.
+  - Added automated test `T9.18` in `scripts/verify-all.js` checking that all 14 language files contain non-empty translations for all required legend, sync, and footer build attribution keys. All 57 tests pass with 100% success rate.
+
+---
+
+## 31. Future Roadmap Notes
 - **Pinned Full-Stack Rust / WebAssembly Migration:** Evaluated a future 4-phase rewrite of the Cloudflare Pages Functions backend (and optional frontend interactivity) to Rust (`workers-rs` compiling to WebAssembly) for compile-time type safety, zero-dependency binary durability, and strict edge memory safety—kept as a guiding north star when designing new features and data models.

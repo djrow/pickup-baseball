@@ -289,7 +289,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '31',
+  CLIENT_VERSION: '32',
 
   // Current user cache
   currentUser: null,
@@ -371,20 +371,21 @@ const API = {
   async loadLangDict(lang) {
     if (lang === 'en') return EN_DICT;
     if (this.i18nCache[lang]) return this.i18nCache[lang];
+    const cacheKey = 'pickup_i18n_v' + this.CLIENT_VERSION + '_' + lang;
     try {
-      const cachedRaw = localStorage.getItem(`pickup_i18n_v1_${lang}`);
+      const cachedRaw = localStorage.getItem(cacheKey);
       if (cachedRaw) {
         this.i18nCache[lang] = JSON.parse(cachedRaw);
         return this.i18nCache[lang];
       }
     } catch (e) {}
     try {
-      const res = await fetch(`/i18n/${lang}.json?v=1`);
+      const res = await fetch('/i18n/' + encodeURIComponent(lang) + '.json?v=' + this.CLIENT_VERSION);
       if (res.ok) {
         const data = await res.json();
         this.i18nCache[lang] = data;
         try {
-          localStorage.setItem(`pickup_i18n_v1_${lang}`, JSON.stringify(data));
+          localStorage.setItem(cacheKey, JSON.stringify(data));
         } catch (e) {}
         return data;
       }

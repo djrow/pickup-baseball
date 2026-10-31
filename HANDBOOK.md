@@ -234,16 +234,16 @@ pickup-baseball/
 
 Because the site is an installable Progressive Web App (PWA) with an offline Service Worker, phones and browsers aggressively cache CSS and JavaScript files.
 
-Whenever you deploy a frontend or API change, **increment the version integer by 1** (for example, from `30` to `31`) in these places:
+Whenever you deploy a frontend or API change, **increment the version integer by 1** (for example, from `31` to `32`) in these places:
 
-1. **`public/js/api.js`** — `CLIENT_VERSION: '31'`
-2. **`functions/api/[[route]].js`** — `const CURRENT_APP_VERSION = '31';`
-3. **`src/server.js`** — `const CURRENT_APP_VERSION = '31';`
-4. **`scripts/verify-all.js`** — `const CURRENT_APP_VERSION = '31';`
-5. **`public/sw.js`** — `const CACHE_NAME = 'pbf-cache-v31';`
-6. **All 8 HTML files in `public/`** (`index.html`, `event.html`, `archive.html`, `admin.html`, `login.html`, `profile.html`, `donate.html`, `404.html`) — update `?v=30` to `?v=31` on `<link rel="stylesheet" href="/css/style.css?v=31">` and `<script src="/js/...?v=31"></script>`.
+1. **`public/js/api.js`** — `CLIENT_VERSION: '32'`
+2. **`functions/api/[[route]].js`** — `const CURRENT_APP_VERSION = '32';`
+3. **`src/server.js`** — `const CURRENT_APP_VERSION = '32';`
+4. **`scripts/verify-all.js`** — `const CURRENT_APP_VERSION = '32';`
+5. **`public/sw.js`** — `const CACHE_NAME = 'pbf-cache-v32';`
+6. **All 8 HTML files in `public/`** (`index.html`, `event.html`, `archive.html`, `admin.html`, `login.html`, `profile.html`, `donate.html`, `404.html`) — update `?v=31` to `?v=32` on `<link rel="stylesheet" href="/css/style.css?v=32">` and `<script src="/js/...?v=32"></script>`.
 
-*Tip: You can do a project-wide Find & Replace of `?v=30` → `?v=31` for the HTML files in any editor like VS Code.*
+*Tip: You can do a project-wide Find & Replace of `?v=31` → `?v=32` for the HTML files in any editor like VS Code.*
 
 When `CURRENT_APP_VERSION` on the server increases, any player who still has an older tab or installed PWA open will automatically get the **"Update Available — Click to Refresh"** button in the footer.
 
