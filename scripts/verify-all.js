@@ -55,7 +55,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-const CURRENT_APP_VERSION = '26';
+const CURRENT_APP_VERSION = '27';
 app.use((req, res, next) => {
   res.setHeader('X-App-Version', CURRENT_APP_VERSION);
   next();
@@ -1351,5 +1351,67 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     detail = await apiReq('GET', `/api/events/${groupEventId}`, seedOrgCookie);
     const t1AfterCancel = detail.data.duties.find(d => d.id === task1Id);
     assert.equal(t1AfterCancel.assigned_players.length, 0, 'Declining RSVP must release group tasks');
+  });
+
+  await t9.test('T9.16: Live Cloud Calendar Sync Pill, Auto-Refresh Lifecycle & Live .ics Subscription Feed', async () => {
+    // 1. Static UI & ES6 checks
+    const indexHtml = fs.readFileSync(path.join(publicDir, 'index.html'), 'utf8');
+    assert.ok(indexHtml.includes('id="calendar-sync-pill"'), 'index.html must include live cloud sync status pill');
+    assert.ok(indexHtml.includes('id="calendar-subscribe-panel"'), 'index.html must include live calendar subscription panel');
+
+    const appJs = fs.readFileSync(path.join(publicDir, 'js/app.js'), 'utf8');
+    assert.ok(appJs.includes('setupCloudSyncLifecycle'), 'app.js must bind cloud sync lifecycle listeners');
+    assert.ok(appJs.includes('visibilitychange'), 'app.js must auto-refresh when tab/PWA regains visibility');
+    assert.ok(appJs.includes('webcal://'), 'app.js must generate webcal:// subscription URL');
+    assert.ok(appJs.includes('/api/events/calendar.ics'), 'app.js must point to live /api/events/calendar.ics feed');
+    assert.ok(!appJs.includes('?.'), 'app.js must not use optional chaining for broad ES6 compatibility');
+    assert.ok(!appJs.includes('??'), 'app.js must not use nullish coalescing for broad ES6 compatibility');
+
+    const css = fs.readFileSync(path.join(publicDir, 'css/style.css'), 'utf8');
+    assert.ok(css.includes('.calendar-sync-pill.is-synced'), 'style.css must style synced cloud indicator');
+    assert.ok(css.includes('.calendar-sync-pill.is-offline'), 'style.css must style offline/cached warning indicator');
+    assert.ok(css.includes('.calendar-subscribe-panel'), 'style.css must style live calendar subscription panel');
+
+    // 2. Verify GET /api/events sends Cache-Control: no-store and authoritative synced_at timestamp
+    const eventsRes = await apiReq('GET', '/api/events?filter=all', null);
+    assert.equal(eventsRes.status, 200);
+    assert.ok((eventsRes.headers.get('cache-control') || '').includes('no-store'), 'GET /api/events must send Cache-Control: no-store');
+    assert.ok(eventsRes.data.synced_at && !isNaN(new Date(eventsRes.data.synced_at).getTime()), 'GET /api/events must return valid ISO synced_at timestamp');
+
+    // 3. Create a public rainout game & a private restricted game, then verify GET /api/events/calendar.ics
+    const pubCreate = await apiReq('POST', '/api/events', seedOrgCookie, {
+      title: 'Public Live Feed Sunday Game',
+      location: 'Bushrod Park Field 1, Oakland, CA',
+      event_date: '2026-12-13T20:00:00.000Z'
+    });
+    assert.equal(pubCreate.status, 200);
+    const pubRainId = pubCreate.data.eventId;
+
+    const rainRes = await apiReq('POST', `/api/events/${pubRainId}/rainout`, seedOrgCookie, {
+      note: 'Infield standing water after overnight storm'
+    });
+    assert.equal(rainRes.status, 200);
+
+    const privCreate = await apiReq('POST', '/api/events', seedOrgCookie, {
+      title: 'Private Whitelist Secret Scrimmage',
+      location: 'Hidden Diamond',
+      event_date: '2026-12-20T20:00:00.000Z',
+      allowed_emails: ['vip_only@sundaypickup.org']
+    });
+    assert.equal(privCreate.status, 200);
+
+    const icsRes = await fetch(`${baseUrl}/api/events/calendar.ics`);
+    assert.equal(icsRes.status, 200, 'Live calendar.ics feed must respond 200 OK');
+    assert.ok((icsRes.headers.get('content-type') || '').includes('text/calendar'), 'calendar.ics must return text/calendar Content-Type');
+    assert.ok((icsRes.headers.get('cache-control') || '').includes('no-store'), 'calendar.ics must disable edge caching for immediate rainout propagation');
+
+    const icsText = await icsRes.text();
+    assert.ok(icsText.includes('BEGIN:VCALENDAR') && icsText.includes('END:VCALENDAR'), 'Feed must be valid VCALENDAR');
+    assert.ok(icsText.includes('REFRESH-INTERVAL;VALUE=DURATION:PT1H'), 'Feed must advertise 1-hour refresh interval (RFC 7986)');
+    assert.ok(icsText.includes('X-PUBLISHED-TTL:PT1H'), 'Feed must advertise 1-hour TTL for Apple/Outlook');
+    assert.ok(icsText.includes(`UID:pickup-baseball-event-${pubRainId}@pickupbaseballfoundation.org`), 'Public event must have stable UID');
+    assert.ok(icsText.includes('SUMMARY:🌧️ RAINED OUT: Public Live Feed Sunday Game'), 'Rained-out game must be prefixed with RAINED OUT in live feed');
+    assert.ok(icsText.includes('Infield standing water after overnight storm'), 'Rainout note must appear in VEVENT description');
+    assert.ok(!icsText.includes('Private Whitelist Secret Scrimmage'), 'Restricted private whitelist events must be excluded from anonymous public .ics feed');
   });
 });

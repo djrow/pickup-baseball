@@ -24,7 +24,8 @@ Designed with a **10+ year longevity philosophy**:
    - **Dynamic Month Range Header & Multi-Week Step**: Dynamically formats visible month boundaries (e.g. `Oct – Nov 2026`) and steps forward/backward by 4 weeks with `‹` / `›` controls and a 1-click `Today` reset.
    - **Non-Sunday Event Support**: Mid-week games, clinics, or Saturday tournaments automatically slot into chronological order with custom weekday tags (`Sat, Nov 7`).
    - **Interactive Preview Drawer**: Selecting any game slides open `#calendar-date-drawer` with Google Calendar export, location map, volunteer task status, and 1-click RSVP.
-   - **1-Click `.ics` Export Download** (`pickup-baseball-schedule.ics`) compatible with Apple Calendar, Microsoft Outlook, and Google Calendar, plus direct access to the **[Past Games Archive](https://www.pickupbaseballfoundation.org/archive.html)**.
+   - **Live Cloud Sync Status Pill & Auto-Refresh**: Displays a real-time sync badge (`🟢 Cloud synced • Just now ↻`) next to the calendar subtitle that flips to an amber warning (`⚠️ Offline — cached schedule (...) ↻`) whenever the device is offline or unreachable, and automatically re-syncs with Cloudflare D1 when returning to the browser tab/PWA (`visibilitychange`), regaining signal (`online`), or tapping the pill.
+   - **Live Cloud Calendar Subscription (`webcal://` & `/api/events/calendar.ics`)**: 1-click live subscription panel for **Apple Calendar**, **Google Calendar**, and **Microsoft Outlook** (with 1-hour refresh headers, automatic rainout prefixes `🌧️ RAINED OUT:`, and zero player PII), alongside a 1-click static `.ics` snapshot download and direct access to the **[Past Games Archive](https://www.pickupbaseballfoundation.org/archive.html)**.
 
 2. **Simplified Group RSVPs (Players, Spectators & Off-Field Volunteers), Roster Tracking, & RSVP Whitelists**:
    - **Single-Step Group RSVP**: A single account or email can RSVP for an entire household or friend group using two mutually-exclusive headcount steppers — **⚾ Players** *(playing on the field, `0..25`)* and **👏 Spectators** *(watching or helping off-field, `0..25`)* — alongside a unified **🛡️ Group Volunteer Tasks** checklist.
@@ -110,8 +111,8 @@ Designed with a **10+ year longevity philosophy**:
     - User account removal, email ban list (`banned_emails`), guest RSVP policy toggle, and one-click roster/comment moderation.
 
 13. **Comprehensive Zero-Dependency Acceptance Test Suite**:
-    - 54-test automated end-to-end verification suite in `scripts/verify-all.js` using native Node.js v22 test runner (`node:test`, `node:assert/strict`, `fetch`) with zero third-party test dependencies.
-    - Rigorously validates magic link authentication, 4-tier RBAC permission boundaries, group RSVPs (players, spectators, and off-field volunteers), group task ownership, RSVP whitelists, waitlist queue promotions, rainout incident notifications, rolling calendar horizons, and version negotiation.
+    - 55-test automated end-to-end verification suite in `scripts/verify-all.js` using native Node.js v22 test runner (`node:test`, `node:assert/strict`, `fetch`) with zero third-party test dependencies.
+    - Rigorously validates magic link authentication, 4-tier RBAC permission boundaries, group RSVPs (players, spectators, and off-field volunteers), group task ownership, RSVP whitelists, waitlist queue promotions, rainout incident notifications, rolling calendar horizons, live cloud `.ics` feeds, and version negotiation.
 
 14. **Detailed Development Narrative & Open Source**:
     - Complete chronicle of all architectural decisions, edge migrations, and technical phases in **[`DEVELOPMENT_NARRATIVE.md`](DEVELOPMENT_NARRATIVE.md)**.
@@ -297,7 +298,7 @@ Cloudflare Pages hosts both the static files in `public/` and the serverless Hon
 # Start local Cloudflare Pages + D1 dev server at http://localhost:8788
 npm run dev
 
-# Run comprehensive 54-test automated acceptance verification suite
+# Run comprehensive 55-test automated acceptance verification suite
 npm test
 
 # Deploy static assets and Worker functions to production

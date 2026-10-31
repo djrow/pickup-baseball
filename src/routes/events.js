@@ -59,7 +59,8 @@ router.get('/', optionalUser, (req, res) => {
       ev.allowed_emails_list = allowed;
     });
 
-    res.json({ events });
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ events, synced_at: nowIso });
   } catch (err) {
     console.error('[Events] Error listing events:', err);
     res.status(500).json({ error: 'Failed to fetch events.' });
@@ -158,6 +159,105 @@ router.get('/attendee-candidates', requireEventCreator, (req, res) => {
   } catch (err) {
     console.error('[Events] Error fetching candidate accounts:', err);
     res.status(500).json({ error: 'Failed to fetch candidate accounts.' });
+  }
+});
+
+/**
+ * Helper: Escape text values per RFC 5545 iCalendar specification
+ */
+function escapeIcsText(str) {
+  return String(str || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/;/g, '\\;')
+    .replace(/,/g, '\\,')
+    .replace(/\r?\n/g, '\\n');
+}
+
+function formatIcsUtcDate(d) {
+  const pad = n => String(n).padStart(2, '0');
+  return d.getUTCFullYear() +
+    pad(d.getUTCMonth() + 1) +
+    pad(d.getUTCDate()) + 'T' +
+    pad(d.getUTCHours()) +
+    pad(d.getUTCMinutes()) +
+    pad(d.getUTCSeconds()) + 'Z';
+}
+
+/**
+ * Live iCalendar (.ics) subscription feed for Apple Calendar, Google Calendar, & Outlook
+ * Public endpoint: excludes restricted private/invitational games and contains zero player PII.
+ */
+router.get('/calendar.ics', (req, res) => {
+  try {
+    const allEvents = db.prepare(`
+      SELECT id, title, description, location, event_date, status, rainout_note, allowed_emails, created_at
+      FROM events
+      WHERE status IN ('active', 'rainout')
+      ORDER BY event_date ASC
+    `).all();
+
+    // Only publish unrestricted community events to the anonymous public calendar feed
+    const publicEvents = allEvents.filter(ev => parseAllowedEmails(ev.allowed_emails).length === 0);
+
+    const proto = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+    const host = req.get('host') || 'www.pickupbaseballfoundation.org';
+    const origin = `${proto}://${host}`;
+    const nowStamp = formatIcsUtcDate(new Date());
+
+    const icsLines = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Pickup Baseball Foundation//NONSGML Pickup Baseball Calendar//EN',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      'X-WR-CALNAME:Sunday Pickup Baseball',
+      'X-WR-CALDESC:Live game schedule from Pickup Baseball Foundation (www.pickupbaseballfoundation.org)',
+      'X-WR-TIMEZONE:America/Los_Angeles',
+      'REFRESH-INTERVAL;VALUE=DURATION:PT1H',
+      'X-PUBLISHED-TTL:PT1H'
+    ];
+
+    for (const ev of publicEvents) {
+      const startDate = new Date(ev.event_date);
+      if (isNaN(startDate.getTime())) continue;
+      const endDate = new Date(startDate.getTime() + 3 * 60 * 60 * 1000);
+      const isRainout = ev.status === 'rainout';
+      const baseTitle = ev.title || 'Sunday Pickup Baseball - Noon Game';
+      const summary = isRainout ? `🌧️ RAINED OUT: ${baseTitle}` : baseTitle;
+      const eventUrl = `${origin}/event.html?id=${ev.id}`;
+      const descParts = [];
+      if (isRainout) {
+        descParts.push(ev.rainout_note ? `RAINED OUT — "${ev.rainout_note}"` : 'RAINED OUT — Check event page for field updates.');
+      } else {
+        descParts.push('Free community pickup baseball. Check live roster, coordinate gear & volunteer for tasks:');
+      }
+      descParts.push(eventUrl);
+      if (ev.description && ev.description.trim()) {
+        descParts.push(ev.description.trim());
+      }
+
+      icsLines.push('BEGIN:VEVENT');
+      icsLines.push(`UID:pickup-baseball-event-${ev.id}@pickupbaseballfoundation.org`);
+      icsLines.push(`DTSTAMP:${nowStamp}`);
+      icsLines.push(`DTSTART:${formatIcsUtcDate(startDate)}`);
+      icsLines.push(`DTEND:${formatIcsUtcDate(endDate)}`);
+      icsLines.push(`SUMMARY:${escapeIcsText(summary)}`);
+      icsLines.push(`LOCATION:${escapeIcsText(ev.location || 'Bushrod Park Field 1, Oakland, CA')}`);
+      icsLines.push(`DESCRIPTION:${escapeIcsText(descParts.join('\n\n'))}`);
+      icsLines.push(`URL:${eventUrl}`);
+      icsLines.push('STATUS:CONFIRMED');
+      icsLines.push('END:VEVENT');
+    }
+
+    icsLines.push('END:VCALENDAR');
+
+    res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+    res.setHeader('Content-Disposition', 'inline; filename="pickup-baseball-schedule.ics"');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.send(icsLines.join('\r\n') + '\r\n');
+  } catch (err) {
+    console.error('[Events] Error generating live calendar.ics feed:', err);
+    res.status(500).send('Failed to generate calendar feed.');
   }
 });
 

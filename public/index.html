@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pickup Baseball Foundation</title>
-  <link rel="stylesheet" href="/css/style.css?v=26">
+  <link rel="stylesheet" href="/css/style.css?v=27">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png">
@@ -90,16 +90,23 @@
             <span style="font-size: 1.35rem; line-height: 1;">📅</span>
             <h2 id="calendar-title" data-i18n="calendar.title">Game Calendar</h2>
           </div>
-          <p class="calendar-subtitle" data-i18n="calendar.subtitle">
-            Sunday Pickup Games • 12:00 PM • Bushrod Park
-          </p>
+          <div class="calendar-subtitle-row">
+            <p class="calendar-subtitle" data-i18n="calendar.subtitle">
+              Sunday Pickup Games • 12:00 PM • Bushrod Park
+            </p>
+            <button type="button" id="calendar-sync-pill" class="calendar-sync-pill is-syncing" aria-live="polite" title="Click to re-verify schedule with the cloud">
+              <span class="sync-dot" aria-hidden="true"></span>
+              <span id="calendar-sync-text">Syncing with cloud…</span>
+              <span class="sync-refresh-icon" aria-hidden="true">↻</span>
+            </button>
+          </div>
         </div>
         <div class="calendar-header-actions">
           <a href="/archive.html" class="btn btn-outline btn-sm" style="font-weight: 600; display: inline-flex; align-items: center; gap: 5px;" title="View past Sunday game recaps and turnout">
             <span>📜</span> <span data-i18n="home.view_past_archive">Past Archive →</span>
           </a>
-          <button type="button" id="calendar-export-ics-btn" class="btn btn-outline btn-sm" title="Download .ics schedule for Google, Apple, or Outlook Calendar">
-            <span>📥</span> <span data-i18n="calendar.add_to_calendar">Export (.ics)</span>
+          <button type="button" id="calendar-export-ics-btn" class="btn btn-outline btn-sm" aria-expanded="false" aria-controls="calendar-subscribe-panel" title="Subscribe to live cloud calendar or download .ics schedule">
+            <span>🔄</span> <span data-i18n="calendar.add_to_calendar">Subscribe (.ics)</span>
           </button>
           <div class="calendar-nav-controls">
             <button type="button" id="calendar-prev-btn" class="calendar-nav-btn" aria-label="Previous Month">‹</button>
@@ -109,6 +116,9 @@
           </div>
         </div>
       </div>
+
+      <!-- Live Cloud Calendar Subscription Panel (webcal:// & Google Calendar) -->
+      <div id="calendar-subscribe-panel" class="calendar-subscribe-panel" style="display: none;"></div>
 
       <!-- Calendar Month Grid Container -->
       <div id="calendar-grid-container" class="calendar-grid-container">
@@ -180,7 +190,7 @@
   <!-- Site Footer -->
   <footer id="site-footer" class="site-footer"></footer>
 
-  <script src="/js/api.js?v=26"></script>
-  <script src="/js/app.js?v=26"></script>
+  <script src="/js/api.js?v=27"></script>
+  <script src="/js/app.js?v=27"></script>
 </body>
 </html>

@@ -3256,6 +3256,166 @@ footer.site-footer strong {
   border: 1px solid var(--giants-orange-border);
 }
 
+/* ==========================================================================
+   Live Cloud Calendar Sync Pill & Subscription Panel (.ics / webcal://)
+   ========================================================================== */
+.calendar-subtitle-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 3px;
+}
+
+.calendar-subtitle-row .calendar-subtitle {
+  margin: 0;
+}
+
+.calendar-sync-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-family: inherit;
+  line-height: 1.4;
+  border: 1px solid var(--border);
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s, color 0.15s;
+}
+
+.calendar-sync-pill:hover {
+  border-color: var(--secondary);
+  color: var(--secondary);
+}
+
+.calendar-sync-pill .sync-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.calendar-sync-pill .sync-refresh-icon {
+  font-size: 0.82rem;
+  line-height: 1;
+  opacity: 0.78;
+}
+
+.calendar-sync-pill.is-synced {
+  background: rgba(22, 163, 74, 0.1);
+  border-color: rgba(22, 163, 74, 0.32);
+  color: #15803d;
+}
+
+[data-theme-mode="dark"] .calendar-sync-pill.is-synced {
+  background: rgba(34, 197, 94, 0.14);
+  border-color: rgba(34, 197, 94, 0.38);
+  color: #4ade80;
+}
+
+.calendar-sync-pill.is-synced .sync-dot {
+  background: #16a34a;
+}
+
+[data-theme-mode="dark"] .calendar-sync-pill.is-synced .sync-dot {
+  background: #4ade80;
+}
+
+.calendar-sync-pill.is-offline {
+  background: rgba(217, 119, 6, 0.14);
+  border-color: rgba(217, 119, 6, 0.45);
+  color: #b45309;
+}
+
+[data-theme-mode="dark"] .calendar-sync-pill.is-offline {
+  background: rgba(245, 158, 11, 0.18);
+  border-color: rgba(245, 158, 11, 0.48);
+  color: #fbbf24;
+}
+
+.calendar-sync-pill.is-offline .sync-dot {
+  background: #d97706;
+}
+
+[data-theme-mode="dark"] .calendar-sync-pill.is-offline .sync-dot {
+  background: #fbbf24;
+}
+
+@keyframes pbfSyncSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.calendar-sync-pill.is-syncing .sync-refresh-icon {
+  display: inline-block;
+  animation: pbfSyncSpin 0.9s linear infinite;
+}
+
+.calendar-subscribe-panel {
+  background: var(--bg-subtle);
+  border: 1.5px solid var(--border);
+  border-left: 4px solid var(--primary);
+  border-inline-start: 4px solid var(--primary);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+
+.subscribe-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.subscribe-panel-title {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--secondary);
+  margin: 0 0 3px 0;
+}
+
+.subscribe-panel-desc {
+  font-size: 0.84rem;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.45;
+}
+
+.subscribe-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.subscribe-url-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.subscribe-url-input {
+  flex: 1;
+  min-width: 220px;
+  font-size: 16px !important;
+  padding: 6px 10px !important;
+  border-radius: var(--radius-sm) !important;
+  border: 1.5px solid var(--border) !important;
+  background: var(--bg-card) !important;
+  color: var(--text-muted) !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+
 
 
 

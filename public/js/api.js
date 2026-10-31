@@ -15,8 +15,22 @@ const EN_DICT = {
   "calendar.title": "Game Calendar",
   "calendar.subtitle": "Sunday Pickup Games • 12:00 PM • Bushrod Park",
   "calendar.today": "Today",
-  "calendar.add_to_calendar": "Export (.ics)",
+  "calendar.add_to_calendar": "Subscribe (.ics)",
   "calendar.export_btn": "📥 Export Schedule (.ics)",
+  "calendar.sync_checking": "Syncing with cloud…",
+  "calendar.sync_just_now": "Cloud synced • Just now",
+  "calendar.sync_mins_ago": "Cloud synced • {mins}m ago",
+  "calendar.sync_at_time": "Cloud synced • {time}",
+  "calendar.sync_offline_cached": "Offline — cached schedule ({time})",
+  "calendar.sync_offline": "Offline — showing cached schedule",
+  "calendar.sync_offline_empty": "Offline — unable to reach cloud",
+  "calendar.subscribe_title": "🔄 Live Cloud Calendar Sync (.ics)",
+  "calendar.subscribe_desc": "Subscribe once so newly scheduled games, field changes, and rainout alerts update automatically on your phone or computer.",
+  "calendar.subscribe_apple_btn": "🍎 Apple / Outlook (Live Sync)",
+  "calendar.subscribe_google_btn": "📅 Google Calendar (Live Sync)",
+  "calendar.subscribe_copy_btn": "📋 Copy Feed URL",
+  "calendar.subscribe_copied": "✓ Copied!",
+  "calendar.subscribe_snapshot_btn": "📥 Download One-Time .ics File",
   "calendar.noon_game": "12:00 PM Game",
   "calendar.legend_game": "Confirmed Game (12:00 PM)",
   "calendar.legend_prospective": "Prospective (TBA)",
@@ -266,7 +280,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '26',
+  CLIENT_VERSION: '27',
 
   // Current user cache
   currentUser: null,
@@ -987,9 +1001,12 @@ const API = {
   },
 
   async getEvents(filter = 'upcoming') {
-    const res = await fetch(`/api/events?filter=${filter}`);
+    const res = await fetch(`/api/events?filter=${encodeURIComponent(filter)}`, { cache: 'no-store' });
     this.checkResponseVersion(res);
     const data = await res.json();
+    if (!res.ok) {
+      throw new Error((data && data.error) ? data.error : 'Failed to sync schedule with cloud.');
+    }
     if (data && data.user !== undefined) {
       API.currentUser = data.user || null;
       API.setCachedUser(API.currentUser);

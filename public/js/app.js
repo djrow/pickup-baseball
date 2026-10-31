@@ -4,6 +4,111 @@
 
 let currentFilter = 'all';
 let lastLoadedEvents = [];
+let calendarSyncState = 'syncing'; // 'syncing' | 'synced' | 'offline'
+let lastCloudSyncedAt = 0;
+let hasCachedFallback = false;
+let isSyncInFlight = false;
+let syncLifecycleBound = false;
+
+function formatSyncTimestamp(epochMs) {
+  if (!epochMs || epochMs <= 0) return '';
+  const d = new Date(epochMs);
+  if (isNaN(d.getTime())) return '';
+  const now = new Date();
+  const sameDay = d.toDateString() === now.toDateString();
+  try {
+    if (sameDay) {
+      return new Intl.DateTimeFormat(API.getLang(), { hour: 'numeric', minute: '2-digit' }).format(d);
+    }
+    return new Intl.DateTimeFormat(API.getLang(), { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(d);
+  } catch (e) {
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+}
+
+function updateSyncPillUi() {
+  const pill = document.getElementById('calendar-sync-pill');
+  const textEl = document.getElementById('calendar-sync-text');
+  if (!pill || !textEl) return;
+
+  pill.classList.remove('is-syncing', 'is-synced', 'is-offline');
+
+  if (calendarSyncState === 'syncing') {
+    pill.classList.add('is-syncing');
+    textEl.textContent = API.t('calendar.sync_checking', 'Syncing with cloud…');
+    pill.title = 'Checking cloud database for latest schedule updates…';
+    return;
+  }
+
+  if (calendarSyncState === 'synced') {
+    pill.classList.add('is-synced');
+    const elapsedMs = Math.max(0, Date.now() - lastCloudSyncedAt);
+    if (elapsedMs < 60000) {
+      textEl.textContent = API.t('calendar.sync_just_now', 'Cloud synced • Just now');
+    } else if (elapsedMs < 3600000) {
+      const mins = Math.max(1, Math.floor(elapsedMs / 60000));
+      textEl.textContent = API.t('calendar.sync_mins_ago', { mins: mins });
+    } else {
+      textEl.textContent = API.t('calendar.sync_at_time', { time: formatSyncTimestamp(lastCloudSyncedAt) });
+    }
+    pill.title = 'Calendar matches live cloud schedule (verified ' + formatSyncTimestamp(lastCloudSyncedAt) + '). Click to refresh now.';
+    return;
+  }
+
+  // Offline or failed cloud fetch
+  pill.classList.add('is-offline');
+  let cachedEpoch = lastCloudSyncedAt;
+  if (!cachedEpoch) {
+    try {
+      cachedEpoch = parseInt(localStorage.getItem('pickup_cached_events_synced_at') || '0', 10) || 0;
+    } catch (e) {}
+  }
+  if (hasCachedFallback && cachedEpoch > 0) {
+    textEl.textContent = API.t('calendar.sync_offline_cached', { time: formatSyncTimestamp(cachedEpoch) });
+  } else if (hasCachedFallback) {
+    textEl.textContent = API.t('calendar.sync_offline', 'Offline — showing cached schedule');
+  } else {
+    textEl.textContent = API.t('calendar.sync_offline_empty', 'Offline — unable to reach cloud');
+  }
+  pill.title = 'Could not reach the cloud database. Showing locally saved schedule — click to retry.';
+}
+
+function setupCloudSyncLifecycle() {
+  if (syncLifecycleBound) return;
+  const pill = document.getElementById('calendar-sync-pill');
+  if (pill) {
+    pill.addEventListener('click', function() {
+      loadGames(false, true);
+    });
+  }
+
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible') {
+      updateSyncPillUi();
+      if (Date.now() - lastCloudSyncedAt > 30000) {
+        loadGames(false, true);
+      }
+    }
+  });
+
+  window.addEventListener('online', function() {
+    loadGames(false, true);
+  });
+
+  window.addEventListener('offline', function() {
+    calendarSyncState = 'offline';
+    updateSyncPillUi();
+  });
+
+  setInterval(function() {
+    updateSyncPillUi();
+    if (document.visibilityState === 'visible' && navigator.onLine !== false && (Date.now() - lastCloudSyncedAt > 300000)) {
+      loadGames(false, true);
+    }
+  }, 30000);
+
+  syncLifecycleBound = true;
+}
 
 function applyUserToHomeUi(user) {
   API.renderNav(user);
@@ -32,9 +137,15 @@ async function initHome() {
 
   setupFilters();
   setupCalendarControls();
+  setupCloudSyncLifecycle();
 
   window.addEventListener('pickup:langchange', () => {
     applyUserToHomeUi(API.currentUser);
+    updateSyncPillUi();
+    const subPanel = document.getElementById('calendar-subscribe-panel');
+    if (subPanel && subPanel.style.display !== 'none') {
+      renderSubscribePanel();
+    }
     renderEventsView(lastLoadedEvents);
   });
 
@@ -62,20 +173,27 @@ function renderEventsView(events) {
   renderCalendar(lastLoadedEvents);
 }
 
-async function loadGames(justLoggedIn = false) {
+async function loadGames(justLoggedIn = false, isBackgroundRefresh = false) {
+  if (isSyncInFlight) return;
+  isSyncInFlight = true;
+
   const cacheKey = `pickup_cached_events_${currentFilter}`;
 
-  let renderedFromCache = false;
-  try {
-    const cachedRaw = localStorage.getItem(cacheKey);
-    if (cachedRaw) {
-      const cachedEvents = JSON.parse(cachedRaw);
-      if (Array.isArray(cachedEvents) && cachedEvents.length > 0) {
-        renderEventsView(cachedEvents);
-        renderedFromCache = true;
+  if (!isBackgroundRefresh) {
+    try {
+      const cachedRaw = localStorage.getItem(cacheKey);
+      if (cachedRaw) {
+        const cachedEvents = JSON.parse(cachedRaw);
+        if (Array.isArray(cachedEvents) && cachedEvents.length > 0) {
+          hasCachedFallback = true;
+          renderEventsView(cachedEvents);
+        }
       }
-    }
-  } catch (e) {}
+    } catch (e) {}
+  }
+
+  calendarSyncState = 'syncing';
+  updateSyncPillUi();
 
   try {
     const data = await API.getEvents(currentFilter);
@@ -93,13 +211,23 @@ async function loadGames(justLoggedIn = false) {
       }
     }
 
+    lastCloudSyncedAt = Date.now();
+    hasCachedFallback = events.length > 0;
+    calendarSyncState = 'synced';
+    updateSyncPillUi();
+
     try {
       localStorage.setItem(cacheKey, JSON.stringify(events));
+      localStorage.setItem('pickup_cached_events_synced_at', String(lastCloudSyncedAt));
     } catch (e) {}
 
     renderEventsView(events);
   } catch (err) {
     console.error('Error loading games:', err);
+    calendarSyncState = 'offline';
+    updateSyncPillUi();
+  } finally {
+    isSyncInFlight = false;
   }
 }
 
@@ -143,10 +271,101 @@ function setupCalendarControls() {
   }
   if (exportBtn) {
     exportBtn.addEventListener('click', () => {
-      downloadCalendarIcs(calendarEventsCache);
+      toggleSubscribePanel();
     });
   }
   calendarControlsBound = true;
+}
+
+function toggleSubscribePanel(forceClose) {
+  const panel = document.getElementById('calendar-subscribe-panel');
+  const exportBtn = document.getElementById('calendar-export-ics-btn');
+  if (!panel) return;
+  const isOpen = panel.style.display !== 'none';
+  if (forceClose || isOpen) {
+    panel.style.display = 'none';
+    if (exportBtn) exportBtn.setAttribute('aria-expanded', 'false');
+  } else {
+    renderSubscribePanel();
+    panel.style.display = 'block';
+    if (exportBtn) exportBtn.setAttribute('aria-expanded', 'true');
+  }
+}
+
+function renderSubscribePanel() {
+  const panel = document.getElementById('calendar-subscribe-panel');
+  if (!panel) return;
+
+  const host = window.location.host || 'www.pickupbaseballfoundation.org';
+  const origin = window.location.origin || ('https://' + host);
+  const feedHttpUrl = origin + '/api/events/calendar.ics';
+  const webcalUrl = 'webcal://' + host + '/api/events/calendar.ics';
+  const googleSubscribeUrl = 'https://calendar.google.com/calendar/r?cid=' + encodeURIComponent(webcalUrl);
+
+  panel.innerHTML = `
+    <div class="subscribe-panel-header">
+      <div>
+        <h3 class="subscribe-panel-title">${API.escapeHtml(API.t('calendar.subscribe_title', '🔄 Live Cloud Calendar Sync (.ics)'))}</h3>
+        <p class="subscribe-panel-desc">${API.escapeHtml(API.t('calendar.subscribe_desc', 'Subscribe once so newly scheduled games, field changes, and rainout alerts update automatically on your phone or computer.'))}</p>
+      </div>
+      <button type="button" id="calendar-subscribe-close-btn" class="calendar-drawer-close-btn" aria-label="Close calendar sync options" title="Close">✕</button>
+    </div>
+    <div class="subscribe-actions-row">
+      <a href="${API.escapeHtml(webcalUrl)}" class="btn btn-primary btn-sm" style="font-weight: 700; text-decoration: none;">
+        ${API.escapeHtml(API.t('calendar.subscribe_apple_btn', '🍎 Apple / Outlook (Live Sync)'))}
+      </a>
+      <a href="${API.escapeHtml(googleSubscribeUrl)}" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm" style="font-weight: 700; text-decoration: none;">
+        ${API.escapeHtml(API.t('calendar.subscribe_google_btn', '📅 Google Calendar (Live Sync)'))}
+      </a>
+      <button type="button" id="calendar-download-snapshot-btn" class="btn btn-outline btn-sm" title="Download a one-time static .ics file snapshot">
+        ${API.escapeHtml(API.t('calendar.subscribe_snapshot_btn', '📥 Download One-Time .ics File'))}
+      </button>
+    </div>
+    <div class="subscribe-url-row">
+      <input type="text" id="calendar-feed-url-input" class="subscribe-url-input" value="${API.escapeHtml(feedHttpUrl)}" readonly aria-label="Live calendar subscription URL">
+      <button type="button" id="calendar-copy-feed-btn" class="btn btn-outline btn-sm" style="white-space: nowrap; font-weight: 600;">
+        ${API.escapeHtml(API.t('calendar.subscribe_copy_btn', '📋 Copy Feed URL'))}
+      </button>
+    </div>
+  `;
+
+  const closeBtn = document.getElementById('calendar-subscribe-close-btn');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', function() {
+      toggleSubscribePanel(true);
+    });
+  }
+
+  const snapshotBtn = document.getElementById('calendar-download-snapshot-btn');
+  if (snapshotBtn) {
+    snapshotBtn.addEventListener('click', function() {
+      downloadCalendarIcs(calendarEventsCache);
+    });
+  }
+
+  const copyBtn = document.getElementById('calendar-copy-feed-btn');
+  const urlInput = document.getElementById('calendar-feed-url-input');
+  if (copyBtn && urlInput) {
+    copyBtn.addEventListener('click', function() {
+      const markCopied = function() {
+        copyBtn.textContent = API.t('calendar.subscribe_copied', '✓ Copied!');
+        setTimeout(function() {
+          copyBtn.textContent = API.t('calendar.subscribe_copy_btn', '📋 Copy Feed URL');
+        }, 2200);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(feedHttpUrl).then(markCopied).catch(function() {
+          urlInput.select();
+          try { document.execCommand('copy'); } catch (e) {}
+          markCopied();
+        });
+      } else {
+        urlInput.select();
+        try { document.execCommand('copy'); } catch (e) {}
+        markCopied();
+      }
+    });
+  }
 }
 
 function getPacificDateKey(dateInput) {

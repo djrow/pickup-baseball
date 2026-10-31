@@ -407,5 +407,25 @@ Redesigned the event RSVP workflow (`public/event.html`, `public/js/event.js`, `
 
 ---
 
-## 28. Future Roadmap Notes
+## 28. Phase 27: Live Cloud Calendar Sync Indicator, Auto-Refresh & Live `.ics` Subscription Feed
+Eliminated ambiguity between locally cached schedule snapshots and the live Cloudflare D1 schedule—both on the web app and in players' personal calendar apps:
+- **Live Cloud Sync Status Pill & Auto-Refresh Lifecycle (`public/index.html`, `public/js/app.js`, `public/js/api.js`):**
+  - Added an interactive `#calendar-sync-pill` badge alongside the calendar subtitle showing real-time cloud verification state:
+    - `↻ Syncing with cloud…` during background revalidation.
+    - `🟢 Cloud synced • Just now ↻` (updating dynamically to `Xm ago` or timestamp) once verified against Cloudflare D1 (`Cache-Control: no-store` + authoritative `synced_at` timestamp on `GET /api/events`).
+    - `⚠️ Offline — cached schedule ([time]) ↻` in high-contrast amber whenever a network fetch fails or the device goes offline, preserving the `0ms` `localStorage` schedule without ever letting stale data masquerade as live.
+  - Hardened `API.getEvents()` with `{ cache: 'no-store' }` and strict `res.ok` error checking so transient HTTP errors never overwrite the local schedule cache.
+  - Bound automatic cloud re-sync triggers on `visibilitychange` (whenever a player returns to an open browser tab or installed PWA after 30+ seconds), `online` / `offline` network transitions, a 5-minute active-tab heartbeat, and 1-tap manual refresh on the sync pill.
+- **Live Cloud iCalendar Subscription Feed (`GET /api/events/calendar.ics`):**
+  - Implemented `GET /api/events/calendar.ics` across both Express (`src/routes/events.js`) and Cloudflare Pages Functions (`functions/api/[[route]].js`) serving a live, uncached RFC 5545 + RFC 7986 calendar stream (`REFRESH-INTERVAL;VALUE=DURATION:PT1H`, `X-PUBLISHED-TTL:PT1H`, `Cache-Control: no-cache, no-store, must-revalidate`).
+  - Uses stable per-event `UID`s (`pickup-baseball-event-{id}@pickupbaseballfoundation.org`) so newly added games, field changes, and Sunday-morning rainout calls (`🌧️ RAINED OUT: ...` with organizer rainout notes) automatically propagate in place to subscribed phones and computers, while excluding restricted whitelist games and omitting all player PII.
+  - Added an inline `#calendar-subscribe-panel` drawer on the calendar card offering 1-click **🍎 Apple / Outlook (`webcal://`)**, **📅 Google Calendar (`?cid=webcal://...`)**, **📋 Copy Feed URL**, and **📥 Download One-Time `.ics` File**.
+- **Automated Verification & Version Bump:**
+  - Added acceptance test `T9.16` in `scripts/verify-all.js` verifying `Cache-Control: no-store`, `synced_at`, live `/api/events/calendar.ics` RFC 5545 output, rainout summary/note propagation, restricted private game exclusion, and ES6 compatibility.
+  - Bumped cache bust version to `v27` across all client, server, service worker, and HTML asset links (`CLIENT_VERSION: '27'`, `CURRENT_APP_VERSION = '27'`, `CACHE_NAME = 'pbf-cache-v27'`).
+  - All 55 automated tests in `scripts/verify-all.js` pass with 100% success rate.
+
+---
+
+## 29. Future Roadmap Notes
 - **Pinned Full-Stack Rust / WebAssembly Migration:** Evaluated a future 4-phase rewrite of the Cloudflare Pages Functions backend (and optional frontend interactivity) to Rust (`workers-rs` compiling to WebAssembly) for compile-time type safety, zero-dependency binary durability, and strict edge memory safety—kept as a guiding north star when designing new features and data models.
