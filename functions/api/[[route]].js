@@ -12,6 +12,9 @@ async function ensureD1Schema(db) {
   const alterStatements = [
     'ALTER TABLE events ADD COLUMN allowed_emails TEXT DEFAULT NULL',
     'ALTER TABLE events ADD COLUMN actual_attendance INTEGER DEFAULT NULL',
+    'ALTER TABLE events ADD COLUMN rainout_note TEXT DEFAULT NULL',
+    'ALTER TABLE events ADD COLUMN rainout_at DATETIME DEFAULT NULL',
+    'ALTER TABLE events ADD COLUMN rainout_email_sent INTEGER DEFAULT 0',
     'ALTER TABLE attendees ADD COLUMN additional_guests INTEGER DEFAULT 0',
     'ALTER TABLE attendees ADD COLUMN guest_names TEXT',
     'ALTER TABLE attendees ADD COLUMN players_count INTEGER DEFAULT NULL',
@@ -1666,7 +1669,7 @@ function formatIcsUtcDate(d) {
 app.get('/events/calendar.ics', async (c) => {
   try {
     const { results: allEvents } = await c.env.DB.prepare(`
-      SELECT id, title, description, location, event_date, status, rainout_note, allowed_emails, created_at
+      SELECT *
       FROM events
       WHERE status IN ('active', 'rainout')
       ORDER BY event_date ASC
