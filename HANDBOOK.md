@@ -11,6 +11,11 @@ The entire app was built with **zero frontend build tools** (plain HTML, CSS, an
 - **Part I: How to Use the Web App**
   1. [For Players, Spectators & Volunteers](#1-for-players-spectators--volunteers)
   2. [For Game Facilitators & Organizers](#2-for-game-facilitators--organizers)
+     - [Limited Roster Size & Automatic Waitlist Behavior](#-limited-roster-size--automatic-waitlist-behavior)
+     - [Restricting RSVPs to Invited Emails](#-restricting-rsvps-to-invited-emails-optional)
+     - [Editing a Game & Turnout](#-editing-a-game--recording-actual-turnout)
+     - [Calling a Rainout & Reopening](#-calling-a-rainout-or-reopening-a-game)
+     - [Community Highlights & RSS Feed](#-publishing-community-highlights--submitting-multimedia-to-the-rss-feed)
   3. [For Administrators](#3-for-administrators)
 - **Part II: Manual Maintenance & Code Editing Handbook**
   4. [How the Codebase Is Organized](#4-how-the-codebase-is-organized)
@@ -83,6 +88,32 @@ Accounts granted the **`Facilitator`**, **`Organizer`**, or **`Admin`** role see
 1. Go to **`/admin.html`**.
 2. **Fastest way:** Click **⚡ Post Next Sunday @ Noon** to pre-fill next Sunday at 12:00 PM Pacific Time with the default field location and default 6 volunteer tasks, then click **Publish Game**.
 3. **Custom game:** Fill out the title, date/time (always entered in Pacific Time), field location, Google Maps link (optional), max on-field players (leave blank for unlimited), and volunteer tasks.
+
+### 👥 Limited Roster Size & Automatic Waitlist Behavior
+To keep games organized, safe, and fun without overcrowded dugouts or excessive bench waiting, organizers can configure an active player cap on any game:
+
+#### 1. Setting or Changing the Player Limit
+- **When creating a game (`/admin.html`):** Under the "Schedule a New Game" form, check **"Cap Playing Roster Capacity"** and specify the maximum number of on-field players. The standard default is **`28` players** (two full 14-player lineups).
+- **Unlimited games:** If left unchecked or blank, the game remains open to an unlimited number of players (`max_players = null`).
+- **Adjusting on the fly (`/event.html`):** Click **✏️ Edit Game** in the top-right corner of the event card to raise or lower the player cap at any time.
+
+#### 2. Who Counts Toward the Cap (Players vs. Spectators)
+- **⚾ On-field Players:** Only registered **players** (`players_count`) count against `max_players`.
+- **👏 Spectators & Off-field Volunteers:** Spectators (family members and friends cheering from the bleachers) and off-field volunteers (such as Bringing Water/Food or Game Facilitator) **never consume roster spots**. Spectator RSVPs are always confirmed immediately (`status: 'attending'`), even when the on-field playing roster is 100% full.
+
+#### 3. Automatic Waitlist Activation & Queue Numbers
+- As soon as confirmed on-field players reach the capacity limit, the game status dynamically switches to **"Playing Roster Full"**.
+- Subsequent players who attempt to RSVP are automatically placed on the **⏳ Waitlist** and assigned an exact sequential queue position (e.g. *Waitlist #1*, *Waitlist #2*).
+- An automated email is immediately sent to the registrant confirming their place on the waitlist with a direct link to check their status anytime.
+
+#### 4. Automatic First-In, First-Out (FIFO) Promotion
+- The waitlist runs entirely autonomously on a strict FIFO basis:
+  - Whenever an active player or group cancels their reservation (via the **"Can't Make It? Cancel RSVP"** button on `/event.html`) or decreases their party's `players_count`, the system automatically checks if enough vacant spots opened to accommodate the next group in line.
+  - The waitlisted group is automatically promoted to the active roster (`status: 'attending'`).
+  - An instant email notification is dispatched via Resend:
+    > *"⚾ A spot opened up! You're in for [Game Title] (Sunday, [Date] at 12:00 PM PST)"*
+- **Organizer Moderation Trigger:** If an organizer manually deletes a mistaken or spam player from the roster using the `✕` / `🗑️` button on `/event.html`, the waitlist promotion engine evaluates immediately and promotes the next waiting player.
+- **Raising Capacity:** If an organizer edits the game and increases the cap (e.g. from 24 to 28), the top waitlisted players are automatically promoted into the open slots with notification emails dispatched.
 
 ### 🔒 Restricting RSVPs to Invited Emails (Optional)
 - When creating or editing a game on `/admin.html`, toggle **"Restrict RSVP to specific invited player accounts"**.
