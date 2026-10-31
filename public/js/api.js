@@ -44,7 +44,7 @@ const EN_DICT = {
   "calendar.view_details": "RSVP & View Game Details →",
   "footer.tagline": "Building community through America's pastime.",
   "footer.subtext": "Built for simplicity and durability. Free & open-source.",
-  "footer.about_site": "Built with Google Gemini in October 2026 for simplicity and durability. This site is new and few people know about it. Free & open-source",
+  "footer.about_site": "Built with Google Gemini in October 2026 for simplicity and durability. Free & open-source",
   "footer.update_app": "Update App",
   "footer.update_available": "Update Available — Click to Refresh",
   "footer.update_checking": "Checking for updates and clearing cache...",
@@ -52,7 +52,6 @@ const EN_DICT = {
   "footer.update_available_desc": "A new version of Sunday Pickup Baseball is ready.",
   "hero.title": "Free Pickup Baseball Every Sunday at Noon",
   "hero.desc": "We provide accessible, friendly Sunday baseball games for everyone in the community. Check the head count, coordinate gear, volunteer for game-day tasks, and play ball!",
-  "hero.notice": "NOTICE: This site is new and few people know about it. Published in October 2026.",
   "hero.login_btn": "⚾ Player Log In / Sign In",
   "hero.profile_btn": "👤 Player Profile ({name})",
   "hero.mailing_btn": "Join Mailing List ↗",
@@ -281,7 +280,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '29',
+  CLIENT_VERSION: '30',
 
   // Current user cache
   currentUser: null,
@@ -653,7 +652,7 @@ const API = {
             <div id="footer-update-status" class="footer-update-status" style="display: none;" role="status" aria-live="polite"></div>
           </div>
           <p style="margin-top: 12px; font-size: 0.8rem; color: #94a3b8; line-height: 1.5;">
-            <span data-i18n="footer.about_site">${this.escapeHtml(this.t('footer.about_site', 'Built with Google Gemini in October 2026 for simplicity and durability. This site is new and few people know about it. Free & open-source'))}</span> on <a href="https://github.com/djrow/pickup-baseball" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">GitHub</a>.
+            <span data-i18n="footer.about_site">${this.escapeHtml(this.t('footer.about_site', 'Built with Google Gemini in October 2026 for simplicity and durability. Free & open-source'))}</span> on <a href="https://github.com/djrow/pickup-baseball" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">GitHub</a>.
           </p>
         </div>
       `;
