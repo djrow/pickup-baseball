@@ -55,7 +55,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-const CURRENT_APP_VERSION = '27';
+const CURRENT_APP_VERSION = '28';
 app.use((req, res, next) => {
   res.setHeader('X-App-Version', CURRENT_APP_VERSION);
   next();
@@ -1413,5 +1413,10 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(icsText.includes('SUMMARY:🌧️ RAINED OUT: Public Live Feed Sunday Game'), 'Rained-out game must be prefixed with RAINED OUT in live feed');
     assert.ok(icsText.includes('Infield standing water after overnight storm'), 'Rainout note must appear in VEVENT description');
     assert.ok(!icsText.includes('Private Whitelist Secret Scrimmage'), 'Restricted private whitelist events must be excluded from anonymous public .ics feed');
+
+    const apiJs = fs.readFileSync(path.join(publicDir, 'js/api.js'), 'utf8');
+    const readmeMd = fs.readFileSync(path.join(__dirname, '..', 'README.md'), 'utf8');
+    assert.ok(apiJs.includes('Built with Google Gemini'), 'Site footer must include Built with Google Gemini');
+    assert.ok(readmeMd.includes('Built with Google Gemini'), 'README.md must include Built with Google Gemini');
   });
 });

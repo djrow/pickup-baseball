@@ -44,6 +44,7 @@ const EN_DICT = {
   "calendar.view_details": "RSVP & View Game Details →",
   "footer.tagline": "Building community through America's pastime.",
   "footer.subtext": "Built for simplicity and durability. Free & open-source.",
+  "footer.built_with": "Built with Google Gemini",
   "footer.update_app": "Update App",
   "footer.update_available": "Update Available — Click to Refresh",
   "footer.update_checking": "Checking for updates and clearing cache...",
@@ -280,7 +281,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '27',
+  CLIENT_VERSION: '28',
 
   // Current user cache
   currentUser: null,
@@ -654,6 +655,7 @@ const API = {
             </div>
             <div id="footer-update-status" class="footer-update-status" style="display: none;" role="status" aria-live="polite"></div>
           </div>
+          <p style="margin-top: 10px; font-size: 0.78rem; color: #94a3b8;" data-i18n="footer.built_with">${this.escapeHtml(this.t('footer.built_with', 'Built with Google Gemini'))}</p>
         </div>
       `;
     }
