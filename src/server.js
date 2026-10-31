@@ -4,10 +4,11 @@ const path = require('path');
 const express = require('express');
 const cookieParser = require('cookie-parser');
 
-const { initDatabase } = require('./db');
+const { initDatabase, db } = require('./db');
 const { startReminderScheduler } = require('./reminders');
 const authRoutes = require('./routes/auth');
 const eventRoutes = require('./routes/events');
+const { router: postRoutes, serveFeedXml } = require('./routes/posts');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -27,7 +28,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-const CURRENT_APP_VERSION = '30';
+const CURRENT_APP_VERSION = '31';
 app.use((req, res, next) => {
   res.setHeader('X-App-Version', CURRENT_APP_VERSION);
   next();
@@ -43,6 +44,11 @@ app.use('/uploads/avatars', express.static(avatarsDir));
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/events', eventRoutes);
+app.use('/api/posts', postRoutes);
+
+// RSS 2.0 + Media RSS Feed Endpoints
+app.get('/api/feed.xml', serveFeedXml);
+app.get('/feed.xml', serveFeedXml);
 
 // Health check endpoint for uptime monitors (Fly.io, Render, Railway, Hetzner, etc.)
 app.get('/health', (req, res) => {

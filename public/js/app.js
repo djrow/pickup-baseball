@@ -123,6 +123,10 @@ function applyUserToHomeUi(user) {
       heroBtn.href = '/login.html';
     }
   }
+  const feedAdminActions = document.getElementById('feed-admin-actions');
+  if (feedAdminActions) {
+    feedAdminActions.style.display = (user && user.canManageEvents) ? '' : 'none';
+  }
 }
 
 async function initHome() {
@@ -138,6 +142,7 @@ async function initHome() {
   setupFilters();
   setupCalendarControls();
   setupCloudSyncLifecycle();
+  loadCommunityFeed();
 
   window.addEventListener('pickup:langchange', () => {
     applyUserToHomeUi(API.currentUser);
@@ -147,6 +152,7 @@ async function initHome() {
       renderSubscribePanel();
     }
     renderEventsView(lastLoadedEvents);
+    loadCommunityFeed();
   });
 
   // Check if arrived via magic link login or successful code verification
@@ -829,3 +835,178 @@ function renderCalendar(events) {
     renderCalendarDrawer(selectedCalendarDateKey, game, selectedCalendarDateKey < todayKey);
   }
 }
+
+// =============================================================================
+// Community Highlights & RSS Feed Module
+// =============================================================================
+
+async function loadCommunityFeed() {
+  const container = document.getElementById('feed-posts-container');
+  if (!container) return;
+
+  try {
+    const data = await API.getPosts();
+    const posts = (data && data.posts) ? data.posts : [];
+    renderFeedPosts(posts);
+  } catch (err) {
+    console.error('Error loading community highlights:', err);
+    if (container) {
+      container.innerHTML = `
+        <div class="feed-empty-state">
+          <div class="feed-empty-state-icon">📡</div>
+          <div class="feed-empty-state-title">${API.escapeHtml(API.t('feed.no_posts_title', 'No Highlights Posted Yet'))}</div>
+          <p class="feed-empty-state-desc">${API.escapeHtml(API.t('feed.no_posts_desc', 'Check back soon for game recaps, photo albums, video clips, and announcements!'))}</p>
+        </div>
+      `;
+    }
+  }
+}
+
+function renderFeedPosts(posts) {
+  const container = document.getElementById('feed-posts-container');
+  if (!container) return;
+
+  if (!posts || posts.length === 0) {
+    container.innerHTML = `
+      <div class="feed-empty-state">
+        <div class="feed-empty-state-icon">⚾</div>
+        <div class="feed-empty-state-title">${API.escapeHtml(API.t('feed.no_posts_title', 'No Highlights Posted Yet'))}</div>
+        <p class="feed-empty-state-desc">${API.escapeHtml(API.t('feed.no_posts_desc', 'Check back soon for game recaps, photo albums, video clips, and announcements!'))}</p>
+      </div>
+    `;
+    return;
+  }
+
+  const isManager = Boolean(API.currentUser && API.currentUser.canManageEvents);
+
+  const cardsHtml = posts.map(post => {
+    const mUrl = post.media_url ? String(post.media_url).trim() : '';
+    const mType = post.media_type || API.parseMediaType(mUrl);
+    let mediaHtml = '';
+
+    if (mUrl) {
+      if (mType === 'youtube') {
+        const embedUrl = API.getYouTubeEmbedUrl(mUrl);
+        if (embedUrl) {
+          mediaHtml = `
+            <div class="feed-post-media feed-media-youtube">
+              <iframe src="${API.escapeHtml(embedUrl)}" title="${API.escapeHtml(post.title)}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe>
+            </div>
+          `;
+        }
+      } else if (mType === 'image') {
+        const safeImg = API.safeUrl(mUrl);
+        if (safeImg) {
+          mediaHtml = `
+            <div class="feed-post-media">
+              <a href="${API.escapeHtml(safeImg)}" target="_blank" rel="noopener noreferrer">
+                <img src="${API.escapeHtml(safeImg)}" alt="${API.escapeHtml(post.title)}" class="feed-post-img" loading="lazy" />
+              </a>
+            </div>
+          `;
+        }
+      } else if (mType === 'video') {
+        const safeVid = API.safeUrl(mUrl);
+        if (safeVid) {
+          mediaHtml = `
+            <div class="feed-post-media">
+              <video src="${API.escapeHtml(safeVid)}" class="feed-post-video" controls playsinline preload="metadata"></video>
+            </div>
+          `;
+        }
+      } else if (mType === 'audio') {
+        const safeAud = API.safeUrl(mUrl);
+        if (safeAud) {
+          mediaHtml = `
+            <div class="feed-post-audio-container">
+              <audio src="${API.escapeHtml(safeAud)}" class="feed-post-audio" controls preload="metadata"></audio>
+            </div>
+          `;
+        }
+      }
+    }
+
+    let dateStr = '';
+    if (post.created_at) {
+      const d = new Date(post.created_at);
+      if (!isNaN(d.getTime())) {
+        try {
+          dateStr = new Intl.DateTimeFormat(API.getLang(), { month: 'short', day: 'numeric', year: 'numeric' }).format(d);
+        } catch (e) {
+          dateStr = d.toLocaleDateString();
+        }
+      }
+    }
+
+    const authorDisplay = post.author_name ? API.escapeHtml(post.author_name) : 'Organizer';
+
+    let gameBadgeHtml = '';
+    if (post.event_id) {
+      const evTitle = post.event_title ? API.escapeHtml(post.event_title) : API.t('feed.game_badge', '⚾ Game Link');
+      gameBadgeHtml = `
+        <a href="/event.html?id=${encodeURIComponent(post.event_id)}" class="feed-post-game-tag">
+          ⚾ ${evTitle}
+        </a>
+      `;
+    }
+
+    let adminDeleteBtn = '';
+    if (isManager) {
+      adminDeleteBtn = `
+        <button type="button" class="btn btn-outline btn-sm feed-delete-btn" data-post-id="${API.escapeHtml(String(post.id))}" style="color: #ef4444; border-color: #fca5a5; padding: 2px 8px; font-size: 0.75rem;">
+          🗑️ ${API.escapeHtml(API.t('feed.delete_btn', 'Delete'))}
+        </button>
+      `;
+    }
+
+    return `
+      <article class="feed-post-card" id="post-${API.escapeHtml(String(post.id))}">
+        ${mediaHtml}
+        <div class="feed-post-body">
+          <div class="feed-post-meta">
+            <span>By <strong>${authorDisplay}</strong></span>
+            <span>${API.escapeHtml(dateStr)}</span>
+          </div>
+          ${gameBadgeHtml}
+          <h3 class="feed-post-title">${API.escapeHtml(post.title)}</h3>
+          <p class="feed-post-text">${API.escapeHtml(post.content)}</p>
+          ${isManager ? `
+            <div class="feed-post-footer">
+              <span style="font-size: 0.75rem; color: var(--text-muted);">Post ID #${API.escapeHtml(String(post.id))}</span>
+              ${adminDeleteBtn}
+            </div>
+          ` : ''}
+        </div>
+      </article>
+    `;
+  }).join('');
+
+  container.innerHTML = `
+    <div class="feed-posts-grid">
+      ${cardsHtml}
+    </div>
+  `;
+
+  // Attach delete listeners
+  if (isManager) {
+    container.querySelectorAll('.feed-delete-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const postId = btn.getAttribute('data-post-id');
+        if (!postId) return;
+        if (!confirm(API.t('feed.confirm_delete', 'Delete this highlight from the community feed and RSS?'))) {
+          return;
+        }
+        try {
+          btn.disabled = true;
+          await API.deletePost(postId);
+          await loadCommunityFeed();
+        } catch (err) {
+          alert(err.message || 'Failed to delete post.');
+          btn.disabled = false;
+        }
+      });
+    });
+  }
+}
+

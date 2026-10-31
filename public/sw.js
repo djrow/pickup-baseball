@@ -1,5 +1,5 @@
 // Service Worker for Pickup Baseball Foundation PWA
-const CACHE_NAME = 'pbf-cache-v30';
+const CACHE_NAME = 'pbf-cache-v31';
 
 const STATIC_ASSETS = [
   '/',
@@ -81,8 +81,8 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 1. Dynamic API calls: ALWAYS Network Only (Never cache live database, auth, or roster data)
-  if (url.pathname.startsWith('/api/')) {
+  // 1. Dynamic API & RSS Feed calls: ALWAYS Network Only (Never cache live database, auth, roster, or feed data)
+  if (url.pathname.startsWith('/api/') || url.pathname === '/feed.xml') {
     event.respondWith(fetch(req));
     return;
   }

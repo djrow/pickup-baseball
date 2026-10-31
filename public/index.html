@@ -4,7 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pickup Baseball Foundation</title>
-  <link rel="stylesheet" href="/css/style.css?v=30">
+  <link rel="stylesheet" href="/css/style.css?v=31">
+  <link rel="alternate" type="application/rss+xml" title="Sunday Pickup Baseball Highlights &amp; Updates" href="/feed.xml">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png">
@@ -137,6 +138,37 @@
       </div>
     </section>
 
+    <!-- Community Highlights & RSS Feed Section -->
+    <section id="community-feed-section" class="card feed-card" style="margin-top: 36px;" aria-labelledby="feed-heading">
+      <div class="feed-section-header" style="display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 20px;">
+        <div>
+          <h2 id="feed-heading" style="font-size: 1.35rem; color: var(--secondary); margin: 0 0 4px 0; display: flex; align-items: center; gap: 8px;">
+            <span>📢</span> <span data-i18n="feed.heading">Highlights &amp; Community Updates</span>
+          </h2>
+          <p style="font-size: 0.9rem; color: var(--text-muted); margin: 0;" data-i18n="feed.subtitle">
+            Game recaps, video highlights, photo albums, and field announcements.
+          </p>
+        </div>
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+          <a href="/feed.xml" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm" style="display: inline-flex; align-items: center; gap: 6px; font-weight: 600;" title="Subscribe to RSS Feed">
+            <span data-i18n="feed.rss_btn">📡 RSS Feed</span>
+          </a>
+          <span id="feed-admin-actions" style="display: none;">
+            <a href="/admin.html#post-form-section" class="btn btn-primary btn-sm" style="display: inline-flex; align-items: center; gap: 4px; font-weight: 600;" data-i18n="feed.new_post_btn">
+              + New Highlight
+            </a>
+          </span>
+        </div>
+      </div>
+
+      <!-- Feed Posts Container -->
+      <div id="feed-posts-container" class="feed-posts-container" aria-live="polite">
+        <div style="text-align: center; padding: 30px; color: var(--text-muted);">
+          Loading highlights…
+        </div>
+      </div>
+    </section>
+
     <!-- How It Works Section -->
     <section class="card" style="margin-top: 48px; background: var(--bg-card);">
       <h2 style="font-size: 1.3rem; color: var(--secondary); margin-bottom: 20px; text-align: center;" data-i18n="how.title">
@@ -187,7 +219,7 @@
   <!-- Site Footer -->
   <footer id="site-footer" class="site-footer"></footer>
 
-  <script src="/js/api.js?v=30"></script>
-  <script src="/js/app.js?v=30"></script>
+  <script src="/js/api.js?v=31"></script>
+  <script src="/js/app.js?v=31"></script>
 </body>
 </html>

@@ -118,9 +118,23 @@ function initDatabase() {
       sort_order INTEGER DEFAULT 0
     );
 
+    CREATE TABLE IF NOT EXISTS posts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      content TEXT NOT NULL,
+      summary TEXT,
+      media_url TEXT,
+      media_type TEXT,
+      author_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      author_name TEXT NOT NULL,
+      event_id INTEGER REFERENCES events(id) ON DELETE SET NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE INDEX IF NOT EXISTS idx_events_date ON events(event_date);
     CREATE INDEX IF NOT EXISTS idx_attendees_event ON attendees(event_id);
     CREATE INDEX IF NOT EXISTS idx_comments_event ON comments(event_id);
+    CREATE INDEX IF NOT EXISTS idx_posts_created_at ON posts(created_at DESC);
   `);
 
   // Migrate users table columns if upgrading

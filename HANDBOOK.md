@@ -103,6 +103,27 @@ Accounts granted the **`Facilitator`**, **`Organizer`**, or **`Admin`** role see
 ### 🛡️ Moderating Rosters & Comments
 - Organizers and Admins see a small `✕` / `🗑️` button beside roster entries and discussion comments on `/event.html` to remove spam or mistaken entries (removing an attendee also triggers automatic waitlist promotion if a spot opens).
 
+### 📢 Publishing Community Highlights & Submitting Multimedia to the RSS Feed
+- Navigate to the **Community Highlights & RSS Feed** section on `/admin.html` (or click **+ New Highlight** on the homepage).
+- **Zero-Storage Cloudflare Architecture:** To keep hosting costs zero and stay within Cloudflare D1 limits, you **do not upload heavy image or video files to Cloudflare**. Instead, you paste external links (YouTube, Imgur, direct image URLs, or video links) and the app renders them richly for users while generating standard Media RSS XML.
+- **Filling out the publisher form:**
+  1. **Headline / Title *:** Game recap title or announcement.
+  2. **Associated Game (Optional):** Link the post to a specific Sunday game in the dropdown.
+  3. **Story / Recap Content *:** The recap, box score, standout innings, or volunteer shoutouts.
+  4. **Short Summary / Subtitle (Optional):** 1-sentence synopsis used in RSS feeds and reader apps.
+  5. **External Multimedia URL (Optional):**
+     - **YouTube videos or shorts:** (e.g. `https://www.youtube.com/watch?v=...` or `https://youtu.be/...`). The app automatically embeds a responsive 16:9 privacy-preserving player (`https://www.youtube-nocookie.com/embed/...`).
+     - **Images & Photos:** (e.g. `https://i.imgur.com/...` or any direct `.jpg`/`.png` link). The app renders a photo card with lazy-loading and adds an RSS `<enclosure>` + `<media:content>` tag.
+     - **Direct Video Streams:** (e.g. `.mp4` link). The app renders an HTML5 `<video controls playsinline>` player.
+     - **Audio Podcasts / Voice Notes:** (e.g. `.mp3` link). The app renders a native `<audio controls>` player.
+  6. **Media Format:** Leave as *Auto-detect from link* or pick explicitly.
+  7. **Multimedia Live Preview:** As soon as you type or paste a URL, the real-time preview box below the form shows exactly how the media will look before you publish.
+- Click **🚀 Publish Highlight to Community Feed & RSS**.
+- The highlight is immediately published to:
+  - The **📢 Highlights & Community Updates** grid on the homepage (`index.html#community-feed-section`).
+  - The public **RSS 2.0 + Media RSS feed** at [`/feed.xml`](https://www.pickupbaseballfoundation.org/feed.xml).
+- Organizers and admins can delete posts anytime using the red **🗑️ Delete** button on `/admin.html` or inline on the homepage.
+
 ---
 
 ## 3. For Administrators
@@ -287,6 +308,19 @@ If you ever need to store a new field on `events`, `attendees`, or `users`:
   npx wrangler pages secret put RESEND_API_KEY --project-name pickup-baseball
   ```
   Paste the new `re_...` key when prompted, then run `npm run deploy`.
+
+---
+
+### Recipe G: Managing the Community Highlights & RSS 2.0 Media Feed
+- **How it works behind the scenes:**
+  - Database table `posts` in Cloudflare D1 stores headlines, text content, author, created date, and external media URLs (`media_url`, `media_type`).
+  - Edge endpoint `/feed.xml` and `/api/feed.xml` reads the latest posts and renders a standard **RSS 2.0** XML document with Yahoo **Media RSS** (`xmlns:media="http://search.yahoo.com/mrss/"`) tags and Atom self-links.
+  - Homepage (`index.html`) fetches `GET /api/posts` and renders rich media cards with responsive 16:9 YouTube iframes (`youtube-nocookie.com`), photo zoom cards, and native HTML5 video/audio elements.
+- **Adding or modifying supported external media embed rules:**
+  - URL detection helper is defined in `public/js/api.js` under `API.parseMediaType(url)` and on the backend in `src/routes/posts.js` and `functions/api/[[route]].js`.
+  - Content Security Policy (CSP) headers in `public/_headers` control which external iframe origins can load:
+    - If adding a new embed service (e.g., Vimeo), add its embed domain to `frame-src` in `public/_headers`.
+  - Always keep `media-src 'self' https: data:` in `public/_headers` so audio/video tags can stream from external CDNs.
 
 ---
 

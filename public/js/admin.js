@@ -74,6 +74,7 @@ async function initAdmin() {
   setupTaskBuilder();
   setupDefaultTemplateEditor();
   setupCreateForm();
+  setupCommunityHighlightsAdmin();
   await loadAdminGames();
 
   // If Admin, load User Roles Management section
@@ -543,7 +544,8 @@ function setupCreateForm() {
       let allowedEmails = null;
       if (restrictToggle && restrictToggle.checked) {
         const checkedBoxes = Array.from(document.querySelectorAll('.allowed-player-cb:checked')).map(cb => cb.value);
-        const extraEmails = (document.getElementById('event-extra-allowed-emails')?.value || '')
+        const extraEmailsEl = document.getElementById('event-extra-allowed-emails');
+        const extraEmails = ((extraEmailsEl && extraEmailsEl.value) || '')
           .split(/[,\n;]/)
           .map(s => s.trim().toLowerCase())
           .filter(s => s.includes('@'));
@@ -611,6 +613,7 @@ async function loadAdminGames() {
     const data = await API.getEvents('all');
     const events = data.events || [];
     loadedAdminEventsMap = new Map(events.map(ev => [ev.id, ev]));
+    updateAdminPostEventDropdown(events);
 
     // Populate common-locations-list datalist with unique clean locations from existing games
     const datalist = document.getElementById('common-locations-list');
@@ -775,7 +778,8 @@ window.saveEditedGame = async function(eventId) {
   const actualVal = attendanceInput ? attendanceInput.value.trim() : '';
   const actualAttendance = actualVal === '' ? null : parseInt(actualVal, 10);
 
-  const allowedEmailsRaw = document.getElementById(`edit-allowed-emails-${eventId}`)?.value || '';
+  const allowedEmailsEl = document.getElementById(`edit-allowed-emails-${eventId}`);
+  const allowedEmailsRaw = (allowedEmailsEl && allowedEmailsEl.value) || '';
   const allowedList = allowedEmailsRaw.split(/[,\n;]/).map(s => s.trim().toLowerCase()).filter(s => s.includes('@'));
   const allowed_emails = allowedList.length > 0 ? allowedList : null;
 
@@ -1183,6 +1187,292 @@ function setupAdminUserManagement(currentUser) {
 
   loadUsers();
   if (refreshBtn) refreshBtn.addEventListener('click', loadUsers);
+}
+
+// =============================================================================
+// Community Highlights & RSS Feed Administration
+// =============================================================================
+
+function setupCommunityHighlightsAdmin() {
+  const form = document.getElementById('create-post-form');
+  const mediaUrlInput = document.getElementById('post-media-url-input');
+  const mediaTypeSelect = document.getElementById('post-media-type-select');
+  const previewContainer = document.getElementById('post-media-preview-container');
+  const previewTarget = document.getElementById('post-media-preview-target');
+  const alertBox = document.getElementById('post-form-alert');
+
+  function updateLivePreview() {
+    if (!previewContainer || !previewTarget || !mediaUrlInput || !mediaTypeSelect) return;
+    const url = (mediaUrlInput.value || '').trim();
+    const explicitType = mediaTypeSelect.value;
+    const resolvedType = API.parseMediaType(url, explicitType);
+
+    if (!url || resolvedType === 'none') {
+      previewContainer.style.display = 'none';
+      previewTarget.innerHTML = '';
+      return;
+    }
+
+    previewContainer.style.display = 'block';
+
+    if (resolvedType === 'youtube') {
+      const embedUrl = API.getYouTubeEmbedUrl(url);
+      if (embedUrl) {
+        previewTarget.innerHTML = `
+          <div class="feed-post-media feed-media-youtube" style="max-width: 480px; border-radius: var(--radius-sm); overflow: hidden;">
+            <iframe src="${API.escapeHtml(embedUrl)}" title="YouTube Preview" allowfullscreen></iframe>
+          </div>
+          <small style="color: var(--text-muted); display: block; margin-top: 6px;">
+            ✓ YouTube detected (ID: ${API.escapeHtml(API.getYouTubeId(url) || '')}) — will embed via privacy-preserving nocookie player.
+          </small>
+        `;
+      } else {
+        previewTarget.innerHTML = `<span style="color: #ef4444;">⚠️ Could not parse YouTube video ID from URL.</span>`;
+      }
+    } else if (resolvedType === 'image') {
+      const safeImg = API.safeUrl(url);
+      if (safeImg) {
+        previewTarget.innerHTML = `
+          <div style="max-width: 360px;">
+            <img src="${API.escapeHtml(safeImg)}" alt="Preview" style="max-width: 100%; border-radius: var(--radius-sm); border: 1px solid var(--border);" onerror="this.onerror=null; this.parentElement.innerHTML='<span style=\\'color:#ef4444;\\'>Failed to load image preview. Check link.</span>';" />
+          </div>
+          <small style="color: var(--text-muted); display: block; margin-top: 6px;">
+            ✓ Image link detected — will render photo card and RSS enclosure.
+          </small>
+        `;
+      } else {
+        previewTarget.innerHTML = `<span style="color: #ef4444;">⚠️ Invalid image URL.</span>`;
+      }
+    } else if (resolvedType === 'video') {
+      const safeVid = API.safeUrl(url);
+      if (safeVid) {
+        previewTarget.innerHTML = `
+          <div style="max-width: 480px;">
+            <video src="${API.escapeHtml(safeVid)}" controls playsinline style="max-width: 100%; border-radius: var(--radius-sm);"></video>
+          </div>
+          <small style="color: var(--text-muted); display: block; margin-top: 6px;">
+            ✓ Direct video stream link detected.
+          </small>
+        `;
+      } else {
+        previewTarget.innerHTML = `<span style="color: #ef4444;">⚠️ Invalid video URL.</span>`;
+      }
+    } else if (resolvedType === 'audio') {
+      const safeAud = API.safeUrl(url);
+      if (safeAud) {
+        previewTarget.innerHTML = `
+          <div style="max-width: 480px;">
+            <audio src="${API.escapeHtml(safeAud)}" controls style="width: 100%;"></audio>
+          </div>
+          <small style="color: var(--text-muted); display: block; margin-top: 6px;">
+            ✓ Direct audio podcast link detected.
+          </small>
+        `;
+      } else {
+        previewTarget.innerHTML = `<span style="color: #ef4444;">⚠️ Invalid audio URL.</span>`;
+      }
+    } else {
+      previewTarget.innerHTML = `
+        <div style="font-size: 0.9rem;">
+          🔗 Web link: <a href="${API.escapeHtml(API.safeUrl(url))}" target="_blank" rel="noopener noreferrer">${API.escapeHtml(url)}</a>
+        </div>
+      `;
+    }
+  }
+
+  if (mediaUrlInput) {
+    mediaUrlInput.addEventListener('input', updateLivePreview);
+    mediaUrlInput.addEventListener('change', updateLivePreview);
+  }
+  if (mediaTypeSelect) {
+    mediaTypeSelect.addEventListener('change', updateLivePreview);
+  }
+
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (alertBox) alertBox.innerHTML = '';
+
+      const submitBtn = document.getElementById('post-submit-btn');
+      const titleInput = document.getElementById('post-title-input');
+      const contentInput = document.getElementById('post-content-input');
+      const summaryInput = document.getElementById('post-summary-input');
+      const eventSelect = document.getElementById('post-event-id-select');
+
+      const title = (titleInput && titleInput.value) ? titleInput.value.trim() : '';
+      const content = (contentInput && contentInput.value) ? contentInput.value.trim() : '';
+      const summary = (summaryInput && summaryInput.value) ? summaryInput.value.trim() : '';
+      const media_url = (mediaUrlInput && mediaUrlInput.value) ? mediaUrlInput.value.trim() : '';
+      const media_type = (mediaTypeSelect && mediaTypeSelect.value) ? mediaTypeSelect.value : 'auto';
+      const event_id = (eventSelect && eventSelect.value) ? eventSelect.value : null;
+
+      if (!title || !content) {
+        if (alertBox) {
+          alertBox.innerHTML = `<div class="alert alert-error">Title and content are required.</div>`;
+        }
+        return;
+      }
+
+      try {
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.textContent = 'Publishing…';
+        }
+
+        await API.createPost({
+          title: title,
+          content: content,
+          summary: summary,
+          media_url: media_url,
+          media_type: media_type,
+          event_id: event_id
+        });
+
+        if (alertBox) {
+          alertBox.innerHTML = `
+            <div class="alert alert-success">
+              ✓ Highlight published successfully! Added to <a href="/feed.xml" target="_blank" rel="noopener noreferrer" style="text-decoration: underline;">/feed.xml</a> and the community homepage.
+            </div>
+          `;
+        }
+
+        form.reset();
+        updateLivePreview();
+        await loadAdminPosts();
+      } catch (err) {
+        if (alertBox) {
+          alertBox.innerHTML = `<div class="alert alert-error">${API.escapeHtml(err.message || 'Failed to publish highlight.')}</div>`;
+        }
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = '🚀 Publish Highlight to Community Feed & RSS';
+        }
+      }
+    });
+  }
+
+  loadAdminPosts();
+}
+
+function updateAdminPostEventDropdown(events) {
+  const select = document.getElementById('post-event-id-select');
+  if (!select) return;
+
+  const currentVal = select.value;
+  let html = '<option value="">-- No specific game --</option>';
+  if (Array.isArray(events)) {
+    events.forEach(ev => {
+      let dateLabel = '';
+      if (ev.date) {
+        try {
+          const d = new Date(ev.date);
+          dateLabel = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        } catch (e) {}
+      }
+      const title = ev.title || 'Pickup Game';
+      html += `<option value="${API.escapeHtml(String(ev.id))}">Game #${API.escapeHtml(String(ev.id))}: ${API.escapeHtml(title)}${dateLabel ? ' (' + API.escapeHtml(dateLabel) + ')' : ''}</option>`;
+    });
+  }
+  select.innerHTML = html;
+  if (currentVal) select.value = currentVal;
+}
+
+async function loadAdminPosts() {
+  const container = document.getElementById('admin-posts-container');
+  if (!container) return;
+
+  try {
+    const data = await API.getPosts();
+    const posts = (data && data.posts) ? data.posts : [];
+
+    if (posts.length === 0) {
+      container.innerHTML = `
+        <div style="text-align: center; padding: 24px; color: var(--text-muted); background: var(--bg-subtle); border-radius: var(--radius-sm);">
+          No highlights published yet. Use the form above to post the first game recap or photo!
+        </div>
+      `;
+      return;
+    }
+
+    const itemsHtml = posts.map(post => {
+      let dateLabel = '';
+      if (post.created_at) {
+        try {
+          const d = new Date(post.created_at);
+          dateLabel = d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+        } catch (e) {}
+      }
+
+      const mUrl = post.media_url ? String(post.media_url).trim() : '';
+      const mType = post.media_type || API.parseMediaType(mUrl);
+      let mediaBadge = '<span class="badge" style="background: var(--bg-subtle); color: var(--text-muted);">Text Only</span>';
+
+      if (mType === 'youtube') {
+        mediaBadge = '<span class="badge badge-orange">▶ YouTube Video</span>';
+      } else if (mType === 'image') {
+        mediaBadge = '<span class="badge badge-green">📷 Photo / Image</span>';
+      } else if (mType === 'video') {
+        mediaBadge = '<span class="badge badge-blue">🎬 Video Stream</span>';
+      } else if (mType === 'audio') {
+        mediaBadge = '<span class="badge badge-blue">🎙️ Audio Clip</span>';
+      } else if (mUrl) {
+        mediaBadge = '<span class="badge">🔗 Link</span>';
+      }
+
+      return `
+        <div class="card" style="margin-bottom: 12px; padding: 14px 18px; display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; flex-wrap: wrap;">
+          <div style="flex: 1; min-width: 240px;">
+            <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 6px; flex-wrap: wrap;">
+              ${mediaBadge}
+              <span style="font-size: 0.8rem; color: var(--text-muted);">${API.escapeHtml(dateLabel)}</span>
+              ${post.event_id ? `<span style="font-size: 0.8rem; color: var(--primary);">• ⚾ Game #${API.escapeHtml(String(post.event_id))}</span>` : ''}
+              ${post.author_name ? `<span style="font-size: 0.8rem; color: var(--text-muted);">• By ${API.escapeHtml(post.author_name)}</span>` : ''}
+            </div>
+            <h4 style="margin: 0 0 6px 0; font-size: 1.05rem; color: var(--text-primary);">${API.escapeHtml(post.title)}</h4>
+            <p style="margin: 0; font-size: 0.88rem; color: var(--text-muted); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
+              ${API.escapeHtml(post.content)}
+            </p>
+            ${mUrl ? `
+              <div style="margin-top: 6px; font-size: 0.8rem;">
+                <a href="${API.escapeHtml(API.safeUrl(mUrl))}" target="_blank" rel="noopener noreferrer" style="color: var(--primary); text-decoration: underline; word-break: break-all;">
+                  ${API.escapeHtml(mUrl)} ↗
+                </a>
+              </div>
+            ` : ''}
+          </div>
+          <div>
+            <button type="button" class="btn btn-outline btn-sm admin-delete-post-btn" data-post-id="${API.escapeHtml(String(post.id))}" style="color: #ef4444; border-color: #fca5a5;">
+              🗑️ Delete
+            </button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    container.innerHTML = itemsHtml;
+
+    container.querySelectorAll('.admin-delete-post-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const postId = btn.getAttribute('data-post-id');
+        if (!postId) return;
+        if (!confirm('Are you sure you want to permanently delete this highlight from the community feed and RSS?')) {
+          return;
+        }
+        try {
+          btn.disabled = true;
+          await API.deletePost(postId);
+          await loadAdminPosts();
+        } catch (err) {
+          alert(err.message || 'Failed to delete highlight.');
+          btn.disabled = false;
+        }
+      });
+    });
+  } catch (err) {
+    container.innerHTML = `<p style="color: var(--danger);">Failed to load highlights.</p>`;
+  }
 }
 
 document.addEventListener('DOMContentLoaded', initAdmin);

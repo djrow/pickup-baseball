@@ -4,7 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Dashboard - Sunday Pickup Baseball</title>
-  <link rel="stylesheet" href="/css/style.css?v=30">
+  <link rel="stylesheet" href="/css/style.css?v=31">
+  <link rel="alternate" type="application/rss+xml" title="Sunday Pickup Baseball Highlights &amp; Updates" href="/feed.xml">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png">
@@ -203,6 +204,95 @@
       </div>
     </section>
 
+    <!-- Community Highlights & RSS Feed Publisher -->
+    <section class="card" id="post-form-section" style="margin-top: 36px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
+        <div>
+          <h2 class="card-title" style="margin-bottom: 2px;">📢 Community Highlights &amp; RSS Feed</h2>
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0;">
+            Publish game recaps, video highlights, photo albums, and field updates. Automatically published to <a href="/feed.xml" target="_blank" rel="noopener noreferrer" style="text-decoration: underline;">/feed.xml</a> with Media RSS tags and displayed richly on the homepage.
+          </p>
+        </div>
+        <a href="/feed.xml" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm">
+          📡 View Live RSS Feed
+        </a>
+      </div>
+
+      <div id="post-form-alert"></div>
+
+      <form id="create-post-form">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+          <div class="form-group">
+            <label for="post-title-input">Headline / Title *</label>
+            <input type="text" id="post-title-input" placeholder="e.g. Bushrod Walk-Off Thriller! Highlights &amp; Recaps" required>
+          </div>
+
+          <div class="form-group">
+            <label for="post-event-id-select">Associated Game (Optional)</label>
+            <select id="post-event-id-select">
+              <option value="">-- No specific game --</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="post-content-input">Story / Recap Content *</label>
+          <textarea id="post-content-input" rows="4" placeholder="Write the game recap, volunteer shoutouts, inning details, or community announcement..." required></textarea>
+        </div>
+
+        <div class="form-group">
+          <label for="post-summary-input">Short Summary / Subtitle (Optional, used in RSS summaries)</label>
+          <input type="text" id="post-summary-input" placeholder="One-line summary for feed readers...">
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+          <div class="form-group">
+            <label for="post-media-url-input">External Multimedia URL (Optional)</label>
+            <input type="url" id="post-media-url-input" placeholder="https://www.youtube.com/watch?v=... or https://imgur.com/... or image link">
+            <small style="color: var(--text-muted); display: block; margin-top: 4px;">
+              Supports YouTube videos/shorts, image links (Imgur, direct JPG/PNG/WebP), direct video (.mp4/.webm), or audio podcasts.
+            </small>
+          </div>
+
+          <div class="form-group">
+            <label for="post-media-type-select">Media Format</label>
+            <select id="post-media-type-select">
+              <option value="auto">Auto-detect from link</option>
+              <option value="youtube">YouTube Video / Short</option>
+              <option value="image">Photo / Image</option>
+              <option value="video">Direct Video Clip (.mp4)</option>
+              <option value="audio">Audio Podcast / Broadcast (.mp3)</option>
+              <option value="none">No Media (Text Only)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Real-Time Multimedia Live Preview -->
+        <div id="post-media-preview-container" style="display: none; margin-top: 10px; margin-bottom: 20px; padding: 14px; background: var(--bg-hover); border-radius: var(--radius-sm); border: 1px dashed var(--border);">
+          <div style="font-size: 0.85rem; font-weight: 700; color: var(--text-muted); margin-bottom: 8px;">
+            📺 Multimedia Live Preview
+          </div>
+          <div id="post-media-preview-target"></div>
+        </div>
+
+        <div style="margin-top: 16px; display: flex; gap: 10px; align-items: center;">
+          <button type="submit" id="post-submit-btn" class="btn btn-primary" style="font-weight: 700;">
+            🚀 Publish Highlight to Community Feed &amp; RSS
+          </button>
+        </div>
+      </form>
+
+      <!-- Manage Existing Published Highlights -->
+      <div style="margin-top: 36px; padding-top: 24px; border-top: 1px solid var(--border);">
+        <h3 style="font-size: 1.15rem; color: var(--secondary); margin-bottom: 12px;">
+          Published Community Highlights
+        </h3>
+        <div id="admin-posts-container">
+          <p style="color: var(--text-muted);">Loading highlights...</p>
+        </div>
+      </div>
+    </section>
+
     <!-- User Management & Roles (Admins only) -->
     <section id="admin-user-mgmt-section" class="card" style="margin-top: 36px; display: none;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
@@ -237,7 +327,7 @@
 
   <footer id="site-footer" class="site-footer"></footer>
 
-  <script src="/js/api.js?v=30"></script>
-  <script src="/js/admin.js?v=30"></script>
+  <script src="/js/api.js?v=31"></script>
+  <script src="/js/admin.js?v=31"></script>
 </body>
 </html>

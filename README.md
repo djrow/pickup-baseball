@@ -113,10 +113,19 @@ Designed with a **10+ year longevity philosophy**:
     - User account removal, email ban list (`banned_emails`), guest RSVP policy toggle, and one-click roster/comment moderation.
 
 13. **Comprehensive Zero-Dependency Acceptance Test Suite**:
-    - 55-test automated end-to-end verification suite in `scripts/verify-all.js` using native Node.js v22 test runner (`node:test`, `node:assert/strict`, `fetch`) with zero third-party test dependencies.
-    - Rigorously validates magic link authentication, 4-tier RBAC permission boundaries, group RSVPs (players, spectators, and off-field volunteers), group task ownership, RSVP whitelists, waitlist queue promotions, rainout incident notifications, rolling calendar horizons, live cloud `.ics` feeds, and version negotiation.
+    - 56-test automated end-to-end verification suite in `scripts/verify-all.js` using native Node.js v22 test runner (`node:test`, `node:assert/strict`, `fetch`) with zero third-party test dependencies.
+    - Rigorously validates magic link authentication, 4-tier RBAC permission boundaries, group RSVPs (players, spectators, and off-field volunteers), group task ownership, RSVP whitelists, waitlist queue promotions, rainout incident notifications, rolling calendar horizons, live cloud `.ics` feeds, RSS 2.0 Media feed, multimedia embeds, and version negotiation.
 
-14. **User & Maintenance Handbook, Development Narrative, & Open Source**:
+14. **RSS 2.0 & Media RSS Feed with Zero-Host Multimedia Interpretation**:
+    - Standard **RSS 2.0 + Media RSS** feed endpoint (`/feed.xml` and `/api/feed.xml`) equipped with autodiscovery `<link rel="alternate" type="application/rss+xml" href="/feed.xml">` and RFC 822 timestamps.
+    - **Zero Cloudflare Media Storage Overhead**: Organizers and admins post game recaps, video clips, and photo albums without hosting heavy media files on Cloudflare. The database stores only external URLs, titles, and text while multimedia streams directly from external platforms.
+    - **Rich In-App Interpretation & Display**:
+      - **YouTube videos & shorts**: Translated into responsive 16:9 privacy-preserving embeds (`youtube-nocookie.com`) with automated video ID resolution.
+      - **Photos & Albums**: Rendered as responsive lazy-loaded photo cards with RSS `<enclosure>` and `<media:content>` tags.
+      - **Video & Audio**: Rendered with native HTML5 `<video controls playsinline>` and `<audio controls>`.
+    - Real-time live multimedia preview and post management on `public/admin.html`.
+
+15. **User & Maintenance Handbook, Development Narrative, & Open Source**:
     - Practical guide to using every feature and making manual code edits by hand in **[`HANDBOOK.md`](HANDBOOK.md)**.
     - Complete chronicle of all architectural decisions, edge migrations, and technical phases in **[`DEVELOPMENT_NARRATIVE.md`](DEVELOPMENT_NARRATIVE.md)**.
     - Direct GitHub repository link in the site footer beside *"Free & open-source"*.

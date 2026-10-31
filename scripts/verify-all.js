@@ -55,7 +55,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-const CURRENT_APP_VERSION = '30';
+const CURRENT_APP_VERSION = '31';
 app.use((req, res, next) => {
   res.setHeader('X-App-Version', CURRENT_APP_VERSION);
   next();
@@ -63,9 +63,13 @@ app.use((req, res, next) => {
 app.get('/api/version', (req, res) => {
   res.json({ version: CURRENT_APP_VERSION });
 });
+const { router: postRoutes, serveFeedXml } = require('../src/routes/posts');
 app.use(express.static(path.join(__dirname, '..', 'public')));
 app.use('/api/auth', authRoutes);
 app.use('/api/events', eventRoutes);
+app.use('/api/posts', postRoutes);
+app.get('/api/feed.xml', serveFeedXml);
+app.get('/feed.xml', serveFeedXml);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() });
@@ -1422,5 +1426,131 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(readmeMd.includes('Built with Google Gemini in October 2026 for simplicity and durability'), 'README.md must include Built with Google Gemini in October 2026 for simplicity and durability');
     assert.ok(readmeMd.includes('(HANDBOOK.md)'), 'README.md must link to HANDBOOK.md');
     assert.ok(fs.existsSync(path.join(__dirname, '..', 'HANDBOOK.md')), 'HANDBOOK.md must exist in repository root');
+  });
+
+  await test('T9.17: RSS 2.0 Feed with Media RSS, Multimedia Interpretation, and Highlights Lifecycle', async () => {
+    const publicDir = path.join(__dirname, '..', 'public');
+
+    // 1. Verify player without organizer privileges cannot create posts
+    const unauthPost = await apiReq('POST', '/api/posts', seedPlayerCookie, {
+      title: 'Hacker Post',
+      content: 'Should be rejected'
+    });
+    assert.equal(unauthPost.status, 403, 'Regular players must be denied posting rights');
+
+    // 2. Organizer creates YouTube highlight post
+    const ytPostRes = await apiReq('POST', '/api/posts', seedOrgCookie, {
+      title: 'Walk-Off Grand Slam Highlights & Dugout Celebration',
+      content: 'Incredible finish at Bushrod Park Field 1! Bottom of the 9th bases-loaded comeback.',
+      summary: 'Game-winning grand slam recap with full video clip.',
+      media_url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      media_type: 'auto'
+    });
+    assert.equal(ytPostRes.status, 200, 'Organizer should successfully create YouTube highlight');
+    assert.ok(ytPostRes.data.post && ytPostRes.data.post.id, 'Created post must return post with id');
+    const ytPostId = ytPostRes.data.post.id;
+    assert.equal(ytPostRes.data.post.media_type, 'youtube', 'Should auto-detect youtube media type');
+
+    // 3. Organizer creates Image highlight post
+    const imgPostRes = await apiReq('POST', '/api/posts', seedOrgCookie, {
+      title: 'October Game Day Photo Album & Team Portrait',
+      content: 'Great turnout today with 22 community players on the field. Check out the team photo!',
+      media_url: 'https://i.imgur.com/exampleBushrodPhoto.jpg',
+      media_type: 'auto'
+    });
+    assert.equal(imgPostRes.status, 200);
+    const imgPostId = imgPostRes.data.post.id;
+    assert.equal(imgPostRes.data.post.media_type, 'image', 'Should auto-detect image media type');
+
+    // 4. Organizer creates Text-only announcement
+    const textPostRes = await apiReq('POST', '/api/posts', seedOrgCookie, {
+      title: 'Field Rakes & Equipment Maintenance Notice',
+      content: 'Big thanks to everyone who helped drag the infield and inventory the game baseballs bucket.',
+      media_type: 'none'
+    });
+    assert.equal(textPostRes.status, 200);
+    const textPostId = textPostRes.data.post.id;
+
+    // 5. Verify GET /api/posts returns newly created posts with correct metadata
+    const postsListRes = await apiReq('GET', '/api/posts', null);
+    assert.equal(postsListRes.status, 200);
+    assert.ok(Array.isArray(postsListRes.data.posts), 'GET /api/posts must return posts array');
+    const returnedPosts = postsListRes.data.posts;
+    assert.ok(returnedPosts.some(p => p.id === ytPostId), 'Posts list must contain YouTube post');
+    assert.ok(returnedPosts.some(p => p.id === imgPostId), 'Posts list must contain Image post');
+    assert.ok(returnedPosts.some(p => p.id === textPostId), 'Posts list must contain Text post');
+
+    // 6. Verify GET /feed.xml and GET /api/feed.xml return valid RFC 822 + Media RSS XML
+    for (const feedPath of ['/feed.xml', '/api/feed.xml']) {
+      const feedRes = await fetch(`${baseUrl}${feedPath}`);
+      assert.equal(feedRes.status, 200, `${feedPath} must respond 200 OK`);
+      const contentType = feedRes.headers.get('content-type') || '';
+      assert.ok(contentType.includes('application/rss+xml'), `${feedPath} must return application/rss+xml`);
+      const xml = await feedRes.text();
+
+      // Check root RSS & Media RSS namespaces
+      assert.ok(xml.includes('<rss version="2.0"'), 'Feed must be RSS 2.0');
+      assert.ok(xml.includes('xmlns:media="http://search.yahoo.com/mrss/"'), 'Feed must define Yahoo Media RSS namespace');
+      assert.ok(xml.includes('xmlns:atom="http://www.w3.org/2005/Atom"'), 'Feed must define Atom namespace');
+      assert.ok(xml.includes('<atom:link') && xml.includes('rel="self" type="application/rss+xml"'), 'Feed must declare self Atom link');
+
+      // Check YouTube item with media tags & player embed
+      assert.ok(xml.includes('Walk-Off Grand Slam Highlights & Dugout Celebration'), 'Feed must include YouTube post title');
+      assert.ok(xml.includes('<media:content url="https://www.youtube.com/watch?v=dQw4w9WgXcQ" medium="video">'), 'Feed must output media:content for YouTube');
+      assert.ok(xml.includes('<media:player url="https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ" />'), 'Feed must output media:player with nocookie embed');
+      assert.ok(xml.includes('<media:thumbnail url="https://img.youtube.com/vi/dQw4w9WgXcQ/hqdefault.jpg" />'), 'Feed must output media:thumbnail for YouTube');
+
+      // Check Image item with media tags & enclosure
+      assert.ok(xml.includes('<media:content url="https://i.imgur.com/exampleBushrodPhoto.jpg" medium="image" />'), 'Feed must output media:content for image');
+      assert.ok(xml.includes('<enclosure url="https://i.imgur.com/exampleBushrodPhoto.jpg" type="image/jpeg" length="0" />'), 'Feed must output enclosure for image');
+    }
+
+    // 7. Verify post deletion lifecycle
+    const unauthDel = await apiReq('DELETE', `/api/posts/${textPostId}`, seedPlayerCookie);
+    assert.equal(unauthDel.status, 403, 'Regular player cannot delete posts');
+
+    const authDel = await apiReq('DELETE', `/api/posts/${textPostId}`, seedOrgCookie);
+    assert.equal(authDel.status, 200, 'Organizer must successfully delete post');
+
+    const postsAfterDel = await apiReq('GET', '/api/posts', null);
+    assert.ok(!postsAfterDel.data.posts.some(p => p.id === textPostId), 'Deleted post must no longer appear in /api/posts');
+
+    // 8. Verify Frontend Autodiscovery, Templates & Security Headers
+    const indexHtml = fs.readFileSync(path.join(publicDir, 'index.html'), 'utf8');
+    assert.ok(indexHtml.includes('<link rel="alternate" type="application/rss+xml"'), 'index.html must include RSS autodiscovery link');
+    assert.ok(indexHtml.includes('id="community-feed-section"'), 'index.html must include community feed section');
+    assert.ok(indexHtml.includes('id="feed-posts-container"'), 'index.html must include feed posts container');
+
+    const adminHtml = fs.readFileSync(path.join(publicDir, 'admin.html'), 'utf8');
+    assert.ok(adminHtml.includes('id="post-form-section"'), 'admin.html must include post creator form section');
+    assert.ok(adminHtml.includes('id="post-media-preview-container"'), 'admin.html must include multimedia live preview');
+
+    const headersFile = fs.readFileSync(path.join(publicDir, '_headers'), 'utf8');
+    assert.ok(headersFile.includes('https://www.youtube-nocookie.com'), 'CSP must allow YouTube nocookie player in frame-src');
+    assert.ok(headersFile.includes('https://www.youtube.com'), 'CSP must allow YouTube in frame-src');
+    assert.ok(headersFile.includes("media-src 'self' https: data:"), 'CSP must allow external media sources');
+    assert.ok(headersFile.includes('/feed.xml'), '_headers must configure feed.xml caching');
+
+    const routesJson = JSON.parse(fs.readFileSync(path.join(publicDir, '_routes.json'), 'utf8'));
+    assert.ok(routesJson.include && routesJson.include.includes('/feed.xml'), '_routes.json must include /feed.xml');
+
+    const feedFunctionExists = fs.existsSync(path.join(__dirname, '..', 'functions', 'feed.xml.js'));
+    assert.ok(feedFunctionExists, 'functions/feed.xml.js must exist for Cloudflare Pages edge rendering');
+
+    // 9. Verify zero ES2020+ incompatible syntax (?. or ??) in client JS
+    const jsFiles = ['api.js', 'app.js', 'admin.js', 'event.js', 'archive.js'];
+    for (const file of jsFiles) {
+      const code = fs.readFileSync(path.join(publicDir, 'js', file), 'utf8');
+      const lines = code.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (/\?\./.test(line) && !/regex|\/|\.test\(|match\(/.test(line)) {
+          assert.fail(`Found disallowed optional chaining (?.) in public/js/${file} at line ${i + 1}: ${line.trim()}`);
+        }
+        if (/\?\?/.test(line)) {
+          assert.fail(`Found disallowed nullish coalescing (??) in public/js/${file} at line ${i + 1}: ${line.trim()}`);
+        }
+      }
+    }
   });
 });

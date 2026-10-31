@@ -33,7 +33,10 @@
 - **[24. Phase 23: Pure Calendar-Driven Landing Page](#24-phase-23-pure-calendar-driven-landing-page-removal-of-featured-game-card)** — Removed redundant "Next Sunday Pickup" featured card, calendar-first landing.
 - **[25. Phase 24: Anchoring 'Next Game' & 'Past Game' Badges to Real-World Timeline](#25-phase-24-anchoring-next-game--past-game-badges-to-real-world-timeline)** — Decoupled pills from pagination index, strict `trueNextGameKey` and `dateKey < todayKey` anchoring.
 - **[26. Phase 25: Loading Full Event Dataset for Authentic Past Game Rendering](#26-phase-25-loading-full-event-dataset-for-authentic-past-game-rendering)** — Switched home query from `upcoming` to `all`, restoring recorded event data (e.g. Oct 25 turnout, location, and recap).
-- **[27. Future Roadmap Notes](#27-future-roadmap-notes)** — Full-stack Rust / WebAssembly edge migration architecture.
+- **[27. Phase 26: Simplified Group RSVPs — Players, Spectators & Group-Owned Volunteer Tasks](#27-phase-26-simplified-group-rsvps--players-spectators--group-owned-volunteer-tasks)** — Mutually exclusive player/spectator headcount model, group-level task ownership, waitlist capacity isolation.
+- **[28. Phase 27: Live Cloud Calendar Sync Indicator, Auto-Refresh & Live .ics Subscription Feed](#28-phase-27-live-cloud-calendar-sync-indicator-auto-refresh--live-ics-subscription-feed)** — Real-time cloud verification pill, visibility/network auto-refresh, live RFC 5545 calendar stream.
+- **[29. Phase 28: RSS 2.0 & Media RSS Community Feed, Zero-Host Multimedia Interpretation & Edge Highlights](#29-phase-28-rss-20--media-rss-community-feed-zero-host-multimedia-interpretation--edge-highlights)** — Standard RSS 2.0 + Media RSS feed, zero-storage Cloudflare external links, rich in-app YouTube/image/video interpretation, live preview.
+- **[30. Future Roadmap Notes](#30-future-roadmap-notes)** — Full-stack Rust / WebAssembly edge migration architecture.
 
 ---
 
@@ -427,5 +430,32 @@ Eliminated ambiguity between locally cached schedule snapshots and the live Clou
 
 ---
 
-## 29. Future Roadmap Notes
+## 29. Phase 28: RSS 2.0 & Media RSS Community Feed, Zero-Host Multimedia Interpretation & Edge Highlights
+Implemented a lightweight, zero-storage multimedia publishing and syndication architecture (`/feed.xml`, `d1_schema.sql`, `public/index.html`, `public/admin.html`, `public/js/api.js`, `public/js/app.js`, `public/js/admin.js`, `src/routes/posts.js`, `functions/api/[[route]].js`, `functions/feed.xml.js`):
+- **Zero-Storage Cloudflare Architecture (Option B):**
+  - Solved the requirement for sharing game video clips, recaps, and photos without incurring Cloudflare storage fees or bloating D1 database limits.
+  - Added lightweight `posts` schema (`id, title, content, summary, media_url, media_type, author_id, author_name, event_id, created_at`) storing only textual data and external media links.
+- **RFC 822 & Yahoo Media RSS Syndication (`/feed.xml` and `/api/feed.xml`):**
+  - Built standards-compliant RSS 2.0 feed generator with Yahoo Media RSS (`xmlns:media="http://search.yahoo.com/mrss/"`) and Atom (`xmlns:atom="http://www.w3.org/2005/Atom"`) namespace support.
+  - Renders `<media:content>`, `<media:player>`, and `<media:thumbnail>` for YouTube clips, and `<media:content>` + `<enclosure>` for direct images, videos, and audio.
+  - Added dedicated edge Function `functions/feed.xml.js` and route inclusion in `public/_routes.json` so edge requests are handled directly with `Cache-Control: no-cache, no-store`.
+  - Added autodiscovery `<link rel="alternate" type="application/rss+xml" ...>` tags in the `<head>` of all HTML pages.
+- **Rich In-App Interpretation & Real-Time Multimedia Live Preview:**
+  - YouTube videos & shorts auto-resolve video IDs to privacy-preserving 16:9 nocookie embeds (`https://www.youtube-nocookie.com/embed/...`).
+  - Image links render into responsive lazy-loaded photo cards with zoom links.
+  - Direct video/audio links render into native HTML5 `<video controls playsinline>` and `<audio controls>` players.
+  - Publisher form on `public/admin.html` features real-time live multimedia preview that dynamically updates on link entry, alongside dropdown association with scheduled Sunday games.
+  - Homepage (`index.html`) displays a responsive **📢 Highlights & Community Updates** card grid between the calendar and "How It Works".
+- **Security & Performance Hardening:**
+  - Updated Content Security Policy (CSP) in `public/_headers`: expanded `frame-src` to allow `https://www.youtube-nocookie.com https://www.youtube.com` and added `media-src 'self' https: data:`.
+  - Configured Service Worker (`public/sw.js`) to treat `/feed.xml` as network-only (bypassing stale cache).
+  - Maintained strict ES6 compatibility (0 occurrences of `?.` or `??`) across all frontend JavaScript files.
+- **Automated Verification & Version Bump:**
+  - Added acceptance test `T9.17` in `scripts/verify-all.js` validating post lifecycle, auto-detection, RFC 822 / Media RSS XML output, CSP rules, and ES6 compatibility.
+  - Bumped cache bust version to `v31` across all client, server, service worker, and HTML asset links (`CLIENT_VERSION: '31'`, `CURRENT_APP_VERSION = '31'`, `CACHE_NAME = 'pbf-cache-v31'`).
+  - All 56 automated tests in `scripts/verify-all.js` pass with 100% success rate.
+
+---
+
+## 30. Future Roadmap Notes
 - **Pinned Full-Stack Rust / WebAssembly Migration:** Evaluated a future 4-phase rewrite of the Cloudflare Pages Functions backend (and optional frontend interactivity) to Rust (`workers-rs` compiling to WebAssembly) for compile-time type safety, zero-dependency binary durability, and strict edge memory safety—kept as a guiding north star when designing new features and data models.

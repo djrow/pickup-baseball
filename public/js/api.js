@@ -99,6 +99,15 @@ const EN_DICT = {
   "home.duties_configured": "{count} Tasks Configured",
   "home.skill_levels_note": "⚾ Open to all skill levels. Need gear or can bring some? Click below to let the team know.",
   "home.join_roster_btn": "Join Roster / Volunteer for Tasks",
+  "feed.heading": "Highlights & Community Updates",
+  "feed.subtitle": "Game recaps, video highlights, photo albums, and field announcements.",
+  "feed.rss_btn": "📡 RSS Feed",
+  "feed.new_post_btn": "+ New Highlight",
+  "feed.no_posts_title": "No Highlights Posted Yet",
+  "feed.no_posts_desc": "Check back soon for game recaps, photo albums, video clips, and announcements!",
+  "feed.confirm_delete": "Delete this highlight from the community feed and RSS?",
+  "feed.delete_btn": "Delete",
+  "feed.game_badge": "⚾ Game Link",
   "how.title": "How Our Pickup Baseball Program Works",
   "how.s1_title": "1. RSVP Anytime",
   "how.s1_desc": "Sign up in seconds as a guest or with just your name & email. Knowing player numbers helps us balance teams and pick the right field.",
@@ -280,7 +289,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '30',
+  CLIENT_VERSION: '31',
 
   // Current user cache
   currentUser: null,
@@ -1000,6 +1009,42 @@ const API = {
     }
   },
 
+  async getPosts() {
+    const res = await fetch('/api/posts', { cache: 'no-store' });
+    this.checkResponseVersion(res);
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error((data && data.error) ? data.error : 'Failed to load community highlights.');
+    }
+    return data;
+  },
+
+  async createPost(payload) {
+    const res = await fetch('/api/posts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {})
+    });
+    this.checkResponseVersion(res);
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error((data && data.error) ? data.error : 'Failed to publish post.');
+    }
+    return data;
+  },
+
+  async deletePost(id) {
+    const res = await fetch('/api/posts/' + encodeURIComponent(id), {
+      method: 'DELETE'
+    });
+    this.checkResponseVersion(res);
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error((data && data.error) ? data.error : 'Failed to delete post.');
+    }
+    return data;
+  },
+
   async getEvents(filter = 'upcoming') {
     const res = await fetch(`/api/events?filter=${encodeURIComponent(filter)}`, { cache: 'no-store' });
     this.checkResponseVersion(res);
@@ -1387,6 +1432,37 @@ const API = {
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
+  },
+
+  parseMediaType(url, explicitType) {
+    if (explicitType && explicitType !== 'auto') return explicitType;
+    if (!url) return 'none';
+    const u = String(url).trim();
+    if (/youtube\.com\/watch\?|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\//i.test(u)) {
+      return 'youtube';
+    }
+    if (/\.(jpeg|jpg|png|webp|gif|svg)(\?.*)?$/i.test(u) || /imgur\.com\//i.test(u)) {
+      return 'image';
+    }
+    if (/\.(mp4|webm|mov)(\?.*)?$/i.test(u)) {
+      return 'video';
+    }
+    if (/\.(mp3|wav|ogg|m4a)(\?.*)?$/i.test(u)) {
+      return 'audio';
+    }
+    return 'link';
+  },
+
+  getYouTubeId(url) {
+    if (!url) return null;
+    const match = String(url).match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([\w-]{11})/i);
+    return match ? match[1] : null;
+  },
+
+  getYouTubeEmbedUrl(url) {
+    const id = this.getYouTubeId(url);
+    if (!id) return '';
+    return 'https://www.youtube-nocookie.com/embed/' + id;
   },
 
   safeUrl(rawUrl) {
