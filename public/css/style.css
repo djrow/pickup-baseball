@@ -1510,6 +1510,76 @@ header.site-header {
   background-color: var(--bg-subtle);
 }
 
+/* Compact Scrollable Admin Accounts Table */
+.admin-users-scroll-container {
+  max-height: 380px;
+  overflow-y: auto;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  position: relative;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) var(--bg-card);
+}
+
+.admin-users-scroll-container::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.admin-users-scroll-container::-webkit-scrollbar-track {
+  background: var(--bg-subtle);
+}
+
+.admin-users-scroll-container::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+.admin-users-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+.admin-users-scroll-container thead th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-card);
+  z-index: 2;
+  box-shadow: 0 1px 0 var(--border);
+}
+
+/* Compact data table modifiers */
+.data-table-compact th {
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
+}
+
+.data-table-compact td {
+  padding: 5px 10px;
+  font-size: 0.82rem;
+  line-height: 1.25;
+}
+
+.data-table-compact .admin-role-selector {
+  padding: 2px 6px;
+  font-size: 0.8rem;
+  height: 28px;
+  border-radius: var(--radius-sm);
+}
+
+.data-table-compact .btn-delete-user {
+  padding: 2px 8px;
+  font-size: 0.76rem;
+  height: 26px;
+  line-height: 1.2;
+}
+
+.data-table-compact .badge {
+  padding: 2px 6px;
+  font-size: 0.72rem;
+}
+
 .duty-card {
   background: var(--bg-card);
   border: 1px solid var(--border);

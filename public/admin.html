@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Dashboard - Sunday Pickup Baseball</title>
-  <link rel="stylesheet" href="/css/style.css?v=32">
+  <link rel="stylesheet" href="/css/style.css?v=33">
   <link rel="alternate" type="application/rss+xml" title="Sunday Pickup Baseball Highlights &amp; Updates" href="/feed.xml">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
@@ -295,23 +295,40 @@
 
     <!-- User Management & Roles (Admins only) -->
     <section id="admin-user-mgmt-section" class="card" style="margin-top: 36px; display: none;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
         <div>
           <h2 class="card-title" style="margin-bottom: 2px;">👥 User Roles & Permissions</h2>
           <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0;">Change account roles to assign Organizer or Admin privileges.</p>
         </div>
         <button type="button" id="admin-refresh-users-btn" class="btn btn-outline btn-sm">🔄 Refresh</button>
       </div>
+
       <div id="admin-user-mgmt-alert"></div>
-      <div class="table-responsive" style="border: 1px solid var(--border); border-radius: var(--radius-sm);">
-        <table class="data-table">
+
+      <!-- Live Search & Filter Controls -->
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
+        <div style="position: relative; flex: 1; max-width: 380px; min-width: 220px;">
+          <input
+            type="text"
+            id="admin-user-search-input"
+            placeholder="🔍 Filter accounts by name or email..."
+            style="width: 100%; font-size: 0.84rem; padding: 6px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border); background: var(--bg-input); color: var(--text-main);"
+            autocomplete="off"
+            aria-label="Filter accounts by name or email"
+          >
+        </div>
+        <div id="admin-user-count-display" style="font-size: 0.82rem; color: var(--text-muted); font-weight: 600;"></div>
+      </div>
+
+      <div id="admin-users-scroll-container" class="table-responsive admin-users-scroll-container">
+        <table class="data-table data-table-compact">
           <thead>
             <tr>
-              <th>User Account</th>
-              <th>Games Attended</th>
-              <th>Current Role</th>
-              <th>Change Role</th>
-              <th>Actions</th>
+              <th style="min-width: 180px;">User Account</th>
+              <th style="min-width: 110px;">Games Attended</th>
+              <th style="min-width: 120px;">Current Role</th>
+              <th style="min-width: 150px;">Change Role</th>
+              <th style="min-width: 100px;">Actions</th>
             </tr>
           </thead>
           <tbody id="admin-users-table-body">
@@ -327,7 +344,7 @@
 
   <footer id="site-footer" class="site-footer"></footer>
 
-  <script src="/js/api.js?v=32"></script>
-  <script src="/js/admin.js?v=32"></script>
+  <script src="/js/api.js?v=33"></script>
+  <script src="/js/admin.js?v=33"></script>
 </body>
 </html>

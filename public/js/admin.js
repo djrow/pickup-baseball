@@ -1038,151 +1038,197 @@ function setupAdminUserManagement(currentUser) {
   const alertBox = document.getElementById('admin-user-mgmt-alert');
   const tableBody = document.getElementById('admin-users-table-body');
   const refreshBtn = document.getElementById('admin-refresh-users-btn');
+  const searchInput = document.getElementById('admin-user-search-input');
+  const countDisplay = document.getElementById('admin-user-count-display');
+
+  let cachedUsers = [];
+
+  function renderUsersList() {
+    const rawQuery = (searchInput && searchInput.value) ? searchInput.value : '';
+    const query = rawQuery.trim().toLowerCase();
+
+    let filtered = cachedUsers;
+    if (query) {
+      filtered = cachedUsers.filter(u => {
+        const name = (u.name || '').toLowerCase();
+        const email = (u.email || '').toLowerCase();
+        return name.indexOf(query) !== -1 || email.indexOf(query) !== -1;
+      });
+    }
+
+    if (countDisplay) {
+      if (cachedUsers.length === 0) {
+        countDisplay.textContent = '0 accounts';
+      } else if (query) {
+        countDisplay.textContent = `Showing ${filtered.length} of ${cachedUsers.length} accounts`;
+      } else {
+        countDisplay.textContent = `${cachedUsers.length} account${cachedUsers.length === 1 ? '' : 's'}`;
+      }
+    }
+
+    if (cachedUsers.length === 0) {
+      tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 14px;">No users registered yet.</td></tr>';
+      return;
+    }
+
+    if (filtered.length === 0) {
+      tableBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 20px; font-size: 0.85rem;">No accounts found matching "<strong>${API.escapeHtml(query)}</strong>"</td></tr>`;
+      return;
+    }
+
+    tableBody.innerHTML = filtered.map(u => {
+      const isMe = u.id === currentUser.id;
+      let roleBadge = '<span class="badge badge-gray">👤 Player</span>';
+      if (u.role === 'admin') {
+        roleBadge = '<span class="badge badge-orange">👑 Admin</span>';
+      } else if (u.role === 'organizer') {
+        roleBadge = '<span class="badge badge-green">🛡️ Organizer</span>';
+      } else if (u.role === 'facilitator') {
+        roleBadge = '<span class="badge badge-blue">📋 Facilitator</span>';
+      }
+
+      const gamesCount = (typeof u.eventsAttended === 'number') ? u.eventsAttended : 0;
+
+      return `
+        <tr>
+          <td style="padding: 5px 10px;">
+            <div style="font-weight: 700; color: var(--secondary); font-size: 0.84rem; line-height: 1.2;">
+              ${API.escapeHtml(u.name)}
+              ${isMe ? '<span style="color: var(--primary); font-size: 0.75rem; margin-left: 4px; font-weight: 600;">(You)</span>' : ''}
+            </div>
+            <div style="font-size: 0.77rem; color: var(--text-muted); font-family: monospace; line-height: 1.2;">${API.escapeHtml(u.email)}</div>
+          </td>
+          <td style="padding: 5px 10px; font-weight: 600; font-size: 0.82rem; white-space: nowrap;">
+            ${gamesCount} game${gamesCount === 1 ? '' : 's'}
+          </td>
+          <td style="padding: 5px 10px; white-space: nowrap;">
+            ${roleBadge}
+          </td>
+          <td style="padding: 5px 10px;">
+            <select class="admin-role-selector" data-user-id="${u.id}" data-user-name="${API.escapeHtml(u.name)}" style="padding: 2px 6px; border-radius: var(--radius-sm); border: 1.5px solid var(--border); font-size: 0.8rem; font-weight: 600; background: var(--bg-input); color: var(--text-main); cursor: pointer; height: 28px;">
+              <option value="player" ${u.role === 'player' ? 'selected' : ''}>👤 Player</option>
+              <option value="facilitator" ${u.role === 'facilitator' ? 'selected' : ''}>📋 Facilitator (Game Day Lead)</option>
+              <option value="organizer" ${u.role === 'organizer' ? 'selected' : ''}>🛡️ Organizer (Can Post Games)</option>
+              <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>👑 Admin (Full Access)</option>
+            </select>
+          </td>
+          <td style="padding: 5px 10px; white-space: nowrap;">
+            ${isMe ? '<span style="color: var(--text-muted); font-size: 0.78rem;">(Your account)</span>' : `
+              <button type="button" class="btn btn-outline btn-sm btn-delete-user" data-user-id="${u.id}" data-user-email="${API.escapeHtml(u.email)}" style="color: var(--danger); border-color: var(--danger); font-size: 0.75rem; padding: 2px 8px; height: 26px; line-height: 1.2; font-weight: 600;">
+                🗑️ Remove
+              </button>
+            `}
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    bindUserRowEvents();
+  }
+
+  function bindUserRowEvents() {
+    tableBody.querySelectorAll('.btn-delete-user').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const targetUserId = e.currentTarget.getAttribute('data-user-id');
+        const targetUserEmail = e.currentTarget.getAttribute('data-user-email');
+
+        if (!confirm(`Are you sure you want to permanently remove user account: ${targetUserEmail}?`)) {
+          return;
+        }
+
+        const alsoBan = confirm(`Would you also like to permanently BAN ${targetUserEmail} from re-registering or signing in again?`);
+        alertBox.innerHTML = `<div class="alert alert-info" style="font-size: 0.88rem;">Removing ${API.escapeHtml(targetUserEmail)}...</div>`;
+
+        try {
+          const deleteRes = await API.deleteUser(targetUserId, alsoBan, 'Banned by admin');
+          if (deleteRes.error) {
+            alertBox.innerHTML = `<div class="alert alert-error" style="font-size: 0.88rem;">${API.escapeHtml(deleteRes.error)}</div>`;
+          } else {
+            alertBox.innerHTML = `<div class="alert alert-success" style="font-size: 0.88rem;">✓ ${API.escapeHtml(deleteRes.message)}</div>`;
+            await loadUsers();
+          }
+        } catch (err) {
+          alertBox.innerHTML = `<div class="alert alert-error" style="font-size: 0.88rem;">Failed to remove user account.</div>`;
+        }
+      });
+    });
+
+    tableBody.querySelectorAll('.admin-role-selector').forEach(sel => {
+      sel.addEventListener('change', async (e) => {
+        const targetUserId = e.target.getAttribute('data-user-id');
+        const targetUserName = e.target.getAttribute('data-user-name');
+        const newRole = e.target.value;
+
+        alertBox.innerHTML = `<div class="alert alert-info" style="font-size: 0.88rem;">Updating role for ${API.escapeHtml(targetUserName)}...</div>`;
+
+        try {
+          const updateRes = await API.updateUserRole(targetUserId, newRole);
+          if (updateRes.error) {
+            alertBox.innerHTML = `<div class="alert alert-error" style="font-size: 0.88rem;">${API.escapeHtml(updateRes.error)}</div>`;
+            await loadUsers();
+          } else {
+            const isSelf = parseInt(targetUserId, 10) === currentUser.id;
+            const isSelfDemotion = isSelf && newRole !== 'admin';
+
+            if (isSelf) {
+              currentUser.role = newRole;
+              currentUser.isAdmin = (newRole === 'admin');
+              currentUser.canManageEvents = (newRole === 'admin' || newRole === 'organizer');
+              currentAdminUser = currentUser;
+              API.renderNav(currentUser);
+            }
+
+            if (isSelfDemotion) {
+              const roleTitle = newRole === 'organizer' ? 'Organizer' : 'Player';
+              alertBox.innerHTML = `<div class="alert alert-success" style="font-size: 0.88rem;">Your role has been updated to ${roleTitle}. Admin management features are now restricted.</div>`;
+
+              applyRoleUI(currentUser);
+              await loadAdminGames();
+
+              if (newRole === 'player') {
+                setTimeout(() => {
+                  alert('Your role has been updated to Player. Redirecting to home page.');
+                  window.location.href = '/index.html';
+                }, 1500);
+              } else {
+                setTimeout(() => {
+                  const sec = document.getElementById('admin-user-mgmt-section');
+                  if (sec) sec.style.display = 'none';
+                }, 2500);
+              }
+            } else {
+              alertBox.innerHTML = `<div class="alert alert-success" style="font-size: 0.88rem;">✓ Role for <strong>${API.escapeHtml(targetUserName)}</strong> updated to <strong>${newRole}</strong>!</div>`;
+              await loadUsers();
+            }
+          }
+        } catch (err) {
+          alertBox.innerHTML = `<div class="alert alert-error" style="font-size: 0.88rem;">Failed to update role. Please try again.</div>`;
+          await loadUsers();
+        }
+      });
+    });
+  }
 
   async function loadUsers() {
-    tableBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 14px;">Loading users...</td></tr>';
+    tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 14px;">Loading users...</td></tr>';
     try {
       const res = await API.getUsers();
       if (res.error) {
-        tableBody.innerHTML = `<tr><td colspan="4" style="color: var(--danger); text-align: center; padding: 14px;">${API.escapeHtml(res.error)}</td></tr>`;
+        tableBody.innerHTML = `<tr><td colspan="5" style="color: var(--danger); text-align: center; padding: 14px;">${API.escapeHtml(res.error)}</td></tr>`;
         return;
       }
 
-      const users = res.users || [];
-      if (users.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 14px;">No users registered yet.</td></tr>';
-        return;
-      }
-
-      tableBody.innerHTML = users.map(u => {
-        const isMe = u.id === currentUser.id;
-        let roleBadge = '<span class="badge badge-gray">👤 Player</span>';
-        if (u.role === 'admin') {
-          roleBadge = '<span class="badge badge-orange">👑 Admin</span>';
-        } else if (u.role === 'organizer') {
-          roleBadge = '<span class="badge badge-green">🛡️ Organizer</span>';
-        } else if (u.role === 'facilitator') {
-          roleBadge = '<span class="badge badge-blue">📋 Facilitator</span>';
-        }
-
-        return `
-          <tr>
-            <td>
-              <div style="font-weight: 700; color: var(--secondary);">
-                ${API.escapeHtml(u.name)}
-                ${isMe ? '<span style="color: var(--primary); font-size: 0.78rem; margin-left: 4px;">(You)</span>' : ''}
-              </div>
-              <div style="font-size: 0.8rem; color: var(--text-muted);">${API.escapeHtml(u.email)}</div>
-            </td>
-            <td style="font-weight: 600;">
-              ${u.eventsAttended} game${u.eventsAttended === 1 ? '' : 's'}
-            </td>
-            <td>
-              ${roleBadge}
-            </td>
-            <td>
-              <select class="admin-role-selector" data-user-id="${u.id}" data-user-name="${API.escapeHtml(u.name)}" style="padding: 4px 8px; border-radius: var(--radius-sm); border: 1.5px solid var(--border); font-size: 0.85rem; font-weight: 600; background: var(--bg-input); color: var(--text-main); cursor: pointer;">
-                <option value="player" ${u.role === 'player' ? 'selected' : ''}>👤 Player</option>
-                <option value="facilitator" ${u.role === 'facilitator' ? 'selected' : ''}>📋 Facilitator (Game Day Lead)</option>
-                <option value="organizer" ${u.role === 'organizer' ? 'selected' : ''}>🛡️ Organizer (Can Post Games)</option>
-                <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>👑 Admin (Full Access)</option>
-              </select>
-            </td>
-            <td>
-              ${isMe ? '<span style="color: var(--text-muted); font-size: 0.8rem;">(Your account)</span>' : `
-                <button type="button" class="btn btn-outline btn-sm btn-delete-user" data-user-id="${u.id}" data-user-email="${API.escapeHtml(u.email)}" style="color: var(--danger); border-color: var(--danger); font-size: 0.8rem; padding: 4px 10px; font-weight: 600;">
-                  🗑️ Remove
-                </button>
-              `}
-            </td>
-          </tr>
-        `;
-      }).join('');
-
-      document.querySelectorAll('.btn-delete-user').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-          const targetUserId = e.currentTarget.getAttribute('data-user-id');
-          const targetUserEmail = e.currentTarget.getAttribute('data-user-email');
-
-          if (!confirm(`Are you sure you want to permanently remove user account: ${targetUserEmail}?`)) {
-            return;
-          }
-
-          const alsoBan = confirm(`Would you also like to permanently BAN ${targetUserEmail} from re-registering or signing in again?`);
-          alertBox.innerHTML = `<div class="alert alert-info" style="font-size: 0.88rem;">Removing ${API.escapeHtml(targetUserEmail)}...</div>`;
-
-          try {
-            const deleteRes = await API.deleteUser(targetUserId, alsoBan, 'Banned by admin');
-            if (deleteRes.error) {
-              alertBox.innerHTML = `<div class="alert alert-error" style="font-size: 0.88rem;">${API.escapeHtml(deleteRes.error)}</div>`;
-            } else {
-              alertBox.innerHTML = `<div class="alert alert-success" style="font-size: 0.88rem;">✓ ${API.escapeHtml(deleteRes.message)}</div>`;
-              await loadUsers();
-            }
-          } catch (err) {
-            alertBox.innerHTML = `<div class="alert alert-error" style="font-size: 0.88rem;">Failed to remove user account.</div>`;
-          }
-        });
-      });
-
-      document.querySelectorAll('.admin-role-selector').forEach(sel => {
-        sel.addEventListener('change', async (e) => {
-          const targetUserId = e.target.getAttribute('data-user-id');
-          const targetUserName = e.target.getAttribute('data-user-name');
-          const newRole = e.target.value;
-
-          alertBox.innerHTML = `<div class="alert alert-info" style="font-size: 0.88rem;">Updating role for ${API.escapeHtml(targetUserName)}...</div>`;
-
-          try {
-            const updateRes = await API.updateUserRole(targetUserId, newRole);
-            if (updateRes.error) {
-              alertBox.innerHTML = `<div class="alert alert-error" style="font-size: 0.88rem;">${API.escapeHtml(updateRes.error)}</div>`;
-              await loadUsers();
-            } else {
-              const isSelf = parseInt(targetUserId, 10) === currentUser.id;
-              const isSelfDemotion = isSelf && newRole !== 'admin';
-
-              if (isSelf) {
-                currentUser.role = newRole;
-                currentUser.isAdmin = (newRole === 'admin');
-                currentUser.canManageEvents = (newRole === 'admin' || newRole === 'organizer');
-                currentAdminUser = currentUser;
-                API.renderNav(currentUser);
-              }
-
-              if (isSelfDemotion) {
-                const roleTitle = newRole === 'organizer' ? 'Organizer' : 'Player';
-                alertBox.innerHTML = `<div class="alert alert-success" style="font-size: 0.88rem;">Your role has been updated to ${roleTitle}. Admin management features are now restricted.</div>`;
-
-                applyRoleUI(currentUser);
-                await loadAdminGames();
-
-                if (newRole === 'player') {
-                  setTimeout(() => {
-                    alert('Your role has been updated to Player. Redirecting to home page.');
-                    window.location.href = '/index.html';
-                  }, 1500);
-                } else {
-                  setTimeout(() => {
-                    const sec = document.getElementById('admin-user-mgmt-section');
-                    if (sec) sec.style.display = 'none';
-                  }, 2500);
-                }
-              } else {
-                alertBox.innerHTML = `<div class="alert alert-success" style="font-size: 0.88rem;">✓ Role for <strong>${API.escapeHtml(targetUserName)}</strong> updated to <strong>${newRole}</strong>!</div>`;
-                await loadUsers();
-              }
-            }
-          } catch (err) {
-            alertBox.innerHTML = `<div class="alert alert-error" style="font-size: 0.88rem;">Failed to update role. Please try again.</div>`;
-            await loadUsers();
-          }
-        });
-      });
-
+      cachedUsers = res.users || [];
+      renderUsersList();
     } catch (err) {
-      tableBody.innerHTML = '<tr><td colspan="4" style="color: var(--danger); text-align: center; padding: 14px;">Error loading users.</td></tr>';
+      tableBody.innerHTML = '<tr><td colspan="5" style="color: var(--danger); text-align: center; padding: 14px;">Error loading users.</td></tr>';
     }
+  }
+
+  if (searchInput) {
+    searchInput.addEventListener('input', () => {
+      renderUsersList();
+    });
   }
 
   loadUsers();

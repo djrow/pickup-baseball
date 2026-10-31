@@ -473,5 +473,22 @@ Resolved missing localization keys across all 14 non-English JSON language dicti
 
 ---
 
-## 31. Future Roadmap Notes
+## 31. Phase 30: Compact Scrollable User Accounts Table with Real-Time Substring Search Filter
+Addressed scaling usability as registered user accounts grow by compactifying vertical row height, constraining the table container to a scrollable viewport, and adding instant client-side substring search filtering across names and emails:
+- **Compact Vertical Sizing & Responsive Scroll Container:**
+  - Wrapped user management table inside `#admin-users-scroll-container` (`.admin-users-scroll-container`) with a fixed maximum height (`max-height: 380px`), vertical scrolling (`overflow-y: auto`), custom thin scrollbars, and sticky table headers (`thead th { position: sticky; top: 0; }`).
+  - Added `.data-table-compact` styling reducing cell padding from `12px 14px` down to `5px 10px`, typography to `0.82rem`, and compact selector/button controls so many records fit simultaneously within a small portion of the screen.
+- **Live Search & Filter by Name or Email:**
+  - Added live filter input `#admin-user-search-input` above the accounts table for instant case-insensitive substring searching matching against player name (`u.name`) and email (`u.email`).
+  - Integrated dynamic match counter `#admin-user-count-display` displaying `Showing X of Y accounts` during filtering and total account count when unfiltered.
+  - Provided graceful empty state display (`No accounts found matching "query"`) if no records match the search terms.
+  - Preserved active filter queries across background user data refreshes and role modifications.
+- **Code Longevity & Testing:**
+  - Maintained strict ES6 vanilla JavaScript standards (0 occurrences of `?.` or `??`).
+  - Added automated test `T3.6` in `scripts/verify-all.js` validating the presence and styling of the search filter input, match counter, scroll container, compact styles, and live search logic.
+  - Bumped application cache version to `v33` across backend, frontend, Service Worker, and all HTML files. All 58 tests pass with 100% success rate.
+
+---
+
+## 32. Future Roadmap Notes
 - **Pinned Full-Stack Rust / WebAssembly Migration:** Evaluated a future 4-phase rewrite of the Cloudflare Pages Functions backend (and optional frontend interactivity) to Rust (`workers-rs` compiling to WebAssembly) for compile-time type safety, zero-dependency binary durability, and strict edge memory safety—kept as a guiding north star when designing new features and data models.

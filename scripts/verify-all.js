@@ -55,7 +55,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-const CURRENT_APP_VERSION = '32';
+const CURRENT_APP_VERSION = '33';
 app.use((req, res, next) => {
   res.setHeader('X-App-Version', CURRENT_APP_VERSION);
   next();
@@ -519,6 +519,30 @@ test('T3: User Role Management & Session Persistence', async (t) => {
     const adminInDb = db.prepare('SELECT role, is_admin FROM users WHERE id = ?').get(seedAdminId);
     assert.equal(adminInDb.role, 'admin');
     assert.equal(adminInDb.is_admin, 1);
+  });
+
+  await t.test('T3.6: Admin User Accounts Table Compact View, Scroll Container & Live Substring Search Filter', async () => {
+    const adminHtml = fs.readFileSync(path.join(__dirname, '..', 'public', 'admin.html'), 'utf8');
+    assert.ok(adminHtml.includes('id="admin-user-search-input"'), 'admin.html must contain search filter input');
+    assert.ok(adminHtml.includes('id="admin-user-count-display"'), 'admin.html must contain accounts count display');
+    assert.ok(adminHtml.includes('id="admin-users-scroll-container"'), 'admin.html must contain scrollable container id');
+    assert.ok(adminHtml.includes('class="table-responsive admin-users-scroll-container"'), 'admin.html must have scrollable container class');
+    assert.ok(adminHtml.includes('data-table-compact'), 'admin.html accounts table must use data-table-compact class');
+
+    const styleCss = fs.readFileSync(path.join(__dirname, '..', 'public', 'css', 'style.css'), 'utf8');
+    assert.ok(styleCss.includes('.admin-users-scroll-container'), 'style.css must define .admin-users-scroll-container');
+    assert.ok(styleCss.includes('max-height: 380px'), 'style.css must constrain max-height for user accounts container');
+    assert.ok(styleCss.includes('overflow-y: auto'), 'style.css must enable vertical scroll on container');
+    assert.ok(styleCss.includes('position: sticky'), 'style.css must anchor table headers with position: sticky');
+    assert.ok(styleCss.includes('.data-table-compact'), 'style.css must define compact table styling');
+    assert.ok(styleCss.includes('padding: 5px 10px'), 'style.css must compactify vertical padding on table cells');
+
+    const adminJs = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'admin.js'), 'utf8');
+    assert.ok(adminJs.includes('admin-user-search-input'), 'admin.js must query search input');
+    assert.ok(adminJs.includes('renderUsersList'), 'admin.js must include renderUsersList function');
+    assert.ok(adminJs.includes('indexOf(query)'), 'admin.js must perform case-insensitive substring search for name and email');
+    assert.ok(adminJs.includes('Showing '), 'admin.js must display filtered accounts count');
+    assert.ok(adminJs.includes('No accounts found matching'), 'admin.js must display clear feedback when 0 accounts match');
   });
 });
 
