@@ -3001,5 +3001,261 @@ footer.site-footer strong {
   }
 }
 
+/* ==========================================================================
+   Simplified Group RSVP Steppers, Tasks Checklist & Spectator Badges (v26)
+   ========================================================================== */
+
+.rsvp-counters-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.rsvp-counter-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border);
+  background: var(--bg-subtle);
+  transition: border-color 0.15s, background-color 0.15s, box-shadow 0.15s;
+}
+
+.rsvp-counter-card.is-active {
+  border-color: var(--as-green-border);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-sm);
+}
+
+.rsvp-counter-info {
+  min-width: 0;
+}
+
+.rsvp-counter-title {
+  font-weight: 800;
+  font-size: 0.98rem;
+  color: var(--secondary);
+  line-height: 1.25;
+}
+
+.rsvp-counter-sub {
+  font-size: 0.77rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.rsvp-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.stepper-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1.5px solid var(--border);
+  background: var(--bg-card);
+  color: var(--secondary);
+  font-size: 1.15rem;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  transition: background-color 0.12s, border-color 0.12s, color 0.12s, transform 0.05s;
+}
+
+.stepper-btn:hover:not(:disabled) {
+  border-color: var(--giants-orange);
+  color: var(--giants-orange);
+  background: var(--giants-orange-light);
+}
+
+.stepper-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.stepper-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.stepper-input {
+  width: 44px !important;
+  height: 34px;
+  padding: 0 4px !important;
+  text-align: center;
+  font-weight: 800;
+  font-size: 1rem !important;
+  font-variant-numeric: tabular-nums;
+  border-radius: 8px !important;
+  border: 1.5px solid var(--border) !important;
+  background: var(--bg-input) !important;
+  color: var(--text-main) !important;
+  -moz-appearance: textfield;
+}
+
+.stepper-input::-webkit-outer-spin-button,
+.stepper-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.rsvp-group-summary {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--secondary);
+  background: var(--as-green-subtle);
+  border: 1px solid var(--as-green-border);
+  border-radius: 8px;
+  padding: 7px 12px;
+  margin-bottom: 14px;
+}
+
+.rsvp-group-summary.is-empty {
+  background: var(--giants-orange-light);
+  border-color: var(--giants-orange-border);
+  color: var(--giants-orange);
+}
+
+.rsvp-tasks-checklist {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(265px, 1fr));
+  gap: 8px;
+}
+
+.rsvp-task-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 9px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  cursor: pointer;
+  margin-bottom: 0;
+  font-weight: normal;
+  transition: border-color 0.12s, background-color 0.12s;
+}
+
+.rsvp-task-row:hover:not(.is-disabled):not(.is-readonly) {
+  border-color: var(--giants-orange);
+}
+
+.rsvp-task-row.is-checked {
+  border-color: var(--as-green);
+  background: var(--as-green-subtle);
+}
+
+.rsvp-task-row.is-disabled {
+  background: var(--bg-subtle);
+  cursor: not-allowed;
+  opacity: 0.85;
+}
+
+.rsvp-task-row.is-readonly {
+  cursor: default;
+  background: var(--bg-subtle);
+}
+
+.rsvp-task-row input[type="checkbox"] {
+  width: 17px;
+  height: 17px;
+  margin-top: 2px;
+  flex-shrink: 0;
+  accent-color: var(--as-green);
+  cursor: inherit;
+}
+
+.rsvp-optional-details {
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  margin-bottom: 16px;
+}
+
+.rsvp-optional-details summary {
+  padding: 9px 14px;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--secondary);
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  user-select: none;
+}
+
+.rsvp-optional-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.rsvp-optional-details summary::before {
+  content: "+";
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  font-weight: 800;
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.rsvp-optional-details[open] summary::before {
+  content: "−";
+}
+
+.rsvp-optional-body {
+  padding: 4px 14px 14px 14px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.rsvp-actions-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.rsvp-cancel-btn {
+  border-color: var(--border) !important;
+  color: var(--text-muted) !important;
+  font-size: 0.88rem;
+  padding: 9px 14px;
+}
+
+.rsvp-cancel-btn:hover {
+  border-color: #ef4444 !important;
+  background: rgba(239, 68, 68, 0.08) !important;
+  color: #ef4444 !important;
+}
+
+.badge-spectator {
+  background: var(--bg-subtle);
+  color: var(--secondary);
+  border: 1px solid var(--border);
+}
+
+.badge-volunteer {
+  background: var(--giants-orange-light);
+  color: var(--giants-orange);
+  border: 1px solid var(--giants-orange-border);
+}
+
+
 
 

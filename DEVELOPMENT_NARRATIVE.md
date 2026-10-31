@@ -388,5 +388,24 @@ Resolved an issue where past events (specifically the October 25 game) appeared 
 
 ---
 
-## 27. Future Roadmap Notes
+## 27. Phase 26: Simplified Group RSVPs — Players, Spectators & Group-Owned Volunteer Tasks
+Redesigned the event RSVP workflow (`public/event.html`, `public/js/event.js`, `src/routes/events.js`, `functions/api/[[route]].js`) so a single user account or email can RSVP cleanly for any combination of on-field players, spectators, and group volunteer tasks without redundant UI clutter:
+- **Mutually-Exclusive Group Headcount Model (Option B):**
+  - Added `players_count INTEGER DEFAULT 1` and `spectators_count INTEGER DEFAULT 0` to `attendees` across SQLite (`src/db.js`), Cloudflare D1 (`d1_schema.sql`), and automatic idempotent Worker migration (`ensureD1Schema` in `functions/api/[[route]].js`), backfilling legacy rows (`1 + COALESCE(additional_guests, 0)` for active rows, `0` for declined) while preserving full backward compatibility for legacy `additional_guests` API callers.
+  - **Independent Playing Roster Capacity:** Only `players_count` counts toward `max_players` and triggers the player waitlist. Groups with `0 Players` (spectators cheering from the bleachers or off-field volunteers bringing water/facilitating) never consume on-field player slots and confirm immediately (`status: 'attending'`) even when `max_players` is full.
+  - **Off-Field Volunteer Auto-Handling & Queue Promotion:** Submitting `0 Players, 0 Spectators` with `1+` checked tasks automatically records `spectatorsCount = 1` as an off-field volunteer (`🙌 Volunteer`), while `0 Players, 0 Spectators, 0 Tasks` returns HTTP `400`. Waitlist auto-promotion (`promoteNextWaitlistedPlayer`) triggers automatically whenever a confirmed group cancels or reduces its `players_count`.
+- **Group-Owned Volunteer Tasks & Removal of Duplicate Task Board Card:**
+  - Removed the duplicate standalone `🛡️ Game Day Task Board` (`#duties-grid`) card from `public/event.html`, consolidating task coordination into a single unified **🛡️ Group Volunteer Tasks** checklist inside `#rsvp-section`.
+  - Volunteer tasks (`duty_assignments`) belong to the group/account (`attendee_id`) as a whole rather than requiring per-individual assignment within a household or group. When RSVPs are locked (rainout or restricted invite), the unified task checklist automatically switches to a clean read-only view so task status remains visible.
+- **Streamlined Event RSVP & "Who's Coming" UI:**
+  - Replaced `"Will you attend?"` radio cards and `"Bringing Additional Guests?"` dropdowns with two `[ − ] count [ + ]` steppers (**⚾ Players** and **👏 Spectators**), a live group summary bar, collapsible `<details id="rsvp-optional-details">` for optional group names & shared gear, dynamic `Confirm RSVP` / `Update RSVP` / `Join Player Waitlist` CTA, and a conditional 1-click `Can't Make It` cancel button.
+  - Updated the **"👥 Who's Coming"** roster, event header, calendar preview drawer (`public/js/app.js`), and Resend confirmation/waitlist emails (`src/mailer.js`, `functions/api/[[route]].js`) to display player and spectator counts, group badges (`⚾ X Players`, `👏 Y Spectators`, `🙌 Volunteer`), and `🛡️ Group Tasks`.
+- **Automated Verification & Version Bump:**
+  - Updated `T9.8` and added comprehensive end-to-end test `T9.15` in `scripts/verify-all.js` covering mixed player/spectator group RSVPs, group task ownership, spectator bypass when `max_players` is full, off-field volunteer signups, waitlist auto-promotion on player-count reduction, cancellation task release, and ES6 compatibility.
+  - Bumped cache bust version to `v26` across all client, server, service worker, and HTML asset links (`CLIENT_VERSION: '26'`, `CURRENT_APP_VERSION = '26'`, `CACHE_NAME = 'pbf-cache-v26'`).
+  - All 54 automated tests in `scripts/verify-all.js` pass with 100% success rate.
+
+---
+
+## 28. Future Roadmap Notes
 - **Pinned Full-Stack Rust / WebAssembly Migration:** Evaluated a future 4-phase rewrite of the Cloudflare Pages Functions backend (and optional frontend interactivity) to Rust (`workers-rs` compiling to WebAssembly) for compile-time type safety, zero-dependency binary durability, and strict edge memory safety—kept as a guiding north star when designing new features and data models.

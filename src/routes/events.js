@@ -31,7 +31,8 @@ router.get('/', optionalUser, (req, res) => {
 
     const events = db.prepare(`
       SELECT e.*,
-        (SELECT COALESCE(SUM(1 + COALESCE(a.additional_guests, 0)), 0) FROM attendees a WHERE a.event_id = e.id AND a.status = 'attending') as attendee_count,
+        (SELECT COALESCE(SUM(COALESCE(a.players_count, 1 + COALESCE(a.additional_guests, 0))), 0) FROM attendees a WHERE a.event_id = e.id AND a.status = 'attending') as attendee_count,
+        (SELECT COALESCE(SUM(COALESCE(a.spectators_count, 0)), 0) FROM attendees a WHERE a.event_id = e.id AND a.status = 'attending') as spectator_count,
         (SELECT COUNT(*) FROM event_duties d WHERE d.event_id = e.id) as duty_count
       FROM events e
       ${whereClause}
@@ -41,7 +42,7 @@ router.get('/', optionalUser, (req, res) => {
     // If user is logged in, attach their personal RSVP status to each event
     if (req.user) {
       const userRsvps = db.prepare(`
-        SELECT event_id, status, gear_bringing
+        SELECT event_id, status, gear_bringing, players_count, spectators_count
         FROM attendees
         WHERE user_id = ?
       `).all(req.user.id);
@@ -193,7 +194,10 @@ router.get('/:id', optionalUser, (req, res) => {
 
     // Fetch confirmed attendees
     const attendees = db.prepare(`
-      SELECT a.id, a.name, a.status, a.gear_bringing, a.additional_guests, a.guest_names, a.is_guest, a.created_at,
+      SELECT a.id, a.name, a.status, a.gear_bringing,
+        COALESCE(a.players_count, 1 + COALESCE(a.additional_guests, 0)) as players_count,
+        COALESCE(a.spectators_count, 0) as spectators_count,
+        a.additional_guests, a.guest_names, a.is_guest, a.created_at,
         u.bio, u.avatar_url,
         (
           SELECT group_concat(d.title, ', ')
@@ -209,7 +213,10 @@ router.get('/:id', optionalUser, (req, res) => {
 
     // Fetch waitlisted attendees in signup order
     const waitlist = db.prepare(`
-      SELECT a.id, a.name, a.status, a.additional_guests, a.guest_names, a.is_guest, a.created_at,
+      SELECT a.id, a.name, a.status,
+        COALESCE(a.players_count, 1 + COALESCE(a.additional_guests, 0)) as players_count,
+        COALESCE(a.spectators_count, 0) as spectators_count,
+        a.additional_guests, a.guest_names, a.is_guest, a.created_at,
         u.bio, u.avatar_url
       FROM attendees a
       LEFT JOIN users u ON a.user_id = u.id
@@ -276,8 +283,9 @@ router.get('/:id', optionalUser, (req, res) => {
       }
     }
 
-    const totalConfirmedPlayers = attendees.reduce((sum, a) => sum + 1 + (a.additional_guests || 0), 0);
-    const totalWaitlistPlayers = waitlist.reduce((sum, w) => sum + 1 + (w.additional_guests || 0), 0);
+    const totalConfirmedPlayers = attendees.reduce((sum, a) => sum + (a.players_count != null ? a.players_count : (1 + (a.additional_guests || 0))), 0);
+    const totalConfirmedSpectators = attendees.reduce((sum, a) => sum + (a.spectators_count || 0), 0);
+    const totalWaitlistPlayers = waitlist.reduce((sum, w) => sum + (w.players_count != null ? w.players_count : (1 + (w.additional_guests || 0))), 0);
 
     res.json({
       event: {
@@ -293,6 +301,8 @@ router.get('/:id', optionalUser, (req, res) => {
       myRsvp,
       canViewRoster,
       totalAttendees: totalConfirmedPlayers,
+      totalSpectators: totalConfirmedSpectators,
+      totalHeadcount: totalConfirmedPlayers + totalConfirmedSpectators,
       totalWaitlist: totalWaitlistPlayers
     });
   } catch (err) {
@@ -311,7 +321,7 @@ function promoteNextWaitlistedPlayer(eventId) {
   let firstPromoted = null;
   while (true) {
     const activeRow = db.prepare(`
-      SELECT COALESCE(SUM(1 + COALESCE(additional_guests, 0)), 0) as total
+      SELECT COALESCE(SUM(COALESCE(players_count, 1 + COALESCE(additional_guests, 0))), 0) as total
       FROM attendees WHERE event_id = ? AND status = 'attending'
     `).get(eventId);
     const activeCount = activeRow ? activeRow.total : 0;
@@ -332,9 +342,11 @@ function promoteNextWaitlistedPlayer(eventId) {
 
     if (!nextWaitlisted) break;
 
-    const partySize = 1 + (nextWaitlisted.additional_guests || 0);
-    // If party size exceeds available slots, do not overfill
-    if (event.max_players && partySize > availableSlots) {
+    const partyPlayers = nextWaitlisted.players_count != null
+      ? nextWaitlisted.players_count
+      : (1 + (nextWaitlisted.additional_guests || 0));
+    // If party player size exceeds available slots, do not overfill
+    if (event.max_players && partyPlayers > availableSlots) {
       break;
     }
 
@@ -362,7 +374,7 @@ function promoteNextWaitlistedPlayer(eventId) {
 }
 
 /**
- * RSVP for an event (handles both logged-in users and guests)
+ * RSVP for an event (handles players, spectators, and group volunteer tasks)
  */
 router.post('/:id/rsvp', optionalUser, async (req, res) => {
   try {
@@ -372,19 +384,52 @@ router.post('/:id/rsvp', optionalUser, async (req, res) => {
       return res.status(404).json({ error: 'Event not found.' });
     }
 
-    let { name, email, gear_bringing, duty_ids, management_token, status, additional_guests, guest_names } = req.body;
+    let {
+      name,
+      email,
+      gear_bringing,
+      duty_ids,
+      management_token,
+      status,
+      players_count,
+      spectators_count,
+      additional_guests,
+      guest_names
+    } = req.body;
     status = status === 'declined' ? 'declined' : 'attending';
 
-    let additionalGuests = parseInt(additional_guests, 10);
-    if (isNaN(additionalGuests) || additionalGuests < 0) {
-      additionalGuests = 0;
-    } else if (additionalGuests > 20) {
-      additionalGuests = 20;
-    }
+    let playersCount = 1;
+    let spectatorsCount = 0;
+
     if (status === 'declined') {
-      additionalGuests = 0;
+      playersCount = 0;
+      spectatorsCount = 0;
+    } else if (players_count !== undefined || spectators_count !== undefined) {
+      const parsedPlayers = players_count !== undefined ? parseInt(players_count, 10) : 0;
+      const parsedSpectators = spectators_count !== undefined ? parseInt(spectators_count, 10) : 0;
+      playersCount = isNaN(parsedPlayers) ? 0 : Math.max(0, Math.min(25, parsedPlayers));
+      spectatorsCount = isNaN(parsedSpectators) ? 0 : Math.max(0, Math.min(25, parsedSpectators));
+
+      if (playersCount === 0 && spectatorsCount === 0) {
+        if (Array.isArray(duty_ids) && duty_ids.length > 0) {
+          spectatorsCount = 1;
+        } else {
+          return res.status(400).json({ error: 'Please include at least 1 player, spectator, or volunteer task in your RSVP.' });
+        }
+      }
+    } else {
+      let legacyGuests = parseInt(additional_guests, 10);
+      if (isNaN(legacyGuests) || legacyGuests < 0) {
+        legacyGuests = 0;
+      } else if (legacyGuests > 20) {
+        legacyGuests = 20;
+      }
+      playersCount = 1 + legacyGuests;
+      spectatorsCount = 0;
     }
-    const cleanGuestNames = (guest_names || '').trim().slice(0, 500);
+
+    const additionalGuests = status === 'declined' ? 0 : Math.max(0, playersCount - 1);
+    const cleanGuestNames = status === 'declined' ? '' : (guest_names || '').trim().slice(0, 500);
 
     if (event.status === 'rainout' && status === 'attending') {
       return res.status(400).json({ error: 'RSVPs are closed because this game has been called for rain.' });
@@ -431,24 +476,25 @@ router.post('/:id/rsvp', optionalUser, async (req, res) => {
     `).get(eventId, email);
 
     const wasAttending = existingAttendee && existingAttendee.status === 'attending';
+    const prevPlayersCount = existingAttendee
+      ? (existingAttendee.players_count != null ? existingAttendee.players_count : (1 + (existingAttendee.additional_guests || 0)))
+      : 0;
 
     let finalStatus = status;
     let waitlistPos = 0;
 
-    const requestedPartySize = 1 + additionalGuests;
-
-    if (status === 'attending') {
-      // If event enforces roster capacity, check if party fits
+    if (status === 'attending' && playersCount > 0) {
+      // Only on-field players count toward max_players capacity; spectators & off-field volunteers never consume player slots
       if (event.max_players && event.max_players > 0) {
         const activeRow = db.prepare(`
-          SELECT COALESCE(SUM(1 + COALESCE(additional_guests, 0)), 0) as total
+          SELECT COALESCE(SUM(COALESCE(players_count, 1 + COALESCE(additional_guests, 0))), 0) as total
           FROM attendees
           WHERE event_id = ? AND status = 'attending' AND email != ?
         `).get(eventId, email);
 
         const currentOtherPlayers = activeRow ? activeRow.total : 0;
 
-        if (currentOtherPlayers + requestedPartySize > event.max_players) {
+        if (currentOtherPlayers + playersCount > event.max_players) {
           finalStatus = 'waitlist';
         }
       }
@@ -462,18 +508,18 @@ router.post('/:id/rsvp', optionalUser, async (req, res) => {
       attendeeId = existingAttendee.id;
       db.prepare(`
         UPDATE attendees
-        SET name = ?, status = ?, gear_bringing = ?, additional_guests = ?, guest_names = ?, user_id = COALESCE(?, user_id), is_guest = ?
+        SET name = ?, status = ?, gear_bringing = ?, players_count = ?, spectators_count = ?, additional_guests = ?, guest_names = ?, user_id = COALESCE(?, user_id), is_guest = ?
         WHERE id = ?
-      `).run(name, finalStatus, (gear_bringing || '').trim(), additionalGuests, cleanGuestNames, userId, isGuest, attendeeId);
+      `).run(name, finalStatus, (gear_bringing || '').trim(), playersCount, spectatorsCount, additionalGuests, cleanGuestNames, userId, isGuest, attendeeId);
     } else {
       const result = db.prepare(`
-        INSERT INTO attendees (event_id, user_id, name, email, is_guest, status, gear_bringing, additional_guests, guest_names, management_token)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(eventId, userId, name, email, isGuest, finalStatus, (gear_bringing || '').trim(), additionalGuests, cleanGuestNames, mgmtToken);
+        INSERT INTO attendees (event_id, user_id, name, email, is_guest, status, gear_bringing, players_count, spectators_count, additional_guests, guest_names, management_token)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(eventId, userId, name, email, isGuest, finalStatus, (gear_bringing || '').trim(), playersCount, spectatorsCount, additionalGuests, cleanGuestNames, mgmtToken);
       attendeeId = result.lastInsertRowid;
     }
 
-    // Handle duty assignments: only confirmed attending players hold duty slots
+    // Handle group task assignments: any confirmed attending group (players, spectators, or off-field volunteers) can hold task slots
     const assignedDutyNames = [];
     if (finalStatus === 'attending' && Array.isArray(duty_ids)) {
       db.prepare('DELETE FROM duty_assignments WHERE attendee_id = ?').run(attendeeId);
@@ -496,13 +542,13 @@ router.post('/:id/rsvp', optionalUser, async (req, res) => {
           }
         }
       }
-    } else {
+    } else if (finalStatus !== 'attending') {
       // Clear duties if declined or waitlisted
       db.prepare('DELETE FROM duty_assignments WHERE attendee_id = ?').run(attendeeId);
     }
 
-    // If active player declined/cancelled or reduced guest count, trigger waitlist promotion!
-    if (wasAttending && (status === 'declined' || finalStatus === 'waitlist' || (existingAttendee.additional_guests || 0) > additionalGuests)) {
+    // If active player declined/cancelled or reduced on-field player count, trigger waitlist promotion!
+    if (wasAttending && (status === 'declined' || finalStatus === 'waitlist' || prevPlayersCount > playersCount)) {
       promoteNextWaitlistedPlayer(eventId);
     }
 
@@ -518,6 +564,8 @@ router.post('/:id/rsvp', optionalUser, async (req, res) => {
         name,
         event,
         waitlistPosition: waitlistPos,
+        playersCount,
+        spectatorsCount,
         additionalGuests,
         guestNames: cleanGuestNames,
         managementToken: existingAttendee ? (existingAttendee.management_token || mgmtToken) : mgmtToken
@@ -529,8 +577,10 @@ router.post('/:id/rsvp', optionalUser, async (req, res) => {
         success: true,
         status: 'waitlist',
         waitlistPosition: waitlistPos,
+        playersCount,
+        spectatorsCount,
         managementToken: existingAttendee ? (existingAttendee.management_token || mgmtToken) : mgmtToken,
-        message: `The roster is full (${event.max_players} players), but you're #${waitlistPos} on the waitlist! If a spot opens up, you will be automatically promoted and notified immediately.`
+        message: `The playing roster is full (${event.max_players} players), so your group is #${waitlistPos} on the player waitlist! If a spot opens up, you will be automatically promoted and notified immediately.`
       });
     }
 
@@ -541,6 +591,8 @@ router.post('/:id/rsvp', optionalUser, async (req, res) => {
         event,
         dutyName: assignedDutyNames.join(', '),
         gearBringing: (gear_bringing || '').trim(),
+        playersCount,
+        spectatorsCount,
         additionalGuests,
         guestNames: cleanGuestNames,
         managementToken: existingAttendee ? (existingAttendee.management_token || mgmtToken) : mgmtToken
@@ -548,11 +600,23 @@ router.post('/:id/rsvp', optionalUser, async (req, res) => {
         console.error('[RSVP] Failed to dispatch confirmation email:', err);
       });
 
+      let confirmMsg = `You're confirmed! A confirmation email has been sent to ${email}.`;
+      if (playersCount > 0 && spectatorsCount > 0) {
+        confirmMsg = `RSVP confirmed (${playersCount} ${playersCount === 1 ? 'player' : 'players'}, ${spectatorsCount} ${spectatorsCount === 1 ? 'spectator' : 'spectators'})! Confirmation sent to ${email}.`;
+      } else if (playersCount === 0 && spectatorsCount > 0) {
+        const label = assignedDutyNames.length > 0
+          ? (spectatorsCount === 1 ? 'volunteer' : 'volunteers/spectators')
+          : (spectatorsCount === 1 ? 'spectator' : 'spectators');
+        confirmMsg = `RSVP confirmed (${spectatorsCount} ${label})! Confirmation sent to ${email}.`;
+      }
+
       return res.json({
         success: true,
         status: 'attending',
+        playersCount,
+        spectatorsCount,
         managementToken: existingAttendee ? (existingAttendee.management_token || mgmtToken) : mgmtToken,
-        message: `You're on the roster! A confirmation email has been sent to ${email}.`
+        message: confirmMsg
       });
     }
 
@@ -560,6 +624,8 @@ router.post('/:id/rsvp', optionalUser, async (req, res) => {
     res.json({
       success: true,
       status: 'declined',
+      playersCount: 0,
+      spectatorsCount: 0,
       managementToken: existingAttendee ? (existingAttendee.management_token || mgmtToken) : mgmtToken,
       message: 'Your RSVP has been cancelled.'
     });

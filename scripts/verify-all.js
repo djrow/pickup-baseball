@@ -55,7 +55,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-const CURRENT_APP_VERSION = '25';
+const CURRENT_APP_VERSION = '26';
 app.use((req, res, next) => {
   res.setHeader('X-App-Version', CURRENT_APP_VERSION);
   next();
@@ -1063,14 +1063,14 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(apiJs.includes('"home.join_roster_btn": "Join Roster / Volunteer for Tasks"'), 'api.js must define Volunteer for Tasks');
     assert.ok(apiJs.includes('"how.s2_title": "2. Coordinate Gear & Tasks"'), 'api.js must define Coordinate Gear & Tasks');
     assert.ok(apiJs.includes('"event.duties_status": "Tasks Status"'), 'api.js must define Tasks Status');
-    assert.ok(apiJs.includes('"event.rsvp_heading": "Mark Attendance & Sign Up for Tasks"'), 'api.js must define Sign Up for Tasks');
-    assert.ok(apiJs.includes('"event.duty_board_title": "🛡️ Game Day Task Board"'), 'api.js must define Task Board');
+    assert.ok(apiJs.includes('"event.rsvp_heading": "RSVP & Volunteer Tasks"'), 'api.js must define RSVP & Volunteer Tasks');
 
     const eventHtmlPath = path.join(publicDir, 'event.html');
     const eventHtml = fs.readFileSync(eventHtmlPath, 'utf8');
     assert.ok(eventHtml.includes('Tasks Status'), 'event.html must show Tasks Status');
-    assert.ok(eventHtml.includes('Mark Attendance & Sign Up for Tasks'), 'event.html must show Sign Up for Tasks');
-    assert.ok(eventHtml.includes('🛡️ Game Day Task Board'), 'event.html must show Task Board');
+    assert.ok(eventHtml.includes('RSVP &amp; Volunteer Tasks'), 'event.html must show RSVP & Volunteer Tasks');
+    assert.ok(eventHtml.includes('🛡️ Group Volunteer Tasks'), 'event.html must show unified Group Volunteer Tasks checklist');
+    assert.ok(!eventHtml.includes('id="duties-grid"'), 'event.html must not contain duplicate standalone Task Board grid');
     assert.ok(!eventHtml.includes('Game Day Duty Board'), 'event.html must not contain Game Day Duty Board');
 
     const indexHtmlPath = path.join(publicDir, 'index.html');
@@ -1199,5 +1199,157 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     const appJs = fs.readFileSync(path.join(publicDir, 'js/app.js'), 'utf8');
     assert.ok(appJs.includes("let currentFilter = 'all';"), 'app.js must initialize currentFilter to all to include past event records in calendar track');
     assert.ok(appJs.includes('renderCalendarDrawer(dateKey, game, dateKey < todayKey);'), 'app.js must evaluate isPast dynamically against todayKey for drawer details');
+  });
+
+  await t9.test('T9.15: Group RSVP with Players, Spectators, Group Volunteer Tasks & Simplified UI', async () => {
+    // 1. Static UI & ES6 compatibility checks
+    const eventHtml = fs.readFileSync(path.join(publicDir, 'event.html'), 'utf8');
+    assert.ok(eventHtml.includes('id="rsvp-players-count"'), 'event.html must include players count stepper input');
+    assert.ok(eventHtml.includes('id="rsvp-spectators-count"'), 'event.html must include spectators count stepper input');
+    assert.ok(eventHtml.includes('id="rsvp-optional-details"'), 'event.html must include collapsible optional details');
+    assert.ok(eventHtml.includes('id="rsvp-cancel-btn"'), 'event.html must include conditional cancel RSVP button');
+    assert.ok(eventHtml.includes('id="spectators-badge"'), 'event.html must include spectators badge in roster header');
+    assert.ok(!eventHtml.includes('id="duties-grid"'), 'event.html must not include duplicate standalone duties-grid card');
+
+    const eventJs = fs.readFileSync(path.join(publicDir, 'js/event.js'), 'utf8');
+    assert.ok(!eventJs.includes('?.'), 'event.js must not use optional chaining for broad ES6 compatibility');
+    assert.ok(!eventJs.includes('??'), 'event.js must not use nullish coalescing for broad ES6 compatibility');
+
+    // 2. Create an event with max_players = 2 and default volunteer tasks
+    const createRes = await apiReq('POST', '/api/events', seedOrgCookie, {
+      title: 'Group RSVP & Spectators Verification Game',
+      location: 'Bushrod Park Field 1',
+      event_date: '2026-12-06T20:00:00.000Z',
+      max_players: 2
+    });
+    assert.equal(createRes.status, 200, 'Organizer creating max_players=2 event must receive 200');
+    const groupEventId = createRes.data.eventId;
+
+    const initDetail = await apiReq('GET', `/api/events/${groupEventId}`, null);
+    assert.equal(initDetail.status, 200);
+    assert.ok(initDetail.data.duties.length >= 3, 'Event must have default volunteer tasks');
+    const task1Id = initDetail.data.duties[0].id;
+    const task2Id = initDetail.data.duties[1].id;
+    const task3Id = initDetail.data.duties[2].id;
+
+    // 3. Empty RSVP (0 players, 0 spectators, 0 tasks) must return 400
+    const emptyRsvp = await apiReq('POST', `/api/events/${groupEventId}/rsvp`, null, {
+      name: 'Empty Group',
+      email: 'empty_group@sundaypickup.org',
+      players_count: 0,
+      spectators_count: 0,
+      duty_ids: []
+    });
+    assert.equal(emptyRsvp.status, 400, 'RSVP with 0 players, 0 spectators, and 0 tasks must return 400');
+
+    // 4. Mixed group RSVP: 2 players + 3 spectators claiming 2 group tasks -> fills max_players (2/2)
+    const mixedRsvp = await apiReq('POST', `/api/events/${groupEventId}/rsvp`, null, {
+      name: 'Garcia Family Group',
+      email: 'garcia_family@sundaypickup.org',
+      players_count: 2,
+      spectators_count: 3,
+      guest_names: 'Marco, Elena, Abuela, Leo, Maya',
+      gear_bringing: '2 wood bats & cooler',
+      duty_ids: [task1Id, task2Id]
+    });
+    assert.equal(mixedRsvp.status, 200, 'Mixed group RSVP must succeed');
+    assert.equal(mixedRsvp.data.status, 'attending');
+    assert.equal(mixedRsvp.data.playersCount, 2);
+    assert.equal(mixedRsvp.data.spectatorsCount, 3);
+
+    // Unauthenticated viewer sees slot count & totals, with volunteer names redacted for privacy
+    const unauthDetail = await apiReq('GET', `/api/events/${groupEventId}`, null);
+    assert.equal(unauthDetail.data.canViewRoster, false, 'Unauthenticated viewer without token must have canViewRoster=false');
+    assert.equal(unauthDetail.data.duties.find(d => d.id === task1Id).assigned_players[0].name, '', 'Unauthenticated view redacts volunteer name while preserving filled slot');
+
+    // Authorized viewer (via management token or organizer cookie) sees full group ownership & roster
+    let detail = await apiReq('GET', `/api/events/${groupEventId}?token=${mixedRsvp.data.managementToken}`, null);
+    assert.equal(detail.data.canViewRoster, true, 'Attendee with management token must have canViewRoster=true');
+    assert.equal(detail.data.totalAttendees, 2, 'totalAttendees must reflect 2 on-field players');
+    assert.equal(detail.data.totalSpectators, 3, 'totalSpectators must reflect 3 spectators');
+    assert.equal(detail.data.totalHeadcount, 5, 'totalHeadcount must reflect 5 total people');
+    const t1 = detail.data.duties.find(d => d.id === task1Id);
+    const t2 = detail.data.duties.find(d => d.id === task2Id);
+    assert.equal(t1.assigned_players[0].name, 'Garcia Family Group', 'Task 1 must be owned by the group');
+    assert.equal(t2.assigned_players[0].name, 'Garcia Family Group', 'Task 2 must be owned by the group');
+
+    // 5. Spectator-only RSVP (0 players, 2 spectators) when max_players (2/2) is FULL -> confirms immediately!
+    const specRsvp = await apiReq('POST', `/api/events/${groupEventId}/rsvp`, null, {
+      name: 'Cheering Friends',
+      email: 'cheering_friends@sundaypickup.org',
+      players_count: 0,
+      spectators_count: 2,
+      duty_ids: []
+    });
+    assert.equal(specRsvp.status, 200, 'Spectator-only RSVP must succeed when playing roster is full');
+    assert.equal(specRsvp.data.status, 'attending', 'Spectators must bypass player waitlist and confirm immediately');
+
+    // 6. Off-field volunteer RSVP (0 players, 0 spectators, 1 task) when max_players is FULL -> auto-sets spectatorsCount=1 and confirms!
+    const volRsvp = await apiReq('POST', `/api/events/${groupEventId}/rsvp`, null, {
+      name: 'Coach Volunteer',
+      email: 'coach_vol@sundaypickup.org',
+      players_count: 0,
+      spectators_count: 0,
+      duty_ids: [task3Id]
+    });
+    assert.equal(volRsvp.status, 200, 'Off-field volunteer RSVP must succeed');
+    assert.equal(volRsvp.data.status, 'attending', 'Off-field volunteer must confirm immediately');
+    assert.equal(volRsvp.data.spectatorsCount, 1, 'Off-field volunteer with 0 players/0 spectators must count as 1 off-field attendee');
+
+    detail = await apiReq('GET', `/api/events/${groupEventId}`, seedOrgCookie);
+    assert.equal(detail.data.totalAttendees, 2, 'On-field player count remains 2');
+    assert.equal(detail.data.totalSpectators, 6, 'Off-field spectators/volunteers count is now 3 + 2 + 1 = 6');
+    const t3 = detail.data.duties.find(d => d.id === task3Id);
+    assert.equal(t3.assigned_players[0].name, 'Coach Volunteer', 'Task 3 must be assigned to off-field volunteer');
+
+    // 7. Group with 1 player + 1 spectator when max_players (2/2) is FULL -> placed on waitlist
+    const waitRsvp = await apiReq('POST', `/api/events/${groupEventId}/rsvp`, null, {
+      name: 'Waitlisted Duo',
+      email: 'waitlisted_duo@sundaypickup.org',
+      players_count: 1,
+      spectators_count: 1,
+      duty_ids: []
+    });
+    assert.equal(waitRsvp.status, 200);
+    assert.equal(waitRsvp.data.status, 'waitlist', 'Group requesting on-field player spot when full must join waitlist');
+
+    // 8. Garcia Family Group switches from 2 players + 3 spectators to 0 players + 3 spectators (still keeping tasks!)
+    //    -> frees 2 on-field spots -> Waitlisted Duo auto-promotes to attending!
+    const switchToSpectators = await apiReq('POST', `/api/events/${groupEventId}/rsvp`, null, {
+      name: 'Garcia Family Group',
+      email: 'garcia_family@sundaypickup.org',
+      players_count: 0,
+      spectators_count: 3,
+      duty_ids: [task1Id, task2Id]
+    });
+    assert.equal(switchToSpectators.status, 200);
+    assert.equal(switchToSpectators.data.status, 'attending');
+
+    detail = await apiReq('GET', `/api/events/${groupEventId}`, seedOrgCookie);
+    assert.equal(detail.data.totalWaitlist, 0, 'Waitlist must be empty after auto-promotion');
+    assert.equal(detail.data.totalAttendees, 1, 'Promoted Waitlisted Duo now occupies 1 on-field player spot');
+    assert.equal(detail.data.totalSpectators, 7, 'Total spectators is now 3 + 2 + 1 + 1 = 7');
+    assert.ok(detail.data.attendees.some(a => a.name === 'Waitlisted Duo'), 'Waitlisted Duo must now be in confirmed attendees');
+
+    // 9. Verify GET /api/events list endpoint aggregates attendee_count and spectator_count accurately
+    const listRes = await apiReq('GET', '/api/events', null);
+    assert.equal(listRes.status, 200);
+    const listedGame = listRes.data.events.find(e => e.id === groupEventId);
+    assert.ok(listedGame, 'Group test event must appear in events list');
+    assert.equal(listedGame.attendee_count, 1, 'List endpoint attendee_count must sum confirmed players_count');
+    assert.equal(listedGame.spectator_count, 7, 'List endpoint spectator_count must sum confirmed spectators_count');
+
+    // 10. Cancel RSVP ('declined') releases group tasks
+    const cancelRes = await apiReq('POST', `/api/events/${groupEventId}/rsvp`, null, {
+      name: 'Garcia Family Group',
+      email: 'garcia_family@sundaypickup.org',
+      status: 'declined'
+    });
+    assert.equal(cancelRes.status, 200);
+    assert.equal(cancelRes.data.status, 'declined');
+
+    detail = await apiReq('GET', `/api/events/${groupEventId}`, seedOrgCookie);
+    const t1AfterCancel = detail.data.duties.find(d => d.id === task1Id);
+    assert.equal(t1AfterCancel.assigned_players.length, 0, 'Declining RSVP must release group tasks');
   });
 });

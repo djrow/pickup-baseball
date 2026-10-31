@@ -74,6 +74,8 @@ CREATE TABLE IF NOT EXISTS attendees (
   status TEXT DEFAULT 'attending',
   gear_bringing TEXT,
   notes TEXT,
+  players_count INTEGER DEFAULT 1,
+  spectators_count INTEGER DEFAULT 0,
   additional_guests INTEGER DEFAULT 0,
   guest_names TEXT,
   management_token TEXT UNIQUE,

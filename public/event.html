@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Game Details & RSVP - Sunday Pickup Baseball</title>
-  <link rel="stylesheet" href="/css/style.css?v=25">
+  <link rel="stylesheet" href="/css/style.css?v=26">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png">
@@ -80,7 +80,7 @@
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
             </span>
             <div>
-              <div class="meta-label" data-i18n="home.date_time">Date & Time</div>
+              <div class="meta-label" data-i18n="home.date_time">Date &amp; Time</div>
               <div class="meta-value" id="event-datetime"></div>
             </div>
           </div>
@@ -121,28 +121,28 @@
         <p id="event-description" style="color: var(--text-main); margin-top: 8px; white-space: pre-wrap;"></p>
       </div>
 
-      <!-- RSVP & Volunteer Section -->
+      <!-- Simplified Group RSVP & Volunteer Tasks Section -->
       <section class="card" id="rsvp-section" style="border: 2px solid var(--primary); background: var(--bg-card);">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
           <div>
-            <h2 style="font-size: 1.35rem; color: var(--secondary); margin-bottom: 4px;" data-i18n="event.rsvp_heading">
-              Mark Attendance & Sign Up for Tasks
+            <h2 style="font-size: 1.32rem; color: var(--secondary); margin-bottom: 2px;" data-i18n="event.rsvp_heading">
+              RSVP &amp; Volunteer Tasks
             </h2>
-            <p style="font-size: 0.88rem; color: var(--text-muted);" data-i18n="event.rsvp_subheading">
-              Let the team know if you are coming, what gear you have, and claim a task.
+            <p style="font-size: 0.86rem; color: var(--text-muted); margin: 0;" data-i18n="event.rsvp_subheading">
+              Sign up players, spectators, and group tasks in one step.
             </p>
           </div>
           <div id="rsvp-badge-container"></div>
         </div>
 
         <div id="rsvp-alert"></div>
-        <div id="rsvp-rainout-notice" style="display: none; margin-bottom: 20px;"></div>
+        <div id="rsvp-rainout-notice" style="display: none; margin-bottom: 16px;"></div>
 
-        <!-- Registered Player Login Prompt -->
-        <div id="rsvp-login-prompt" style="background: var(--bg-subtle); border: 1.5px solid var(--border); border-radius: var(--radius-sm); padding: 12px 16px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+        <!-- Registered User Login Prompt -->
+        <div id="rsvp-login-prompt" style="background: var(--bg-subtle); border: 1.5px solid var(--border); border-radius: var(--radius-sm); padding: 12px 16px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
           <div>
-            <strong style="color: var(--primary); font-size: 0.95rem;" data-i18n="event.already_account">Already have a player account?</strong>
-            <div style="font-size: 0.82rem; color: var(--text-muted); margin-top: 2px;" data-i18n="event.login_autofill">Log in to auto-fill your name, photo, bio, and task assignments.</div>
+            <strong style="color: var(--primary); font-size: 0.92rem;" data-i18n="event.already_account">Already have an account?</strong>
+            <div style="font-size: 0.82rem; color: var(--text-muted); margin-top: 2px;" data-i18n="event.login_autofill">Log in to save your group RSVP and manage tasks anytime.</div>
           </div>
           <a href="/login.html" class="btn btn-primary btn-sm" style="font-weight: 700; text-decoration: none;">
             ⚾ <span data-i18n="nav.login">Log In</span>
@@ -150,109 +150,106 @@
         </div>
 
         <form id="rsvp-form">
-          <!-- User / Guest Identity Fields -->
-          <div id="guest-fields" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 16px;">
-            <div class="form-group" style="margin-bottom: 0;">
-              <label for="rsvp-name" data-i18n="event.name_label">Name *</label>
-              <input type="text" id="rsvp-name" placeholder="Your name" data-i18n-placeholder="event.name_placeholder" required>
+          <div id="rsvp-interactive-top">
+            <!-- Guest Name & Email Fields (hidden when signed in) -->
+            <div id="guest-fields" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-bottom: 14px;">
+              <div class="form-group" style="margin-bottom: 0;">
+                <label for="rsvp-name" data-i18n="event.name_label">Name *</label>
+                <input type="text" id="rsvp-name" placeholder="Your name or group name" data-i18n-placeholder="event.name_placeholder" required>
+              </div>
+              <div class="form-group" style="margin-bottom: 0;">
+                <label for="rsvp-email" data-i18n="event.email_label">Email Address *</label>
+                <input type="email" id="rsvp-email" placeholder="For game reminder notifications" data-i18n-placeholder="event.email_placeholder" required>
+              </div>
             </div>
-            <div class="form-group" style="margin-bottom: 0;">
-              <label for="rsvp-email" data-i18n="event.email_label">Email Address *</label>
-              <input type="email" id="rsvp-email" placeholder="For game reminder notifications" data-i18n-placeholder="event.email_placeholder" required>
+
+            <!-- Group Headcount Steppers: Players & Spectators -->
+            <div class="rsvp-counters-grid">
+              <div class="rsvp-counter-card is-active" id="players-counter-card">
+                <div class="rsvp-counter-info">
+                  <div class="rsvp-counter-title" data-i18n="event.players_counter_title">⚾ Players</div>
+                  <div class="rsvp-counter-sub" data-i18n="event.players_counter_sub">Playing on the field</div>
+                </div>
+                <div class="rsvp-stepper" role="group" aria-label="Players in your group">
+                  <button type="button" class="stepper-btn" id="players-dec-btn" aria-label="Decrease players">−</button>
+                  <input type="number" id="rsvp-players-count" class="stepper-input" value="1" min="0" max="25" aria-label="Number of players">
+                  <button type="button" class="stepper-btn" id="players-inc-btn" aria-label="Increase players">+</button>
+                </div>
+              </div>
+
+              <div class="rsvp-counter-card" id="spectators-counter-card">
+                <div class="rsvp-counter-info">
+                  <div class="rsvp-counter-title" data-i18n="event.spectators_counter_title">👏 Spectators</div>
+                  <div class="rsvp-counter-sub" data-i18n="event.spectators_counter_sub">Watching or helping off-field</div>
+                </div>
+                <div class="rsvp-stepper" role="group" aria-label="Spectators in your group">
+                  <button type="button" class="stepper-btn" id="spectators-dec-btn" aria-label="Decrease spectators">−</button>
+                  <input type="number" id="rsvp-spectators-count" class="stepper-input" value="0" min="0" max="25" aria-label="Number of spectators">
+                  <button type="button" class="stepper-btn" id="spectators-inc-btn" aria-label="Increase spectators">+</button>
+                </div>
+              </div>
             </div>
+
+            <div id="rsvp-group-summary" class="rsvp-group-summary"></div>
           </div>
 
-          <!-- Attendance Choice -->
-          <div class="form-group">
-            <label style="margin-bottom: 8px;" data-i18n="event.will_attend">Will you attend?</label>
-            <div style="display: flex; gap: 16px; flex-wrap: wrap;">
-              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600;">
-                <input type="radio" name="rsvp-status" value="attending" checked>
-                <span data-i18n="event.attending_yes">⚾ Yes, I'm playing!</span>
-              </label>
-              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; color: var(--text-muted);">
-                <input type="radio" name="rsvp-status" value="declined">
-                <span data-i18n="event.attending_no">✕ Can't make it</span>
-              </label>
+          <!-- Unified Group Volunteer Tasks Checklist (Single source of truth on page) -->
+          <div class="form-group" id="duties-selection-group" style="margin-bottom: 14px;">
+            <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
+              <label style="margin-bottom: 0;" data-i18n="event.duties_label">🛡️ Group Volunteer Tasks</label>
+              <span style="font-size: 0.78rem; color: var(--text-muted);" data-i18n="event.duties_help">Your group covers checked tasks together</span>
             </div>
-          </div>
-
-          <!-- Additional Guests -->
-          <div class="form-group" id="additional-guests-group">
-            <label for="rsvp-additional-guests" data-i18n="event.additional_guests_label">Bringing Additional Guests?</label>
-            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-              <select id="rsvp-additional-guests" style="min-width: 170px; padding: 8px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border); font-size: 0.92rem; font-weight: 600; background: var(--bg-card); color: var(--text-main);">
-                <option value="0" data-i18n="event.just_me">0 (Just me)</option>
-                <option value="1">+1 Guest</option>
-                <option value="2">+2 Guests</option>
-                <option value="3">+3 Guests</option>
-                <option value="4">+4 Guests</option>
-                <option value="5">+5 Guests</option>
-              </select>
-              <input type="text" id="rsvp-guest-names" placeholder="Guest names (e.g. Alex, Jordan)" style="flex: 1; min-width: 200px; display: none;" data-i18n-placeholder="event.guest_names_placeholder">
-            </div>
-            <div class="help-text" data-i18n="event.additional_guests_help">
-              Each guest reserves an active roster slot so we have an accurate head count for game day.
-            </div>
-          </div>
-
-          <!-- Gear Coordination -->
-          <div class="form-group" id="gear-group">
-            <label for="rsvp-gear" data-i18n="event.gear_label">Gear You Can Bring (Optional)</label>
-            <input type="text" id="rsvp-gear" placeholder="e.g. 2 wood bats, catcher's helmet, spare glove, bucket of balls" data-i18n-placeholder="event.gear_placeholder">
-            <div class="help-text" data-i18n="event.gear_help">
-              Coordination helps us make sure we have enough bats, balls, and gear for players without their own.
-            </div>
-          </div>
-
-          <!-- Tasks Signup -->
-          <div class="form-group" id="duties-selection-group">
-            <label style="margin-bottom: 6px;" data-i18n="event.duties_label">Volunteer for Game Tasks (Check any you can take):</label>
-            <div class="help-text" style="margin-bottom: 10px;" data-i18n="event.duties_help">
-              Pickup baseball relies on everyone pitching in. Check an open slot below!
-            </div>
-            <div id="rsvp-duties-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px;">
+            <div id="rsvp-duties-list" class="rsvp-tasks-checklist">
               <!-- Populated dynamically -->
             </div>
           </div>
 
-          <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 24px; flex-wrap: wrap; gap: 12px;">
-            <button type="submit" id="rsvp-submit-btn" class="btn btn-primary btn-lg" data-i18n="event.submit_rsvp_btn">
-              Confirm RSVP & Task Signup
-            </button>
-            <span style="font-size: 0.8rem; color: var(--text-muted);" data-i18n="event.rsvp_email_note">
-              📬 You will receive an immediate confirmation email + reminder 24h before game time.
-            </span>
+          <div id="rsvp-interactive-bottom">
+            <!-- Collapsible Optional Details: Group Names & Shared Gear -->
+            <details id="rsvp-optional-details" class="rsvp-optional-details">
+              <summary data-i18n="event.optional_details_summary">Add group names or shared gear (optional)</summary>
+              <div class="rsvp-optional-body">
+                <div class="form-group" style="margin-bottom: 12px;">
+                  <label for="rsvp-guest-names" style="font-size: 0.85rem;" data-i18n="event.group_names_label">Group / Guest Names</label>
+                  <input type="text" id="rsvp-guest-names" placeholder="e.g. Alex, Jordan, Sam" data-i18n-placeholder="event.guest_names_placeholder">
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label for="rsvp-gear" style="font-size: 0.85rem;" data-i18n="event.gear_label">Shared Gear Your Group Can Bring</label>
+                  <input type="text" id="rsvp-gear" placeholder="e.g. 2 wood bats, catcher's helmet, spare glove" data-i18n-placeholder="event.gear_placeholder">
+                </div>
+              </div>
+            </details>
+
+            <div class="rsvp-actions-bar">
+              <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <button type="submit" id="rsvp-submit-btn" class="btn btn-primary" data-i18n="event.submit_rsvp_btn">
+                  Confirm RSVP
+                </button>
+                <button type="button" id="rsvp-cancel-btn" class="btn btn-outline rsvp-cancel-btn" style="display: none;" data-i18n="event.cancel_rsvp_btn">
+                  Can't Make It
+                </button>
+              </div>
+              <span style="font-size: 0.78rem; color: var(--text-muted);" data-i18n="event.rsvp_email_note">
+                📬 Confirmation email + 24h game reminder
+              </span>
+            </div>
           </div>
         </form>
       </section>
 
-      <!-- Tasks Board -->
+      <!-- Attendees Roster, Spectators & Group Tasks -->
       <section class="card">
         <div class="card-header">
           <div>
-            <h2 class="card-title" data-i18n="event.duty_board_title">🛡️ Game Day Task Board</h2>
-            <p style="font-size: 0.88rem; color: var(--text-muted);" data-i18n="event.duty_board_desc">
-              Essential roles to keep our pickup games safe, fun, and organized.
-            </p>
-          </div>
-        </div>
-
-        <div id="duties-grid" class="duty-grid">
-          <!-- Populated dynamically -->
-        </div>
-      </section>
-
-      <!-- Attendees Roster & Gear List -->
-      <section class="card">
-        <div class="card-header">
-          <div>
-            <h2 class="card-title" data-i18n="event.roster_title">👥 Player Roster & Equipment</h2>
+            <h2 class="card-title" data-i18n="event.roster_title">👥 Who's Coming</h2>
             <p style="font-size: 0.88rem; color: var(--text-muted);" data-i18n="event.roster_desc">
-              See who is playing, what gear is covered, and team tasks.
+              Players, spectators, shared gear, and group tasks.
             </p>
           </div>
-          <span id="roster-badge" class="badge badge-green"></span>
+          <div id="roster-badges-wrap" style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+            <span id="roster-badge" class="badge badge-green"></span>
+            <span id="spectators-badge" class="badge badge-spectator" style="display: none;"></span>
+          </div>
         </div>
 
         <div id="attendees-container">
@@ -307,7 +304,7 @@
 
   <footer id="site-footer" class="site-footer"></footer>
 
-  <script src="/js/api.js?v=25"></script>
-  <script src="/js/event.js?v=25"></script>
+  <script src="/js/api.js?v=26"></script>
+  <script src="/js/event.js?v=26"></script>
 </body>
 </html>

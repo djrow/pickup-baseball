@@ -83,6 +83,8 @@ function initDatabase() {
       status TEXT DEFAULT 'attending',
       gear_bringing TEXT,
       notes TEXT,
+      players_count INTEGER DEFAULT 1,
+      spectators_count INTEGER DEFAULT 0,
       additional_guests INTEGER DEFAULT 0,
       guest_names TEXT,
       management_token TEXT UNIQUE,
@@ -151,13 +153,27 @@ function initDatabase() {
     db.exec('ALTER TABLE events ADD COLUMN actual_attendance INTEGER DEFAULT NULL');
   }
 
-  // Migrate attendees table columns for additional guests
+  // Migrate attendees table columns for players, spectators, and additional guests
   const attendeeCols = db.pragma('table_info(attendees)').map(c => c.name);
   if (!attendeeCols.includes('additional_guests')) {
     db.exec('ALTER TABLE attendees ADD COLUMN additional_guests INTEGER DEFAULT 0');
   }
   if (!attendeeCols.includes('guest_names')) {
     db.exec('ALTER TABLE attendees ADD COLUMN guest_names TEXT');
+  }
+  if (!attendeeCols.includes('players_count')) {
+    db.exec('ALTER TABLE attendees ADD COLUMN players_count INTEGER DEFAULT NULL');
+    db.exec(`
+      UPDATE attendees
+      SET players_count = CASE
+        WHEN status = 'declined' THEN 0
+        ELSE 1 + COALESCE(additional_guests, 0)
+      END
+      WHERE players_count IS NULL
+    `);
+  }
+  if (!attendeeCols.includes('spectators_count')) {
+    db.exec('ALTER TABLE attendees ADD COLUMN spectators_count INTEGER DEFAULT 0');
   }
 
   // Ensure role synchronization

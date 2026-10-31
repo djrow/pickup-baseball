@@ -26,15 +26,18 @@ Designed with a **10+ year longevity philosophy**:
    - **Interactive Preview Drawer**: Selecting any game slides open `#calendar-date-drawer` with Google Calendar export, location map, volunteer task status, and 1-click RSVP.
    - **1-Click `.ics` Export Download** (`pickup-baseball-schedule.ics`) compatible with Apple Calendar, Microsoft Outlook, and Google Calendar, plus direct access to the **[Past Games Archive](https://www.pickupbaseballfoundation.org/archive.html)**.
 
-2. **Game Scheduling, Roster Tracking, & RSVP Whitelists**:
-   - Live player roster showing confirmed headcount, player bios, and shared equipment.
-   - Instant RSVP confirmation email with game details and a personal management link.
+2. **Simplified Group RSVPs (Players, Spectators & Off-Field Volunteers), Roster Tracking, & RSVP Whitelists**:
+   - **Single-Step Group RSVP**: A single account or email can RSVP for an entire household or friend group using two mutually-exclusive headcount steppers — **⚾ Players** *(playing on the field, `0..25`)* and **👏 Spectators** *(watching or helping off-field, `0..25`)* — alongside a unified **🛡️ Group Volunteer Tasks** checklist.
+   - **Spectator & Off-Field Volunteer Support**: Only on-field `players_count` consumes `max_players` playing roster capacity. Spectators and off-field volunteers (`0 Players`) never take player spots and confirm immediately even when the playing roster is full.
+   - **Group-Owned Task Responsibility**: Checked volunteer tasks are owned by the group/account as a whole (`🛡️ Group Tasks`), eliminating per-person task friction while tucking optional group names and shared gear into a clean collapsible `<details>` drawer.
+   - Live **"👥 Who's Coming"** roster displaying confirmed player and spectator badges, off-field volunteer tags (`🙌 Volunteer`), shared equipment, and group task assignments.
+   - Instant RSVP confirmation email with group breakdown and a personal management link.
    - 1-Click **"Post Next Sunday @ Noon"** scheduler normalized to `America/Los_Angeles` (Pacific Time).
    - Inline **Edit Game Details** tool for organizers and facilitators with smart location autocomplete.
    - **Per-Event RSVP Whitelists (Allowed Player Emails)**: Event creators (Admins and Organizers) can designate private or invitational games restricted to specific player email addresses. Built with an Organizer candidate accounts search directory (`GET /api/events/attendee-candidates`) featuring checkbox multi-selection and custom email entry, enforced with HTTP 403 Forbidden on unauthorized signups and polite invitation status notices on the event page.
 
-3. **Volunteer Task Coordination & Game Day Roles**:
-   - Standardized site-wide **Task** and **Tasks** coordination (standardized from legacy duty/duties terminology).
+3. **Unified Group Volunteer Task Coordination**:
+   - Single unified **🛡️ Group Volunteer Tasks** checklist integrated directly inside the RSVP card (retiring the duplicate standalone Task Board card for a cleaner, scannable event page, and switching automatically to a read-only view when RSVPs are locked or rained out).
    - Customizable default task template pre-configured with the 6 essential game-day tasks:
      - **Game Facilitator** (1 slot) — *Help coordinate teams, batting order, and fair play throughout the game.*
      - **Water / Food** (1 slot) — *Bring drinking water, ice, and dugout snacks or fruit for players.*
@@ -49,9 +52,9 @@ Designed with a **10+ year longevity philosophy**:
 
 5. **Streamlined Calendar-First Homepage & Roster Privacy**:
    - Pure calendar-first landing page: retired redundant lower featured game cards and secondary lists in favor of the unified rolling calendar and slide-out preview drawer.
-   - Automated roster capacity capping (`max_players`) with instant waitlist activation.
-   - Automatic queue promotion upon cancellations with instant email dispatch.
-   - Multi-guest reservation support (+1 to +5 guests per RSVP).
+   - Automated playing roster capacity capping (`max_players`) with instant waitlist activation for on-field players while allowing spectators to join freely.
+   - Automatic queue promotion upon cancellations or on-field player reductions with instant email dispatch.
+   - Group reservation support (`0..25` players and `0..25` spectators per account).
    - **Privacy Shield for Player Rosters**: Unauthenticated visitors see a privacy notice protecting player identities until an RSVP is submitted or an organizer signs in.
    - Dedicated **[Past Games Archive](https://www.pickupbaseballfoundation.org/archive.html)** with Sunday turnout recording.
 
@@ -107,8 +110,8 @@ Designed with a **10+ year longevity philosophy**:
     - User account removal, email ban list (`banned_emails`), guest RSVP policy toggle, and one-click roster/comment moderation.
 
 13. **Comprehensive Zero-Dependency Acceptance Test Suite**:
-    - 52-test automated end-to-end verification suite in `scripts/verify-all.js` using native Node.js v22 test runner (`node:test`, `node:assert/strict`, `fetch`) with zero third-party test dependencies.
-    - Rigorously validates magic link authentication, 4-tier RBAC permission boundaries, task management, RSVP whitelists, waitlist queue promotions, rainout incident notifications, rolling calendar horizons, and version negotiation.
+    - 54-test automated end-to-end verification suite in `scripts/verify-all.js` using native Node.js v22 test runner (`node:test`, `node:assert/strict`, `fetch`) with zero third-party test dependencies.
+    - Rigorously validates magic link authentication, 4-tier RBAC permission boundaries, group RSVPs (players, spectators, and off-field volunteers), group task ownership, RSVP whitelists, waitlist queue promotions, rainout incident notifications, rolling calendar horizons, and version negotiation.
 
 14. **Detailed Development Narrative & Open Source**:
     - Complete chronicle of all architectural decisions, edge migrations, and technical phases in **[`DEVELOPMENT_NARRATIVE.md`](DEVELOPMENT_NARRATIVE.md)**.
@@ -294,7 +297,7 @@ Cloudflare Pages hosts both the static files in `public/` and the serverless Hon
 # Start local Cloudflare Pages + D1 dev server at http://localhost:8788
 npm run dev
 
-# Run comprehensive 52-test automated acceptance verification suite
+# Run comprehensive 54-test automated acceptance verification suite
 npm test
 
 # Deploy static assets and Worker functions to production

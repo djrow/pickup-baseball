@@ -140,7 +140,7 @@ Play ball!
 /**
  * Send instant RSVP confirmation email
  */
-async function sendRsvpConfirmation({ email, name, event, dutyName, gearBringing, additionalGuests, guestNames, managementToken }) {
+async function sendRsvpConfirmation({ email, name, event, dutyName, gearBringing, playersCount, spectatorsCount, additionalGuests, guestNames, managementToken }) {
   const manageLink = `${APP_URL}/event.html?id=${event.id}&token=${encodeURIComponent(managementToken || '')}`;
   const eventDateFormatted = new Date(event.event_date).toLocaleString('en-US', {
     weekday: 'long',
@@ -153,48 +153,55 @@ async function sendRsvpConfirmation({ email, name, event, dutyName, gearBringing
     timeZoneName: 'short'
   });
 
-  const guestsCount = Number(additionalGuests) || 0;
-  const totalParty = 1 + guestsCount;
+  const pCount = playersCount !== undefined ? Number(playersCount) : (1 + (Number(additionalGuests) || 0));
+  const sCount = Number(spectatorsCount) || 0;
+  const groupParts = [];
+  if (pCount > 0) groupParts.push(`${pCount} ${pCount === 1 ? 'player' : 'players'}`);
+  if (sCount > 0) groupParts.push(`${sCount} ${pCount === 0 && dutyName ? (sCount === 1 ? 'volunteer' : 'volunteers/spectators') : (sCount === 1 ? 'spectator' : 'spectators')}`);
+  const groupSummary = groupParts.join(', ') || '1 attendee';
 
-  const subject = `Confirmed: You're playing in ${event.title} (${eventDateFormatted})`;
+  const subject = pCount > 0
+    ? `Confirmed: You're in for ${event.title} (${eventDateFormatted})`
+    : `Confirmed: RSVP for ${event.title} (${eventDateFormatted})`;
   const text = `Hi ${name},
 
-You're confirmed for pickup baseball!
+Your group RSVP is confirmed for pickup baseball!
 
 Event: ${event.title}
 Date & Time: ${eventDateFormatted}
 Location: ${event.location}
-${guestsCount > 0 ? `Additional Guests: +${guestsCount}${guestNames ? ` (${guestNames})` : ''}\nTotal in Your Party: ${totalParty} players\n` : ''}${dutyName ? `Task Signed Up For: ${dutyName}\n` : ''}${gearBringing ? `Gear You're Bringing: ${gearBringing}\n` : ''}
-Need to coordinate gear, check who else is coming, or change your RSVP?
+Your Group: ${groupSummary}${guestNames ? ` (${guestNames})` : ''}
+${dutyName ? `Group Task(s): ${dutyName}\n` : ''}${gearBringing ? `Shared Gear: ${gearBringing}\n` : ''}
+Need to coordinate gear, check who else is coming, or update your RSVP?
 Visit the event page here:
 ${manageLink}
 
-See you on the field!
+See you at the field!
 - ${APP_NAME}`;
 
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 26px; border: 1px solid #dbe4e0; border-top: 5px solid #FD5A1E; border-radius: 8px; background: #ffffff;">
       <h2 style="color: #003831; margin-top: 0; font-size: 22px;">⚾ RSVP Confirmed!</h2>
       <p style="color: #0c1f1a; font-size: 16px;">Hi <strong>${name}</strong>,</p>
-      <p style="color: #546e66; font-size: 15px;">You are confirmed on the roster for <strong>${event.title}</strong>.</p>
+      <p style="color: #546e66; font-size: 15px;">Your group RSVP is confirmed for <strong>${event.title}</strong>.</p>
       
       <div style="background: #f5f8f7; border-left: 4px solid #003831; border: 1px solid #dbe4e0; padding: 18px; margin: 20px 0; border-radius: 6px;">
         <p style="margin: 4px 0; color: #0c1f1a;"><strong>📅 When:</strong> ${eventDateFormatted}</p>
         <p style="margin: 4px 0; color: #0c1f1a;"><strong>📍 Where:</strong> ${event.location}</p>
-        ${guestsCount > 0 ? `<p style="margin: 4px 0; color: #003831;"><strong>👥 Additional Guests:</strong> +${guestsCount} ${guestNames ? `<em>(${guestNames})</em>` : ''} (${totalParty} players total in your party)</p>` : ''}
+        <p style="margin: 4px 0; color: #003831;"><strong>👥 Your Group:</strong> ${groupSummary}${guestNames ? ` <em>(${guestNames})</em>` : ''}</p>
         ${event.location_url ? `<p style="margin: 4px 0;"><a href="${event.location_url}" target="_blank" style="color: #FD5A1E; font-weight: 700;">View Map / Directions ↗</a></p>` : ''}
-        ${dutyName ? `<p style="margin: 6px 0 4px 0; color: #003831;"><strong>🛡️ Your Task:</strong> <span style="background: #e6f0ed; padding: 2px 8px; border-radius: 4px; font-weight: 700;">${dutyName}</span></p>` : ''}
-        ${gearBringing ? `<p style="margin: 4px 0; color: #0c1f1a;"><strong>🎒 Gear You're Bringing:</strong> <em>${gearBringing}</em></p>` : ''}
+        ${dutyName ? `<p style="margin: 6px 0 4px 0; color: #003831;"><strong>🛡️ Group Task(s):</strong> <span style="background: #e6f0ed; padding: 2px 8px; border-radius: 4px; font-weight: 700;">${dutyName}</span></p>` : ''}
+        ${gearBringing ? `<p style="margin: 4px 0; color: #0c1f1a;"><strong>🎒 Shared Gear:</strong> <em>${gearBringing}</em></p>` : ''}
       </div>
 
       <p style="text-align: center; margin: 28px 0;">
         <a href="${manageLink}" style="background: #FD5A1E; color: #ffffff; padding: 13px 26px; border-radius: 6px; text-decoration: none; font-weight: 700; font-size: 15px; display: inline-block;">
-          View Live Roster & Coordinate Gear →
+          View Live Roster & Update RSVP →
         </a>
       </p>
 
       <p style="color: #546e66; font-size: 13px; border-top: 1px solid #dbe4e0; padding-top: 14px;">
-        Plans changed? Use the button above to update your gear or cancel your attendance so another player can take your spot.
+        Plans changed? Use the button above to update your group count, tasks, or cancel your RSVP.
       </p>
     </div>
   `;
@@ -389,7 +396,7 @@ Play ball!
 /**
  * Send confirmation that attendee is placed on waitlist
  */
-async function sendWaitlistConfirmation({ email, name, event, waitlistPosition, additionalGuests, guestNames, managementToken }) {
+async function sendWaitlistConfirmation({ email, name, event, waitlistPosition, playersCount, spectatorsCount, additionalGuests, guestNames, managementToken }) {
   const manageLink = `${APP_URL}/event.html?id=${event.id}&token=${encodeURIComponent(managementToken || '')}`;
   const eventDateFormatted = new Date(event.event_date).toLocaleString('en-US', {
     weekday: 'long',
@@ -402,15 +409,15 @@ async function sendWaitlistConfirmation({ email, name, event, waitlistPosition, 
     timeZoneName: 'short'
   });
 
-  const guestsCount = Number(additionalGuests) || 0;
-  const totalParty = 1 + guestsCount;
+  const pCount = playersCount !== undefined ? Number(playersCount) : (1 + (Number(additionalGuests) || 0));
+  const sCount = Number(spectatorsCount) || 0;
 
   const subject = `⏳ Waitlist Confirmed: ${event.title} (Position #${waitlistPosition})`;
   const text = `Hi ${name},
 
 The active playing roster for ${event.title} is currently full at ${event.max_players || 'maximum'} players.
 
-You are on the waitlist at position #${waitlistPosition}${guestsCount > 0 ? ` with your party of ${totalParty} players` : ''}.
+You are on the waitlist at position #${waitlistPosition}${pCount > 1 ? ` with ${pCount} players` : ''}${sCount > 0 ? ` (+ ${sCount} ${sCount === 1 ? 'spectator' : 'spectators'})` : ''}.
 
 If active roster spots open up, you will be automatically promoted to the playing roster and notified immediately by email!
 
@@ -427,7 +434,7 @@ ${manageLink}
       
       <div style="background: #f5f8f7; border-left: 4px solid #FD5A1E; border: 1px solid #dbe4e0; padding: 18px; margin: 20px 0; border-radius: 6px;">
         <p style="margin: 4px 0; color: #003831; font-size: 17px;"><strong>Your Waitlist Position:</strong> <span style="background: #FD5A1E; color: #fff; padding: 3px 10px; border-radius: 20px; font-weight: 700;">#${waitlistPosition}</span></p>
-        ${guestsCount > 0 ? `<p style="margin: 6px 0 4px 0; color: #0c1f1a;"><strong>👥 Party Size:</strong> ${totalParty} players (+${guestsCount} guests)</p>` : ''}
+        ${(pCount > 1 || sCount > 0) ? `<p style="margin: 6px 0 4px 0; color: #0c1f1a;"><strong>👥 Your Group:</strong> ${pCount} ${pCount === 1 ? 'player' : 'players'}${sCount > 0 ? `, ${sCount} ${sCount === 1 ? 'spectator' : 'spectators'}` : ''}</p>` : ''}
         <p style="margin: 8px 0 4px 0; color: #0c1f1a;"><strong>📅 Game Date:</strong> ${eventDateFormatted}</p>
         <p style="margin: 4px 0; color: #0c1f1a;"><strong>📍 Location:</strong> ${event.location}</p>
       </div>

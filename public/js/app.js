@@ -244,7 +244,7 @@ function renderCalendarDrawer(dateKey, game, isPast) {
         <div class="drawer-meta" style="margin-top: 6px;">
           <span class="drawer-meta-item"><span>📅</span> <strong>${API.escapeHtml(dateFormatted)}</strong></span>
           <span class="drawer-meta-item"><span>📍</span> ${API.escapeHtml(game.location)}</span>
-          <span class="drawer-meta-item" style="color: var(--secondary); font-weight: 700;"><span>👥</span> ${turnoutCount} Players</span>
+          <span class="drawer-meta-item" style="color: var(--secondary); font-weight: 700;"><span>👥</span> ${turnoutCount} Players${game.spectator_count > 0 ? ` + ${game.spectator_count} ${game.spectator_count === 1 ? 'Spectator' : 'Spectators'}` : ''}</span>
           <span class="drawer-meta-item"><span>🛡️</span> ${API.escapeHtml(API.t('home.duties_configured', { count: game.duty_count }))}</span>
         </div>
         ${game.rainout_note ? `<div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 6px;"><em>Rainout note: "${API.escapeHtml(game.rainout_note)}"</em></div>` : ''}
@@ -274,7 +274,7 @@ function renderCalendarDrawer(dateKey, game, isPast) {
         <div class="drawer-meta" style="margin-top: 6px;">
           <span class="drawer-meta-item"><span>📅</span> <strong>${API.escapeHtml(dateFormatted)}</strong></span>
           <span class="drawer-meta-item"><span>📍</span> ${API.escapeHtml(game.location)}</span>
-          <span class="drawer-meta-item" style="color: var(--secondary); font-weight: 700;"><span>👥</span> ${API.escapeHtml(API.t('home.players_count', { count: game.attendee_count }))}</span>
+          <span class="drawer-meta-item" style="color: var(--secondary); font-weight: 700;"><span>👥</span> ${API.escapeHtml(API.t('home.players_count', { count: game.attendee_count }))}${game.spectator_count > 0 ? ` + ${game.spectator_count} ${game.spectator_count === 1 ? 'Spectator' : 'Spectators'}` : ''}</span>
           <span class="drawer-meta-item"><span>🛡️</span> ${API.escapeHtml(API.t('home.duties_configured', { count: game.duty_count }))}</span>
         </div>
         ${game.rainout_note ? `<div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 6px;"><em>Rainout note: "${API.escapeHtml(game.rainout_note)}"</em></div>` : ''}
