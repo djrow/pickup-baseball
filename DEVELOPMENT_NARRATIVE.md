@@ -490,5 +490,17 @@ Addressed scaling usability as registered user accounts grow by compactifying ve
 
 ---
 
-## 32. Future Roadmap Notes
+## 32. Phase 31: Top Bar Header & Calendar Subtitle Streamlining
+Streamlined the visual presentation of the top bar header and game calendar section:
+- **Removed Top Bar Community Pill:**
+  - Removed `<span class="brand-tag">Community</span>` from the site brand header in `public/js/api.js` (`API.renderNav`) and across all 8 static HTML template fallbacks (`index.html`, `event.html`, `archive.html`, `admin.html`, `donate.html`, `login.html`, `profile.html`, `404.html`), eliminating visual clutter beside the foundation logo and text.
+- **Removed Calendar Subtitle Text:**
+  - Removed the static subtitle `"Sunday Pickup Games • 12:00 PM • Bushrod Park"` from the calendar section header in `public/index.html`, retaining the live cloud calendar sync indicator button neatly beneath the title.
+- **Verification & Version Invalidation:**
+  - Added regression test assertions in `scripts/verify-all.js` (`T9.16`) confirming the absence of the hardcoded calendar subtitle and top bar brand tag.
+  - Bumped version to `v34` across `CLIENT_VERSION`, `CURRENT_APP_VERSION`, Service Worker cache name (`pbf-cache-v34`), and all 8 HTML files. All 58 automated tests pass.
+
+---
+
+## 33. Future Roadmap Notes
 - **Pinned Full-Stack Rust / WebAssembly Migration:** Evaluated a future 4-phase rewrite of the Cloudflare Pages Functions backend (and optional frontend interactivity) to Rust (`workers-rs` compiling to WebAssembly) for compile-time type safety, zero-dependency binary durability, and strict edge memory safety—kept as a guiding north star when designing new features and data models.

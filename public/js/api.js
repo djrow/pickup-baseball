@@ -289,7 +289,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '33',
+  CLIENT_VERSION: '34',
 
   // Current user cache
   currentUser: null,
@@ -1404,7 +1404,6 @@ const API = {
           <img src="/logo.svg" alt="Pickup Baseball Foundation Logo" class="brand-logo">
           <span class="brand-text"><span class="brand-line">Pickup Baseball</span> <span class="brand-line">Foundation</span></span>
           <span class="brand-short">PBF</span>
-          <span class="brand-tag">${this.t('nav.community')}</span>
         </a>
         <div class="nav-links">
           ${donateLinkHtml}

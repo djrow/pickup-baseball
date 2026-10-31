@@ -55,7 +55,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-const CURRENT_APP_VERSION = '33';
+const CURRENT_APP_VERSION = '34';
 app.use((req, res, next) => {
   res.setHeader('X-App-Version', CURRENT_APP_VERSION);
   next();
@@ -1386,6 +1386,11 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     const indexHtml = fs.readFileSync(path.join(publicDir, 'index.html'), 'utf8');
     assert.ok(indexHtml.includes('id="calendar-sync-pill"'), 'index.html must include live cloud sync status pill');
     assert.ok(indexHtml.includes('id="calendar-subscribe-panel"'), 'index.html must include live calendar subscription panel');
+    assert.ok(!indexHtml.includes('Sunday Pickup Games • 12:00 PM • Bushrod Park'), 'index.html must not include hardcoded calendar subtitle');
+    assert.ok(!indexHtml.includes('brand-tag'), 'index.html must not include community pill in top bar');
+
+    const apiJsNav = fs.readFileSync(path.join(publicDir, 'js/api.js'), 'utf8');
+    assert.ok(!apiJsNav.includes('class="brand-tag"'), 'api.js renderNav must not include community brand-tag pill');
 
     const appJs = fs.readFileSync(path.join(publicDir, 'js/app.js'), 'utf8');
     assert.ok(appJs.includes('setupCloudSyncLifecycle'), 'app.js must bind cloud sync lifecycle listeners');
