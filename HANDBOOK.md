@@ -1,0 +1,324 @@
+# ⚾ Pickup Baseball Foundation — User Guide & Manual Maintenance Handbook
+
+Welcome! This handbook explains **how to use** the [Pickup Baseball Foundation web app](https://www.pickupbaseballfoundation.org) (for players, spectators, volunteers, organizers, and admins) and **how to make manual code changes yourself** using nothing more than a text editor and a terminal.
+
+The entire app was built with **zero frontend build tools** (plain HTML, CSS, and standard JavaScript) specifically so a human volunteer can read, understand, and edit it 5 or 10 years from now without framework upgrades or broken build pipelines.
+
+---
+
+## 📖 Table of Contents
+
+- **Part I: How to Use the Web App**
+  1. [For Players, Spectators & Volunteers](#1-for-players-spectators--volunteers)
+  2. [For Game Facilitators & Organizers](#2-for-game-facilitators--organizers)
+  3. [For Administrators](#3-for-administrators)
+- **Part II: Manual Maintenance & Code Editing Handbook**
+  4. [How the Codebase Is Organized](#4-how-the-codebase-is-organized)
+  5. [The 4-Step Workflow for Any Manual Change](#5-the-4-step-workflow-for-any-manual-change)
+  6. [Version Bumping Checklist (Clearing Browser & Phone Caches)](#6-version-bumping-checklist-clearing-browser--phone-caches)
+  7. [Cookbook: Step-by-Step Recipes for Common Edits](#7-cookbook-step-by-step-recipes-for-common-edits)
+  8. [House Rules & Safety Guardrails](#8-house-rules--safety-guardrails)
+  9. [Troubleshooting & Emergency Recovery](#9-troubleshooting--emergency-recovery)
+
+---
+
+# Part I: How to Use the Web App
+
+## 1. For Players, Spectators & Volunteers
+
+### 📅 Browsing the Game Calendar (Homepage)
+- The homepage (`index.html`) displays a **rolling 6-card schedule**:
+  - **Card 1 (`📜 Past Game`):** The most recent past game with recorded turnout and a link to post-game comments.
+  - **Card 2 (`⚾ Next Game` or `Today`):** The immediate upcoming game.
+  - **Cards 3–6:** Upcoming confirmed games (`⚾ 12:00 PM`) or unscheduled future Sundays (`📅 Prospective` / `📍 TBA`).
+- **Navigation:** Use `‹` and `›` to step backward or forward by 4 weeks, or click **`Today`** to jump back to the current week.
+- **Preview Drawer:** Click any card to slide open a summary drawer with the field location, player/spectator headcount, volunteer task count, a **Google Cal ↗** shortcut, and an **RSVP & View Game Details →** button.
+- **Cloud Sync Badge:** Next to the calendar subtitle, a live pill confirms whether your screen matches the cloud database:
+  - `🟢 Cloud synced • Just now ↻` — Verified live against Cloudflare D1 (click anytime to re-check).
+  - `⚠️ Offline — cached schedule (...) ↻` — Your phone/computer lost internet and is showing the last saved schedule.
+
+### 🔄 Subscribing Your Phone or Computer Calendar (`Subscribe (.ics)`)
+- Click **`🔄 Subscribe (.ics)`** in the calendar header to open the live sync drawer:
+  - **🍎 Apple / Outlook (Live Sync):** Opens a `webcal://` subscription so iPhone, Mac, or Outlook calendars stay updated automatically.
+  - **📅 Google Calendar (Live Sync):** Adds the live feed directly to Google Calendar.
+  - **📋 Copy Feed URL:** Copies `https://www.pickupbaseballfoundation.org/api/events/calendar.ics`.
+  - **📥 Download One-Time `.ics` File:** Downloads a static snapshot (does *not* auto-update if a rainout is called later).
+- When subscribed to the live feed, newly scheduled games, field changes, and `🌧️ RAINED OUT:` alerts sync to your personal calendar automatically.
+
+### 🔑 Signing In (Passwordless Email Login)
+- Click **Log In** in the top bar (`/login.html`).
+- Enter your email address (and name if it's your first time).
+- Check your inbox for an email from `games@pickupbaseballfoundation.org`:
+  - Either type the **6-digit code** into the login page, **or** click the **1-click magic sign-in link** in the email.
+- Once signed in, your browser stays signed in for **90 days**. You can log out anytime from your **Profile** page (`/profile.html`).
+
+### ⚾👏🛡️ Submitting a Group RSVP (Players, Spectators & Volunteer Tasks)
+On any game page (`/event.html?id=...`), one person or household account can RSVP for their whole group in a single step:
+1. **⚾ Players (`−` / `+`):** How many people in your group are **playing on the field** (`0` to `25`). Only on-field players count toward a game's playing roster cap (`max_players`).
+2. **👏 Spectators (`−` / `+`):** How many people in your group are **watching or helping off-field** (`0` to `25`). Spectators never take up playing spots and are confirmed immediately even if the playing roster is full.
+3. **🛡️ Group Volunteer Tasks:** Check any game-day tasks your group will cover (such as *Bases*, *Pitching machine and power*, *Game Baseballs*, *Field Dragging*, *Game Facilitator*, or *Water / Food*). **Tasks belong to your group as a whole**, not to separate individuals inside your group.
+   - *Off-field volunteers:* You can set `0 Players` and check a task (or add `1+ Spectators`) to volunteer without playing!
+4. **Optional Group Names & Shared Gear:** Click *"Add group names or shared gear (optional)"* to list group members' names or equipment you're bringing (extra bats, gloves, catcher's gear).
+5. **Confirm / Update / Cancel:**
+   - Click **Confirm RSVP** (or **Update RSVP** if editing). You'll receive a confirmation email with a personal link to manage your RSVP later, plus an automatic reminder email ~24 hours before first pitch.
+   - Plans changed? Click **Can't Make It** next to the update button. Your spot and any claimed tasks are immediately released so others can take them.
+
+### ⏳ Waitlists & Automatic Promotion
+- If an organizer sets a player cap (for example, `24` players) and all playing spots are full, groups requesting `1+ Players` are placed on the **Player Waitlist** in signup order.
+- Whenever a confirmed group cancels or reduces their **⚾ Players** count, the system **automatically promotes** the next waitlisted group that fits and emails them immediately.
+
+### 💬 Discussion Board, Profile, Languages & Themes
+- **Game Discussion Board:** Bottom of every game page — post carpool notes, gear questions, weather updates, or post-game highlights.
+- **Player Profile (`/profile.html`):** Update your display name, short baseball bio, or upload a profile photo (automatically resized to 256×256 and stripped of GPS/EXIF camera metadata for privacy).
+- **Language Selector:** Top navigation bar — switch among **15 languages** (including right-to-left layout for Arabic and Persian).
+- **Theme & Colors:** Bottom footer (`🎨 Theme & Colors`) — choose Light or Dark mode and pick from **12 MLB team color palettes**.
+
+---
+
+## 2. For Game Facilitators & Organizers
+
+Accounts granted the **`Facilitator`**, **`Organizer`**, or **`Admin`** role see an **`⚾ Org`** (or **`⚙️ Admin`**) button in the top navigation bar (`/admin.html`) plus organizer tools directly on each game page.
+
+### ⚡ Scheduling a Game
+1. Go to **`/admin.html`**.
+2. **Fastest way:** Click **⚡ Post Next Sunday @ Noon** to pre-fill next Sunday at 12:00 PM Pacific Time with the default field location and default 6 volunteer tasks, then click **Publish Game**.
+3. **Custom game:** Fill out the title, date/time (always entered in Pacific Time), field location, Google Maps link (optional), max on-field players (leave blank for unlimited), and volunteer tasks.
+
+### 🔒 Restricting RSVPs to Invited Emails (Optional)
+- When creating or editing a game on `/admin.html`, toggle **"Restrict RSVP to specific invited player accounts"**.
+- Check registered players from the searchable directory (or type additional email addresses). Only those emails (plus organizers/admins) will be permitted to RSVP, and private restricted games are automatically hidden from the public `.ics` calendar feed.
+
+### ✏️ Editing a Game & Recording Actual Turnout
+- On any game page (`/event.html?id=...`), click **✏️ Edit Game** in the top-right corner of the header card to change title, date/time, location, player cap, or description inline.
+- After a game finishes, use the **📊 Record Actual Turnout** box on the game page (or on `/archive.html`) to record how many people actually played on the field (including walk-ups who didn't RSVP online).
+
+### 🌧️ Calling a Rainout (or Reopening a Game)
+- On the game page, click **🌧️ Call Rainout**, enter an optional field/weather note (e.g., *"Standing water on Bushrod Field 1"*), and confirm.
+- What happens automatically:
+  1. The game displays a prominent rainout banner and closes new RSVPs.
+  2. Every confirmed attendee/group receives a **Rainout Alert email** releasing them from equipment and volunteer task commitments.
+  3. Subscribed phone/computer calendars update the event title to `🌧️ RAINED OUT: ...`.
+- If the sun comes out and fields dry up, click **☀️ Reopen Game** to restore active status and optionally notify attendees that the game is back on.
+
+### 🛡️ Moderating Rosters & Comments
+- Organizers and Admins see a small `✕` / `🗑️` button beside roster entries and discussion comments on `/event.html` to remove spam or mistaken entries (removing an attendee also triggers automatic waitlist promotion if a spot opens).
+
+---
+
+## 3. For Administrators
+
+Accounts with the **`Admin`** role have full access to `/admin.html` system controls:
+
+- **👥 User Roles & Account Management:** Promote any registered player to `Facilitator`, `Organizer`, or `Admin` (or demote back to `Player`), remove accounts, or block abusive email addresses (`banned_emails`).
+- **🔐 Guest RSVP Policy Toggle:** Switch between allowing guests to RSVP with just a name + email vs. requiring all attendees to sign in with a verified email code first.
+- **🛡️ Default Volunteer Tasks Template:** Edit the default list of tasks (titles, descriptions, and slot counts) that pre-populate whenever new Sunday games are created.
+- **📥 Backup Database (`.sql`):** Click **📥 Backup Database (.sql)** on `/admin.html` at any time to download a complete SQL snapshot of all users, games, RSVPs, tasks, and comments.
+
+---
+
+# Part II: Manual Maintenance & Code Editing Handbook
+
+## 4. How the Codebase Is Organized
+
+There is **no build step** for the website. The files inside `public/` are served verbatim to browsers.
+
+```text
+pickup-baseball/
+├── public/                        # FRONTEND (Served directly by Cloudflare Pages CDN)
+│   ├── index.html                 # Homepage: hero banner, privacy promise, rolling calendar
+│   ├── event.html                 # Single game page: Group RSVP, tasks, roster, comments
+│   ├── archive.html               # Past games archive & actual turnout history
+│   ├── admin.html                 # Organizer & Admin dashboard
+│   ├── login.html                 # Passwordless 6-digit code / magic link sign-in
+│   ├── profile.html               # Player profile, bio, avatar upload, & logout button
+│   ├── donate.html                # Donation links & tax-receipt information
+│   ├── 404.html                   # Custom 404 Not Found page
+│   ├── sw.js                      # Offline PWA Service Worker & static cache list
+│   ├── _headers                   # HTTP security headers (Content-Security-Policy, HSTS)
+│   ├── _redirects                 # Redirects *.pages.dev & apex domain to www.
+│   ├── _routes.json               # Tells Cloudflare to route /api/* to the Worker
+│   ├── css/style.css              # All site styles + 12 MLB color themes + dark mode
+│   ├── i18n/*.json                # Translation dictionaries for 14 non-English languages
+│   └── js/
+│       ├── api.js                 # Shared API client, English text (EN_DICT), nav, footer, themes
+│       ├── app.js                 # Homepage calendar, cloud sync pill, & .ics subscribe panel
+│       ├── event.js               # Event page logic: steppers, tasks, roster, rainout, comments
+│       ├── archive.js             # Past games archive page logic
+│       ├── admin.js               # Admin dashboard & Default Tasks editor
+│       └── account-dashboard.js   # Shared event creation & whitelist UI controls
+│
+├── functions/
+│   └── api/[[route]].js           # PRODUCTION BACKEND (Cloudflare Pages Function / Hono + D1)
+│
+├── src/                           # LOCAL NODE/EXPRESS BACKEND (Used by `npm run dev` & `npm test`)
+│   ├── server.js                  # Express app entry point (http://localhost:3000)
+│   ├── db.js                      # Local SQLite schema & migrations (better-sqlite3)
+│   ├── auth.js                    # Local session & RBAC middleware
+│   ├── mailer.js                  # Local email templates (prints emails to console in dev)
+│   ├── reminders.js               # 24-hour reminder processor
+│   └── routes/
+│       ├── auth.js                # Local /api/auth/* routes
+│       └── events.js              # Local /api/events/* routes
+│
+├── scripts/
+│   └── verify-all.js              # Automated 55-test verification suite (`npm test`)
+├── d1_schema.sql                  # Master SQLite / Cloudflare D1 table definitions
+└── wrangler.toml                  # Cloudflare Pages project config, public env vars, & D1 binding
+```
+
+> ### ⚠️ Important Rule: The Two Backend Copies
+> - **`functions/api/[[route]].js`** is what runs **live in the cloud** on Cloudflare Workers + D1.
+> - **`src/`** is a local Node.js/Express mirror used for fast offline development (`npm run dev`) and the automated test suite (`npm test`).
+> - **If you only edit HTML, CSS, or `public/js/*.js`:** You do **not** need to touch either backend.
+> - **If you change an API endpoint or database query:** Make the same change in **both** `functions/api/[[route]].js` and `src/` so `npm test` verifies the exact logic running in production.
+
+---
+
+## 5. The 4-Step Workflow for Any Manual Change
+
+### Prerequisites (One-Time Setup on Your Computer)
+1. Install **[Node.js](https://nodejs.org/)** (v20 or v22 LTS) and **Git**.
+2. Open a terminal in the project folder and install dependencies:
+   ```bash
+   npm install
+   ```
+3. Log in to Cloudflare (only needed once per computer in order to deploy):
+   ```bash
+   npx wrangler login
+   ```
+
+### Making & Publishing a Change
+1. **Preview Locally (Optional):**
+   - Run `npm run dev` and open `http://localhost:3000` (uses a local SQLite file in `data/`, printing login codes and emails directly to your terminal!).
+   - *Or* run `npm run pages:dev` to emulate the Cloudflare Pages Worker locally at `http://localhost:8788`.
+2. **Edit the Files & Bump the Cache Version:**
+   - Make your edits (see [Section 7 Cookbook](#7-cookbook-step-by-step-recipes-for-common-edits)) and increment the version number by `+1` (see [Section 6 Checklist](#6-version-bumping-checklist-clearing-browser--phone-caches)).
+3. **Run the Automated Test Suite:**
+   ```bash
+   npm test
+   ```
+   Confirm it ends with `# fail 0`. (Note: some tests assert specific UI headings or element IDs—if you intentionally renamed a heading that a test checks in `scripts/verify-all.js`, update that test's expected text too.)
+4. **Save to GitHub & Deploy to Cloudflare:**
+   ```bash
+   git add -A
+   git commit -m "Describe your change here"
+   git push origin trunk
+   npm run deploy
+   ```
+   Verify the live site updated by visiting `https://www.pickupbaseballfoundation.org/api/version` in your browser—it should show your new version number!
+
+---
+
+## 6. Version Bumping Checklist (Clearing Browser & Phone Caches)
+
+Because the site is an installable Progressive Web App (PWA) with an offline Service Worker, phones and browsers aggressively cache CSS and JavaScript files.
+
+Whenever you deploy a frontend or API change, **increment the version integer by 1** (for example, from `30` to `31`) in these places:
+
+1. **`public/js/api.js`** — `CLIENT_VERSION: '31'`
+2. **`functions/api/[[route]].js`** — `const CURRENT_APP_VERSION = '31';`
+3. **`src/server.js`** — `const CURRENT_APP_VERSION = '31';`
+4. **`scripts/verify-all.js`** — `const CURRENT_APP_VERSION = '31';`
+5. **`public/sw.js`** — `const CACHE_NAME = 'pbf-cache-v31';`
+6. **All 8 HTML files in `public/`** (`index.html`, `event.html`, `archive.html`, `admin.html`, `login.html`, `profile.html`, `donate.html`, `404.html`) — update `?v=30` to `?v=31` on `<link rel="stylesheet" href="/css/style.css?v=31">` and `<script src="/js/...?v=31"></script>`.
+
+*Tip: You can do a project-wide Find & Replace of `?v=30` → `?v=31` for the HTML files in any editor like VS Code.*
+
+When `CURRENT_APP_VERSION` on the server increases, any player who still has an older tab or installed PWA open will automatically get the **"Update Available — Click to Refresh"** button in the footer.
+
+---
+
+## 7. Cookbook: Step-by-Step Recipes for Common Edits
+
+### Recipe A: Changing Page Text, Headings, or Footer Copy
+> **⚡ Crucial Watch-Out (`data-i18n`):**
+> Many HTML elements carry a `data-i18n="some.key"` attribute (for example, `<h1 data-i18n="hero.title">...</h1>`). On page load, `API.applyTranslations()` in `public/js/api.js` replaces that element's text with the matching entry from `EN_DICT` (for English) or `public/i18n/<lang>.json` (for other languages).
+>
+> **If you edit text in an HTML file and don't update `EN_DICT` in `public/js/api.js`, your new text will flash for a split second and revert to the old text!**
+
+**How to change text cleanly:**
+1. Find the element in `public/*.html` and update its text.
+2. Check if it has a `data-i18n="..."` (or `data-i18n-html="..."` / `data-i18n-placeholder="..."`) attribute.
+3. If it does, open **`public/js/api.js`**, find that key inside `EN_DICT` near the top of the file, and update its English string to match.
+   - *(Optional)* Update the corresponding key in `public/i18n/*.json` if you want non-English translations updated too, or rename the `data-i18n` key (e.g., `hero.title_v2`) so stale translations in `public/i18n/*.json` don't override it.
+4. **Editing the Site Footer:** The footer on all pages is generated centrally inside `renderFooter()` in **`public/js/api.js`** (search for `renderFooter()`). Edit both `EN_DICT` and the fallback string inside `renderFooter()`.
+
+---
+
+### Recipe B: Updating Donation Links or the Privacy Promise
+- **Donation Page:** Open **`public/donate.html`**. Edit button URLs (PayPal Giving Fund, Every.org, EIN details, etc.) directly in HTML, and update matching `donate.*` keys in `EN_DICT` inside **`public/js/api.js`**.
+- **Homepage Mailing List Link:** Open **`public/index.html`** and look for `id="mailing-list-link"` to update the Google Form URL.
+- **Privacy Promise Bullets:** Open **`public/index.html`** (`#privacy-policy`) and update matching `privacy.b1`–`privacy.b5` keys in `EN_DICT` inside **`public/js/api.js`**.
+
+---
+
+### Recipe C: Changing Default Field Location or Default Volunteer Tasks
+- **Default Volunteer Tasks (No Code Needed!):** Sign in as an **Admin**, go to `/admin.html`, edit the **Default Volunteer Tasks Template**, and click Save.
+  - *(To change the hardcoded fallback defaults in code, edit `DEFAULT_BASEBALL_DUTIES` in both `functions/api/[[route]].js` and `src/db.js`.)*
+- **Default Field Location / Quick-Schedule Defaults:**
+  - Calendar subtitle text: `calendar.subtitle` in `public/index.html` and `EN_DICT` in `public/js/api.js`.
+  - "Post Next Sunday @ Noon" preset values: search for `Bushrod Park` in `public/js/account-dashboard.js` and `public/js/admin.js`.
+
+---
+
+### Recipe D: Changing Colors, Fonts, or Adding a Team Color Theme
+1. Open **`public/css/style.css`**:
+   - The default **Bay Area Heritage** colors live in `:root` at the top of `public/css/style.css` (`--primary`, `--secondary`, `--giants-orange`, `--as-green`, etc.).
+   - Each additional MLB team theme overrides those CSS variables under `[data-color-theme="team-id"]` (and `[data-theme-mode="dark"][data-color-theme="team-id"]`).
+2. To add a new theme to the footer picker, add an entry to the `COLOR_THEMES` array in **`public/js/api.js`**, then add its `[data-color-theme="your-theme-id"]` CSS variable block in **`public/css/style.css`**.
+
+---
+
+### Recipe E: Adding a New Column to the Database (Zero-Downtime)
+If you ever need to store a new field on `events`, `attendees`, or `users`:
+1. Add the column to `CREATE TABLE` in **`d1_schema.sql`** (for fresh setups).
+2. Add the column to `CREATE TABLE` **and** an `ALTER TABLE ... ADD COLUMN ...` inside `try { ... } catch (e) {}` in **`src/db.js`** (for local dev & `npm test`).
+3. Add `'ALTER TABLE ... ADD COLUMN ...'` to the `alterStatements` array inside **`ensureD1Schema(db)`** at the very top of **`functions/api/[[route]].js`**.
+   - *Why this works so well:* As soon as you run `npm run deploy`, the very first request to the Cloudflare Worker automatically runs `ensureD1Schema(db)`, safely adding the new column to the live cloud D1 database without losing a single row of data!
+
+---
+
+### Recipe F: Changing Admin Email, Sender Address, or Email API Key
+- **Public settings (`ADMIN_EMAIL`, `ADMIN_NAME`, `FROM_EMAIL`, `REPLY_TO_EMAIL`, `APP_NAME`):**
+  Edit **`wrangler.toml`** under `[vars]`, then run `npm run deploy`.
+- **Resend API Key (`RESEND_API_KEY`):**
+  Never put secret API keys in `wrangler.toml` or Git. Rotate or update the key securely via terminal:
+  ```bash
+  npx wrangler pages secret put RESEND_API_KEY --project-name pickup-baseball
+  ```
+  Paste the new `re_...` key when prompted, then run `npm run deploy`.
+
+---
+
+## 8. House Rules & Safety Guardrails
+
+Follow these four habits to keep the site fast, secure, and working on older phones for years to come:
+
+1. **Keep Frontend JavaScript ES6-Compatible (`public/js/*.js`):**
+   - Avoid newer JS operators like optional chaining (`obj?.prop`) and nullish coalescing (`a ?? b`) in `public/js/*.js`. Write `obj && obj.prop` instead so older iPhones, iPads, and budget Android browsers never fail with a syntax error.
+   - Quick syntax check command before deploying:
+     ```bash
+     node --check public/js/api.js
+     node --check public/js/app.js
+     node --check public/js/event.js
+     node --check "functions/api/[[route]].js"
+     ```
+2. **Always Escape User Input in HTML (`API.escapeHtml`):**
+   - Whenever inserting a player's name, bio, gear note, or comment into `.innerHTML`, wrap it in `${API.escapeHtml(value)}` to prevent Cross-Site Scripting (XSS).
+3. **Always Use Parameterized SQL Queries (`?`):**
+   - In `functions/api/[[route]].js`, always use `db.prepare('SELECT * FROM events WHERE id = ?').bind(eventId)` — never build SQL strings with `${eventId}`.
+4. **Keep Inputs at `16px` Minimum Font Size on Mobile:**
+   - iOS Safari automatically zooms the screen awkwardly if an `<input>` or `<textarea>` has `font-size` smaller than `16px`. Keep form controls at `16px` (`1rem`).
+
+---
+
+## 9. Troubleshooting & Emergency Recovery
+
+| Symptom | Cause | Fix |
+| :--- | :--- | :--- |
+| **Edited HTML text reverts back immediately when page loads** | Element has a `data-i18n="..."` key overriding it from `public/js/api.js`. | Update the matching key in `EN_DICT` at the top of `public/js/api.js` (see [Recipe A](#recipe-a-changing-page-text-headings-or-footer-copy)). |
+| **Browser or phone still shows old CSS or JS after deploy** | Browser or Service Worker is serving cached version. | Bump version numbers ([Section 6](#6-version-bumping-checklist-clearing-browser--phone-caches)) and redeploy, or hard-refresh (`Ctrl+Shift+R` / `Cmd+Shift+R`). |
+| **`/api/...` route returns 404 or matches `/events/:id` by mistake** | Dynamic `:id` route was registered above a named static sub-route. | Place static sub-routes (like `/events/calendar.ics` or `/events/default-duties`) **above** `/events/:id` in `functions/api/[[route]].js` and `src/routes/events.js`. |
+| **Login or RSVP emails aren't arriving** | Resend API key expired or domain DNS record changed. | Check **resend.com → Logs & Domains** to confirm `pickupbaseballfoundation.org` is verified, and re-set `RESEND_API_KEY` if needed ([Recipe F](#recipe-f-changing-admin-email-sender-address-or-email-api-key)). |
+| **Need to roll back a bad deployment immediately** | Bug introduced in latest deploy. | Run `git revert HEAD && npm run deploy`, **or** open **Cloudflare Dashboard → Workers & Pages → `pickup-baseball` → Deployments** and click **Rollback** on the previous working deployment in 1 click. |
+| **Need to restore data from a `.sql` backup file** | Accidental deletion of an event or table rows. | Sign in to `/admin.html` regularly to download `baseball_backup_YYYY-MM-DD.sql` snapshots. Individual `INSERT` statements from that plain-text `.sql` file can be executed directly in **Cloudflare Dashboard → Storage & Databases → D1 → `pickup-baseball-db` → Console** or via `npx wrangler d1 execute pickup-baseball-db --remote --file=your_restore.sql`. |

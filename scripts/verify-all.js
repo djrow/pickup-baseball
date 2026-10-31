@@ -1420,5 +1420,7 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(!apiJs.includes('This site is new and few people know about it.'), 'Removed sentence must not appear in api.js');
     assert.ok(apiJs.includes('Built with Google Gemini in October 2026 for simplicity and durability. Free & open-source'), 'Site footer must include clean Built with Google Gemini in October 2026 attribution');
     assert.ok(readmeMd.includes('Built with Google Gemini in October 2026 for simplicity and durability'), 'README.md must include Built with Google Gemini in October 2026 for simplicity and durability');
+    assert.ok(readmeMd.includes('(HANDBOOK.md)'), 'README.md must link to HANDBOOK.md');
+    assert.ok(fs.existsSync(path.join(__dirname, '..', 'HANDBOOK.md')), 'HANDBOOK.md must exist in repository root');
   });
 });

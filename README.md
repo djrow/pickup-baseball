@@ -2,6 +2,8 @@
 
 A fast, durable, and zero-cost web application built for the **[Pickup Baseball Foundation](https://www.pickupbaseballfoundation.org)** to organize free weekly Sunday pickup baseball games at Noon.
 
+> 📘 **User Guide & Manual Maintenance Handbook:** Read **[`HANDBOOK.md`](HANDBOOK.md)** for a complete walkthrough of how to use the web app (players, spectators, volunteers, organizers, and admins) plus step-by-step recipes for making manual changes to the code yourself.
+
 Designed with a **10+ year longevity philosophy**:
 - **Zero Frontend Build Steps**: Pure HTML5, semantic CSS3, and standard Vanilla JavaScript (`public/`). No bundlers, Webpack, Vite, or framework churn that breaks over time.
 - **100% Free-Tier Serverless Edge Stack**: Hosted on **Cloudflare Pages** (static assets + global CDN), **Cloudflare Pages Functions / Workers** (`functions/api/[[route]].js` powered by Hono), **Cloudflare D1** (serverless SQLite in the cloud), and **Resend** (transactional email).
@@ -114,7 +116,8 @@ Designed with a **10+ year longevity philosophy**:
     - 55-test automated end-to-end verification suite in `scripts/verify-all.js` using native Node.js v22 test runner (`node:test`, `node:assert/strict`, `fetch`) with zero third-party test dependencies.
     - Rigorously validates magic link authentication, 4-tier RBAC permission boundaries, group RSVPs (players, spectators, and off-field volunteers), group task ownership, RSVP whitelists, waitlist queue promotions, rainout incident notifications, rolling calendar horizons, live cloud `.ics` feeds, and version negotiation.
 
-14. **Detailed Development Narrative & Open Source**:
+14. **User & Maintenance Handbook, Development Narrative, & Open Source**:
+    - Practical guide to using every feature and making manual code edits by hand in **[`HANDBOOK.md`](HANDBOOK.md)**.
     - Complete chronicle of all architectural decisions, edge migrations, and technical phases in **[`DEVELOPMENT_NARRATIVE.md`](DEVELOPMENT_NARRATIVE.md)**.
     - Direct GitHub repository link in the site footer beside *"Free & open-source"*.
 
@@ -152,6 +155,7 @@ Designed with a **10+ year longevity philosophy**:
 │   ├── api/[[route]].js        # Hono REST API running on Cloudflare Pages Functions / Workers
 │   └── health.js               # Health check endpoint (/health)
 ├── scripts/
+├── HANDBOOK.md                 # User guide & step-by-step manual code maintenance handbook
 ├── DEVELOPMENT_NARRATIVE.md    # Comprehensive chronicle of all development phases
 ├── d1_schema.sql               # Cloudflare D1 SQLite database schema (DDL + default duties)
 └── wrangler.toml               # Cloudflare Pages, environment vars, & D1 binding configuration
