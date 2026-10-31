@@ -44,7 +44,7 @@ const EN_DICT = {
   "calendar.view_details": "RSVP & View Game Details →",
   "footer.tagline": "Building community through America's pastime.",
   "footer.subtext": "Built for simplicity and durability. Free & open-source.",
-  "footer.built_with": "Built with Google Gemini",
+  "footer.about_site": "Built with Google Gemini in October 2026 for simplicity and durability. This site is new and few people know about it. Free & open-source",
   "footer.update_app": "Update App",
   "footer.update_available": "Update Available — Click to Refresh",
   "footer.update_checking": "Checking for updates and clearing cache...",
@@ -281,7 +281,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '28',
+  CLIENT_VERSION: '29',
 
   // Current user cache
   currentUser: null,
@@ -640,9 +640,6 @@ const API = {
       footer.innerHTML = `
         <div class="container">
           <p><img src="/logo.svg" alt="" class="footer-logo"> <strong>Pickup Baseball Foundation</strong> — <span data-i18n="footer.tagline">${this.escapeHtml(this.t('footer.tagline', "Building community through America's pastime."))}</span></p>
-          <p style="margin-top: 6px; font-size: 0.8rem; color: #94a3b8;">
-            <span data-i18n="footer.subtext">${this.escapeHtml(this.t('footer.subtext', "Built for simplicity and durability. Free & open-source"))}</span> on <a href="https://github.com/djrow/pickup-baseball" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">GitHub</a>.
-          </p>
           <div class="footer-controls">
             <div class="footer-theme-wrapper">
               <button type="button" id="footer-theme-trigger" class="footer-theme-btn" aria-label="Change Appearance Theme">🎨 Theme &amp; Colors</button>
@@ -655,7 +652,9 @@ const API = {
             </div>
             <div id="footer-update-status" class="footer-update-status" style="display: none;" role="status" aria-live="polite"></div>
           </div>
-          <p style="margin-top: 10px; font-size: 0.78rem; color: #94a3b8;" data-i18n="footer.built_with">${this.escapeHtml(this.t('footer.built_with', 'Built with Google Gemini'))}</p>
+          <p style="margin-top: 12px; font-size: 0.8rem; color: #94a3b8; line-height: 1.5;">
+            <span data-i18n="footer.about_site">${this.escapeHtml(this.t('footer.about_site', 'Built with Google Gemini in October 2026 for simplicity and durability. This site is new and few people know about it. Free & open-source'))}</span> on <a href="https://github.com/djrow/pickup-baseball" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">GitHub</a>.
+          </p>
         </div>
       `;
     }

@@ -318,4 +318,4 @@ Signed-in administrators can download a complete `.sql` backup of the live Cloud
 ## 📜 License
 MIT License. Built for the Pickup Baseball Foundation.
 
-Built with Google Gemini.
+Built with Google Gemini in October 2026 for simplicity and durability.

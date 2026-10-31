@@ -55,7 +55,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-const CURRENT_APP_VERSION = '28';
+const CURRENT_APP_VERSION = '29';
 app.use((req, res, next) => {
   res.setHeader('X-App-Version', CURRENT_APP_VERSION);
   next();
@@ -1416,7 +1416,8 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
 
     const apiJs = fs.readFileSync(path.join(publicDir, 'js/api.js'), 'utf8');
     const readmeMd = fs.readFileSync(path.join(__dirname, '..', 'README.md'), 'utf8');
-    assert.ok(apiJs.includes('Built with Google Gemini'), 'Site footer must include Built with Google Gemini');
-    assert.ok(readmeMd.includes('Built with Google Gemini'), 'README.md must include Built with Google Gemini');
+    assert.ok(!indexHtml.includes('data-i18n="hero.notice"'), 'October 2026 notice must be moved out of the hero section');
+    assert.ok(apiJs.includes('Built with Google Gemini in October 2026 for simplicity and durability'), 'Site footer must include unified Built with Google Gemini in October 2026 for simplicity and durability');
+    assert.ok(readmeMd.includes('Built with Google Gemini in October 2026 for simplicity and durability'), 'README.md must include Built with Google Gemini in October 2026 for simplicity and durability');
   });
 });
