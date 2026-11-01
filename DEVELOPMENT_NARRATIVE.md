@@ -502,5 +502,20 @@ Streamlined the visual presentation of the top bar header and game calendar sect
 
 ---
 
-## 33. Future Roadmap Notes
+## 33. Phase 32: Google Calendar Event Date 1900 Bugfix (Preserving 2026 Year)
+Diagnosed and resolved a subtle regular expression bug in Google Calendar URL generation:
+- **Root Cause Analysis:**
+  - In `public/js/app.js`, `formatGCal` used `d.toISOString().replace(/-|:|.\d\d\d/g, '')`.
+  - Because the dot in `.\d\d\d` was unescaped, it matched any character followed by three digits. In `2026-11-15T20:00:00.000Z`, `2026` matched `.` (2) and `\d\d\d` (026), replacing the year `2026` with an empty string!
+  - The resulting query string became `dates=1115T200000Z/1115T230000Z`, which Google Calendar interpreted as year 1900.
+- **Robust Full-Year Implementation:**
+  - Replaced the flawed regex with explicit UTC component getters (`d.getUTCFullYear()`, `pad(d.getUTCMonth() + 1)`, `pad(d.getUTCDate())`, etc.) guaranteeing correct `YYYYMMDDTHHMMSSZ` format (`20261115T200000Z/20261115T230000Z`).
+  - Added reusable `API.getGoogleCalendarUrl(ev)` in `public/js/api.js` and hooked it into both the calendar event drawer in `app.js` and the event details header on `event.html`.
+- **Automated Regression Verification & Version Bump:**
+  - Added automated test in `scripts/verify-all.js` (`T9.16`) verifying that `getGoogleCalendarUrl` generates dates targeting 2026 and never contains 1900.
+  - Bumped version to `v35` across all backend, frontend, Service Worker, and HTML files. All 58 automated tests pass.
+
+---
+
+## 34. Future Roadmap Notes
 - **Pinned Full-Stack Rust / WebAssembly Migration:** Evaluated a future 4-phase rewrite of the Cloudflare Pages Functions backend (and optional frontend interactivity) to Rust (`workers-rs` compiling to WebAssembly) for compile-time type safety, zero-dependency binary durability, and strict edge memory safety—kept as a guiding north star when designing new features and data models.

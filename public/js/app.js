@@ -381,13 +381,28 @@ function getPacificDateKey(dateInput) {
 }
 
 function getGoogleCalendarUrl(ev) {
-  const startDate = new Date(ev.event_date);
+  if (API && typeof API.getGoogleCalendarUrl === 'function') {
+    return API.getGoogleCalendarUrl(ev);
+  }
+  if (!ev || !ev.event_date) return '#';
+  let startDate = new Date(ev.event_date);
+  if (isNaN(startDate.getTime())) {
+    startDate = new Date();
+  }
   const endDate = new Date(startDate.getTime() + 3 * 60 * 60 * 1000);
-  const formatGCal = (d) => d.toISOString().replace(/-|:|.\d\d\d/g, '');
+  const pad = function(n) { return String(n).padStart(2, '0'); };
+  const formatGCal = function(d) {
+    return d.getUTCFullYear() +
+      pad(d.getUTCMonth() + 1) +
+      pad(d.getUTCDate()) + 'T' +
+      pad(d.getUTCHours()) +
+      pad(d.getUTCMinutes()) +
+      pad(d.getUTCSeconds()) + 'Z';
+  };
   const title = encodeURIComponent(ev.title || 'Sunday Pickup Baseball - Noon Game');
-  const details = encodeURIComponent(`Free community pickup baseball. Check headcount, coordinate gear & volunteer for tasks at https://www.pickupbaseballfoundation.org/event.html?id=${ev.id}`);
+  const details = encodeURIComponent('Free community pickup baseball. Check headcount, coordinate gear & volunteer for tasks at https://www.pickupbaseballfoundation.org/event.html?id=' + ev.id);
   const location = encodeURIComponent(ev.location || 'Bushrod Park Field 1, Oakland, CA');
-  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${formatGCal(startDate)}/${formatGCal(endDate)}&details=${details}&location=${location}`;
+  return 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + title + '&dates=' + formatGCal(startDate) + '/' + formatGCal(endDate) + '&details=' + details + '&location=' + location;
 }
 
 function downloadCalendarIcs(events) {

@@ -55,7 +55,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-const CURRENT_APP_VERSION = '34';
+const CURRENT_APP_VERSION = '35';
 app.use((req, res, next) => {
   res.setHeader('X-App-Version', CURRENT_APP_VERSION);
   next();
@@ -1399,6 +1399,19 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(appJs.includes('/api/events/calendar.ics'), 'app.js must point to live /api/events/calendar.ics feed');
     assert.ok(!appJs.includes('?.'), 'app.js must not use optional chaining for broad ES6 compatibility');
     assert.ok(!appJs.includes('??'), 'app.js must not use nullish coalescing for broad ES6 compatibility');
+    assert.ok(!appJs.includes('.\\d\\d\\d'), 'app.js must not use buggy unescaped regex in formatGCal');
+    assert.ok(appJs.includes('d.getUTCFullYear()'), 'app.js formatGCal must explicitly preserve UTC full year');
+    assert.ok(apiJsNav.includes('d.getUTCFullYear()'), 'api.js getGoogleCalendarUrl must explicitly preserve UTC full year');
+
+    // Verify Google Calendar URL preserves 2026 and never defaults to 1900
+    const testEvent = { id: 77, title: 'Bushrod Championship Game', event_date: '2026-11-15T20:00:00.000Z', location: 'Bushrod Park Field 1' };
+    const pad = (n) => String(n).padStart(2, '0');
+    const formatGCal = (d) => d.getUTCFullYear() + pad(d.getUTCMonth() + 1) + pad(d.getUTCDate()) + 'T' + pad(d.getUTCHours()) + pad(d.getUTCMinutes()) + pad(d.getUTCSeconds()) + 'Z';
+    const testStart = new Date(testEvent.event_date);
+    const testEnd = new Date(testStart.getTime() + 3 * 3600000);
+    const testGCalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(testEvent.title)}&dates=${formatGCal(testStart)}/${formatGCal(testEnd)}`;
+    assert.ok(testGCalUrl.includes('dates=20261115T200000Z/20261115T230000Z'), 'Google Calendar URL must explicitly target year 2026');
+    assert.ok(!testGCalUrl.includes('1900'), 'Google Calendar URL must not contain year 1900');
 
     const css = fs.readFileSync(path.join(publicDir, 'css/style.css'), 'utf8');
     assert.ok(css.includes('.calendar-sync-pill.is-synced'), 'style.css must style synced cloud indicator');

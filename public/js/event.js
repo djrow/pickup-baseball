@@ -141,7 +141,11 @@ async function loadEventData(preserveAlertHtml) {
 function renderEventDetails() {
   const ev = eventData.event;
   document.getElementById('event-title').textContent = API.translateEventTitle(ev);
-  document.getElementById('event-datetime').textContent = API.formatDateTime(ev.event_date);
+  const dtEl = document.getElementById('event-datetime');
+  if (dtEl) {
+    const gCalUrl = API.getGoogleCalendarUrl(ev);
+    dtEl.innerHTML = API.escapeHtml(API.formatDateTime(ev.event_date)) + ' <a href="' + gCalUrl + '" target="_blank" rel="noopener noreferrer" style="display: inline-block; margin-left: 8px; font-size: 0.78rem; text-decoration: underline; color: var(--primary); font-weight: 600;" title="Add this game to Google Calendar">📅 Google Cal ↗</a>';
+  }
   document.getElementById('event-location').textContent = ev.location;
 
   const statusBadge = document.getElementById('event-status-badge');
