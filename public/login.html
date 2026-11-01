@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sign In / Register - Sunday Pickup Baseball</title>
-  <link rel="stylesheet" href="/css/style.css?v=35">
+  <link rel="stylesheet" href="/css/style.css?v=36">
   <link rel="alternate" type="application/rss+xml" title="Sunday Pickup Baseball Highlights &amp; Updates" href="/feed.xml">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
@@ -57,7 +57,7 @@
           <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
             <a href="/index.html" class="btn btn-primary" style="font-weight: 700;" data-i18n="login.view_games_btn">⚾ View Scheduled Games</a>
             <a href="/profile.html" class="btn btn-outline" style="font-weight: 700;" data-i18n="login.profile_btn">👤 Player Profile</a>
-            <a href="#security-management-section" id="admin-security-link" class="btn btn-outline" style="display: none; font-weight: 700;">🛡️ Access Control &amp; Bans</a>
+            <a href="/admin.html#admin-security-section" id="admin-security-link" class="btn btn-outline" style="display: none; font-weight: 700;">🛡️ Access Control &amp; Bans</a>
             <button type="button" id="login-page-logout-btn" class="btn btn-outline" style="color: var(--danger); border-color: var(--danger);" data-i18n="nav.logout">
               Log Out
             </button>
@@ -146,7 +146,7 @@
 
   <footer id="site-footer" class="site-footer"></footer>
 
-  <script src="/js/api.js?v=35"></script>
+  <script src="/js/api.js?v=36"></script>
   <script>
     function getSafeRedirectUrl() {
       const params = new URLSearchParams(window.location.search);
@@ -203,7 +203,7 @@
 
         // Dynamically load the authenticated account/admin dashboard script
         const script = document.createElement('script');
-        script.src = '/js/account-dashboard.js';
+        script.src = '/js/account-dashboard.js?v=36';
         script.onload = () => {
           if (typeof window.initAuthenticatedDashboard === 'function') {
             window.initAuthenticatedDashboard(user);

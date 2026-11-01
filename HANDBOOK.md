@@ -165,7 +165,9 @@ Accounts with the **`Admin`** role have full access to `/admin.html` system cont
   - **Compact View & Scrolling:** The accounts table is rendered in a compact, vertically scrollable viewport (`max-height: 380px`) with sticky column headers, so even when hundreds of players register, the table only occupies a small, contained portion of the screen without pushing the rest of the dashboard down.
   - **Live Filter by Name or Email:** Use the search bar above the accounts table to instantly filter the list by any substring of a player's name or email address (case-insensitive). The live counter displays `Showing X of Y accounts` in real time, with clear feedback if no accounts match.
   - **Role Assignments & Actions:** Promote any registered player to `Facilitator`, `Organizer`, or `Admin` (or demote back to `Player`), remove obsolete accounts, or block abusive email addresses (`banned_emails`).
-- **🔐 Guest RSVP Policy Toggle:** Switch between allowing guests to RSVP with just a name + email vs. requiring all attendees to sign in with a verified email code first.
+- **🛡️ Access Control & Guest Policy:**
+  - **Guest RSVP Policy Toggle:** Switch between allowing guests to RSVP with just a name + email vs. requiring all attendees to sign in with a verified email code first (disabling anonymous RSVPs across all games).
+  - **Banned Email Addresses:** Review, add, or unban restricted email addresses directly on `/admin.html`. When removing a user account with the ban option checked, the address is automatically added to this list and blocked from requesting login codes, maintaining active sessions, or submitting RSVPs.
 - **🛡️ Default Volunteer Tasks Template:** Edit the default list of tasks (titles, descriptions, and slot counts) that pre-populate whenever new Sunday games are created.
 - **📥 Backup Database (`.sql`):** Click **📥 Backup Database (.sql)** on `/admin.html` at any time to download a complete SQL snapshot of all users, games, RSVPs, tasks, and comments.
 

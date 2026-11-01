@@ -25,6 +25,8 @@ function applyRoleUI(user) {
   const defaultTemplateCard = document.getElementById('default-template-card');
   const saveAsDefaultsBtn = document.getElementById('btn-save-as-defaults');
   const userMgmtSec = document.getElementById('admin-user-mgmt-section');
+  const securitySec = document.getElementById('admin-security-section');
+  const securityNavBtn = document.getElementById('admin-security-nav-btn');
 
   if (user && user.isAdmin) {
     if (badgeEl) {
@@ -34,6 +36,9 @@ function applyRoleUI(user) {
     if (backupBtn) backupBtn.style.display = 'inline-flex';
     if (defaultTemplateCard) defaultTemplateCard.style.display = 'block';
     if (saveAsDefaultsBtn) saveAsDefaultsBtn.style.display = 'inline-block';
+    if (userMgmtSec) userMgmtSec.style.display = 'block';
+    if (securitySec) securitySec.style.display = 'block';
+    if (securityNavBtn) securityNavBtn.style.display = 'inline-flex';
   } else if (user && user.canManageEvents) {
     // Organizer or Facilitator Control
     if (badgeEl) {
@@ -49,6 +54,8 @@ function applyRoleUI(user) {
     if (defaultTemplateCard) defaultTemplateCard.style.display = 'none';
     if (saveAsDefaultsBtn) saveAsDefaultsBtn.style.display = 'none';
     if (userMgmtSec) userMgmtSec.style.display = 'none';
+    if (securitySec) securitySec.style.display = 'none';
+    if (securityNavBtn) securityNavBtn.style.display = 'none';
   }
 }
 
@@ -77,9 +84,10 @@ async function initAdmin() {
   setupCommunityHighlightsAdmin();
   await loadAdminGames();
 
-  // If Admin, load User Roles Management section
+  // If Admin, load User Roles Management section and Access Control & Guest Policy
   if (user.isAdmin) {
     setupAdminUserManagement(user);
+    setupAdminSecurity(user);
   }
 }
 
@@ -1146,6 +1154,9 @@ function setupAdminUserManagement(currentUser) {
           } else {
             alertBox.innerHTML = `<div class="alert alert-success" style="font-size: 0.88rem;">✓ ${API.escapeHtml(deleteRes.message)}</div>`;
             await loadUsers();
+            if (alsoBan && typeof reloadBannedEmailsFn === 'function') {
+              await reloadBannedEmailsFn();
+            }
           }
         } catch (err) {
           alertBox.innerHTML = `<div class="alert alert-error" style="font-size: 0.88rem;">Failed to remove user account.</div>`;
@@ -1194,6 +1205,10 @@ function setupAdminUserManagement(currentUser) {
                 setTimeout(() => {
                   const sec = document.getElementById('admin-user-mgmt-section');
                   if (sec) sec.style.display = 'none';
+                  const secSec = document.getElementById('admin-security-section');
+                  if (secSec) secSec.style.display = 'none';
+                  const secNav = document.getElementById('admin-security-nav-btn');
+                  if (secNav) secNav.style.display = 'none';
                 }, 2500);
               }
             } else {
@@ -1233,6 +1248,166 @@ function setupAdminUserManagement(currentUser) {
 
   loadUsers();
   if (refreshBtn) refreshBtn.addEventListener('click', loadUsers);
+}
+
+// =============================================================================
+// Access Control & Guest Policy Administration
+// =============================================================================
+
+let reloadBannedEmailsFn = null;
+
+function setupAdminSecurity(currentUser) {
+  const section = document.getElementById('admin-security-section');
+  if (!section) return;
+
+  const requireLoginCheckbox = document.getElementById('setting-require-login');
+  const settingsAlert = document.getElementById('settings-alert');
+  const bannedTableBody = document.getElementById('banned-emails-table-body');
+  const bannedAlert = document.getElementById('banned-emails-alert');
+  const banForm = document.getElementById('ban-email-form');
+  const banSubmitBtn = document.getElementById('ban-submit-btn');
+  const refreshBannedBtn = document.getElementById('refresh-banned-btn');
+
+  async function loadSettings() {
+    try {
+      const s = await API.getSettings();
+      if (requireLoginCheckbox && s && s.require_login_to_rsvp !== undefined) {
+        requireLoginCheckbox.checked = Boolean(s.require_login_to_rsvp);
+      }
+    } catch (e) {
+      console.error('Failed to load guest policy settings:', e);
+    }
+  }
+
+  if (requireLoginCheckbox) {
+    requireLoginCheckbox.addEventListener('change', async (e) => {
+      const isChecked = e.target.checked;
+      if (settingsAlert) {
+        settingsAlert.innerHTML = '<span style="font-size: 0.8rem; color: var(--text-muted);">Saving policy...</span>';
+      }
+      try {
+        const res = await API.updateSettings({ require_login_to_rsvp: isChecked });
+        if (res.error) {
+          if (settingsAlert) {
+            settingsAlert.innerHTML = `<span style="font-size: 0.8rem; color: var(--danger);">${API.escapeHtml(res.error)}</span>`;
+          }
+        } else {
+          if (settingsAlert) {
+            settingsAlert.innerHTML = `<span style="font-size: 0.8rem; color: var(--success); font-weight: 700;">✓ Policy updated: ${isChecked ? 'Sign-in required for all RSVPs (Guests disabled)' : 'Guest RSVPs permitted'}</span>`;
+          }
+        }
+      } catch (err) {
+        if (settingsAlert) {
+          settingsAlert.innerHTML = '<span style="font-size: 0.8rem; color: var(--danger);">Failed to save policy.</span>';
+        }
+      }
+    });
+  }
+
+  async function loadBannedEmails() {
+    if (!bannedTableBody) return;
+    bannedTableBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 10px;">Loading banned list...</td></tr>';
+    try {
+      const res = await API.getBannedEmails();
+      const list = (res && res.bannedEmails) ? res.bannedEmails : [];
+      if (list.length === 0) {
+        bannedTableBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 10px;">No banned emails.</td></tr>';
+        return;
+      }
+      bannedTableBody.innerHTML = list.map(b => `
+        <tr>
+          <td style="font-weight: 700; color: var(--danger); font-size: 0.84rem; font-family: monospace;">${API.escapeHtml(b.email)}</td>
+          <td style="font-size: 0.82rem; color: var(--text-muted);">${API.escapeHtml(b.reason || 'None')}</td>
+          <td style="font-size: 0.82rem; color: var(--text-muted); white-space: nowrap;">${b.created_at ? API.escapeHtml(b.created_at.slice(0, 10)) : ''}</td>
+          <td style="white-space: nowrap;">
+            <button type="button" class="btn btn-outline btn-sm btn-unban" data-ban-id="${b.id}" data-email="${API.escapeHtml(b.email)}" style="font-size: 0.75rem; padding: 2px 8px; height: 26px; line-height: 1.2;">
+              Unban
+            </button>
+          </td>
+        </tr>
+      `).join('');
+
+      bannedTableBody.querySelectorAll('.btn-unban').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const banId = e.currentTarget.getAttribute('data-ban-id');
+          const email = e.currentTarget.getAttribute('data-email');
+          if (!confirm(`Unban ${email}?`)) return;
+          try {
+            const unbanRes = await API.unbanEmail(banId);
+            if (bannedAlert) {
+              bannedAlert.innerHTML = `<div class="alert alert-success" style="font-size: 0.85rem;">${API.escapeHtml(unbanRes.message || 'Ban removed.')}</div>`;
+            }
+            await loadBannedEmails();
+          } catch (err) {
+            if (bannedAlert) {
+              bannedAlert.innerHTML = '<div class="alert alert-error" style="font-size: 0.85rem;">Failed to unban email.</div>';
+            }
+          }
+        });
+      });
+    } catch (e) {
+      bannedTableBody.innerHTML = '<tr><td colspan="4" style="color: var(--danger); text-align: center; padding: 10px;">Failed to load banned list.</td></tr>';
+    }
+  }
+
+  reloadBannedEmailsFn = loadBannedEmails;
+
+  if (banForm) {
+    banForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const emailInput = document.getElementById('ban-email-input');
+      const reasonInput = document.getElementById('ban-reason-input');
+      const email = emailInput ? emailInput.value.trim() : '';
+      const reason = reasonInput ? reasonInput.value.trim() : '';
+      if (!email) return;
+
+      if (bannedAlert) {
+        bannedAlert.innerHTML = '<span style="font-size: 0.85rem; color: var(--text-muted);">Adding to ban list...</span>';
+      }
+      if (banSubmitBtn) {
+        banSubmitBtn.disabled = true;
+      }
+
+      try {
+        const res = await API.banEmail(email, reason);
+        if (res.error) {
+          if (bannedAlert) {
+            bannedAlert.innerHTML = `<div class="alert alert-error" style="font-size: 0.85rem;">${API.escapeHtml(res.error)}</div>`;
+          }
+        } else {
+          if (bannedAlert) {
+            bannedAlert.innerHTML = `<div class="alert alert-success" style="font-size: 0.85rem;">✓ ${API.escapeHtml(res.message || 'Email added to ban list.')}</div>`;
+          }
+          if (emailInput) emailInput.value = '';
+          if (reasonInput) reasonInput.value = '';
+          await loadBannedEmails();
+        }
+      } catch (err) {
+        if (bannedAlert) {
+          bannedAlert.innerHTML = '<div class="alert alert-error" style="font-size: 0.85rem;">Failed to ban email.</div>';
+        }
+      } finally {
+        if (banSubmitBtn) {
+          banSubmitBtn.disabled = false;
+        }
+      }
+    });
+  }
+
+  if (refreshBannedBtn) {
+    refreshBannedBtn.addEventListener('click', loadBannedEmails);
+  }
+
+  loadSettings();
+  loadBannedEmails();
+
+  if (window.location.hash === '#admin-security-section' || window.location.hash === '#security-management-section') {
+    setTimeout(() => {
+      try {
+        section.scrollIntoView({ behavior: 'smooth' });
+      } catch (e) {}
+    }, 150);
+  }
 }
 
 // =============================================================================

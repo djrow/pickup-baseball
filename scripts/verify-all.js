@@ -55,7 +55,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-const CURRENT_APP_VERSION = '35';
+const CURRENT_APP_VERSION = '36';
 app.use((req, res, next) => {
   res.setHeader('X-App-Version', CURRENT_APP_VERSION);
   next();
@@ -543,6 +543,31 @@ test('T3: User Role Management & Session Persistence', async (t) => {
     assert.ok(adminJs.includes('indexOf(query)'), 'admin.js must perform case-insensitive substring search for name and email');
     assert.ok(adminJs.includes('Showing '), 'admin.js must display filtered accounts count');
     assert.ok(adminJs.includes('No accounts found matching'), 'admin.js must display clear feedback when 0 accounts match');
+  });
+
+  await t.test('T3.7: Access Control & Guest Policy on Admin Page', async () => {
+    const adminHtml = fs.readFileSync(path.join(__dirname, '..', 'public', 'admin.html'), 'utf8');
+    assert.ok(adminHtml.includes('id="admin-security-section"'), 'admin.html must contain #admin-security-section');
+    assert.ok(adminHtml.includes('Access Control &amp; Guest Policy'), 'admin.html must display Access Control & Guest Policy heading');
+    assert.ok(adminHtml.includes('id="setting-require-login"'), 'admin.html must contain require login checkbox');
+    assert.ok(adminHtml.includes('id="ban-email-form"'), 'admin.html must contain ban email form');
+    assert.ok(adminHtml.includes('id="banned-emails-table-body"'), 'admin.html must contain banned emails table body');
+    assert.ok(adminHtml.includes('href="#admin-security-section"'), 'admin.html top nav must link directly to #admin-security-section');
+    assert.ok(!adminHtml.includes('href="/login.html#security-management-section"'), 'admin.html must not bounce to login.html for security settings');
+
+    const adminJs = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'admin.js'), 'utf8');
+    assert.ok(adminJs.includes('setupAdminSecurity'), 'admin.js must define setupAdminSecurity');
+    assert.ok(adminJs.includes('admin-security-section'), 'admin.js must query #admin-security-section');
+    assert.ok(adminJs.includes('API.updateSettings'), 'admin.js must update guest RSVP policy via API');
+    assert.ok(adminJs.includes('API.banEmail'), 'admin.js must submit banned email via API');
+    assert.ok(adminJs.includes('API.unbanEmail'), 'admin.js must unban email via API');
+
+    const accountDashJs = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'account-dashboard.js'), 'utf8');
+    assert.ok(!accountDashJs.includes('id="security-management-section"'), 'account-dashboard.js must no longer host security management section');
+    assert.ok(!accountDashJs.includes('id="setting-require-login"'), 'account-dashboard.js must no longer host require-login checkbox');
+
+    const loginHtml = fs.readFileSync(path.join(__dirname, '..', 'public', 'login.html'), 'utf8');
+    assert.ok(loginHtml.includes('href="/admin.html#admin-security-section"'), 'login.html admin-security-link must route to admin page');
   });
 });
 
@@ -1580,7 +1605,7 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(feedFunctionExists, 'functions/feed.xml.js must exist for Cloudflare Pages edge rendering');
 
     // 9. Verify zero ES2020+ incompatible syntax (?. or ??) in client JS
-    const jsFiles = ['api.js', 'app.js', 'admin.js', 'event.js', 'archive.js'];
+    const jsFiles = ['api.js', 'app.js', 'admin.js', 'event.js', 'archive.js', 'account-dashboard.js'];
     for (const file of jsFiles) {
       const code = fs.readFileSync(path.join(publicDir, 'js', file), 'utf8');
       const lines = code.split('\n');

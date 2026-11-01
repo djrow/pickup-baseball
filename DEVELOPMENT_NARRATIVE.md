@@ -517,5 +517,23 @@ Diagnosed and resolved a subtle regular expression bug in Google Calendar URL ge
 
 ---
 
-## 34. Future Roadmap Notes
+## 34. Phase 33: Consolidated Admin Security & Access Control / Guest Policy
+Moved and consolidated all access control, anonymous guest policy, and banned email management onto the main Admin page (`admin.html`):
+- **Access Control & Guest Policy on `/admin.html`:**
+  - Added dedicated `<section id="admin-security-section" class="card">` containing the global **"Require Email Sign-In to RSVP (Disable Anonymous Guest RSVPs)"** policy checkbox (`#setting-require-login`) and full **"Banned Email Addresses"** management card (`#ban-email-form`, `#banned-emails-table-body`, `#refresh-banned-btn`).
+  - Styled with the compact data table design (`data-table-compact`) and scroll container (`admin-users-scroll-container`), providing seamless email banning and unbanning.
+  - Linked top admin action button directly to `#admin-security-section` (`#admin-security-nav-btn`), eliminating the awkward redirect that previously bounced administrators to `/login.html`.
+  - Added real-time refresh binding: permanently removing a user account with the "also ban" option immediately updates both the accounts table and the banned email addresses list on `/admin.html`.
+  - Enforced strict Admin-only visibility in `applyRoleUI()`: only full Administrators see access control cards and buttons; Organizers and Facilitators cannot view or alter security policies.
+- **Cleaned Up Account Dashboard & Login Page:**
+  - Removed `#security-management-section` markup and guest policy/ban logic from `public/js/account-dashboard.js`, keeping the account dashboard focused on scheduling and account roles.
+  - Updated `#admin-security-link` on `/login.html` to direct administrators straight to `/admin.html#admin-security-section`.
+- **Testing & Version Invalidation:**
+  - Added automated test `T3.7` in `scripts/verify-all.js` verifying the presence and functionality of the security section on `admin.html`, the direct top nav anchor link, the absence of security sections from `account-dashboard.js`, and proper routing.
+  - Verified zero `?.` or `??` syntax across all client scripts.
+  - Bumped cache bust version to `v36` across `CLIENT_VERSION`, `CURRENT_APP_VERSION`, `CACHE_NAME = 'pbf-cache-v36'`, and all 8 HTML files. All 59 automated tests pass with 100% success rate.
+
+---
+
+## 35. Future Roadmap Notes
 - **Pinned Full-Stack Rust / WebAssembly Migration:** Evaluated a future 4-phase rewrite of the Cloudflare Pages Functions backend (and optional frontend interactivity) to Rust (`workers-rs` compiling to WebAssembly) for compile-time type safety, zero-dependency binary durability, and strict edge memory safety—kept as a guiding north star when designing new features and data models.

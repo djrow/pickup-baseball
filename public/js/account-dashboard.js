@@ -138,64 +138,6 @@ window.initAuthenticatedDashboard = function(user) {
           </table>
         </div>
       </div>
-
-      <div id="security-management-section" style="margin-bottom: 28px; padding-top: 20px; border-top: 1px solid var(--border);">
-        <div style="margin-bottom: 16px;">
-          <h3 style="color: var(--secondary); font-size: 1.25rem; margin: 0;">🛡️ Access Control &amp; Guest Policy</h3>
-          <p style="color: var(--text-muted); font-size: 0.85rem; margin: 2px 0 0 0;">
-            Control guest RSVPs and manage restricted/banned email addresses.
-          </p>
-        </div>
-
-        <div style="background: var(--bg-subtle); border: 1.5px solid var(--border); border-radius: var(--radius-sm); padding: 16px; margin-bottom: 20px;">
-          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 700; color: var(--secondary); margin-bottom: 4px;">
-            <input type="checkbox" id="setting-require-login" style="width: 18px; height: 18px; cursor: pointer;">
-            Require Email Sign-In to RSVP (Disable Anonymous Guest RSVPs)
-          </label>
-          <p style="margin: 0 0 0 28px; font-size: 0.85rem; color: var(--text-muted);">
-            When checked, players must verify their email and sign in before they can RSVP or claim volunteer equipment tasks. Anonymous guest RSVP forms will be disabled.
-          </p>
-          <div id="settings-alert" style="margin-top: 8px;"></div>
-        </div>
-
-        <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 18px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
-            <div>
-              <h4 style="margin: 0; color: var(--secondary); font-size: 1rem;">🚫 Banned Email Addresses</h4>
-              <p style="margin: 2px 0 0 0; font-size: 0.8rem; color: var(--text-muted);">Banned emails cannot request login codes, use active sessions, or register for games.</p>
-            </div>
-            <button type="button" id="refresh-banned-btn" class="btn btn-outline btn-sm">
-              🔄 Refresh Bans
-            </button>
-          </div>
-
-          <form id="ban-email-form" style="display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap;">
-            <input type="email" id="ban-email-input" required placeholder="player-to-block@example.com" style="flex: 2; min-width: 220px; padding: 6px 12px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); font-size: 0.88rem;">
-            <input type="text" id="ban-reason-input" placeholder="Reason (optional)" style="flex: 2; min-width: 180px; padding: 6px 12px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); font-size: 0.88rem;">
-            <button type="submit" class="btn btn-outline btn-sm" style="color: var(--danger); border-color: var(--danger); font-weight: 700;">
-              🚫 Ban Email
-            </button>
-          </form>
-
-          <div id="banned-emails-alert"></div>
-
-          <div class="table-responsive" style="border: 1px solid var(--border); border-radius: var(--radius-sm); max-height: 220px; overflow-y: auto;">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>Banned Email</th>
-                  <th>Reason</th>
-                  <th>Date Banned</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody id="banned-emails-table-body">
-                <tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 12px;">Loading banned list...</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
     `;
   }
 
@@ -440,7 +382,6 @@ function setupUserManagementScreen(currentUser) {
             } else {
               alertBox.innerHTML = `<div class="alert alert-success" style="font-size: 0.88rem;">✓ ${API.escapeHtml(deleteRes.message)}</div>`;
               await loadUsers();
-              await loadBannedEmails();
             }
           } catch (err) {
             alertBox.innerHTML = `<div class="alert alert-error" style="font-size: 0.88rem;">Failed to remove user account.</div>`;
@@ -503,113 +444,7 @@ function setupUserManagementScreen(currentUser) {
   loadUsers();
   if (refreshBtn) refreshBtn.addEventListener('click', loadUsers);
 
-  const requireLoginCheckbox = document.getElementById('setting-require-login');
-  const settingsAlert = document.getElementById('settings-alert');
-  const bannedTableBody = document.getElementById('banned-emails-table-body');
-  const bannedAlert = document.getElementById('banned-emails-alert');
-  const banForm = document.getElementById('ban-email-form');
-  const refreshBannedBtn = document.getElementById('refresh-banned-btn');
-
-  async function loadSettings() {
-    try {
-      const s = await API.getSettings();
-      if (requireLoginCheckbox && s && s.require_login_to_rsvp !== undefined) {
-        requireLoginCheckbox.checked = Boolean(s.require_login_to_rsvp);
-      }
-    } catch (e) {}
-  }
-
-  if (requireLoginCheckbox) {
-    requireLoginCheckbox.addEventListener('change', async (e) => {
-      const isChecked = e.target.checked;
-      settingsAlert.innerHTML = '<span style="font-size: 0.8rem; color: var(--text-muted);">Saving policy...</span>';
-      try {
-        const res = await API.updateSettings({ require_login_to_rsvp: isChecked });
-        if (res.error) {
-          settingsAlert.innerHTML = `<span style="font-size: 0.8rem; color: var(--danger);">${API.escapeHtml(res.error)}</span>`;
-        } else {
-          settingsAlert.innerHTML = `<span style="font-size: 0.8rem; color: var(--success); font-weight: 700;">✓ Policy updated: ${isChecked ? 'Sign-in required for all RSVPs (Guests disabled)' : 'Guest RSVPs permitted'}</span>`;
-        }
-      } catch (err) {
-        settingsAlert.innerHTML = '<span style="font-size: 0.8rem; color: var(--danger);">Failed to save policy.</span>';
-      }
-    });
-  }
-
-  async function loadBannedEmails() {
-    if (!bannedTableBody) return;
-    bannedTableBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 10px;">Loading banned list...</td></tr>';
-    try {
-      const res = await API.getBannedEmails();
-      const list = res.bannedEmails || [];
-      if (list.length === 0) {
-        bannedTableBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 10px;">No banned emails.</td></tr>';
-        return;
-      }
-      bannedTableBody.innerHTML = list.map(b => `
-        <tr>
-          <td style="font-weight: 700; color: var(--danger); font-size: 0.85rem;">${API.escapeHtml(b.email)}</td>
-          <td style="font-size: 0.82rem; color: var(--text-muted);">${API.escapeHtml(b.reason || 'None')}</td>
-          <td style="font-size: 0.82rem; color: var(--text-muted);">${b.created_at ? API.escapeHtml(b.created_at.slice(0, 10)) : ''}</td>
-          <td>
-            <button type="button" class="btn btn-outline btn-sm btn-unban" data-ban-id="${b.id}" data-email="${API.escapeHtml(b.email)}" style="font-size: 0.75rem; padding: 2px 8px;">
-              Unban
-            </button>
-          </td>
-        </tr>
-      `).join('');
-
-      document.querySelectorAll('.btn-unban').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-          const banId = e.currentTarget.getAttribute('data-ban-id');
-          const email = e.currentTarget.getAttribute('data-email');
-          if (!confirm(`Unban ${email}?`)) return;
-          try {
-            const unbanRes = await API.unbanEmail(banId);
-            bannedAlert.innerHTML = `<div class="alert alert-success" style="font-size: 0.85rem;">${API.escapeHtml(unbanRes.message || 'Ban removed.')}</div>`;
-            await loadBannedEmails();
-          } catch (err) {
-            bannedAlert.innerHTML = '<div class="alert alert-error" style="font-size: 0.85rem;">Failed to unban email.</div>';
-          }
-        });
-      });
-    } catch (e) {
-      bannedTableBody.innerHTML = '<tr><td colspan="4" style="color: var(--danger); text-align: center; padding: 10px;">Failed to load banned list.</td></tr>';
-    }
-  }
-
-  if (banForm) {
-    banForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const emailInput = document.getElementById('ban-email-input');
-      const reasonInput = document.getElementById('ban-reason-input');
-      const email = emailInput.value.trim();
-      const reason = reasonInput.value.trim();
-      if (!email) return;
-
-      bannedAlert.innerHTML = '<span style="font-size: 0.85rem; color: var(--text-muted);">Adding to ban list...</span>';
-      try {
-        const res = await API.banEmail(email, reason);
-        if (res.error) {
-          bannedAlert.innerHTML = `<div class="alert alert-error" style="font-size: 0.85rem;">${API.escapeHtml(res.error)}</div>`;
-        } else {
-          bannedAlert.innerHTML = `<div class="alert alert-success" style="font-size: 0.85rem;">${API.escapeHtml(res.message)}</div>`;
-          emailInput.value = '';
-          reasonInput.value = '';
-          await loadBannedEmails();
-        }
-      } catch (err) {
-        bannedAlert.innerHTML = '<div class="alert alert-error" style="font-size: 0.85rem;">Failed to ban email.</div>';
-      }
-    });
-  }
-
-  if (refreshBannedBtn) refreshBannedBtn.addEventListener('click', loadBannedEmails);
-
-  loadSettings();
-  loadBannedEmails();
-
-  // If page was loaded with an anchor hash (e.g. #security-management-section), scroll to it once mounted
+  // If page was loaded with an anchor hash, scroll to it once mounted
   if (window.location.hash) {
     setTimeout(() => {
       try {

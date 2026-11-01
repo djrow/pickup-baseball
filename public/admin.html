@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Dashboard - Sunday Pickup Baseball</title>
-  <link rel="stylesheet" href="/css/style.css?v=35">
+  <link rel="stylesheet" href="/css/style.css?v=36">
   <link rel="alternate" type="application/rss+xml" title="Sunday Pickup Baseball Highlights &amp; Updates" href="/feed.xml">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
@@ -46,8 +46,8 @@
         <h1 style="color: var(--secondary); font-size: 1.8rem; margin-top: 4px;">Game & Org Manager</h1>
       </div>
       <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-        <a href="/login.html#security-management-section" class="btn btn-outline" style="font-weight: 700; text-decoration: none;">
-          🛡️ Access Control &amp; Bans
+        <a href="#admin-security-section" id="admin-security-nav-btn" class="btn btn-outline" style="font-weight: 700; text-decoration: none;">
+          🛡️ Access Control &amp; Guest Policy
         </a>
         <a href="/api/events/admin/backup-db" id="btn-backup-db" class="btn btn-outline" download style="font-weight: 700; text-decoration: none;">
           📥 Backup Database (.sql)
@@ -339,11 +339,73 @@
       </div>
     </section>
 
+    <!-- Access Control & Guest Policy (Admins only) -->
+    <section id="admin-security-section" class="card" style="margin-top: 36px; display: none;">
+      <a id="security-management-section" style="display: block; position: relative; top: -20px; visibility: hidden;"></a>
+      <div style="margin-bottom: 16px;">
+        <h2 class="card-title" style="margin-bottom: 2px;">🛡️ Access Control &amp; Guest Policy</h2>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0;">
+          Control anonymous guest RSVPs and manage restricted or banned email addresses.
+        </p>
+      </div>
+
+      <!-- Guest Sign-In Policy Setting -->
+      <div style="background: var(--bg-subtle); border: 1.5px solid var(--border); border-radius: var(--radius-sm); padding: 16px; margin-bottom: 24px;">
+        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 700; color: var(--secondary); margin-bottom: 4px;">
+          <input type="checkbox" id="setting-require-login" style="width: 18px; height: 18px; cursor: pointer;">
+          Require Email Sign-In to RSVP (Disable Anonymous Guest RSVPs)
+        </label>
+        <p style="margin: 0 0 0 28px; font-size: 0.85rem; color: var(--text-muted);">
+          When checked, players must verify their email and sign in before they can RSVP or claim volunteer equipment tasks. Anonymous guest RSVP forms will be disabled across all games.
+        </p>
+        <div id="settings-alert" style="margin-top: 8px;"></div>
+      </div>
+
+      <!-- Banned Email Addresses Section -->
+      <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 18px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+          <div>
+            <h3 style="margin: 0; color: var(--secondary); font-size: 1.05rem;">🚫 Banned Email Addresses</h3>
+            <p style="margin: 2px 0 0 0; font-size: 0.82rem; color: var(--text-muted);">Banned emails cannot request login codes, use active sessions, or register for games.</p>
+          </div>
+          <button type="button" id="refresh-banned-btn" class="btn btn-outline btn-sm">
+            🔄 Refresh Bans
+          </button>
+        </div>
+
+        <form id="ban-email-form" style="display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap;">
+          <input type="email" id="ban-email-input" required placeholder="player-to-block@example.com" style="flex: 2; min-width: 220px; padding: 6px 12px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); font-size: 0.88rem; background: var(--bg-input); color: var(--text-main);">
+          <input type="text" id="ban-reason-input" placeholder="Reason (optional)" style="flex: 2; min-width: 180px; padding: 6px 12px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); font-size: 0.88rem; background: var(--bg-input); color: var(--text-main);">
+          <button type="submit" id="ban-submit-btn" class="btn btn-outline btn-sm" style="color: var(--danger); border-color: var(--danger); font-weight: 700;">
+            🚫 Ban Email
+          </button>
+        </form>
+
+        <div id="banned-emails-alert"></div>
+
+        <div class="table-responsive admin-users-scroll-container" style="max-height: 240px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-sm);">
+          <table class="data-table data-table-compact">
+            <thead>
+              <tr>
+                <th style="min-width: 180px;">Banned Email</th>
+                <th style="min-width: 150px;">Reason</th>
+                <th style="min-width: 110px;">Date Banned</th>
+                <th style="min-width: 80px;">Action</th>
+              </tr>
+            </thead>
+            <tbody id="banned-emails-table-body">
+              <tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 12px;">Loading banned list...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
   </main>
 
   <footer id="site-footer" class="site-footer"></footer>
 
-  <script src="/js/api.js?v=35"></script>
-  <script src="/js/admin.js?v=35"></script>
+  <script src="/js/api.js?v=36"></script>
+  <script src="/js/admin.js?v=36"></script>
 </body>
 </html>
