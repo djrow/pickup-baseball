@@ -55,7 +55,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-const CURRENT_APP_VERSION = '41';
+const CURRENT_APP_VERSION = '42';
 app.use((req, res, next) => {
   res.setHeader('X-App-Version', CURRENT_APP_VERSION);
   next();
@@ -1580,7 +1580,6 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(handbookMd.includes('id="rules-of-play"'), 'HANDBOOK.md must have anchor for rules of play');
     assert.ok(apiJs.includes('nav-link-handbook'), 'api.js must render nav-link-handbook');
     assert.ok(apiJs.includes('footer.handbook'), 'api.js must render footer.handbook');
-    assert.ok(indexHtml.includes('sunday-rules-accordion'), 'index.html must include sunday-rules-accordion');
     assert.ok(indexHtml.includes('hero-handbook-btn'), 'index.html must include hero-handbook-btn');
     const licenseText = fs.readFileSync(path.join(__dirname, '..', 'LICENSE'), 'utf8');
     assert.ok(licenseText.includes('Creative Commons Attribution-NonCommercial 4.0 International'), 'LICENSE must be Creative Commons BY-NC 4.0');
@@ -1878,7 +1877,7 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
 
     const indexHtml = fs.readFileSync(path.join(publicDir, 'index.html'), 'utf8');
     assert.ok(indexHtml.includes('/js/weather.js'), 'index.html must script-load weather.js');
-    assert.ok(indexHtml.includes('Sunday Routine (12:00 PM – 4:00 PM)'), 'index.html rules must document 12 PM - 4 PM routine');
+    assert.ok(!indexHtml.includes('sunday-rules-accordion'), 'index.html must have rules accordion removed');
 
     const swJs = fs.readFileSync(path.join(publicDir, 'sw.js'), 'utf8');
     assert.ok(swJs.includes('/js/weather.js'), 'sw.js must cache /js/weather.js for offline use');

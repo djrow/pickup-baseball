@@ -668,5 +668,17 @@ Resolved browser security blocking and standardized 10-day weather forecast copy
 
 ---
 
-## 41. Future Roadmap Notes
+## 41. Phase 40: Home Page Rules of Play Section Cleanup
+- **Removed Rules of Play Accordion (`public/index.html`):**
+  - Removed `#sunday-rules-accordion` from the home page upon user request pending authoring of the official field rules.
+  - The rest of the hero and privacy accordions remain intact with link to the comprehensive Handbook.
+- **Schedule Seeding (Dec 2026 – Feb 2027):**
+  - Created 13 upcoming Sunday games on Bushrod Park Field 1 with complete volunteer duty sets in Cloudflare D1 and local SQLite, extending active schedule visibility through the end of February 2027.
+- **Test Suite & Version Bump:**
+  - Updated `scripts/verify-all.js` to ensure clean passage with the home page rules accordion removed.
+  - Bumped version to `v42` across `CURRENT_APP_VERSION`, `CLIENT_VERSION`, Service Worker cache (`pbf-cache-v42`), and all 8 HTML files (`?v=42`).
+
+---
+
+## 42. Future Roadmap Notes
 - **Pinned Full-Stack Rust / WebAssembly Migration:** Evaluated a future 4-phase rewrite of the Cloudflare Pages Functions backend (and optional frontend interactivity) to Rust (`workers-rs` compiling to WebAssembly) for compile-time type safety, zero-dependency binary durability, and strict edge memory safety—kept as a guiding north star when designing new features and data models.
