@@ -1493,6 +1493,10 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(readmeMd.includes('Built with Google Gemini in October 2026 for simplicity and durability'), 'README.md must include Built with Google Gemini in October 2026 for simplicity and durability');
     assert.ok(readmeMd.includes('(HANDBOOK.md)'), 'README.md must link to HANDBOOK.md');
     assert.ok(fs.existsSync(path.join(__dirname, '..', 'HANDBOOK.md')), 'HANDBOOK.md must exist in repository root');
+    const handbookMd = fs.readFileSync(path.join(__dirname, '..', 'HANDBOOK.md'), 'utf8');
+    assert.ok(handbookMd.includes('Saving Your Email Address & Login Credentials in Your Browser'), 'HANDBOOK.md must contain credential saving guide');
+    assert.ok(handbookMd.includes('Android') && handbookMd.includes('iOS') && handbookMd.includes('macOS') && handbookMd.includes('Windows'), 'HANDBOOK.md must cover Android, iOS, macOS, and Windows');
+    assert.ok(handbookMd.includes('Internet Explorer 11') && handbookMd.includes('Samsung Internet'), 'HANDBOOK.md must cover legacy browsers and mobile browsers');
   });
 
   await test('T9.17: RSS 2.0 Feed with Media RSS, Multimedia Interpretation, and Highlights Lifecycle', async () => {

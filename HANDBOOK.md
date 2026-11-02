@@ -10,6 +10,13 @@ The entire app was built with **zero frontend build tools** (plain HTML, CSS, an
 
 - **Part I: How to Use the Web App**
   1. [For Players, Spectators & Volunteers](#1-for-players-spectators--volunteers)
+     - [Browsing the Game Calendar (Homepage)](#-browsing-the-game-calendar-homepage)
+     - [Subscribing Your Phone or Computer Calendar (`Subscribe (.ics)`)](#-subscribing-your-phone-or-computer-calendar-subscribe-ics)
+     - [Signing In (Passwordless Email Login)](#-signing-in-passwordless-email-login)
+     - [Saving Your Login Email in Your Browser & Device](#saving-login-credentials)
+     - [Submitting a Group RSVP (Players, Spectators & Volunteer Tasks)](#%EF%B8%8F-submitting-a-group-rsvp-players-spectators--volunteer-tasks)
+     - [Waitlists & Automatic Promotion](#-waitlists--automatic-promotion)
+     - [Discussion Board, Profile, Languages & Themes](#-discussion-board-profile-languages--themes)
   2. [For Game Facilitators & Organizers](#2-for-game-facilitators--organizers)
      - [Limited Roster Size & Automatic Waitlist Behavior](#-limited-roster-size--automatic-waitlist-behavior)
      - [Restricting RSVPs to Invited Emails](#-restricting-rsvps-to-invited-emails-optional)
@@ -56,6 +63,239 @@ The entire app was built with **zero frontend build tools** (plain HTML, CSS, an
 - Check your inbox for an email from `games@pickupbaseballfoundation.org`:
   - Either type the **6-digit code** into the login page, **or** click the **1-click magic sign-in link** in the email.
 - Once signed in, your browser stays signed in for **90 days**. You can log out anytime from your **Profile** page (`/profile.html`).
+
+### 💾 Saving Your Email Address & Login Credentials in Your Browser
+<a id="saving-login-credentials"></a>
+
+Because Sunday Pickup Baseball uses a modern, secure **passwordless authentication system** (delivering a 6-digit verification code or a 1-click magic link to your email inbox), you never need to invent, memorize, or enter a complex password.
+
+However, having to re-type your email address each time you sign in on a mobile phone, tablet, or desktop computer can become repetitive. This section provides a complete guide for saving and automatically filling your email address across **all major and legacy browsers on Android, iOS, macOS, and Windows**.
+
+---
+
+#### 1. The Instant Built-in Option: "Remember my email address on this device"
+Right below the Email Address field on the sign-in page (`/login.html`), there is a built-in checkbox:
+- ☑️ **"Remember my email address on this device"**
+- **How It Works:** When checked, the web app securely stores your email address (and your display name) in your browser's client-side `localStorage`.
+- **Zero Third-Party Sharing:** The saved email never leaves your local hardware and is never sent to advertising or analytics trackers.
+- **Next Time You Visit:** When you navigate to `/login.html` on that device, both your name and email are pre-filled automatically. You just click **Send Sign-In Code**.
+- **90-Day Active Session:** Once you verify your sign-in code or click the email link, your device receives a secure `baseball_session` cookie valid for **90 days**. You will stay signed in across browser restarts without having to re-authenticate unless you explicitly click **Log Out** or clear your cookies.
+
+---
+
+#### 2. Mobile Devices: Android (Phones & Tablets)
+
+##### 🟢 Google Chrome on Android (Standard & Most Common)
+Android and Chrome provide deep integration through **Autofill with Google**:
+1. **Enable Autofill in Chrome:**
+   - Open Chrome on your Android phone or tablet.
+   - Tap the **three vertical dots (⋮)** in the top-right corner > select **Settings**.
+   - Tap **Addresses and more** (or **Autofill and payments**).
+   - Toggle **Save and fill addresses** to **ON**.
+   - (Optional) Tap **Add address** to explicitly register your full name and email address.
+2. **Enable System-Wide Google Autofill (Android OS Settings):**
+   - Open your Android **Settings** app.
+   - Go to **Passwords & accounts** (or **System** > **Languages & input** > **Autofill service** on older versions).
+   - Verify that **Autofill service** is set to **Google** (or your preferred password manager).
+3. **Using It in the Login Field:**
+   - On the Sunday Pickup Baseball login page (`/login.html`), tap the **Email Address** input.
+   - Look directly above the on-screen keyboard (Gboard or Samsung Keyboard): a pill containing your email address appears in the suggestion strip.
+   - Tap your email pill to fill the field instantly.
+
+##### 🔵 Samsung Internet (Samsung Galaxy Phones & Tablets)
+1. **Enable Auto Fill Forms / Samsung Pass:**
+   - Open Samsung Internet.
+   - Tap the **Menu (☰)** in the bottom-right corner > tap **Settings** (gear icon).
+   - Select **Personal browsing data** (or **Privacy & security**).
+   - Tap **Autofill forms** (or **Samsung Pass**) and toggle it **ON**.
+   - Make sure your personal profile contains your active email address.
+2. **Using It:**
+   - Tap the Email Address input on `/login.html`.
+   - Samsung Pass or the Auto Fill bar will slide up with your saved email. Tap it (or confirm with your fingerprint/PIN) to populate.
+
+##### 🦊 Mozilla Firefox for Android
+1. Open Firefox > tap the **three dots (⋮)** > **Settings**.
+2. Under the **Autofill** section:
+   - Tap **Logins and passwords** > turn on **Save logins and passwords**.
+   - Tap **Addresses** > turn on **Autofill addresses**.
+3. On `/login.html`, tap the Email Address input and select your email from the Firefox suggestion bar.
+
+##### 📱 Legacy Android Browsers (Android 4.4 KitKat to Android 8.0 Oreo Stock AOSP Browser)
+1. Open the stock "Browser" or "Internet" app.
+2. Tap **Menu** > **Settings** > **Privacy & security** (or **General**).
+3. Check the boxes for **Remember form data** and **Enable Auto-fill**.
+4. *Built-in Fallback:* Legacy Android WebKit browsers reliably support HTML5 `localStorage`. Simply check the site's built-in **"Remember my email address on this device"** checkbox, and your email will persist automatically!
+
+---
+
+#### 3. Mobile Devices: Apple iOS (iPhone & iPad)
+
+##### 🧭 Apple Safari on iPhone & iPad
+Safari on iOS uses your Contacts card and iCloud Keychain to fill credentials automatically:
+1. **Enable Contact AutoFill (Fills Name & Email in One Tap):**
+   - Open the iOS **Settings** app on your iPhone or iPad.
+   - Scroll down and tap **Safari**.
+   - Tap **AutoFill**.
+   - Toggle **Contact Info** to **ON (Green)**.
+   - Tap **My Info** and select **your own contact card** from your Contacts list (verify that your email address is included on that contact card).
+2. **Enable Password & Passkey AutoFill (iCloud Keychain):**
+   - In iOS **Settings**, tap **Passwords** (or **General** > **AutoFill & Passwords** on newer iOS versions).
+   - Tap **Password Options** > ensure **AutoFill Passwords and Passkeys** is toggled **ON**.
+3. **Using It on the Login Page:**
+   - In Safari, navigate to `/login.html`.
+   - Tap inside the **Email Address** field.
+   - Look directly above the virtual keyboard: you will see **"AutoFill Contact"** or your email address in the predictive QuickType bar.
+   - Tap your email or "AutoFill Contact". Safari will populate both your Name and Email address in one action.
+
+##### 🟢 Google Chrome for iOS (iPhone & iPad)
+1. Open Chrome on your iPhone or iPad.
+2. Tap the **three horizontal dots (…)** in the bottom-right corner > select **Settings**.
+3. Tap **Addresses and more** > toggle **Save and Fill Addresses** to **ON**.
+4. When visiting `/login.html`, tap the Email Address field and select your saved email from the suggestion bar above the keyboard.
+
+##### 🦊 Mozilla Firefox for iOS
+1. Open Firefox > tap the **Menu (☰)** > **Settings**.
+2. Tap **Logins & Passwords** > toggle **Save Logins** to **ON**.
+3. Select your saved email when prompted in the keyboard suggestion row on `/login.html`.
+
+##### 📱 Legacy iOS Devices (iOS 9 through iOS 13 — iPhone 5s, 6, 6 Plus, iPad Air 1, iPad mini 2/3)
+1. Open **Settings** > **Safari** > **AutoFill**.
+2. Enable **Use Contact Info** and make sure **My Info** is linked to your contact card.
+3. If QuickType is disabled or unsupported, double-tap the email input field to trigger the AutoFill prompt, or check the website's built-in **"Remember my email address on this device"** checkbox.
+
+---
+
+#### 4. Desktop & Laptop: Apple Mac (macOS)
+
+##### 🧭 Apple Safari on macOS
+1. **Enable AutoFill:**
+   - Open Safari.
+   - In the top macOS menu bar, click **Safari** > select **Settings...** (or **Preferences...** on macOS Monterey and earlier), or press `Cmd + ,`.
+   - Click the **AutoFill** tab.
+   - Check the box for **"Using info from my contacts"** (click *Edit...* to ensure your Card in the macOS Contacts app contains your email).
+   - Check the box for **"Usernames and passwords"**.
+2. **Using It on the Login Page:**
+   - Navigate to `/login.html`.
+   - Click into the **Email Address** field.
+   - Safari displays an AutoFill popover displaying your contact name and email address. Click the popover or press `Return` to fill.
+
+##### 🟢 Google Chrome on macOS
+1. Open Chrome > click the **three vertical dots (⋮)** in the upper right > **Settings** (or press `Cmd + ,`).
+2. Click **Autofill and passwords** in the left sidebar > click **Addresses and more**.
+3. Toggle **Save and fill addresses** to **ON**.
+4. (Optional) Under Addresses, click **Add**, enter your name and email address, and click **Save**.
+5. On `/login.html`, click into the email field and select your saved email from the dropdown menu.
+
+##### 🦊 Mozilla Firefox on macOS
+1. Open Firefox > click the **hamburger menu (☰)** in the upper right > **Settings** (or press `Cmd + ,`).
+2. Click **Privacy & Security** in the left navigation.
+3. Scroll down to **Forms and Autofill** > check the box for **Autofill addresses**.
+4. Click **Saved Addresses...** to add or verify your email address.
+5. On `/login.html`, double-click the email field or click inside it to select your email from the autofill dropdown.
+
+##### 🌊 Microsoft Edge on macOS
+1. Open Edge > click **…** (three dots) > **Settings**.
+2. In the left menu, click **Profiles** > select **Personal info** (or **Wallet**).
+3. Toggle **Save and fill personal info** to **ON**.
+
+##### 💻 Legacy macOS Safari (OS X Mavericks, Yosemite, El Capitan, macOS Sierra, High Sierra, Mojave)
+1. Open Safari > click **Safari** > **Preferences** > **AutoFill** tab.
+2. Check **"Using info from my Address Book card"** (or Contacts card).
+3. On `/login.html`, click the email field and select your contact profile.
+
+---
+
+#### 5. Desktop & Laptop: Microsoft Windows (Windows 11, Windows 10, Windows 7/8)
+
+##### 🌊 Microsoft Edge on Windows (Default on Windows 10 & 11)
+1. **Enable Personal Info Autofill:**
+   - Open Microsoft Edge.
+   - Click the **three horizontal dots (…)** in the top right > select **Settings**.
+   - In the left sidebar, click **Profiles** > click **Personal info** (or **Wallet**).
+   - Toggle **Save and fill info** to **ON**.
+2. **Add Your Email Address Manually:**
+   - Under Personal Info, click **Add address** or **Add personal info**.
+   - Enter your name and email address, then click **Save**.
+3. **Using It on the Login Page:**
+   - On `/login.html`, click or press `Tab` into the **Email Address** box.
+   - Edge displays a floating card showing your saved email. Click it or press the Down Arrow (`↓`) and `Enter` to populate the field.
+
+##### 🟢 Google Chrome on Windows
+1. Open Chrome > click the **three vertical dots (⋮)** in the upper right > **Settings**.
+2. In the left navigation, click **Autofill and passwords** > **Addresses and more**.
+3. Toggle **Save and fill addresses** to **ON**.
+4. (Optional) Click **Add** under Addresses to manually store your email and name.
+5. On `/login.html`, click into the email field and choose your email from the suggestion dropdown.
+
+##### 🦊 Mozilla Firefox on Windows
+1. Open Firefox > click the **hamburger menu (☰)** > **Settings**.
+2. In the left navigation, click **Privacy & Security**.
+3. Under **Forms and Autofill**, check the box for **Autofill addresses**.
+4. Click **Saved Addresses...** to review or add your email address.
+5. On `/login.html`, click or double-click the email input to select your address.
+
+##### 🏛️ Legacy Browsers on Windows (Internet Explorer 11 & EdgeHTML)
+
+###### Internet Explorer 11 (Windows 7, Windows 8.1, and Windows 10 Legacy)
+Internet Explorer 11 utilizes the classic Windows **AutoComplete** system:
+1. **Enable AutoComplete for Forms:**
+   - Open Internet Explorer 11.
+   - Click the **Tools** gear icon (`⚙️`) in the top right (or press `Alt + X`) > select **Internet Options**.
+   - Switch to the **Content** tab.
+   - In the **AutoComplete** section, click the **Settings** button.
+   - Ensure the checkboxes for **"Forms"** and **"User names and passwords on forms"** are checked.
+   - Click **OK**, then click **Apply** and **OK**.
+2. **Using AutoComplete in IE11:**
+   - Type your email into the Email Address field and submit the form once. IE11 records the entry into its AutoComplete cache.
+   - On subsequent visits to `/login.html`, **double-click the Email Address field** or click inside it and press the **Down Arrow (`↓`)** on your keyboard to reveal your previous entries, then press **Enter**.
+3. **HTML5 LocalStorage Compatibility:**
+   - Internet Explorer 11 fully supports the HTML5 `localStorage` standard.
+   - Checking the web app's built-in **"Remember my email address on this device"** checkbox works out of the box in IE11, preserving your email across reboots!
+
+###### Legacy Microsoft Edge (EdgeHTML / "Spartan", Windows 10 Builds 1507–1909)
+1. Open Edge > click the **three dots (…)** > **Settings**.
+2. Click **View advanced settings** (or **Passswords & autofill**).
+3. Toggle **Save form entries** to **ON**.
+4. Click **Manage form entries** to review or add your email address.
+
+---
+
+#### 6. Third-Party Password Managers (Bitwarden, 1Password, Dashlane, KeePass, Proton Pass)
+If you manage your credentials using a password manager extension or mobile vault:
+1. **Create an Entry in Your Vault:**
+   - **Title / Name:** Sunday Pickup Baseball
+   - **Website URL:** `https://www.pickupbaseballfoundation.org` (or match `https://www.pickupbaseballfoundation.org/login.html`)
+   - **Username / Login ID:** Your email address (e.g., `you@example.com`)
+   - **Password:** Leave blank, or enter a label such as `passwordless-magic-link`
+2. **Autofilling on the Login Page:**
+   - When viewing `/login.html`, trigger your extension's autofill hotkey:
+     - **Bitwarden:** `Ctrl + Shift + L` (Windows) or `Cmd + Shift + L` (Mac)
+     - **1Password:** `Ctrl + \` (Windows) or `Cmd + \` (Mac)
+     - **Proton Pass / Dashlane:** Click the inline icon directly inside the email field
+   - Your email address will instantly populate the field.
+
+---
+
+#### 7. Troubleshooting & Privacy Best Practices
+
+##### 🕵️ Incognito & Private Browsing Windows
+- When using **Private Browsing** (Safari / Firefox) or **Incognito Mode** (Chrome) or **InPrivate** (Edge):
+  - Browsers deliberately do not save form data or autofill suggestions.
+  - The web app's "Remember my email address on this device" checkbox uses `localStorage`, which browsers erase immediately when the private tab or window is closed.
+  - **Resolution:** If you want your email to stay saved and preserve your 90-day active session, use a standard (non-private) browser window.
+
+##### 🧹 Clearing Browsing Data Without Losing Saved Emails
+- When clearing browser history or cache in your browser's settings:
+  - Keep **"Autofill form data"** (or **"Addresses and more"**) **UNCHECKED** so your browser does not erase your saved email.
+  - Keep **"Cookies and other site data"** **UNCHECKED** if you want to remain logged in for the full 90-day duration without re-entering a verification code.
+
+##### 🏫 Shared or Public Computers (Libraries, School/Work Terminals)
+- When signing in on a shared public terminal:
+  1. **Uncheck** "Remember my email address on this device".
+  2. Use a **Private / Incognito** window.
+  3. When finished, always click **Log Out** from `/profile.html` or the top navigation bar to invalidate the session cookie on the server.
+
+---
 
 ### ⚾👏🛡️ Submitting a Group RSVP (Players, Spectators & Volunteer Tasks)
 On any game page (`/event.html?id=...`), one person or household account can RSVP for their whole group in a single step:

@@ -535,5 +535,22 @@ Moved and consolidated all access control, anonymous guest policy, and banned em
 
 ---
 
-## 35. Future Roadmap Notes
+## 35. Phase 34: Credential & Email Saving Guide in User Handbook (Mobile, Desktop & Legacy Browsers)
+Created a comprehensive, platform-specific guide in `HANDBOOK.md` educating players and organizers on how to save and automatically fill their email address when logging into the web app:
+- **Comprehensive Device & OS Coverage:**
+  - **Android (Phones & Tablets):** Detailed step-by-step instructions for Google Chrome (Autofill with Google, Gboard keyboard suggestion strip), Samsung Internet (Samsung Pass, Auto fill forms), Firefox for Android, and legacy AOSP WebKit browsers.
+  - **Apple iOS (iPhone & iPad):** Step-by-step walkthrough for Safari (enabling Contact AutoFill linked to My Info contact card, iCloud Keychain / Passwords AutoFill, QuickType keyboard bar), Chrome for iOS, Firefox for iOS, and legacy iOS versions (iOS 9–13).
+  - **Apple Mac (macOS):** Full configuration steps for Safari (AutoFill preferences, Contacts card linking, Passwords), Google Chrome for Mac, Firefox for Mac, Microsoft Edge for Mac, and legacy OS X / macOS releases.
+  - **Microsoft Windows:** Detailed guides for Microsoft Edge (Personal Info / Wallet autofill, manual address adding), Google Chrome for Windows, Mozilla Firefox for Windows, legacy EdgeHTML, and Internet Explorer 11 (enabling classic Windows AutoComplete in Tools > Internet Options > Content > AutoComplete, double-click / down-arrow keyboard history).
+- **In-App Feature Education:**
+  - Documented the web app's built-in **"Remember my email address on this device"** checkbox on `/login.html`, detailing how client-side `localStorage` preserves identity without third-party tracking, and how 90-day active session cookies eliminate repetitive log-ins.
+  - Provided instructions for third-party password managers (Bitwarden, 1Password, Dashlane, Proton Pass, KeePass) configured for passwordless email sign-ins.
+  - Included troubleshooting guidance covering Incognito / Private Browsing modes (which clear `localStorage`), advice on preserving autofill data when clearing caches, and security hygiene for shared or public terminals.
+- **Testing & Documentation Integrity:**
+  - Updated Table of Contents in `HANDBOOK.md` with direct anchor link (`#saving-login-credentials`).
+  - Added automated assertion in `scripts/verify-all.js` verifying the presence and comprehensive browser/OS coverage of the credential saving guide. All 59 test suites pass.
+
+---
+
+## 36. Future Roadmap Notes
 - **Pinned Full-Stack Rust / WebAssembly Migration:** Evaluated a future 4-phase rewrite of the Cloudflare Pages Functions backend (and optional frontend interactivity) to Rust (`workers-rs` compiling to WebAssembly) for compile-time type safety, zero-dependency binary durability, and strict edge memory safety—kept as a guiding north star when designing new features and data models.
