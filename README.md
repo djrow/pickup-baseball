@@ -328,7 +328,13 @@ Signed-in administrators can download a complete `.sql` backup of the live Cloud
 
 ---
 
-## 📜 License
-MIT License. Built for the Pickup Baseball Foundation.
+## 📜 Copyright & License
+© 2026 Pickup Baseball Foundation.
+
+Licensed under the **Creative Commons Attribution-NonCommercial 4.0 International License (CC BY-NC 4.0)**.
+- **BY (Attribution):** You must give appropriate credit to the Pickup Baseball Foundation.
+- **NC (NonCommercial):** You may not use the material for commercial purposes.
+
+See [`LICENSE`](LICENSE) for the full license text.
 
 Built with Google Gemini in October 2026 for simplicity and durability.

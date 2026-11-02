@@ -256,5 +256,6 @@
   "footer.handbook": "ハンドブックとグラウンド規則",
   "hero.handbook_btn": "📖 ハンドブックとグラウンド規則 ↗",
   "rules.summary": "⚾ 日曜ゲームの基本ルール：全員打席、ピッチングマシン使用、安全第一。",
-  "rules.full_link": "📖 ウェブアプリのハンドブックで日曜ルールの詳細を読む ↗"
+  "rules.full_link": "📖 ウェブアプリのハンドブックで日曜ルールの詳細を読む ↗",
+  "footer.copyright": "© 2026 Pickup Baseball Foundation. クリエイティブ・コモンズ 表示-非営利 4.0 国際（CC BY-NC 4.0）ライセンスに基づき提供されています。"
 }

@@ -55,7 +55,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-const CURRENT_APP_VERSION = '37';
+const CURRENT_APP_VERSION = '38';
 app.use((req, res, next) => {
   res.setHeader('X-App-Version', CURRENT_APP_VERSION);
   next();
@@ -1503,6 +1503,11 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(apiJs.includes('footer.handbook'), 'api.js must render footer.handbook');
     assert.ok(indexHtml.includes('sunday-rules-accordion'), 'index.html must include sunday-rules-accordion');
     assert.ok(indexHtml.includes('hero-handbook-btn'), 'index.html must include hero-handbook-btn');
+    const licenseText = fs.readFileSync(path.join(__dirname, '..', 'LICENSE'), 'utf8');
+    assert.ok(licenseText.includes('Creative Commons Attribution-NonCommercial 4.0 International'), 'LICENSE must be Creative Commons BY-NC 4.0');
+    assert.ok(readmeMd.includes('Creative Commons Attribution-NonCommercial 4.0 International'), 'README.md must cite Creative Commons BY-NC 4.0');
+    assert.ok(apiJs.includes('footer.copyright'), 'api.js must include footer.copyright');
+    assert.ok(apiJs.includes('Creative Commons BY-NC 4.0'), 'api.js must display Creative Commons BY-NC 4.0');
   });
 
   await test('T9.17: RSS 2.0 Feed with Media RSS, Multimedia Interpretation, and Highlights Lifecycle', async () => {
@@ -1649,7 +1654,8 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
       'calendar.subscribe_title',
       'feed.heading',
       'nav.handbook',
-      'footer.handbook'
+      'footer.handbook',
+      'footer.copyright'
     ];
 
     for (const lang of languages) {

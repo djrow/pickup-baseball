@@ -579,5 +579,22 @@ Added direct in-app handbook links and created an authoritative "Typical Rules o
 
 ---
 
-## 37. Future Roadmap Notes
+## 37. Phase 36: Creative Commons BY-NC 4.0 Copyright & Licensing Integration
+Formalized the project's intellectual property and open-access licensing under Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0):
+- **Universal Copyright Notice in Web App Footer:**
+  - Added a dedicated copyright and licensing notice to `API.renderFooter()` in `public/js/api.js`:
+    `© 2026 Pickup Baseball Foundation. Licensed under Creative Commons BY-NC 4.0.`
+  - Linked directly to the official Creative Commons deed (`https://creativecommons.org/licenses/by-nc/4.0/`).
+  - Fully internationalized the copyright notice across all 15 supported languages in `public/i18n/*.json` (`footer.copyright`).
+- **Repository Licensing Artifacts:**
+  - Created root [`LICENSE`](LICENSE) containing the full legal code of the Creative Commons Attribution-NonCommercial 4.0 International Public License.
+  - Updated [`package.json`](package.json) license identifier to `"CC-BY-NC-4.0"`.
+  - Updated [`README.md`](README.md) and [`HANDBOOK.md`](HANDBOOK.md) declaring CC BY-NC 4.0 terms (free sharing and adaptation with attribution, strictly non-commercial).
+- **Automated Verification & Cache Invalidation:**
+  - Added assertions in `scripts/verify-all.js` (`T9.16` and `T9.18`) validating the presence of the CC BY-NC notice in `LICENSE`, `README.md`, `api.js`, and all 15 language dictionaries.
+  - Bumped cache bust version to `v38` across `CLIENT_VERSION`, `CURRENT_APP_VERSION`, Service Worker cache (`pbf-cache-v38`), and all 8 HTML files (`?v=38`). All 59 automated test suites pass.
+
+---
+
+## 38. Future Roadmap Notes
 - **Pinned Full-Stack Rust / WebAssembly Migration:** Evaluated a future 4-phase rewrite of the Cloudflare Pages Functions backend (and optional frontend interactivity) to Rust (`workers-rs` compiling to WebAssembly) for compile-time type safety, zero-dependency binary durability, and strict edge memory safety—kept as a guiding north star when designing new features and data models.

@@ -256,5 +256,6 @@
   "footer.handbook": "안내서 및 경기 규칙",
   "hero.handbook_btn": "📖 안내서 및 경기 규칙 ↗",
   "rules.summary": "⚾ 일요일 기본 경기 규칙: 연속 타순, 피칭 머신 사용, 안전 최우선.",
-  "rules.full_link": "📖 웹앱 안내서에서 일요일 경기 전체 규칙 읽기 ↗"
+  "rules.full_link": "📖 웹앱 안내서에서 일요일 경기 전체 규칙 읽기 ↗",
+  "footer.copyright": "© 2026 Pickup Baseball Foundation. 크리에이티브 커먼즈 저작자표시-비영리 4.0 국제(CC BY-NC 4.0) 라이선스를 따릅니다."
 }
