@@ -651,5 +651,22 @@ Introduced a zero-host, client-side weather forecasting engine and smart rainout
 
 ---
 
-## 40. Future Roadmap Notes
+## 40. Phase 39: CSP Connect-Src Whitelist & 10-Day Forecast Horizon Alignment
+Resolved browser security blocking and standardized 10-day weather forecast copy and activation:
+- **Content Security Policy (CSP) `connect-src` Whitelisting (`public/_headers`):**
+  - Added `https://api.open-meteo.com` to `connect-src` in `public/_headers`.
+  - Previously, strict CSP blocked browser client-side `fetch()` requests to `api.open-meteo.com`, triggering an unhandled CSP violation error that resulted in fallback text appearing on upcoming events (e.g., seven days away).
+- **10-Day Forecast Horizon Alignment (`weather.js`, `event.js`, `app.js`):**
+  - Configured Open-Meteo query to request `forecast_days=10` with `past_days=2`.
+  - Updated placeholder text, error handling, and assistant widget descriptions from "14-day" to "10-day" across the platform (`10-day forecast activates closer to game`).
+  - Differentiated between genuine outside-horizon dates (`available: false`, `reason: 'outside_horizon'`) and temporary network/CSP fetch failures (`error: true`, displaying `"Weather forecast temporarily unavailable"`).
+- **Multi-Hour Event Matching Resiliency:**
+  - Enhanced `calculateFieldDrainage` to match target game start hours and gracefully fallback to date prefix matches across all hourly timestamps on that day.
+- **Cache-Busting & Test Suite Updates:**
+  - Bumped version to `v41` across `CURRENT_APP_VERSION`, `CLIENT_VERSION`, Service Worker cache (`pbf-cache-v41`), `_headers`, and all 8 HTML files (`?v=41`).
+  - Added assertions to `T9.19` in `scripts/verify-all.js` checking CSP whitelisting, 10-day query parameters, and handbook documentation.
+
+---
+
+## 41. Future Roadmap Notes
 - **Pinned Full-Stack Rust / WebAssembly Migration:** Evaluated a future 4-phase rewrite of the Cloudflare Pages Functions backend (and optional frontend interactivity) to Rust (`workers-rs` compiling to WebAssembly) for compile-time type safety, zero-dependency binary durability, and strict edge memory safety—kept as a guiding north star when designing new features and data models.

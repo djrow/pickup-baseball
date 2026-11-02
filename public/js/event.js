@@ -267,7 +267,11 @@ function renderEventDetails() {
     window.WeatherService.getForecastForGame(ev.event_date, ev.location).then(function(fc) {
       if (!fc || !fc.available) {
         if (weatherDisplay) {
-          weatherDisplay.innerHTML = '<span style="font-size: 0.84rem; color: var(--text-muted);">14-day forecast activates closer to game</span>';
+          if (fc && fc.error) {
+            weatherDisplay.innerHTML = '<span style="font-size: 0.84rem; color: var(--text-muted);">Weather forecast temporarily unavailable</span>';
+          } else {
+            weatherDisplay.innerHTML = '<span style="font-size: 0.84rem; color: var(--text-muted);">10-day forecast activates closer to game</span>';
+          }
         }
         if (weatherIcon) weatherIcon.textContent = '📅';
         if (typeof window.WeatherService.renderAssistantWidget === 'function') {

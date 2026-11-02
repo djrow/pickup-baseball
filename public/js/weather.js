@@ -140,7 +140,7 @@
   var inMemoryCache = {};
 
   async function fetchForecast(lat, lon) {
-    var key = 'pbf_weather_' + Number(lat).toFixed(4) + '_' + Number(lon).toFixed(4);
+    var key = 'pbf_weather_v41_' + Number(lat).toFixed(4) + '_' + Number(lon).toFixed(4);
 
     // 1. Check in-memory cache
     var mem = inMemoryCache[key];
@@ -168,7 +168,7 @@
       '&temperature_unit=fahrenheit' +
       '&precipitation_unit=inch' +
       '&timezone=America%2FLos_Angeles' +
-      '&forecast_days=14' +
+      '&forecast_days=10' +
       '&past_days=2';
 
     var res = await fetch(url);
@@ -202,12 +202,21 @@
     if (targetIdx === -1 && targetHourKey) {
       var datePrefix = targetHourKey.split('T')[0];
       targetIdx = times.indexOf(datePrefix + 'T12:00');
+      if (targetIdx === -1) {
+        for (var t = 0; t < times.length; t++) {
+          if (times[t].indexOf(datePrefix) === 0) {
+            targetIdx = t;
+            break;
+          }
+        }
+      }
     }
 
     if (targetIdx === -1) {
       return {
         available: false,
-        reason: 'Outside forecast horizon (Open-Meteo provides 14-day forecast)'
+        reason: 'Outside forecast horizon (10-day weather forecast activates closer to game)',
+        message: '10-day forecast activates closer to game'
       };
     }
 
@@ -361,7 +370,11 @@
       return drainage;
     } catch (err) {
       console.warn('[Weather] Unable to load forecast:', err.message);
-      return null;
+      return {
+        available: false,
+        error: true,
+        message: 'Weather forecast temporarily unavailable'
+      };
     }
   }
 
@@ -373,6 +386,10 @@
     if (!container) return;
 
     if (!forecastResult || !forecastResult.available) {
+      var isError = forecastResult && forecastResult.error;
+      var subText = isError
+        ? 'Weather forecast temporarily unavailable. Please check back shortly.'
+        : '10-day weather forecasts and 24-hour rainfall drainage tracking activate 10 days before each scheduled game.';
       container.innerHTML = `
         <div class="card" style="border-left: 4px solid var(--border); padding: 16px 20px;">
           <div style="display: flex; align-items: center; gap: 10px;">
@@ -382,7 +399,7 @@
                 Smart Rainout Assistant &amp; Weather Prediction
               </div>
               <div style="font-size: 0.82rem; color: var(--text-muted); margin-top: 2px;">
-                14-day weather forecasts and 24-hour rainfall drainage tracking activate 14 days before each scheduled game.
+                ${subText}
               </div>
             </div>
           </div>

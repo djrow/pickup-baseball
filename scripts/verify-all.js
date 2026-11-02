@@ -55,7 +55,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-const CURRENT_APP_VERSION = '40';
+const CURRENT_APP_VERSION = '41';
 app.use((req, res, next) => {
   res.setHeader('X-App-Version', CURRENT_APP_VERSION);
   next();
@@ -1862,6 +1862,13 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
 
     const eventJs = fs.readFileSync(path.join(publicDir, 'js', 'event.js'), 'utf8');
     assert.ok(eventJs.includes('renderAssistantWidget'), 'event.js must call WeatherService.renderAssistantWidget');
+    assert.ok(eventJs.includes('10-day forecast activates closer to game'), 'event.js must specify 10-day forecast activation window');
+
+    const headersFile = fs.readFileSync(path.join(publicDir, '_headers'), 'utf8');
+    assert.ok(headersFile.includes('https://api.open-meteo.com'), '_headers CSP connect-src must allow https://api.open-meteo.com');
+
+    assert.ok(weatherJsCode.includes('forecast_days=10'), 'weather.js must query 10-day forecast horizon');
+    assert.ok(weatherJsCode.includes('10-day weather forecasts'), 'weather.js must describe 10-day forecast in assistant widget');
 
     const adminHtml = fs.readFileSync(path.join(publicDir, 'admin.html'), 'utf8');
     assert.ok(adminHtml.includes('/js/weather.js'), 'admin.html must script-load weather.js');
@@ -1880,6 +1887,7 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     const handbookMd = fs.readFileSync(path.join(__dirname, '..', 'HANDBOOK.md'), 'utf8');
     assert.ok(handbookMd.includes('Sunday Afternoon Routine (12:00 PM – 4:00 PM)'), 'HANDBOOK.md must document authentic 12 PM - 4 PM routine');
     assert.ok(handbookMd.includes('Smart Rainout Assistant & 24-Hour Surface Accumulation Drainage Tracker'), 'HANDBOOK.md must document Smart Rainout Assistant');
+    assert.ok(handbookMd.includes('10-day weather forecast'), 'HANDBOOK.md must document 10-day weather forecast');
     assert.ok(handbookMd.includes('12:00 PM – 12:30 PM (Warm-ups & Throwing)'), 'HANDBOOK.md must document warmups and throwing');
     assert.ok(handbookMd.includes('12:30 PM – 1:30 PM (Batting Practice)'), 'HANDBOOK.md must document 1 hour of BP');
     assert.ok(handbookMd.includes('3:15 PM – 4:00 PM (Fielding Drills & Field Care)'), 'HANDBOOK.md must document drills and dragging until 4pm');

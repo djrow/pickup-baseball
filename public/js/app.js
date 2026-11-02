@@ -831,7 +831,7 @@ function renderCalendar(events) {
     </div>
   `;
 
-  // Asynchronously populate weather forecast badges for game cards within 14 days
+  // Asynchronously populate weather forecast badges for game cards within 10 days
   if (window.WeatherService && typeof window.WeatherService.populateCardWeatherBadges === 'function') {
     window.WeatherService.populateCardWeatherBadges();
   }
