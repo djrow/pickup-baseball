@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Dashboard - Sunday Pickup Baseball</title>
-  <link rel="stylesheet" href="/css/style.css?v=46">
+  <link rel="stylesheet" href="/css/style.css?v=47">
   <link rel="alternate" type="application/rss+xml" title="Sunday Pickup Baseball Highlights &amp; Updates" href="/feed.xml">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
@@ -194,12 +194,26 @@
 
     <!-- Manage Existing Games -->
     <section class="card" style="margin-top: 36px;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
-        <h2 class="card-title" style="margin-bottom: 0;">Active Scheduled Games</h2>
-        <span style="font-size: 0.85rem; color: var(--text-muted);">Click <strong>"🛡️ Manage Tasks"</strong> on any game to add, edit, or remove tasks.</span>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
+        <div>
+          <h2 class="card-title" style="margin-bottom: 2px;">Active Scheduled Games</h2>
+          <span style="font-size: 0.82rem; color: var(--text-muted);">Manage upcoming games, volunteers, weather, and recorded turnout.</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+          <input
+            type="text"
+            id="admin-game-search-input"
+            placeholder="🔍 Filter games..."
+            style="font-size: 0.82rem; padding: 5px 10px; border-radius: var(--radius-sm); border: 1.5px solid var(--border); background: var(--bg-input); color: var(--text-main); min-width: 180px;"
+            aria-label="Filter games by title or location"
+          >
+          <span id="admin-games-count-badge" class="badge" style="background: var(--bg-subtle); color: var(--secondary); font-size: 0.8rem; font-weight: 700; border: 1px solid var(--border);"></span>
+        </div>
       </div>
-      <div id="admin-games-container">
-        <p style="color: var(--text-muted);">Loading games...</p>
+      <div id="admin-games-scroll-container" class="admin-games-scroll-container">
+        <div id="admin-games-container" style="display: flex; flex-direction: column; gap: 6px; width: 100%;">
+          <p style="color: var(--text-muted); padding: 12px; text-align: center;">Loading games...</p>
+        </div>
       </div>
     </section>
 
@@ -407,8 +421,8 @@
 
   <footer id="site-footer" class="site-footer"></footer>
 
-  <script src="/js/api.js?v=46"></script>
-  <script src="/js/weather.js?v=46"></script>
-  <script src="/js/admin.js?v=46"></script>
+  <script src="/js/api.js?v=47"></script>
+  <script src="/js/weather.js?v=47"></script>
+  <script src="/js/admin.js?v=47"></script>
 </body>
 </html>

@@ -4,7 +4,7 @@ import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 
 const app = new Hono().basePath('/api');
 
-const CURRENT_APP_VERSION = '46';
+const CURRENT_APP_VERSION = '47';
 
 let d1Migrated = false;
 async function ensureD1Schema(db) {

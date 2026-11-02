@@ -55,7 +55,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-const CURRENT_APP_VERSION = '46';
+const CURRENT_APP_VERSION = '47';
 app.use((req, res, next) => {
   res.setHeader('X-App-Version', CURRENT_APP_VERSION);
   next();
@@ -2010,5 +2010,25 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(handbookMd.includes('Paid Operations & Fair-Share Task Scheduling Policy'), 'HANDBOOK.md must document Paid Operations Policy');
     assert.ok(handbookMd.includes('5:00 AM on Monday, 12 weeks prior to game day'), 'HANDBOOK.md must document Monday 5:00 AM release trigger');
     assert.ok(handbookMd.includes('Backup Hero Credit'), 'HANDBOOK.md must document Backup Hero Credits');
+  });
+
+  await t9.test('T9.21: Admin Dashboard Games List Compact View & Scroll Window', () => {
+    const adminHtml = fs.readFileSync(path.join(publicDir, 'admin.html'), 'utf8');
+    assert.ok(adminHtml.includes('id="admin-games-scroll-container"'), 'admin.html must contain scrollable games container id');
+    assert.ok(adminHtml.includes('class="admin-games-scroll-container"'), 'admin.html must use admin-games-scroll-container class');
+    assert.ok(adminHtml.includes('id="admin-game-search-input"'), 'admin.html must contain game filter/search input');
+    assert.ok(adminHtml.includes('id="admin-games-count-badge"'), 'admin.html must contain games count badge');
+
+    const styleCss = fs.readFileSync(path.join(publicDir, 'css', 'style.css'), 'utf8');
+    assert.ok(styleCss.includes('.admin-games-scroll-container'), 'style.css must define .admin-games-scroll-container');
+    assert.ok(styleCss.includes('max-height: 480px'), 'style.css must constrain max-height for games container');
+    assert.ok(styleCss.includes('overflow-y: auto'), 'style.css must enable vertical scroll on games container');
+    assert.ok(styleCss.includes('.admin-game-compact-item'), 'style.css must define .admin-game-compact-item');
+    assert.ok(styleCss.includes('.btn-compact-admin'), 'style.css must define .btn-compact-admin');
+
+    const adminJs = fs.readFileSync(path.join(publicDir, 'js', 'admin.js'), 'utf8');
+    assert.ok(adminJs.includes('renderAdminGameCardHtml'), 'admin.js must contain renderAdminGameCardHtml');
+    assert.ok(adminJs.includes('admin-game-compact-item'), 'admin.js must generate compact items');
+    assert.ok(adminJs.includes('setupAdminGameSearch'), 'admin.js must configure live game search');
   });
 });

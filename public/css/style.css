@@ -1545,6 +1545,112 @@ header.site-header {
   background-color: var(--bg-subtle);
 }
 
+/* Compact Scrollable Admin Scheduled Games List */
+.admin-games-scroll-container {
+  max-height: 480px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  padding: 8px;
+  position: relative;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) var(--bg-card);
+}
+
+.admin-games-scroll-container::-webkit-scrollbar {
+  width: 7px;
+}
+
+.admin-games-scroll-container::-webkit-scrollbar-track {
+  background: var(--bg-subtle);
+}
+
+.admin-games-scroll-container::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+.admin-games-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+.admin-game-compact-item {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--secondary);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.admin-game-compact-item:hover {
+  border-color: var(--primary);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+}
+
+.admin-game-compact-item .admin-game-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+
+.admin-game-compact-item .admin-game-main-info {
+  flex: 1;
+  min-width: 250px;
+}
+
+.admin-game-compact-item .admin-game-title-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  line-height: 1.3;
+}
+
+.admin-game-compact-item .admin-game-title {
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: var(--secondary);
+}
+
+.admin-game-compact-item .admin-game-date {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.admin-game-compact-item .admin-game-meta-line {
+  font-size: 0.77rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 3px;
+  line-height: 1.25;
+}
+
+.admin-game-compact-item .admin-game-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.admin-game-compact-item .btn-compact-admin {
+  padding: 3px 8px;
+  font-size: 0.76rem;
+  line-height: 1.25;
+  border-radius: 4px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 /* Compact Scrollable Admin Accounts Table */
 .admin-users-scroll-container {
   max-height: 380px;

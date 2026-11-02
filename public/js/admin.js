@@ -611,11 +611,232 @@ function setupCreateForm() {
 // -------------------------------------------------------------
 // MANAGE EXISTING GAMES & INLINE TASK MANAGER
 // -------------------------------------------------------------
+let allAdminEventsCache = [];
+let adminGameSearchBound = false;
+
+function setupAdminGameSearch() {
+  const searchInput = document.getElementById('admin-game-search-input');
+  if (!searchInput || adminGameSearchBound) return;
+  adminGameSearchBound = true;
+  searchInput.addEventListener('input', () => {
+    renderAdminGamesList(searchInput.value);
+  });
+}
+
+function renderAdminGameCardHtml(ev) {
+  const isAdmin = currentAdminUser && currentAdminUser.isAdmin;
+  const isRainout = ev.status === 'rainout';
+
+  return `
+    <div class="admin-game-compact-item" id="admin-game-item-${ev.id}">
+      <div class="admin-game-header-row">
+        <div class="admin-game-main-info">
+          <div class="admin-game-title-line">
+            <span class="admin-game-title">${API.escapeHtml(ev.title)}</span>
+            <span class="admin-game-date">• 📅 ${API.formatDateTime(ev.event_date)}</span>
+            ${isRainout ? '<span class="badge badge-rainout" style="font-size: 0.68rem; padding: 1px 6px;">🌧️ Rained Out</span>' : ''}
+            ${ev.is_restricted ? '<span class="badge badge-orange" style="font-size: 0.68rem; padding: 1px 6px;">🔒 Invited Roster</span>' : ''}
+          </div>
+          <div class="admin-game-meta-line">
+            <span>📍 ${API.escapeHtml(ev.location)}</span>
+            <span>•</span>
+            <span style="color: var(--primary); font-weight: 600;">
+              ${ev.actual_attendance != null
+                ? `⚾ <strong>${ev.actual_attendance} played</strong> (${ev.attendee_count} RSVPs)`
+                : `👥 ${ev.attendee_count} on roster`}
+            </span>
+            <span>•</span>
+            <span>🛡️ ${ev.duty_count} tasks</span>
+            <span class="admin-game-weather-row" id="admin-game-weather-${ev.id}" style="display: none;"></span>
+          </div>
+        </div>
+
+        <div class="admin-game-actions">
+          <button type="button" onclick="toggleTaskManager(${ev.id})" class="btn btn-primary btn-compact-admin">
+            🛡️ Tasks (${ev.duty_count})
+          </button>
+          <button type="button" onclick="toggleEditGamePanel(${ev.id})" class="btn btn-outline btn-compact-admin">
+            ✏️ Edit
+          </button>
+          <button type="button" onclick="toggleQuickTurnout(${ev.id})" class="btn btn-outline btn-compact-admin" style="font-weight: 700; color: var(--secondary);">
+            📊 Turnout
+          </button>
+          <button type="button" onclick="toggleAdminWeatherPanel(${ev.id})" class="btn btn-outline btn-compact-admin" id="btn-admin-weather-${ev.id}" style="font-weight: 600;">
+            🌧️ Field Drainage
+          </button>
+          <a href="/event.html?id=${ev.id}" class="btn btn-outline btn-compact-admin" target="_blank" rel="noopener noreferrer">
+            View ↗
+          </a>
+          <a href="/event.html?id=${ev.id}" class="btn ${isRainout ? 'btn-danger' : 'btn-outline'} btn-compact-admin">
+            ${isRainout ? '🌧️ Manage' : '🌧️ Rainout'}
+          </a>
+          ${isAdmin ? `
+            <button type="button" onclick="sendReminders(${ev.id})" class="btn btn-outline btn-compact-admin">
+              📧 Remind
+            </button>
+            <button type="button" onclick="deleteGame(${ev.id})" class="btn btn-danger btn-compact-admin">
+              Delete
+            </button>
+          ` : ''}
+        </div>
+      </div>
+
+      <!-- Inline Quick Turnout Recording Panel -->
+      <div id="quick-turnout-panel-${ev.id}" style="display: ${openQuickTurnoutEventId === ev.id ? 'block' : 'none'}; margin-top: 10px; padding: 12px 14px; background: var(--bg-subtle); border-radius: var(--radius-sm); border: 1.5px solid var(--secondary); box-shadow: var(--shadow-sm);">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 1.2rem;">⚾</span>
+            <div>
+              <div style="font-weight: 700; font-size: 0.88rem; color: var(--secondary);">
+                Record Field Turnout: ${API.escapeHtml(ev.title)}
+              </div>
+              <div style="font-size: 0.78rem; color: var(--text-muted);">
+                ${ev.actual_attendance != null ? `Recorded: <strong>${ev.actual_attendance} players</strong> (${ev.attendee_count} online RSVPs)` : `${ev.attendee_count} online RSVPs. Enter count of players who played.`}
+              </div>
+            </div>
+          </div>
+          <form id="quick-turnout-form-${ev.id}" onsubmit="saveAdminQuickTurnout(event, ${ev.id})" style="display: flex; align-items: center; gap: 6px; margin: 0;">
+            <input type="number" id="quick-turnout-input-${ev.id}" value="${ev.actual_attendance != null ? ev.actual_attendance : ''}" min="0" max="200" placeholder="e.g. 18" required style="width: 75px; padding: 4px 8px; font-weight: 700; font-size: 0.9rem; border-radius: 4px; border: 1.5px solid var(--border);">
+            <button type="submit" id="quick-turnout-btn-${ev.id}" class="btn btn-primary btn-compact-admin">💾 Save</button>
+            <button type="button" onclick="toggleQuickTurnout(${ev.id})" class="btn btn-outline btn-compact-admin">Cancel</button>
+          </form>
+        </div>
+        <div id="quick-turnout-alert-${ev.id}"></div>
+      </div>
+
+      <!-- Inline Smart Rainout Assistant & Field Drainage Panel -->
+      <div id="admin-weather-panel-${ev.id}" style="display: none; margin-top: 10px;"></div>
+
+      <!-- Inline Game Details Edit Panel -->
+      <div id="edit-game-panel-${ev.id}" style="display: ${openEditGameEventId === ev.id ? 'block' : 'none'}; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border);">
+        <div id="edit-game-alert-${ev.id}"></div>
+        <div style="background: var(--bg-subtle); padding: 14px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+          <h4 style="color: var(--secondary); font-size: 0.95rem; margin: 0 0 10px 0;">✏️ Edit Game Details</h4>
+          <div class="grid-2">
+            <div class="form-group" style="margin-bottom: 10px;">
+              <label style="font-size: 0.8rem;">Game Title *</label>
+              <input type="text" id="edit-title-${ev.id}" value="${API.escapeHtml(ev.title || '')}" required style="padding: 5px 8px; font-size: 0.88rem;">
+            </div>
+            <div class="form-group" style="margin-bottom: 10px;">
+              <label style="font-size: 0.8rem;">Date &amp; Time (Pacific) *</label>
+              <input type="datetime-local" id="edit-date-${ev.id}" value="${API.escapeHtml(API.isoToPacificLocalInput(ev.event_date))}" required style="padding: 5px 8px; font-size: 0.88rem;">
+            </div>
+          </div>
+          <div class="grid-2">
+            <div class="form-group" style="margin-bottom: 10px;">
+              <label style="font-size: 0.8rem;">Field Location *</label>
+              <input type="text" id="edit-location-${ev.id}" value="${API.escapeHtml(ev.location || '')}" list="common-locations-list" required style="padding: 5px 8px; font-size: 0.88rem;">
+            </div>
+            <div class="form-group" style="margin-bottom: 10px;">
+              <label style="font-size: 0.8rem;">Map / Directions Link (Optional)</label>
+              <input type="text" id="edit-map-${ev.id}" value="${API.escapeHtml(ev.location_url || '')}" placeholder="https://maps.google.com/?q=..." style="padding: 5px 8px; font-size: 0.88rem;">
+            </div>
+          </div>
+          <div class="form-group" style="margin-bottom: 10px;">
+            <label style="font-size: 0.8rem;">Game Details &amp; Announcements</label>
+            <textarea id="edit-desc-${ev.id}" rows="2" style="padding: 5px 8px; font-size: 0.85rem;">${API.escapeHtml(ev.description || '')}</textarea>
+          </div>
+          <div class="form-group" style="background: var(--bg-card); padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 10px;">
+            <label style="font-weight: 600; font-size: 0.82rem; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+              <span>⚾</span> <span>Actual Attendance (Headcount Who Played)</span>
+            </label>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <input type="number" id="edit-actual-attendance-${ev.id}" value="${ev.actual_attendance != null ? ev.actual_attendance : ''}" min="0" max="200" placeholder="e.g. 18" style="width: 80px; padding: 4px 8px; font-weight: 700; font-size: 0.88rem;">
+              <span style="font-size: 0.78rem; color: var(--text-muted);">
+                Record actual turnout from the field. Shown in past games archive!
+              </span>
+            </div>
+          </div>
+          <div class="form-group" style="background: var(--bg-card); padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 10px;">
+            <label style="font-weight: 600; font-size: 0.82rem; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+              <span>🔒</span> <span>Allowed Player Emails (Whitelist)</span>
+            </label>
+            <textarea id="edit-allowed-emails-${ev.id}" rows="2" placeholder="Leave blank to allow all players; or enter emails separated by commas or lines" style="padding: 5px 8px; font-size: 0.82rem;">${API.escapeHtml(((ev.allowed_emails_list) || (ev.allowed_emails ? (typeof ev.allowed_emails === 'string' ? JSON.parse(ev.allowed_emails) : ev.allowed_emails) : [])).join(', '))}</textarea>
+            <span style="font-size: 0.76rem; color: var(--text-muted);">
+              Leave blank to allow any registered player or guest to RSVP. Enter specific email addresses to restrict access.
+            </span>
+          </div>
+          <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+            <button type="button" id="save-game-btn-${ev.id}" onclick="saveEditedGame(${ev.id})" class="btn btn-primary btn-compact-admin">💾 Save Changes</button>
+            <button type="button" onclick="toggleEditGamePanel(${ev.id})" class="btn btn-outline btn-compact-admin">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Inline Task Management Panel (Toggled via button) -->
+      <div id="task-manager-panel-${ev.id}" style="display: ${openTaskManagerEventId === ev.id ? 'block' : 'none'}; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border);">
+        <!-- Rendered by renderTaskManagerContent(eventId) -->
+      </div>
+    </div>
+  `;
+}
+
+function renderAdminGamesList(query) {
+  const container = document.getElementById('admin-games-container');
+  const countBadge = document.getElementById('admin-games-count-badge');
+  if (!container) return;
+
+  let events = allAdminEventsCache || [];
+  const searchInput = document.getElementById('admin-game-search-input');
+  const activeQuery = (query !== undefined ? query : (searchInput ? searchInput.value : '')).trim().toLowerCase();
+
+  if (activeQuery) {
+    events = events.filter(ev => {
+      const title = (ev.title || '').toLowerCase();
+      const loc = (ev.location || '').toLowerCase();
+      const date = (API.formatDateTime(ev.event_date) || '').toLowerCase();
+      return title.includes(activeQuery) || loc.includes(activeQuery) || date.includes(activeQuery);
+    });
+  }
+
+  if (countBadge) {
+    if (allAdminEventsCache.length === 0) {
+      countBadge.textContent = '0 games';
+    } else if (events.length === allAdminEventsCache.length) {
+      countBadge.textContent = `${events.length} game${events.length === 1 ? '' : 's'}`;
+    } else {
+      countBadge.textContent = `${events.length} of ${allAdminEventsCache.length} games`;
+    }
+  }
+
+  if (events.length === 0) {
+    container.innerHTML = activeQuery
+      ? `<div style="text-align: center; padding: 24px; color: var(--text-muted); font-size: 0.88rem;">No games found matching "<strong>${API.escapeHtml(activeQuery)}</strong>".</div>`
+      : '<p style="color: var(--text-muted); text-align: center; padding: 16px;">No games created yet.</p>';
+    return;
+  }
+
+  container.innerHTML = events.map(ev => renderAdminGameCardHtml(ev)).join('');
+
+  // Asynchronously populate weather & drainage indicators on admin game cards
+  if (window.WeatherService && typeof window.WeatherService.getForecastForGame === 'function') {
+    events.forEach(function(ev) {
+      window.WeatherService.getForecastForGame(ev.event_date, ev.location).then(function(fc) {
+        if (!fc || !fc.available) return;
+        var wRow = document.getElementById('admin-game-weather-' + ev.id);
+        var wBtn = document.getElementById('btn-admin-weather-' + ev.id);
+        if (wRow) {
+          wRow.innerHTML = '<span class="badge ' + fc.badgeClass + '" style="font-size: 0.72rem; padding: 1px 6px; font-weight: 700;">' + fc.emoji + ' ' + fc.temperature + '°F &bull; ' + API.escapeHtml(fc.condition) + ' (' + API.escapeHtml(fc.statusLabel) + ')</span>';
+          wRow.style.display = 'inline-block';
+        }
+        if (wBtn) {
+          wBtn.innerHTML = fc.emoji + ' ' + fc.temperature + '°F &bull; ' + fc.totalRain24hFormatted + ' Rain';
+        }
+      }).catch(function() {});
+    });
+  }
+
+  if (openTaskManagerEventId) {
+    renderTaskManagerContent(openTaskManagerEventId);
+  }
+}
+
 async function loadAdminGames() {
   const container = document.getElementById('admin-games-container');
   try {
     const data = await API.getEvents('all');
     const events = data.events || [];
+    allAdminEventsCache = events;
     loadedAdminEventsMap = new Map(events.map(ev => [ev.id, ev]));
     updateAdminPostEventDropdown(events);
 
@@ -631,177 +852,12 @@ async function loadAdminGames() {
         .join('');
     }
 
-    if (events.length === 0) {
-      container.innerHTML = '<p style="color: var(--text-muted);">No games created yet.</p>';
-      return;
-    }
-
-    container.innerHTML = `
-      <div style="display: flex; flex-direction: column; gap: 16px;">
-        ${events.map(ev => `
-          <div class="card" style="margin-bottom: 0; padding: 18px; border-left: 4px solid var(--secondary);">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px;">
-              <div>
-                <div style="font-weight: 700; font-size: 1.15rem; color: var(--secondary); display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                  <span>${API.escapeHtml(ev.title)}</span>
-                  ${ev.status === 'rainout' ? '<span class="badge badge-rainout" style="font-size: 0.72rem;">🌧️ Rained Out</span>' : ''}
-                  ${ev.is_restricted ? '<span class="badge badge-orange" style="font-size: 0.72rem;">🔒 Invited Roster</span>' : ''}
-                </div>
-                <div style="font-size: 0.9rem; color: var(--text-main); margin-top: 3px;">
-                  📅 ${API.formatDateTime(ev.event_date)} | 📍 ${API.escapeHtml(ev.location)}
-                </div>
-                <div style="font-size: 0.82rem; color: var(--primary); font-weight: 600; margin-top: 5px;">
-                  ${ev.actual_attendance != null
-                    ? `⚾ <strong>${ev.actual_attendance} played</strong> (${ev.attendee_count} online RSVPs)`
-                    : `👥 ${ev.attendee_count} players on roster`} | 🛡️ ${ev.duty_count} volunteer tasks configured
-                </div>
-                <div class="admin-game-weather-row" id="admin-game-weather-${ev.id}" style="display: none; margin-top: 5px;"></div>
-              </div>
-
-              <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                <button onclick="toggleAdminWeatherPanel(${ev.id})" class="btn btn-outline btn-sm" id="btn-admin-weather-${ev.id}" style="font-weight: 600;">
-                  🌧️ Field Drainage
-                </button>
-                <button onclick="toggleQuickTurnout(${ev.id})" class="btn btn-outline btn-sm" style="font-weight: 700; color: var(--secondary);">
-                  📊 Record Turnout
-                </button>
-                <button onclick="toggleEditGamePanel(${ev.id})" class="btn btn-outline btn-sm">
-                  ✏️ Edit Details
-                </button>
-                <button onclick="toggleTaskManager(${ev.id})" class="btn btn-primary btn-sm">
-                  🛡️ Manage Tasks (${ev.duty_count})
-                </button>
-                <a href="/event.html?id=${ev.id}" class="btn btn-outline btn-sm" target="_blank">
-                  View Page ↗
-                </a>
-                <a href="/event.html?id=${ev.id}" class="btn ${ev.status === 'rainout' ? 'btn-danger' : 'btn-outline'} btn-sm">
-                  ${ev.status === 'rainout' ? '🌧️ Manage Rainout' : '🌧️ Rainout'}
-                </a>
-                ${currentAdminUser && currentAdminUser.isAdmin ? `
-                  <button onclick="sendReminders(${ev.id})" class="btn btn-outline btn-sm">
-                    📧 Send Reminders
-                  </button>
-                  <button onclick="deleteGame(${ev.id})" class="btn btn-danger btn-sm">
-                    Delete
-                  </button>
-                ` : ''}
-              </div>
-            </div>
-
-            <!-- Inline Quick Turnout Recording Panel -->
-            <div id="quick-turnout-panel-${ev.id}" style="display: ${openQuickTurnoutEventId === ev.id ? 'block' : 'none'}; margin-top: 14px; padding: 14px 18px; background: var(--bg-subtle); border-radius: var(--radius-sm); border: 1.5px solid var(--secondary); box-shadow: var(--shadow-sm);">
-              <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-                <div style="display: flex; align-items: center; gap: 10px;">
-                  <span style="font-size: 1.4rem;">⚾</span>
-                  <div>
-                    <div style="font-weight: 700; font-size: 0.95rem; color: var(--secondary);">
-                      Record Field Turnout for: ${API.escapeHtml(ev.title)}
-                    </div>
-                    <div style="font-size: 0.8rem; color: var(--text-muted);">
-                      ${ev.actual_attendance != null ? `Currently recorded: <strong>${ev.actual_attendance} players</strong> (${ev.attendee_count} online RSVPs)` : `${ev.attendee_count} online RSVPs. Enter how many players actually played.`}
-                    </div>
-                  </div>
-                </div>
-                <form id="quick-turnout-form-${ev.id}" onsubmit="saveAdminQuickTurnout(event, ${ev.id})" style="display: flex; align-items: center; gap: 8px; margin: 0;">
-                  <input type="number" id="quick-turnout-input-${ev.id}" value="${ev.actual_attendance != null ? ev.actual_attendance : ''}" min="0" max="200" placeholder="e.g. 18" required style="width: 85px; padding: 6px 10px; font-weight: 700; font-size: 1rem; border-radius: 6px; border: 1.5px solid var(--border);">
-                  <button type="submit" id="quick-turnout-btn-${ev.id}" class="btn btn-primary btn-sm">💾 Save Turnout</button>
-                  <button type="button" onclick="toggleQuickTurnout(${ev.id})" class="btn btn-outline btn-sm">Cancel</button>
-                </form>
-              </div>
-              <div id="quick-turnout-alert-${ev.id}"></div>
-            </div>
-
-            <!-- Inline Smart Rainout Assistant & Field Drainage Panel -->
-            <div id="admin-weather-panel-${ev.id}" style="display: none; margin-top: 14px;"></div>
-
-            <!-- Inline Game Details Edit Panel -->
-            <div id="edit-game-panel-${ev.id}" style="display: ${openEditGameEventId === ev.id ? 'block' : 'none'}; margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--border);">
-              <div id="edit-game-alert-${ev.id}"></div>
-              <div style="background: var(--bg-subtle); padding: 16px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
-                <h4 style="color: var(--secondary); font-size: 1rem; margin: 0 0 12px 0;">✏️ Edit Game Details</h4>
-                <div class="grid-2">
-                  <div class="form-group">
-                    <label>Game Title *</label>
-                    <input type="text" id="edit-title-${ev.id}" value="${API.escapeHtml(ev.title || '')}" required>
-                  </div>
-                  <div class="form-group">
-                    <label>Date &amp; Time (Pacific) *</label>
-                    <input type="datetime-local" id="edit-date-${ev.id}" value="${API.escapeHtml(API.isoToPacificLocalInput(ev.event_date))}" required>
-                  </div>
-                </div>
-                <div class="grid-2">
-                  <div class="form-group">
-                    <label>Field Location *</label>
-                    <input type="text" id="edit-location-${ev.id}" value="${API.escapeHtml(ev.location || '')}" list="common-locations-list" required>
-                  </div>
-                  <div class="form-group">
-                    <label>Map / Directions Link (Optional)</label>
-                    <input type="text" id="edit-map-${ev.id}" value="${API.escapeHtml(ev.location_url || '')}" placeholder="https://maps.google.com/?q=...">
-                  </div>
-                </div>
-                <div class="form-group">
-                  <label>Game Details &amp; Announcements</label>
-                  <textarea id="edit-desc-${ev.id}" rows="2">${API.escapeHtml(ev.description || '')}</textarea>
-                </div>
-                <div class="form-group" style="background: var(--bg-card); padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 12px;">
-                  <label style="font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
-                    <span>⚾</span> <span>Actual Attendance (Headcount Who Played)</span>
-                  </label>
-                  <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                    <input type="number" id="edit-actual-attendance-${ev.id}" value="${ev.actual_attendance != null ? ev.actual_attendance : ''}" min="0" max="200" placeholder="e.g. 18" style="width: 90px; padding: 5px 8px; font-weight: 700;">
-                    <span style="font-size: 0.82rem; color: var(--text-muted);">
-                      Record actual turnout from the field. Shown in past games archive!
-                    </span>
-                  </div>
-                </div>
-                <div class="form-group" style="background: var(--bg-card); padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 12px;">
-                  <label style="font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
-                    <span>🔒</span> <span>Allowed Player Emails (Whitelist)</span>
-                  </label>
-                  <textarea id="edit-allowed-emails-${ev.id}" rows="2" placeholder="Leave blank to allow all players; or enter emails separated by commas or lines">${API.escapeHtml(((ev.allowed_emails_list) || (ev.allowed_emails ? (typeof ev.allowed_emails === 'string' ? JSON.parse(ev.allowed_emails) : ev.allowed_emails) : [])).join(', '))}</textarea>
-                  <span style="font-size: 0.8rem; color: var(--text-muted);">
-                    Leave blank to allow any registered player or guest to RSVP. Enter specific email addresses to restrict access.
-                  </span>
-                </div>
-                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                  <button type="button" id="save-game-btn-${ev.id}" onclick="saveEditedGame(${ev.id})" class="btn btn-primary btn-sm">💾 Save Changes</button>
-                  <button type="button" onclick="toggleEditGamePanel(${ev.id})" class="btn btn-outline btn-sm">Cancel</button>
-                </div>
-              </div>
-            </div>
-
-            <!-- Inline Task Management Panel (Toggled via button) -->
-            <div id="task-manager-panel-${ev.id}" style="display: ${openTaskManagerEventId === ev.id ? 'block' : 'none'}; margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--border);">
-              <!-- Rendered by renderTaskManagerContent(eventId) -->
-            </div>
-          </div>
-        `).join('')}
-      </div>
-    `;
-
-    // Asynchronously populate weather & drainage indicators on admin game cards
-    if (window.WeatherService && typeof window.WeatherService.getForecastForGame === 'function') {
-      events.forEach(function(ev) {
-        window.WeatherService.getForecastForGame(ev.event_date, ev.location).then(function(fc) {
-          if (!fc || !fc.available) return;
-          var wRow = document.getElementById('admin-game-weather-' + ev.id);
-          var wBtn = document.getElementById('btn-admin-weather-' + ev.id);
-          if (wRow) {
-            wRow.innerHTML = '<span class="badge ' + fc.badgeClass + '" style="font-size: 0.74rem; padding: 2px 8px; font-weight: 700;">' + fc.emoji + ' ' + fc.temperature + '°F &bull; ' + API.escapeHtml(fc.condition) + ' &bull; Prev 24h Rain: ' + fc.totalRain24hFormatted + ' (' + API.escapeHtml(fc.statusLabel) + ')</span>';
-            wRow.style.display = 'block';
-          }
-          if (wBtn) {
-            wBtn.innerHTML = fc.emoji + ' ' + fc.temperature + '°F &bull; ' + fc.totalRain24hFormatted + ' Rain';
-          }
-        }).catch(function() {});
-      });
-    }
-
-    if (openTaskManagerEventId) {
-      renderTaskManagerContent(openTaskManagerEventId);
-    }
+    setupAdminGameSearch();
+    renderAdminGamesList();
   } catch (err) {
-    container.innerHTML = '<div class="alert alert-error">Unable to load games.</div>';
+    if (container) {
+      container.innerHTML = '<div class="alert alert-error">Unable to load games.</div>';
+    }
   }
 }
 
