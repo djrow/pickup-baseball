@@ -696,5 +696,16 @@ Resolved browser security blocking and standardized 10-day weather forecast copy
 
 ---
 
-## 43. Future Roadmap Notes
+## 43. Phase 42: Top Bar Header Navigation Streamlining
+- **Removed Handbook Link from Top Bar (`nav-link-handbook`):**
+  - Removed the `📖 Handbook` link from the header top bar across all 8 HTML files and `api.js` `updateAuthNav()`.
+  - Streamlines top bar navigation to `Donate`, `Language selector`, and `Log In` / `Profile`.
+  - Handbook remains accessible in the site footer (`footer.handbook`) and repository documentation.
+- **Test Suite & Version Bump:**
+  - Updated `scripts/verify-all.js` `T9.16` to verify that `nav-link-handbook` is absent from top bar rendering.
+  - Bumped version to `v45` across `CURRENT_APP_VERSION`, `CLIENT_VERSION`, Service Worker cache (`pbf-cache-v45`), and all 8 HTML files (`?v=45`).
+
+---
+
+## 44. Future Roadmap Notes
 - **Pinned Full-Stack Rust / WebAssembly Migration:** Evaluated a future 4-phase rewrite of the Cloudflare Pages Functions backend (and optional frontend interactivity) to Rust (`workers-rs` compiling to WebAssembly) for compile-time type safety, zero-dependency binary durability, and strict edge memory safety—kept as a guiding north star when designing new features and data models.

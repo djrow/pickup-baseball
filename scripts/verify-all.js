@@ -55,7 +55,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-const CURRENT_APP_VERSION = '44';
+const CURRENT_APP_VERSION = '45';
 app.use((req, res, next) => {
   res.setHeader('X-App-Version', CURRENT_APP_VERSION);
   next();
@@ -1578,7 +1578,7 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(handbookMd.includes('Internet Explorer 11') && handbookMd.includes('Samsung Internet'), 'HANDBOOK.md must cover legacy browsers and mobile browsers');
     assert.ok(handbookMd.includes('Typical Rules of Play on the Field on Sundays'), 'HANDBOOK.md must contain typical rules of play section');
     assert.ok(handbookMd.includes('id="rules-of-play"'), 'HANDBOOK.md must have anchor for rules of play');
-    assert.ok(apiJs.includes('nav-link-handbook'), 'api.js must render nav-link-handbook');
+    assert.ok(!apiJs.includes('nav-link-handbook'), 'api.js top bar must not render nav-link-handbook');
     assert.ok(apiJs.includes('footer.handbook'), 'api.js must render footer.handbook');
     assert.ok(indexHtml.includes('hero-handbook-btn'), 'index.html must include hero-handbook-btn');
     const licenseText = fs.readFileSync(path.join(__dirname, '..', 'LICENSE'), 'utf8');

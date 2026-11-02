@@ -140,7 +140,7 @@
   var inMemoryCache = {};
 
   async function fetchForecast(lat, lon) {
-    var key = 'pbf_weather_v44_' + Number(lat).toFixed(4) + '_' + Number(lon).toFixed(4);
+    var key = 'pbf_weather_v45_' + Number(lat).toFixed(4) + '_' + Number(lon).toFixed(4);
 
     // 1. Check in-memory cache
     var mem = inMemoryCache[key];

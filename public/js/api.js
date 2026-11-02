@@ -295,7 +295,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '44',
+  CLIENT_VERSION: '45',
 
   // Current user cache
   currentUser: null,
@@ -1423,7 +1423,6 @@ const API = {
 
     const isDonatePage = typeof window !== 'undefined' && (window.location.pathname.endsWith('donate.html') || window.location.pathname === '/donate');
     const donateLinkHtml = `<a href="/donate.html" class="nav-link-donate${isDonatePage ? ' active' : ''}">${this.t('nav.donate')}</a>`;
-    const handbookLinkHtml = `<a href="https://github.com/djrow/pickup-baseball/blob/trunk/HANDBOOK.md" target="_blank" rel="noopener noreferrer" class="nav-link-handbook" data-i18n="nav.handbook" title="User Guide, Sunday Field Rules &amp; Manual Maintenance Handbook">📖 <span data-i18n="nav.handbook">${this.t('nav.handbook', 'Handbook')}</span></a>`;
 
     const langOptionsHtml = this.SUPPORTED_LANGUAGES.map(l =>
       `<option value="${l.code}" ${l.code === currentLang ? 'selected' : ''} title="${this.escapeHtml(l.label)}">${l.short}</option>`
@@ -1438,7 +1437,6 @@ const API = {
           <span class="brand-short">PBF</span>
         </a>
         <div class="nav-links">
-          ${handbookLinkHtml}
           ${donateLinkHtml}
           ${langSelectHtml}
           ${authHtml}
