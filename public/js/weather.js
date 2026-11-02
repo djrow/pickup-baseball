@@ -140,7 +140,7 @@
   var inMemoryCache = {};
 
   async function fetchForecast(lat, lon) {
-    var key = 'pbf_weather_v42_' + Number(lat).toFixed(4) + '_' + Number(lon).toFixed(4);
+    var key = 'pbf_weather_v43_' + Number(lat).toFixed(4) + '_' + Number(lon).toFixed(4);
 
     // 1. Check in-memory cache
     var mem = inMemoryCache[key];
@@ -520,40 +520,6 @@
 
         <!-- 24-Hour Drainage Breakdown Timeline -->
         ${timelineHtml}
-
-        <!-- Sunday Afternoon Routine Timeline -->
-        <div style="margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border);">
-          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
-            <span style="font-size: 0.82rem; font-weight: 700; color: var(--secondary);">
-              ⚾ Sunday Afternoon Routine (12:00 PM – 4:00 PM)
-            </span>
-            <span style="font-size: 0.74rem; color: var(--text-muted); font-style: italic;">
-              Sunday afternoons stay dry — playability is decided by previous 24h drainage
-            </span>
-          </div>
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px;">
-            <div style="background: var(--bg-card); border: 1px solid var(--border); border-left: 3px solid var(--primary); padding: 6px 10px; border-radius: 6px;">
-              <div style="font-weight: 800; font-size: 0.78rem; color: var(--primary);">12:00 PM – 12:30 PM</div>
-              <div style="font-weight: 700; font-size: 0.82rem; color: var(--secondary);">Warmups &amp; Throwing</div>
-              <div style="font-size: 0.72rem; color: var(--text-muted);">Stretch and loosen arms for 30m</div>
-            </div>
-            <div style="background: var(--bg-card); border: 1px solid var(--border); border-left: 3px solid var(--secondary); padding: 6px 10px; border-radius: 6px;">
-              <div style="font-weight: 800; font-size: 0.78rem; color: var(--secondary);">12:30 PM – 1:30 PM</div>
-              <div style="font-weight: 700; font-size: 0.82rem; color: var(--secondary);">Batting Practice (BP)</div>
-              <div style="font-size: 0.72rem; color: var(--text-muted);">1 hour of machine-pitch BP</div>
-            </div>
-            <div style="background: var(--bg-card); border: 1px solid var(--border); border-left: 3px solid var(--primary); padding: 6px 10px; border-radius: 6px;">
-              <div style="font-weight: 800; font-size: 0.78rem; color: var(--primary);">1:30 PM – ~3:15 PM</div>
-              <div style="font-weight: 700; font-size: 0.82rem; color: var(--secondary);">Pickup Game</div>
-              <div style="font-size: 0.72rem; color: var(--text-muted);">Continuous batting &amp; rotations</div>
-            </div>
-            <div style="background: var(--bg-card); border: 1px solid var(--border); border-left: 3px solid var(--secondary); padding: 6px 10px; border-radius: 6px;">
-              <div style="font-weight: 800; font-size: 0.78rem; color: var(--secondary);">3:15 PM – 4:00 PM</div>
-              <div style="font-weight: 700; font-size: 0.82rem; color: var(--secondary);">Fielding Drills</div>
-              <div style="font-size: 0.72rem; color: var(--text-muted);">Grounders, fly balls &amp; dragging</div>
-            </div>
-          </div>
-        </div>
 
         <!-- Heuristic Transparency Note -->
         <div style="margin-top: 12px; font-size: 0.74rem; color: var(--text-muted); line-height: 1.4; background: var(--bg-subtle); padding: 8px 12px; border-radius: var(--radius-sm);">

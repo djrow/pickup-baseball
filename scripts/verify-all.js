@@ -55,7 +55,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-const CURRENT_APP_VERSION = '42';
+const CURRENT_APP_VERSION = '43';
 app.use((req, res, next) => {
   res.setHeader('X-App-Version', CURRENT_APP_VERSION);
   next();
@@ -1878,6 +1878,9 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     const indexHtml = fs.readFileSync(path.join(publicDir, 'index.html'), 'utf8');
     assert.ok(indexHtml.includes('/js/weather.js'), 'index.html must script-load weather.js');
     assert.ok(!indexHtml.includes('sunday-rules-accordion'), 'index.html must have rules accordion removed');
+    assert.ok(indexHtml.includes('sunday-routine-section'), 'index.html must contain sunday-routine-section');
+    assert.ok(indexHtml.includes('Sunday Afternoon Routine (12:00 PM – 4:00 PM)'), 'index.html must display Sunday Afternoon Routine');
+    assert.ok(!weatherJsCode.includes('Sunday Afternoon Routine'), 'weather.js must not contain Sunday Afternoon Routine');
 
     const swJs = fs.readFileSync(path.join(publicDir, 'sw.js'), 'utf8');
     assert.ok(swJs.includes('/js/weather.js'), 'sw.js must cache /js/weather.js for offline use');

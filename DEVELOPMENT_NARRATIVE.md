@@ -680,5 +680,21 @@ Resolved browser security blocking and standardized 10-day weather forecast copy
 
 ---
 
-## 42. Future Roadmap Notes
+## 42. Phase 41: Relocate Sunday Afternoon Routine to Home Page
+- **Relocated Sunday Afternoon Routine (`public/index.html`):**
+  - Added dedicated card section `#sunday-routine-section` on the home page directly above the Game Calendar.
+  - Features the complete 4-part weekly progression:
+    - 12:00 PM – 12:30 PM: Warmups & Throwing
+    - 12:30 PM – 1:30 PM: Batting Practice (BP)
+    - 1:30 PM – ~3:15 PM: Pickup Game
+    - 3:15 PM – 4:00 PM: Fielding Drills & Care
+- **Streamlined Weather Assistant Widget (`public/js/weather.js`):**
+  - Removed Sunday routine chips from the Smart Rainout Assistant widget, keeping it cleanly focused on hourly rainfall, soil percolation decay, and field playability.
+- **Test Suite & Version Bump:**
+  - Updated `scripts/verify-all.js` to test presence of `#sunday-routine-section` on `index.html` and absence from `weather.js`.
+  - Bumped version to `v43` across `CURRENT_APP_VERSION`, `CLIENT_VERSION`, Service Worker cache (`pbf-cache-v43`), and all 8 HTML files (`?v=43`).
+
+---
+
+## 43. Future Roadmap Notes
 - **Pinned Full-Stack Rust / WebAssembly Migration:** Evaluated a future 4-phase rewrite of the Cloudflare Pages Functions backend (and optional frontend interactivity) to Rust (`workers-rs` compiling to WebAssembly) for compile-time type safety, zero-dependency binary durability, and strict edge memory safety—kept as a guiding north star when designing new features and data models.
