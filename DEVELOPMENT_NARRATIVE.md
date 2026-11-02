@@ -39,7 +39,8 @@
 - **[30. Phase 29: Complete 15-Language i18n Translation for Calendar Demarcation Legend, Live Sync, and Footer Webapp Build Attribution](#30-phase-29-complete-15-language-i18n-translation-for-calendar-demarcation-legend-live-sync-and-footer-webapp-build-attribution)** — Full translation of calendar demarcation legend, live sync states, feed, and footer build statement across all 14 California language dictionaries with cache busting.
 - **[37. Phase 36: Creative Commons BY-NC 4.0 Copyright & Licensing Integration](#37-phase-36-creative-commons-by-nc-40-copyright--licensing-integration)** — Universal CC BY-NC 4.0 copyright notices, LICENSE file, and 15-language translation.
 - **[38. Phase 37: Consolidation of Facilitator into Organizer Role & Field Turnout Recording UI](#38-phase-37-consolidation-of-facilitator-into-organizer-role--field-turnout-recording-ui)** — Migrated legacy facilitator user roles to Organizer, rejected obsolete role assignments, and added 1-click field turnout recording controls across Admin and Archive pages.
-- **[39. Future Roadmap Notes](#39-future-roadmap-notes)** — Full-stack Rust / WebAssembly edge migration architecture.
+- **[39. Phase 38: Client-Side Weather Engine, Temperature/Emoji Game Cards & Smart Rainout Assistant](#39-phase-38-client-side-weather-engine-temperatureemoji-game-cards--smart-rainout-assistant)** — Integrated zero-host Open-Meteo weather API, game card temperature & emoji pills, authentic 12 PM – 4 PM Sunday routine, and 24-hour rainfall surface accumulation & exponential soil drainage heuristic.
+- **[40. Future Roadmap Notes](#40-future-roadmap-notes)** — Full-stack Rust / WebAssembly edge migration architecture.
 
 ---
 
@@ -620,5 +621,35 @@ Consolidated user roles down to a clear 3-tier hierarchy (`Admin`, `Organizer`, 
 
 ---
 
-## 39. Future Roadmap Notes
+## 39. Phase 38: Client-Side Weather Engine, Temperature/Emoji Game Cards & Smart Rainout Assistant
+Introduced a zero-host, client-side weather forecasting engine and smart rainout assistant designed specifically around baseball field drainage dynamics:
+- **Zero-Host, Client-Side Weather Architecture (`public/js/weather.js`):**
+  - Integrated Open-Meteo's open-access API (`api.open-meteo.com`) fetching 14-day hourly temperature, weather codes, and precipitation in Fahrenheit and inches.
+  - Runs 100% in the user's browser via native `fetch()` with zero API keys, zero subscription fees, and 0 Cloudflare Worker bandwidth or execution limits used.
+  - Backed by an in-memory and `sessionStorage` cache (30-minute TTL) to prevent duplicate network hits during tab navigation.
+- **Weather Emoji & Temperature on Game Cards:**
+  - **Homepage Sunday Calendar Track (`app.js`):** Added asynchronous weather badge pills (`.sunday-weather-badge`) to upcoming game cards displaying live game-time conditions (e.g. `⛅ 68°F` or `☀️ 72°F`).
+  - **Calendar Drawer:** Displays full game-time weather description alongside 24-hour previous rain accumulation and field condition status.
+  - **Game Event Page (`event.js`):** Integrated weather meta item into the header card (`#event-weather-display`) and embedded the full interactive Smart Rainout Assistant.
+  - **Admin Dashboard (`admin.js`):** Displays weather conditions on each game card and provides a **"🌧️ Field Drainage"** toggle to inspect the rainout assistant and drainage simulation.
+- **24-Hour Rainfall Surface Accumulation & Soil Drainage Heuristic:**
+  - Calibrated to the authentic field dynamics: Bay Area Sunday afternoons are dry; rainouts are determined by how much rain accumulated on the diamond in the previous 24 hours (Saturday 12 PM through Sunday 12 PM) and whether it had time to drain.
+  - Implemented exponential soil percolation decay ($\tau = 8.0\text{ hours}$):
+    $$\text{ESM} = \sum_{h=1}^{24} r_h \cdot e^{-h / \tau}$$
+    - Rain falling Saturday afternoon (18–24 hours before noon) retains $<10\%$ surface moisture because it percolates into subsurface drainage, keeping the diamond firm and playable.
+    - Rain falling Sunday morning (1–3 hours before noon) retains $70\%–88\%$ surface moisture, producing puddles and soft mud.
+  - Classifies field into 4 playability tiers: 🟢 Field Playable (Dry & Firm), 🟡 Damp Infield (Playable with Care), 🟠 Puddle Alert (Drying / Maintenance Needed), and 🔴 High Rainout Likelihood (Waterlogged).
+- **Authentic Sunday Afternoon Schedule (12:00 PM – 4:00 PM):**
+  - Updated handbook and in-app schedules to reflect the true diamond progression:
+    - 12:00 PM – 12:30 PM: Warmups & stretching (30 mins throwing).
+    - 12:30 PM – 1:30 PM: Batting practice (1 hour off the pitching machine).
+    - 1:30 PM – ~3:15 PM: Sunday pickup baseball game with continuous lineups.
+    - 3:15 PM – 4:00 PM: Fielding drills (grounders & fly balls) and field raking/care.
+- **Automated Acceptance Verification:**
+  - Added test suite `T9.19` in `scripts/verify-all.js` validating the WeatherService API, heuristic calculations across all 4 scenarios, game card weather pill containers, and schedule documentation.
+  - Bumped version to `v40` across `CLIENT_VERSION`, `CURRENT_APP_VERSION`, Service Worker cache (`pbf-cache-v40`), and all 8 HTML files (`?v=40`).
+
+---
+
+## 40. Future Roadmap Notes
 - **Pinned Full-Stack Rust / WebAssembly Migration:** Evaluated a future 4-phase rewrite of the Cloudflare Pages Functions backend (and optional frontend interactivity) to Rust (`workers-rs` compiling to WebAssembly) for compile-time type safety, zero-dependency binary durability, and strict edge memory safety—kept as a guiding north star when designing new features and data models.

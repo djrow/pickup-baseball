@@ -55,7 +55,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-const CURRENT_APP_VERSION = '39';
+const CURRENT_APP_VERSION = '40';
 app.use((req, res, next) => {
   res.setHeader('X-App-Version', CURRENT_APP_VERSION);
   next();
@@ -1758,5 +1758,130 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
 
     const apiJs = fs.readFileSync(path.join(publicDir, 'js', 'api.js'), 'utf8');
     assert.ok(apiJs.includes('pickup_i18n_v'), 'api.js loadLangDict must use version-busted localStorage cache key');
+  });
+
+  await t9.test('T9.19: Client-Side Weather Engine, Temperature/Emoji Pills & Smart Rainout Assistant Drainage Heuristic', async () => {
+    // 1. Verify public/js/weather.js exists and is syntactically valid ES6
+    const weatherJsPath = path.join(publicDir, 'js', 'weather.js');
+    assert.ok(fs.existsSync(weatherJsPath), 'public/js/weather.js must exist');
+    const weatherJsCode = fs.readFileSync(weatherJsPath, 'utf8');
+    assert.ok(!weatherJsCode.includes('?.'), 'weather.js must not contain optional chaining (?.)');
+    assert.ok(!weatherJsCode.includes('??'), 'weather.js must not contain nullish coalescing (??)');
+
+    // 2. Execute weather.js in an isolated Node vm context to verify exports & heuristic execution
+    const vm = require('vm');
+    const sandbox = {
+      window: {},
+      console: console,
+      fetch: globalThis.fetch,
+      Intl: Intl,
+      Date: Date,
+      Math: Math,
+      JSON: JSON,
+      parseInt: parseInt,
+      isNaN: isNaN,
+      Array: Array,
+      Object: Object,
+      String: String,
+      Number: Number,
+      Set: Set
+    };
+    vm.createContext(sandbox);
+    vm.runInContext(weatherJsCode, sandbox);
+    const ws = sandbox.window.WeatherService;
+    assert.ok(ws, 'WeatherService must be mounted to window');
+    assert.equal(typeof ws.calculateFieldDrainage, 'function');
+    assert.equal(typeof ws.renderAssistantWidget, 'function');
+    assert.equal(typeof ws.populateCardWeatherBadges, 'function');
+    assert.equal(ws.HEURISTIC_CONFIG.DRAINAGE_DECAY_HOURS, 8.0, 'Drainage decay half-life must be 8 hours');
+
+    // 3. Test Drainage Heuristic: Scenario 1 - 0.00" Rain (Dry & Firm)
+    const times = [];
+    const precipDry = [];
+    const precipSatRain = [];
+    const precipSunMorningRain = [];
+    const temps = [];
+    const codes = [];
+
+    for (let i = 0; i < 48; i++) {
+      const h = String(i % 24).padStart(2, '0');
+      const day = i < 24 ? '2026-11-07' : '2026-11-08';
+      times.push(`${day}T${h}:00`);
+      precipDry.push(0);
+      // Heavy rain on Saturday 12-3 PM (20 hours before Sunday warmups)
+      precipSatRain.push(i >= 12 && i <= 15 ? 0.20 : 0);
+      // Rain on Sunday morning 9-11 AM (1-3 hours before Sunday warmups)
+      precipSunMorningRain.push(i >= 33 && i <= 35 ? 0.20 : 0);
+      temps.push(66);
+      codes.push(2);
+    }
+
+    const rDry = ws.calculateFieldDrainage({
+      time: times,
+      precipitation: precipDry,
+      temperature_2m: temps,
+      weathercode: codes
+    }, '2026-11-08T12:00');
+    assert.equal(rDry.status, 'good', 'Dry weather must result in status good');
+    assert.equal(rDry.totalRain24h, 0);
+    assert.equal(rDry.effectiveMoisture, 0);
+    assert.ok(rDry.prognosis.includes('No standing puddles'));
+
+    // Test Drainage Heuristic: Scenario 2 - 0.80" Rain Saturday afternoon (Adequate time to drain)
+    const rSat = ws.calculateFieldDrainage({
+      time: times,
+      precipitation: precipSatRain,
+      temperature_2m: temps,
+      weathercode: codes
+    }, '2026-11-08T12:00');
+    assert.equal(rSat.status, 'moderate', 'Rain that fell 20h ago and drained must be moderate/playable');
+    assert.equal(rSat.totalRain24h, 0.80);
+    assert.ok(rSat.effectiveMoisture < 0.10, 'Effective moisture must decay below 0.10" after 20 hours');
+    assert.ok(rSat.recommendation.includes('Playable'));
+
+    // Test Drainage Heuristic: Scenario 3 - 0.60" Rain Sunday morning (Recent rain, puddles formed)
+    const rSun = ws.calculateFieldDrainage({
+      time: times,
+      precipitation: precipSunMorningRain,
+      temperature_2m: temps,
+      weathercode: codes
+    }, '2026-11-08T12:00');
+    assert.equal(rSun.status, 'rainout_risk', 'Rain 1-3h before warmups must trigger rainout risk due to standing puddles');
+    assert.ok(rSun.effectiveMoisture >= 0.40, 'Surface moisture must remain high without drying time');
+
+    // 4. Verify UI Card & Page Integrations
+    const appJs = fs.readFileSync(path.join(publicDir, 'js', 'app.js'), 'utf8');
+    assert.ok(appJs.includes('sunday-weather-badge'), 'app.js must render .sunday-weather-badge container on calendar cards');
+    assert.ok(appJs.includes('drawer-weather-'), 'app.js must render drawer weather element');
+    assert.ok(appJs.includes('populateCardWeatherBadges'), 'app.js must trigger WeatherService.populateCardWeatherBadges()');
+
+    const eventHtml = fs.readFileSync(path.join(publicDir, 'event.html'), 'utf8');
+    assert.ok(eventHtml.includes('id="smart-rainout-widget"'), 'event.html must contain #smart-rainout-widget');
+    assert.ok(eventHtml.includes('id="event-weather-meta-item"'), 'event.html must contain #event-weather-meta-item');
+    assert.ok(eventHtml.includes('/js/weather.js'), 'event.html must script-load weather.js');
+
+    const eventJs = fs.readFileSync(path.join(publicDir, 'js', 'event.js'), 'utf8');
+    assert.ok(eventJs.includes('renderAssistantWidget'), 'event.js must call WeatherService.renderAssistantWidget');
+
+    const adminHtml = fs.readFileSync(path.join(publicDir, 'admin.html'), 'utf8');
+    assert.ok(adminHtml.includes('/js/weather.js'), 'admin.html must script-load weather.js');
+
+    const adminJs = fs.readFileSync(path.join(publicDir, 'js', 'admin.js'), 'utf8');
+    assert.ok(adminJs.includes('toggleAdminWeatherPanel'), 'admin.js must define toggleAdminWeatherPanel');
+
+    const indexHtml = fs.readFileSync(path.join(publicDir, 'index.html'), 'utf8');
+    assert.ok(indexHtml.includes('/js/weather.js'), 'index.html must script-load weather.js');
+    assert.ok(indexHtml.includes('Sunday Routine (12:00 PM – 4:00 PM)'), 'index.html rules must document 12 PM - 4 PM routine');
+
+    const swJs = fs.readFileSync(path.join(publicDir, 'sw.js'), 'utf8');
+    assert.ok(swJs.includes('/js/weather.js'), 'sw.js must cache /js/weather.js for offline use');
+
+    // 5. Verify Handbook documentation
+    const handbookMd = fs.readFileSync(path.join(__dirname, '..', 'HANDBOOK.md'), 'utf8');
+    assert.ok(handbookMd.includes('Sunday Afternoon Routine (12:00 PM – 4:00 PM)'), 'HANDBOOK.md must document authentic 12 PM - 4 PM routine');
+    assert.ok(handbookMd.includes('Smart Rainout Assistant & 24-Hour Surface Accumulation Drainage Tracker'), 'HANDBOOK.md must document Smart Rainout Assistant');
+    assert.ok(handbookMd.includes('12:00 PM – 12:30 PM (Warm-ups & Throwing)'), 'HANDBOOK.md must document warmups and throwing');
+    assert.ok(handbookMd.includes('12:30 PM – 1:30 PM (Batting Practice)'), 'HANDBOOK.md must document 1 hour of BP');
+    assert.ok(handbookMd.includes('3:15 PM – 4:00 PM (Fielding Drills & Field Care)'), 'HANDBOOK.md must document drills and dragging until 4pm');
   });
 });

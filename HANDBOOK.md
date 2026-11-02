@@ -24,6 +24,7 @@ The entire app was built with **zero frontend build tools** (plain HTML, CSS, an
      - [Limited Roster Size & Automatic Waitlist Behavior](#-limited-roster-size--automatic-waitlist-behavior)
      - [Restricting RSVPs to Invited Emails](#-restricting-rsvps-to-invited-emails-optional)
      - [Editing a Game & Turnout](#-editing-a-game--recording-actual-turnout)
+     - [Smart Rainout Assistant & Drainage Tracker](#%EF%B8%8F-smart-rainout-assistant--24-hour-surface-accumulation-drainage-tracker)
      - [Calling a Rainout & Reopening](#-calling-a-rainout-or-reopening-a-game)
      - [Community Highlights & RSS Feed](#-publishing-community-highlights--submitting-multimedia-to-the-rss-feed)
   3. [For Administrators](#3-for-administrators)
@@ -316,10 +317,11 @@ To keep the games fun, safe, fast-paced, and equitable for players of all experi
 
 ---
 
-#### 2. Weekly Schedule & Pregame Routine
-- **Game Time:** First pitch is promptly at **12:00 PM Pacific Time** on Sundays (primarily at **Bushrod Park Field 1 or Diamond 2** in Oakland, CA).
-- **Warm-Ups (11:30 AM – 12:00 PM):** Arrive 20–30 minutes early to stretch, play catch, take batting practice off the machine, and help set up bases.
-- **Forming Teams:** At 12:00 PM, players gather at home plate. Facilitators split attendees into two balanced squads (Home and Away) based on positions and experience so both sides have competitive defense and fun.
+#### 2. Weekly Schedule & Sunday Afternoon Routine (12:00 PM – 4:00 PM)
+- **12:00 PM – 12:30 PM (Warm-ups & Throwing):** Arrive promptly at Noon. Throw for 30 minutes, stretch arms and legs, play long-toss, and help set up bases.
+- **12:30 PM – 1:30 PM (Batting Practice):** 1 full hour of machine-pitch batting practice off the pitching machine. Every attendee takes dedicated swings in the batter's box while teammates track fly balls and shag baseballs.
+- **1:30 PM – ~3:15 PM (Pickup Baseball Game):** At 1:30 PM, players gather at home plate to split into balanced Home and Away squads. Game starts promptly with continuous batting orders and free defensive rotations.
+- **3:15 PM – 4:00 PM (Fielding Drills & Field Care):** Drill grounders and fly balls for players seeking extra repetitions, then drag and rake the infield dirt, clear trash from dugouts, and pack foundation equipment.
 
 ---
 
@@ -449,6 +451,31 @@ To keep games organized, safe, and fun without overcrowded dugouts or excessive 
 ### ✏️ Editing a Game & Recording Actual Turnout
 - On any game page (`/event.html?id=...`), click **✏️ Edit Game** in the top-right corner of the header card to change title, date/time, location, player cap, or description inline.
 - After a game finishes, use the **📊 Record Actual Turnout** box on the game page (or on `/archive.html`) to record how many people actually played on the field (including walk-ups who didn't RSVP online).
+
+### 🌧️ Smart Rainout Assistant & 24-Hour Surface Accumulation Drainage Tracker
+To help organizers and players know in advance whether the diamond is playable, the platform includes a zero-host, client-side **Smart Rainout Assistant**:
+
+#### 1. Why Sunday 24-Hour Prior Rainfall Matters
+- In the San Francisco Bay Area (Oakland, Berkeley, San Francisco), active rain during Sunday afternoons is exceedingly rare.
+- Almost all pickup baseball rainouts are caused not by falling rain at Noon, but by **how much water accumulated on the field in the preceding 24 hours (Saturday 12:00 PM through Sunday 12:00 PM)** and **whether fallen rain had adequate time to percolate through the dirt and drain away**.
+
+#### 2. The Soil Drainage & Surface Moisture Heuristic Model
+The client-side engine queries hourly rainfall from Open-Meteo and applies an exponential percolation decay model:
+$$\text{ESM} = \sum_{h=1}^{24} r_h \cdot e^{-h / \tau}$$
+where $r_h$ is the rainfall in inches that fell $h$ hours before 12:00 PM warmups, and $\tau = 8.0\text{ hours}$ is the soil drainage half-decay rate:
+- **Rain Saturday afternoon (18–24 hours ago):** Retains only 5%–10% surface effect ($e^{-20/8} \approx 0.08$). A steady 0.80" shower on Saturday that ends by evening will cleanly drain into the ground, leaving the field firm and ready for Sunday afternoon baseball!
+- **Rain Sunday morning (1–3 hours before warmups):** Retains 70%–88% surface moisture ($e^{-2/8} \approx 0.78$). Even a light 0.20" shower will sit as standing puddles in batter's boxes and along baselines because it has had insufficient time to soak in.
+
+#### 3. Four Field Playability Classifications
+- 🟢 **Field Playable (Dry & Firm):** $\text{ESM} < 0.08"$. Infield dirt is dry, baselines firm, zero puddles. Full 12:00 PM – 4:00 PM program runs smoothly.
+- 🟡 **Damp Infield (Playable with Care):** $0.08" \le \text{ESM} < 0.22"$. Rain had sufficient hours to drain; dirt is soft; molded cleats recommended.
+- 🟠 **Puddle Alert (Drying / Maintenance Needed):** $0.22" \le \text{ESM} < 0.45"$ or rain ended $<3$ hours before noon. Standing puddles in depressions; organizers should inspect the field by 10:30 AM with rakes or brooms.
+- 🔴 **High Rainout Likelihood (Waterlogged):** $\text{ESM} \ge 0.45"$ or heavy rain active within 2 hours of warmups. Deep standing water along baselines; field cannot drain in time for 12:00 PM warmups. Organizers should consider broadcasting a rainout.
+
+#### 4. Zero-Cost, Zero-Host Client-Side Architecture
+- The assistant runs 100% in the user's browser via `public/js/weather.js` using Open-Meteo's open-access API.
+- **Zero API keys**, **zero subscription fees**, and **zero Cloudflare Worker bandwidth or execution limits used**.
+- Results are cached in browser `sessionStorage` (30-minute TTL) so page refreshes and navigation never make duplicate requests.
 
 ### 🌧️ Calling a Rainout (or Reopening a Game)
 - On the game page, click **🌧️ Call Rainout**, enter an optional field/weather note (e.g., *"Standing water on Bushrod Field 1"*), and confirm.

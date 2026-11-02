@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Game Details & RSVP - Sunday Pickup Baseball</title>
-  <link rel="stylesheet" href="/css/style.css?v=39">
+  <link rel="stylesheet" href="/css/style.css?v=40">
   <link rel="alternate" type="application/rss+xml" title="Sunday Pickup Baseball Highlights &amp; Updates" href="/feed.xml">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
@@ -97,6 +97,17 @@
               </div>
             </div>
           </div>
+          <div class="meta-item" id="event-weather-meta-item">
+            <span class="meta-icon orange">
+              <span id="event-weather-icon" style="font-size: 1.25rem; line-height: 1;">⛅</span>
+            </span>
+            <div>
+              <div class="meta-label">Weather &amp; Forecast</div>
+              <div class="meta-value" id="event-weather-display">
+                <span style="color: var(--text-muted); font-size: 0.88rem;">Checking forecast...</span>
+              </div>
+            </div>
+          </div>
           <div class="meta-item">
             <span class="meta-icon">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
@@ -121,6 +132,9 @@
 
         <p id="event-description" style="color: var(--text-main); margin-top: 8px; white-space: pre-wrap;"></p>
       </div>
+
+      <!-- Smart Rainout Assistant & Field Surface Accumulation Widget -->
+      <div id="smart-rainout-widget" style="margin-bottom: 24px;"></div>
 
       <!-- Simplified Group RSVP & Volunteer Tasks Section -->
       <section class="card" id="rsvp-section" style="border: 2px solid var(--primary); background: var(--bg-card);">
@@ -305,7 +319,8 @@
 
   <footer id="site-footer" class="site-footer"></footer>
 
-  <script src="/js/api.js?v=39"></script>
-  <script src="/js/event.js?v=39"></script>
+  <script src="/js/api.js?v=40"></script>
+  <script src="/js/weather.js?v=40"></script>
+  <script src="/js/event.js?v=40"></script>
 </body>
 </html>

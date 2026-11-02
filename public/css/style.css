@@ -3704,8 +3704,43 @@ footer.site-footer strong {
   margin: 0 auto;
 }
 
+/* ==========================================================================
+   Weather & Smart Rainout Assistant Styles
+   ========================================================================== */
 
+.sunday-weather-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
 
+.weather-card-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+  font-size: 0.74rem;
+  font-weight: 700;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--secondary);
+  line-height: 1.2;
+}
 
+.smart-rainout-card {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.drainage-col:hover {
+  background: var(--bg-subtle);
+  border-radius: 4px;
+}
+
+.admin-game-weather-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
 
 

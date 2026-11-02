@@ -655,9 +655,13 @@ async function loadAdminGames() {
                     ? `⚾ <strong>${ev.actual_attendance} played</strong> (${ev.attendee_count} online RSVPs)`
                     : `👥 ${ev.attendee_count} players on roster`} | 🛡️ ${ev.duty_count} volunteer tasks configured
                 </div>
+                <div class="admin-game-weather-row" id="admin-game-weather-${ev.id}" style="display: none; margin-top: 5px;"></div>
               </div>
 
               <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                <button onclick="toggleAdminWeatherPanel(${ev.id})" class="btn btn-outline btn-sm" id="btn-admin-weather-${ev.id}" style="font-weight: 600;">
+                  🌧️ Field Drainage
+                </button>
                 <button onclick="toggleQuickTurnout(${ev.id})" class="btn btn-outline btn-sm" style="font-weight: 700; color: var(--secondary);">
                   📊 Record Turnout
                 </button>
@@ -706,6 +710,9 @@ async function loadAdminGames() {
               </div>
               <div id="quick-turnout-alert-${ev.id}"></div>
             </div>
+
+            <!-- Inline Smart Rainout Assistant & Field Drainage Panel -->
+            <div id="admin-weather-panel-${ev.id}" style="display: none; margin-top: 14px;"></div>
 
             <!-- Inline Game Details Edit Panel -->
             <div id="edit-game-panel-${ev.id}" style="display: ${openEditGameEventId === ev.id ? 'block' : 'none'}; margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--border);">
@@ -772,6 +779,24 @@ async function loadAdminGames() {
       </div>
     `;
 
+    // Asynchronously populate weather & drainage indicators on admin game cards
+    if (window.WeatherService && typeof window.WeatherService.getForecastForGame === 'function') {
+      events.forEach(function(ev) {
+        window.WeatherService.getForecastForGame(ev.event_date, ev.location).then(function(fc) {
+          if (!fc || !fc.available) return;
+          var wRow = document.getElementById('admin-game-weather-' + ev.id);
+          var wBtn = document.getElementById('btn-admin-weather-' + ev.id);
+          if (wRow) {
+            wRow.innerHTML = '<span class="badge ' + fc.badgeClass + '" style="font-size: 0.74rem; padding: 2px 8px; font-weight: 700;">' + fc.emoji + ' ' + fc.temperature + '°F &bull; ' + API.escapeHtml(fc.condition) + ' &bull; Prev 24h Rain: ' + fc.totalRain24hFormatted + ' (' + API.escapeHtml(fc.statusLabel) + ')</span>';
+            wRow.style.display = 'block';
+          }
+          if (wBtn) {
+            wBtn.innerHTML = fc.emoji + ' ' + fc.temperature + '°F &bull; ' + fc.totalRain24hFormatted + ' Rain';
+          }
+        }).catch(function() {});
+      });
+    }
+
     if (openTaskManagerEventId) {
       renderTaskManagerContent(openTaskManagerEventId);
     }
@@ -779,6 +804,23 @@ async function loadAdminGames() {
     container.innerHTML = '<div class="alert alert-error">Unable to load games.</div>';
   }
 }
+
+window.toggleAdminWeatherPanel = async function(eventId) {
+  var panel = document.getElementById('admin-weather-panel-' + eventId);
+  if (!panel) return;
+  if (panel.style.display === 'block') {
+    panel.style.display = 'none';
+    return;
+  }
+  panel.style.display = 'block';
+  var ev = loadedAdminEventsMap.get(eventId);
+  if (!ev) return;
+  if (window.WeatherService && typeof window.WeatherService.getForecastForGame === 'function') {
+    panel.innerHTML = '<div style="padding: 12px; color: var(--text-muted); font-size: 0.85rem;">Loading weather forecast & field drainage simulation...</div>';
+    var fc = await window.WeatherService.getForecastForGame(ev.event_date, ev.location);
+    window.WeatherService.renderAssistantWidget('admin-weather-panel-' + eventId, fc, { locationName: ev.location });
+  }
+};
 
 window.toggleQuickTurnout = function(eventId) {
   const panel = document.getElementById('quick-turnout-panel-' + eventId);

@@ -514,6 +514,7 @@ function renderCalendarDrawer(dateKey, game, isPast) {
         <div class="drawer-meta" style="margin-top: 6px;">
           <span class="drawer-meta-item"><span>📅</span> <strong>${API.escapeHtml(dateFormatted)}</strong></span>
           <span class="drawer-meta-item"><span>📍</span> ${API.escapeHtml(game.location)}</span>
+          <span class="drawer-meta-item drawer-weather-meta" id="drawer-weather-${dateKey}" style="display: none;"></span>
           <span class="drawer-meta-item" style="color: var(--secondary); font-weight: 700;"><span>👥</span> ${API.escapeHtml(API.t('home.players_count', { count: game.attendee_count }))}${game.spectator_count > 0 ? ` + ${game.spectator_count} ${game.spectator_count === 1 ? 'Spectator' : 'Spectators'}` : ''}</span>
           <span class="drawer-meta-item"><span>🛡️</span> ${API.escapeHtml(API.t('home.duties_configured', { count: game.duty_count }))}</span>
         </div>
@@ -578,6 +579,19 @@ function renderCalendarDrawer(dateKey, game, isPast) {
         gridContainer.querySelectorAll('.calendar-sunday-card').forEach(c => c.classList.remove('selected-sunday'));
       }
     });
+  }
+
+  // Load weather & field drainage forecast asynchronously for selected game/date
+  if (window.WeatherService && typeof window.WeatherService.getForecastForGame === 'function') {
+    var targetIso = game ? game.event_date : dateKey + 'T20:00:00.000Z';
+    var loc = game ? game.location : 'Bushrod Park Field 1';
+    window.WeatherService.getForecastForGame(targetIso, loc).then(function(fc) {
+      var wEl = document.getElementById('drawer-weather-' + dateKey);
+      if (wEl && fc && fc.available) {
+        wEl.innerHTML = '<span>' + fc.emoji + '</span> <strong>' + fc.temperature + '°F ' + API.escapeHtml(fc.condition) + '</strong> <span style="font-size: 0.8rem; color: var(--text-muted);">(' + fc.totalRain24hFormatted + ' rain in prev 24h &bull; ' + API.escapeHtml(fc.statusLabel) + ')</span>';
+        wEl.style.display = 'inline-flex';
+      }
+    }).catch(function() {});
   }
 }
 
@@ -794,6 +808,7 @@ function renderCalendar(events) {
             <span class="sunday-time-icon">${timeIcon}</span>
             <span class="sunday-time-text">${timeText}</span>
           </div>
+          <div class="sunday-weather-badge" data-weather-date="${dateKey}" style="display: none; margin-top: 3px;"></div>
           <div class="sunday-game-location" title="${API.escapeHtml(locationTitle)}">
             📍 ${API.escapeHtml(locationName)}
           </div>
@@ -815,6 +830,11 @@ function renderCalendar(events) {
       ${cardsHtml}
     </div>
   `;
+
+  // Asynchronously populate weather forecast badges for game cards within 14 days
+  if (window.WeatherService && typeof window.WeatherService.populateCardWeatherBadges === 'function') {
+    window.WeatherService.populateCardWeatherBadges();
+  }
 
   gridContainer.querySelectorAll('.calendar-sunday-card[data-date-key]').forEach(card => {
     const handleSelect = () => {

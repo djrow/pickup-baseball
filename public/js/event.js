@@ -259,6 +259,43 @@ function renderEventDetails() {
       <div class="duty-progress-fill" style="width: ${pct}%;"></div>
     </div>
   `;
+
+  // Asynchronously load weather and Smart Rainout Assistant
+  const weatherIcon = document.getElementById('event-weather-icon');
+  const weatherDisplay = document.getElementById('event-weather-display');
+  if (weatherDisplay && window.WeatherService && typeof window.WeatherService.getForecastForGame === 'function') {
+    window.WeatherService.getForecastForGame(ev.event_date, ev.location).then(function(fc) {
+      if (!fc || !fc.available) {
+        if (weatherDisplay) {
+          weatherDisplay.innerHTML = '<span style="font-size: 0.84rem; color: var(--text-muted);">14-day forecast activates closer to game</span>';
+        }
+        if (weatherIcon) weatherIcon.textContent = '📅';
+        if (typeof window.WeatherService.renderAssistantWidget === 'function') {
+          window.WeatherService.renderAssistantWidget('smart-rainout-widget', fc, { locationName: ev.location });
+        }
+        return;
+      }
+
+      if (weatherIcon) weatherIcon.textContent = fc.emoji;
+      if (weatherDisplay) {
+        weatherDisplay.innerHTML = `
+          <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+            <span style="font-weight: 800; color: var(--secondary); font-size: 1.05rem;">${fc.temperature}°F</span>
+            <span style="font-size: 0.82rem; color: var(--text-muted); font-weight: 600;">${API.escapeHtml(fc.condition)}</span>
+            <span class="badge ${fc.badgeClass}" style="font-size: 0.72rem; padding: 1px 6px;">${fc.statusLabel}</span>
+          </div>
+        `;
+      }
+
+      if (typeof window.WeatherService.renderAssistantWidget === 'function') {
+        window.WeatherService.renderAssistantWidget('smart-rainout-widget', fc, { locationName: ev.location });
+      }
+    }).catch(function(err) {
+      if (weatherDisplay) {
+        weatherDisplay.innerHTML = '<span style="font-size: 0.84rem; color: var(--text-muted);">Weather forecast temporarily unavailable</span>';
+      }
+    });
+  }
 }
 
 function renderAttendeesRoster() {
