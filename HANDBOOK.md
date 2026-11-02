@@ -20,7 +20,7 @@ The entire app was built with **zero frontend build tools** (plain HTML, CSS, an
      - [Submitting a Group RSVP (Players, Spectators & Volunteer Tasks)](#%EF%B8%8F-submitting-a-group-rsvp-players-spectators--volunteer-tasks)
      - [Waitlists & Automatic Promotion](#-waitlists--automatic-promotion)
      - [Discussion Board, Profile, Languages & Themes](#-discussion-board-profile-languages--themes)
-  2. [For Game Facilitators & Organizers](#2-for-game-facilitators--organizers)
+  2. [For Organizers & Administrators](#2-for-organizers--administrators)
      - [Limited Roster Size & Automatic Waitlist Behavior](#-limited-roster-size--automatic-waitlist-behavior)
      - [Restricting RSVPs to Invited Emails](#-restricting-rsvps-to-invited-emails-optional)
      - [Editing a Game & Turnout](#-editing-a-game--recording-actual-turnout)
@@ -404,9 +404,12 @@ On any game page (`/event.html?id=...`), one person or household account can RSV
 
 ---
 
-## 2. For Game Facilitators & Organizers
+## 2. For Organizers & Administrators
 
-Accounts granted the **`Facilitator`**, **`Organizer`**, or **`Admin`** role see an **`⚾ Org`** (or **`⚙️ Admin`**) button in the top navigation bar (`/admin.html`) plus organizer tools directly on each game page.
+Accounts granted the **`Organizer`** or **`Admin`** role see an **`🛡️ Org`** (or **`👑 Admin`**) button in the top navigation bar (`/admin.html`) plus organizer tools directly on each game page, the past games archive (`/archive.html`), and the admin dashboard. Organizers handle all game-day planning, publishing games, managing lineups and rosters, broadcasting rainouts, and recording field attendance turnouts.
+
+> [!NOTE]
+> On-field game day coordination—such as setting batting orders and balancing squads at home plate—is supported by the **Game Facilitator** volunteer task (a volunteer slot open to all game attendees). Account-level administration and permissions are managed using the **`Organizer`** role.
 
 ### ⚡ Scheduling a Game
 1. Go to **`/admin.html`**.
@@ -488,7 +491,7 @@ Accounts with the **`Admin`** role have full access to `/admin.html` system cont
 - **👥 User Roles & Account Management:**
   - **Compact View & Scrolling:** The accounts table is rendered in a compact, vertically scrollable viewport (`max-height: 380px`) with sticky column headers, so even when hundreds of players register, the table only occupies a small, contained portion of the screen without pushing the rest of the dashboard down.
   - **Live Filter by Name or Email:** Use the search bar above the accounts table to instantly filter the list by any substring of a player's name or email address (case-insensitive). The live counter displays `Showing X of Y accounts` in real time, with clear feedback if no accounts match.
-  - **Role Assignments & Actions:** Promote any registered player to `Facilitator`, `Organizer`, or `Admin` (or demote back to `Player`), remove obsolete accounts, or block abusive email addresses (`banned_emails`).
+  - **Role Assignments & Actions:** Promote any registered player to `Organizer` or `Admin` (or demote back to `Player`), remove obsolete accounts, or block abusive email addresses (`banned_emails`).
 - **🛡️ Access Control & Guest Policy:**
   - **Guest RSVP Policy Toggle:** Switch between allowing guests to RSVP with just a name + email vs. requiring all attendees to sign in with a verified email code first (disabling anonymous RSVPs across all games).
   - **Banned Email Addresses:** Review, add, or unban restricted email addresses directly on `/admin.html`. When removing a user account with the ban option checked, the address is automatically added to this list and blocked from requesting login codes, maintaining active sessions, or submitting RSVPs.

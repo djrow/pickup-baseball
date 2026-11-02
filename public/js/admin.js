@@ -11,9 +11,10 @@ let builderDuties = [];
 // Duties in the "Organization Default Tasks Template" editor
 let templateDuties = [];
 
-// Currently expanded event task manager or game details editor
+// Currently expanded event task manager, game details editor, or quick turnout recorder
 let openTaskManagerEventId = null;
 let openEditGameEventId = null;
+let openQuickTurnoutEventId = null;
 let loadedAdminEventsMap = new Map();
 
 // Currently logged-in admin/organizer user
@@ -40,15 +41,10 @@ function applyRoleUI(user) {
     if (securitySec) securitySec.style.display = 'block';
     if (securityNavBtn) securityNavBtn.style.display = 'inline-flex';
   } else if (user && user.canManageEvents) {
-    // Organizer or Facilitator Control
+    // Organizer Control
     if (badgeEl) {
-      if (user.role === 'facilitator') {
-        badgeEl.className = 'badge badge-blue';
-        badgeEl.innerHTML = '📋 Facilitator Control';
-      } else {
-        badgeEl.className = 'badge badge-green';
-        badgeEl.innerHTML = '🛡️ Organizer Control';
-      }
+      badgeEl.className = 'badge badge-green';
+      badgeEl.innerHTML = '🛡️ Organizer Control';
     }
     if (backupBtn) backupBtn.style.display = 'none';
     if (defaultTemplateCard) defaultTemplateCard.style.display = 'none';
@@ -662,6 +658,9 @@ async function loadAdminGames() {
               </div>
 
               <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                <button onclick="toggleQuickTurnout(${ev.id})" class="btn btn-outline btn-sm" style="font-weight: 700; color: var(--secondary);">
+                  📊 Record Turnout
+                </button>
                 <button onclick="toggleEditGamePanel(${ev.id})" class="btn btn-outline btn-sm">
                   ✏️ Edit Details
                 </button>
@@ -683,6 +682,29 @@ async function loadAdminGames() {
                   </button>
                 ` : ''}
               </div>
+            </div>
+
+            <!-- Inline Quick Turnout Recording Panel -->
+            <div id="quick-turnout-panel-${ev.id}" style="display: ${openQuickTurnoutEventId === ev.id ? 'block' : 'none'}; margin-top: 14px; padding: 14px 18px; background: var(--bg-subtle); border-radius: var(--radius-sm); border: 1.5px solid var(--secondary); box-shadow: var(--shadow-sm);">
+              <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <span style="font-size: 1.4rem;">⚾</span>
+                  <div>
+                    <div style="font-weight: 700; font-size: 0.95rem; color: var(--secondary);">
+                      Record Field Turnout for: ${API.escapeHtml(ev.title)}
+                    </div>
+                    <div style="font-size: 0.8rem; color: var(--text-muted);">
+                      ${ev.actual_attendance != null ? `Currently recorded: <strong>${ev.actual_attendance} players</strong> (${ev.attendee_count} online RSVPs)` : `${ev.attendee_count} online RSVPs. Enter how many players actually played.`}
+                    </div>
+                  </div>
+                </div>
+                <form id="quick-turnout-form-${ev.id}" onsubmit="saveAdminQuickTurnout(event, ${ev.id})" style="display: flex; align-items: center; gap: 8px; margin: 0;">
+                  <input type="number" id="quick-turnout-input-${ev.id}" value="${ev.actual_attendance != null ? ev.actual_attendance : ''}" min="0" max="200" placeholder="e.g. 18" required style="width: 85px; padding: 6px 10px; font-weight: 700; font-size: 1rem; border-radius: 6px; border: 1.5px solid var(--border);">
+                  <button type="submit" id="quick-turnout-btn-${ev.id}" class="btn btn-primary btn-sm">💾 Save Turnout</button>
+                  <button type="button" onclick="toggleQuickTurnout(${ev.id})" class="btn btn-outline btn-sm">Cancel</button>
+                </form>
+              </div>
+              <div id="quick-turnout-alert-${ev.id}"></div>
             </div>
 
             <!-- Inline Game Details Edit Panel -->
@@ -757,6 +779,70 @@ async function loadAdminGames() {
     container.innerHTML = '<div class="alert alert-error">Unable to load games.</div>';
   }
 }
+
+window.toggleQuickTurnout = function(eventId) {
+  const panel = document.getElementById('quick-turnout-panel-' + eventId);
+  if (!panel) return;
+  if (openQuickTurnoutEventId === eventId) {
+    openQuickTurnoutEventId = null;
+    panel.style.display = 'none';
+  } else {
+    if (openQuickTurnoutEventId) {
+      const prev = document.getElementById('quick-turnout-panel-' + openQuickTurnoutEventId);
+      if (prev) prev.style.display = 'none';
+    }
+    openQuickTurnoutEventId = eventId;
+    panel.style.display = 'block';
+    const input = document.getElementById('quick-turnout-input-' + eventId);
+    if (input) input.focus();
+  }
+};
+
+window.saveAdminQuickTurnout = async function(e, eventId) {
+  e.preventDefault();
+  const input = document.getElementById('quick-turnout-input-' + eventId);
+  const btn = document.getElementById('quick-turnout-btn-' + eventId);
+  const alertBox = document.getElementById('quick-turnout-alert-' + eventId);
+  if (!input) return;
+
+  const count = parseInt(input.value.trim(), 10);
+  if (isNaN(count) || count < 0) {
+    if (alertBox) {
+      alertBox.innerHTML = '<div class="alert alert-error" style="font-size: 0.82rem; margin-top: 8px;">Please enter a valid attendance number.</div>';
+    }
+    return;
+  }
+
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+  }
+
+  try {
+    const res = await API.updateEvent(eventId, { actual_attendance: count });
+    if (res.error) {
+      if (alertBox) {
+        alertBox.innerHTML = '<div class="alert alert-error" style="font-size: 0.82rem; margin-top: 8px;">' + API.escapeHtml(res.error) + '</div>';
+      }
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = '💾 Save Turnout';
+      }
+    } else {
+      openQuickTurnoutEventId = null;
+      showAlert('Game turnout successfully recorded (' + count + ' players played).', false);
+      await loadAdminGames();
+    }
+  } catch (err) {
+    if (alertBox) {
+      alertBox.innerHTML = '<div class="alert alert-error" style="font-size: 0.82rem; margin-top: 8px;">Failed to save turnout. Please try again.</div>';
+    }
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '💾 Save Turnout';
+    }
+  }
+};
 
 window.toggleEditGamePanel = function(eventId) {
   const panel = document.getElementById(`edit-game-panel-${eventId}`);
@@ -1091,8 +1177,6 @@ function setupAdminUserManagement(currentUser) {
         roleBadge = '<span class="badge badge-orange">👑 Admin</span>';
       } else if (u.role === 'organizer') {
         roleBadge = '<span class="badge badge-green">🛡️ Organizer</span>';
-      } else if (u.role === 'facilitator') {
-        roleBadge = '<span class="badge badge-blue">📋 Facilitator</span>';
       }
 
       const gamesCount = (typeof u.eventsAttended === 'number') ? u.eventsAttended : 0;
@@ -1115,8 +1199,7 @@ function setupAdminUserManagement(currentUser) {
           <td style="padding: 5px 10px;">
             <select class="admin-role-selector" data-user-id="${u.id}" data-user-name="${API.escapeHtml(u.name)}" style="padding: 2px 6px; border-radius: var(--radius-sm); border: 1.5px solid var(--border); font-size: 0.8rem; font-weight: 600; background: var(--bg-input); color: var(--text-main); cursor: pointer; height: 28px;">
               <option value="player" ${u.role === 'player' ? 'selected' : ''}>👤 Player</option>
-              <option value="facilitator" ${u.role === 'facilitator' ? 'selected' : ''}>📋 Facilitator (Game Day Lead)</option>
-              <option value="organizer" ${u.role === 'organizer' ? 'selected' : ''}>🛡️ Organizer (Can Post Games)</option>
+              <option value="organizer" ${u.role === 'organizer' ? 'selected' : ''}>🛡️ Organizer (Can Post Games &amp; Record Turnout)</option>
               <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>👑 Admin (Full Access)</option>
             </select>
           </td>

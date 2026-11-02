@@ -95,6 +95,9 @@ function renderArchiveList(events, container) {
     return;
   }
 
+  const user = API.currentUser;
+  const canManage = Boolean(user && (user.canManageEvents || user.isAdmin));
+
   container.innerHTML = `
     <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 18px;">
       ${events.map(ev => {
@@ -140,12 +143,24 @@ function renderArchiveList(events, container) {
                       <span style="font-size: 0.74rem; color: var(--text-muted); font-weight: 500;">
                         ${API.escapeHtml(API.t('home.online_rsvps_sub', { count: ev.attendee_count }))}
                       </span>
+                      ${canManage ? `
+                        <button type="button" onclick="quickEditArchiveTurnout(${ev.id}, ${ev.actual_attendance})" class="btn btn-outline btn-sm" style="font-size: 0.72rem; padding: 2px 6px; margin-top: 4px; align-self: flex-start;">
+                          ✏️ Edit Turnout
+                        </button>
+                      ` : ''}
                     </div>
                   `
                   : `
-                    <span style="font-weight: 700; color: var(--primary); font-size: 0.9rem; display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums;">
-                      ${API.icon('users', 16)} ${API.escapeHtml(API.t('home.on_roster_count', { count: ev.attendee_count }))}
-                    </span>
+                    <div style="display: flex; flex-direction: column;">
+                      <span style="font-weight: 700; color: var(--primary); font-size: 0.9rem; display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums;">
+                        ${API.icon('users', 16)} ${API.escapeHtml(API.t('home.on_roster_count', { count: ev.attendee_count }))}
+                      </span>
+                      ${canManage ? `
+                        <button type="button" onclick="quickRecordArchiveTurnout(${ev.id})" class="btn btn-primary btn-sm" style="font-size: 0.75rem; padding: 2px 8px; margin-top: 4px; align-self: flex-start;">
+                          📊 Record Turnout
+                        </button>
+                      ` : ''}
+                    </div>
                   `
                 )
               }
@@ -159,5 +174,45 @@ function renderArchiveList(events, container) {
     </div>
   `;
 }
+
+window.quickRecordArchiveTurnout = async function(eventId) {
+  const current = prompt('Enter the number of players who attended and played in this game:');
+  if (current === null) return;
+  const count = parseInt(current.trim(), 10);
+  if (isNaN(count) || count < 0) {
+    alert('Please enter a valid attendance number.');
+    return;
+  }
+  try {
+    const res = await API.updateEvent(eventId, { actual_attendance: count });
+    if (res && res.error) {
+      alert(res.error);
+    } else {
+      await loadArchiveGames();
+    }
+  } catch (err) {
+    alert('Failed to save turnout.');
+  }
+};
+
+window.quickEditArchiveTurnout = async function(eventId, currentCount) {
+  const current = prompt('Update actual headcount for this game:', currentCount);
+  if (current === null) return;
+  const count = parseInt(current.trim(), 10);
+  if (isNaN(count) || count < 0) {
+    alert('Please enter a valid attendance number.');
+    return;
+  }
+  try {
+    const res = await API.updateEvent(eventId, { actual_attendance: count });
+    if (res && res.error) {
+      alert(res.error);
+    } else {
+      await loadArchiveGames();
+    }
+  } catch (err) {
+    alert('Failed to save turnout.');
+  }
+};
 
 document.addEventListener('DOMContentLoaded', initArchive);

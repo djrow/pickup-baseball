@@ -37,7 +37,9 @@
 - **[28. Phase 27: Live Cloud Calendar Sync Indicator, Auto-Refresh & Live .ics Subscription Feed](#28-phase-27-live-cloud-calendar-sync-indicator-auto-refresh--live-ics-subscription-feed)** — Real-time cloud verification pill, visibility/network auto-refresh, live RFC 5545 calendar stream.
 - **[29. Phase 28: RSS 2.0 & Media RSS Community Feed, Zero-Host Multimedia Interpretation & Edge Highlights](#29-phase-28-rss-20--media-rss-community-feed-zero-host-multimedia-interpretation--edge-highlights)** — Standard RSS 2.0 + Media RSS feed, zero-storage Cloudflare external links, rich in-app YouTube/image/video interpretation, live preview.
 - **[30. Phase 29: Complete 15-Language i18n Translation for Calendar Demarcation Legend, Live Sync, and Footer Webapp Build Attribution](#30-phase-29-complete-15-language-i18n-translation-for-calendar-demarcation-legend-live-sync-and-footer-webapp-build-attribution)** — Full translation of calendar demarcation legend, live sync states, feed, and footer build statement across all 14 California language dictionaries with cache busting.
-- **[31. Future Roadmap Notes](#31-future-roadmap-notes)** — Full-stack Rust / WebAssembly edge migration architecture.
+- **[37. Phase 36: Creative Commons BY-NC 4.0 Copyright & Licensing Integration](#37-phase-36-creative-commons-by-nc-40-copyright--licensing-integration)** — Universal CC BY-NC 4.0 copyright notices, LICENSE file, and 15-language translation.
+- **[38. Phase 37: Consolidation of Facilitator into Organizer Role & Field Turnout Recording UI](#38-phase-37-consolidation-of-facilitator-into-organizer-role--field-turnout-recording-ui)** — Migrated legacy facilitator user roles to Organizer, rejected obsolete role assignments, and added 1-click field turnout recording controls across Admin and Archive pages.
+- **[39. Future Roadmap Notes](#39-future-roadmap-notes)** — Full-stack Rust / WebAssembly edge migration architecture.
 
 ---
 
@@ -596,5 +598,27 @@ Formalized the project's intellectual property and open-access licensing under C
 
 ---
 
-## 38. Future Roadmap Notes
+## 38. Phase 37: Consolidation of Facilitator into Organizer Role & Field Turnout Recording UI
+Consolidated user roles down to a clear 3-tier hierarchy (`Admin`, `Organizer`, `Player`) by removing the redundant `facilitator` account role and giving Organizers seamless, 1-click tools to record field attendance turnouts:
+- **Consolidation of Facilitator into Organizer:**
+  - The `facilitator` account role was originally introduced as a 4th authorization tier, but created confusion because `organizer` fulfills all the same game-day and scheduling capabilities.
+  - Migrated legacy `role = 'facilitator'` accounts to `organizer` across both SQLite (`src/db.js`) and Cloudflare D1 (`functions/api/[[route]].js`).
+  - Removed `'facilitator'` from valid role arrays in `PUT /auth/users/:id/role` endpoints (now returning HTTP 400 Bad Request if attempted).
+  - Cleaned up role selectors and badges across `admin.js`, `account-dashboard.js`, `login.html`, and `profile.html`.
+  - Clarified that on-field game coordination (balancing squads and batting orders at home plate) remains an essential volunteer duty open to all attendees via the **Game Facilitator** volunteer task slot (`event_duties`), while user account permissions utilize the **`Organizer`** role.
+- **Dedicated Field Turnout (`actual_attendance`) Recording UI for Organizers:**
+  - **Admin Dashboard (`/admin.html`):** Added a prominent **"📊 Record Turnout"** button on every game card that opens a fast inline form (`#quick-turnout-panel-${ev.id}`) to record or update how many players actually played on the diamond with 1 click.
+  - **Past Games Archive (`/archive.html`):** Organizers and administrators viewing the archive now see a direct **"📊 Record Turnout"** button for untracked past games or **"✏️ Edit Turnout"** button for recorded games, prompting for headcount and immediately saving via `API.updateEvent()`.
+  - **Game Event Page (`/event.html`):** Maintained and reinforced the prominent organizer attendance banner (`#organizer-attendance-panel`) allowing organizers to record turnout directly from their phone on the field.
+- **Comprehensive Automated Acceptance Tests:**
+  - Added test `T3.8`: Verifies rejection of role assignment `facilitator` via `PUT /api/auth/users/:id/role` with HTTP 400 and verifies absence of obsolete options across client code.
+  - Added test `T3.9`: Verifies auto-migration of legacy database rows with `role = 'facilitator'` to `role = 'organizer'`.
+  - Added test `T3.10`: Verifies an Organizer can update `actual_attendance` via `PUT /api/events/:id` and receive 200, verifies persistence, and confirms regular players cannot update headcount (HTTP 403 Forbidden).
+  - Confirmed 100% pass rate across all 62 automated tests in `scripts/verify-all.js`.
+- **Cache Invalidation & Version Bump:**
+  - Bumped cache bust version to `v39` across `CLIENT_VERSION`, `CURRENT_APP_VERSION`, Service Worker cache (`pbf-cache-v39`), and all 8 HTML files (`?v=39`).
+
+---
+
+## 39. Future Roadmap Notes
 - **Pinned Full-Stack Rust / WebAssembly Migration:** Evaluated a future 4-phase rewrite of the Cloudflare Pages Functions backend (and optional frontend interactivity) to Rust (`workers-rs` compiling to WebAssembly) for compile-time type safety, zero-dependency binary durability, and strict edge memory safety—kept as a guiding north star when designing new features and data models.

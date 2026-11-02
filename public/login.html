@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sign In / Register - Sunday Pickup Baseball</title>
-  <link rel="stylesheet" href="/css/style.css?v=38">
+  <link rel="stylesheet" href="/css/style.css?v=39">
   <link rel="alternate" type="application/rss+xml" title="Sunday Pickup Baseball Highlights &amp; Updates" href="/feed.xml">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
@@ -147,7 +147,7 @@
 
   <footer id="site-footer" class="site-footer"></footer>
 
-  <script src="/js/api.js?v=38"></script>
+  <script src="/js/api.js?v=39"></script>
   <script>
     function getSafeRedirectUrl() {
       const params = new URLSearchParams(window.location.search);
@@ -189,8 +189,6 @@
               roleBadge.innerHTML = '<span class="badge badge-orange" style="font-size: 0.85rem; padding: 4px 10px;">👑 Administrator</span>';
             } else if (user.role === 'organizer') {
               roleBadge.innerHTML = '<span class="badge badge-green" style="font-size: 0.85rem; padding: 4px 10px;">🛡️ Event Organizer</span>';
-            } else if (user.role === 'facilitator') {
-              roleBadge.innerHTML = '<span class="badge badge-blue" style="font-size: 0.85rem; padding: 4px 10px;">📋 Game Facilitator</span>';
             } else {
               roleBadge.innerHTML = '<span class="badge badge-gray" style="font-size: 0.85rem; padding: 4px 10px;">👤 Player</span>';
             }
@@ -204,7 +202,7 @@
 
         // Dynamically load the authenticated account/admin dashboard script
         const script = document.createElement('script');
-        script.src = '/js/account-dashboard.js?v=38';
+        script.src = '/js/account-dashboard.js?v=39';
         script.onload = () => {
           if (typeof window.initAuthenticatedDashboard === 'function') {
             window.initAuthenticatedDashboard(user);

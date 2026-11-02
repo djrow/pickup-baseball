@@ -4,7 +4,7 @@ import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 
 const app = new Hono().basePath('/api');
 
-const CURRENT_APP_VERSION = '38';
+const CURRENT_APP_VERSION = '39';
 
 let d1Migrated = false;
 async function ensureD1Schema(db) {
@@ -36,6 +36,11 @@ async function ensureD1Schema(db) {
       END
       WHERE players_count IS NULL
     `).run();
+  } catch (e) {}
+
+  // Migrate legacy facilitator user role to organizer
+  try {
+    await db.prepare("UPDATE users SET role = 'organizer' WHERE role = 'facilitator'").run();
   } catch (e) {}
 
   try {
@@ -772,7 +777,7 @@ async function getUserFromSession(db, sessionId) {
 
   const role = session.role || (session.is_admin === 1 ? 'admin' : 'player');
   const isAdmin = role === 'admin' || Boolean(session.is_admin);
-  const canManageEvents = role === 'admin' || role === 'organizer' || role === 'facilitator' || isAdmin;
+  const canManageEvents = role === 'admin' || role === 'organizer' || isAdmin;
 
   return {
     id: session.id,
@@ -1309,8 +1314,7 @@ app.get('/auth/users', async (c) => {
       ORDER BY 
         CASE WHEN u.role = 'admin' OR u.is_admin = 1 THEN 1 
              WHEN u.role = 'organizer' THEN 2 
-             WHEN u.role = 'facilitator' THEN 3
-             ELSE 4 END,
+             ELSE 3 END,
         u.name COLLATE NOCASE ASC
     `).all();
 
@@ -1330,8 +1334,8 @@ app.put('/auth/users/:id/role', async (c) => {
   const targetId = parseInt(c.req.param('id'), 10);
   const { role } = await c.req.json();
 
-  if (!['admin', 'organizer', 'facilitator', 'player'].includes(role)) {
-    return c.json({ error: 'Invalid role. Must be admin, organizer, facilitator, or player.' }, 400);
+  if (!['admin', 'organizer', 'player'].includes(role)) {
+    return c.json({ error: 'Invalid role. Must be admin, organizer, or player.' }, 400);
   }
 
   const targetUser = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(targetId).first();

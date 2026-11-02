@@ -194,6 +194,7 @@ function initDatabase() {
   db.exec("UPDATE users SET role = 'admin' WHERE is_admin = 1 AND (role IS NULL OR role = 'player')");
   db.exec("UPDATE users SET is_admin = 1 WHERE role = 'admin'");
   db.exec("UPDATE users SET role = 'player' WHERE role IS NULL");
+  db.exec("UPDATE users SET role = 'organizer' WHERE role = 'facilitator'");
 
   // Bootstrap admin: Ensure at least one admin exists
   const adminCount = db.prepare("SELECT COUNT(*) as c FROM users WHERE role = 'admin' OR is_admin = 1").get().c;

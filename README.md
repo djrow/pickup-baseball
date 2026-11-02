@@ -106,9 +106,9 @@ Designed with a **10+ year longevity philosophy**:
     - Dedicated **[Donate page](https://www.pickupbaseballfoundation.org/donate.html)** with PayPal Giving Fund, Every.org, and IRS tax-receipt instructions.
     - Plain-English privacy notice on the homepage explaining that only names and emails are collected and data is never shared or sold.
 
-12. **Four-Tier RBAC, Facilitator Role, & Database Backups**:
-    - Role-based access control with 4 distinct tiers: `Admin`, `Organizer`, `Facilitator`, and `Player`.
-    - Dedicated **Game Facilitator** role (`📋 Game Facilitator`) with event creation, editing, and rainout management privileges.
+12. **Three-Tier RBAC, Turnout Recording & Database Backups**:
+    - Role-based access control with 3 distinct tiers: `Admin`, `Organizer`, and `Player`.
+    - **Organizer** role (`🛡️ Organizer`) with full game creation, inline task management, rainout emergency alerts, and field turnout recording privileges (`actual_attendance`) across game, admin, and archive pages.
     - One-click **📥 Backup Database (.sql)** download directly from the Admin Dashboard.
     - User account removal, email ban list (`banned_emails`), guest RSVP policy toggle, and one-click roster/comment moderation.
 

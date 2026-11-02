@@ -55,7 +55,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-const CURRENT_APP_VERSION = '38';
+const CURRENT_APP_VERSION = '39';
 app.use((req, res, next) => {
   res.setHeader('X-App-Version', CURRENT_APP_VERSION);
   next();
@@ -568,6 +568,85 @@ test('T3: User Role Management & Session Persistence', async (t) => {
 
     const loginHtml = fs.readFileSync(path.join(__dirname, '..', 'public', 'login.html'), 'utf8');
     assert.ok(loginHtml.includes('href="/admin.html#admin-security-section"'), 'login.html admin-security-link must route to admin page');
+  });
+
+  await t.test('T3.8: Facilitator user role elimination & rejected assignment via PUT /api/auth/users/:id/role', async () => {
+    // 1. Attempt to assign role 'facilitator' via API -> must return 400
+    const res = await apiReq('PUT', `/api/auth/users/${targetPlayerId}/role`, seedAdminCookie, {
+      role: 'facilitator'
+    });
+    assert.equal(res.status, 400, 'Assigning obsolete facilitator role must return HTTP 400');
+    assert.ok(res.data.error.includes('Invalid role'), 'Error message must specify invalid role');
+
+    // 2. Verify admin.js and account-dashboard.js do not have <option value="facilitator">
+    const adminJs = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'admin.js'), 'utf8');
+    assert.ok(!adminJs.includes('value="facilitator"'), 'admin.js must not contain facilitator role option');
+    assert.ok(!adminJs.includes("role === 'facilitator'"), 'admin.js must not contain role === facilitator branch');
+
+    const accountDashJs = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'account-dashboard.js'), 'utf8');
+    assert.ok(!accountDashJs.includes('value="facilitator"'), 'account-dashboard.js must not contain facilitator role option');
+    assert.ok(!accountDashJs.includes("role === 'facilitator'"), 'account-dashboard.js must not contain role === facilitator check');
+
+    const loginHtml = fs.readFileSync(path.join(__dirname, '..', 'public', 'login.html'), 'utf8');
+    assert.ok(!loginHtml.includes("role === 'facilitator'"), 'login.html must not contain role === facilitator check');
+
+    const profileHtml = fs.readFileSync(path.join(__dirname, '..', 'public', 'profile.html'), 'utf8');
+    assert.ok(!profileHtml.includes("role === 'facilitator'"), 'profile.html must not contain role === facilitator check');
+  });
+
+  await t.test('T3.9: Auto-migration of legacy facilitator role in SQLite to organizer', async () => {
+    // Insert a test user with role = 'facilitator' directly
+    const legacyEmail = `legacy_facilitator_${Date.now()}@sundaypickup.org`;
+    db.prepare("INSERT INTO users (name, email, role, is_admin) VALUES ('Legacy Facilitator', ?, 'facilitator', 0)").run(legacyEmail);
+    
+    // Verify initial insertion had role 'facilitator'
+    const legacyUserBefore = db.prepare("SELECT id, role FROM users WHERE email = ?").get(legacyEmail);
+    assert.equal(legacyUserBefore.role, 'facilitator');
+
+    // Run schema / migration logic
+    initDatabase();
+
+    // Verify user was migrated to 'organizer'
+    const legacyUserAfter = db.prepare("SELECT id, role FROM users WHERE email = ?").get(legacyEmail);
+    assert.equal(legacyUserAfter.role, 'organizer', 'Legacy facilitator user must be migrated to organizer');
+  });
+
+  await t.test('T3.10: Organizer capability to record and update actual game turnout (actual_attendance)', async () => {
+    // 1. Promote player to organizer
+    const promoteRes = await apiReq('PUT', `/api/auth/users/${targetPlayerId}/role`, seedAdminCookie, {
+      role: 'organizer'
+    });
+    assert.equal(promoteRes.status, 200);
+
+    // 2. Create a game as organizer
+    const createRes = await apiReq('POST', '/api/events', targetPlayerCookie, {
+      title: 'Turnout Verification Game',
+      location: 'Bushrod Park Field 1',
+      event_date: '2026-11-29T20:00:00.000Z',
+      use_default_duties: true
+    });
+    assert.equal(createRes.status, 200);
+    const gameId = createRes.data.eventId;
+
+    // 3. Organizer records actual turnout (headcount) via PUT /api/events/:id
+    const turnoutRes = await apiReq('PUT', `/api/events/${gameId}`, targetPlayerCookie, {
+      actual_attendance: 19
+    });
+    assert.equal(turnoutRes.status, 200, 'Organizer updating actual_attendance must return HTTP 200');
+
+    // 4. Verify turnout is persisted in database and returned via GET /api/events/:id
+    const getRes = await apiReq('GET', `/api/events/${gameId}`);
+    assert.equal(getRes.status, 200);
+    assert.equal(getRes.data.event.actual_attendance, 19, 'Event actual_attendance must be 19');
+
+    // 5. Demote user to player and verify player CANNOT update turnout
+    await apiReq('PUT', `/api/auth/users/${targetPlayerId}/role`, seedAdminCookie, {
+      role: 'player'
+    });
+    const playerAttemptRes = await apiReq('PUT', `/api/events/${gameId}`, targetPlayerCookie, {
+      actual_attendance: 22
+    });
+    assert.equal(playerAttemptRes.status, 403, 'Player attempting to update event actual_attendance must return HTTP 403');
   });
 });
 
