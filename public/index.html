@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pickup Baseball Foundation</title>
-  <link rel="stylesheet" href="/css/style.css?v=36">
+  <link rel="stylesheet" href="/css/style.css?v=37">
   <link rel="alternate" type="application/rss+xml" title="Sunday Pickup Baseball Highlights &amp; Updates" href="/feed.xml">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
@@ -30,6 +30,7 @@
           <span class="brand-short">PBF</span>
         </a>
         <div class="nav-links">
+          <a href="https://github.com/djrow/pickup-baseball/blob/trunk/HANDBOOK.md" target="_blank" rel="noopener noreferrer" class="nav-link-handbook" data-i18n="nav.handbook">📖 Handbook</a>
           <a href="/donate.html" class="nav-link-donate" data-i18n="nav.donate">Donate</a>
           <a href="/login.html" class="btn-login"><span class="btn-login-icon">⚾ </span><span data-i18n="nav.login">Log In</span></a>
         </div>
@@ -48,6 +49,9 @@
       <div id="hero-actions" style="margin-top: 16px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
         <a href="/login.html" id="hero-login-btn" class="btn btn-primary" style="font-weight: 700;" data-i18n="hero.login_btn">
           ⚾ Player Log In / Sign In
+        </a>
+        <a href="https://github.com/djrow/pickup-baseball/blob/trunk/HANDBOOK.md" target="_blank" rel="noopener noreferrer" id="hero-handbook-btn" class="btn btn-outline" data-i18n="hero.handbook_btn">
+          📖 Handbook &amp; Field Rules ↗
         </a>
         <a href="https://docs.google.com/forms/d/e/1FAIpQLSfexDvQitKsRkfrpViQnJAumJTmH3yLP4Qj-LiIWiT2L2MhMw/viewform" id="mailing-list-link" target="_blank" rel="noopener noreferrer" class="btn btn-outline" data-i18n="hero.mailing_btn">
           Join Mailing List ↗
@@ -68,6 +72,28 @@
             <li data-i18n-html="privacy.b5">If you make a player account, the site will also email you sign-in codes and game confirmations or reminders. Anything extra you add to your profile (like a bio or photo) is optional.</li>
           </ul>
           <div style="margin-top: 8px;"><span data-i18n="privacy.contact_prefix">Questions or want your info removed? Email</span> <a href="mailto:pickupbaseballfoundation@gmail.com" style="color: var(--primary); font-weight: 600;">pickupbaseballfoundation@gmail.com</a>.</div>
+        </div>
+      </details>
+
+      <!-- Plain-language Sunday rules of play (compact expandable accordion) -->
+      <details id="sunday-rules-accordion" class="privacy-accordion" style="margin-top: 10px;">
+        <summary>
+          <span data-i18n="rules.summary">⚾ Typical Rules of Play on Sundays: Casual, all skill levels, pitching machine, continuous batting, and safety first.</span>
+        </summary>
+        <div class="privacy-accordion-body">
+          <ul style="margin: 0; margin-left: 18px; margin-inline-start: 18px; padding: 0;">
+            <li data-i18n-html="rules.b1"><strong>Everyone Bats &amp; Plays:</strong> Continuous batting lineup for all attendees. Free, unlimited defensive rotations between innings so everyone gets fielding time.</li>
+            <li data-i18n-html="rules.b2"><strong>Pitching Machine or Coach Pitch:</strong> Consistent, hittable strikes (typically 45–55 mph). Any batted ball striking the machine or protective L-screen is ruled a dead-ball single for safety.</li>
+            <li data-i18n-html="rules.b3"><strong>Safety First (No Collisions):</strong> Baserunners must slide or veer to avoid contact. Absolutely no collisions with catchers or infielders. No base stealing.</li>
+            <li data-i18n-html="rules.b4"><strong>Helmets &amp; Protective Gear:</strong> Batting helmets required for all batters and baserunners. Full catcher's gear required behind the plate. Molded cleats or turf sneakers only (no metal spikes).</li>
+            <li data-i18n-html="rules.b5"><strong>Inning Limit &amp; Sportsmanship:</strong> 3 outs or a 5-run maximum per half-inning keeps the game moving. All skill levels welcome with zero tolerance for unsportsmanlike behavior.</li>
+            <li data-i18n-html="rules.b6"><strong>Field Care:</strong> Help drag and rake the infield, clean dugouts, and leave the field cleaner than we found it.</li>
+          </ul>
+          <div style="margin-top: 10px;">
+            <a href="https://github.com/djrow/pickup-baseball/blob/trunk/HANDBOOK.md#rules-of-play" target="_blank" rel="noopener noreferrer" style="color: var(--primary); font-weight: 600;" data-i18n="rules.full_link">
+              📖 Read the Complete Sunday Rules of Play in the Webapp Handbook ↗
+            </a>
+          </div>
         </div>
       </details>
     </div>
@@ -215,7 +241,7 @@
   <!-- Site Footer -->
   <footer id="site-footer" class="site-footer"></footer>
 
-  <script src="/js/api.js?v=36"></script>
-  <script src="/js/app.js?v=36"></script>
+  <script src="/js/api.js?v=37"></script>
+  <script src="/js/app.js?v=37"></script>
 </body>
 </html>

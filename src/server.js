@@ -28,13 +28,21 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-const CURRENT_APP_VERSION = '36';
+const CURRENT_APP_VERSION = '37';
 app.use((req, res, next) => {
   res.setHeader('X-App-Version', CURRENT_APP_VERSION);
   next();
 });
 app.get('/api/version', (req, res) => {
   res.json({ version: CURRENT_APP_VERSION });
+});
+
+// Handbook & Field Rules shortcuts
+app.get('/handbook', (req, res) => {
+  res.redirect('https://github.com/djrow/pickup-baseball/blob/trunk/HANDBOOK.md');
+});
+app.get('/rules', (req, res) => {
+  res.redirect('https://github.com/djrow/pickup-baseball/blob/trunk/HANDBOOK.md#rules-of-play');
 });
 
 // Serve static frontend assets and persistent user uploaded avatars

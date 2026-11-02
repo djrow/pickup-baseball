@@ -552,5 +552,32 @@ Created a comprehensive, platform-specific guide in `HANDBOOK.md` educating play
 
 ---
 
-## 36. Future Roadmap Notes
+## 36. Phase 35: Handbook Webapp Navigation & Typical Sunday Field Rules of Play
+Added direct in-app handbook links and created an authoritative "Typical Rules of Play on the Field on Sundays" section in both the user handbook and the webapp homepage:
+- **Typical Rules of Play on Sundays:**
+  - Documented standard Bushrod Park Sunday pickup guidelines in `HANDBOOK.md` (`#rules-of-play`):
+    - *Philosophy & Spirit:* Inclusive, welcoming to all skill levels (beginners to college veterans), co-ed, zero-tolerance for aggression or unsportsmanlike behavior.
+    - *Weekly Routine:* 12:00 PM first pitch, 11:30 AM warmups, organic team division at home plate.
+    - *Continuous Batting Lineup:* Everyone bats in a continuous order; no bench sitters during offensive half-innings.
+    - *Defensive Rotations:* Free substitutions, 4 outfielders (LF, LC, RC, RF) for high turnout, fair dugout rotation.
+    - *Pitching Machine & Safety:* 45–55 mph consistent strikes, protective L-screen dead-ball single rule protecting operators.
+    - *5-Run Inning Cap & Count:* 3-strike counts, no walks off the machine, 5-run maximum per half-inning to keep defense fresh.
+    - *Baserunning Safety:* Strictly no collisions (slide or avoid contact), no base stealing, courtesy runners available.
+    - *Protective Gear:* Batting helmets mandatory, complete catcher's gear behind the plate, molded cleats/sneakers only (no metal spikes).
+    - *Self-Officiating & Honor System:* Tie goes to the runner, zero arguments on the diamond.
+    - *Field Care:* Dragging/raking the dirt infield, clearing all dugout trash, leaving the field cleaner than we found it.
+- **Webapp Handbook Integration & Navigation:**
+  - Added `.nav-link-handbook` ("📖 Handbook") across the top navigation bar (`API.renderNav`) and all 8 static HTML fallbacks.
+  - Added direct link in the site footer (`API.renderFooter`) beside GitHub ("Handbook & Field Rules").
+  - Added hero action shortcut button on `index.html` ("📖 Handbook & Field Rules ↗").
+  - Added plain-language expandable accordion on `index.html` (`#sunday-rules-accordion`) displaying core rules and linking to the handbook.
+  - Added `/handbook` and `/rules` redirects in `public/_redirects`, `functions/api/[[route]].js`, and `src/server.js`.
+  - Added 15-language internationalization support for `nav.handbook`, `footer.handbook`, `hero.handbook_btn`, and `rules.*`.
+- **Testing & Version Invalidation:**
+  - Bumped version to `v37` across `CLIENT_VERSION`, `CURRENT_APP_VERSION`, Service Worker cache (`pbf-cache-v37`), and all 8 HTML files (`?v=37`).
+  - Added automated test assertions in `scripts/verify-all.js` (`T9.16` & `T9.18`). All 59 tests pass.
+
+---
+
+## 37. Future Roadmap Notes
 - **Pinned Full-Stack Rust / WebAssembly Migration:** Evaluated a future 4-phase rewrite of the Cloudflare Pages Functions backend (and optional frontend interactivity) to Rust (`workers-rs` compiling to WebAssembly) for compile-time type safety, zero-dependency binary durability, and strict edge memory safety—kept as a guiding north star when designing new features and data models.

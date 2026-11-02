@@ -14,6 +14,7 @@ The entire app was built with **zero frontend build tools** (plain HTML, CSS, an
      - [Subscribing Your Phone or Computer Calendar (`Subscribe (.ics)`)](#-subscribing-your-phone-or-computer-calendar-subscribe-ics)
      - [Signing In (Passwordless Email Login)](#-signing-in-passwordless-email-login)
      - [Saving Your Login Email in Your Browser & Device](#saving-login-credentials)
+     - [Typical Rules of Play on the Field on Sundays](#rules-of-play)
      - [Submitting a Group RSVP (Players, Spectators & Volunteer Tasks)](#%EF%B8%8F-submitting-a-group-rsvp-players-spectators--volunteer-tasks)
      - [Waitlists & Automatic Promotion](#-waitlists--automatic-promotion)
      - [Discussion Board, Profile, Languages & Themes](#-discussion-board-profile-languages--themes)
@@ -294,6 +295,87 @@ If you manage your credentials using a password manager extension or mobile vaul
   1. **Uncheck** "Remember my email address on this device".
   2. Use a **Private / Incognito** window.
   3. When finished, always click **Log Out** from `/profile.html` or the top navigation bar to invalidate the session cookie on the server.
+
+---
+
+### ⚾ Typical Rules of Play on the Field on Sundays
+<a id="rules-of-play"></a>
+
+Every Sunday at Noon, the Pickup Baseball Foundation hosts free, accessible, and friendly pickup baseball for everyone in the community. Whether you played in college or have never picked up a baseball glove before, you are welcome on the field.
+
+To keep the games fun, safe, fast-paced, and equitable for players of all experience levels, Sunday games follow these established field guidelines:
+
+---
+
+#### 1. Spirit of the Game: Friendly, Inclusive & Supportive
+- **All Skill Levels Welcome:** Our primary goal is fun, exercise, community building, and reps. Veterans enthusiastically support newcomers, and beginners are encouraged to take their cuts and learn the game.
+- **Zero-Tolerance for Unsportsmanlike Conduct:** Aggressive arguing, trash talking, throwing equipment, or dangerous play is strictly prohibited. We celebrate great plays made by either team!
+- **Co-ed & Multi-Generational:** Adult players of all genders, backgrounds, and ages (including supervised youth) share the diamond together.
+
+---
+
+#### 2. Weekly Schedule & Pregame Routine
+- **Game Time:** First pitch is promptly at **12:00 PM Pacific Time** on Sundays (primarily at **Bushrod Park Field 1 or Diamond 2** in Oakland, CA).
+- **Warm-Ups (11:30 AM – 12:00 PM):** Arrive 20–30 minutes early to stretch, play catch, take batting practice off the machine, and help set up bases.
+- **Forming Teams:** At 12:00 PM, players gather at home plate. Facilitators split attendees into two balanced squads (Home and Away) based on positions and experience so both sides have competitive defense and fun.
+
+---
+
+#### 3. Continuous Batting Lineup (Everyone Bats!)
+- **No Bench Sitters:** Every registered player and walk-up is included in their team's batting order.
+- **Continuous Lineup:** If a team has 12, 14, or 16 players, the batting order cycles through all 12, 14, or 16 batters continuously throughout the entire game. You never sit out an inning while your team is hitting.
+- **Late Arrivals:** Anyone arriving after first pitch is simply added to the bottom of their team's batting order without penalty.
+
+---
+
+#### 4. Free Defensive Substitutions & Outfield Sharing (Everyone Fields!)
+- **Unlimited Rotations:** Players may swap defensive positions freely between innings (for example, playing two innings at second base, two innings in the outfield, or taking a rest in the dugout).
+- **Extra Outfielders:** When team turnout is large (more than 9 fielders per side), teams routinely play with **4 outfielders** (Left, Left-Center, Right-Center, Right) to keep more players active on the field and reduce physical strain.
+- **Fair Dugout Rotation:** If a team has more than 10 fielders, 1 or 2 players rotate into the dugout each half-inning so playing time is 100% equal.
+
+---
+
+#### 5. Pitching Machine Guidelines & Mound Safety
+- **Electric Pitching Machine:** Most games utilize a portable electric pitching machine powered by a battery pack (one of our core volunteer duties).
+- **Consistent, Hittable Strikes:** The machine is dialed in to a predictable, moderate speed (typically 45–55 mph) with minimal break. This allows batters of all skill levels to put balls in play and gives infielders and outfielders realistic fielding chances.
+- **L-Screen Safety Rule (Dead Ball Single):** The machine operator is protected by a sturdy L-screen. Any batted ball that strikes the L-screen, the pitching machine, or the operator is immediately ruled a **dead-ball single** (or a re-pitch by mutual agreement) to ensure safety.
+- **Coach / Volunteer Pitching:** If live volunteer pitching is used instead of the machine, pitchers focus on throwing strikes to induce contact rather than aiming for strikeouts.
+
+---
+
+#### 6. Count, Strikeouts & 5-Run Inning Cap
+- **Standard 3 Strikes:** Batters receive standard 3-strike counts.
+- **No Walks off the Machine:** Because the machine is set to throw strikes, wild pitches that are completely unhittable do not count against the batter. Hitters swing until they put the ball in play or record 3 swinging/called strikes, keeping the game brisk and engaging.
+- **5-Run Maximum Per Half-Inning:** To prevent one team from being stranded under the hot sun during a prolonged inning, a half-inning automatically ends after **3 outs OR a maximum of 5 runs scored**, whichever occurs first. The 9th / final inning is typically uncapped.
+
+---
+
+#### 7. Baserunning Safety: Slide or Avoid Contact (No Collisions!)
+- **Safety First (Zero Collisions):** Baserunners must slide or veer / give themselves up to avoid contact with fielders making a play. Barreling or colliding with a catcher or infielder is strictly prohibited.
+- **No Base Stealing / Controlled Leads:** To protect voluntary catchers and pitchers, base stealing and leading off are prohibited. Runners advance only on batted balls or wild overthrows that leave the infield.
+- **Courtesy Runners:** Any player nursing an injury, recovering from physical strain, or needing running assistance can request a courtesy runner (the player who made the last out) from home plate or from any base without burning a substitution.
+
+---
+
+#### 8. Protective Gear & Footwear
+- **Batting Helmets:** Required for all batters, on-deck hitters, and baserunners while on the field.
+- **Catcher's Gear:** Anyone catching behind the plate must wear a complete catcher's gear set (mask/helmet, chest protector, and shin guards).
+- **Footwear:** Molded rubber/plastic cleats, turf shoes, or athletic sneakers only. **Metal spikes are strictly prohibited** for player safety and artificial/dirt turf preservation.
+- **Bats:** Wood, wood-composite, BBCOR (-3), or USA Baseball certified bats. High-compression modified softball bats are not allowed.
+- **Fielding Gloves:** Players are encouraged to bring their own glove. Volunteers regularly bring 2–3 spare gloves for newcomers.
+
+---
+
+#### 9. Self-Officiating & The Honor System
+- **Self-Umpired:** Pickup baseball is played on the honor system. The batting team's catcher, machine feeder, or base coaches call balls, strikes, and fair/foul lines.
+- **Tie Goes to the Runner:** If a close play occurs at any base, the call always favors the runner, or players agree to replay the pitch with a smile. There are no arguments in pickup baseball!
+
+---
+
+#### 10. Post-Game Field Care: Leave the Field Better Than We Found It
+- **Infield Dragging & Raking:** Volunteers pull-drag the dirt infield, smooth out sliding paths, and rake the batter's boxes and pitcher's landing area.
+- **Dugout & Bleacher Cleanup:** Pick up all water bottles, tape, athletic wrappers, and trash from both dugouts and spectator bleachers.
+- **Packing Equipment:** Inventory and safely pack up the bases, pitching machine, battery, balls, and foundation equipment.
 
 ---
 

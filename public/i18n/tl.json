@@ -251,5 +251,10 @@
   "event.on_waitlist_badge": "⏳ Nasa Waitlist",
   "event.waitlist_pos_badge": "Waitlist #{pos}",
   "event.join_waitlist_btn": "Sumali sa Player Waitlist",
-  "event.update_waitlist_btn": "I-update ang Waitlist RSVP"
+  "event.update_waitlist_btn": "I-update ang Waitlist RSVP",
+  "nav.handbook": "Manwal",
+  "footer.handbook": "Manwal at mga Patakaran sa Laro",
+  "hero.handbook_btn": "📖 Manwal at mga Patakaran ↗",
+  "rules.summary": "⚾ Karaniwang Patakaran sa Laro tuwing Linggo: Tuloy-tuloy na batting, pitching machine, at kaligtasan muna.",
+  "rules.full_link": "📖 Basahin ang Kumpletong Patakaran sa Manwal ng Webapp ↗"
 }

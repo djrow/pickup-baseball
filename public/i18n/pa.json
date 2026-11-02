@@ -251,5 +251,10 @@
   "event.on_waitlist_badge": "⏳ ਵੇਟਲਿਸਟ ਵਿੱਚ",
   "event.waitlist_pos_badge": "ਵੇਟਲਿਸਟ #{pos}",
   "event.join_waitlist_btn": "ਖਿਡਾਰੀ ਵੇਟਲਿਸਟ ਵਿੱਚ ਸ਼ਾਮਲ ਹੋਵੋ",
-  "event.update_waitlist_btn": "ਵੇਟਲਿਸਟ ਅੱਪਡੇਟ ਕਰੋ"
+  "event.update_waitlist_btn": "ਵੇਟਲਿਸਟ ਅੱਪਡੇਟ ਕਰੋ",
+  "nav.handbook": "ਹੈਂਡਬੁੱਕ",
+  "footer.handbook": "ਹੈਂਡਬੁੱਕ ਅਤੇ ਖੇਡ ਨਿਯਮ",
+  "hero.handbook_btn": "📖 ਹੈਂਡਬੁੱਕ ਅਤੇ ਖੇਡ ਨਿਯਮ ↗",
+  "rules.summary": "⚾ ਐਤਵਾਰ ਖੇਡ ਦੇ ਆਮ ਨਿਯਮ: ਲਗਾਤਾਰ ਬੱਲੇਬਾਜ਼ੀ, ਪਿਚਿੰਗ ਮਸ਼ੀਨ ਅਤੇ ਸੁਰੱਖਿਆ ਪਹਿਲਾਂ।",
+  "rules.full_link": "📖 ਵੈੱਬਐਪ ਹੈਂਡਬੁੱਕ ਵਿੱਚ ਐਤਵਾਰ ਦੇ ਪੂਰੇ ਨਿਯਮ ਪੜ੍ਹੋ ↗"
 }

@@ -251,5 +251,10 @@
   "event.on_waitlist_badge": "⏳ प्रतीक्षा सूची में",
   "event.waitlist_pos_badge": "प्रतीक्षा सूची #{pos}",
   "event.join_waitlist_btn": "खिलाड़ी प्रतीक्षा सूची में शामिल हों",
-  "event.update_waitlist_btn": "प्रतीक्षा सूची अपडेट करें"
+  "event.update_waitlist_btn": "प्रतीक्षा सूची अपडेट करें",
+  "nav.handbook": "नियमावली",
+  "footer.handbook": "नियमावली और खेल के नियम",
+  "hero.handbook_btn": "📖 नियमावली और खेल के नियम ↗",
+  "rules.summary": "⚾ रविवार के खेल के सामान्य नियम: निरंतर बल्लेबाजी, पिचिंग मशीन और सुरक्षा सबसे पहले।",
+  "rules.full_link": "📖 वेबएप नियमावली में रविवार के खेल के पूरे नियम पढ़ें ↗"
 }

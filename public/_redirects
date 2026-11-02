@@ -1,1 +1,4 @@
 https://pickup-baseball.pages.dev/* https://www.pickupbaseballfoundation.org/:splat 301!
+/handbook https://github.com/djrow/pickup-baseball/blob/trunk/HANDBOOK.md 302
+/rules https://github.com/djrow/pickup-baseball/blob/trunk/HANDBOOK.md#rules-of-play 302
+

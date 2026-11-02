@@ -251,5 +251,10 @@
   "event.on_waitlist_badge": "⏳ در صف انتظار",
   "event.waitlist_pos_badge": "صف انتظار #{pos}",
   "event.join_waitlist_btn": "پیوستن به فهرست انتظار بازیکنان",
-  "event.update_waitlist_btn": "به‌روزرسانی ثبت‌نام در صف انتظار"
+  "event.update_waitlist_btn": "به‌روزرسانی ثبت‌نام در صف انتظار",
+  "nav.handbook": "کتابچه راهنما",
+  "footer.handbook": "کتابچه راهنما و قوانین زمین",
+  "hero.handbook_btn": "📖 کتابچه راهنما و قوانین زمین ↗",
+  "rules.summary": "⚾ قوانین معمول بازی یکشنبه‌ها: ضربه‌زنی پیوسته، دستگاه پرتاب و اولویت ایمنی.",
+  "rules.full_link": "📖 مطالعه قوانین کامل بازی یکشنبه‌ها در کتابچه راهنما ↗"
 }

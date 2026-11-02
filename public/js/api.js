@@ -8,6 +8,7 @@ const EN_DICT = {
   "nav.calendar": "Calendar",
   "nav.archive": "Archive",
   "nav.donate": "Donate",
+  "nav.handbook": "Handbook",
   "nav.login": "Log In",
   "nav.logout": "Log Out",
   "nav.admin": "⚙️ Admin",
@@ -45,6 +46,10 @@ const EN_DICT = {
   "footer.tagline": "Building community through America's pastime.",
   "footer.subtext": "Built for simplicity and durability. Free & open-source.",
   "footer.about_site": "Built with Google Gemini in October 2026 for simplicity and durability. Free & open-source",
+  "footer.handbook": "Handbook & Field Rules",
+  "hero.handbook_btn": "📖 Handbook & Field Rules ↗",
+  "rules.summary": "⚾ Typical Rules of Play on Sundays: Casual, all skill levels, pitching machine, continuous batting, and safety first.",
+  "rules.full_link": "📖 Read the Complete Sunday Rules of Play in the Webapp Handbook ↗",
   "footer.update_app": "Update App",
   "footer.update_available": "Update Available — Click to Refresh",
   "footer.update_checking": "Checking for updates and clearing cache...",
@@ -289,7 +294,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '36',
+  CLIENT_VERSION: '37',
 
   // Current user cache
   currentUser: null,
@@ -662,7 +667,7 @@ const API = {
             <div id="footer-update-status" class="footer-update-status" style="display: none;" role="status" aria-live="polite"></div>
           </div>
           <p style="margin-top: 12px; font-size: 0.8rem; color: #94a3b8; line-height: 1.5;">
-            <span data-i18n="footer.about_site">${this.escapeHtml(this.t('footer.about_site', 'Built with Google Gemini in October 2026 for simplicity and durability. Free & open-source'))}</span> on <a href="https://github.com/djrow/pickup-baseball" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">GitHub</a>.
+            <span data-i18n="footer.about_site">${this.escapeHtml(this.t('footer.about_site', 'Built with Google Gemini in October 2026 for simplicity and durability. Free & open-source'))}</span> on <a href="https://github.com/djrow/pickup-baseball" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">GitHub</a> • <a href="https://github.com/djrow/pickup-baseball/blob/trunk/HANDBOOK.md" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;" data-i18n="footer.handbook">${this.escapeHtml(this.t('footer.handbook', 'Handbook & Field Rules'))}</a>.
           </p>
         </div>
       `;
@@ -1414,6 +1419,7 @@ const API = {
 
     const isDonatePage = typeof window !== 'undefined' && (window.location.pathname.endsWith('donate.html') || window.location.pathname === '/donate');
     const donateLinkHtml = `<a href="/donate.html" class="nav-link-donate${isDonatePage ? ' active' : ''}">${this.t('nav.donate')}</a>`;
+    const handbookLinkHtml = `<a href="https://github.com/djrow/pickup-baseball/blob/trunk/HANDBOOK.md" target="_blank" rel="noopener noreferrer" class="nav-link-handbook" data-i18n="nav.handbook" title="User Guide, Sunday Field Rules &amp; Manual Maintenance Handbook">📖 <span data-i18n="nav.handbook">${this.t('nav.handbook', 'Handbook')}</span></a>`;
 
     const langOptionsHtml = this.SUPPORTED_LANGUAGES.map(l =>
       `<option value="${l.code}" ${l.code === currentLang ? 'selected' : ''} title="${this.escapeHtml(l.label)}">${l.short}</option>`
@@ -1428,6 +1434,7 @@ const API = {
           <span class="brand-short">PBF</span>
         </a>
         <div class="nav-links">
+          ${handbookLinkHtml}
           ${donateLinkHtml}
           ${langSelectHtml}
           ${authHtml}

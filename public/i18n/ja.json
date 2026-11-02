@@ -251,5 +251,10 @@
   "event.on_waitlist_badge": "⏳ キャンセル待ち",
   "event.waitlist_pos_badge": "キャンセル待ち #{pos}番目",
   "event.join_waitlist_btn": "選手キャンセル待ちに登録",
-  "event.update_waitlist_btn": "キャンセル待ち情報を更新"
+  "event.update_waitlist_btn": "キャンセル待ち情報を更新",
+  "nav.handbook": "ハンドブック",
+  "footer.handbook": "ハンドブックとグラウンド規則",
+  "hero.handbook_btn": "📖 ハンドブックとグラウンド規則 ↗",
+  "rules.summary": "⚾ 日曜ゲームの基本ルール：全員打席、ピッチングマシン使用、安全第一。",
+  "rules.full_link": "📖 ウェブアプリのハンドブックで日曜ルールの詳細を読む ↗"
 }

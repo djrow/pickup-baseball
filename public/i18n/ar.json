@@ -251,5 +251,10 @@
   "event.on_waitlist_badge": "⏳ في قائمة الانتظار",
   "event.waitlist_pos_badge": "قائمة الانتظار رقم #{pos}",
   "event.join_waitlist_btn": "الانضمام إلى قائمة انتظار اللاعبين",
-  "event.update_waitlist_btn": "تحديث التسجيل في قائمة الانتظار"
+  "event.update_waitlist_btn": "تحديث التسجيل في قائمة الانتظار",
+  "nav.handbook": "دليل الاستخدام",
+  "footer.handbook": "دليل الاستخدام وقواعد اللعب",
+  "hero.handbook_btn": "📖 دليل الاستخدام وقواعد اللعب ↗",
+  "rules.summary": "⚾ قواعد اللعب المعتادة أيام الأحد: مشاركة الجميع، آلة الرمي، والسلامة أولاً.",
+  "rules.full_link": "📖 قراءة قواعد لعب يوم الأحد كاملة في دليل الويب ↗"
 }

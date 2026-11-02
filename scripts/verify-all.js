@@ -55,7 +55,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-const CURRENT_APP_VERSION = '36';
+const CURRENT_APP_VERSION = '37';
 app.use((req, res, next) => {
   res.setHeader('X-App-Version', CURRENT_APP_VERSION);
   next();
@@ -1497,6 +1497,12 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(handbookMd.includes('Saving Your Email Address & Login Credentials in Your Browser'), 'HANDBOOK.md must contain credential saving guide');
     assert.ok(handbookMd.includes('Android') && handbookMd.includes('iOS') && handbookMd.includes('macOS') && handbookMd.includes('Windows'), 'HANDBOOK.md must cover Android, iOS, macOS, and Windows');
     assert.ok(handbookMd.includes('Internet Explorer 11') && handbookMd.includes('Samsung Internet'), 'HANDBOOK.md must cover legacy browsers and mobile browsers');
+    assert.ok(handbookMd.includes('Typical Rules of Play on the Field on Sundays'), 'HANDBOOK.md must contain typical rules of play section');
+    assert.ok(handbookMd.includes('id="rules-of-play"'), 'HANDBOOK.md must have anchor for rules of play');
+    assert.ok(apiJs.includes('nav-link-handbook'), 'api.js must render nav-link-handbook');
+    assert.ok(apiJs.includes('footer.handbook'), 'api.js must render footer.handbook');
+    assert.ok(indexHtml.includes('sunday-rules-accordion'), 'index.html must include sunday-rules-accordion');
+    assert.ok(indexHtml.includes('hero-handbook-btn'), 'index.html must include hero-handbook-btn');
   });
 
   await test('T9.17: RSS 2.0 Feed with Media RSS, Multimedia Interpretation, and Highlights Lifecycle', async () => {
@@ -1641,7 +1647,9 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
       'calendar.sync_checking',
       'calendar.sync_just_now',
       'calendar.subscribe_title',
-      'feed.heading'
+      'feed.heading',
+      'nav.handbook',
+      'footer.handbook'
     ];
 
     for (const lang of languages) {

@@ -979,6 +979,41 @@ header.site-header {
   border-color: var(--giants-orange);
 }
 
+.nav-link-handbook {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: var(--radius-full);
+  font-size: 0.88rem;
+  font-weight: 700;
+  text-decoration: none !important;
+  color: var(--text-main) !important;
+  background: var(--bg-subtle);
+  border: 1.5px solid var(--border);
+  box-sizing: border-box;
+  flex-shrink: 0;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s, transform 0.05s;
+}
+
+.nav-link-handbook:hover {
+  color: var(--giants-orange) !important;
+  border-color: var(--giants-orange);
+  background: var(--giants-orange-light);
+}
+
+[data-theme="dark"] .nav-link-handbook {
+  color: var(--text-main) !important;
+}
+
+[data-theme="dark"] .nav-link-handbook:hover {
+  color: var(--giants-orange) !important;
+  background: var(--giants-orange-light);
+  border-color: var(--giants-orange);
+}
+
 /* Buttons */
 .btn {
   display: inline-flex;
@@ -2133,7 +2168,8 @@ footer.site-footer strong {
   .nav-links {
     gap: 8px;
   }
-  .nav-link-donate {
+  .nav-link-donate,
+  .nav-link-handbook {
     height: 30px;
     padding: 0 10px;
     font-size: 0.8rem;
@@ -2184,7 +2220,8 @@ footer.site-footer strong {
   .nav-links {
     gap: 5px;
   }
-  .nav-link-donate {
+  .nav-link-donate,
+  .nav-link-handbook {
     height: 30px;
     padding: 0 8px;
     font-size: 0.76rem;
@@ -2223,6 +2260,7 @@ footer.site-footer strong {
     gap: 4px;
   }
   .nav-link-donate,
+  .nav-link-handbook,
   .btn-login {
     padding: 0 6px;
     font-size: 0.72rem;

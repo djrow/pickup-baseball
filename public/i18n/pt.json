@@ -251,5 +251,10 @@
   "event.on_waitlist_badge": "⏳ Na Fila de Espera",
   "event.waitlist_pos_badge": "Fila de Espera #{pos}",
   "event.join_waitlist_btn": "Entrar na Fila de Espera de Jogadores",
-  "event.update_waitlist_btn": "Atualizar Fila de Espera"
+  "event.update_waitlist_btn": "Atualizar Fila de Espera",
+  "nav.handbook": "Manual",
+  "footer.handbook": "Manual e Regras de Campo",
+  "hero.handbook_btn": "📖 Manual e Regras de Campo ↗",
+  "rules.summary": "⚾ Regras Típicas dos Jogos de Domingo: Rebatida contínua, máquina de arremesso e segurança em primeiro lugar.",
+  "rules.full_link": "📖 Ler as Regras Completas de Domingo no Manual do Webapp ↗"
 }

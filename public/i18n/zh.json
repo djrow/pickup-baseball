@@ -251,5 +251,10 @@
   "event.on_waitlist_badge": "⏳ 候补中",
   "event.waitlist_pos_badge": "候补第 #{pos} 位",
   "event.join_waitlist_btn": "加入球员候补名单",
-  "event.update_waitlist_btn": "更新候补报名"
+  "event.update_waitlist_btn": "更新候补报名",
+  "nav.handbook": "手册",
+  "footer.handbook": "手册与比赛规则",
+  "hero.handbook_btn": "📖 手册与比赛规则 ↗",
+  "rules.summary": "⚾ 周日典型比赛规则：人人上场、发球机投球、连续击球、安全第一。",
+  "rules.full_link": "📖 在网站手册中阅读完整的周日比赛规则 ↗"
 }

@@ -251,5 +251,10 @@
   "event.on_waitlist_badge": "⏳ 대기 중",
   "event.waitlist_pos_badge": "대기 #{pos}번",
   "event.join_waitlist_btn": "선수 대기 명단 등록",
-  "event.update_waitlist_btn": "대기 명단 정보 수정"
+  "event.update_waitlist_btn": "대기 명단 정보 수정",
+  "nav.handbook": "안내서",
+  "footer.handbook": "안내서 및 경기 규칙",
+  "hero.handbook_btn": "📖 안내서 및 경기 규칙 ↗",
+  "rules.summary": "⚾ 일요일 기본 경기 규칙: 연속 타순, 피칭 머신 사용, 안전 최우선.",
+  "rules.full_link": "📖 웹앱 안내서에서 일요일 경기 전체 규칙 읽기 ↗"
 }

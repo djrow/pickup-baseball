@@ -251,5 +251,10 @@
   "event.on_waitlist_badge": "⏳ En liste d'attente",
   "event.waitlist_pos_badge": "Liste d'attente #{pos}",
   "event.join_waitlist_btn": "Rejoindre la liste d'attente des joueurs",
-  "event.update_waitlist_btn": "Mettre à jour l'inscription sur liste d'attente"
+  "event.update_waitlist_btn": "Mettre à jour l'inscription sur liste d'attente",
+  "nav.handbook": "Manuel",
+  "footer.handbook": "Manuel et règles du jeu",
+  "hero.handbook_btn": "📖 Manuel et règles du jeu ↗",
+  "rules.summary": "⚾ Règles typiques du dimanche : Tour de batte continu, lance-balles et sécurité avant tout.",
+  "rules.full_link": "📖 Lire les règles complètes du dimanche dans le manuel du site ↗"
 }

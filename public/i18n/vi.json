@@ -251,5 +251,10 @@
   "event.on_waitlist_badge": "⏳ Trong Danh Sách Chờ",
   "event.waitlist_pos_badge": "Danh Sách Chờ #{pos}",
   "event.join_waitlist_btn": "Tham Gia Danh Sách Chờ Cầu Thủ",
-  "event.update_waitlist_btn": "Cập Nhật Đăng Ký Danh Sách Chờ"
+  "event.update_waitlist_btn": "Cập Nhật Đăng Ký Danh Sách Chờ",
+  "nav.handbook": "Cẩm nang",
+  "footer.handbook": "Cẩm nang & Quy tắc thi đấu",
+  "hero.handbook_btn": "📖 Cẩm nang & Quy tắc thi đấu ↗",
+  "rules.summary": "⚾ Quy tắc thi đấu thông thường vào Chủ nhật: Tất cả cùng đánh bóng, máy ném bóng và an toàn là trên hết.",
+  "rules.full_link": "📖 Đọc toàn bộ quy tắc thi đấu trong Cẩm nang Webapp ↗"
 }

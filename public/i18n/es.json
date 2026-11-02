@@ -251,5 +251,10 @@
   "event.on_waitlist_badge": "⏳ En Espera",
   "event.waitlist_pos_badge": "Lista de Espera #{pos}",
   "event.join_waitlist_btn": "Unirse a la Lista de Espera",
-  "event.update_waitlist_btn": "Actualizar Lista de Espera"
+  "event.update_waitlist_btn": "Actualizar Lista de Espera",
+  "nav.handbook": "Manual",
+  "footer.handbook": "Manual y Reglas de Campo",
+  "hero.handbook_btn": "📖 Manual y Reglas de Campo ↗",
+  "rules.summary": "⚾ Reglas Típicas de Juego los Domingos: Bateo continuo, máquina de pitcheo y seguridad primero.",
+  "rules.full_link": "📖 Leer las Regras Completas de los Domingos en el Manual ↗"
 }
