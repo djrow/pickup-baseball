@@ -70,7 +70,7 @@ function optionalUser(req, res, next) {
   if (session) {
     const role = session.role || (session.is_admin === 1 ? 'admin' : 'player');
     const isAdmin = role === 'admin' || Boolean(session.is_admin);
-    const canManageEvents = role === 'admin' || role === 'organizer' || isAdmin;
+    const canManageEvents = role === 'admin' || role === 'organizer' || role === 'facilitator' || isAdmin;
 
     req.user = {
       id: session.id,
