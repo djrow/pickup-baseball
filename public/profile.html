@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Player Profile & Settings - Sunday Pickup Baseball</title>
-  <link rel="stylesheet" href="/css/style.css?v=45">
+  <link rel="stylesheet" href="/css/style.css?v=46">
   <link rel="alternate" type="application/rss+xml" title="Sunday Pickup Baseball Highlights &amp; Updates" href="/feed.xml">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
@@ -63,6 +63,19 @@
       </div>
 
       <div id="profile-alert"></div>
+
+      <!-- Badges & Hero Credits Section -->
+      <div style="padding: 16px 20px; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 24px;">
+        <h3 style="font-size: 0.95rem; color: var(--secondary); margin-bottom: 8px;">🏅 Operations Badges &amp; Hero Credits</h3>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center; font-size: 0.85rem;">
+          <span id="badge-machine-pill" class="badge badge-gray">⚡ Pitching Machine: Uncertified</span>
+          <span id="badge-field-pill" class="badge badge-gray">🚜 Field Dragging: Uncertified</span>
+          <span id="hero-credits-pill" class="badge badge-orange">🛡️ 0 Backup Hero Credits</span>
+        </div>
+        <p style="font-size: 0.77rem; color: var(--text-muted); margin-top: 8px; margin-bottom: 0;">
+          Badges allow claiming paid tasks up to 12 weeks ahead. Backup Hero Credits can be redeemed for early Tier 1 access above your 3-month fair-share cap.
+        </p>
+      </div>
 
       <!-- Avatar Section -->
       <div style="display: flex; align-items: center; gap: 20px; padding: 20px; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 24px; flex-wrap: wrap;">
@@ -127,7 +140,7 @@
 
   <footer id="site-footer" class="site-footer"></footer>
 
-  <script src="/js/api.js?v=45"></script>
+  <script src="/js/api.js?v=46"></script>
   <script>
     let currentUser = null;
 
@@ -177,6 +190,34 @@
       } else {
         roleBadge.className = 'badge badge-gray';
         roleBadge.textContent = '👤 Player';
+      }
+
+      const machinePill = document.getElementById('badge-machine-pill');
+      if (machinePill) {
+        if (currentUser.machineBadge) {
+          machinePill.className = 'badge badge-green';
+          machinePill.textContent = '⚡ Pitching Machine: Certified';
+        } else {
+          machinePill.className = 'badge badge-gray';
+          machinePill.textContent = '⚡ Pitching Machine: Uncertified';
+        }
+      }
+
+      const fieldPill = document.getElementById('badge-field-pill');
+      if (fieldPill) {
+        if (currentUser.fieldBadge) {
+          fieldPill.className = 'badge badge-green';
+          fieldPill.textContent = '🚜 Field Dragging: Certified';
+        } else {
+          fieldPill.className = 'badge badge-gray';
+          fieldPill.textContent = '🚜 Field Dragging: Uncertified';
+        }
+      }
+
+      const heroCreditsPill = document.getElementById('hero-credits-pill');
+      if (heroCreditsPill) {
+        const credits = currentUser.heroCredits || 0;
+        heroCreditsPill.textContent = `🛡️ ${credits} Backup Hero Credit${credits === 1 ? '' : 's'}`;
       }
 
       renderAvatarPreview();

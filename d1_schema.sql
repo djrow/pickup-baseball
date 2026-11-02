@@ -8,6 +8,9 @@ CREATE TABLE IF NOT EXISTS users (
   avatar_url TEXT,
   role TEXT DEFAULT 'player',
   is_admin INTEGER DEFAULT 0,
+  machine_badge INTEGER DEFAULT 0,
+  field_badge INTEGER DEFAULT 0,
+  hero_credits INTEGER DEFAULT 0,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 

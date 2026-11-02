@@ -331,6 +331,9 @@ router.get('/users', requireAdmin, (req, res) => {
         u.avatar_url as avatarUrl, 
         COALESCE(u.role, CASE WHEN u.is_admin = 1 THEN 'admin' ELSE 'player' END) as role,
         u.is_admin as isAdmin,
+        COALESCE(u.machine_badge, 0) as machine_badge,
+        COALESCE(u.field_badge, 0) as field_badge,
+        COALESCE(u.hero_credits, 0) as hero_credits,
         u.created_at as createdAt,
         (SELECT COUNT(*) FROM attendees WHERE user_id = u.id AND status = 'attending') as eventsAttended
       FROM users u
@@ -393,6 +396,52 @@ router.put('/users/:id/role', requireAdmin, (req, res) => {
   } catch (err) {
     console.error('[Auth] Error updating user role:', err);
     res.status(500).json({ error: 'Failed to update user role.' });
+  }
+});
+
+/**
+ * Update user badges and hero credits (Admin only)
+ * Body: { machine_badge?: number, field_badge?: number, hero_credits?: number }
+ */
+router.put('/users/:id/badges', requireAdmin, (req, res) => {
+  try {
+    const targetId = parseInt(req.params.id, 10);
+    const targetUser = db.prepare('SELECT id, email, machine_badge, field_badge, hero_credits FROM users WHERE id = ?').get(targetId);
+    if (!targetUser) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    const { machine_badge, field_badge, hero_credits } = req.body;
+    const newMachineBadge = machine_badge !== undefined ? (machine_badge ? 1 : 0) : (targetUser.machine_badge || 0);
+    const newFieldBadge = field_badge !== undefined ? (field_badge ? 1 : 0) : (targetUser.field_badge || 0);
+    const newHeroCredits = hero_credits !== undefined ? Math.max(0, parseInt(hero_credits, 10) || 0) : (targetUser.hero_credits || 0);
+
+    db.prepare(`
+      UPDATE users
+      SET machine_badge = ?, field_badge = ?, hero_credits = ?
+      WHERE id = ?
+    `).run(newMachineBadge, newFieldBadge, newHeroCredits, targetId);
+
+    // If target user is updating their own record, update req.user as well
+    if (req.user && req.user.id === targetId) {
+      req.user.machineBadge = Boolean(newMachineBadge);
+      req.user.fieldBadge = Boolean(newFieldBadge);
+      req.user.heroCredits = newHeroCredits;
+    }
+
+    res.json({
+      success: true,
+      message: `Badges and credits updated for ${targetUser.email}.`,
+      user: {
+        id: targetId,
+        machine_badge: newMachineBadge,
+        field_badge: newFieldBadge,
+        hero_credits: newHeroCredits
+      }
+    });
+  } catch (err) {
+    console.error('[Auth] Error updating user badges/credits:', err);
+    res.status(500).json({ error: 'Failed to update user badges.' });
   }
 });
 

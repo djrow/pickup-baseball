@@ -1203,12 +1203,12 @@ function setupAdminUserManagement(currentUser) {
     }
 
     if (cachedUsers.length === 0) {
-      tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 14px;">No users registered yet.</td></tr>';
+      tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 14px;">No users registered yet.</td></tr>';
       return;
     }
 
     if (filtered.length === 0) {
-      tableBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 20px; font-size: 0.85rem;">No accounts found matching "<strong>${API.escapeHtml(query)}</strong>"</td></tr>`;
+      tableBody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 20px; font-size: 0.85rem;">No accounts found matching "<strong>${API.escapeHtml(query)}</strong>"</td></tr>`;
       return;
     }
 
@@ -1222,6 +1222,7 @@ function setupAdminUserManagement(currentUser) {
       }
 
       const gamesCount = (typeof u.eventsAttended === 'number') ? u.eventsAttended : 0;
+      const credits = (typeof u.hero_credits === 'number') ? u.hero_credits : 0;
 
       return `
         <tr>
@@ -1237,6 +1238,23 @@ function setupAdminUserManagement(currentUser) {
           </td>
           <td style="padding: 5px 10px; white-space: nowrap;">
             ${roleBadge}
+          </td>
+          <td style="padding: 5px 10px; white-space: nowrap;">
+            <label style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.76rem; font-weight: 600; cursor: pointer; margin-right: 8px;">
+              <input type="checkbox" class="admin-machine-badge" data-user-id="${u.id}" ${u.machine_badge ? 'checked' : ''}>
+              ⚡ Machine
+            </label>
+            <label style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.76rem; font-weight: 600; cursor: pointer;">
+              <input type="checkbox" class="admin-field-badge" data-user-id="${u.id}" ${u.field_badge ? 'checked' : ''}>
+              🚜 Dragging
+            </label>
+          </td>
+          <td style="padding: 5px 10px; white-space: nowrap;">
+            <div style="display: inline-flex; align-items: center; gap: 4px;">
+              <button type="button" class="btn btn-outline btn-sm btn-credit-minus" data-user-id="${u.id}" style="padding: 0 6px; height: 24px; font-size: 0.78rem; line-height: 1;">−</button>
+              <span class="admin-hero-credits-val" data-user-id="${u.id}" style="font-weight: 700; font-size: 0.82rem; min-width: 20px; text-align: center;">${credits}</span>
+              <button type="button" class="btn btn-outline btn-sm btn-credit-plus" data-user-id="${u.id}" style="padding: 0 6px; height: 24px; font-size: 0.78rem; line-height: 1;">+</button>
+            </div>
           </td>
           <td style="padding: 5px 10px;">
             <select class="admin-role-selector" data-user-id="${u.id}" data-user-name="${API.escapeHtml(u.name)}" style="padding: 2px 6px; border-radius: var(--radius-sm); border: 1.5px solid var(--border); font-size: 0.8rem; font-weight: 600; background: var(--bg-input); color: var(--text-main); cursor: pointer; height: 28px;">
@@ -1347,21 +1365,102 @@ function setupAdminUserManagement(currentUser) {
         }
       });
     });
+
+    tableBody.querySelectorAll('.admin-machine-badge').forEach(chk => {
+      chk.addEventListener('change', async (e) => {
+        const targetUserId = e.target.getAttribute('data-user-id');
+        const isChecked = e.target.checked;
+        try {
+          const res = await API.updateUserBadges(targetUserId, { machine_badge: isChecked ? 1 : 0 });
+          if (res.error) {
+            alertBox.innerHTML = `<div class="alert alert-error" style="font-size: 0.88rem;">${API.escapeHtml(res.error)}</div>`;
+            e.target.checked = !isChecked;
+          } else {
+            const found = cachedUsers.find(u => String(u.id) === String(targetUserId));
+            if (found) found.machine_badge = isChecked ? 1 : 0;
+            alertBox.innerHTML = `<div class="alert alert-success" style="font-size: 0.88rem;">✓ Machine badge updated!</div>`;
+          }
+        } catch (err) {
+          e.target.checked = !isChecked;
+        }
+      });
+    });
+
+    tableBody.querySelectorAll('.admin-field-badge').forEach(chk => {
+      chk.addEventListener('change', async (e) => {
+        const targetUserId = e.target.getAttribute('data-user-id');
+        const isChecked = e.target.checked;
+        try {
+          const res = await API.updateUserBadges(targetUserId, { field_badge: isChecked ? 1 : 0 });
+          if (res.error) {
+            alertBox.innerHTML = `<div class="alert alert-error" style="font-size: 0.88rem;">${API.escapeHtml(res.error)}</div>`;
+            e.target.checked = !isChecked;
+          } else {
+            const found = cachedUsers.find(u => String(u.id) === String(targetUserId));
+            if (found) found.field_badge = isChecked ? 1 : 0;
+            alertBox.innerHTML = `<div class="alert alert-success" style="font-size: 0.88rem;">✓ Field dragging badge updated!</div>`;
+          }
+        } catch (err) {
+          e.target.checked = !isChecked;
+        }
+      });
+    });
+
+    tableBody.querySelectorAll('.btn-credit-minus').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const targetUserId = e.currentTarget.getAttribute('data-user-id');
+        const found = cachedUsers.find(u => String(u.id) === String(targetUserId));
+        const currentCredits = found && typeof found.hero_credits === 'number' ? found.hero_credits : 0;
+        if (currentCredits <= 0) return;
+        const newCredits = currentCredits - 1;
+        try {
+          const res = await API.updateUserBadges(targetUserId, { hero_credits: newCredits });
+          if (res.error) {
+            alertBox.innerHTML = `<div class="alert alert-error" style="font-size: 0.88rem;">${API.escapeHtml(res.error)}</div>`;
+          } else {
+            if (found) found.hero_credits = newCredits;
+            const span = tableBody.querySelector(`.admin-hero-credits-val[data-user-id="${targetUserId}"]`);
+            if (span) span.textContent = newCredits;
+            alertBox.innerHTML = `<div class="alert alert-success" style="font-size: 0.88rem;">✓ Backup hero credits updated to ${newCredits}!</div>`;
+          }
+        } catch (err) {}
+      });
+    });
+
+    tableBody.querySelectorAll('.btn-credit-plus').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const targetUserId = e.currentTarget.getAttribute('data-user-id');
+        const found = cachedUsers.find(u => String(u.id) === String(targetUserId));
+        const currentCredits = found && typeof found.hero_credits === 'number' ? found.hero_credits : 0;
+        const newCredits = currentCredits + 1;
+        try {
+          const res = await API.updateUserBadges(targetUserId, { hero_credits: newCredits });
+          if (res.error) {
+            alertBox.innerHTML = `<div class="alert alert-error" style="font-size: 0.88rem;">${API.escapeHtml(res.error)}</div>`;
+          } else {
+            if (found) found.hero_credits = newCredits;
+            const span = tableBody.querySelector(`.admin-hero-credits-val[data-user-id="${targetUserId}"]`);
+            if (span) span.textContent = newCredits;
+            alertBox.innerHTML = `<div class="alert alert-success" style="font-size: 0.88rem;">✓ Backup hero credits updated to ${newCredits}!</div>`;
+          }
+        } catch (err) {}
+      });
+    });
   }
 
   async function loadUsers() {
-    tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 14px;">Loading users...</td></tr>';
+    tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 14px;">Loading users...</td></tr>';
     try {
       const res = await API.getUsers();
       if (res.error) {
-        tableBody.innerHTML = `<tr><td colspan="5" style="color: var(--danger); text-align: center; padding: 14px;">${API.escapeHtml(res.error)}</td></tr>`;
+        tableBody.innerHTML = `<tr><td colspan="7" style="color: var(--danger); text-align: center; padding: 14px;">${API.escapeHtml(res.error)}</td></tr>`;
         return;
       }
 
       cachedUsers = res.users || [];
       renderUsersList();
     } catch (err) {
-      tableBody.innerHTML = '<tr><td colspan="5" style="color: var(--danger); text-align: center; padding: 14px;">Error loading users.</td></tr>';
+      tableBody.innerHTML = '<tr><td colspan="7" style="color: var(--danger); text-align: center; padding: 14px;">Error loading users.</td></tr>';
     }
   }
 

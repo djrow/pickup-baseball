@@ -27,6 +27,7 @@ The entire app was built with **zero frontend build tools** (plain HTML, CSS, an
      - [Smart Rainout Assistant & Drainage Tracker](#%EF%B8%8F-smart-rainout-assistant--24-hour-surface-accumulation-drainage-tracker)
      - [Calling a Rainout & Reopening](#-calling-a-rainout-or-reopening-a-game)
      - [Community Highlights & RSS Feed](#-publishing-community-highlights--submitting-multimedia-to-the-rss-feed)
+     - [Paid Operations & Fair-Share Task Scheduling Policy (Section 2.5)](#-paid-operations--fair-share-task-scheduling-policy)
   3. [For Administrators](#3-for-administrators)
 - **Part II: Manual Maintenance & Code Editing Handbook**
   4. [How the Codebase Is Organized](#4-how-the-codebase-is-organized)
@@ -509,6 +510,66 @@ where $r_h$ is the rainfall in inches that fell $h$ hours before 12:00 PM warmup
   - The **📢 Highlights & Community Updates** grid on the homepage (`index.html#community-feed-section`).
   - The public **RSS 2.0 + Media RSS feed** at [`/feed.xml`](https://www.pickupbaseballfoundation.org/feed.xml).
 - Organizers and admins can delete posts anytime using the red **🗑️ Delete** button on `/admin.html` or inline on the homepage.
+
+---
+
+### 💵 Paid Operations & Fair-Share Task Scheduling Policy
+<a id="-paid-operations--fair-share-task-scheduling-policy"></a>
+
+Sunday Pickup Baseball relies on dedicated operational roles to transport equipment and prepare high-quality playing diamonds every week. Because weekly events offer a limited number of compensated operational positions, this policy establishes a deterministic, transparent, and non-punitive system for distributing paid shifts equitably among interested community members.
+
+#### 1. Core Principles: Decentralization, Transparency & Non-Punitive Design
+- **No Private Organizer Hiring:** The **Game Organizer role does NOT include arranging or hiring paid workers** for their event. Organizers focus entirely on on-field game coordination, lineups, and community safety. Paid task scheduling is handled 100% autonomously and transparently by the web app.
+- **Deterministic Transparency (Zero Lottery):** Sign-up windows and fair-share quotas are calculated using deterministic rules visible to everyone. There is no lottery, favoritism, or opaque manual selection.
+- **Strictly Non-Punitive:** The system contains **zero strikes, cooldowns, or cancellation penalties**. If an emergency arises and a worker must drop a shift, their spot is immediately released back to the community without penalty, and any redeemed Backup Hero Credit is promptly refunded.
+
+#### 2. The Two Paid Operational Roles & Badges
+To ensure field safety and equipment reliability, only accounts holding the corresponding Foundation Certification Badge may claim paid operational tasks:
+1. **⚡ Pitching Machine & Power (`machine_badge`):**
+   - **Responsibilities:** Safely transporting the electric pitching machine and high-capacity battery station to the field, operating and feeding consistent strikes, packing the gear post-game, and recharging the battery pack between games.
+   - **Certification:** Granted by Foundation Administrators on the user's account after hands-on training with machine calibration, battery charging safety, and L-screen placement.
+2. **🚜 Field Dragging (`field_badge`):**
+   - **Responsibilities:** Arriving 20 minutes prior to warm-ups with the pull rake and drag mat to smooth the infield dirt, level sliding paths, tamp the batter's boxes, and groom the diamond post-game.
+   - **Certification:** Granted by Foundation Administrators upon completion of infield grooming and diamond care instruction.
+
+> [!NOTE]
+> General volunteer tasks (such as *Bases*, *Game Baseballs*, *Game Facilitator*, and *Water / Food*) are open to all attendees and do not require specialized operational badges.
+
+#### 3. The 12-Week Sign-Up Timeline & Monday 5:00 AM Unlock Trigger
+- **Release Moment:** An event's volunteer and operational tasks unlock exactly at **5:00 AM on Monday, 12 weeks prior to game day** (the day after the day 12 weeks before Sunday, or 83 days prior).
+- **Task Release Cadence:** Every Monday morning at 5:00 AM Pacific, the next upcoming Sunday event three months away unlocks its tasks.
+- **Locked State (`🔒`):** Prior to 5:00 AM on that Monday, tasks are locked. Players and spectators may RSVP for roster spots at any time, but operational tasks cannot be selected until the unlock moment.
+
+#### 4. The Three Tiered Windows & Rolling 3-Month Fair-Share Cap
+Across any rolling 3-month period (12 weekly events), there are 24 total paid operational shifts (12 pitching machine shifts and 12 field dragging shifts). Sign-ups progress across three distinct tiers over the 12-week window leading up to game day:
+
+##### 🏆 Tier 1: Weeks 12 to 6 Prior (Fair-Share Quota Window)
+- **Timeframe:** From the unlock trigger (83 days prior) down to 42 days (6 weeks) before game day.
+- **Who Can Select:** Certified badged workers only.
+- **Rolling 3-Month Fair-Share Cap:**
+  To guarantee that every certified worker gets an equitable distribution of available shifts, each worker is subject to a per-type cap on a rolling 12-week basis:
+  $$\text{Cap} = \left\lfloor \frac{24}{2n} \right\rfloor = \left\lfloor \frac{12}{n} \right\rfloor$$
+  where $n$ is the number of active certified workers holding that specific badge ($n \ge 1$):
+  - If $n = 4$ badged workers: $\text{Cap} = \lfloor 12/4 \rfloor = 3$ machine shifts and $3$ dragging shifts per worker per 3 months.
+  - If $n = 3$ badged workers: $\text{Cap} = \lfloor 12/3 \rfloor = 4$ shifts per worker.
+  - If $n = 2$ badged workers: $\text{Cap} = \lfloor 12/2 \rfloor = 6$ shifts per worker.
+- **Cap Reached:** A worker who has already claimed their cap of that duty type within the rolling 12-week period cannot select additional shifts in Tier 1 **unless they redeem a Backup Hero Credit**.
+
+##### 🔓 Tier 2: Weeks 6 to 2 Prior (Open Badged Access)
+- **Timeframe:** From 42 days (6 weeks) down to 14 days (2 weeks) before game day.
+- **Who Can Select:** **All certified badged workers**, even if they have already met their Tier 1 quota!
+- **Purpose:** Ensures that shifts not claimed during the initial quota window are filled well in advance. No Backup Hero Credits are required.
+
+##### 🚨 Tier 3: Weeks 2 to Game Day (Standby & Urgent Cover Incentive)
+- **Timeframe:** Within 14 days of game day down to first pitch.
+- **Who Can Select:** All qualified badged personnel.
+- **🛡️ Short-Notice Backup Hero Credit:**
+  Stepping up on short notice (**less than 48 hours before first pitch**) to claim an open or vacated shift automatically awards **+1 Backup Hero Credit** upon signup.
+
+#### 5. Backup Hero Credit Mechanics
+- **Earned Through Solidarity:** Backup Hero Credits recognize members who step up during short-notice emergencies (<48 hours) to ensure Sunday games run without interruption.
+- **Redeemed for Early Tier 1 Access:** When high-demand future dates unlock (such as holiday weekends or season openers), a capped worker can redeem 1 Backup Hero Credit to claim a shift during Tier 1 above the standard cap.
+- **Refund Policy:** Non-punitive by design: If a game is called for rain or if an attendee cancels their RSVP before game day, any redeemed hero credit is instantly restored to their balance.
 
 ---
 

@@ -4,7 +4,7 @@ import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 
 const app = new Hono().basePath('/api');
 
-const CURRENT_APP_VERSION = '45';
+const CURRENT_APP_VERSION = '46';
 
 let d1Migrated = false;
 async function ensureD1Schema(db) {
@@ -18,7 +18,10 @@ async function ensureD1Schema(db) {
     'ALTER TABLE attendees ADD COLUMN additional_guests INTEGER DEFAULT 0',
     'ALTER TABLE attendees ADD COLUMN guest_names TEXT',
     'ALTER TABLE attendees ADD COLUMN players_count INTEGER DEFAULT NULL',
-    'ALTER TABLE attendees ADD COLUMN spectators_count INTEGER DEFAULT 0'
+    'ALTER TABLE attendees ADD COLUMN spectators_count INTEGER DEFAULT 0',
+    'ALTER TABLE users ADD COLUMN machine_badge INTEGER DEFAULT 0',
+    'ALTER TABLE users ADD COLUMN field_badge INTEGER DEFAULT 0',
+    'ALTER TABLE users ADD COLUMN hero_credits INTEGER DEFAULT 0'
   ];
   for (const sql of alterStatements) {
     try {
@@ -765,7 +768,10 @@ async function getUserFromSession(db, sessionId) {
       u.bio, 
       CASE WHEN u.avatar_url IS NOT NULL AND u.avatar_url != '' THEN '/api/users/' || u.id || '/avatar?v=' || length(u.avatar_url) ELSE '' END as avatar_url, 
       u.is_admin,
-      COALESCE(u.role, CASE WHEN u.is_admin = 1 THEN 'admin' ELSE 'player' END) as role
+      COALESCE(u.role, CASE WHEN u.is_admin = 1 THEN 'admin' ELSE 'player' END) as role,
+      COALESCE(u.machine_badge, 0) as machine_badge,
+      COALESCE(u.field_badge, 0) as field_badge,
+      COALESCE(u.hero_credits, 0) as hero_credits
     FROM sessions s
     JOIN users u ON s.user_id = u.id
     WHERE s.id = ?
@@ -787,7 +793,10 @@ async function getUserFromSession(db, sessionId) {
     avatarUrl: session.avatar_url || '',
     role: role,
     isAdmin: isAdmin,
-    canManageEvents: canManageEvents
+    canManageEvents: canManageEvents,
+    machineBadge: Boolean(session.machine_badge),
+    fieldBadge: Boolean(session.field_badge),
+    heroCredits: session.hero_credits || 0
   };
 }
 
@@ -1308,6 +1317,9 @@ app.get('/auth/users', async (c) => {
         CASE WHEN u.avatar_url IS NOT NULL AND u.avatar_url != '' THEN '/api/users/' || u.id || '/avatar?v=' || length(u.avatar_url) ELSE '' END as avatarUrl, 
         COALESCE(u.role, CASE WHEN u.is_admin = 1 THEN 'admin' ELSE 'player' END) as role,
         u.is_admin as isAdmin,
+        COALESCE(u.machine_badge, 0) as machine_badge,
+        COALESCE(u.field_badge, 0) as field_badge,
+        COALESCE(u.hero_credits, 0) as hero_credits,
         u.created_at as createdAt,
         (SELECT COUNT(*) FROM attendees WHERE user_id = u.id AND status = 'attending') as eventsAttended
       FROM users u
@@ -1358,6 +1370,46 @@ app.put('/auth/users/:id/role', async (c) => {
     message: `Role updated to ${role}.`,
     user: { id: targetId, role, isAdmin: Boolean(isAdminFlag) }
   });
+});
+
+app.put('/auth/users/:id/badges', async (c) => {
+  const currentUser = c.get('user');
+  if (!currentUser || !currentUser.isAdmin) {
+    return c.json({ error: 'Administrator access required.' }, 403);
+  }
+
+  const targetId = parseInt(c.req.param('id'), 10);
+  const targetUser = await c.env.DB.prepare('SELECT id, email, machine_badge, field_badge, hero_credits FROM users WHERE id = ?').bind(targetId).first();
+  if (!targetUser) {
+    return c.json({ error: 'User not found.' }, 404);
+  }
+
+  try {
+    const body = await c.req.json();
+    const newMachineBadge = body.machine_badge !== undefined ? (body.machine_badge ? 1 : 0) : (targetUser.machine_badge || 0);
+    const newFieldBadge = body.field_badge !== undefined ? (body.field_badge ? 1 : 0) : (targetUser.field_badge || 0);
+    const newHeroCredits = body.hero_credits !== undefined ? Math.max(0, parseInt(body.hero_credits, 10) || 0) : (targetUser.hero_credits || 0);
+
+    await c.env.DB.prepare(`
+      UPDATE users
+      SET machine_badge = ?, field_badge = ?, hero_credits = ?
+      WHERE id = ?
+    `).bind(newMachineBadge, newFieldBadge, newHeroCredits, targetId).run();
+
+    return c.json({
+      success: true,
+      message: `Badges and credits updated for ${targetUser.email}.`,
+      user: {
+        id: targetId,
+        machine_badge: newMachineBadge,
+        field_badge: newFieldBadge,
+        hero_credits: newHeroCredits
+      }
+    });
+  } catch (err) {
+    console.error('[Auth] Error updating user badges/credits:', err);
+    return c.json({ error: 'Failed to update user badges.' }, 500);
+  }
 });
 
 app.delete('/auth/users/:id', async (c) => {
@@ -1657,6 +1709,119 @@ function parseAllowedEmails(raw) {
   return [];
 }
 
+function getTaskUnlockAt(eventDateStr) {
+  const d = new Date(eventDateStr);
+  const target = new Date(d.getTime() - (83 * 24 * 3600 * 1000));
+  const datePart = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles' }).format(target);
+  const testPst = new Date(datePart + 'T05:00:00-08:00');
+  const tzCheck = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', timeZoneName: 'short' }).format(testPst);
+  const isPdt = tzCheck.includes('PDT');
+  return new Date(datePart + (isPdt ? 'T05:00:00-07:00' : 'T05:00:00-08:00')).toISOString();
+}
+
+function formatUnlockDateTime(isoStr) {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Los_Angeles',
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short'
+  }).format(new Date(isoStr));
+}
+
+function getTaskTier(eventDateStr, now) {
+  const unlockIso = getTaskUnlockAt(eventDateStr);
+  const unlockTime = new Date(unlockIso).getTime();
+  const eventTime = new Date(eventDateStr).getTime();
+  const nowTime = (now || new Date()).getTime();
+
+  if (nowTime < unlockTime) {
+    return {
+      tier: 'locked',
+      isUnlocked: false,
+      unlockAt: unlockIso
+    };
+  }
+
+  const tier2Time = eventTime - (42 * 24 * 3600 * 1000);
+  if (nowTime < tier2Time) {
+    return {
+      tier: 'tier1',
+      isUnlocked: true,
+      unlockAt: unlockIso
+    };
+  }
+
+  const tier3Time = eventTime - (14 * 24 * 3600 * 1000);
+  if (nowTime < tier3Time) {
+    return {
+      tier: 'tier2',
+      isUnlocked: true,
+      unlockAt: unlockIso
+    };
+  }
+
+  return {
+    tier: 'tier3',
+    isUnlocked: true,
+    unlockAt: unlockIso
+  };
+}
+
+function getDutyType(title) {
+  const lower = (title || '').toLowerCase();
+  if (lower.includes('machine')) {
+    return {
+      type: 'machine',
+      isPaid: true,
+      requiredBadge: 'machine_badge',
+      badgeName: 'Pitching Machine Badge'
+    };
+  }
+  if (lower.includes('drag')) {
+    return {
+      type: 'field',
+      isPaid: true,
+      requiredBadge: 'field_badge',
+      badgeName: 'Field Dragging Badge'
+    };
+  }
+  return {
+    type: 'general',
+    isPaid: false,
+    requiredBadge: null,
+    badgeName: null
+  };
+}
+
+async function getDutyTier1CapD1(db, dutyType) {
+  const badgeCol = dutyType === 'machine' ? 'machine_badge' : 'field_badge';
+  const row = await db.prepare(`SELECT COUNT(*) as count FROM users WHERE ${badgeCol} = 1`).first();
+  const n = Math.max(1, (row ? row.count : 0));
+  return Math.max(1, Math.floor(12 / n));
+}
+
+async function getUserRollingShiftsD1(db, userId, dutyType, targetEventDate, targetEventId) {
+  const likePattern = dutyType === 'machine' ? '%machine%' : '%drag%';
+  const row = await db.prepare(`
+    SELECT COUNT(DISTINCT e.id) as count
+    FROM duty_assignments da
+    JOIN event_duties ed ON da.duty_id = ed.id
+    JOIN attendees a ON da.attendee_id = a.id
+    JOIN events e ON a.event_id = e.id
+    WHERE a.user_id = ?
+      AND a.status = 'attending'
+      AND e.status != 'cancelled'
+      AND e.id != ?
+      AND LOWER(ed.title) LIKE ?
+      AND ABS(julianday(e.event_date) - julianday(?)) <= 42
+  `).bind(userId, targetEventId || 0, likePattern, targetEventDate).first();
+  return row ? row.count : 0;
+}
+
 app.get('/events/attendee-candidates', async (c) => {
   const user = c.get('user');
   if (!user || !user.canManageEvents) {
@@ -1921,7 +2086,89 @@ app.get('/events/:id', async (c) => {
     const hasRsvpd = Boolean(myRsvp && (myRsvp.status === 'attending' || myRsvp.status === 'declined' || myRsvp.status === 'waitlist'));
     const canViewRoster = Boolean(hasRsvpd || isOrganizer);
 
-    const sanitizedDuties = duties.map(d => ({
+    const tierInfo = getTaskTier(event.event_date);
+    const viewerId = user ? user.id : (myRsvp && myRsvp.user_id ? myRsvp.user_id : null);
+    let viewerUser = null;
+    if (viewerId) {
+      viewerUser = await c.env.DB.prepare('SELECT id, machine_badge, field_badge, hero_credits FROM users WHERE id = ?').bind(viewerId).first();
+    }
+    const hoursUntilEvent = (new Date(event.event_date).getTime() - Date.now()) / (3600 * 1000);
+    const isUrgentCoverWindow = hoursUntilEvent > 0 && hoursUntilEvent < 48;
+
+    if (myRsvp && viewerUser) {
+      myRsvp.hero_credits = viewerUser.hero_credits || 0;
+      myRsvp.machine_badge = viewerUser.machine_badge || 0;
+      myRsvp.field_badge = viewerUser.field_badge || 0;
+    }
+
+    const machineCap = await getDutyTier1CapD1(c.env.DB, 'machine');
+    const fieldCap = await getDutyTier1CapD1(c.env.DB, 'field');
+
+    let viewerMachineShifts = 0;
+    let viewerFieldShifts = 0;
+    if (viewerUser) {
+      viewerMachineShifts = await getUserRollingShiftsD1(c.env.DB, viewerUser.id, 'machine', event.event_date, event.id);
+      viewerFieldShifts = await getUserRollingShiftsD1(c.env.DB, viewerUser.id, 'field', event.event_date, event.id);
+    }
+
+    const enrichedDuties = duties.map(d => {
+      const dType = getDutyType(d.title);
+      let userHasBadge = false;
+      let isEligible = true;
+      let ineligibilityReason = null;
+      let canUseHeroCredit = false;
+      let tier1Cap = null;
+      let userCurrentShifts = 0;
+
+      if (!tierInfo.isUnlocked) {
+        isEligible = false;
+        ineligibilityReason = `Tasks locked until ${formatUnlockDateTime(tierInfo.unlockAt)}`;
+      } else if (dType.isPaid) {
+        tier1Cap = dType.type === 'machine' ? machineCap : fieldCap;
+        if (viewerUser) {
+          userHasBadge = dType.type === 'machine' ? Boolean(viewerUser.machine_badge) : Boolean(viewerUser.field_badge);
+          if (!userHasBadge) {
+            isEligible = false;
+            ineligibilityReason = `Requires ${dType.badgeName}`;
+          } else {
+            userCurrentShifts = dType.type === 'machine' ? viewerMachineShifts : viewerFieldShifts;
+            if (tierInfo.tier === 'tier1') {
+              if (userCurrentShifts >= tier1Cap) {
+                if ((viewerUser.hero_credits || 0) >= 1) {
+                  isEligible = true;
+                  canUseHeroCredit = true;
+                  ineligibilityReason = `Tier 1 cap reached (${tier1Cap} shifts). Redeem 1 Backup Hero Credit to select early.`;
+                } else {
+                  isEligible = false;
+                  canUseHeroCredit = false;
+                  ineligibilityReason = `Tier 1 cap reached (${tier1Cap} shifts). Opens in Tier 2 (6 weeks before game) or requires 1 Backup Hero Credit.`;
+                }
+              }
+            }
+          }
+        } else {
+          isEligible = false;
+          ineligibilityReason = 'Sign in with a certified badged account to select paid tasks.';
+        }
+      }
+
+      return {
+        ...d,
+        duty_type: dType.type,
+        is_paid: dType.isPaid,
+        requires_badge: dType.requiredBadge,
+        badge_name: dType.badgeName,
+        user_has_badge: userHasBadge,
+        is_eligible: isEligible,
+        ineligibility_reason: ineligibilityReason,
+        can_use_hero_credit: canUseHeroCredit,
+        tier1_cap: tier1Cap,
+        user_current_shifts: userCurrentShifts,
+        is_urgent_cover: isUrgentCoverWindow && dType.isPaid
+      };
+    });
+
+    const sanitizedDuties = enrichedDuties.map(d => ({
       ...d,
       assigned_players: canViewRoster
         ? d.assigned_players
@@ -1952,7 +2199,11 @@ app.get('/events/:id', async (c) => {
         ...event,
         allowed_emails_list: allowedList,
         is_restricted: isRestricted,
-        is_allowed_to_rsvp: isAllowedToRsvp
+        is_allowed_to_rsvp: isAllowedToRsvp,
+        task_unlock_at: tierInfo.unlockAt,
+        task_tier: tierInfo.tier,
+        is_tasks_unlocked: tierInfo.isUnlocked,
+        hours_until_event: hoursUntilEvent
       },
       duties: sanitizedDuties || [],
       attendees: canViewRoster ? (attendees || []) : [],
@@ -2258,6 +2509,7 @@ app.post('/events/:id/rsvp', async (c) => {
       email,
       gear_bringing,
       duty_ids,
+      redeem_hero_credit,
       management_token,
       status,
       players_count,
@@ -2381,6 +2633,63 @@ app.post('/events/:id/rsvp', async (c) => {
       }
     }
 
+    const tierInfo = getTaskTier(event.event_date);
+    if (status === 'attending' && Array.isArray(duty_ids) && duty_ids.length > 0) {
+      if (!tierInfo.isUnlocked) {
+        return c.json({
+          error: `Volunteer tasks for this game are locked until ${formatUnlockDateTime(tierInfo.unlockAt)} (12 weeks before first pitch).`
+        });
+      }
+
+      let attendeeUser = null;
+      if (userId) {
+        attendeeUser = await c.env.DB.prepare('SELECT id, machine_badge, field_badge, hero_credits FROM users WHERE id = ?').bind(userId).first();
+      }
+
+      let creditsNeeded = 0;
+      for (const dId of duty_ids) {
+        const duty = await c.env.DB.prepare('SELECT * FROM event_duties WHERE id = ? AND event_id = ?').bind(dId, eventId).first();
+        if (!duty) continue;
+        const dType = getDutyType(duty.title);
+        if (dType.isPaid) {
+          if (!attendeeUser) {
+            return c.json({
+              error: `Selecting paid tasks (${duty.title}) requires signing in with a certified badged account.`
+            }, 400);
+          }
+          const hasBadge = dType.type === 'machine' ? Boolean(attendeeUser.machine_badge) : Boolean(attendeeUser.field_badge);
+          if (!hasBadge) {
+            return c.json({
+              error: `Selecting '${duty.title}' requires the ${dType.badgeName}. Contact an administrator to be certified.`
+            }, 400);
+          }
+          if (tierInfo.tier === 'tier1') {
+            const cap = await getDutyTier1CapD1(c.env.DB, dType.type);
+            const userShifts = await getUserRollingShiftsD1(c.env.DB, attendeeUser.id, dType.type, event.event_date, eventId);
+            if (userShifts >= cap) {
+              if (!redeem_hero_credit) {
+                return c.json({
+                  error: `Tier 1 rolling 3-month fair-share cap reached (${cap} shifts). You have ${attendeeUser.hero_credits || 0} Backup Hero Credit(s). Check 'Redeem 1 Backup Hero Credit' to claim this shift early.`
+                }, 400);
+              }
+              if ((attendeeUser.hero_credits || 0) < 1) {
+                return c.json({
+                  error: `Tier 1 fair-share cap reached (${cap} shifts) and you do not have any Backup Hero Credits available.`
+                }, 400);
+              }
+              creditsNeeded += 1;
+            }
+          }
+        }
+      }
+
+      if (creditsNeeded > 0 && (attendeeUser.hero_credits || 0) < creditsNeeded) {
+        return c.json({
+          error: `Insufficient Backup Hero Credits. You need ${creditsNeeded} credit(s) but have ${attendeeUser.hero_credits || 0}.`
+        }, 400);
+      }
+    }
+
     let attendeeId;
     if (existingAttendee) {
       if (!user && existingAttendee.management_token && management_token && management_token !== existingAttendee.management_token) {
@@ -2401,6 +2710,17 @@ app.post('/events/:id/rsvp', async (c) => {
     }
 
     const assignedDutyNames = [];
+    let heroCreditEarned = false;
+    let heroCreditRedeemed = false;
+    const hoursUntilEvent = (new Date(event.event_date).getTime() - Date.now()) / (3600 * 1000);
+    const isUrgentWindow = hoursUntilEvent > 0 && hoursUntilEvent < 48;
+
+    let prevDuties = [];
+    if (attendeeId) {
+      const { results: pRows } = await c.env.DB.prepare('SELECT duty_id FROM duty_assignments WHERE attendee_id = ?').bind(attendeeId).all();
+      prevDuties = (pRows || []).map(r => r.duty_id);
+    }
+
     if (finalStatus === 'attending' && Array.isArray(duty_ids)) {
       await c.env.DB.prepare('DELETE FROM duty_assignments WHERE attendee_id = ?').bind(attendeeId).run();
 
@@ -2423,6 +2743,22 @@ app.post('/events/:id/rsvp', async (c) => {
               VALUES (?, ?)
             `).bind(dId, attendeeId).run();
             assignedDutyNames.push(duty.title);
+
+            const dType = getDutyType(duty.title);
+            if (dType.isPaid && userId) {
+              if (tierInfo.tier === 'tier1' && redeem_hero_credit && !heroCreditRedeemed) {
+                const cap = await getDutyTier1CapD1(c.env.DB, dType.type);
+                const shifts = await getUserRollingShiftsD1(c.env.DB, userId, dType.type, event.event_date, eventId);
+                if (shifts >= cap) {
+                  await c.env.DB.prepare('UPDATE users SET hero_credits = MAX(0, hero_credits - 1) WHERE id = ?').bind(userId).run();
+                  heroCreditRedeemed = true;
+                }
+              }
+              if (isUrgentWindow && !prevDuties.includes(dId) && !heroCreditEarned) {
+                await c.env.DB.prepare('UPDATE users SET hero_credits = hero_credits + 1 WHERE id = ?').bind(userId).run();
+                heroCreditEarned = true;
+              }
+            }
           }
         }
       }
@@ -2495,6 +2831,13 @@ app.post('/events/:id/rsvp', async (c) => {
           ? (spectatorsCount === 1 ? 'volunteer' : 'volunteers/spectators')
           : (spectatorsCount === 1 ? 'spectator' : 'spectators');
         confirmMsg = `RSVP confirmed (${spectatorsCount} ${label})! Confirmation sent to ${email}.`;
+      }
+
+      if (heroCreditEarned) {
+        confirmMsg += ' 🛡️ Short-notice urgent shift cover (<48 hrs): +1 Backup Hero Credit awarded!';
+      }
+      if (heroCreditRedeemed) {
+        confirmMsg += ' 🛡️ 1 Backup Hero Credit redeemed for Tier 1 early access.';
       }
 
       return c.json({

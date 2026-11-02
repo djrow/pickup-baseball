@@ -536,8 +536,35 @@ function renderTasksChecklist(isInteractive) {
   const myRsvp = eventData.myRsvp;
   const myAssignedDutyIds = (myRsvp && myRsvp.status === 'attending' && Array.isArray(myRsvp.duty_ids)) ? myRsvp.duty_ids : [];
   const isRainout = eventData.event && eventData.event.status === 'rainout';
+  const isTasksLocked = Boolean(eventData.event && eventData.event.is_tasks_unlocked === false);
+  const taskUnlockAt = eventData.event && eventData.event.task_unlock_at;
 
-  dutiesList.innerHTML = duties.map(function(d) {
+  let lockedBannerHtml = '';
+  if (isTasksLocked) {
+    const formattedUnlock = taskUnlockAt ? new Date(taskUnlockAt).toLocaleString('en-US', {
+      timeZone: 'America/Los_Angeles',
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZoneName: 'short'
+    }) : 'closer to game day';
+    lockedBannerHtml = `
+      <div style="padding: 10px 14px; background: var(--bg-subtle); border: 1.5px dashed var(--border); border-radius: var(--radius-sm); margin-bottom: 12px; font-size: 0.82rem; color: var(--text-muted); display: flex; align-items: flex-start; gap: 8px;">
+        <span style="font-size: 1.1rem; line-height: 1;">🔒</span>
+        <div>
+          <strong style="color: var(--text-main); display: block; margin-bottom: 2px;">Tasks unlock on ${API.escapeHtml(formattedUnlock)}</strong>
+          <span>Under the 12-week Fair-Share Policy, volunteer and paid operations tasks unlock at 5:00 AM on Monday, 12 weeks before game day. You can RSVP as a player or spectator now; tasks can be claimed once unlocked.</span>
+        </div>
+      </div>
+    `;
+  }
+
+  let showHeroCreditOption = false;
+  let userHeroCredits = (myRsvp && typeof myRsvp.hero_credits === 'number') ? myRsvp.hero_credits : 0;
+
+  const dutyRowsHtml = duties.map(function(d) {
     const assigned = d.assigned_players || [];
     const isMine = myAssignedDutyIds.indexOf(d.id) !== -1;
     const otherFilledCount = assigned.filter(function(p) { return !myRsvp || p.attendee_id !== myRsvp.id; }).length;
@@ -558,13 +585,29 @@ function renderTasksChecklist(isInteractive) {
       statusPillHtml = `<span class="badge badge-orange" style="font-size: 0.68rem;">${remaining} open</span>`;
     }
 
-    if (!isInteractive) {
+    let badgePillHtml = '';
+    if (d.is_paid) {
+      if (d.duty_type === 'machine') {
+        badgePillHtml = '<span class="badge badge-gray" style="font-size: 0.68rem; margin-right: 4px;">⚡ Machine Badge</span>';
+      } else if (d.duty_type === 'field') {
+        badgePillHtml = '<span class="badge badge-gray" style="font-size: 0.68rem; margin-right: 4px;">🚜 Dragging Badge</span>';
+      }
+    }
+
+    if (d.is_urgent_cover && !isCompletelyFull) {
+      badgePillHtml += '<span class="badge badge-green" style="font-size: 0.68rem; margin-right: 4px;">🛡️ Urgent Cover (+1 Hero Credit)</span>';
+    }
+
+    if (!isInteractive || isTasksLocked) {
       return `
         <div class="rsvp-task-row is-readonly">
           <div style="font-size: 0.86rem; flex: 1; min-width: 0;">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 6px;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; flex-wrap: wrap;">
               <strong style="color: var(--text-main);">${API.escapeHtml(translatedTitle)}</strong>
-              ${statusPillHtml}
+              <div style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap;">
+                ${badgePillHtml}
+                ${statusPillHtml}
+              </div>
             </div>
             ${translatedDesc ? `<div style="font-size: 0.77rem; color: var(--text-muted); margin-top: 2px;">${API.escapeHtml(translatedDesc)}</div>` : ''}
           </div>
@@ -572,7 +615,18 @@ function renderTasksChecklist(isInteractive) {
       `;
     }
 
-    const disabled = isFullForMe && !isMine;
+    const ineligibilityReason = d.ineligibility_reason;
+    const canUseCredit = Boolean(d.can_use_hero_credit);
+    if (canUseCredit) {
+      showHeroCreditOption = true;
+    }
+
+    let isDisallowedByPolicy = false;
+    if (d.is_paid && !d.is_eligible && !isMine) {
+      isDisallowedByPolicy = true;
+    }
+
+    const disabled = (isFullForMe || isDisallowedByPolicy) && !isMine;
     const rowClasses = ['rsvp-task-row'];
     if (isMine) rowClasses.push('is-checked');
     if (disabled) rowClasses.push('is-disabled');
@@ -587,16 +641,37 @@ function renderTasksChecklist(isInteractive) {
           ${disabled ? 'disabled' : ''}
         >
         <div style="font-size: 0.86rem; flex: 1; min-width: 0;">
-          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 6px;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; flex-wrap: wrap;">
             <strong style="color: ${disabled ? 'var(--text-muted)' : 'var(--text-main)'};">${API.escapeHtml(translatedTitle)}</strong>
-            ${statusPillHtml}
+            <div style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap;">
+              ${badgePillHtml}
+              ${statusPillHtml}
+            </div>
           </div>
           ${translatedDesc ? `<div style="font-size: 0.77rem; color: var(--text-muted); margin-top: 2px;">${API.escapeHtml(translatedDesc)}</div>` : ''}
           ${(!isCompletelyFull && volunteerNames) ? `<div style="font-size: 0.74rem; color: var(--secondary); font-weight: 600; margin-top: 2px;">✓ ${volunteerNames}</div>` : ''}
+          ${(isDisallowedByPolicy && ineligibilityReason) ? `<div style="font-size: 0.74rem; color: var(--danger); font-weight: 600; margin-top: 3px;">⚠️ ${API.escapeHtml(ineligibilityReason)}</div>` : ''}
         </div>
       </label>
     `;
   }).join('');
+
+  let heroCreditBoxHtml = '';
+  if (showHeroCreditOption && !isTasksLocked) {
+    heroCreditBoxHtml = `
+      <div style="padding: 10px 14px; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); margin-top: 12px; font-size: 0.82rem;">
+        <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--secondary); cursor: pointer; margin-bottom: 0;">
+          <input type="checkbox" id="redeem-hero-credit-checkbox" name="redeem_hero_credit" value="1">
+          <span>🛡️ Redeem 1 Backup Hero Credit (You have ${userHeroCredits} available)</span>
+        </label>
+        <p style="font-size: 0.75rem; color: var(--text-muted); margin: 4px 0 0 24px;">
+          Redeeming a Backup Hero Credit grants early Tier 1 access to this shift even if you have reached your rolling 3-month fair-share cap.
+        </p>
+      </div>
+    `;
+  }
+
+  dutiesList.innerHTML = lockedBannerHtml + dutyRowsHtml + heroCreditBoxHtml;
 }
 
 function getGroupFormCounts() {
@@ -1348,6 +1423,8 @@ function setupRsvpForm() {
     const gear = gearEl ? gearEl.value : '';
     const guestNamesEl = document.getElementById('rsvp-guest-names');
     const guestNames = ((guestNamesEl && guestNamesEl.value) || '').trim();
+    const redeemHeroEl = document.getElementById('redeem-hero-credit-checkbox');
+    const redeemHeroCredit = Boolean(redeemHeroEl && redeemHeroEl.checked);
 
     const payload = {
       status: 'attending',
@@ -1359,6 +1436,7 @@ function setupRsvpForm() {
       guest_names: guestNames,
       gear_bringing: gear,
       duty_ids: checkedDuties,
+      redeem_hero_credit: redeemHeroCredit,
       management_token: guestToken
     };
 

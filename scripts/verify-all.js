@@ -55,7 +55,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-const CURRENT_APP_VERSION = '45';
+const CURRENT_APP_VERSION = '46';
 app.use((req, res, next) => {
   res.setHeader('X-App-Version', CURRENT_APP_VERSION);
   next();
@@ -1363,6 +1363,7 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     const task1Id = initDetail.data.duties[0].id;
     const task2Id = initDetail.data.duties[1].id;
     const task3Id = initDetail.data.duties[2].id;
+    const task5Id = initDetail.data.duties[4].id;
 
     // 3. Empty RSVP (0 players, 0 spectators, 0 tasks) must return 400
     const emptyRsvp = await apiReq('POST', `/api/events/${groupEventId}/rsvp`, null, {
@@ -1374,7 +1375,7 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     });
     assert.equal(emptyRsvp.status, 400, 'RSVP with 0 players, 0 spectators, and 0 tasks must return 400');
 
-    // 4. Mixed group RSVP: 2 players + 3 spectators claiming 2 group tasks -> fills max_players (2/2)
+    // 4. Mixed group RSVP: 2 players + 3 spectators claiming 2 general group tasks -> fills max_players (2/2)
     const mixedRsvp = await apiReq('POST', `/api/events/${groupEventId}/rsvp`, null, {
       name: 'Garcia Family Group',
       email: 'garcia_family@sundaypickup.org',
@@ -1382,7 +1383,7 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
       spectators_count: 3,
       guest_names: 'Marco, Elena, Abuela, Leo, Maya',
       gear_bringing: '2 wood bats & cooler',
-      duty_ids: [task1Id, task2Id]
+      duty_ids: [task1Id, task3Id]
     });
     assert.equal(mixedRsvp.status, 200, 'Mixed group RSVP must succeed');
     assert.equal(mixedRsvp.data.status, 'attending');
@@ -1401,9 +1402,9 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.equal(detail.data.totalSpectators, 3, 'totalSpectators must reflect 3 spectators');
     assert.equal(detail.data.totalHeadcount, 5, 'totalHeadcount must reflect 5 total people');
     const t1 = detail.data.duties.find(d => d.id === task1Id);
-    const t2 = detail.data.duties.find(d => d.id === task2Id);
+    const t3 = detail.data.duties.find(d => d.id === task3Id);
     assert.equal(t1.assigned_players[0].name, 'Garcia Family Group', 'Task 1 must be owned by the group');
-    assert.equal(t2.assigned_players[0].name, 'Garcia Family Group', 'Task 2 must be owned by the group');
+    assert.equal(t3.assigned_players[0].name, 'Garcia Family Group', 'Task 3 must be owned by the group');
 
     // 5. Spectator-only RSVP (0 players, 2 spectators) when max_players (2/2) is FULL -> confirms immediately!
     const specRsvp = await apiReq('POST', `/api/events/${groupEventId}/rsvp`, null, {
@@ -1422,7 +1423,7 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
       email: 'coach_vol@sundaypickup.org',
       players_count: 0,
       spectators_count: 0,
-      duty_ids: [task3Id]
+      duty_ids: [task5Id]
     });
     assert.equal(volRsvp.status, 200, 'Off-field volunteer RSVP must succeed');
     assert.equal(volRsvp.data.status, 'attending', 'Off-field volunteer must confirm immediately');
@@ -1431,8 +1432,8 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     detail = await apiReq('GET', `/api/events/${groupEventId}`, seedOrgCookie);
     assert.equal(detail.data.totalAttendees, 2, 'On-field player count remains 2');
     assert.equal(detail.data.totalSpectators, 6, 'Off-field spectators/volunteers count is now 3 + 2 + 1 = 6');
-    const t3 = detail.data.duties.find(d => d.id === task3Id);
-    assert.equal(t3.assigned_players[0].name, 'Coach Volunteer', 'Task 3 must be assigned to off-field volunteer');
+    const t5 = detail.data.duties.find(d => d.id === task5Id);
+    assert.equal(t5.assigned_players[0].name, 'Coach Volunteer', 'Task 5 must be assigned to off-field volunteer');
 
     // 7. Group with 1 player + 1 spectator when max_players (2/2) is FULL -> placed on waitlist
     const waitRsvp = await apiReq('POST', `/api/events/${groupEventId}/rsvp`, null, {
@@ -1452,7 +1453,7 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
       email: 'garcia_family@sundaypickup.org',
       players_count: 0,
       spectators_count: 3,
-      duty_ids: [task1Id, task2Id]
+      duty_ids: [task1Id, task3Id]
     });
     assert.equal(switchToSpectators.status, 200);
     assert.equal(switchToSpectators.data.status, 'attending');
@@ -1893,5 +1894,121 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(handbookMd.includes('12:00 PM – 12:30 PM (Warm-ups & Throwing)'), 'HANDBOOK.md must document warmups and throwing');
     assert.ok(handbookMd.includes('12:30 PM – 1:30 PM (Batting Practice)'), 'HANDBOOK.md must document 1 hour of BP');
     assert.ok(handbookMd.includes('3:15 PM – 4:00 PM (Fielding Drills & Field Care)'), 'HANDBOOK.md must document drills and dragging until 4pm');
+  });
+
+  await t9.test('T9.20: Paid Operations & Fair-Share Task Scheduling Policy (12-Week Unlock, Badges, Rolling Cap, and Hero Credits)', async () => {
+    // 1. Create a future event >12 weeks away (e.g. 16 weeks ahead)
+    const farDate = new Date(Date.now() + 16 * 7 * 24 * 3600 * 1000).toISOString();
+    const farRes = await apiReq('POST', '/api/events', seedOrgCookie, {
+      title: 'Far Future Game (Locked Tasks)',
+      location: 'Bushrod Park Field 1',
+      event_date: farDate
+    });
+    assert.equal(farRes.status, 200);
+    const farId = farRes.data.eventId;
+
+    // Check GET details
+    const farDetail = await apiReq('GET', `/api/events/${farId}`, null);
+    assert.equal(farDetail.status, 200);
+    assert.equal(farDetail.data.event.is_tasks_unlocked, false, 'Far future event tasks must be locked');
+    assert.equal(farDetail.data.event.task_tier, 'locked', 'Task tier must be locked');
+
+    // Attempting to select task when locked must return 400
+    const farDutyId = farDetail.data.duties[0].id;
+    const lockAttempt = await apiReq('POST', `/api/events/${farId}/rsvp`, null, {
+      name: 'Early Bird',
+      email: 'early_bird@sundaypickup.org',
+      players_count: 1,
+      duty_ids: [farDutyId]
+    });
+    assert.equal(lockAttempt.status, 400);
+    assert.ok(lockAttempt.data.error.includes('locked until'), 'Error must specify tasks are locked');
+
+    // 2. Create an event in Tier 1 (e.g. 8 weeks away)
+    const tier1Date = new Date(Date.now() + 8 * 7 * 24 * 3600 * 1000).toISOString();
+    const t1Res = await apiReq('POST', '/api/events', seedOrgCookie, {
+      title: 'Tier 1 Scheduling Game',
+      location: 'Bushrod Park Field 1',
+      event_date: tier1Date
+    });
+    assert.equal(t1Res.status, 200);
+    const t1Id = t1Res.data.eventId;
+
+    const t1Detail = await apiReq('GET', `/api/events/${t1Id}`, null);
+    assert.equal(t1Detail.data.event.is_tasks_unlocked, true, 'Tier 1 event tasks must be unlocked');
+    assert.equal(t1Detail.data.event.task_tier, 'tier1', 'Task tier must be tier1');
+
+    const machineDuty = t1Detail.data.duties.find(d => d.title.toLowerCase().includes('machine'));
+    const fieldDuty = t1Detail.data.duties.find(d => d.title.toLowerCase().includes('drag'));
+    assert.ok(machineDuty, 'Must have pitching machine duty');
+    assert.ok(fieldDuty, 'Must have field dragging duty');
+
+    // Unauthenticated or unbadged player claiming machine duty -> 400
+    const unbadgedAttempt = await apiReq('POST', `/api/events/${t1Id}/rsvp`, null, {
+      name: 'Uncertified Worker',
+      email: 'uncertified@sundaypickup.org',
+      players_count: 1,
+      duty_ids: [machineDuty.id]
+    });
+    assert.equal(unbadgedAttempt.status, 400);
+    assert.ok(unbadgedAttempt.data.error.includes('Pitching Machine Badge') || unbadgedAttempt.data.error.includes('badged account'));
+
+    // Register a certified worker
+    const workerUser = db.prepare("INSERT INTO users (name, email, role, machine_badge, field_badge, hero_credits) VALUES (?, ?, 'player', 1, 1, 0)").run(
+      'Certified Pro', 'certified_pro@sundaypickup.org'
+    );
+    const workerId = workerUser.lastInsertRowid;
+    const workerSession = createSession(workerId).sessionId;
+    const workerCookie = `baseball_session=${workerSession}`;
+
+    // Badged player claiming machine duty -> 200
+    const badgedRsvp = await apiReq('POST', `/api/events/${t1Id}/rsvp`, workerCookie, {
+      players_count: 1,
+      duty_ids: [machineDuty.id]
+    });
+    assert.equal(badgedRsvp.status, 200, 'Certified badged worker must be permitted to claim machine duty');
+
+    // 3. Test Admin badge and hero credits update endpoint
+    const updateBadgeRes = await apiReq('PUT', `/api/auth/users/${workerId}/badges`, seedAdminCookie, {
+      hero_credits: 2
+    });
+    assert.equal(updateBadgeRes.status, 200);
+    assert.equal(updateBadgeRes.data.user.hero_credits, 2);
+
+    // Verify GET /api/auth/users includes machine_badge, field_badge, and hero_credits
+    const usersListRes = await apiReq('GET', '/api/auth/users', seedAdminCookie);
+    assert.equal(usersListRes.status, 200);
+    const listedWorker = usersListRes.data.users.find(u => u.id === workerId);
+    assert.equal(listedWorker.machine_badge, 1);
+    assert.equal(listedWorker.field_badge, 1);
+    assert.equal(listedWorker.hero_credits, 2);
+
+    // 4. Test Tier 3 urgent cover (<48h)
+    const urgentDate = new Date(Date.now() + 24 * 3600 * 1000).toISOString(); // 24 hours from now
+    const urgentEventRes = await apiReq('POST', '/api/events', seedOrgCookie, {
+      title: 'Urgent Cover Game Tomorrow',
+      location: 'Bushrod Park Field 1',
+      event_date: urgentDate
+    });
+    const urgentId = urgentEventRes.data.eventId;
+    const urgentDetail = await apiReq('GET', `/api/events/${urgentId}`, workerCookie);
+    assert.equal(urgentDetail.data.event.task_tier, 'tier3');
+    const urgentMachineDuty = urgentDetail.data.duties.find(d => d.title.toLowerCase().includes('machine'));
+
+    // Claim urgent shift -> awards +1 hero credit
+    const beforeCredits = db.prepare('SELECT hero_credits FROM users WHERE id = ?').get(workerId).hero_credits;
+    const urgentClaim = await apiReq('POST', `/api/events/${urgentId}/rsvp`, workerCookie, {
+      players_count: 1,
+      duty_ids: [urgentMachineDuty.id]
+    });
+    assert.equal(urgentClaim.status, 200);
+    const afterCredits = db.prepare('SELECT hero_credits FROM users WHERE id = ?').get(workerId).hero_credits;
+    assert.equal(afterCredits, beforeCredits + 1, 'Claiming urgent cover (<48h) must award +1 Backup Hero Credit');
+
+    // 5. Verify Handbook Section 2.5 documentation
+    const handbookMd = fs.readFileSync(path.join(__dirname, '..', 'HANDBOOK.md'), 'utf8');
+    assert.ok(handbookMd.includes('Paid Operations & Fair-Share Task Scheduling Policy'), 'HANDBOOK.md must document Paid Operations Policy');
+    assert.ok(handbookMd.includes('5:00 AM on Monday, 12 weeks prior to game day'), 'HANDBOOK.md must document Monday 5:00 AM release trigger');
+    assert.ok(handbookMd.includes('Backup Hero Credit'), 'HANDBOOK.md must document Backup Hero Credits');
   });
 });

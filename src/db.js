@@ -23,7 +23,11 @@ function initDatabase() {
       email TEXT NOT NULL UNIQUE COLLATE NOCASE,
       bio TEXT,
       avatar_url TEXT,
+      role TEXT DEFAULT 'player',
       is_admin INTEGER DEFAULT 0,
+      machine_badge INTEGER DEFAULT 0,
+      field_badge INTEGER DEFAULT 0,
+      hero_credits INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -147,6 +151,15 @@ function initDatabase() {
   }
   if (!userCols.includes('role')) {
     db.exec("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'player'");
+  }
+  if (!userCols.includes('machine_badge')) {
+    db.exec('ALTER TABLE users ADD COLUMN machine_badge INTEGER DEFAULT 0');
+  }
+  if (!userCols.includes('field_badge')) {
+    db.exec('ALTER TABLE users ADD COLUMN field_badge INTEGER DEFAULT 0');
+  }
+  if (!userCols.includes('hero_credits')) {
+    db.exec('ALTER TABLE users ADD COLUMN hero_credits INTEGER DEFAULT 0');
   }
 
   // Migrate events table columns for rainout handling

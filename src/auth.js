@@ -61,7 +61,10 @@ function optionalUser(req, res, next) {
       u.bio, 
       u.avatar_url, 
       u.is_admin,
-      COALESCE(u.role, CASE WHEN u.is_admin = 1 THEN 'admin' ELSE 'player' END) as role
+      COALESCE(u.role, CASE WHEN u.is_admin = 1 THEN 'admin' ELSE 'player' END) as role,
+      COALESCE(u.machine_badge, 0) as machine_badge,
+      COALESCE(u.field_badge, 0) as field_badge,
+      COALESCE(u.hero_credits, 0) as hero_credits
     FROM sessions s
     JOIN users u ON s.user_id = u.id
     WHERE s.id = ? AND datetime(s.expires_at) > datetime('now')
@@ -80,7 +83,10 @@ function optionalUser(req, res, next) {
       avatarUrl: session.avatar_url || '',
       role: role,
       isAdmin: isAdmin,
-      canManageEvents: canManageEvents
+      canManageEvents: canManageEvents,
+      machineBadge: Boolean(session.machine_badge),
+      fieldBadge: Boolean(session.field_badge),
+      heroCredits: session.hero_credits || 0
     };
   } else {
     req.user = null;

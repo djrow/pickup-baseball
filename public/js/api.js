@@ -295,7 +295,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '45',
+  CLIENT_VERSION: '46',
 
   // Current user cache
   currentUser: null,
@@ -1238,6 +1238,15 @@ const API = {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ role })
+    });
+    return res.json();
+  },
+
+  async updateUserBadges(userId, badges) {
+    const res = await fetch(`/api/auth/users/${userId}/badges`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(badges)
     });
     return res.json();
   },
