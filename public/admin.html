@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Dashboard - Sunday Pickup Baseball</title>
-  <link rel="stylesheet" href="/css/style.css?v=47">
+  <link rel="stylesheet" href="/css/style.css?v=48">
   <link rel="alternate" type="application/rss+xml" title="Sunday Pickup Baseball Highlights &amp; Updates" href="/feed.xml">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
@@ -40,21 +40,15 @@
   <main class="container" id="admin-main-container" style="margin-top: 32px; margin-bottom: 60px; display: none;">
 
     <!-- Top Admin Header -->
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px;">
+    <div class="flex-between" style="margin-bottom: 24px;">
       <div>
         <span id="admin-header-badge" class="badge badge-orange">👑 Admin Control</span>
         <h1 style="color: var(--secondary); font-size: 1.8rem; margin-top: 4px;">Game & Org Manager</h1>
       </div>
-      <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-        <a href="#admin-security-section" id="admin-security-nav-btn" class="btn btn-outline" style="font-weight: 700; text-decoration: none;">
-          🛡️ Access Control &amp; Guest Policy
-        </a>
-        <a href="/api/events/admin/backup-db" id="btn-backup-db" class="btn btn-outline" download style="font-weight: 700; text-decoration: none;">
-          📥 Backup Database (.sql)
-        </a>
-        <button id="quick-sunday-btn" class="btn btn-primary">
-          ⚡ 1-Click: Post Next Sunday @ Noon
-        </button>
+      <div class="flex-row-wrap">
+        <a href="#admin-security-section" id="admin-security-nav-btn" class="btn btn-outline">🛡️ Access Control &amp; Guest Policy</a>
+        <a href="/api/events/admin/backup-db" id="btn-backup-db" class="btn btn-outline" download>📥 Backup Database (.sql)</a>
+        <button id="quick-sunday-btn" class="btn btn-primary">⚡ 1-Click: Post Next Sunday @ Noon</button>
       </div>
     </div>
 
@@ -65,19 +59,18 @@
       <h2 class="card-title" style="margin-bottom: 16px;">Schedule a New Game</h2>
       
       <form id="create-event-form">
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+        <div class="grid-2col">
           <div class="form-group">
             <label for="event-title-input">Game Title *</label>
             <input type="text" id="event-title-input" value="Sunday Pickup Baseball" required>
           </div>
-
           <div class="form-group">
             <label for="event-date-input">Date & Time *</label>
             <input type="datetime-local" id="event-date-input" required>
           </div>
         </div>
 
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+        <div class="grid-2col">
           <div class="form-group">
             <label for="event-location-input">Field Location *</label>
             <input type="text" id="event-location-input" value="Bushrod Park Field 1" list="common-locations-list" placeholder="e.g. Bushrod Park Field 1" required>
@@ -86,7 +79,6 @@
               <option value="Bushrod Park Field 2">
             </datalist>
           </div>
-
           <div class="form-group">
             <label for="event-map-input">Map / Directions Link (Optional)</label>
             <input type="text" id="event-map-input" placeholder="https://maps.google.com/?q=...">
@@ -99,93 +91,80 @@
         </div>
 
         <!-- Roster Size Cap Settings -->
-        <div class="form-group" style="background: var(--bg-card); padding: 14px 16px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 16px;">
+        <div class="form-group subpanel-card" style="margin-bottom: 16px;">
           <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 600; margin: 0;">
             <input type="checkbox" id="event-cap-toggle" style="width: 18px; height: 18px; accent-color: var(--primary);">
             <span>Limit Playing Roster Size (Auto-Waitlist when full)</span>
           </label>
           <div id="event-max-players-wrap" style="display: none; margin-top: 12px; padding-left: 28px;">
-            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-              <label for="event-max-players-input" style="font-size: 0.88rem; color: var(--text-muted); margin: 0;">Maximum Confirmed Players:</label>
+            <div class="flex-row-wrap">
+              <label for="event-max-players-input" class="text-muted-sm">Maximum Confirmed Players:</label>
               <input type="number" id="event-max-players-input" value="28" min="2" max="100" style="width: 85px; padding: 6px 10px;">
-              <span style="font-size: 0.8rem; color: var(--text-muted);">Additional signups will automatically be placed on the waitlist.</span>
+              <span class="text-muted-sm" style="font-size: 0.8rem;">Additional signups will automatically be placed on the waitlist.</span>
             </div>
           </div>
         </div>
 
         <!-- RSVP Access & Allowed Players Whitelist -->
-        <div class="form-group" style="background: var(--bg-card); padding: 14px 16px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 16px;">
+        <div class="form-group subpanel-card" style="margin-bottom: 16px;">
           <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 600; margin: 0;">
             <input type="checkbox" id="event-restrict-toggle" style="width: 18px; height: 18px; accent-color: var(--primary);">
             <span>🔒 Restrict RSVPs to Specific Invited Players</span>
           </label>
           <div id="event-restrict-wrap" style="display: none; margin-top: 14px; padding-left: 28px;">
-            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 10px;">
+            <p class="text-muted-sm" style="margin-bottom: 10px;">
               Only player accounts with selected email addresses will be permitted to RSVP. The list below shows all registered user accounts.
             </p>
-            <div style="display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; align-items: center;">
+            <div class="flex-row-wrap" style="margin-bottom: 10px;">
               <input type="text" id="allowed-player-search" placeholder="Search player name or email..." style="max-width: 260px; padding: 6px 10px; font-size: 0.85rem;">
               <button type="button" id="btn-select-all-players" class="btn btn-outline btn-sm">Select All</button>
               <button type="button" id="btn-deselect-all-players" class="btn btn-outline btn-sm">Deselect All</button>
-              <span id="selected-players-count" style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">0 players selected</span>
+              <span id="selected-players-count" class="text-muted-sm" style="font-weight: 600;">0 players selected</span>
             </div>
-            <div id="allowed-players-list" style="max-height: 200px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 12px; background: var(--bg-subtle); display: flex; flex-direction: column; gap: 6px;">
-              <span style="color: var(--text-muted); font-size: 0.85rem;">Loading player accounts...</span>
+            <div id="allowed-players-list" class="subpanel" style="max-height: 200px; overflow-y: auto; padding: 8px 12px; display: flex; flex-direction: column; gap: 6px;">
+              <span class="text-muted-sm">Loading player accounts...</span>
             </div>
             <div style="margin-top: 12px;">
-              <label for="event-extra-allowed-emails" style="font-size: 0.85rem; font-weight: 600; color: var(--text-muted);">Additional Allowed Emails (one per line or comma-separated):</label>
+              <label for="event-extra-allowed-emails" class="text-muted-sm" style="font-weight: 600;">Additional Allowed Emails (one per line or comma-separated):</label>
               <textarea id="event-extra-allowed-emails" rows="2" placeholder="e.g. guestplayer@gmail.com, coach@example.com" style="margin-top: 4px; font-size: 0.85rem;"></textarea>
             </div>
           </div>
         </div>
 
         <!-- Task Builder Setup -->
-        <div class="form-group" style="background: var(--bg-subtle); padding: 20px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+        <div class="form-group subpanel">
+          <div class="flex-between" style="margin-bottom: 12px;">
             <div>
               <h3 style="font-size: 1.05rem; color: var(--secondary); margin-bottom: 2px;">🛡️ Game Day Volunteer Tasks</h3>
-              <p style="font-size: 0.82rem; color: var(--text-muted); margin: 0;">
-                These are the tasks players and guests can reserve when they RSVP. Customize them below:
-              </p>
+              <p class="text-muted-sm" style="font-size: 0.82rem;">These are the tasks players and guests can reserve when they RSVP. Customize them below:</p>
             </div>
-            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <div class="flex-row-wrap" style="gap: 8px;">
               <button type="button" id="btn-add-task-row" class="btn btn-primary btn-sm">+ Add Task</button>
               <button type="button" id="btn-save-as-defaults" class="btn btn-secondary btn-sm" title="Save this task list as the default template for all future games">💾 Save as Org Defaults</button>
               <button type="button" id="btn-reset-default-tasks" class="btn btn-outline btn-sm">↺ Reset</button>
               <button type="button" id="btn-clear-tasks" class="btn btn-outline btn-sm">✕ Clear All</button>
             </div>
           </div>
-
-          <div id="task-builder-list" style="display: flex; flex-direction: column; gap: 10px; margin-top: 14px;">
-            <!-- Rendered dynamically by admin.js -->
-          </div>
+          <div id="task-builder-list" style="display: flex; flex-direction: column; gap: 10px; margin-top: 14px;"></div>
         </div>
 
-        <button type="submit" id="create-event-btn" class="btn btn-primary btn-lg" style="margin-top: 8px;">
-          Publish Game
-        </button>
+        <button type="submit" id="create-event-btn" class="btn btn-primary btn-lg" style="margin-top: 8px;">Publish Game</button>
       </form>
     </section>
 
     <!-- Organization Default Template Card -->
-    <section id="default-template-card" class="card" style="margin-top: 28px; background: var(--bg-card);">
-      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+    <section id="default-template-card" class="card" style="margin-top: 28px;">
+      <div class="flex-between">
         <div>
           <h2 class="card-title" style="margin-bottom: 2px;">⚙️ Organization Default Tasks Template</h2>
-          <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0;">
-            These default tasks automatically populate every new Sunday pickup game and the 1-Click game scheduler.
-          </p>
+          <p class="text-muted-sm">These default tasks automatically populate every new Sunday pickup game and the 1-Click game scheduler.</p>
         </div>
-        <button type="button" id="toggle-default-template-btn" class="btn btn-outline btn-sm">
-          ✏️ Edit Default Template
-        </button>
+        <button type="button" id="toggle-default-template-btn" class="btn btn-outline btn-sm">✏️ Edit Default Template</button>
       </div>
 
       <div id="default-template-panel" style="display: none; margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--border);">
-        <div id="default-template-list" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px;">
-          <!-- Loaded dynamically -->
-        </div>
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+        <div id="default-template-list" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px;"></div>
+        <div class="flex-between">
           <button type="button" id="btn-add-default-template-row" class="btn btn-outline btn-sm">+ Add Task to Template</button>
           <button type="button" id="btn-save-default-template" class="btn btn-primary">💾 Save New Default Template</button>
         </div>
@@ -194,20 +173,14 @@
 
     <!-- Manage Existing Games -->
     <section class="card" style="margin-top: 36px;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
+      <div class="flex-between" style="margin-bottom: 12px;">
         <div>
           <h2 class="card-title" style="margin-bottom: 2px;">Active Scheduled Games</h2>
-          <span style="font-size: 0.82rem; color: var(--text-muted);">Manage upcoming games, volunteers, weather, and recorded turnout.</span>
+          <span class="text-muted-sm" style="font-size: 0.82rem;">Manage upcoming games, volunteers, weather, and recorded turnout.</span>
         </div>
-        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-          <input
-            type="text"
-            id="admin-game-search-input"
-            placeholder="🔍 Filter games..."
-            style="font-size: 0.82rem; padding: 5px 10px; border-radius: var(--radius-sm); border: 1.5px solid var(--border); background: var(--bg-input); color: var(--text-main); min-width: 180px;"
-            aria-label="Filter games by title or location"
-          >
-          <span id="admin-games-count-badge" class="badge" style="background: var(--bg-subtle); color: var(--secondary); font-size: 0.8rem; font-weight: 700; border: 1px solid var(--border);"></span>
+        <div class="flex-row-wrap">
+          <input type="text" id="admin-game-search-input" placeholder="🔍 Filter games..." style="font-size: 0.82rem; padding: 5px 10px; min-width: 180px; width: auto;" aria-label="Filter games by title or location">
+          <span id="admin-games-count-badge" class="badge badge-gray"></span>
         </div>
       </div>
       <div id="admin-games-scroll-container" class="admin-games-scroll-container">
@@ -219,27 +192,24 @@
 
     <!-- Community Highlights & RSS Feed Publisher -->
     <section class="card" id="post-form-section" style="margin-top: 36px;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
+      <div class="flex-between" style="margin-bottom: 16px;">
         <div>
           <h2 class="card-title" style="margin-bottom: 2px;">📢 Community Highlights &amp; RSS Feed</h2>
-          <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0;">
+          <p class="text-muted-sm">
             Publish game recaps, video highlights, photo albums, and field updates. Automatically published to <a href="/feed.xml" target="_blank" rel="noopener noreferrer" style="text-decoration: underline;">/feed.xml</a> with Media RSS tags and displayed richly on the homepage.
           </p>
         </div>
-        <a href="/feed.xml" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm">
-          📡 View Live RSS Feed
-        </a>
+        <a href="/feed.xml" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm">📡 View Live RSS Feed</a>
       </div>
 
       <div id="post-form-alert"></div>
 
       <form id="create-post-form">
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+        <div class="grid-2col">
           <div class="form-group">
             <label for="post-title-input">Headline / Title *</label>
             <input type="text" id="post-title-input" placeholder="e.g. Bushrod Walk-Off Thriller! Highlights &amp; Recaps" required>
           </div>
-
           <div class="form-group">
             <label for="post-event-id-select">Associated Game (Optional)</label>
             <select id="post-event-id-select">
@@ -258,15 +228,12 @@
           <input type="text" id="post-summary-input" placeholder="One-line summary for feed readers...">
         </div>
 
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+        <div class="grid-2col">
           <div class="form-group">
             <label for="post-media-url-input">External Multimedia URL (Optional)</label>
             <input type="url" id="post-media-url-input" placeholder="https://www.youtube.com/watch?v=... or https://imgur.com/... or image link">
-            <small style="color: var(--text-muted); display: block; margin-top: 4px;">
-              Supports YouTube videos/shorts, image links (Imgur, direct JPG/PNG/WebP), direct video (.mp4/.webm), or audio podcasts.
-            </small>
+            <small class="help-text" style="display: block;">Supports YouTube videos/shorts, image links (Imgur, direct JPG/PNG/WebP), direct video (.mp4/.webm), or audio podcasts.</small>
           </div>
-
           <div class="form-group">
             <label for="post-media-type-select">Media Format</label>
             <select id="post-media-type-select">
@@ -281,37 +248,29 @@
         </div>
 
         <!-- Real-Time Multimedia Live Preview -->
-        <div id="post-media-preview-container" style="display: none; margin-top: 10px; margin-bottom: 20px; padding: 14px; background: var(--bg-hover); border-radius: var(--radius-sm); border: 1px dashed var(--border);">
-          <div style="font-size: 0.85rem; font-weight: 700; color: var(--text-muted); margin-bottom: 8px;">
-            📺 Multimedia Live Preview
-          </div>
+        <div id="post-media-preview-container" class="subpanel" style="display: none; margin: 10px 0 20px; border-style: dashed;">
+          <div style="font-size: 0.85rem; font-weight: 700; color: var(--text-muted); margin-bottom: 8px;">📺 Multimedia Live Preview</div>
           <div id="post-media-preview-target"></div>
         </div>
 
-        <div style="margin-top: 16px; display: flex; gap: 10px; align-items: center;">
-          <button type="submit" id="post-submit-btn" class="btn btn-primary" style="font-weight: 700;">
-            🚀 Publish Highlight to Community Feed &amp; RSS
-          </button>
+        <div class="flex-row-wrap" style="margin-top: 16px;">
+          <button type="submit" id="post-submit-btn" class="btn btn-primary">🚀 Publish Highlight to Community Feed &amp; RSS</button>
         </div>
       </form>
 
       <!-- Manage Existing Published Highlights -->
       <div style="margin-top: 36px; padding-top: 24px; border-top: 1px solid var(--border);">
-        <h3 style="font-size: 1.15rem; color: var(--secondary); margin-bottom: 12px;">
-          Published Community Highlights
-        </h3>
-        <div id="admin-posts-container">
-          <p style="color: var(--text-muted);">Loading highlights...</p>
-        </div>
+        <h3 style="font-size: 1.15rem; color: var(--secondary); margin-bottom: 12px;">Published Community Highlights</h3>
+        <div id="admin-posts-container"><p class="text-muted-sm">Loading highlights...</p></div>
       </div>
     </section>
 
     <!-- User Management & Roles (Admins only) -->
     <section id="admin-user-mgmt-section" class="card" style="margin-top: 36px; display: none;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+      <div class="flex-between" style="margin-bottom: 12px;">
         <div>
           <h2 class="card-title" style="margin-bottom: 2px;">👥 User Roles & Permissions</h2>
-          <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0;">Change account roles to assign Organizer or Admin privileges.</p>
+          <p class="text-muted-sm">Change account roles to assign Organizer or Admin privileges.</p>
         </div>
         <button type="button" id="admin-refresh-users-btn" class="btn btn-outline btn-sm">🔄 Refresh</button>
       </div>
@@ -319,18 +278,11 @@
       <div id="admin-user-mgmt-alert"></div>
 
       <!-- Live Search & Filter Controls -->
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
+      <div class="flex-between" style="margin-bottom: 12px;">
         <div style="position: relative; flex: 1; max-width: 380px; min-width: 220px;">
-          <input
-            type="text"
-            id="admin-user-search-input"
-            placeholder="🔍 Filter accounts by name or email..."
-            style="width: 100%; font-size: 0.84rem; padding: 6px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border); background: var(--bg-input); color: var(--text-main);"
-            autocomplete="off"
-            aria-label="Filter accounts by name or email"
-          >
+          <input type="text" id="admin-user-search-input" placeholder="🔍 Filter accounts by name or email..." style="font-size: 0.84rem; padding: 6px 12px;" autocomplete="off" aria-label="Filter accounts by name or email">
         </div>
-        <div id="admin-user-count-display" style="font-size: 0.82rem; color: var(--text-muted); font-weight: 600;"></div>
+        <div id="admin-user-count-display" class="text-muted-sm" style="font-weight: 600;"></div>
       </div>
 
       <div id="admin-users-scroll-container" class="table-responsive admin-users-scroll-container">
@@ -347,9 +299,7 @@
             </tr>
           </thead>
           <tbody id="admin-users-table-body">
-            <tr>
-              <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 16px;">Loading users...</td>
-            </tr>
+            <tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 16px;">Loading users...</td></tr>
           </tbody>
         </table>
       </div>
@@ -360,41 +310,35 @@
       <a id="security-management-section" style="display: block; position: relative; top: -20px; visibility: hidden;"></a>
       <div style="margin-bottom: 16px;">
         <h2 class="card-title" style="margin-bottom: 2px;">🛡️ Access Control &amp; Guest Policy</h2>
-        <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0;">
-          Control anonymous guest RSVPs and manage restricted or banned email addresses.
-        </p>
+        <p class="text-muted-sm">Control anonymous guest RSVPs and manage restricted or banned email addresses.</p>
       </div>
 
       <!-- Guest Sign-In Policy Setting -->
-      <div style="background: var(--bg-subtle); border: 1.5px solid var(--border); border-radius: var(--radius-sm); padding: 16px; margin-bottom: 24px;">
+      <div class="subpanel" style="margin-bottom: 24px;">
         <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 700; color: var(--secondary); margin-bottom: 4px;">
           <input type="checkbox" id="setting-require-login" style="width: 18px; height: 18px; cursor: pointer;">
           Require Email Sign-In to RSVP (Disable Anonymous Guest RSVPs)
         </label>
-        <p style="margin: 0 0 0 28px; font-size: 0.85rem; color: var(--text-muted);">
+        <p class="text-muted-sm" style="margin-left: 28px;">
           When checked, players must verify their email and sign in before they can RSVP or claim volunteer equipment tasks. Anonymous guest RSVP forms will be disabled across all games.
         </p>
         <div id="settings-alert" style="margin-top: 8px;"></div>
       </div>
 
       <!-- Banned Email Addresses Section -->
-      <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 18px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+      <div class="subpanel-card" style="padding: 18px;">
+        <div class="flex-between" style="margin-bottom: 12px;">
           <div>
             <h3 style="margin: 0; color: var(--secondary); font-size: 1.05rem;">🚫 Banned Email Addresses</h3>
-            <p style="margin: 2px 0 0 0; font-size: 0.82rem; color: var(--text-muted);">Banned emails cannot request login codes, use active sessions, or register for games.</p>
+            <p class="text-muted-sm" style="margin-top: 2px; font-size: 0.82rem;">Banned emails cannot request login codes, use active sessions, or register for games.</p>
           </div>
-          <button type="button" id="refresh-banned-btn" class="btn btn-outline btn-sm">
-            🔄 Refresh Bans
-          </button>
+          <button type="button" id="refresh-banned-btn" class="btn btn-outline btn-sm">🔄 Refresh Bans</button>
         </div>
 
-        <form id="ban-email-form" style="display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap;">
-          <input type="email" id="ban-email-input" required placeholder="player-to-block@example.com" style="flex: 2; min-width: 220px; padding: 6px 12px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); font-size: 0.88rem; background: var(--bg-input); color: var(--text-main);">
-          <input type="text" id="ban-reason-input" placeholder="Reason (optional)" style="flex: 2; min-width: 180px; padding: 6px 12px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); font-size: 0.88rem; background: var(--bg-input); color: var(--text-main);">
-          <button type="submit" id="ban-submit-btn" class="btn btn-outline btn-sm" style="color: var(--danger); border-color: var(--danger); font-weight: 700;">
-            🚫 Ban Email
-          </button>
+        <form id="ban-email-form" class="flex-row-wrap" style="gap: 8px; margin-bottom: 14px;">
+          <input type="email" id="ban-email-input" required placeholder="player-to-block@example.com" style="flex: 2; min-width: 220px; padding: 6px 12px; font-size: 0.88rem;">
+          <input type="text" id="ban-reason-input" placeholder="Reason (optional)" style="flex: 2; min-width: 180px; padding: 6px 12px; font-size: 0.88rem;">
+          <button type="submit" id="ban-submit-btn" class="btn btn-outline btn-sm" style="color: var(--danger); border-color: var(--danger);">🚫 Ban Email</button>
         </form>
 
         <div id="banned-emails-alert"></div>
@@ -421,8 +365,8 @@
 
   <footer id="site-footer" class="site-footer"></footer>
 
-  <script src="/js/api.js?v=47"></script>
-  <script src="/js/weather.js?v=47"></script>
-  <script src="/js/admin.js?v=47"></script>
+  <script src="/js/api.js?v=48"></script>
+  <script src="/js/weather.js?v=48"></script>
+  <script src="/js/admin.js?v=48"></script>
 </body>
 </html>

@@ -10,6 +10,7 @@
     "deploy": "npx wrangler pages deploy public --project-name pickup-baseball --branch trunk --commit-dirty=true",
     "d1:backup": "npx wrangler d1 export pickup-baseball-db --remote --output ./d1_backup.sql",
     "seed": "node src/seed.js",
+    "bump": "node scripts/bump-version.js",
     "test": "node scripts/verify-all.js"
   },
   "keywords": [],
@@ -17,11 +18,8 @@
   "license": "CC-BY-NC-4.0",
   "dependencies": {
     "better-sqlite3": "^13.0.3",
-    "cookie-parser": "^1.4.7",
     "dotenv": "^18.0.8",
     "express": "^5.3.0",
-    "hono": "^4.13.13",
-    "multer": "^2.4.0",
-    "nodemailer": "^10.1.7"
+    "hono": "^4.13.13"
   }
 }

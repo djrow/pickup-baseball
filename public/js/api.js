@@ -295,7 +295,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '47',
+  CLIENT_VERSION: '48',
 
   // Current user cache
   currentUser: null,
@@ -444,15 +444,7 @@ const API = {
   async initI18n() {
     const lang = this.getLang();
     if (lang !== 'en') {
-      try {
-        const cachedRaw = localStorage.getItem(`pickup_i18n_v1_${lang}`);
-        if (cachedRaw) {
-          this.i18nCache[lang] = JSON.parse(cachedRaw);
-        }
-      } catch (e) {}
-      if (!this.i18nCache[lang]) {
-        await this.loadLangDict(lang);
-      }
+      await this.loadLangDict(lang);
     }
     this.applyTranslations();
     if (lang !== 'en') {
@@ -941,6 +933,7 @@ const API = {
         await Promise.all(cacheNames.map(k => caches.delete(k)));
       }
 
+      this.clearDataCaches();
       try {
         localStorage.removeItem('pbf_events_cache');
         localStorage.removeItem('pbf_cached_user');
@@ -996,11 +989,35 @@ const API = {
     } catch (e) {}
   },
 
+  async request(method, url, body, opts) {
+    const options = opts || {};
+    const init = { method: method };
+    if (options.noStore) init.cache = 'no-store';
+    if (body !== undefined && body !== null) {
+      if (typeof FormData !== 'undefined' && body instanceof FormData) {
+        init.body = body;
+      } else {
+        init.headers = { 'Content-Type': 'application/json' };
+        init.body = JSON.stringify(body);
+      }
+    }
+    const res = await fetch(url, init);
+    this.checkResponseVersion(res);
+    const data = await res.json();
+    if (options.throwOnError && !res.ok) {
+      throw new Error((data && data.error) ? data.error : (options.errorMsg || 'Request failed.'));
+    }
+    if (options.invalidateKeys && (!options.invalidateOnSuccess || (data && data.success))) {
+      try {
+        options.invalidateKeys.forEach(function(k) { localStorage.removeItem(k); });
+      } catch (e) {}
+    }
+    return data;
+  },
+
   async getMe() {
     try {
-      const res = await fetch('/api/auth/me');
-      this.checkResponseVersion(res);
-      const data = await res.json();
+      const data = await this.request('GET', '/api/auth/me');
       API.currentUser = data.user || null;
       API.setCachedUser(API.currentUser);
       return API.currentUser;
@@ -1020,48 +1037,27 @@ const API = {
   },
 
   async getPosts() {
-    const res = await fetch('/api/posts', { cache: 'no-store' });
-    this.checkResponseVersion(res);
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error((data && data.error) ? data.error : 'Failed to load community highlights.');
-    }
-    return data;
+    return this.request('GET', '/api/posts', null, {
+      noStore: true, throwOnError: true, errorMsg: 'Failed to load community highlights.'
+    });
   },
 
   async createPost(payload) {
-    const res = await fetch('/api/posts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload || {})
+    return this.request('POST', '/api/posts', payload || {}, {
+      throwOnError: true, errorMsg: 'Failed to publish post.'
     });
-    this.checkResponseVersion(res);
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error((data && data.error) ? data.error : 'Failed to publish post.');
-    }
-    return data;
   },
 
   async deletePost(id) {
-    const res = await fetch('/api/posts/' + encodeURIComponent(id), {
-      method: 'DELETE'
+    return this.request('DELETE', '/api/posts/' + encodeURIComponent(id), null, {
+      throwOnError: true, errorMsg: 'Failed to delete post.'
     });
-    this.checkResponseVersion(res);
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error((data && data.error) ? data.error : 'Failed to delete post.');
-    }
-    return data;
   },
 
   async getEvents(filter = 'upcoming') {
-    const res = await fetch(`/api/events?filter=${encodeURIComponent(filter)}`, { cache: 'no-store' });
-    this.checkResponseVersion(res);
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error((data && data.error) ? data.error : 'Failed to sync schedule with cloud.');
-    }
+    const data = await this.request('GET', '/api/events?filter=' + encodeURIComponent(filter), null, {
+      noStore: true, throwOnError: true, errorMsg: 'Failed to sync schedule with cloud.'
+    });
     if (data && data.user !== undefined) {
       API.currentUser = data.user || null;
       API.setCachedUser(API.currentUser);
@@ -1070,10 +1066,8 @@ const API = {
   },
 
   async getEvent(id, token = '') {
-    const url = `/api/events/${id}${token ? `?token=${encodeURIComponent(token)}` : ''}`;
-    const res = await fetch(url);
-    this.checkResponseVersion(res);
-    const data = await res.json();
+    const url = '/api/events/' + id + (token ? '?token=' + encodeURIComponent(token) : '');
+    const data = await this.request('GET', url);
     if (data && data.user !== undefined) {
       API.currentUser = data.user || null;
       API.setCachedUser(API.currentUser);
@@ -1082,215 +1076,284 @@ const API = {
   },
 
   async postRsvp(id, payload) {
-    const res = await fetch(`/api/events/${id}/rsvp`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+    return this.request('POST', '/api/events/' + id + '/rsvp', payload, {
+      invalidateKeys: ['pickup_cached_event_' + id, 'pickup_cached_events_upcoming', 'pickup_cached_events_all']
     });
-    const data = await res.json();
-    try {
-      localStorage.removeItem(`pickup_cached_event_${id}`);
-      localStorage.removeItem('pickup_cached_events_upcoming');
-    } catch (e) {}
-    return data;
   },
 
   async postComment(id, payload) {
-    const res = await fetch(`/api/events/${id}/comments`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+    return this.request('POST', '/api/events/' + id + '/comments', payload, {
+      invalidateKeys: ['pickup_cached_event_' + id]
     });
-    const data = await res.json();
-    try {
-      localStorage.removeItem(`pickup_cached_event_${id}`);
-    } catch (e) {}
-    return data;
+  },
+
+  async deleteComment(eventId, commentId) {
+    return this.request('DELETE', '/api/events/' + eventId + '/comments/' + commentId, null, {
+      invalidateKeys: ['pickup_cached_event_' + eventId]
+    });
+  },
+
+  async removeAttendee(eventId, attendeeId) {
+    return this.request('DELETE', '/api/events/' + eventId + '/attendees/' + attendeeId, null, {
+      invalidateKeys: ['pickup_cached_event_' + eventId, 'pickup_cached_events_upcoming', 'pickup_cached_events_all']
+    });
   },
 
   async callRainout(id, payload) {
-    const res = await fetch(`/api/events/${id}/rainout`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload || {})
+    return this.request('POST', '/api/events/' + id + '/rainout', payload || {}, {
+      invalidateKeys: ['pickup_cached_event_' + id, 'pickup_cached_events_upcoming', 'pickup_cached_events_all']
     });
-    const data = await res.json();
-    try {
-      localStorage.removeItem(`pickup_cached_event_${id}`);
-      localStorage.removeItem('pickup_cached_events_upcoming');
-      localStorage.removeItem('pickup_cached_events_all');
-    } catch (e) {}
-    return data;
   },
 
   async reopenEvent(id, payload) {
-    const res = await fetch(`/api/events/${id}/reopen`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload || {})
+    return this.request('POST', '/api/events/' + id + '/reopen', payload || {}, {
+      invalidateKeys: ['pickup_cached_event_' + id, 'pickup_cached_events_upcoming', 'pickup_cached_events_all']
     });
-    const data = await res.json();
-    try {
-      localStorage.removeItem(`pickup_cached_event_${id}`);
-      localStorage.removeItem('pickup_cached_events_upcoming');
-      localStorage.removeItem('pickup_cached_events_all');
-    } catch (e) {}
-    return data;
   },
 
   async sendRainoutEmail(id, payload) {
-    const res = await fetch(`/api/events/${id}/send-rainout-email`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload || {})
-    });
-    return res.json();
+    return this.request('POST', '/api/events/' + id + '/send-rainout-email', payload || {});
+  },
+
+  async sendReminders(id) {
+    return this.request('POST', '/api/events/' + id + '/send-reminders');
   },
 
   async sendLoginCode(email, name = '') {
-    const res = await fetch('/api/auth/send-code', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, name })
-    });
-    return res.json();
+    return this.request('POST', '/api/auth/send-code', { email: email, name: name });
   },
 
   async verifyLoginCode(email, code) {
-    const res = await fetch('/api/auth/verify-code', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, code })
-    });
-    return res.json();
+    return this.request('POST', '/api/auth/verify-code', { email: email, code: code });
   },
 
   async updateProfile(name, bio) {
-    const res = await fetch('/api/auth/profile', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, bio })
-    });
-    return res.json();
+    return this.request('PUT', '/api/auth/profile', { name: name, bio: bio });
   },
 
   async uploadAvatar(file) {
     const formData = new FormData();
     formData.append('avatar', file);
-    const res = await fetch('/api/auth/avatar', {
-      method: 'POST',
-      body: formData
-    });
-    return res.json();
+    return this.request('POST', '/api/auth/avatar', formData);
   },
 
   async deleteAvatar() {
-    const res = await fetch('/api/auth/avatar', {
-      method: 'DELETE'
-    });
-    return res.json();
+    return this.request('DELETE', '/api/auth/avatar');
+  },
+
+  async getDefaultDuties() {
+    return this.request('GET', '/api/events/default-duties');
+  },
+
+  async saveDefaultDuties(duties) {
+    return this.request('PUT', '/api/events/default-duties', { duties: duties });
   },
 
   async createEvent(payload) {
-    const res = await fetch('/api/events', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+    return this.request('POST', '/api/events', payload, {
+      invalidateKeys: ['pickup_cached_events_upcoming', 'pickup_cached_events_all']
     });
-    const data = await res.json();
-    try {
-      localStorage.removeItem('pickup_cached_events_upcoming');
-      localStorage.removeItem('pickup_cached_events_all');
-    } catch (e) {}
-    return data;
   },
 
   async updateEvent(id, payload) {
-    const res = await fetch(`/api/events/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+    return this.request('PUT', '/api/events/' + id, payload, {
+      invalidateOnSuccess: true,
+      invalidateKeys: [
+        'pickup_cached_event_' + id,
+        'pickup_cached_events_upcoming',
+        'pickup_cached_events_past',
+        'pickup_cached_events_all'
+      ]
     });
-    const data = await res.json();
-    if (data && data.success) {
-      try {
-        localStorage.removeItem(`pickup_cached_event_${id}`);
-        localStorage.removeItem('pickup_cached_events_upcoming');
-        localStorage.removeItem('pickup_cached_events_past');
-        localStorage.removeItem('pickup_cached_events_all');
-      } catch (e) {}
-    }
-    return data;
+  },
+
+  async deleteEvent(id) {
+    return this.request('DELETE', '/api/events/' + id, null, {
+      invalidateOnSuccess: true,
+      invalidateKeys: [
+        'pickup_cached_event_' + id,
+        'pickup_cached_events_upcoming',
+        'pickup_cached_events_past',
+        'pickup_cached_events_all'
+      ]
+    });
+  },
+
+  async addDuty(eventId, payload) {
+    return this.request('POST', '/api/events/' + eventId + '/duties', payload, {
+      invalidateKeys: ['pickup_cached_event_' + eventId]
+    });
+  },
+
+  async updateDuty(eventId, dutyId, payload) {
+    return this.request('PUT', '/api/events/' + eventId + '/duties/' + dutyId, payload, {
+      invalidateKeys: ['pickup_cached_event_' + eventId]
+    });
+  },
+
+  async deleteDuty(eventId, dutyId) {
+    return this.request('DELETE', '/api/events/' + eventId + '/duties/' + dutyId, null, {
+      invalidateKeys: ['pickup_cached_event_' + eventId]
+    });
   },
 
   async getAttendeeCandidates() {
-    const res = await fetch('/api/events/attendee-candidates');
-    return res.json();
+    return this.request('GET', '/api/events/attendee-candidates');
   },
 
   async getUsers() {
-    const res = await fetch('/api/auth/users');
-    return res.json();
+    return this.request('GET', '/api/auth/users');
   },
 
   async updateUserRole(userId, role) {
-    const res = await fetch(`/api/auth/users/${userId}/role`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ role })
-    });
-    return res.json();
+    return this.request('PUT', '/api/auth/users/' + userId + '/role', { role: role });
   },
 
   async updateUserBadges(userId, badges) {
-    const res = await fetch(`/api/auth/users/${userId}/badges`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(badges)
-    });
-    return res.json();
+    return this.request('PUT', '/api/auth/users/' + userId + '/badges', badges);
   },
 
   async deleteUser(userId, ban = false, reason = '') {
-    const res = await fetch(`/api/auth/users/${userId}?ban=${ban ? 'true' : 'false'}&reason=${encodeURIComponent(reason)}`, {
-      method: 'DELETE'
-    });
-    return res.json();
+    return this.request('DELETE', '/api/auth/users/' + userId + '?ban=' + (ban ? 'true' : 'false') + '&reason=' + encodeURIComponent(reason));
   },
 
   async getBannedEmails() {
-    const res = await fetch('/api/auth/banned-emails');
-    return res.json();
+    return this.request('GET', '/api/auth/banned-emails');
   },
 
   async banEmail(email, reason = '') {
-    const res = await fetch('/api/auth/banned-emails', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, reason })
-    });
-    return res.json();
+    return this.request('POST', '/api/auth/banned-emails', { email: email, reason: reason });
   },
 
   async unbanEmail(id) {
-    const res = await fetch(`/api/auth/banned-emails/${id}`, {
-      method: 'DELETE'
-    });
-    return res.json();
+    return this.request('DELETE', '/api/auth/banned-emails/' + id);
   },
 
   async getSettings() {
-    const res = await fetch('/api/settings');
-    return res.json();
+    return this.request('GET', '/api/settings');
   },
 
   async updateSettings(settings) {
-    const res = await fetch('/api/settings', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(settings)
-    });
-    return res.json();
+    return this.request('PUT', '/api/settings', settings);
+  },
+
+  renderEditGameFieldsHtml(prefix, ev) {
+    const pacificLocal = this.isoToPacificLocalInput(ev.event_date);
+    const hasCap = Boolean(ev.max_players && ev.max_players > 0);
+    const capVal = hasCap ? ev.max_players : 28;
+    let allowedArr = [];
+    if (Array.isArray(ev.allowed_emails_list)) {
+      allowedArr = ev.allowed_emails_list;
+    } else if (ev.allowed_emails) {
+      try {
+        allowedArr = typeof ev.allowed_emails === 'string' ? JSON.parse(ev.allowed_emails) : ev.allowed_emails;
+      } catch (e) {}
+    }
+
+    return `
+      <div class="grid-2">
+        <div class="form-group" style="margin-bottom: 10px;">
+          <label for="${prefix}-title" style="font-size: 0.82rem;">Game Title *</label>
+          <input type="text" id="${prefix}-title" value="${this.escapeHtml(ev.title || '')}" required>
+        </div>
+        <div class="form-group" style="margin-bottom: 10px;">
+          <label for="${prefix}-date" style="font-size: 0.82rem;">Date &amp; Time (Pacific) *</label>
+          <input type="datetime-local" id="${prefix}-date" value="${this.escapeHtml(pacificLocal)}" required>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="form-group" style="margin-bottom: 10px;">
+          <label for="${prefix}-location" style="font-size: 0.82rem;">Field Location *</label>
+          <input type="text" id="${prefix}-location" value="${this.escapeHtml(ev.location || '')}" list="common-locations-list" required>
+        </div>
+        <div class="form-group" style="margin-bottom: 10px;">
+          <label for="${prefix}-map" style="font-size: 0.82rem;">Map / Directions Link (Optional)</label>
+          <input type="text" id="${prefix}-map" value="${this.escapeHtml(ev.location_url || '')}" placeholder="https://maps.google.com/?q=...">
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom: 10px;">
+        <label for="${prefix}-desc" style="font-size: 0.82rem;">Game Details &amp; Announcements</label>
+        <textarea id="${prefix}-desc" rows="2">${this.escapeHtml(ev.description || '')}</textarea>
+      </div>
+      <div class="form-group" style="background: var(--bg-card); padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 10px;">
+        <label for="${prefix}-actual-attendance" style="font-weight: 600; font-size: 0.84rem; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+          <span>⚾</span> <span>Actual Attendance (Players who played)</span>
+        </label>
+        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+          <input type="number" id="${prefix}-actual-attendance" value="${ev.actual_attendance != null ? ev.actual_attendance : ''}" min="0" max="200" placeholder="e.g. 18" style="width: 90px; padding: 5px 8px; font-weight: 700;">
+          <span style="font-size: 0.8rem; color: var(--text-muted);">Record actual turnout from the field. Shown in Past Games archive!</span>
+        </div>
+      </div>
+      <div class="form-group" style="background: var(--bg-card); padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 10px;">
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; font-size: 0.84rem; margin: 0;">
+          <input type="checkbox" id="${prefix}-cap-toggle" ${hasCap ? 'checked' : ''} style="width: 16px; height: 16px; accent-color: var(--primary);">
+          <span>Limit Playing Roster Size (Auto-Waitlist when full)</span>
+        </label>
+        <div id="${prefix}-max-players-wrap" style="display: ${hasCap ? 'block' : 'none'}; margin-top: 8px; padding-left: 24px;">
+          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <label for="${prefix}-max-players" style="font-size: 0.84rem; color: var(--text-muted); margin: 0;">Max Confirmed Players:</label>
+            <input type="number" id="${prefix}-max-players" value="${capVal}" min="2" max="100" style="width: 80px; padding: 4px 8px;">
+          </div>
+        </div>
+      </div>
+      <div class="form-group" style="background: var(--bg-card); padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 12px;">
+        <label for="${prefix}-allowed-emails" style="font-weight: 600; font-size: 0.84rem; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+          <span>🔒</span> <span>Allowed Player Emails (Whitelist — Optional)</span>
+        </label>
+        <textarea id="${prefix}-allowed-emails" rows="2" placeholder="Leave blank to allow all players; or enter emails separated by commas or lines" style="font-size: 0.82rem;">${this.escapeHtml((allowedArr || []).join(', '))}</textarea>
+      </div>
+    `;
+  },
+
+  bindEditGameCapToggle(prefix) {
+    const capToggle = document.getElementById(prefix + '-cap-toggle');
+    const capWrap = document.getElementById(prefix + '-max-players-wrap');
+    if (capToggle && capWrap) {
+      capToggle.onchange = function() {
+        capWrap.style.display = capToggle.checked ? 'block' : 'none';
+      };
+    }
+  },
+
+  readEditGameFields(prefix) {
+    const titleEl = document.getElementById(prefix + '-title');
+    const dateEl = document.getElementById(prefix + '-date');
+    const locEl = document.getElementById(prefix + '-location');
+    const mapEl = document.getElementById(prefix + '-map');
+    const descEl = document.getElementById(prefix + '-desc');
+    const attEl = document.getElementById(prefix + '-actual-attendance');
+    const capToggle = document.getElementById(prefix + '-cap-toggle');
+    const maxEl = document.getElementById(prefix + '-max-players');
+    const allowedEl = document.getElementById(prefix + '-allowed-emails');
+
+    const title = titleEl ? titleEl.value.trim() : '';
+    const rawDate = dateEl ? dateEl.value : '';
+    const location = locEl ? locEl.value.trim() : '';
+    if (!title || !rawDate || !location) {
+      return { error: 'Title, Date/Time, and Field Location are required.' };
+    }
+
+    const attRaw = attEl ? attEl.value.trim() : '';
+    const parsedAtt = attRaw === '' ? null : parseInt(attRaw, 10);
+    const maxPlayers = (capToggle && capToggle.checked)
+      ? (parseInt(maxEl ? maxEl.value : '28', 10) || 28)
+      : null;
+
+    const allowedRaw = allowedEl ? allowedEl.value : '';
+    const allowedList = allowedRaw.split(/[,\n;]/).map(function(s) { return s.trim().toLowerCase(); }).filter(function(s) { return s.indexOf('@') !== -1; });
+
+    return {
+      payload: {
+        title: title,
+        event_date: this.localToPacificIso(rawDate),
+        location: location,
+        location_url: mapEl ? mapEl.value.trim() : '',
+        description: descEl ? descEl.value.trim() : '',
+        max_players: maxPlayers,
+        actual_attendance: (parsedAtt === null || isNaN(parsedAtt)) ? null : parsedAtt,
+        allowed_emails: allowedList.length > 0 ? allowedList : null
+      }
+    };
   },
 
   formatDate(isoString) {
@@ -1452,11 +1515,6 @@ const API = {
         </div>
       </div>
     `;
-
-    const logoutBtn = document.getElementById('nav-logout-btn');
-    if (logoutBtn) {
-      logoutBtn.addEventListener('click', () => API.logout());
-    }
 
     const langSelect = document.getElementById('lang-select');
     if (langSelect) {

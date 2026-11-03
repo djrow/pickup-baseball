@@ -1,58 +1,40 @@
 /**
- * Admin Dashboard logic with Task & Duty Management and Default Template Editor
+ * Admin & Organizer Dashboard: Game Scheduling, Task Templates, User Roles, Moderation & Highlights
  */
 
-// Cached organization default duties
 let orgDefaultDuties = [];
-
-// Current duties being customized in the "Schedule New Game" form
 let builderDuties = [];
-
-// Duties in the "Organization Default Tasks Template" editor
 let templateDuties = [];
 
-// Currently expanded event task manager, game details editor, or quick turnout recorder
 let openTaskManagerEventId = null;
 let openEditGameEventId = null;
 let openQuickTurnoutEventId = null;
 let loadedAdminEventsMap = new Map();
-
-// Currently logged-in admin/organizer user
 let currentAdminUser = null;
 
-function applyRoleUI(user) {
-  const badgeEl = document.getElementById('admin-header-badge');
-  const backupBtn = document.getElementById('btn-backup-db');
-  const defaultTemplateCard = document.getElementById('default-template-card');
-  const saveAsDefaultsBtn = document.getElementById('btn-save-as-defaults');
-  const userMgmtSec = document.getElementById('admin-user-mgmt-section');
-  const securitySec = document.getElementById('admin-security-section');
-  const securityNavBtn = document.getElementById('admin-security-nav-btn');
+function cloneList(arr) {
+  return JSON.parse(JSON.stringify(arr || []));
+}
 
-  if (user && user.isAdmin) {
-    if (badgeEl) {
-      badgeEl.className = 'badge badge-orange';
-      badgeEl.innerHTML = '👑 Admin Control';
-    }
-    if (backupBtn) backupBtn.style.display = 'inline-flex';
-    if (defaultTemplateCard) defaultTemplateCard.style.display = 'block';
-    if (saveAsDefaultsBtn) saveAsDefaultsBtn.style.display = 'inline-block';
-    if (userMgmtSec) userMgmtSec.style.display = 'block';
-    if (securitySec) securitySec.style.display = 'block';
-    if (securityNavBtn) securityNavBtn.style.display = 'inline-flex';
-  } else if (user && user.canManageEvents) {
-    // Organizer Control
-    if (badgeEl) {
-      badgeEl.className = 'badge badge-green';
-      badgeEl.innerHTML = '🛡️ Organizer Control';
-    }
-    if (backupBtn) backupBtn.style.display = 'none';
-    if (defaultTemplateCard) defaultTemplateCard.style.display = 'none';
-    if (saveAsDefaultsBtn) saveAsDefaultsBtn.style.display = 'none';
-    if (userMgmtSec) userMgmtSec.style.display = 'none';
-    if (securitySec) securitySec.style.display = 'none';
-    if (securityNavBtn) securityNavBtn.style.display = 'none';
+function applyRoleUI(user) {
+  const isAdmin = Boolean(user && user.isAdmin);
+  const badgeEl = document.getElementById('admin-header-badge');
+  if (badgeEl) {
+    badgeEl.className = isAdmin ? 'badge badge-orange' : 'badge badge-green';
+    badgeEl.innerHTML = isAdmin ? '👑 Admin Control' : '🛡️ Organizer Control';
   }
+  const toggleIds = [
+    ['btn-backup-db', 'inline-flex'],
+    ['default-template-card', 'block'],
+    ['btn-save-as-defaults', 'inline-block'],
+    ['admin-user-mgmt-section', 'block'],
+    ['admin-security-section', 'block'],
+    ['admin-security-nav-btn', 'inline-flex']
+  ];
+  toggleIds.forEach(function(pair) {
+    const el = document.getElementById(pair[0]);
+    if (el) el.style.display = isAdmin ? pair[1] : 'none';
+  });
 }
 
 async function initAdmin() {
@@ -71,16 +53,13 @@ async function initAdmin() {
   setDefaultDateTime();
   setupQuickSundayButton();
 
-  // Load organization default duties from API
   await loadDefaultDuties();
-
   setupTaskBuilder();
   setupDefaultTemplateEditor();
   setupCreateForm();
   setupCommunityHighlightsAdmin();
   await loadAdminGames();
 
-  // If Admin, load User Roles Management section and Access Control & Guest Policy
   if (user.isAdmin) {
     setupAdminUserManagement(user);
     setupAdminSecurity(user);
@@ -89,78 +68,120 @@ async function initAdmin() {
 
 async function loadDefaultDuties() {
   try {
-    const res = await fetch('/api/events/default-duties');
-    const data = await res.json();
+    const data = await API.getDefaultDuties();
     orgDefaultDuties = data.duties || [];
   } catch (err) {
-    console.error('Failed to load default duties, using fallback:', err);
     orgDefaultDuties = [
-      { title: "Bases", description: "Bring 3 throw-down bases.", slots_needed: 1 },
-      { title: "Pitching machine and power", description: "Bring a pitching machine and a way to run it on the field.", slots_needed: 1 },
-      { title: "Game Baseballs", description: "Bring game balls bucket.", slots_needed: 1 },
-      { title: "Field Dragging", description: "Arrive 20 mins early to drag the infield with the pull rake.", slots_needed: 2 },
-      { title: "Game Facilitator", description: "Help coordinate teams, batting order, and fair play throughout the game.", slots_needed: 1 },
-      { title: "Water / Food", description: "Bring drinking water, ice, and dugout snacks or fruit for players.", slots_needed: 1 }
+      { title: 'Bases', description: 'Bring 3 throw-down bases.', slots_needed: 1 },
+      { title: 'Pitching machine and power', description: 'Bring a pitching machine and a way to run it on the field.', slots_needed: 1 },
+      { title: 'Game Baseballs', description: 'Bring game balls bucket.', slots_needed: 1 },
+      { title: 'Field Dragging', description: 'Arrive 20 mins early to drag the infield with the pull rake.', slots_needed: 2 },
+      { title: 'Game Facilitator', description: 'Help coordinate teams, batting order, and fair play throughout the game.', slots_needed: 1 },
+      { title: 'Water / Food', description: 'Bring drinking water, ice, and dugout snacks or fruit for players.', slots_needed: 1 }
     ];
   }
-  builderDuties = JSON.parse(JSON.stringify(orgDefaultDuties));
-  templateDuties = JSON.parse(JSON.stringify(orgDefaultDuties));
-}
-
-function getNextSundayNoon() {
-  const d = new Date();
-  const day = d.getDay(); // 0 is Sunday
-  const daysUntilSunday = (7 - day) % 7 || 7;
-  const nextSunday = new Date(d.getFullYear(), d.getMonth(), d.getDate() + daysUntilSunday, 12, 0, 0);
-  return nextSunday;
-}
-
-function formatForDateTimeInput(date) {
-  const pad = (n) => String(n).padStart(2, '0');
-  const yyyy = date.getFullYear();
-  const mm = pad(date.getMonth() + 1);
-  const dd = pad(date.getDate());
-  const hh = pad(date.getHours());
-  const min = pad(date.getMinutes());
-  return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+  builderDuties = cloneList(orgDefaultDuties);
+  templateDuties = cloneList(orgDefaultDuties);
 }
 
 function setDefaultDateTime() {
   const dateInput = document.getElementById('event-date-input');
   if (dateInput) {
-    dateInput.value = formatForDateTimeInput(getNextSundayNoon());
+    dateInput.value = API.isoToPacificLocalInput(API.getNextSundayNoonPacificIso());
   }
 }
 
 // -------------------------------------------------------------
-// TASK & DUTY BUILDER (For New Event Form)
+// SHARED EDITABLE TASK ROWS (New Event Builder + Org Default Template)
 // -------------------------------------------------------------
+function readEditableTaskRows(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return [];
+  const rows = container.querySelectorAll('.editable-task-row');
+  const updated = [];
+  rows.forEach(function(row) {
+    updated.push({
+      title: row.querySelector('.editable-task-title').value,
+      description: row.querySelector('.editable-task-desc').value,
+      slots_needed: parseInt(row.querySelector('.editable-task-slots').value, 10) || 1
+    });
+  });
+  return updated;
+}
+
+function renderEditableTaskRows(containerId, list, removeFnName, emptyHtml) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  if (!list || list.length === 0) {
+    container.innerHTML = '<div style="text-align: center; padding: 18px; background: var(--bg-card); border: 1px dashed var(--border); border-radius: var(--radius-sm); color: var(--text-muted); font-size: 0.9rem;">' + emptyHtml + '</div>';
+    return;
+  }
+
+  container.innerHTML = list.map(function(duty, idx) {
+    return `
+      <div class="editable-task-row" style="display: grid; grid-template-columns: 2fr 3fr 100px 40px; gap: 10px; align-items: center; background: var(--bg-card); padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);">
+        <div>
+          <label style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 2px;">Task Name</label>
+          <input type="text" class="editable-task-title" value="${API.escapeHtml(duty.title)}" placeholder="e.g. Umpire, Baseballs..." required style="padding: 6px 10px; font-size: 0.9rem;">
+        </div>
+        <div>
+          <label style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 2px;">Description / Details</label>
+          <input type="text" class="editable-task-desc" value="${API.escapeHtml(duty.description)}" placeholder="e.g. Bring bucket of balls..." style="padding: 6px 10px; font-size: 0.9rem;">
+        </div>
+        <div>
+          <label style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 2px;">Volunteers</label>
+          <input type="number" class="editable-task-slots" min="1" max="15" value="${duty.slots_needed || 1}" required style="padding: 6px 8px; font-size: 0.9rem; text-align: center;">
+        </div>
+        <div style="text-align: right; padding-top: 18px;">
+          <button type="button" onclick="${removeFnName}(${idx})" title="Remove task" style="background: none; border: none; cursor: pointer; color: var(--danger); font-size: 1.15rem; line-height: 1;">🗑️</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderTaskBuilder() {
+  renderEditableTaskRows('task-builder-list', builderDuties, 'removeTaskBuilderRow', 'No tasks added yet. Click <strong>"+ Add Task"</strong> or <strong>"↺ Reset"</strong> above.');
+}
+
+function renderDefaultTemplateList() {
+  renderEditableTaskRows('default-template-list', templateDuties, 'removeTemplateRow', 'No default tasks configured. Click "+ Add Task to Template" below.');
+}
+
+window.removeTaskBuilderRow = function(index) {
+  builderDuties = readEditableTaskRows('task-builder-list');
+  builderDuties.splice(index, 1);
+  renderTaskBuilder();
+};
+
+window.removeTemplateRow = function(index) {
+  templateDuties = readEditableTaskRows('default-template-list');
+  templateDuties.splice(index, 1);
+  renderDefaultTemplateList();
+};
+
 function setupTaskBuilder() {
   const addBtn = document.getElementById('btn-add-task-row');
   const resetBtn = document.getElementById('btn-reset-default-tasks');
   const clearBtn = document.getElementById('btn-clear-tasks');
   const saveAsDefaultsBtn = document.getElementById('btn-save-as-defaults');
 
-  addBtn.addEventListener('click', () => {
-    syncBuilderDutiesFromDOM();
-    builderDuties.push({
-      title: '',
-      description: '',
-      slots_needed: 1
-    });
+  addBtn.addEventListener('click', function() {
+    builderDuties = readEditableTaskRows('task-builder-list');
+    builderDuties.push({ title: '', description: '', slots_needed: 1 });
     renderTaskBuilder();
-    const inputs = document.querySelectorAll('.task-builder-title');
+    const inputs = document.querySelectorAll('#task-builder-list .editable-task-title');
     if (inputs.length > 0) inputs[inputs.length - 1].focus();
   });
 
-  resetBtn.addEventListener('click', () => {
-    if (confirm('Reset tasks to your organization\'s default tasks template?')) {
-      builderDuties = JSON.parse(JSON.stringify(orgDefaultDuties));
+  resetBtn.addEventListener('click', function() {
+    if (confirm("Reset tasks to your organization's default tasks template?")) {
+      builderDuties = cloneList(orgDefaultDuties);
       renderTaskBuilder();
     }
   });
 
-  clearBtn.addEventListener('click', () => {
+  clearBtn.addEventListener('click', function() {
     if (confirm('Remove all tasks from this game? Players will only RSVP without volunteer task signups.')) {
       builderDuties = [];
       renderTaskBuilder();
@@ -168,15 +189,13 @@ function setupTaskBuilder() {
   });
 
   if (saveAsDefaultsBtn) {
-    saveAsDefaultsBtn.addEventListener('click', async () => {
-      syncBuilderDutiesFromDOM();
-      const invalidDuty = builderDuties.find(d => !d.title.trim());
-      if (invalidDuty) {
+    saveAsDefaultsBtn.addEventListener('click', async function() {
+      builderDuties = readEditableTaskRows('task-builder-list');
+      if (builderDuties.some(function(d) { return !d.title.trim(); })) {
         alert('Please give a title to all tasks before saving as defaults.');
         return;
       }
-
-      if (confirm(`Save these ${builderDuties.length} tasks as the organization's permanent default tasks template for all future games?`)) {
+      if (confirm('Save these ' + builderDuties.length + " tasks as the organization's permanent default tasks template for all future games?")) {
         await saveDefaultsToBackend(builderDuties);
       }
     });
@@ -185,99 +204,35 @@ function setupTaskBuilder() {
   renderTaskBuilder();
 }
 
-function syncBuilderDutiesFromDOM() {
-  const rows = document.querySelectorAll('.task-builder-row');
-  const updated = [];
-  rows.forEach(row => {
-    const title = row.querySelector('.task-builder-title').value;
-    const desc = row.querySelector('.task-builder-desc').value;
-    const slots = parseInt(row.querySelector('.task-builder-slots').value, 10) || 1;
-    updated.push({
-      title,
-      description: desc,
-      slots_needed: slots
-    });
-  });
-  builderDuties = updated;
-}
-
-function renderTaskBuilder() {
-  const container = document.getElementById('task-builder-list');
-  if (builderDuties.length === 0) {
-    container.innerHTML = `
-      <div style="text-align: center; padding: 20px; background: var(--bg-card); border: 1px dashed var(--border); border-radius: var(--radius-sm); color: var(--text-muted); font-size: 0.9rem;">
-        No tasks added yet. Click <strong>"+ Add Task"</strong> or <strong>"↺ Reset"</strong> above.
-      </div>
-    `;
-    return;
-  }
-
-  container.innerHTML = builderDuties.map((duty, idx) => `
-    <div class="task-builder-row" style="display: grid; grid-template-columns: 2fr 3fr 100px 40px; gap: 10px; align-items: center; background: var(--bg-card); padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);">
-      <div>
-        <label style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 2px;">Task Name</label>
-        <input type="text" class="task-builder-title" value="${API.escapeHtml(duty.title)}" placeholder="e.g. Umpire, Baseballs..." required style="padding: 6px 10px; font-size: 0.9rem;">
-      </div>
-      <div>
-        <label style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 2px;">Description / Details</label>
-        <input type="text" class="task-builder-desc" value="${API.escapeHtml(duty.description)}" placeholder="e.g. Bring bucket of balls..." style="padding: 6px 10px; font-size: 0.9rem;">
-      </div>
-      <div>
-        <label style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 2px;">Volunteers</label>
-        <input type="number" class="task-builder-slots" min="1" max="15" value="${duty.slots_needed || 1}" required style="padding: 6px 8px; font-size: 0.9rem; text-align: center;">
-      </div>
-      <div style="text-align: right; padding-top: 18px;">
-        <button type="button" onclick="removeTaskBuilderRow(${idx})" title="Remove task" style="background: none; border: none; cursor: pointer; color: var(--danger); font-size: 1.15rem; line-height: 1;">🗑️</button>
-      </div>
-    </div>
-  `).join('');
-}
-
-window.removeTaskBuilderRow = function(index) {
-  syncBuilderDutiesFromDOM();
-  builderDuties.splice(index, 1);
-  renderTaskBuilder();
-};
-
-// -------------------------------------------------------------
-// ORGANIZATION DEFAULT TASKS TEMPLATE EDITOR
-// -------------------------------------------------------------
 function setupDefaultTemplateEditor() {
   const toggleBtn = document.getElementById('toggle-default-template-btn');
   const panel = document.getElementById('default-template-panel');
   const addBtn = document.getElementById('btn-add-default-template-row');
   const saveBtn = document.getElementById('btn-save-default-template');
-
   if (!toggleBtn || !panel) return;
 
-  toggleBtn.addEventListener('click', () => {
+  toggleBtn.addEventListener('click', function() {
     const isHidden = panel.style.display === 'none';
     panel.style.display = isHidden ? 'block' : 'none';
     toggleBtn.textContent = isHidden ? '✕ Close Template' : '✏️ Edit Default Template';
     if (isHidden) {
-      templateDuties = JSON.parse(JSON.stringify(orgDefaultDuties));
+      templateDuties = cloneList(orgDefaultDuties);
       renderDefaultTemplateList();
     }
   });
 
-  addBtn.addEventListener('click', () => {
-    syncTemplateDutiesFromDOM();
-    templateDuties.push({
-      title: '',
-      description: '',
-      slots_needed: 1
-    });
+  addBtn.addEventListener('click', function() {
+    templateDuties = readEditableTaskRows('default-template-list');
+    templateDuties.push({ title: '', description: '', slots_needed: 1 });
     renderDefaultTemplateList();
   });
 
-  saveBtn.addEventListener('click', async () => {
-    syncTemplateDutiesFromDOM();
-    const invalidDuty = templateDuties.find(d => !d.title.trim());
-    if (invalidDuty) {
+  saveBtn.addEventListener('click', async function() {
+    templateDuties = readEditableTaskRows('default-template-list');
+    if (templateDuties.some(function(d) { return !d.title.trim(); })) {
       alert('Please enter a task name for all items, or click the trash icon to remove empty rows.');
       return;
     }
-
     saveBtn.disabled = true;
     saveBtn.textContent = 'Saving...';
     await saveDefaultsToBackend(templateDuties);
@@ -286,74 +241,15 @@ function setupDefaultTemplateEditor() {
   });
 }
 
-function syncTemplateDutiesFromDOM() {
-  const rows = document.querySelectorAll('.template-task-row');
-  const updated = [];
-  rows.forEach(row => {
-    const title = row.querySelector('.template-task-title').value;
-    const desc = row.querySelector('.template-task-desc').value;
-    const slots = parseInt(row.querySelector('.template-task-slots').value, 10) || 1;
-    updated.push({
-      title,
-      description: desc,
-      slots_needed: slots
-    });
-  });
-  templateDuties = updated;
-}
-
-function renderDefaultTemplateList() {
-  const container = document.getElementById('default-template-list');
-  if (templateDuties.length === 0) {
-    container.innerHTML = `
-      <div style="text-align: center; padding: 16px; background: var(--bg-card); border: 1px dashed var(--border); border-radius: var(--radius-sm); color: var(--text-muted); font-size: 0.9rem;">
-        No default tasks configured. Click "+ Add Task to Template" below.
-      </div>
-    `;
-    return;
-  }
-
-  container.innerHTML = templateDuties.map((duty, idx) => `
-    <div class="template-task-row" style="display: grid; grid-template-columns: 2fr 3fr 100px 40px; gap: 10px; align-items: center; background: var(--bg-card); padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);">
-      <div>
-        <label style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 2px;">Default Task</label>
-        <input type="text" class="template-task-title" value="${API.escapeHtml(duty.title)}" placeholder="e.g. Umpire, Baseballs..." required style="padding: 6px 10px; font-size: 0.88rem;">
-      </div>
-      <div>
-        <label style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 2px;">Description</label>
-        <input type="text" class="template-task-desc" value="${API.escapeHtml(duty.description)}" placeholder="e.g. Bring bucket of balls..." style="padding: 6px 10px; font-size: 0.88rem;">
-      </div>
-      <div>
-        <label style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 2px;">Volunteers</label>
-        <input type="number" class="template-task-slots" min="1" max="15" value="${duty.slots_needed || 1}" required style="padding: 6px 8px; font-size: 0.88rem; text-align: center;">
-      </div>
-      <div style="text-align: right; padding-top: 18px;">
-        <button type="button" onclick="removeTemplateRow(${idx})" title="Remove task" style="background: none; border: none; cursor: pointer; color: var(--danger); font-size: 1.15rem; line-height: 1;">🗑️</button>
-      </div>
-    </div>
-  `).join('');
-}
-
-window.removeTemplateRow = function(index) {
-  syncTemplateDutiesFromDOM();
-  templateDuties.splice(index, 1);
-  renderDefaultTemplateList();
-};
-
 async function saveDefaultsToBackend(dutiesToSave) {
   try {
-    const res = await fetch('/api/events/default-duties', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ duties: dutiesToSave })
-    });
-    const data = await res.json();
+    const data = await API.saveDefaultDuties(dutiesToSave);
     if (data.error) {
       showAlert(data.error, true);
     } else {
       orgDefaultDuties = data.duties;
-      templateDuties = JSON.parse(JSON.stringify(orgDefaultDuties));
-      showAlert(`Organization default tasks template saved (${orgDefaultDuties.length} tasks)! All future games will use these defaults.`, false);
+      templateDuties = cloneList(orgDefaultDuties);
+      showAlert('Organization default tasks template saved (' + orgDefaultDuties.length + ' tasks)! All future games will use these defaults.', false);
       renderDefaultTemplateList();
     }
   } catch (err) {
@@ -366,10 +262,9 @@ async function saveDefaultsToBackend(dutiesToSave) {
 // -------------------------------------------------------------
 function setupQuickSundayButton() {
   const btn = document.getElementById('quick-sunday-btn');
-  btn.addEventListener('click', async () => {
+  btn.addEventListener('click', async function() {
     const nextSundayIso = API.getNextSundayNoonPacificIso();
     const dateFormatted = API.formatDate(nextSundayIso);
-
     const location = prompt('Enter field location for this Sunday game:', 'Central Park - North Meadow Field #4');
     if (!location) return;
 
@@ -377,28 +272,20 @@ function setupQuickSundayButton() {
     btn.textContent = 'Posting game...';
 
     try {
-      const res = await fetch('/api/events', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: `Sunday Pickup Baseball (${dateFormatted})`,
-          event_date: nextSundayIso,
-          location: location.trim(),
-          description: 'Weekly community pickup baseball game. All skill levels welcome! Bring your glove and enthusiasm. Please check off any gear you can share or tasks you can take.',
-          use_default_duties: true
-        })
+      const data = await API.createEvent({
+        title: 'Sunday Pickup Baseball (' + dateFormatted + ')',
+        event_date: nextSundayIso,
+        location: location.trim(),
+        description: 'Weekly community pickup baseball game. All skill levels welcome! Bring your glove and enthusiasm. Please check off any gear you can share or tasks you can take.',
+        use_default_duties: true
       });
-
-      const data = await res.json();
       if (data.error) {
         showAlert(data.error, true);
       } else {
         const newId = data.eventId || (data.event && data.event.id);
-        showAlert(`Successfully posted Sunday game for ${dateFormatted}! Redirecting...`, false);
+        showAlert('Successfully posted Sunday game for ' + dateFormatted + '! Redirecting...', false);
         if (newId) {
-          setTimeout(() => {
-            window.location.href = `/event.html?id=${newId}`;
-          }, 600);
+          setTimeout(function() { window.location.href = '/event.html?id=' + newId; }, 600);
         } else {
           await loadAdminGames();
         }
@@ -433,15 +320,17 @@ function renderCandidatePlayers(players) {
     container.innerHTML = '<span style="color: var(--text-muted); font-size: 0.85rem;">No user accounts found.</span>';
     return;
   }
-  container.innerHTML = players.map(p => `
-    <label class="allowed-player-row" style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; cursor: pointer; margin: 0; padding: 2px 0;">
-      <input type="checkbox" class="allowed-player-cb" value="${API.escapeHtml(p.email)}" style="accent-color: var(--primary);">
-      <span style="font-weight: 600; color: var(--secondary);">${API.escapeHtml(p.name)}</span>
-      <span style="color: var(--text-muted); font-size: 0.78rem;">(${API.escapeHtml(p.email)})</span>
-    </label>
-  `).join('');
+  container.innerHTML = players.map(function(p) {
+    return `
+      <label class="allowed-player-row" style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; cursor: pointer; margin: 0; padding: 2px 0;">
+        <input type="checkbox" class="allowed-player-cb" value="${API.escapeHtml(p.email)}" style="accent-color: var(--primary);">
+        <span style="font-weight: 600; color: var(--secondary);">${API.escapeHtml(p.name)}</span>
+        <span style="color: var(--text-muted); font-size: 0.78rem;">(${API.escapeHtml(p.email)})</span>
+      </label>
+    `;
+  }).join('');
 
-  container.querySelectorAll('.allowed-player-cb').forEach(cb => {
+  container.querySelectorAll('.allowed-player-cb').forEach(function(cb) {
     cb.addEventListener('change', updateSelectedPlayersCount);
   });
   updateSelectedPlayersCount();
@@ -451,7 +340,7 @@ function updateSelectedPlayersCount() {
   const countEl = document.getElementById('selected-players-count');
   const checked = document.querySelectorAll('.allowed-player-cb:checked');
   if (countEl) {
-    countEl.textContent = `${checked.length} player${checked.length === 1 ? '' : 's'} selected`;
+    countEl.textContent = checked.length + ' player' + (checked.length === 1 ? '' : 's') + ' selected';
   }
 }
 
@@ -460,7 +349,7 @@ function setupCreateForm() {
   const capToggle = document.getElementById('event-cap-toggle');
   const capWrap = document.getElementById('event-max-players-wrap');
   if (capToggle && capWrap) {
-    capToggle.addEventListener('change', () => {
+    capToggle.addEventListener('change', function() {
       capWrap.style.display = capToggle.checked ? 'block' : 'none';
     });
   }
@@ -468,7 +357,7 @@ function setupCreateForm() {
   const restrictToggle = document.getElementById('event-restrict-toggle');
   const restrictWrap = document.getElementById('event-restrict-wrap');
   if (restrictToggle && restrictWrap) {
-    restrictToggle.addEventListener('change', () => {
+    restrictToggle.addEventListener('change', function() {
       restrictWrap.style.display = restrictToggle.checked ? 'block' : 'none';
       if (restrictToggle.checked && candidatePlayersCache.length === 0) {
         loadCandidatePlayers();
@@ -478,20 +367,18 @@ function setupCreateForm() {
 
   const searchInput = document.getElementById('allowed-player-search');
   if (searchInput) {
-    searchInput.addEventListener('input', () => {
+    searchInput.addEventListener('input', function() {
       const q = searchInput.value.trim().toLowerCase();
-      const rows = document.querySelectorAll('.allowed-player-row');
-      rows.forEach(r => {
-        const text = r.textContent.toLowerCase();
-        r.style.display = text.includes(q) ? 'flex' : 'none';
+      document.querySelectorAll('.allowed-player-row').forEach(function(r) {
+        r.style.display = r.textContent.toLowerCase().indexOf(q) !== -1 ? 'flex' : 'none';
       });
     });
   }
 
   const selectAllBtn = document.getElementById('btn-select-all-players');
   if (selectAllBtn) {
-    selectAllBtn.addEventListener('click', () => {
-      document.querySelectorAll('.allowed-player-row').forEach(r => {
+    selectAllBtn.addEventListener('click', function() {
+      document.querySelectorAll('.allowed-player-row').forEach(function(r) {
         if (r.style.display !== 'none') {
           const cb = r.querySelector('.allowed-player-cb');
           if (cb) cb.checked = true;
@@ -503,27 +390,22 @@ function setupCreateForm() {
 
   const deselectAllBtn = document.getElementById('btn-deselect-all-players');
   if (deselectAllBtn) {
-    deselectAllBtn.addEventListener('click', () => {
-      document.querySelectorAll('.allowed-player-cb').forEach(cb => cb.checked = false);
+    deselectAllBtn.addEventListener('click', function() {
+      document.querySelectorAll('.allowed-player-cb').forEach(function(cb) { cb.checked = false; });
       updateSelectedPlayersCount();
     });
   }
 
-  form.addEventListener('submit', async (e) => {
+  form.addEventListener('submit', async function(e) {
     e.preventDefault();
     const submitBtn = document.getElementById('create-event-btn');
     submitBtn.disabled = true;
     submitBtn.textContent = 'Publishing...';
 
     try {
-      syncBuilderDutiesFromDOM();
-
-      // Validate that duties have titles
-      const invalidDuty = builderDuties.find(d => !d.title.trim());
-      if (invalidDuty) {
+      builderDuties = readEditableTaskRows('task-builder-list');
+      if (builderDuties.some(function(d) { return !d.title.trim(); })) {
         showAlert('Please enter a name for all tasks, or click the trash can to delete empty rows.', true);
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Publish Game';
         return;
       }
 
@@ -531,70 +413,54 @@ function setupCreateForm() {
       const rawDate = document.getElementById('event-date-input').value;
       if (!rawDate) {
         showAlert('Please enter a valid date and time for the game.', true);
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Publish Game';
         return;
       }
-      const eventDate = API.localToPacificIso(rawDate);
-      const location = document.getElementById('event-location-input').value.trim();
-      const locationUrl = document.getElementById('event-map-input').value.trim();
-      const description = document.getElementById('event-desc-input').value.trim();
 
-      const hasCap = capToggle && capToggle.checked;
-      const maxPlayers = hasCap
+      const maxPlayers = (capToggle && capToggle.checked)
         ? (parseInt(document.getElementById('event-max-players-input').value, 10) || 28)
         : null;
 
       let allowedEmails = null;
       if (restrictToggle && restrictToggle.checked) {
-        const checkedBoxes = Array.from(document.querySelectorAll('.allowed-player-cb:checked')).map(cb => cb.value);
+        const checkedBoxes = Array.from(document.querySelectorAll('.allowed-player-cb:checked')).map(function(cb) { return cb.value; });
         const extraEmailsEl = document.getElementById('event-extra-allowed-emails');
         const extraEmails = ((extraEmailsEl && extraEmailsEl.value) || '')
           .split(/[,\n;]/)
-          .map(s => s.trim().toLowerCase())
-          .filter(s => s.includes('@'));
-        const combined = [...new Set([...checkedBoxes, ...extraEmails])];
+          .map(function(s) { return s.trim().toLowerCase(); })
+          .filter(function(s) { return s.indexOf('@') !== -1; });
+        const combined = Array.from(new Set(checkedBoxes.concat(extraEmails)));
         if (combined.length === 0) {
           showAlert('Please select or enter at least one allowed player email, or uncheck the restricted RSVP box.', true);
-          submitBtn.disabled = false;
-          submitBtn.textContent = 'Publish Game';
           return;
         }
         allowedEmails = combined;
       }
 
-      const res = await fetch('/api/events', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title,
-          event_date: eventDate,
-          location,
-          location_url: locationUrl,
-          description,
-          max_players: maxPlayers,
-          allowed_emails: allowedEmails,
-          custom_duties: builderDuties
-        })
+      const data = await API.createEvent({
+        title: title,
+        event_date: API.localToPacificIso(rawDate),
+        location: document.getElementById('event-location-input').value.trim(),
+        location_url: document.getElementById('event-map-input').value.trim(),
+        description: document.getElementById('event-desc-input').value.trim(),
+        max_players: maxPlayers,
+        allowed_emails: allowedEmails,
+        custom_duties: builderDuties
       });
 
-      const data = await res.json();
       if (data.error) {
         showAlert(data.error, true);
       } else {
         const newId = data.eventId || (data.event && data.event.id);
-        showAlert(`Game "${title}" published with ${builderDuties.length} volunteer tasks! Redirecting...`, false);
+        showAlert('Game "' + title + '" published with ' + builderDuties.length + ' volunteer tasks! Redirecting...', false);
         form.reset();
         if (capWrap) capWrap.style.display = 'none';
         document.getElementById('event-title-input').value = 'Sunday Pickup Baseball';
         document.getElementById('event-location-input').value = 'Bushrod Park Field 1';
-        builderDuties = JSON.parse(JSON.stringify(orgDefaultDuties));
+        builderDuties = cloneList(orgDefaultDuties);
         renderTaskBuilder();
         setDefaultDateTime();
         if (newId) {
-          setTimeout(() => {
-            window.location.href = `/event.html?id=${newId}`;
-          }, 600);
+          setTimeout(function() { window.location.href = '/event.html?id=' + newId; }, 600);
         } else {
           await loadAdminGames();
         }
@@ -618,7 +484,7 @@ function setupAdminGameSearch() {
   const searchInput = document.getElementById('admin-game-search-input');
   if (!searchInput || adminGameSearchBound) return;
   adminGameSearchBound = true;
-  searchInput.addEventListener('input', () => {
+  searchInput.addEventListener('input', function() {
     renderAdminGamesList(searchInput.value);
   });
 }
@@ -626,6 +492,7 @@ function setupAdminGameSearch() {
 function renderAdminGameCardHtml(ev) {
   const isAdmin = currentAdminUser && currentAdminUser.isAdmin;
   const isRainout = ev.status === 'rainout';
+  const editPrefix = 'edit-ev-' + ev.id;
 
   return `
     <div class="admin-game-compact-item" id="admin-game-item-${ev.id}">
@@ -652,31 +519,15 @@ function renderAdminGameCardHtml(ev) {
         </div>
 
         <div class="admin-game-actions">
-          <button type="button" onclick="toggleTaskManager(${ev.id})" class="btn btn-primary btn-compact-admin">
-            🛡️ Tasks (${ev.duty_count})
-          </button>
-          <button type="button" onclick="toggleEditGamePanel(${ev.id})" class="btn btn-outline btn-compact-admin">
-            ✏️ Edit
-          </button>
-          <button type="button" onclick="toggleQuickTurnout(${ev.id})" class="btn btn-outline btn-compact-admin" style="font-weight: 700; color: var(--secondary);">
-            📊 Turnout
-          </button>
-          <button type="button" onclick="toggleAdminWeatherPanel(${ev.id})" class="btn btn-outline btn-compact-admin" id="btn-admin-weather-${ev.id}" style="font-weight: 600;">
-            🌧️ Field Drainage
-          </button>
-          <a href="/event.html?id=${ev.id}" class="btn btn-outline btn-compact-admin" target="_blank" rel="noopener noreferrer">
-            View ↗
-          </a>
-          <a href="/event.html?id=${ev.id}" class="btn ${isRainout ? 'btn-danger' : 'btn-outline'} btn-compact-admin">
-            ${isRainout ? '🌧️ Manage' : '🌧️ Rainout'}
-          </a>
+          <button type="button" onclick="toggleTaskManager(${ev.id})" class="btn btn-primary btn-compact-admin">🛡️ Tasks (${ev.duty_count})</button>
+          <button type="button" onclick="toggleEditGamePanel(${ev.id})" class="btn btn-outline btn-compact-admin">✏️ Edit</button>
+          <button type="button" onclick="toggleQuickTurnout(${ev.id})" class="btn btn-outline btn-compact-admin" style="font-weight: 700; color: var(--secondary);">📊 Turnout</button>
+          <button type="button" onclick="toggleAdminWeatherPanel(${ev.id})" class="btn btn-outline btn-compact-admin" id="btn-admin-weather-${ev.id}" style="font-weight: 600;">🌧️ Field Drainage</button>
+          <a href="/event.html?id=${ev.id}" class="btn btn-outline btn-compact-admin" target="_blank" rel="noopener noreferrer">View ↗</a>
+          <a href="/event.html?id=${ev.id}" class="btn ${isRainout ? 'btn-danger' : 'btn-outline'} btn-compact-admin">${isRainout ? '🌧️ Manage' : '🌧️ Rainout'}</a>
           ${isAdmin ? `
-            <button type="button" onclick="sendReminders(${ev.id})" class="btn btn-outline btn-compact-admin">
-              📧 Remind
-            </button>
-            <button type="button" onclick="deleteGame(${ev.id})" class="btn btn-danger btn-compact-admin">
-              Delete
-            </button>
+            <button type="button" onclick="sendReminders(${ev.id})" class="btn btn-outline btn-compact-admin">📧 Remind</button>
+            <button type="button" onclick="deleteGame(${ev.id})" class="btn btn-danger btn-compact-admin">Delete</button>
           ` : ''}
         </div>
       </div>
@@ -687,9 +538,7 @@ function renderAdminGameCardHtml(ev) {
           <div style="display: flex; align-items: center; gap: 8px;">
             <span style="font-size: 1.2rem;">⚾</span>
             <div>
-              <div style="font-weight: 700; font-size: 0.88rem; color: var(--secondary);">
-                Record Field Turnout: ${API.escapeHtml(ev.title)}
-              </div>
+              <div style="font-weight: 700; font-size: 0.88rem; color: var(--secondary);">Record Field Turnout: ${API.escapeHtml(ev.title)}</div>
               <div style="font-size: 0.78rem; color: var(--text-muted);">
                 ${ev.actual_attendance != null ? `Recorded: <strong>${ev.actual_attendance} players</strong> (${ev.attendee_count} online RSVPs)` : `${ev.attendee_count} online RSVPs. Enter count of players who played.`}
               </div>
@@ -712,50 +561,7 @@ function renderAdminGameCardHtml(ev) {
         <div id="edit-game-alert-${ev.id}"></div>
         <div style="background: var(--bg-subtle); padding: 14px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
           <h4 style="color: var(--secondary); font-size: 0.95rem; margin: 0 0 10px 0;">✏️ Edit Game Details</h4>
-          <div class="grid-2">
-            <div class="form-group" style="margin-bottom: 10px;">
-              <label style="font-size: 0.8rem;">Game Title *</label>
-              <input type="text" id="edit-title-${ev.id}" value="${API.escapeHtml(ev.title || '')}" required style="padding: 5px 8px; font-size: 0.88rem;">
-            </div>
-            <div class="form-group" style="margin-bottom: 10px;">
-              <label style="font-size: 0.8rem;">Date &amp; Time (Pacific) *</label>
-              <input type="datetime-local" id="edit-date-${ev.id}" value="${API.escapeHtml(API.isoToPacificLocalInput(ev.event_date))}" required style="padding: 5px 8px; font-size: 0.88rem;">
-            </div>
-          </div>
-          <div class="grid-2">
-            <div class="form-group" style="margin-bottom: 10px;">
-              <label style="font-size: 0.8rem;">Field Location *</label>
-              <input type="text" id="edit-location-${ev.id}" value="${API.escapeHtml(ev.location || '')}" list="common-locations-list" required style="padding: 5px 8px; font-size: 0.88rem;">
-            </div>
-            <div class="form-group" style="margin-bottom: 10px;">
-              <label style="font-size: 0.8rem;">Map / Directions Link (Optional)</label>
-              <input type="text" id="edit-map-${ev.id}" value="${API.escapeHtml(ev.location_url || '')}" placeholder="https://maps.google.com/?q=..." style="padding: 5px 8px; font-size: 0.88rem;">
-            </div>
-          </div>
-          <div class="form-group" style="margin-bottom: 10px;">
-            <label style="font-size: 0.8rem;">Game Details &amp; Announcements</label>
-            <textarea id="edit-desc-${ev.id}" rows="2" style="padding: 5px 8px; font-size: 0.85rem;">${API.escapeHtml(ev.description || '')}</textarea>
-          </div>
-          <div class="form-group" style="background: var(--bg-card); padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 10px;">
-            <label style="font-weight: 600; font-size: 0.82rem; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
-              <span>⚾</span> <span>Actual Attendance (Headcount Who Played)</span>
-            </label>
-            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-              <input type="number" id="edit-actual-attendance-${ev.id}" value="${ev.actual_attendance != null ? ev.actual_attendance : ''}" min="0" max="200" placeholder="e.g. 18" style="width: 80px; padding: 4px 8px; font-weight: 700; font-size: 0.88rem;">
-              <span style="font-size: 0.78rem; color: var(--text-muted);">
-                Record actual turnout from the field. Shown in past games archive!
-              </span>
-            </div>
-          </div>
-          <div class="form-group" style="background: var(--bg-card); padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 10px;">
-            <label style="font-weight: 600; font-size: 0.82rem; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
-              <span>🔒</span> <span>Allowed Player Emails (Whitelist)</span>
-            </label>
-            <textarea id="edit-allowed-emails-${ev.id}" rows="2" placeholder="Leave blank to allow all players; or enter emails separated by commas or lines" style="padding: 5px 8px; font-size: 0.82rem;">${API.escapeHtml(((ev.allowed_emails_list) || (ev.allowed_emails ? (typeof ev.allowed_emails === 'string' ? JSON.parse(ev.allowed_emails) : ev.allowed_emails) : [])).join(', '))}</textarea>
-            <span style="font-size: 0.76rem; color: var(--text-muted);">
-              Leave blank to allow any registered player or guest to RSVP. Enter specific email addresses to restrict access.
-            </span>
-          </div>
+          ${API.renderEditGameFieldsHtml(editPrefix, ev)}
           <div style="display: flex; gap: 6px; flex-wrap: wrap;">
             <button type="button" id="save-game-btn-${ev.id}" onclick="saveEditedGame(${ev.id})" class="btn btn-primary btn-compact-admin">💾 Save Changes</button>
             <button type="button" onclick="toggleEditGamePanel(${ev.id})" class="btn btn-outline btn-compact-admin">Cancel</button>
@@ -763,10 +569,8 @@ function renderAdminGameCardHtml(ev) {
         </div>
       </div>
 
-      <!-- Inline Task Management Panel (Toggled via button) -->
-      <div id="task-manager-panel-${ev.id}" style="display: ${openTaskManagerEventId === ev.id ? 'block' : 'none'}; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border);">
-        <!-- Rendered by renderTaskManagerContent(eventId) -->
-      </div>
+      <!-- Inline Task Management Panel -->
+      <div id="task-manager-panel-${ev.id}" style="display: ${openTaskManagerEventId === ev.id ? 'block' : 'none'}; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border);"></div>
     </div>
   `;
 }
@@ -781,11 +585,11 @@ function renderAdminGamesList(query) {
   const activeQuery = (query !== undefined ? query : (searchInput ? searchInput.value : '')).trim().toLowerCase();
 
   if (activeQuery) {
-    events = events.filter(ev => {
+    events = events.filter(function(ev) {
       const title = (ev.title || '').toLowerCase();
       const loc = (ev.location || '').toLowerCase();
       const date = (API.formatDateTime(ev.event_date) || '').toLowerCase();
-      return title.includes(activeQuery) || loc.includes(activeQuery) || date.includes(activeQuery);
+      return title.indexOf(activeQuery) !== -1 || loc.indexOf(activeQuery) !== -1 || date.indexOf(activeQuery) !== -1;
     });
   }
 
@@ -793,28 +597,28 @@ function renderAdminGamesList(query) {
     if (allAdminEventsCache.length === 0) {
       countBadge.textContent = '0 games';
     } else if (events.length === allAdminEventsCache.length) {
-      countBadge.textContent = `${events.length} game${events.length === 1 ? '' : 's'}`;
+      countBadge.textContent = events.length + ' game' + (events.length === 1 ? '' : 's');
     } else {
-      countBadge.textContent = `${events.length} of ${allAdminEventsCache.length} games`;
+      countBadge.textContent = events.length + ' of ' + allAdminEventsCache.length + ' games';
     }
   }
 
   if (events.length === 0) {
     container.innerHTML = activeQuery
-      ? `<div style="text-align: center; padding: 24px; color: var(--text-muted); font-size: 0.88rem;">No games found matching "<strong>${API.escapeHtml(activeQuery)}</strong>".</div>`
+      ? '<div style="text-align: center; padding: 24px; color: var(--text-muted); font-size: 0.88rem;">No games found matching "<strong>' + API.escapeHtml(activeQuery) + '</strong>".</div>'
       : '<p style="color: var(--text-muted); text-align: center; padding: 16px;">No games created yet.</p>';
     return;
   }
 
-  container.innerHTML = events.map(ev => renderAdminGameCardHtml(ev)).join('');
+  container.innerHTML = events.map(function(ev) { return renderAdminGameCardHtml(ev); }).join('');
+  events.forEach(function(ev) { API.bindEditGameCapToggle('edit-ev-' + ev.id); });
 
-  // Asynchronously populate weather & drainage indicators on admin game cards
   if (window.WeatherService && typeof window.WeatherService.getForecastForGame === 'function') {
     events.forEach(function(ev) {
       window.WeatherService.getForecastForGame(ev.event_date, ev.location).then(function(fc) {
         if (!fc || !fc.available) return;
-        var wRow = document.getElementById('admin-game-weather-' + ev.id);
-        var wBtn = document.getElementById('btn-admin-weather-' + ev.id);
+        const wRow = document.getElementById('admin-game-weather-' + ev.id);
+        const wBtn = document.getElementById('btn-admin-weather-' + ev.id);
         if (wRow) {
           wRow.innerHTML = '<span class="badge ' + fc.badgeClass + '" style="font-size: 0.72rem; padding: 1px 6px; font-weight: 700;">' + fc.emoji + ' ' + fc.temperature + '°F &bull; ' + API.escapeHtml(fc.condition) + ' (' + API.escapeHtml(fc.statusLabel) + ')</span>';
           wRow.style.display = 'inline-block';
@@ -837,19 +641,18 @@ async function loadAdminGames() {
     const data = await API.getEvents('all');
     const events = data.events || [];
     allAdminEventsCache = events;
-    loadedAdminEventsMap = new Map(events.map(ev => [ev.id, ev]));
+    loadedAdminEventsMap = new Map(events.map(function(ev) { return [ev.id, ev]; }));
     updateAdminPostEventDropdown(events);
 
-    // Populate common-locations-list datalist with unique clean locations from existing games
     const datalist = document.getElementById('common-locations-list');
     if (datalist) {
       const locSet = new Set(['Bushrod Park Field 1', 'Bushrod Park Field 2']);
-      events.forEach(ev => {
+      events.forEach(function(ev) {
         if (ev.location && ev.location.trim()) locSet.add(ev.location.trim());
       });
-      datalist.innerHTML = Array.from(locSet)
-        .map(loc => `<option value="${API.escapeHtml(loc)}">`)
-        .join('');
+      datalist.innerHTML = Array.from(locSet).map(function(loc) {
+        return '<option value="' + API.escapeHtml(loc) + '">';
+      }).join('');
     }
 
     setupAdminGameSearch();
@@ -862,18 +665,18 @@ async function loadAdminGames() {
 }
 
 window.toggleAdminWeatherPanel = async function(eventId) {
-  var panel = document.getElementById('admin-weather-panel-' + eventId);
+  const panel = document.getElementById('admin-weather-panel-' + eventId);
   if (!panel) return;
   if (panel.style.display === 'block') {
     panel.style.display = 'none';
     return;
   }
   panel.style.display = 'block';
-  var ev = loadedAdminEventsMap.get(eventId);
+  const ev = loadedAdminEventsMap.get(eventId);
   if (!ev) return;
   if (window.WeatherService && typeof window.WeatherService.getForecastForGame === 'function') {
     panel.innerHTML = '<div style="padding: 12px; color: var(--text-muted); font-size: 0.85rem;">Loading weather forecast & field drainage simulation...</div>';
-    var fc = await window.WeatherService.getForecastForGame(ev.event_date, ev.location);
+    const fc = await window.WeatherService.getForecastForGame(ev.event_date, ev.location);
     window.WeatherService.renderAssistantWidget('admin-weather-panel-' + eventId, fc, { locationName: ev.location });
   }
 };
@@ -905,9 +708,7 @@ window.saveAdminQuickTurnout = async function(e, eventId) {
 
   const count = parseInt(input.value.trim(), 10);
   if (isNaN(count) || count < 0) {
-    if (alertBox) {
-      alertBox.innerHTML = '<div class="alert alert-error" style="font-size: 0.82rem; margin-top: 8px;">Please enter a valid attendance number.</div>';
-    }
+    if (alertBox) alertBox.innerHTML = '<div class="alert alert-error" style="font-size: 0.82rem; margin-top: 8px;">Please enter a valid attendance number.</div>';
     return;
   }
 
@@ -919,64 +720,42 @@ window.saveAdminQuickTurnout = async function(e, eventId) {
   try {
     const res = await API.updateEvent(eventId, { actual_attendance: count });
     if (res.error) {
-      if (alertBox) {
-        alertBox.innerHTML = '<div class="alert alert-error" style="font-size: 0.82rem; margin-top: 8px;">' + API.escapeHtml(res.error) + '</div>';
-      }
-      if (btn) {
-        btn.disabled = false;
-        btn.textContent = '💾 Save Turnout';
-      }
+      if (alertBox) alertBox.innerHTML = '<div class="alert alert-error" style="font-size: 0.82rem; margin-top: 8px;">' + API.escapeHtml(res.error) + '</div>';
+      if (btn) { btn.disabled = false; btn.textContent = '💾 Save'; }
     } else {
       openQuickTurnoutEventId = null;
       showAlert('Game turnout successfully recorded (' + count + ' players played).', false);
       await loadAdminGames();
     }
   } catch (err) {
-    if (alertBox) {
-      alertBox.innerHTML = '<div class="alert alert-error" style="font-size: 0.82rem; margin-top: 8px;">Failed to save turnout. Please try again.</div>';
-    }
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = '💾 Save Turnout';
-    }
+    if (alertBox) alertBox.innerHTML = '<div class="alert alert-error" style="font-size: 0.82rem; margin-top: 8px;">Failed to save turnout. Please try again.</div>';
+    if (btn) { btn.disabled = false; btn.textContent = '💾 Save'; }
   }
 };
 
 window.toggleEditGamePanel = function(eventId) {
-  const panel = document.getElementById(`edit-game-panel-${eventId}`);
+  const panel = document.getElementById('edit-game-panel-' + eventId);
   if (!panel) return;
   if (openEditGameEventId === eventId) {
     openEditGameEventId = null;
     panel.style.display = 'none';
   } else {
     if (openEditGameEventId) {
-      const prev = document.getElementById(`edit-game-panel-${openEditGameEventId}`);
+      const prev = document.getElementById('edit-game-panel-' + openEditGameEventId);
       if (prev) prev.style.display = 'none';
     }
     openEditGameEventId = eventId;
     panel.style.display = 'block';
+    API.bindEditGameCapToggle('edit-ev-' + eventId);
   }
 };
 
 window.saveEditedGame = async function(eventId) {
-  const saveBtn = document.getElementById(`save-game-btn-${eventId}`);
-  const alertBox = document.getElementById(`edit-game-alert-${eventId}`);
-  const title = document.getElementById(`edit-title-${eventId}`).value.trim();
-  const rawDate = document.getElementById(`edit-date-${eventId}`).value;
-  const location = document.getElementById(`edit-location-${eventId}`).value.trim();
-  const locationUrl = document.getElementById(`edit-map-${eventId}`).value.trim();
-  const description = document.getElementById(`edit-desc-${eventId}`).value.trim();
-  const attendanceInput = document.getElementById(`edit-actual-attendance-${eventId}`);
-  const actualVal = attendanceInput ? attendanceInput.value.trim() : '';
-  const actualAttendance = actualVal === '' ? null : parseInt(actualVal, 10);
-
-  const allowedEmailsEl = document.getElementById(`edit-allowed-emails-${eventId}`);
-  const allowedEmailsRaw = (allowedEmailsEl && allowedEmailsEl.value) || '';
-  const allowedList = allowedEmailsRaw.split(/[,\n;]/).map(s => s.trim().toLowerCase()).filter(s => s.includes('@'));
-  const allowed_emails = allowedList.length > 0 ? allowedList : null;
-
-  if (!title || !rawDate || !location) {
-    alertBox.innerHTML = '<div class="alert alert-error">Title, Date/Time, and Field Location are required.</div>';
+  const saveBtn = document.getElementById('save-game-btn-' + eventId);
+  const alertBox = document.getElementById('edit-game-alert-' + eventId);
+  const parsed = API.readEditGameFields('edit-ev-' + eventId);
+  if (parsed.error) {
+    alertBox.innerHTML = '<div class="alert alert-error">' + API.escapeHtml(parsed.error) + '</div>';
     return;
   }
 
@@ -985,22 +764,14 @@ window.saveEditedGame = async function(eventId) {
   alertBox.innerHTML = '';
 
   try {
-    const res = await API.updateEvent(eventId, {
-      title,
-      event_date: API.localToPacificIso(rawDate),
-      location,
-      location_url: locationUrl,
-      description,
-      actual_attendance: isNaN(actualAttendance) ? null : actualAttendance,
-      allowed_emails
-    });
+    const res = await API.updateEvent(eventId, parsed.payload);
     if (res.error) {
-      alertBox.innerHTML = `<div class="alert alert-error">${API.escapeHtml(res.error)}</div>`;
+      alertBox.innerHTML = '<div class="alert alert-error">' + API.escapeHtml(res.error) + '</div>';
       saveBtn.disabled = false;
       saveBtn.textContent = '💾 Save Changes';
     } else {
       openEditGameEventId = null;
-      showAlert(`Updated game details for "${title}".`, false);
+      showAlert('Updated game details for "' + parsed.payload.title + '".', false);
       await loadAdminGames();
     }
   } catch (err) {
@@ -1011,7 +782,7 @@ window.saveEditedGame = async function(eventId) {
 };
 
 window.toggleTaskManager = async function(eventId) {
-  const panel = document.getElementById(`task-manager-panel-${eventId}`);
+  const panel = document.getElementById('task-manager-panel-' + eventId);
   if (!panel) return;
 
   if (openTaskManagerEventId === eventId) {
@@ -1019,7 +790,7 @@ window.toggleTaskManager = async function(eventId) {
     panel.style.display = 'none';
   } else {
     if (openTaskManagerEventId) {
-      const prev = document.getElementById(`task-manager-panel-${openTaskManagerEventId}`);
+      const prev = document.getElementById('task-manager-panel-' + openTaskManagerEventId);
       if (prev) prev.style.display = 'none';
     }
     openTaskManagerEventId = eventId;
@@ -1029,7 +800,7 @@ window.toggleTaskManager = async function(eventId) {
 };
 
 async function renderTaskManagerContent(eventId) {
-  const panel = document.getElementById(`task-manager-panel-${eventId}`);
+  const panel = document.getElementById('task-manager-panel-' + eventId);
   if (!panel) return;
 
   panel.innerHTML = '<p style="color: var(--text-muted); font-size: 0.85rem;">Loading tasks...</p>';
@@ -1041,19 +812,14 @@ async function renderTaskManagerContent(eventId) {
     panel.innerHTML = `
       <div style="background: var(--bg-subtle); padding: 16px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
-          <h4 style="color: var(--secondary); font-size: 1rem; margin: 0;">
-            Tasks for "${API.escapeHtml(res.event.title)}"
-          </h4>
-          <span style="font-size: 0.8rem; color: var(--text-muted);">
-            Changes save immediately to the live event page.
-          </span>
+          <h4 style="color: var(--secondary); font-size: 1rem; margin: 0;">Tasks for "${API.escapeHtml(res.event.title)}"</h4>
+          <span style="font-size: 0.8rem; color: var(--text-muted);">Changes save immediately to the live event page.</span>
         </div>
 
-        <!-- Current Duties List -->
         <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px;">
           ${duties.length === 0 ? '<p style="font-size: 0.85rem; color: var(--text-muted); font-style: italic;">No tasks added yet for this game.</p>' : ''}
-          ${duties.map(d => {
-            const assignedNames = d.assigned_players.map(p => p.name).join(', ');
+          ${duties.map(function(d) {
+            const assignedNames = (d.assigned_players || []).map(function(p) { return p.name; }).filter(Boolean).join(', ');
             const safeTitle = encodeURIComponent(d.title).replace(/'/g, '%27');
             const safeDesc = encodeURIComponent(d.description || '').replace(/'/g, '%27');
             return `
@@ -1062,29 +828,21 @@ async function renderTaskManagerContent(eventId) {
                   <div style="font-weight: 700; font-size: 0.95rem;">${API.escapeHtml(d.title)}</div>
                   <div style="font-size: 0.82rem; color: var(--text-muted);">${API.escapeHtml(d.description || 'No description')}</div>
                   <div style="font-size: 0.78rem; color: var(--primary); font-weight: 600; margin-top: 3px;">
-                    Slots: ${d.assigned_players.length} / ${d.slots_needed} filled
+                    Slots: ${(d.assigned_players || []).length} / ${d.slots_needed} filled
                     ${assignedNames ? ` (${API.escapeHtml(assignedNames)})` : ' (Open)'}
                   </div>
                 </div>
-
                 <div style="display: flex; gap: 8px; align-items: center;">
-                  <button onclick="editDutyInline(${eventId}, ${d.id}, '${safeTitle}', '${safeDesc}', ${d.slots_needed})" class="btn btn-outline btn-sm" style="font-size: 0.78rem; padding: 4px 8px;">
-                    ✏️ Edit
-                  </button>
-                  <button onclick="deleteDutyInline(${eventId}, ${d.id})" class="btn btn-danger btn-sm" style="font-size: 0.78rem; padding: 4px 8px;">
-                    🗑️ Delete
-                  </button>
+                  <button onclick="editDutyInline(${eventId}, ${d.id}, '${safeTitle}', '${safeDesc}', ${d.slots_needed})" class="btn btn-outline btn-sm" style="font-size: 0.78rem; padding: 4px 8px;">✏️ Edit</button>
+                  <button onclick="deleteDutyInline(${eventId}, ${d.id})" class="btn btn-danger btn-sm" style="font-size: 0.78rem; padding: 4px 8px;">🗑️ Delete</button>
                 </div>
               </div>
             `;
           }).join('')}
         </div>
 
-        <!-- Add New Task to this Event -->
         <div style="background: var(--bg-card); padding: 12px; border: 1px dashed var(--border); border-radius: var(--radius-sm);">
-          <div style="font-weight: 700; font-size: 0.85rem; color: var(--secondary); margin-bottom: 8px;">
-            + Add Another Task to this Game:
-          </div>
+          <div style="font-weight: 700; font-size: 0.85rem; color: var(--secondary); margin-bottom: 8px;">+ Add Another Task to this Game:</div>
           <div style="display: grid; grid-template-columns: 2fr 3fr 100px auto; gap: 8px; align-items: center;">
             <input type="text" id="new-duty-title-${eventId}" placeholder="Task Name (e.g. Bring Cooler)" style="padding: 6px 10px; font-size: 0.85rem;">
             <input type="text" id="new-duty-desc-${eventId}" placeholder="Details (e.g. 5gal cooler + ice)" style="padding: 6px 10px; font-size: 0.85rem;">
@@ -1100,25 +858,18 @@ async function renderTaskManagerContent(eventId) {
 }
 
 window.addDutyToEvent = async function(eventId) {
-  const title = document.getElementById(`new-duty-title-${eventId}`).value.trim();
-  const desc = document.getElementById(`new-duty-desc-${eventId}`).value.trim();
-  const slots = parseInt(document.getElementById(`new-duty-slots-${eventId}`).value, 10) || 1;
-
+  const title = document.getElementById('new-duty-title-' + eventId).value.trim();
+  const desc = document.getElementById('new-duty-desc-' + eventId).value.trim();
+  const slots = parseInt(document.getElementById('new-duty-slots-' + eventId).value, 10) || 1;
   if (!title) {
     alert('Please enter a task name.');
     return;
   }
 
   try {
-    const res = await fetch(`/api/events/${eventId}/duties`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, description: desc, slots_needed: slots })
-    });
-    const data = await res.json();
-    if (data.error) {
-      alert(data.error);
-    } else {
+    const data = await API.addDuty(eventId, { title: title, description: desc, slots_needed: slots });
+    if (data.error) alert(data.error);
+    else {
       await renderTaskManagerContent(eventId);
       await loadAdminGames();
     }
@@ -1128,32 +879,21 @@ window.addDutyToEvent = async function(eventId) {
 };
 
 window.editDutyInline = async function(eventId, dutyId, encodedTitle, encodedDesc, slots) {
-  const currentTitle = decodeURIComponent(encodedTitle);
-  const currentDesc = decodeURIComponent(encodedDesc);
-
-  const newTitle = prompt('Edit Task Name:', currentTitle);
+  const newTitle = prompt('Edit Task Name:', decodeURIComponent(encodedTitle));
   if (newTitle === null) return;
-
-  const newDesc = prompt('Edit Task Details / Description:', currentDesc);
+  const newDesc = prompt('Edit Task Details / Description:', decodeURIComponent(encodedDesc));
   if (newDesc === null) return;
-
   const newSlots = prompt('Volunteers Needed (Number):', slots);
   if (newSlots === null) return;
 
   try {
-    const res = await fetch(`/api/events/${eventId}/duties/${dutyId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title: newTitle.trim(),
-        description: newDesc.trim(),
-        slots_needed: parseInt(newSlots, 10) || 1
-      })
+    const data = await API.updateDuty(eventId, dutyId, {
+      title: newTitle.trim(),
+      description: newDesc.trim(),
+      slots_needed: parseInt(newSlots, 10) || 1
     });
-    const data = await res.json();
-    if (data.error) {
-      alert(data.error);
-    } else {
+    if (data.error) alert(data.error);
+    else {
       await renderTaskManagerContent(eventId);
       await loadAdminGames();
     }
@@ -1166,15 +906,10 @@ window.deleteDutyInline = async function(eventId, dutyId) {
   if (!confirm('Are you sure you want to delete this task? Any existing volunteer assignment for this task will be cleared.')) {
     return;
   }
-
   try {
-    const res = await fetch(`/api/events/${eventId}/duties/${dutyId}`, {
-      method: 'DELETE'
-    });
-    const data = await res.json();
-    if (data.error) {
-      alert(data.error);
-    } else {
+    const data = await API.deleteDuty(eventId, dutyId);
+    if (data.error) alert(data.error);
+    else {
       await renderTaskManagerContent(eventId);
       await loadAdminGames();
     }
@@ -1184,13 +919,9 @@ window.deleteDutyInline = async function(eventId, dutyId) {
 };
 
 async function sendReminders(eventId) {
-  if (!confirm('Send reminder emails right now to all confirmed attendees for this event?')) {
-    return;
-  }
-
+  if (!confirm('Send reminder emails right now to all confirmed attendees for this event?')) return;
   try {
-    const res = await fetch(`/api/events/${eventId}/send-reminders`, { method: 'POST' });
-    const data = await res.json();
+    const data = await API.sendReminders(eventId);
     showAlert(data.message || data.error, !data.success);
   } catch (err) {
     showAlert('Error sending reminders.', true);
@@ -1198,13 +929,9 @@ async function sendReminders(eventId) {
 }
 
 async function deleteGame(eventId) {
-  if (!confirm('Are you sure you want to delete this game? This cannot be undone.')) {
-    return;
-  }
-
+  if (!confirm('Are you sure you want to delete this game? This cannot be undone.')) return;
   try {
-    const res = await fetch(`/api/events/${eventId}`, { method: 'DELETE' });
-    const data = await res.json();
+    const data = await API.deleteEvent(eventId);
     if (data.success) {
       showAlert('Game deleted.', false);
       await loadAdminGames();
@@ -1216,12 +943,15 @@ async function deleteGame(eventId) {
   }
 }
 
-function showAlert(msg, isError = false) {
+function showAlert(msg, isError) {
   const alertBox = document.getElementById('admin-alert');
-  alertBox.innerHTML = `<div class="alert ${isError ? 'alert-error' : 'alert-success'}">${API.escapeHtml(msg)}</div>`;
+  alertBox.innerHTML = '<div class="alert ' + (isError ? 'alert-error' : 'alert-success') + '">' + API.escapeHtml(msg) + '</div>';
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+// =============================================================================
+// User Account Roles, Operations Badges & Hero Credits Management
+// =============================================================================
 function setupAdminUserManagement(currentUser) {
   const section = document.getElementById('admin-user-mgmt-section');
   if (!section) return;
@@ -1235,13 +965,19 @@ function setupAdminUserManagement(currentUser) {
 
   let cachedUsers = [];
 
+  function setUserMgmtAlert(kind, htmlMsg) {
+    if (alertBox) {
+      alertBox.innerHTML = '<div class="alert alert-' + kind + '" style="font-size: 0.88rem;">' + htmlMsg + '</div>';
+    }
+  }
+
   function renderUsersList() {
     const rawQuery = (searchInput && searchInput.value) ? searchInput.value : '';
     const query = rawQuery.trim().toLowerCase();
 
     let filtered = cachedUsers;
     if (query) {
-      filtered = cachedUsers.filter(u => {
+      filtered = cachedUsers.filter(function(u) {
         const name = (u.name || '').toLowerCase();
         const email = (u.email || '').toLowerCase();
         return name.indexOf(query) !== -1 || email.indexOf(query) !== -1;
@@ -1252,9 +988,9 @@ function setupAdminUserManagement(currentUser) {
       if (cachedUsers.length === 0) {
         countDisplay.textContent = '0 accounts';
       } else if (query) {
-        countDisplay.textContent = `Showing ${filtered.length} of ${cachedUsers.length} accounts`;
+        countDisplay.textContent = 'Showing ' + filtered.length + ' of ' + cachedUsers.length + ' accounts';
       } else {
-        countDisplay.textContent = `${cachedUsers.length} account${cachedUsers.length === 1 ? '' : 's'}`;
+        countDisplay.textContent = cachedUsers.length + ' account' + (cachedUsers.length === 1 ? '' : 's');
       }
     }
 
@@ -1264,18 +1000,15 @@ function setupAdminUserManagement(currentUser) {
     }
 
     if (filtered.length === 0) {
-      tableBody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 20px; font-size: 0.85rem;">No accounts found matching "<strong>${API.escapeHtml(query)}</strong>"</td></tr>`;
+      tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 20px; font-size: 0.85rem;">No accounts found matching "<strong>' + API.escapeHtml(query) + '</strong>"</td></tr>';
       return;
     }
 
-    tableBody.innerHTML = filtered.map(u => {
+    tableBody.innerHTML = filtered.map(function(u) {
       const isMe = u.id === currentUser.id;
       let roleBadge = '<span class="badge badge-gray">👤 Player</span>';
-      if (u.role === 'admin') {
-        roleBadge = '<span class="badge badge-orange">👑 Admin</span>';
-      } else if (u.role === 'organizer') {
-        roleBadge = '<span class="badge badge-green">🛡️ Organizer</span>';
-      }
+      if (u.role === 'admin') roleBadge = '<span class="badge badge-orange">👑 Admin</span>';
+      else if (u.role === 'organizer') roleBadge = '<span class="badge badge-green">🛡️ Organizer</span>';
 
       const gamesCount = (typeof u.eventsAttended === 'number') ? u.eventsAttended : 0;
       const credits = (typeof u.hero_credits === 'number') ? u.hero_credits : 0;
@@ -1289,20 +1022,14 @@ function setupAdminUserManagement(currentUser) {
             </div>
             <div style="font-size: 0.77rem; color: var(--text-muted); font-family: monospace; line-height: 1.2;">${API.escapeHtml(u.email)}</div>
           </td>
-          <td style="padding: 5px 10px; font-weight: 600; font-size: 0.82rem; white-space: nowrap;">
-            ${gamesCount} game${gamesCount === 1 ? '' : 's'}
-          </td>
-          <td style="padding: 5px 10px; white-space: nowrap;">
-            ${roleBadge}
-          </td>
+          <td style="padding: 5px 10px; font-weight: 600; font-size: 0.82rem; white-space: nowrap;">${gamesCount} game${gamesCount === 1 ? '' : 's'}</td>
+          <td style="padding: 5px 10px; white-space: nowrap;">${roleBadge}</td>
           <td style="padding: 5px 10px; white-space: nowrap;">
             <label style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.76rem; font-weight: 600; cursor: pointer; margin-right: 8px;">
-              <input type="checkbox" class="admin-machine-badge" data-user-id="${u.id}" ${u.machine_badge ? 'checked' : ''}>
-              ⚡ Machine
+              <input type="checkbox" class="admin-machine-badge" data-user-id="${u.id}" ${u.machine_badge ? 'checked' : ''}> ⚡ Machine
             </label>
             <label style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.76rem; font-weight: 600; cursor: pointer;">
-              <input type="checkbox" class="admin-field-badge" data-user-id="${u.id}" ${u.field_badge ? 'checked' : ''}>
-              🚜 Dragging
+              <input type="checkbox" class="admin-field-badge" data-user-id="${u.id}" ${u.field_badge ? 'checked' : ''}> 🚜 Dragging
             </label>
           </td>
           <td style="padding: 5px 10px; white-space: nowrap;">
@@ -1321,9 +1048,7 @@ function setupAdminUserManagement(currentUser) {
           </td>
           <td style="padding: 5px 10px; white-space: nowrap;">
             ${isMe ? '<span style="color: var(--text-muted); font-size: 0.78rem;">(Your account)</span>' : `
-              <button type="button" class="btn btn-outline btn-sm btn-delete-user" data-user-id="${u.id}" data-user-email="${API.escapeHtml(u.email)}" style="color: var(--danger); border-color: var(--danger); font-size: 0.75rem; padding: 2px 8px; height: 26px; line-height: 1.2; font-weight: 600;">
-                🗑️ Remove
-              </button>
+              <button type="button" class="btn btn-outline btn-sm btn-delete-user" data-user-id="${u.id}" data-user-email="${API.escapeHtml(u.email)}" style="color: var(--danger); border-color: var(--danger); font-size: 0.75rem; padding: 2px 8px; height: 26px; line-height: 1.2; font-weight: 600;">🗑️ Remove</button>
             `}
           </td>
         </tr>
@@ -1333,174 +1058,123 @@ function setupAdminUserManagement(currentUser) {
     bindUserRowEvents();
   }
 
+  async function saveUserBadgePatch(targetUserId, patch, successMsg, onRevert) {
+    try {
+      const res = await API.updateUserBadges(targetUserId, patch);
+      if (res.error) {
+        setUserMgmtAlert('error', API.escapeHtml(res.error));
+        if (onRevert) onRevert();
+      } else {
+        const found = cachedUsers.find(function(u) { return String(u.id) === String(targetUserId); });
+        if (found) Object.assign(found, patch);
+        if (patch.hero_credits !== undefined) {
+          const span = tableBody.querySelector('.admin-hero-credits-val[data-user-id="' + targetUserId + '"]');
+          if (span) span.textContent = patch.hero_credits;
+        }
+        setUserMgmtAlert('success', '✓ ' + API.escapeHtml(successMsg));
+      }
+    } catch (err) {
+      if (onRevert) onRevert();
+    }
+  }
+
   function bindUserRowEvents() {
-    tableBody.querySelectorAll('.btn-delete-user').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
+    tableBody.querySelectorAll('.btn-delete-user').forEach(function(btn) {
+      btn.addEventListener('click', async function(e) {
         const targetUserId = e.currentTarget.getAttribute('data-user-id');
         const targetUserEmail = e.currentTarget.getAttribute('data-user-email');
-
-        if (!confirm(`Are you sure you want to permanently remove user account: ${targetUserEmail}?`)) {
-          return;
-        }
-
-        const alsoBan = confirm(`Would you also like to permanently BAN ${targetUserEmail} from re-registering or signing in again?`);
-        alertBox.innerHTML = `<div class="alert alert-info" style="font-size: 0.88rem;">Removing ${API.escapeHtml(targetUserEmail)}...</div>`;
+        if (!confirm('Are you sure you want to permanently remove user account: ' + targetUserEmail + '?')) return;
+        const alsoBan = confirm('Would you also like to permanently BAN ' + targetUserEmail + ' from re-registering or signing in again?');
+        setUserMgmtAlert('info', 'Removing ' + API.escapeHtml(targetUserEmail) + '...');
 
         try {
           const deleteRes = await API.deleteUser(targetUserId, alsoBan, 'Banned by admin');
           if (deleteRes.error) {
-            alertBox.innerHTML = `<div class="alert alert-error" style="font-size: 0.88rem;">${API.escapeHtml(deleteRes.error)}</div>`;
+            setUserMgmtAlert('error', API.escapeHtml(deleteRes.error));
           } else {
-            alertBox.innerHTML = `<div class="alert alert-success" style="font-size: 0.88rem;">✓ ${API.escapeHtml(deleteRes.message)}</div>`;
+            setUserMgmtAlert('success', '✓ ' + API.escapeHtml(deleteRes.message));
             await loadUsers();
-            if (alsoBan && typeof reloadBannedEmailsFn === 'function') {
-              await reloadBannedEmailsFn();
-            }
+            if (alsoBan && typeof reloadBannedEmailsFn === 'function') await reloadBannedEmailsFn();
           }
         } catch (err) {
-          alertBox.innerHTML = `<div class="alert alert-error" style="font-size: 0.88rem;">Failed to remove user account.</div>`;
+          setUserMgmtAlert('error', 'Failed to remove user account.');
         }
       });
     });
 
-    tableBody.querySelectorAll('.admin-role-selector').forEach(sel => {
-      sel.addEventListener('change', async (e) => {
+    tableBody.querySelectorAll('.admin-role-selector').forEach(function(sel) {
+      sel.addEventListener('change', async function(e) {
         const targetUserId = e.target.getAttribute('data-user-id');
         const targetUserName = e.target.getAttribute('data-user-name');
         const newRole = e.target.value;
-
-        alertBox.innerHTML = `<div class="alert alert-info" style="font-size: 0.88rem;">Updating role for ${API.escapeHtml(targetUserName)}...</div>`;
+        setUserMgmtAlert('info', 'Updating role for ' + API.escapeHtml(targetUserName) + '...');
 
         try {
           const updateRes = await API.updateUserRole(targetUserId, newRole);
           if (updateRes.error) {
-            alertBox.innerHTML = `<div class="alert alert-error" style="font-size: 0.88rem;">${API.escapeHtml(updateRes.error)}</div>`;
+            setUserMgmtAlert('error', API.escapeHtml(updateRes.error));
             await loadUsers();
+            return;
+          }
+
+          const isSelf = parseInt(targetUserId, 10) === currentUser.id;
+          if (isSelf) {
+            currentUser.role = newRole;
+            currentUser.isAdmin = (newRole === 'admin');
+            currentUser.canManageEvents = (newRole === 'admin' || newRole === 'organizer');
+            currentAdminUser = currentUser;
+            API.renderNav(currentUser);
+          }
+
+          if (isSelf && newRole !== 'admin') {
+            const roleTitle = newRole === 'organizer' ? 'Organizer' : 'Player';
+            setUserMgmtAlert('success', 'Your role has been updated to ' + roleTitle + '. Admin management features are now restricted.');
+            applyRoleUI(currentUser);
+            await loadAdminGames();
+            if (newRole === 'player') {
+              setTimeout(function() {
+                alert('Your role has been updated to Player. Redirecting to home page.');
+                window.location.href = '/index.html';
+              }, 1500);
+            }
           } else {
-            const isSelf = parseInt(targetUserId, 10) === currentUser.id;
-            const isSelfDemotion = isSelf && newRole !== 'admin';
-
-            if (isSelf) {
-              currentUser.role = newRole;
-              currentUser.isAdmin = (newRole === 'admin');
-              currentUser.canManageEvents = (newRole === 'admin' || newRole === 'organizer');
-              currentAdminUser = currentUser;
-              API.renderNav(currentUser);
-            }
-
-            if (isSelfDemotion) {
-              const roleTitle = newRole === 'organizer' ? 'Organizer' : 'Player';
-              alertBox.innerHTML = `<div class="alert alert-success" style="font-size: 0.88rem;">Your role has been updated to ${roleTitle}. Admin management features are now restricted.</div>`;
-
-              applyRoleUI(currentUser);
-              await loadAdminGames();
-
-              if (newRole === 'player') {
-                setTimeout(() => {
-                  alert('Your role has been updated to Player. Redirecting to home page.');
-                  window.location.href = '/index.html';
-                }, 1500);
-              } else {
-                setTimeout(() => {
-                  const sec = document.getElementById('admin-user-mgmt-section');
-                  if (sec) sec.style.display = 'none';
-                  const secSec = document.getElementById('admin-security-section');
-                  if (secSec) secSec.style.display = 'none';
-                  const secNav = document.getElementById('admin-security-nav-btn');
-                  if (secNav) secNav.style.display = 'none';
-                }, 2500);
-              }
-            } else {
-              alertBox.innerHTML = `<div class="alert alert-success" style="font-size: 0.88rem;">✓ Role for <strong>${API.escapeHtml(targetUserName)}</strong> updated to <strong>${newRole}</strong>!</div>`;
-              await loadUsers();
-            }
+            setUserMgmtAlert('success', '✓ Role for <strong>' + API.escapeHtml(targetUserName) + '</strong> updated to <strong>' + API.escapeHtml(newRole) + '</strong>!');
+            await loadUsers();
           }
         } catch (err) {
-          alertBox.innerHTML = `<div class="alert alert-error" style="font-size: 0.88rem;">Failed to update role. Please try again.</div>`;
+          setUserMgmtAlert('error', 'Failed to update role. Please try again.');
           await loadUsers();
         }
       });
     });
 
-    tableBody.querySelectorAll('.admin-machine-badge').forEach(chk => {
-      chk.addEventListener('change', async (e) => {
-        const targetUserId = e.target.getAttribute('data-user-id');
+    tableBody.querySelectorAll('.admin-machine-badge').forEach(function(chk) {
+      chk.addEventListener('change', function(e) {
         const isChecked = e.target.checked;
-        try {
-          const res = await API.updateUserBadges(targetUserId, { machine_badge: isChecked ? 1 : 0 });
-          if (res.error) {
-            alertBox.innerHTML = `<div class="alert alert-error" style="font-size: 0.88rem;">${API.escapeHtml(res.error)}</div>`;
-            e.target.checked = !isChecked;
-          } else {
-            const found = cachedUsers.find(u => String(u.id) === String(targetUserId));
-            if (found) found.machine_badge = isChecked ? 1 : 0;
-            alertBox.innerHTML = `<div class="alert alert-success" style="font-size: 0.88rem;">✓ Machine badge updated!</div>`;
-          }
-        } catch (err) {
-          e.target.checked = !isChecked;
-        }
+        saveUserBadgePatch(e.target.getAttribute('data-user-id'), { machine_badge: isChecked ? 1 : 0 }, 'Machine badge updated!', function() { e.target.checked = !isChecked; });
       });
     });
 
-    tableBody.querySelectorAll('.admin-field-badge').forEach(chk => {
-      chk.addEventListener('change', async (e) => {
-        const targetUserId = e.target.getAttribute('data-user-id');
+    tableBody.querySelectorAll('.admin-field-badge').forEach(function(chk) {
+      chk.addEventListener('change', function(e) {
         const isChecked = e.target.checked;
-        try {
-          const res = await API.updateUserBadges(targetUserId, { field_badge: isChecked ? 1 : 0 });
-          if (res.error) {
-            alertBox.innerHTML = `<div class="alert alert-error" style="font-size: 0.88rem;">${API.escapeHtml(res.error)}</div>`;
-            e.target.checked = !isChecked;
-          } else {
-            const found = cachedUsers.find(u => String(u.id) === String(targetUserId));
-            if (found) found.field_badge = isChecked ? 1 : 0;
-            alertBox.innerHTML = `<div class="alert alert-success" style="font-size: 0.88rem;">✓ Field dragging badge updated!</div>`;
-          }
-        } catch (err) {
-          e.target.checked = !isChecked;
-        }
+        saveUserBadgePatch(e.target.getAttribute('data-user-id'), { field_badge: isChecked ? 1 : 0 }, 'Field dragging badge updated!', function() { e.target.checked = !isChecked; });
       });
     });
 
-    tableBody.querySelectorAll('.btn-credit-minus').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
-        const targetUserId = e.currentTarget.getAttribute('data-user-id');
-        const found = cachedUsers.find(u => String(u.id) === String(targetUserId));
-        const currentCredits = found && typeof found.hero_credits === 'number' ? found.hero_credits : 0;
-        if (currentCredits <= 0) return;
-        const newCredits = currentCredits - 1;
-        try {
-          const res = await API.updateUserBadges(targetUserId, { hero_credits: newCredits });
-          if (res.error) {
-            alertBox.innerHTML = `<div class="alert alert-error" style="font-size: 0.88rem;">${API.escapeHtml(res.error)}</div>`;
-          } else {
-            if (found) found.hero_credits = newCredits;
-            const span = tableBody.querySelector(`.admin-hero-credits-val[data-user-id="${targetUserId}"]`);
-            if (span) span.textContent = newCredits;
-            alertBox.innerHTML = `<div class="alert alert-success" style="font-size: 0.88rem;">✓ Backup hero credits updated to ${newCredits}!</div>`;
-          }
-        } catch (err) {}
-      });
-    });
+    function adjustCredits(targetUserId, delta) {
+      const found = cachedUsers.find(function(u) { return String(u.id) === String(targetUserId); });
+      const currentCredits = found && typeof found.hero_credits === 'number' ? found.hero_credits : 0;
+      const newCredits = currentCredits + delta;
+      if (newCredits < 0) return;
+      saveUserBadgePatch(targetUserId, { hero_credits: newCredits }, 'Backup hero credits updated to ' + newCredits + '!');
+    }
 
-    tableBody.querySelectorAll('.btn-credit-plus').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
-        const targetUserId = e.currentTarget.getAttribute('data-user-id');
-        const found = cachedUsers.find(u => String(u.id) === String(targetUserId));
-        const currentCredits = found && typeof found.hero_credits === 'number' ? found.hero_credits : 0;
-        const newCredits = currentCredits + 1;
-        try {
-          const res = await API.updateUserBadges(targetUserId, { hero_credits: newCredits });
-          if (res.error) {
-            alertBox.innerHTML = `<div class="alert alert-error" style="font-size: 0.88rem;">${API.escapeHtml(res.error)}</div>`;
-          } else {
-            if (found) found.hero_credits = newCredits;
-            const span = tableBody.querySelector(`.admin-hero-credits-val[data-user-id="${targetUserId}"]`);
-            if (span) span.textContent = newCredits;
-            alertBox.innerHTML = `<div class="alert alert-success" style="font-size: 0.88rem;">✓ Backup hero credits updated to ${newCredits}!</div>`;
-          }
-        } catch (err) {}
-      });
+    tableBody.querySelectorAll('.btn-credit-minus').forEach(function(btn) {
+      btn.addEventListener('click', function(e) { adjustCredits(e.currentTarget.getAttribute('data-user-id'), -1); });
+    });
+    tableBody.querySelectorAll('.btn-credit-plus').forEach(function(btn) {
+      btn.addEventListener('click', function(e) { adjustCredits(e.currentTarget.getAttribute('data-user-id'), 1); });
     });
   }
 
@@ -1509,10 +1183,9 @@ function setupAdminUserManagement(currentUser) {
     try {
       const res = await API.getUsers();
       if (res.error) {
-        tableBody.innerHTML = `<tr><td colspan="7" style="color: var(--danger); text-align: center; padding: 14px;">${API.escapeHtml(res.error)}</td></tr>`;
+        tableBody.innerHTML = '<tr><td colspan="7" style="color: var(--danger); text-align: center; padding: 14px;">' + API.escapeHtml(res.error) + '</td></tr>';
         return;
       }
-
       cachedUsers = res.users || [];
       renderUsersList();
     } catch (err) {
@@ -1520,12 +1193,7 @@ function setupAdminUserManagement(currentUser) {
     }
   }
 
-  if (searchInput) {
-    searchInput.addEventListener('input', () => {
-      renderUsersList();
-    });
-  }
-
+  if (searchInput) searchInput.addEventListener('input', renderUsersList);
   loadUsers();
   if (refreshBtn) refreshBtn.addEventListener('click', loadUsers);
 }
@@ -1533,10 +1201,9 @@ function setupAdminUserManagement(currentUser) {
 // =============================================================================
 // Access Control & Guest Policy Administration
 // =============================================================================
-
 let reloadBannedEmailsFn = null;
 
-function setupAdminSecurity(currentUser) {
+function setupAdminSecurity() {
   const section = document.getElementById('admin-security-section');
   if (!section) return;
 
@@ -1554,32 +1221,22 @@ function setupAdminSecurity(currentUser) {
       if (requireLoginCheckbox && s && s.require_login_to_rsvp !== undefined) {
         requireLoginCheckbox.checked = Boolean(s.require_login_to_rsvp);
       }
-    } catch (e) {
-      console.error('Failed to load guest policy settings:', e);
-    }
+    } catch (e) {}
   }
 
   if (requireLoginCheckbox) {
-    requireLoginCheckbox.addEventListener('change', async (e) => {
+    requireLoginCheckbox.addEventListener('change', async function(e) {
       const isChecked = e.target.checked;
-      if (settingsAlert) {
-        settingsAlert.innerHTML = '<span style="font-size: 0.8rem; color: var(--text-muted);">Saving policy...</span>';
-      }
+      if (settingsAlert) settingsAlert.innerHTML = '<span style="font-size: 0.8rem; color: var(--text-muted);">Saving policy...</span>';
       try {
         const res = await API.updateSettings({ require_login_to_rsvp: isChecked });
-        if (res.error) {
-          if (settingsAlert) {
-            settingsAlert.innerHTML = `<span style="font-size: 0.8rem; color: var(--danger);">${API.escapeHtml(res.error)}</span>`;
-          }
-        } else {
-          if (settingsAlert) {
-            settingsAlert.innerHTML = `<span style="font-size: 0.8rem; color: var(--success); font-weight: 700;">✓ Policy updated: ${isChecked ? 'Sign-in required for all RSVPs (Guests disabled)' : 'Guest RSVPs permitted'}</span>`;
-          }
+        if (settingsAlert) {
+          settingsAlert.innerHTML = res.error
+            ? '<span style="font-size: 0.8rem; color: var(--danger);">' + API.escapeHtml(res.error) + '</span>'
+            : '<span style="font-size: 0.8rem; color: var(--success); font-weight: 700;">✓ Policy updated: ' + (isChecked ? 'Sign-in required for all RSVPs (Guests disabled)' : 'Guest RSVPs permitted') + '</span>';
         }
       } catch (err) {
-        if (settingsAlert) {
-          settingsAlert.innerHTML = '<span style="font-size: 0.8rem; color: var(--danger);">Failed to save policy.</span>';
-        }
+        if (settingsAlert) settingsAlert.innerHTML = '<span style="font-size: 0.8rem; color: var(--danger);">Failed to save policy.</span>';
       }
     });
   }
@@ -1594,34 +1251,30 @@ function setupAdminSecurity(currentUser) {
         bannedTableBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 10px;">No banned emails.</td></tr>';
         return;
       }
-      bannedTableBody.innerHTML = list.map(b => `
-        <tr>
-          <td style="font-weight: 700; color: var(--danger); font-size: 0.84rem; font-family: monospace;">${API.escapeHtml(b.email)}</td>
-          <td style="font-size: 0.82rem; color: var(--text-muted);">${API.escapeHtml(b.reason || 'None')}</td>
-          <td style="font-size: 0.82rem; color: var(--text-muted); white-space: nowrap;">${b.created_at ? API.escapeHtml(b.created_at.slice(0, 10)) : ''}</td>
-          <td style="white-space: nowrap;">
-            <button type="button" class="btn btn-outline btn-sm btn-unban" data-ban-id="${b.id}" data-email="${API.escapeHtml(b.email)}" style="font-size: 0.75rem; padding: 2px 8px; height: 26px; line-height: 1.2;">
-              Unban
-            </button>
-          </td>
-        </tr>
-      `).join('');
+      bannedTableBody.innerHTML = list.map(function(b) {
+        return `
+          <tr>
+            <td style="font-weight: 700; color: var(--danger); font-size: 0.84rem; font-family: monospace;">${API.escapeHtml(b.email)}</td>
+            <td style="font-size: 0.82rem; color: var(--text-muted);">${API.escapeHtml(b.reason || 'None')}</td>
+            <td style="font-size: 0.82rem; color: var(--text-muted); white-space: nowrap;">${b.created_at ? API.escapeHtml(b.created_at.slice(0, 10)) : ''}</td>
+            <td style="white-space: nowrap;">
+              <button type="button" class="btn btn-outline btn-sm btn-unban" data-ban-id="${b.id}" data-email="${API.escapeHtml(b.email)}" style="font-size: 0.75rem; padding: 2px 8px; height: 26px; line-height: 1.2;">Unban</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
 
-      bannedTableBody.querySelectorAll('.btn-unban').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
+      bannedTableBody.querySelectorAll('.btn-unban').forEach(function(btn) {
+        btn.addEventListener('click', async function(e) {
           const banId = e.currentTarget.getAttribute('data-ban-id');
           const email = e.currentTarget.getAttribute('data-email');
-          if (!confirm(`Unban ${email}?`)) return;
+          if (!confirm('Unban ' + email + '?')) return;
           try {
             const unbanRes = await API.unbanEmail(banId);
-            if (bannedAlert) {
-              bannedAlert.innerHTML = `<div class="alert alert-success" style="font-size: 0.85rem;">${API.escapeHtml(unbanRes.message || 'Ban removed.')}</div>`;
-            }
+            if (bannedAlert) bannedAlert.innerHTML = '<div class="alert alert-success" style="font-size: 0.85rem;">' + API.escapeHtml(unbanRes.message || 'Ban removed.') + '</div>';
             await loadBannedEmails();
           } catch (err) {
-            if (bannedAlert) {
-              bannedAlert.innerHTML = '<div class="alert alert-error" style="font-size: 0.85rem;">Failed to unban email.</div>';
-            }
+            if (bannedAlert) bannedAlert.innerHTML = '<div class="alert alert-error" style="font-size: 0.85rem;">Failed to unban email.</div>';
           }
         });
       });
@@ -1633,7 +1286,7 @@ function setupAdminSecurity(currentUser) {
   reloadBannedEmailsFn = loadBannedEmails;
 
   if (banForm) {
-    banForm.addEventListener('submit', async (e) => {
+    banForm.addEventListener('submit', async function(e) {
       e.preventDefault();
       const emailInput = document.getElementById('ban-email-input');
       const reasonInput = document.getElementById('ban-reason-input');
@@ -1641,51 +1294,35 @@ function setupAdminSecurity(currentUser) {
       const reason = reasonInput ? reasonInput.value.trim() : '';
       if (!email) return;
 
-      if (bannedAlert) {
-        bannedAlert.innerHTML = '<span style="font-size: 0.85rem; color: var(--text-muted);">Adding to ban list...</span>';
-      }
-      if (banSubmitBtn) {
-        banSubmitBtn.disabled = true;
-      }
+      if (bannedAlert) bannedAlert.innerHTML = '<span style="font-size: 0.85rem; color: var(--text-muted);">Adding to ban list...</span>';
+      if (banSubmitBtn) banSubmitBtn.disabled = true;
 
       try {
         const res = await API.banEmail(email, reason);
         if (res.error) {
-          if (bannedAlert) {
-            bannedAlert.innerHTML = `<div class="alert alert-error" style="font-size: 0.85rem;">${API.escapeHtml(res.error)}</div>`;
-          }
+          if (bannedAlert) bannedAlert.innerHTML = '<div class="alert alert-error" style="font-size: 0.85rem;">' + API.escapeHtml(res.error) + '</div>';
         } else {
-          if (bannedAlert) {
-            bannedAlert.innerHTML = `<div class="alert alert-success" style="font-size: 0.85rem;">✓ ${API.escapeHtml(res.message || 'Email added to ban list.')}</div>`;
-          }
+          if (bannedAlert) bannedAlert.innerHTML = '<div class="alert alert-success" style="font-size: 0.85rem;">✓ ' + API.escapeHtml(res.message || 'Email added to ban list.') + '</div>';
           if (emailInput) emailInput.value = '';
           if (reasonInput) reasonInput.value = '';
           await loadBannedEmails();
         }
       } catch (err) {
-        if (bannedAlert) {
-          bannedAlert.innerHTML = '<div class="alert alert-error" style="font-size: 0.85rem;">Failed to ban email.</div>';
-        }
+        if (bannedAlert) bannedAlert.innerHTML = '<div class="alert alert-error" style="font-size: 0.85rem;">Failed to ban email.</div>';
       } finally {
-        if (banSubmitBtn) {
-          banSubmitBtn.disabled = false;
-        }
+        if (banSubmitBtn) banSubmitBtn.disabled = false;
       }
     });
   }
 
-  if (refreshBannedBtn) {
-    refreshBannedBtn.addEventListener('click', loadBannedEmails);
-  }
+  if (refreshBannedBtn) refreshBannedBtn.addEventListener('click', loadBannedEmails);
 
   loadSettings();
   loadBannedEmails();
 
   if (window.location.hash === '#admin-security-section' || window.location.hash === '#security-management-section') {
-    setTimeout(() => {
-      try {
-        section.scrollIntoView({ behavior: 'smooth' });
-      } catch (e) {}
+    setTimeout(function() {
+      try { section.scrollIntoView({ behavior: 'smooth' }); } catch (e) {}
     }, 150);
   }
 }
@@ -1693,7 +1330,6 @@ function setupAdminSecurity(currentUser) {
 // =============================================================================
 // Community Highlights & RSS Feed Administration
 // =============================================================================
-
 function setupCommunityHighlightsAdmin() {
   const form = document.getElementById('create-post-form');
   const mediaUrlInput = document.getElementById('post-media-url-input');
@@ -1705,9 +1341,7 @@ function setupCommunityHighlightsAdmin() {
   function updateLivePreview() {
     if (!previewContainer || !previewTarget || !mediaUrlInput || !mediaTypeSelect) return;
     const url = (mediaUrlInput.value || '').trim();
-    const explicitType = mediaTypeSelect.value;
-    const resolvedType = API.parseMediaType(url, explicitType);
-
+    const resolvedType = API.parseMediaType(url, mediaTypeSelect.value);
     if (!url || resolvedType === 'none') {
       previewContainer.style.display = 'none';
       previewTarget.innerHTML = '';
@@ -1715,69 +1349,23 @@ function setupCommunityHighlightsAdmin() {
     }
 
     previewContainer.style.display = 'block';
+    const safeLink = API.safeUrl(url);
 
     if (resolvedType === 'youtube') {
       const embedUrl = API.getYouTubeEmbedUrl(url);
-      if (embedUrl) {
-        previewTarget.innerHTML = `
-          <div class="feed-post-media feed-media-youtube" style="max-width: 480px; border-radius: var(--radius-sm); overflow: hidden;">
-            <iframe src="${API.escapeHtml(embedUrl)}" title="YouTube Preview" allowfullscreen></iframe>
-          </div>
-          <small style="color: var(--text-muted); display: block; margin-top: 6px;">
-            ✓ YouTube detected (ID: ${API.escapeHtml(API.getYouTubeId(url) || '')}) — will embed via privacy-preserving nocookie player.
-          </small>
-        `;
-      } else {
-        previewTarget.innerHTML = `<span style="color: #ef4444;">⚠️ Could not parse YouTube video ID from URL.</span>`;
-      }
+      previewTarget.innerHTML = embedUrl
+        ? '<div class="feed-post-media feed-media-youtube" style="max-width: 480px; border-radius: var(--radius-sm); overflow: hidden;"><iframe src="' + API.escapeHtml(embedUrl) + '" title="YouTube Preview" allowfullscreen></iframe></div><small style="color: var(--text-muted); display: block; margin-top: 6px;">✓ YouTube detected (ID: ' + API.escapeHtml(API.getYouTubeId(url) || '') + ')</small>'
+        : '<span style="color: #ef4444;">⚠️ Could not parse YouTube video ID from URL.</span>';
+    } else if (!safeLink) {
+      previewTarget.innerHTML = '<span style="color: #ef4444;">⚠️ Invalid media URL.</span>';
     } else if (resolvedType === 'image') {
-      const safeImg = API.safeUrl(url);
-      if (safeImg) {
-        previewTarget.innerHTML = `
-          <div style="max-width: 360px;">
-            <img src="${API.escapeHtml(safeImg)}" alt="Preview" style="max-width: 100%; border-radius: var(--radius-sm); border: 1px solid var(--border);" onerror="this.onerror=null; this.parentElement.innerHTML='<span style=\\'color:#ef4444;\\'>Failed to load image preview. Check link.</span>';" />
-          </div>
-          <small style="color: var(--text-muted); display: block; margin-top: 6px;">
-            ✓ Image link detected — will render photo card and RSS enclosure.
-          </small>
-        `;
-      } else {
-        previewTarget.innerHTML = `<span style="color: #ef4444;">⚠️ Invalid image URL.</span>`;
-      }
+      previewTarget.innerHTML = '<div style="max-width: 360px;"><img src="' + API.escapeHtml(safeLink) + '" alt="Preview" style="max-width: 100%; border-radius: var(--radius-sm); border: 1px solid var(--border);"></div><small style="color: var(--text-muted); display: block; margin-top: 6px;">✓ Image link detected — will render photo card and RSS enclosure.</small>';
     } else if (resolvedType === 'video') {
-      const safeVid = API.safeUrl(url);
-      if (safeVid) {
-        previewTarget.innerHTML = `
-          <div style="max-width: 480px;">
-            <video src="${API.escapeHtml(safeVid)}" controls playsinline style="max-width: 100%; border-radius: var(--radius-sm);"></video>
-          </div>
-          <small style="color: var(--text-muted); display: block; margin-top: 6px;">
-            ✓ Direct video stream link detected.
-          </small>
-        `;
-      } else {
-        previewTarget.innerHTML = `<span style="color: #ef4444;">⚠️ Invalid video URL.</span>`;
-      }
+      previewTarget.innerHTML = '<div style="max-width: 480px;"><video src="' + API.escapeHtml(safeLink) + '" controls playsinline style="max-width: 100%; border-radius: var(--radius-sm);"></video></div><small style="color: var(--text-muted); display: block; margin-top: 6px;">✓ Direct video stream link detected.</small>';
     } else if (resolvedType === 'audio') {
-      const safeAud = API.safeUrl(url);
-      if (safeAud) {
-        previewTarget.innerHTML = `
-          <div style="max-width: 480px;">
-            <audio src="${API.escapeHtml(safeAud)}" controls style="width: 100%;"></audio>
-          </div>
-          <small style="color: var(--text-muted); display: block; margin-top: 6px;">
-            ✓ Direct audio podcast link detected.
-          </small>
-        `;
-      } else {
-        previewTarget.innerHTML = `<span style="color: #ef4444;">⚠️ Invalid audio URL.</span>`;
-      }
+      previewTarget.innerHTML = '<div style="max-width: 480px;"><audio src="' + API.escapeHtml(safeLink) + '" controls style="width: 100%;"></audio></div><small style="color: var(--text-muted); display: block; margin-top: 6px;">✓ Direct audio podcast link detected.</small>';
     } else {
-      previewTarget.innerHTML = `
-        <div style="font-size: 0.9rem;">
-          🔗 Web link: <a href="${API.escapeHtml(API.safeUrl(url))}" target="_blank" rel="noopener noreferrer">${API.escapeHtml(url)}</a>
-        </div>
-      `;
+      previewTarget.innerHTML = '<div style="font-size: 0.9rem;">🔗 Web link: <a href="' + API.escapeHtml(safeLink) + '" target="_blank" rel="noopener noreferrer">' + API.escapeHtml(url) + '</a></div>';
     }
   }
 
@@ -1785,12 +1373,10 @@ function setupCommunityHighlightsAdmin() {
     mediaUrlInput.addEventListener('input', updateLivePreview);
     mediaUrlInput.addEventListener('change', updateLivePreview);
   }
-  if (mediaTypeSelect) {
-    mediaTypeSelect.addEventListener('change', updateLivePreview);
-  }
+  if (mediaTypeSelect) mediaTypeSelect.addEventListener('change', updateLivePreview);
 
   if (form) {
-    form.addEventListener('submit', async (e) => {
+    form.addEventListener('submit', async function(e) {
       e.preventDefault();
       if (alertBox) alertBox.innerHTML = '';
 
@@ -1802,53 +1388,32 @@ function setupCommunityHighlightsAdmin() {
 
       const title = (titleInput && titleInput.value) ? titleInput.value.trim() : '';
       const content = (contentInput && contentInput.value) ? contentInput.value.trim() : '';
-      const summary = (summaryInput && summaryInput.value) ? summaryInput.value.trim() : '';
-      const media_url = (mediaUrlInput && mediaUrlInput.value) ? mediaUrlInput.value.trim() : '';
-      const media_type = (mediaTypeSelect && mediaTypeSelect.value) ? mediaTypeSelect.value : 'auto';
-      const event_id = (eventSelect && eventSelect.value) ? eventSelect.value : null;
-
       if (!title || !content) {
-        if (alertBox) {
-          alertBox.innerHTML = `<div class="alert alert-error">Title and content are required.</div>`;
-        }
+        if (alertBox) alertBox.innerHTML = '<div class="alert alert-error">Title and content are required.</div>';
         return;
       }
 
       try {
-        if (submitBtn) {
-          submitBtn.disabled = true;
-          submitBtn.textContent = 'Publishing…';
-        }
-
+        if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Publishing…'; }
         await API.createPost({
           title: title,
           content: content,
-          summary: summary,
-          media_url: media_url,
-          media_type: media_type,
-          event_id: event_id
+          summary: (summaryInput && summaryInput.value) ? summaryInput.value.trim() : '',
+          media_url: (mediaUrlInput && mediaUrlInput.value) ? mediaUrlInput.value.trim() : '',
+          media_type: (mediaTypeSelect && mediaTypeSelect.value) ? mediaTypeSelect.value : 'auto',
+          event_id: (eventSelect && eventSelect.value) ? eventSelect.value : null
         });
 
         if (alertBox) {
-          alertBox.innerHTML = `
-            <div class="alert alert-success">
-              ✓ Highlight published successfully! Added to <a href="/feed.xml" target="_blank" rel="noopener noreferrer" style="text-decoration: underline;">/feed.xml</a> and the community homepage.
-            </div>
-          `;
+          alertBox.innerHTML = '<div class="alert alert-success">✓ Highlight published successfully! Added to <a href="/feed.xml" target="_blank" rel="noopener noreferrer" style="text-decoration: underline;">/feed.xml</a> and the community homepage.</div>';
         }
-
         form.reset();
         updateLivePreview();
         await loadAdminPosts();
       } catch (err) {
-        if (alertBox) {
-          alertBox.innerHTML = `<div class="alert alert-error">${API.escapeHtml(err.message || 'Failed to publish highlight.')}</div>`;
-        }
+        if (alertBox) alertBox.innerHTML = '<div class="alert alert-error">' + API.escapeHtml(err.message || 'Failed to publish highlight.') + '</div>';
       } finally {
-        if (submitBtn) {
-          submitBtn.disabled = false;
-          submitBtn.textContent = '🚀 Publish Highlight to Community Feed & RSS';
-        }
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '🚀 Publish Highlight to Community Feed & RSS'; }
       }
     });
   }
@@ -1859,20 +1424,12 @@ function setupCommunityHighlightsAdmin() {
 function updateAdminPostEventDropdown(events) {
   const select = document.getElementById('post-event-id-select');
   if (!select) return;
-
   const currentVal = select.value;
   let html = '<option value="">-- No specific game --</option>';
   if (Array.isArray(events)) {
-    events.forEach(ev => {
-      let dateLabel = '';
-      if (ev.date) {
-        try {
-          const d = new Date(ev.date);
-          dateLabel = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
-        } catch (e) {}
-      }
-      const title = ev.title || 'Pickup Game';
-      html += `<option value="${API.escapeHtml(String(ev.id))}">Game #${API.escapeHtml(String(ev.id))}: ${API.escapeHtml(title)}${dateLabel ? ' (' + API.escapeHtml(dateLabel) + ')' : ''}</option>`;
+    events.forEach(function(ev) {
+      const dateStr = ev.event_date ? API.formatDate(ev.event_date) : '';
+      html += '<option value="' + API.escapeHtml(String(ev.id)) + '">Game #' + API.escapeHtml(String(ev.id)) + ': ' + API.escapeHtml(ev.title || 'Pickup Game') + (dateStr ? ' (' + API.escapeHtml(dateStr) + ')' : '') + '</option>';
     });
   }
   select.innerHTML = html;
@@ -1888,38 +1445,22 @@ async function loadAdminPosts() {
     const posts = (data && data.posts) ? data.posts : [];
 
     if (posts.length === 0) {
-      container.innerHTML = `
-        <div style="text-align: center; padding: 24px; color: var(--text-muted); background: var(--bg-subtle); border-radius: var(--radius-sm);">
-          No highlights published yet. Use the form above to post the first game recap or photo!
-        </div>
-      `;
+      container.innerHTML = '<div style="text-align: center; padding: 24px; color: var(--text-muted); background: var(--bg-subtle); border-radius: var(--radius-sm);">No highlights published yet. Use the form above to post the first game recap or photo!</div>';
       return;
     }
 
-    const itemsHtml = posts.map(post => {
-      let dateLabel = '';
-      if (post.created_at) {
-        try {
-          const d = new Date(post.created_at);
-          dateLabel = d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
-        } catch (e) {}
-      }
+    const mediaBadgeMap = {
+      youtube: '<span class="badge badge-orange">▶ YouTube Video</span>',
+      image: '<span class="badge badge-green">📷 Photo / Image</span>',
+      video: '<span class="badge badge-blue">🎬 Video Stream</span>',
+      audio: '<span class="badge badge-blue">🎙️ Audio Clip</span>'
+    };
 
+    container.innerHTML = posts.map(function(post) {
+      const dateLabel = post.created_at ? API.formatDate(post.created_at) : '';
       const mUrl = post.media_url ? String(post.media_url).trim() : '';
       const mType = post.media_type || API.parseMediaType(mUrl);
-      let mediaBadge = '<span class="badge" style="background: var(--bg-subtle); color: var(--text-muted);">Text Only</span>';
-
-      if (mType === 'youtube') {
-        mediaBadge = '<span class="badge badge-orange">▶ YouTube Video</span>';
-      } else if (mType === 'image') {
-        mediaBadge = '<span class="badge badge-green">📷 Photo / Image</span>';
-      } else if (mType === 'video') {
-        mediaBadge = '<span class="badge badge-blue">🎬 Video Stream</span>';
-      } else if (mType === 'audio') {
-        mediaBadge = '<span class="badge badge-blue">🎙️ Audio Clip</span>';
-      } else if (mUrl) {
-        mediaBadge = '<span class="badge">🔗 Link</span>';
-      }
+      const mediaBadge = mediaBadgeMap[mType] || (mUrl ? '<span class="badge">🔗 Link</span>' : '<span class="badge" style="background: var(--bg-subtle); color: var(--text-muted);">Text Only</span>');
 
       return `
         <div class="card" style="margin-bottom: 12px; padding: 14px 18px; display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; flex-wrap: wrap;">
@@ -1931,36 +1472,21 @@ async function loadAdminPosts() {
               ${post.author_name ? `<span style="font-size: 0.8rem; color: var(--text-muted);">• By ${API.escapeHtml(post.author_name)}</span>` : ''}
             </div>
             <h4 style="margin: 0 0 6px 0; font-size: 1.05rem; color: var(--text-primary);">${API.escapeHtml(post.title)}</h4>
-            <p style="margin: 0; font-size: 0.88rem; color: var(--text-muted); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
-              ${API.escapeHtml(post.content)}
-            </p>
-            ${mUrl ? `
-              <div style="margin-top: 6px; font-size: 0.8rem;">
-                <a href="${API.escapeHtml(API.safeUrl(mUrl))}" target="_blank" rel="noopener noreferrer" style="color: var(--primary); text-decoration: underline; word-break: break-all;">
-                  ${API.escapeHtml(mUrl)} ↗
-                </a>
-              </div>
-            ` : ''}
+            <p style="margin: 0; font-size: 0.88rem; color: var(--text-muted); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${API.escapeHtml(post.content)}</p>
+            ${mUrl ? `<div style="margin-top: 6px; font-size: 0.8rem;"><a href="${API.escapeHtml(API.safeUrl(mUrl))}" target="_blank" rel="noopener noreferrer" style="color: var(--primary); text-decoration: underline; word-break: break-all;">${API.escapeHtml(mUrl)} ↗</a></div>` : ''}
           </div>
           <div>
-            <button type="button" class="btn btn-outline btn-sm admin-delete-post-btn" data-post-id="${API.escapeHtml(String(post.id))}" style="color: #ef4444; border-color: #fca5a5;">
-              🗑️ Delete
-            </button>
+            <button type="button" class="btn btn-outline btn-sm admin-delete-post-btn" data-post-id="${API.escapeHtml(String(post.id))}" style="color: #ef4444; border-color: #fca5a5;">🗑️ Delete</button>
           </div>
         </div>
       `;
     }).join('');
 
-    container.innerHTML = itemsHtml;
-
-    container.querySelectorAll('.admin-delete-post-btn').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
+    container.querySelectorAll('.admin-delete-post-btn').forEach(function(btn) {
+      btn.addEventListener('click', async function(e) {
         e.preventDefault();
         const postId = btn.getAttribute('data-post-id');
-        if (!postId) return;
-        if (!confirm('Are you sure you want to permanently delete this highlight from the community feed and RSS?')) {
-          return;
-        }
+        if (!postId || !confirm('Are you sure you want to permanently delete this highlight from the community feed and RSS?')) return;
         try {
           btn.disabled = true;
           await API.deletePost(postId);
@@ -1972,7 +1498,7 @@ async function loadAdminPosts() {
       });
     });
   } catch (err) {
-    container.innerHTML = `<p style="color: var(--danger);">Failed to load highlights.</p>`;
+    container.innerHTML = '<p style="color: var(--danger);">Failed to load highlights.</p>';
   }
 }
 

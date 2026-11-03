@@ -502,8 +502,7 @@ function renderComments() {
 window.deleteDiscussionComment = async function(commentId) {
   if (!confirm('Delete this comment from the discussion board?')) return;
   try {
-    const res = await fetch(`/api/events/${eventId}/comments/${commentId}`, { method: 'DELETE' });
-    const data = await res.json();
+    const data = await API.deleteComment(eventId, commentId);
     if (data.error) alert(data.error);
     else await loadEventData();
   } catch (e) {
@@ -514,8 +513,7 @@ window.deleteDiscussionComment = async function(commentId) {
 window.removeRosterAttendee = async function(attendeeId) {
   if (!confirm('Remove this group from the game roster?')) return;
   try {
-    const res = await fetch(`/api/events/${eventId}/attendees/${attendeeId}`, { method: 'DELETE' });
-    const data = await res.json();
+    const data = await API.removeAttendee(eventId, attendeeId);
     if (data.error) alert(data.error);
     else await loadEventData();
   } catch (e) {
@@ -1506,12 +1504,8 @@ async function handleSendReminders() {
   if (!confirm('Send 24-hour reminder emails now to all confirmed attendees?')) {
     return;
   }
-
   try {
-    const res = await fetch(`/api/events/${eventId}/send-reminders`, {
-      method: 'POST'
-    });
-    const data = await res.json();
+    const data = await API.sendReminders(eventId);
     alert(data.message || data.error);
   } catch (err) {
     alert('Failed to send reminders.');
@@ -1524,78 +1518,18 @@ window.toggleEditEventPanel = function() {
   if (!panel || !eventData || !eventData.event) return;
   if (!API.currentUser || (!API.currentUser.canManageEvents && !API.currentUser.isAdmin)) return;
 
-  const isOpen = panel.style.display === 'block';
-  if (isOpen) {
+  if (panel.style.display === 'block') {
     panel.style.display = 'none';
     panel.innerHTML = '';
     if (editBtn) editBtn.textContent = '✏️ Edit Game';
     return;
   }
 
-  const ev = eventData.event;
-  const pacificLocal = API.isoToPacificLocalInput
-    ? API.isoToPacificLocalInput(ev.event_date)
-    : (ev.event_date ? ev.event_date.slice(0, 16) : '');
-  const hasCap = Boolean(ev.max_players && ev.max_players > 0);
-  const capVal = hasCap ? ev.max_players : 28;
-
   panel.innerHTML = `
     <div id="edit-event-alert"></div>
     <form id="edit-event-form" style="background: var(--bg-subtle); padding: 16px; border-radius: var(--radius-sm); border: 1.5px solid var(--primary);">
       <h3 style="font-size: 1rem; color: var(--secondary); margin: 0 0 12px 0;">✏️ Edit Game Details</h3>
-      <div class="grid-2">
-        <div class="form-group">
-          <label for="edit-event-title">Game Title *</label>
-          <input type="text" id="edit-event-title" value="${API.escapeHtml(ev.title || '')}" required>
-        </div>
-        <div class="form-group">
-          <label for="edit-event-date">Date &amp; Time (Pacific) *</label>
-          <input type="datetime-local" id="edit-event-date" value="${API.escapeHtml(pacificLocal)}" required>
-        </div>
-      </div>
-      <div class="grid-2">
-        <div class="form-group">
-          <label for="edit-event-location">Field Location *</label>
-          <input type="text" id="edit-event-location" value="${API.escapeHtml(ev.location || '')}" list="common-locations-list" required>
-        </div>
-        <div class="form-group">
-          <label for="edit-event-map">Map / Directions Link (Optional)</label>
-          <input type="text" id="edit-event-map" value="${API.escapeHtml(ev.location_url || '')}" placeholder="https://maps.google.com/?q=...">
-        </div>
-      </div>
-      <div class="form-group">
-        <label for="edit-event-desc">Game Details &amp; Announcements</label>
-        <textarea id="edit-event-desc" rows="2">${API.escapeHtml(ev.description || '')}</textarea>
-      </div>
-
-      <!-- Actual Game Attendance Field -->
-      <div class="form-group" style="background: var(--bg-card); padding: 12px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 14px;">
-        <label for="edit-event-actual-attendance" style="font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
-          <span>⚾</span> <span>Actual Attendance (Players who played)</span>
-        </label>
-        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-          <input type="number" id="edit-event-actual-attendance" value="${ev.actual_attendance != null ? ev.actual_attendance : ''}" min="0" max="200" placeholder="e.g. 18" style="width: 95px; padding: 6px 10px; font-size: 1rem; font-weight: 700;">
-          <span style="font-size: 0.82rem; color: var(--text-muted);">
-            Record actual turnout from the field. Displayed in the Past Games archive!
-          </span>
-        </div>
-      </div>
-
-      <!-- Maximum Roster Size Cap Toggle -->
-      <div class="form-group" style="background: var(--bg-card); padding: 12px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 14px;">
-        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; margin: 0;">
-          <input type="checkbox" id="edit-event-cap-toggle" ${hasCap ? 'checked' : ''} style="width: 17px; height: 17px; accent-color: var(--primary);">
-          <span>Limit Playing Roster Size (Auto-Waitlist when full)</span>
-        </label>
-        <div id="edit-event-max-players-wrap" style="display: ${hasCap ? 'block' : 'none'}; margin-top: 10px; padding-left: 25px;">
-          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-            <label for="edit-event-max-players" style="font-size: 0.88rem; color: var(--text-muted); margin: 0;">Maximum Confirmed Players:</label>
-            <input type="number" id="edit-event-max-players" value="${capVal}" min="2" max="100" style="width: 80px; padding: 4px 8px;">
-            <span style="font-size: 0.78rem; color: var(--text-muted);">Only on-field players count toward cap; spectators can always join.</span>
-          </div>
-        </div>
-      </div>
-
+      ${API.renderEditGameFieldsHtml('edit-event', eventData.event)}
       <datalist id="common-locations-list">
         <option value="Bushrod Park Field 1">
         <option value="Bushrod Park Field 2">
@@ -1609,15 +1543,9 @@ window.toggleEditEventPanel = function() {
 
   panel.style.display = 'block';
   if (editBtn) editBtn.textContent = '✕ Close Editor';
-  document.getElementById('edit-event-title').focus();
-
-  const capToggle = document.getElementById('edit-event-cap-toggle');
-  const capWrap = document.getElementById('edit-event-max-players-wrap');
-  if (capToggle && capWrap) {
-    capToggle.onchange = function() {
-      capWrap.style.display = capToggle.checked ? 'block' : 'none';
-    };
-  }
+  API.bindEditGameCapToggle('edit-event');
+  const titleEl = document.getElementById('edit-event-title');
+  if (titleEl) titleEl.focus();
 
   const cancelEditBtn = document.getElementById('cancel-edit-event-btn');
   if (cancelEditBtn) {
@@ -1634,43 +1562,20 @@ window.toggleEditEventPanel = function() {
       e.preventDefault();
       const saveBtn = document.getElementById('save-edit-event-btn');
       const alertBox = document.getElementById('edit-event-alert');
+      const parsed = API.readEditGameFields('edit-event');
+      if (parsed.error) {
+        alertBox.innerHTML = '<div class="alert alert-error">' + API.escapeHtml(parsed.error) + '</div>';
+        return;
+      }
+
       saveBtn.disabled = true;
       saveBtn.textContent = 'Saving...';
       alertBox.innerHTML = '';
 
       try {
-        const rawDate = document.getElementById('edit-event-date').value;
-        const capEnabled = document.getElementById('edit-event-cap-toggle').checked;
-        const maxPlayers = capEnabled
-          ? (parseInt(document.getElementById('edit-event-max-players').value, 10) || 28)
-          : null;
-
-        const actualAttendanceVal = document.getElementById('edit-event-actual-attendance').value.trim();
-        const actualAttendance = actualAttendanceVal === '' ? null : parseInt(actualAttendanceVal, 10);
-
-        const payload = {
-          title: document.getElementById('edit-event-title').value.trim(),
-          event_date: API.localToPacificIso(rawDate),
-          location: document.getElementById('edit-event-location').value.trim(),
-          location_url: document.getElementById('edit-event-map').value.trim(),
-          description: document.getElementById('edit-event-desc').value.trim(),
-          max_players: maxPlayers,
-          actual_attendance: isNaN(actualAttendance) ? null : actualAttendance
-        };
-
-        let res;
-        if (API.updateEvent) {
-          res = await API.updateEvent(eventId, payload);
-        } else {
-          const r = await fetch(`/api/events/${eventId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-          res = await r.json();
-        }
+        const res = await API.updateEvent(eventId, parsed.payload);
         if (res.error) {
-          alertBox.innerHTML = `<div class="alert alert-error">${API.escapeHtml(res.error)}</div>`;
+          alertBox.innerHTML = '<div class="alert alert-error">' + API.escapeHtml(res.error) + '</div>';
           saveBtn.disabled = false;
           saveBtn.textContent = '💾 Save Changes';
         } else {

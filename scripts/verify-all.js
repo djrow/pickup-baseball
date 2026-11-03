@@ -26,7 +26,6 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const express = require('express');
-const cookieParser = require('cookie-parser');
 
 // ---------------------------------------------------------------------------
 // 0. Test Environment & Database Isolation Setup
@@ -42,38 +41,30 @@ process.env.NODE_ENV = 'test';
 const testDataDir = path.join(os.tmpdir(), `pickup_verify_data_${Date.now()}`);
 process.env.DATA_DIR = testDataDir;
 
-const { db, initDatabase, getDefaultDuties } = require('../src/db');
+const { db, d1, initDatabase, getDefaultDuties } = require('../src/db');
 initDatabase();
 
 const { createSession } = require('../src/auth');
-const authRoutes = require('../src/routes/auth');
-const eventRoutes = require('../src/routes/events');
+const { createNodeHttpBridge, getFullRequestUrl, sendWebResponse } = require('../src/d1-sqlite');
+const { app: honoApp } = require('../src/app/index.js');
+const { CURRENT_APP_VERSION } = require('../src/app/version.js');
+const { renderFeedXmlResponse } = require('../src/app/feeds.js');
 
-// Build Express test application
+// Build Express test application wrapping the unified Hono app
 const app = express();
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser());
-
-const CURRENT_APP_VERSION = '47';
 app.use((req, res, next) => {
   res.setHeader('X-App-Version', CURRENT_APP_VERSION);
   next();
 });
-app.get('/api/version', (req, res) => {
-  res.json({ version: CURRENT_APP_VERSION });
-});
-const { router: postRoutes, serveFeedXml } = require('../src/routes/posts');
 app.use(express.static(path.join(__dirname, '..', 'public')));
-app.use('/api/auth', authRoutes);
-app.use('/api/events', eventRoutes);
-app.use('/api/posts', postRoutes);
-app.get('/api/feed.xml', serveFeedXml);
-app.get('/feed.xml', serveFeedXml);
-
+app.get('/feed.xml', async (req, res) => {
+  const webRes = await renderFeedXmlResponse(d1, getFullRequestUrl(req));
+  await sendWebResponse(webRes, res);
+});
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() });
 });
+app.use('/api', createNodeHttpBridge(honoApp, () => ({ ...process.env, NODE_ENV: 'test', DB: d1 })));
 
 let server;
 let baseUrl;
@@ -562,12 +553,12 @@ test('T3: User Role Management & Session Persistence', async (t) => {
     assert.ok(adminJs.includes('API.banEmail'), 'admin.js must submit banned email via API');
     assert.ok(adminJs.includes('API.unbanEmail'), 'admin.js must unban email via API');
 
-    const accountDashJs = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'account-dashboard.js'), 'utf8');
-    assert.ok(!accountDashJs.includes('id="security-management-section"'), 'account-dashboard.js must no longer host security management section');
-    assert.ok(!accountDashJs.includes('id="setting-require-login"'), 'account-dashboard.js must no longer host require-login checkbox');
+    assert.ok(!fs.existsSync(path.join(__dirname, '..', 'public', 'js', 'account-dashboard.js')), 'Redundant account-dashboard.js must be retired');
 
     const loginHtml = fs.readFileSync(path.join(__dirname, '..', 'public', 'login.html'), 'utf8');
+    const loginJs = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'login.js'), 'utf8');
     assert.ok(loginHtml.includes('href="/admin.html#admin-security-section"'), 'login.html admin-security-link must route to admin page');
+    assert.ok(!loginJs.includes('id="security-management-section"'), 'login.js must not host duplicate security management section');
   });
 
   await t.test('T3.8: Facilitator user role elimination & rejected assignment via PUT /api/auth/users/:id/role', async () => {
@@ -578,20 +569,18 @@ test('T3: User Role Management & Session Persistence', async (t) => {
     assert.equal(res.status, 400, 'Assigning obsolete facilitator role must return HTTP 400');
     assert.ok(res.data.error.includes('Invalid role'), 'Error message must specify invalid role');
 
-    // 2. Verify admin.js and account-dashboard.js do not have <option value="facilitator">
+    // 2. Verify admin.js, login.js, and profile.js do not have facilitator role references
     const adminJs = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'admin.js'), 'utf8');
     assert.ok(!adminJs.includes('value="facilitator"'), 'admin.js must not contain facilitator role option');
     assert.ok(!adminJs.includes("role === 'facilitator'"), 'admin.js must not contain role === facilitator branch');
 
-    const accountDashJs = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'account-dashboard.js'), 'utf8');
-    assert.ok(!accountDashJs.includes('value="facilitator"'), 'account-dashboard.js must not contain facilitator role option');
-    assert.ok(!accountDashJs.includes("role === 'facilitator'"), 'account-dashboard.js must not contain role === facilitator check');
-
     const loginHtml = fs.readFileSync(path.join(__dirname, '..', 'public', 'login.html'), 'utf8');
-    assert.ok(!loginHtml.includes("role === 'facilitator'"), 'login.html must not contain role === facilitator check');
+    const loginJs = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'login.js'), 'utf8');
+    assert.ok(!(loginHtml + loginJs).includes("role === 'facilitator'"), 'login page must not contain role === facilitator check');
 
     const profileHtml = fs.readFileSync(path.join(__dirname, '..', 'public', 'profile.html'), 'utf8');
-    assert.ok(!profileHtml.includes("role === 'facilitator'"), 'profile.html must not contain role === facilitator check');
+    const profileJs = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'profile.js'), 'utf8');
+    assert.ok(!(profileHtml + profileJs).includes("role === 'facilitator'"), 'profile page must not contain role === facilitator check');
   });
 
   await t.test('T3.9: Auto-migration of legacy facilitator role in SQLite to organizer', async () => {
@@ -1174,8 +1163,9 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
 
     const profilePath = path.join(publicDir, 'profile.html');
     const profileHtml = fs.readFileSync(profilePath, 'utf8');
+    const profileJs = fs.readFileSync(path.join(publicDir, 'js/profile.js'), 'utf8');
     assert.ok(profileHtml.includes('profile-logout-btn'), 'profile.html must contain logout button');
-    assert.ok(profileHtml.includes('API.logout()'), 'profile.html must bind logout button to API.logout()');
+    assert.ok((profileHtml + profileJs).includes('API.logout()'), 'profile page must bind logout button to API.logout()');
 
     const appJsPath = path.join(publicDir, 'js/app.js');
     const appJs = fs.readFileSync(appJsPath, 'utf8');
@@ -1699,7 +1689,7 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(feedFunctionExists, 'functions/feed.xml.js must exist for Cloudflare Pages edge rendering');
 
     // 9. Verify zero ES2020+ incompatible syntax (?. or ??) in client JS
-    const jsFiles = ['api.js', 'app.js', 'admin.js', 'event.js', 'archive.js', 'account-dashboard.js'];
+    const jsFiles = ['api.js', 'app.js', 'admin.js', 'event.js', 'archive.js', 'login.js', 'profile.js', 'weather.js'];
     for (const file of jsFiles) {
       const code = fs.readFileSync(path.join(publicDir, 'js', file), 'utf8');
       const lines = code.split('\n');
@@ -2030,5 +2020,66 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(adminJs.includes('renderAdminGameCardHtml'), 'admin.js must contain renderAdminGameCardHtml');
     assert.ok(adminJs.includes('admin-game-compact-item'), 'admin.js must generate compact items');
     assert.ok(adminJs.includes('setupAdminGameSearch'), 'admin.js must configure live game search');
+  });
+
+  await t9.test('T9.22: Unified Backend Parity (Settings, Banned Emails, Comment Deletion, SQL Backup) & Version Sync', async () => {
+    // 1. Settings toggle & anonymous guest policy enforcement
+    const s0 = await apiReq('GET', '/api/settings');
+    assert.equal(s0.status, 200);
+    const s1 = await apiReq('PUT', '/api/settings', seedAdminCookie, { require_login_to_rsvp: true });
+    assert.equal(s1.status, 200);
+    assert.equal(s1.data.require_login_to_rsvp, true);
+    const anonBlocked = await apiReq('POST', `/api/events/${sharedEventId}/rsvp`, null, {
+      name: 'Blocked Anon',
+      email: 'anon-blocked@example.com'
+    });
+    assert.equal(anonBlocked.status, 401, 'Anonymous RSVP must be blocked when require_login_to_rsvp is enabled');
+    await apiReq('PUT', '/api/settings', seedAdminCookie, { require_login_to_rsvp: false });
+
+    // 2. Banned emails lifecycle
+    const banRes = await apiReq('POST', '/api/auth/banned-emails', seedAdminCookie, {
+      email: 'banned-test@example.com',
+      reason: 'Automated test ban'
+    });
+    assert.equal(banRes.status, 200);
+    const listBan = await apiReq('GET', '/api/auth/banned-emails', seedAdminCookie);
+    assert.equal(listBan.status, 200);
+    const foundBan = listBan.data.bannedEmails.find(b => b.email === 'banned-test@example.com');
+    assert.ok(foundBan, 'Banned email must appear in list');
+    const codeBlocked = await apiReq('POST', '/api/auth/send-code', null, { email: 'banned-test@example.com' });
+    assert.equal(codeBlocked.status, 403, 'Banned email must be blocked from requesting login codes');
+    const unbanRes = await apiReq('DELETE', `/api/auth/banned-emails/${foundBan.id}`, seedAdminCookie);
+    assert.equal(unbanRes.status, 200);
+
+    // 3. Comment creation & organizer/admin deletion
+    const cmtRes = await apiReq('POST', `/api/events/${sharedEventId}/comments`, seedPlayerCookie, {
+      content: 'Temporary comment for deletion test'
+    });
+    assert.equal(cmtRes.status, 200);
+    const delCmt = await apiReq('DELETE', `/api/events/${sharedEventId}/comments/${cmtRes.data.comment.id}`, seedAdminCookie);
+    assert.equal(delCmt.status, 200);
+
+    // 4. SQL database backup export
+    const backupRes = await fetch(`${baseUrl}/api/events/admin/backup-db`, {
+      headers: { Cookie: seedAdminCookie }
+    });
+    assert.equal(backupRes.status, 200);
+    const sqlDump = await backupRes.text();
+    assert.ok(sqlDump.includes('-- Sunday Pickup Baseball Database Backup') && sqlDump.includes('INSERT OR IGNORE INTO "users"'), 'Backup dump must contain backup header and user rows');
+
+    // 5. Atomic version stamp synchronization across backend, SW, API client, and HTML assets
+    const swSrc = fs.readFileSync(path.join(publicDir, 'sw.js'), 'utf8');
+    assert.ok(swSrc.includes(`CACHE_NAME = 'pbf-cache-v${CURRENT_APP_VERSION}'`), 'sw.js CACHE_NAME must match CURRENT_APP_VERSION');
+    const apiSrc = fs.readFileSync(path.join(publicDir, 'js', 'api.js'), 'utf8');
+    assert.ok(apiSrc.includes(`CLIENT_VERSION: '${CURRENT_APP_VERSION}'`), 'api.js CLIENT_VERSION must match CURRENT_APP_VERSION');
+    for (const entry of fs.readdirSync(publicDir)) {
+      if (!entry.endsWith('.html')) continue;
+      const html = fs.readFileSync(path.join(publicDir, entry), 'utf8');
+      const versions = [...html.matchAll(/\?v=(\d+)/g)].map(m => m[1]);
+      assert.ok(versions.length > 0, `${entry} must include ?v= asset cache-busting query strings`);
+      for (const v of versions) {
+        assert.equal(v, CURRENT_APP_VERSION, `${entry} asset ?v=${v} must match CURRENT_APP_VERSION (${CURRENT_APP_VERSION})`);
+      }
+    }
   });
 });

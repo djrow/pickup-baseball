@@ -1,0 +1,221 @@
+/**
+ * Player Profile, Operations Badges & EXIF-Safe Avatar Upload
+ */
+
+let currentUser = null;
+
+document.addEventListener('DOMContentLoaded', async function() {
+  currentUser = await API.getMe();
+  if (!currentUser) {
+    alert('Please sign in to view and edit your profile.');
+    window.location.href = '/login.html';
+    return;
+  }
+
+  API.renderNav(currentUser);
+  populateProfileData();
+  setupAvatarUpload();
+  setupProfileForm();
+  setupLogoutButtons();
+});
+
+function setupLogoutButtons() {
+  const logoutBtns = [
+    document.getElementById('profile-logout-btn'),
+    document.getElementById('profile-logout-btn-bottom')
+  ];
+  logoutBtns.forEach(function(btn) {
+    if (btn) {
+      btn.addEventListener('click', async function() {
+        btn.disabled = true;
+        btn.textContent = 'Logging out...';
+        await API.logout();
+      });
+    }
+  });
+}
+
+function populateProfileData() {
+  document.getElementById('profile-name').value = currentUser.name || '';
+  document.getElementById('profile-email').value = currentUser.email || '';
+  document.getElementById('profile-bio').value = currentUser.bio || '';
+
+  const charCount = document.getElementById('bio-char-count');
+  charCount.textContent = (currentUser.bio || '').length + ' / 280';
+
+  const roleBadge = document.getElementById('role-badge');
+  if (currentUser.isAdmin || currentUser.role === 'admin') {
+    roleBadge.className = 'badge badge-orange';
+    roleBadge.textContent = '👑 Administrator';
+  } else if (currentUser.role === 'organizer') {
+    roleBadge.className = 'badge badge-green';
+    roleBadge.textContent = '🛡️ Event Organizer';
+  } else {
+    roleBadge.className = 'badge badge-gray';
+    roleBadge.textContent = '👤 Player';
+  }
+
+  const machinePill = document.getElementById('badge-machine-pill');
+  if (machinePill) {
+    machinePill.className = currentUser.machineBadge ? 'badge badge-green' : 'badge badge-gray';
+    machinePill.textContent = currentUser.machineBadge
+      ? '⚡ Pitching Machine: Certified'
+      : '⚡ Pitching Machine: Uncertified';
+  }
+
+  const fieldPill = document.getElementById('badge-field-pill');
+  if (fieldPill) {
+    fieldPill.className = currentUser.fieldBadge ? 'badge badge-green' : 'badge badge-gray';
+    fieldPill.textContent = currentUser.fieldBadge
+      ? '🚜 Field Dragging: Certified'
+      : '🚜 Field Dragging: Uncertified';
+  }
+
+  const heroCreditsPill = document.getElementById('hero-credits-pill');
+  if (heroCreditsPill) {
+    const credits = currentUser.heroCredits || 0;
+    heroCreditsPill.textContent = '🛡️ ' + credits + ' Backup Hero Credit' + (credits === 1 ? '' : 's');
+  }
+
+  renderAvatarPreview();
+}
+
+function renderAvatarPreview() {
+  const container = document.getElementById('avatar-preview-container');
+  const removeBtn = document.getElementById('btn-remove-avatar');
+  const safeAvatar = API.safeAvatarUrl(currentUser.avatarUrl);
+
+  if (safeAvatar) {
+    container.innerHTML = '<img src="' + API.escapeHtml(safeAvatar) + '" alt="' + API.escapeHtml(currentUser.name) + '" class="profile-avatar-preview">';
+    removeBtn.style.display = 'inline-block';
+  } else {
+    const initial = API.escapeHtml((currentUser.name || 'P').charAt(0).toUpperCase());
+    container.innerHTML = '<span class="profile-avatar-placeholder">' + initial + '</span>';
+    removeBtn.style.display = 'none';
+  }
+}
+
+function compressAndStripExif(file, maxDim, quality) {
+  const limit = maxDim || 256;
+  const q = quality || 0.85;
+  return new Promise(function(resolve) {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = function() {
+      URL.revokeObjectURL(url);
+      let width = img.width;
+      let height = img.height;
+      if (width > limit || height > limit) {
+        if (width > height) {
+          height = Math.round((height * limit) / width);
+          width = limit;
+        } else {
+          width = Math.round((width * limit) / height);
+          height = limit;
+        }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(function(blob) {
+        resolve(blob ? new File([blob], 'avatar.jpg', { type: 'image/jpeg' }) : file);
+      }, 'image/jpeg', q);
+    };
+    img.onerror = function() {
+      URL.revokeObjectURL(url);
+      resolve(file);
+    };
+    img.src = url;
+  });
+}
+
+function setupAvatarUpload() {
+  const fileInput = document.getElementById('avatar-file-input');
+  const removeBtn = document.getElementById('btn-remove-avatar');
+
+  fileInput.addEventListener('change', async function(e) {
+    const rawFile = e.target.files[0];
+    if (!rawFile) return;
+
+    showAlert('Processing & uploading photo...', false);
+    const cleanFile = await compressAndStripExif(rawFile, 256, 0.85);
+
+    try {
+      const res = await API.uploadAvatar(cleanFile);
+      if (res.error) {
+        showAlert(res.error, true);
+        renderAvatarPreview();
+      } else {
+        currentUser.avatarUrl = res.avatarUrl;
+        showAlert('Profile picture updated!', false);
+        renderAvatarPreview();
+        API.renderNav(currentUser);
+      }
+    } catch (err) {
+      showAlert('Failed to upload photo.', true);
+      renderAvatarPreview();
+    }
+  });
+
+  removeBtn.addEventListener('click', async function() {
+    if (!confirm('Remove your profile picture?')) return;
+    try {
+      const res = await API.deleteAvatar();
+      if (res.error) {
+        showAlert(res.error, true);
+      } else {
+        currentUser.avatarUrl = null;
+        showAlert('Profile picture removed.', false);
+        renderAvatarPreview();
+        API.renderNav(currentUser);
+      }
+    } catch (err) {
+      showAlert('Error removing photo.', true);
+    }
+  });
+}
+
+function setupProfileForm() {
+  const form = document.getElementById('profile-form');
+  const bioInput = document.getElementById('profile-bio');
+  const charCount = document.getElementById('bio-char-count');
+
+  bioInput.addEventListener('input', function() {
+    charCount.textContent = bioInput.value.length + ' / 280';
+  });
+
+  form.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const saveBtn = document.getElementById('btn-save-profile');
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+
+    const name = document.getElementById('profile-name').value.trim();
+    const bio = document.getElementById('profile-bio').value.trim();
+
+    try {
+      const res = await API.updateProfile(name, bio);
+      if (res.error) {
+        showAlert(res.error, true);
+      } else {
+        currentUser.name = res.user.name;
+        currentUser.bio = res.user.bio;
+        showAlert('Profile and bio updated successfully!', false);
+        API.renderNav(currentUser);
+      }
+    } catch (err) {
+      showAlert('Error updating profile.', true);
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save Changes';
+    }
+  });
+}
+
+function showAlert(msg, isError) {
+  const box = document.getElementById('profile-alert');
+  box.innerHTML = '<div class="alert ' + (isError ? 'alert-error' : 'alert-success') + '">' + API.escapeHtml(msg) + '</div>';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}

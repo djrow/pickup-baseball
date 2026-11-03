@@ -1,85 +1,55 @@
-require('dotenv').config();
-const fs = require('fs');
-const path = require('path');
 const express = require('express');
-const cookieParser = require('cookie-parser');
-
-const { initDatabase, db } = require('./db');
-const { startReminderScheduler } = require('./reminders');
-const authRoutes = require('./routes/auth');
-const eventRoutes = require('./routes/events');
-const { router: postRoutes, serveFeedXml } = require('./routes/posts');
+const path = require('path');
+const { initDatabase, d1 } = require('./db');
+const { createNodeHttpBridge, getFullRequestUrl, sendWebResponse } = require('./d1-sqlite');
+const { app: honoApp } = require('./app/index.js');
+const { CURRENT_APP_VERSION } = require('./app/version.js');
+const { renderFeedXmlResponse } = require('./app/feeds.js');
+const { startReminderScheduler, stopReminderScheduler } = require('./reminders');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Initialize SQLite database tables and indices
 initDatabase();
 
-// Ensure avatars directory exists inside persistent data storage
-const dataDir = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
-const avatarsDir = path.join(dataDir, 'avatars');
-if (!fs.existsSync(avatarsDir)) {
-  fs.mkdirSync(avatarsDir, { recursive: true });
-}
-
-// Middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser());
-
-const CURRENT_APP_VERSION = '47';
 app.use((req, res, next) => {
   res.setHeader('X-App-Version', CURRENT_APP_VERSION);
   next();
 });
-app.get('/api/version', (req, res) => {
-  res.json({ version: CURRENT_APP_VERSION });
-});
 
-// Handbook & Field Rules shortcuts
-app.get('/handbook', (req, res) => {
-  res.redirect('https://github.com/djrow/pickup-baseball/blob/trunk/HANDBOOK.md');
-});
-app.get('/rules', (req, res) => {
-  res.redirect('https://github.com/djrow/pickup-baseball/blob/trunk/HANDBOOK.md#rules-of-play');
-});
+const uploadsDir = path.join(process.env.DATA_DIR || path.join(__dirname, '..', 'data'), 'uploads', 'avatars');
+app.use('/uploads/avatars', express.static(uploadsDir));
 
-// Serve static frontend assets and persistent user uploaded avatars
-app.use(express.static(path.join(__dirname, '..', 'public')));
-app.use('/uploads/avatars', express.static(avatarsDir));
+app.get(['/handbook', '/rules'], (req, res) => res.redirect(301, '/handbook.html'));
 
-// API Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/events', eventRoutes);
-app.use('/api/posts', postRoutes);
-
-// RSS 2.0 + Media RSS Feed Endpoints
-app.get('/api/feed.xml', serveFeedXml);
-app.get('/feed.xml', serveFeedXml);
-
-// Health check endpoint for uptime monitors (Fly.io, Render, Railway, Hetzner, etc.)
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() });
 });
 
-// Fallback for root /
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
+app.get('/feed.xml', async (req, res) => {
+  const webRes = await renderFeedXmlResponse(d1, getFullRequestUrl(req));
+  await sendWebResponse(webRes, res);
 });
 
-// Start background email reminders check
-startReminderScheduler();
+app.use('/api', createNodeHttpBridge(honoApp, () => ({ ...process.env, DB: d1 })));
+app.use(express.static(path.join(__dirname, '..', 'public')));
+
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api/')) return res.status(404).json({ error: 'API route not found.' });
+  next();
+});
 
 const server = app.listen(PORT, '0.0.0.0', () => {
-  console.log(`⚾ Pickup Baseball Foundation WebApp running at http://localhost:${PORT}`);
-  console.log(`📁 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`⚾ Sunday Pickup Baseball running on http://localhost:${PORT} (v${CURRENT_APP_VERSION})`);
+  startReminderScheduler();
 });
 
-// Graceful shutdown handling
-process.on('SIGTERM', () => {
-  console.log('SIGTERM signal received: closing HTTP server');
-  server.close(() => {
-    console.log('HTTP server closed');
-  });
-});
+function shutdown() {
+  stopReminderScheduler();
+  server.close(() => process.exit(0));
+}
+
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
+
+module.exports = app;
