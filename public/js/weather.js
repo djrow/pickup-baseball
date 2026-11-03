@@ -166,7 +166,7 @@
       'latitude=' + encodeURIComponent(lat) +
       '&longitude=' + encodeURIComponent(lon) +
       '&hourly=precipitation,weathercode,temperature_2m' +
-      '&daily=precipitation_sum' +
+      '&daily=precipitation_sum,precipitation_probability_max,weathercode,temperature_2m_max,temperature_2m_min' +
       '&temperature_unit=fahrenheit' +
       '&precipitation_unit=inch' +
       '&timezone=America%2FLos_Angeles' +
@@ -187,6 +187,103 @@
     } catch (e) {}
 
     return data;
+  }
+
+  /**
+   * Helper: Build 10-day daily forecast breakdown from dailyData or hourlyData
+   */
+  function buildDailyForecast(dailyData, hourlyData, targetDateKey) {
+    var days = [];
+    var weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+    if (dailyData && Array.isArray(dailyData.precipitation_sum) && dailyData.precipitation_sum.length > 0) {
+      var slicePrecip = dailyData.precipitation_sum.slice(-10);
+      var sliceTimes = (dailyData.time && Array.isArray(dailyData.time)) ? dailyData.time.slice(-10) : [];
+      var sliceCodes = (dailyData.weathercode && Array.isArray(dailyData.weathercode)) ? dailyData.weathercode.slice(-10) : [];
+      var sliceProb = (dailyData.precipitation_probability_max && Array.isArray(dailyData.precipitation_probability_max)) ? dailyData.precipitation_probability_max.slice(-10) : [];
+      var sliceMax = (dailyData.temperature_2m_max && Array.isArray(dailyData.temperature_2m_max)) ? dailyData.temperature_2m_max.slice(-10) : [];
+      var sliceMin = (dailyData.temperature_2m_min && Array.isArray(dailyData.temperature_2m_min)) ? dailyData.temperature_2m_min.slice(-10) : [];
+
+      for (var i = 0; i < slicePrecip.length; i++) {
+        var dateStr = sliceTimes[i] || '';
+        var weekdayShort = '';
+        var monthDay = '';
+        if (dateStr) {
+          var parts = dateStr.split('-');
+          if (parts.length === 3) {
+            var dateObj = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), 12, 0, 0);
+            weekdayShort = weekdays[dateObj.getDay()] || '';
+            monthDay = parseInt(parts[1], 10) + '/' + parseInt(parts[2], 10);
+          }
+        }
+        var rainVal = Math.round((Number(slicePrecip[i]) || 0) * 100) / 100;
+        var code = sliceCodes[i] || 0;
+        var wInfo = getWeatherCodeInfo(code);
+
+        days.push({
+          date: dateStr,
+          dayName: weekdayShort || ('Day ' + (i + 1)),
+          dayMonth: monthDay || '',
+          rain: rainVal,
+          rainFormatted: rainVal.toFixed(2) + '"',
+          code: code,
+          emoji: wInfo.emoji,
+          condition: wInfo.condition,
+          prob: sliceProb[i] != null ? Math.round(sliceProb[i]) : null,
+          tempMax: sliceMax[i] != null ? Math.round(sliceMax[i]) : null,
+          tempMin: sliceMin[i] != null ? Math.round(sliceMin[i]) : null,
+          isGameDay: Boolean(targetDateKey && dateStr && dateStr === targetDateKey)
+        });
+      }
+    } else if (hourlyData && Array.isArray(hourlyData.time) && hourlyData.time.length > 0) {
+      var byDate = {};
+      var dateOrder = [];
+      for (var h = 0; h < hourlyData.time.length; h++) {
+        var t = hourlyData.time[h];
+        var dKey = t.split('T')[0];
+        if (!byDate[dKey]) {
+          byDate[dKey] = { precip: 0, code: 0, temps: [] };
+          dateOrder.push(dKey);
+        }
+        var r = Number(hourlyData.precipitation[h]) || 0;
+        byDate[dKey].precip += r;
+        if (t.indexOf('T12:00') !== -1 || byDate[dKey].code === 0) {
+          byDate[dKey].code = hourlyData.weathercode ? (hourlyData.weathercode[h] || 0) : 0;
+        }
+        if (hourlyData.temperature_2m && hourlyData.temperature_2m[h] != null) {
+          byDate[dKey].temps.push(hourlyData.temperature_2m[h]);
+        }
+      }
+      var sliceDateKeys = dateOrder.slice(-10);
+      for (var j = 0; j < sliceDateKeys.length; j++) {
+        var dk = sliceDateKeys[j];
+        var item = byDate[dk];
+        var pParts = dk.split('-');
+        var pDateObj = new Date(parseInt(pParts[0], 10), parseInt(pParts[1], 10) - 1, parseInt(pParts[2], 10), 12, 0, 0);
+        var pWeekday = weekdays[pDateObj.getDay()] || '';
+        var pRain = Math.round(item.precip * 100) / 100;
+        var pInfo = getWeatherCodeInfo(item.code);
+        var pMax = item.temps.length ? Math.round(Math.max.apply(null, item.temps)) : null;
+        var pMin = item.temps.length ? Math.round(Math.min.apply(null, item.temps)) : null;
+
+        days.push({
+          date: dk,
+          dayName: pWeekday,
+          dayMonth: parseInt(pParts[1], 10) + '/' + parseInt(pParts[2], 10),
+          rain: pRain,
+          rainFormatted: pRain.toFixed(2) + '"',
+          code: item.code,
+          emoji: pInfo.emoji,
+          condition: pInfo.condition,
+          prob: null,
+          tempMax: pMax,
+          tempMin: pMin,
+          isGameDay: Boolean(targetDateKey && dk === targetDateKey)
+        });
+      }
+    }
+
+    return days;
   }
 
   /**
@@ -222,19 +319,13 @@
       };
     }
 
-    // Calculate 10-day rainfall prediction across the forecast window
+    // Build 10-day daily breakdown
+    var targetDateKey = targetHourKey ? targetHourKey.split('T')[0] : null;
+    var dailyForecast = buildDailyForecast(dailyData, hourlyData, targetDateKey);
+
     var total10DayRain = 0;
-    if (dailyData && Array.isArray(dailyData.precipitation_sum) && dailyData.precipitation_sum.length > 0) {
-      var sliceDays = dailyData.precipitation_sum.slice(-10);
-      for (var d = 0; d < sliceDays.length; d++) {
-        total10DayRain += (Number(sliceDays[d]) || 0);
-      }
-    } else if (hourlyData && Array.isArray(hourlyData.precipitation) && hourlyData.precipitation.length > 0) {
-      // Fallback: sum up to 240 forecast hours (10 days * 24h)
-      var sliceHours = hourlyData.precipitation.slice(-240);
-      for (var h = 0; h < sliceHours.length; h++) {
-        total10DayRain += (Number(sliceHours[h]) || 0);
-      }
+    for (var di = 0; di < dailyForecast.length; di++) {
+      total10DayRain += dailyForecast[di].rain;
     }
     total10DayRain = Math.round(total10DayRain * 100) / 100;
 
@@ -356,6 +447,7 @@
       rainfall10DayFormatted: total10DayRain.toFixed(2) + '"',
       total10DayRain: total10DayRain,
       total10DayRainFormatted: total10DayRain.toFixed(2) + '"',
+      dailyForecast: dailyForecast,
       effectiveMoisture: effectiveMoisture,
       effectiveMoistureFormatted: effectiveMoisture.toFixed(2) + '"',
       hoursSinceRain: hoursSinceRain,
@@ -398,6 +490,55 @@
         message: 'Weather forecast temporarily unavailable'
       };
     }
+  }
+
+  /**
+   * Render horizontal 10-day rainfall track across the card
+   */
+  function renderDailyRainTrackHtml(dailyList) {
+    if (!dailyList || !Array.isArray(dailyList) || dailyList.length === 0) return '';
+    var cols = dailyList.map(function(d) {
+      var isGame = Boolean(d.isGameDay);
+      var hasRain = d.rain > 0;
+      var rainClass = hasRain ? 'has-rain' : '';
+      var gameClass = isGame ? 'is-game-day' : '';
+      var title = (d.dayName || '') + ' ' + (d.dayMonth || '') + ': ' + d.rainFormatted + ' (' + (d.condition || '') + ')' + (isGame ? ' — Game Day' : '');
+      return '<div class="ten-day-rain-col ' + gameClass + '" title="' + (window.API ? window.API.escapeHtml(title) : title) + '">' +
+        '<span class="day-title">' + (d.dayName || '') + '</span>' +
+        '<span class="day-date">' + (d.dayMonth || '') + '</span>' +
+        '<span class="day-emoji">' + (d.emoji || '☀️') + '</span>' +
+        '<span class="day-rain ' + rainClass + '">' + d.rainFormatted + '</span>' +
+        (isGame ? '<span class="game-day-pill">Game</span>' : '') +
+      '</div>';
+    });
+    return '<div class="ten-day-rain-track">' + cols.join('') + '</div>';
+  }
+
+  /**
+   * Render mini horizontal 10-day rainfall bar row for calendar cards
+   */
+  function renderMiniDailyRainRowHtml(dailyList) {
+    if (!dailyList || !Array.isArray(dailyList) || dailyList.length === 0) return '';
+    var maxRain = 0;
+    for (var m = 0; m < dailyList.length; m++) {
+      if (dailyList[m].rain > maxRain) maxRain = dailyList[m].rain;
+    }
+    var bars = dailyList.map(function(d) {
+      var isGame = Boolean(d.isGameDay);
+      var hasRain = d.rain > 0;
+      var heightPx = 3;
+      if (hasRain) {
+        heightPx = Math.max(5, Math.min(14, Math.round((d.rain / (maxRain || 1)) * 14)));
+      }
+      var barColor = isGame ? 'var(--primary)' : (hasRain ? '#0284c7' : 'var(--border)');
+      var title = (d.dayName || '') + ' ' + (d.dayMonth || '') + ': ' + d.rainFormatted + (isGame ? ' (Game Day)' : '');
+      var letter = d.dayName ? d.dayName.charAt(0) : '';
+      return '<div class="mini-rain-day" title="' + (window.API ? window.API.escapeHtml(title) : title) + '" style="flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 2px;">' +
+        '<span class="mini-rain-bar" style="display: block; width: 100%; max-width: 8px; height: ' + heightPx + 'px; background: ' + barColor + '; border-radius: 2px;"></span>' +
+        '<span class="mini-rain-label" style="font-size: 0.6rem; line-height: 1; color: ' + (isGame ? 'var(--primary)' : 'var(--text-muted)') + '; font-weight: ' + (isGame ? '800' : '600') + ';">' + letter + '</span>' +
+      '</div>';
+    });
+    return '<div class="card-10day-rain-row" style="display: flex; gap: 2px; align-items: flex-end; width: 100%; padding-top: 3px; border-top: 1px dashed var(--border); margin-top: 3px;">' + bars.join('') + '</div>';
   }
 
   /**
@@ -548,6 +689,21 @@
           </div>
         </div>
 
+        <!-- 10-Day Rainfall Prediction Across the Card (Daily Breakdown) -->
+        ${(r.dailyForecast && r.dailyForecast.length > 0) ? `
+          <div style="margin-top: 14px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
+              <div style="font-size: 0.8rem; font-weight: 700; color: var(--secondary); display: inline-flex; align-items: center; gap: 5px;">
+                🌧️ <strong>10-Day Rainfall Prediction (Daily Breakdown)</strong>
+              </div>
+              <div style="font-size: 0.74rem; color: var(--text-muted); font-weight: 600;">
+                10-Day Forecast Total: <strong style="color: var(--secondary);">${r.rainfall10DayFormatted}</strong>
+              </div>
+            </div>
+            ${renderDailyRainTrackHtml(r.dailyForecast)}
+          </div>
+        ` : ''}
+
         <!-- 24-Hour Drainage Breakdown Timeline -->
         ${timelineHtml}
 
@@ -579,14 +735,18 @@
         if (forecast && forecast.available) {
           var matched = document.querySelectorAll('[data-weather-date="' + dk + '"]');
           matched.forEach(function(el) {
+            var miniRow = renderMiniDailyRainRowHtml(forecast.dailyForecast);
             el.innerHTML =
-              '<span class="weather-card-pill ' + forecast.badgeClass + '" title="' + forecast.condition + ' · Prev 24h Rain: ' + forecast.totalRain24hFormatted + ' (' + forecast.statusLabel + ')">' +
-                '<span>' + forecast.emoji + '</span> <span>' + forecast.temperature + '°F</span>' +
-              '</span>' +
-              '<span class="weather-card-pill weather-rain-pill" title="10-Day Rainfall Prediction: ' + forecast.rainfall10DayFormatted + '">' +
-                '<span>🌧️ 10-Day Rain: ' + forecast.rainfall10DayFormatted + '</span>' +
-              '</span>';
-            el.style.display = 'inline-flex';
+              '<div style="display: inline-flex; align-items: center; gap: 4px; width: 100%; flex-wrap: wrap;">' +
+                '<span class="weather-card-pill ' + forecast.badgeClass + '" title="' + forecast.condition + ' · Prev 24h Rain: ' + forecast.totalRain24hFormatted + ' (' + forecast.statusLabel + ')">' +
+                  '<span>' + forecast.emoji + '</span> <span>' + forecast.temperature + '°F</span>' +
+                '</span>' +
+                '<span class="weather-card-pill weather-rain-pill" title="10-Day Rainfall Prediction: ' + forecast.rainfall10DayFormatted + '">' +
+                  '<span>🌧️ 10-Day Rain: ' + forecast.rainfall10DayFormatted + '</span>' +
+                '</span>' +
+              '</div>' +
+              miniRow;
+            el.style.display = 'block';
           });
         }
       } catch (e) {}
@@ -601,6 +761,9 @@
     getPacificDateParts: getPacificDateParts,
     fetchForecast: fetchForecast,
     calculateFieldDrainage: calculateFieldDrainage,
+    buildDailyForecast: buildDailyForecast,
+    renderDailyRainTrackHtml: renderDailyRainTrackHtml,
+    renderMiniDailyRainRowHtml: renderMiniDailyRainRowHtml,
     getForecastForGame: getForecastForGame,
     renderAssistantWidget: renderAssistantWidget,
     populateCardWeatherBadges: populateCardWeatherBadges

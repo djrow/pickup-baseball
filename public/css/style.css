@@ -3099,6 +3099,104 @@ footer.site-footer strong {
   gap: 6px;
 }
 
+.ten-day-rain-track {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 5px;
+  width: 100%;
+  margin-top: 6px;
+  box-sizing: border-box;
+}
+
+@media (max-width: 720px) {
+  .ten-day-rain-track {
+    display: flex;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .ten-day-rain-col {
+    flex: 0 0 66px;
+    min-width: 66px;
+  }
+}
+
+.ten-day-rain-col {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 3px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  font-size: 0.72rem;
+  box-sizing: border-box;
+}
+
+.ten-day-rain-col.is-game-day {
+  border-color: var(--primary);
+  background: rgba(253, 90, 30, 0.08);
+  box-shadow: 0 0 0 1px var(--primary);
+}
+
+.ten-day-rain-col .day-title {
+  font-weight: 700;
+  color: var(--secondary);
+  font-size: 0.72rem;
+  line-height: 1.1;
+}
+
+.ten-day-rain-col .day-date {
+  font-size: 0.66rem;
+  color: var(--text-muted);
+  line-height: 1.1;
+}
+
+.ten-day-rain-col .day-emoji {
+  font-size: 0.95rem;
+  margin: 1px 0;
+  line-height: 1.1;
+}
+
+.ten-day-rain-col .day-rain {
+  font-weight: 700;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.ten-day-rain-col .day-rain.has-rain {
+  color: #0284c7;
+  font-weight: 800;
+}
+
+.ten-day-rain-col.is-game-day .day-rain.has-rain {
+  color: #dc2626;
+}
+
+.ten-day-rain-col .game-day-pill {
+  font-size: 0.58rem;
+  font-weight: 800;
+  background: var(--primary);
+  color: #fff;
+  padding: 1px 4px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  margin-top: 2px;
+  line-height: 1.1;
+}
+
+.card-10day-rain-row {
+  display: flex;
+  gap: 2px;
+  align-items: flex-end;
+  width: 100%;
+  padding-top: 3px;
+  border-top: 1px dashed var(--border);
+  margin-top: 3px;
+}
+
 .smart-rainout-card {
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }

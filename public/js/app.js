@@ -529,6 +529,7 @@ function renderCalendarDrawer(dateKey, game, isPast) {
         </a>
         <button type="button" class="calendar-drawer-close-btn" aria-label="Close details" title="Close">✕</button>
       </div>
+      <div class="drawer-10day-weather-section" id="drawer-10day-weather-${dateKey}" style="display: none; width: 100%; order: 3; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border);"></div>
     `;
   } else {
     const [y, m, d] = dateKey.split('-').map(Number);
@@ -567,6 +568,7 @@ function renderCalendarDrawer(dateKey, game, isPast) {
         ` : ''}
         <button type="button" class="calendar-drawer-close-btn" aria-label="Close details" title="Close">✕ Close</button>
       </div>
+      <div class="drawer-10day-weather-section" id="drawer-10day-weather-${dateKey}" style="display: none; width: 100%; order: 3; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border);"></div>
     `;
   }
 
@@ -588,13 +590,30 @@ function renderCalendarDrawer(dateKey, game, isPast) {
     var loc = game ? game.location : 'Bushrod Park Field 1';
     window.WeatherService.getForecastForGame(targetIso, loc).then(function(fc) {
       var wEl = document.getElementById('drawer-weather-' + dateKey);
-      if (wEl && fc && fc.available) {
-        wEl.innerHTML = '<span>' + fc.emoji + '</span> <strong>' + fc.temperature + '°F ' + API.escapeHtml(fc.condition) + '</strong> ' +
-          '<span class="drawer-rain-prediction" style="display: inline-flex; align-items: center; gap: 4px; font-weight: 700; color: var(--secondary); background: var(--bg-subtle); padding: 2px 8px; border-radius: var(--radius-full); border: 1px solid var(--border); font-size: 0.8rem;">🌧️ <strong>10-Day Rainfall Prediction:</strong> ' + fc.rainfall10DayFormatted + '</span> ' +
-          '<span style="font-size: 0.8rem; color: var(--text-muted);">(' + fc.totalRain24hFormatted + ' in 24h prior &bull; ' + API.escapeHtml(fc.statusLabel) + ')</span>';
-        wEl.style.display = 'inline-flex';
-      } else if (wEl) {
-        wEl.style.display = 'none';
+      var stripEl = document.getElementById('drawer-10day-weather-' + dateKey);
+      if (fc && fc.available) {
+        if (wEl) {
+          wEl.innerHTML = '<span>' + fc.emoji + '</span> <strong>' + fc.temperature + '°F ' + API.escapeHtml(fc.condition) + '</strong> ' +
+            '<span class="drawer-rain-prediction" style="display: inline-flex; align-items: center; gap: 4px; font-weight: 700; color: var(--secondary); background: var(--bg-subtle); padding: 2px 8px; border-radius: var(--radius-full); border: 1px solid var(--border); font-size: 0.8rem;">🌧️ <strong>10-Day Rainfall Prediction:</strong> ' + fc.rainfall10DayFormatted + '</span> ' +
+            '<span style="font-size: 0.8rem; color: var(--text-muted);">(' + fc.totalRain24hFormatted + ' in 24h prior &bull; ' + API.escapeHtml(fc.statusLabel) + ')</span>';
+          wEl.style.display = 'inline-flex';
+        }
+        if (stripEl && fc.dailyForecast && fc.dailyForecast.length > 0 && typeof window.WeatherService.renderDailyRainTrackHtml === 'function') {
+          stripEl.innerHTML =
+            '<div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 6px;">' +
+              '<span style="font-size: 0.82rem; font-weight: 700; color: var(--secondary); display: inline-flex; align-items: center; gap: 5px;">' +
+                '🌧️ <strong>10-Day Rainfall Prediction (Daily Breakdown)</strong>' +
+              '</span>' +
+              '<span style="font-size: 0.76rem; color: var(--text-muted); font-weight: 600;">' +
+                '10-Day Total: <strong style="color: var(--secondary);">' + fc.rainfall10DayFormatted + '</strong>' +
+              '</span>' +
+            '</div>' +
+            window.WeatherService.renderDailyRainTrackHtml(fc.dailyForecast);
+          stripEl.style.display = 'block';
+        }
+      } else {
+        if (wEl) wEl.style.display = 'none';
+        if (stripEl) stripEl.style.display = 'none';
       }
     }).catch(function() {});
   }
