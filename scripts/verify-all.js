@@ -1889,6 +1889,35 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
 
     const headersFile = fs.readFileSync(path.join(publicDir, '_headers'), 'utf8');
     assert.ok(headersFile.includes('https://api.open-meteo.com'), '_headers CSP connect-src must allow https://api.open-meteo.com');
+    assert.ok(headersFile.includes('https://geocoding-api.open-meteo.com'), '_headers CSP connect-src must allow https://geocoding-api.open-meteo.com');
+
+    // Test Dynamic Location & Coordinate Extraction
+    assert.equal(typeof ws.extractCoordinates, 'function', 'extractCoordinates must be a function');
+    assert.equal(typeof ws.resolveCoordsForLocation, 'function', 'resolveCoordsForLocation must be a function');
+    const coordDirect = ws.extractCoordinates('Bushrod Diamond 2 (37.8427, -122.2699)');
+    assert.ok(coordDirect, 'Direct coordinates should be parsed');
+    assert.equal(Math.round(coordDirect.latitude * 1000) / 1000, 37.843);
+    assert.equal(Math.round(coordDirect.longitude * 1000) / 1000, -122.270);
+
+    const coordMapUrl = ws.getCoordsForLocation('https://maps.google.com/?q=37.7749,-122.4194');
+    assert.equal(Math.round(coordMapUrl.latitude * 1000) / 1000, 37.775);
+
+    const bushrodCoords = ws.getCoordsForLocation('Bushrod Park Field 1');
+    assert.equal(Math.round(bushrodCoords.latitude * 1000) / 1000, 37.843);
+
+    const sanPabloCoords = ws.getCoordsForLocation('San Pablo Park Field 2, Berkeley');
+    assert.equal(Math.round(sanPabloCoords.latitude * 1000) / 1000, 37.856);
+
+    const bigRecCoords = ws.getCoordsForLocation('Big Rec Field, San Francisco');
+    assert.equal(Math.round(bigRecCoords.latitude * 1000) / 1000, 37.769);
+
+    const washingtonCoords = ws.getCoordsForLocation('Washington Park, Alameda');
+    assert.equal(Math.round(washingtonCoords.latitude * 1000) / 1000, 37.772);
+
+    const unknownCoords = ws.getCoordsForLocation('Unknown Unscheduled Field 999');
+    assert.equal(Math.round(unknownCoords.latitude * 1000) / 1000, 37.843, 'Unknown location safely defaults to Bushrod');
+
+    assert.ok(appJs.includes('data-weather-location'), 'app.js must pass data-weather-location to calendar card badge');
 
     assert.ok(weatherJsCode.includes('forecast_days=10'), 'weather.js must query 10-day forecast horizon');
     assert.ok(weatherJsCode.includes('renderDailyRainTrackHtml'), 'weather.js must define renderDailyRainTrackHtml');
@@ -1916,6 +1945,7 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     const handbookMd = fs.readFileSync(path.join(__dirname, '..', 'HANDBOOK.md'), 'utf8');
     assert.ok(handbookMd.includes('Sunday Afternoon Routine (12:00 PM – 4:00 PM)'), 'HANDBOOK.md must document authentic 12 PM - 4 PM routine');
     assert.ok(handbookMd.includes('Smart Rainout Assistant & 24-Hour Surface Accumulation Drainage Tracker'), 'HANDBOOK.md must document Smart Rainout Assistant');
+    assert.ok(handbookMd.includes('Dynamic Field Location Awareness'), 'HANDBOOK.md must document Dynamic Field Location Awareness');
     assert.ok(handbookMd.includes('10-day weather forecast'), 'HANDBOOK.md must document 10-day weather forecast');
     assert.ok(handbookMd.includes('12:00 PM – 12:30 PM (Warm-ups & Throwing)'), 'HANDBOOK.md must document warmups and throwing');
     assert.ok(handbookMd.includes('12:30 PM – 1:30 PM (Batting Practice)'), 'HANDBOOK.md must document 1 hour of BP');

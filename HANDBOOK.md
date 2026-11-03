@@ -627,6 +627,13 @@ where $r_h$ is the rainfall in inches that fell $h$ hours before 12:00 PM warmup
 - **Zero API keys**, **zero subscription fees**, and **zero Cloudflare Worker bandwidth or execution limits used**.
 - Results are cached in browser `sessionStorage` (30-minute TTL) so page refreshes and navigation never make duplicate requests.
 
+#### 5. Dynamic Field Location Awareness
+- Weather widgets, pills, and the Smart Rainout Assistant automatically adjust coordinates according to the specific location that the organizer specifies when creating or editing a game.
+- **Built-in Regional Diamond Dictionary:** Seamlessly maps common East Bay, San Francisco, South Bay, and North Bay baseball fields (e.g., Bushrod Park, Raimondi Park, San Pablo Park, James Kenney Park, Washington Park Alameda, Big Rec SF, Crocker Amazon, etc.).
+- **Coordinate & Google Maps Link Parsing:** Automatically extracts latitude and longitude if an organizer enters coordinates directly or pastes a Google Maps link (e.g., `37.8560, -122.2836`).
+- **Live Client-Side Geocoding Fallback:** If an arbitrary diamond or street address is entered, the engine queries Open-Meteo's open geocoding service and caches results in `sessionStorage` for instant repeat lookups.
+- **Per-Card Weather Badges:** On the homepage calendar, each game's weather pill reflects its own designated field rather than a single global default.
+
 ### 🌧️ Calling a Rainout (or Reopening a Game)
 - On the game page, click **🌧️ Call Rainout**, enter an optional field/weather note (e.g., *"Standing water on Bushrod Field 1"*), and confirm.
 - What happens automatically:

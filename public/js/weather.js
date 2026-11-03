@@ -40,7 +40,7 @@
     CACHE_TTL_MS: 30 * 60 * 1000
   };
 
-  // Known field coordinates in the SF Bay Area (Default: Bushrod Park, Oakland)
+  // Known field coordinates across the SF Bay Area (Default: Bushrod Park, Oakland)
   var DEFAULT_COORDS = {
     latitude: 37.8427,
     longitude: -122.2699,
@@ -48,22 +48,209 @@
   };
 
   var FIELD_COORDS_MAP = {
-    'bushrod': { latitude: 37.8427, longitude: -122.2699, name: 'Bushrod Park' },
-    'raimondi': { latitude: 37.8184, longitude: -122.2965, name: 'Raimondi Park' },
-    'grove shafter': { latitude: 37.8344, longitude: -122.2655, name: 'Grove Shafter Park' },
-    'rickey henderson': { latitude: 37.8315, longitude: -122.2678, name: 'Rickey Henderson Field' },
-    'mosswood': { latitude: 37.8252, longitude: -122.2625, name: 'Mosswood Park' }
+    // Oakland Fields
+    'bushrod': { latitude: 37.8427, longitude: -122.2699, name: 'Bushrod Park, Oakland' },
+    'raimondi': { latitude: 37.8184, longitude: -122.2965, name: 'Raimondi Park, Oakland' },
+    'grove shafter': { latitude: 37.8344, longitude: -122.2655, name: 'Grove Shafter Park, Oakland' },
+    'rickey henderson': { latitude: 37.8315, longitude: -122.2678, name: 'Rickey Henderson Field, Oakland' },
+    'carter': { latitude: 37.8315, longitude: -122.2678, name: 'Carter Playing Fields, Oakland' },
+    'mosswood': { latitude: 37.8252, longitude: -122.2625, name: 'Mosswood Park, Oakland' },
+    'laney': { latitude: 37.7941, longitude: -122.2612, name: 'Laney College / Curt Flood Field, Oakland' },
+    'curt flood': { latitude: 37.7941, longitude: -122.2612, name: 'Curt Flood Field, Oakland' },
+    'greenman': { latitude: 37.7661, longitude: -122.1895, name: 'Greenman Field, Oakland' },
+    'lowell': { latitude: 37.8088, longitude: -122.2905, name: 'Lowell Park, Oakland' },
+
+    // Berkeley & Albany & El Cerrito Fields
+    'san pablo park': { latitude: 37.8560, longitude: -122.2836, name: 'San Pablo Park, Berkeley' },
+    'san pablo': { latitude: 37.8560, longitude: -122.2836, name: 'San Pablo Park, Berkeley' },
+    'james kenney': { latitude: 37.8688, longitude: -122.2968, name: 'James Kenney Park, Berkeley' },
+    'codornices': { latitude: 37.8894, longitude: -122.2628, name: 'Codornices Park, Berkeley' },
+    'live oak': { latitude: 37.8847, longitude: -122.2685, name: 'Live Oak Park, Berkeley' },
+    'evans diamond': { latitude: 37.8703, longitude: -122.2646, name: 'Evans Diamond, Berkeley' },
+    'maxwell': { latitude: 37.8703, longitude: -122.2646, name: 'Maxwell Family Field, Berkeley' },
+    'memorial park': { latitude: 37.8899, longitude: -122.2954, name: 'Memorial Park, Albany' },
+    'castro park': { latitude: 37.9152, longitude: -122.3087, name: 'Castro Park, El Cerrito' },
+
+    // Alameda, Emeryville & San Leandro
+    'washington park': { latitude: 37.7719, longitude: -122.2745, name: 'Washington Park, Alameda' },
+    'krusi': { latitude: 37.7618, longitude: -122.2472, name: 'Krusi Park, Alameda' },
+    'rittler': { latitude: 37.7601, longitude: -122.2359, name: 'Rittler Park, Alameda' },
+    'leydecker': { latitude: 37.7335, longitude: -122.2482, name: 'Leydecker Field, Alameda' },
+
+    // San Francisco Diamonds & Parks
+    'big rec': { latitude: 37.7686, longitude: -122.4674, name: 'Big Rec Field, San Francisco' },
+    'nealon': { latitude: 37.7686, longitude: -122.4674, name: 'Nealon Field (Big Rec), SF' },
+    'crocker amazon': { latitude: 37.7126, longitude: -122.4385, name: 'Crocker Amazon Park, San Francisco' },
+    'balboa': { latitude: 37.7247, longitude: -122.4439, name: 'Balboa Park, San Francisco' },
+    'moscone': { latitude: 37.8041, longitude: -122.4357, name: 'Moscone Field, San Francisco' },
+    'lang field': { latitude: 37.7844, longitude: -122.4302, name: 'Lang Field, San Francisco' },
+    'silver terrace': { latitude: 37.7333, longitude: -122.4042, name: 'Silver Terrace, San Francisco' },
+    'jackson park': { latitude: 37.7635, longitude: -122.3986, name: 'Jackson Park, San Francisco' },
+    'fort scott': { latitude: 37.8016, longitude: -122.4716, name: 'Fort Scott Field, Presidio SF' },
+
+    // Contra Costa & Richmond
+    'nicholl': { latitude: 37.9307, longitude: -122.3488, name: 'Nicholl Park, Richmond' },
+
+    // Peninsula & South Bay
+    'central park': { latitude: 37.5614, longitude: -122.3218, name: 'Central Park, San Mateo' },
+    'baylands': { latitude: 37.4526, longitude: -122.1197, name: 'Baylands Athletic Center, Palo Alto' },
+    'excite ballpark': { latitude: 37.3225, longitude: -121.8656, name: 'Excite Ballpark, San Jose' },
+    'municipal stadium': { latitude: 37.3225, longitude: -121.8656, name: 'Municipal Stadium, San Jose' }
   };
+
+  var CITY_COORDS_MAP = {
+    // Regional City Fallbacks (checked only if no specific diamond matches)
+    'oakland': { latitude: 37.8044, longitude: -122.2711, name: 'Oakland, CA' },
+    'berkeley': { latitude: 37.8716, longitude: -122.2727, name: 'Berkeley, CA' },
+    'alameda': { latitude: 37.7652, longitude: -122.2416, name: 'Alameda, CA' },
+    'emeryville': { latitude: 37.8313, longitude: -122.2852, name: 'Emeryville, CA' },
+    'san leandro': { latitude: 37.7249, longitude: -122.1561, name: 'San Leandro, CA' },
+    'san francisco': { latitude: 37.7749, longitude: -122.4194, name: 'San Francisco, CA' },
+    'richmond': { latitude: 37.9358, longitude: -122.3477, name: 'Richmond, CA' },
+    'walnut creek': { latitude: 37.9101, longitude: -122.0652, name: 'Walnut Creek, CA' },
+    'san jose': { latitude: 37.3382, longitude: -121.8863, name: 'San Jose, CA' },
+    'palo alto': { latitude: 37.4419, longitude: -122.1430, name: 'Palo Alto, CA' },
+    'san mateo': { latitude: 37.5630, longitude: -122.3255, name: 'San Mateo, CA' },
+    'marin': { latitude: 37.9735, longitude: -122.5311, name: 'Marin County, CA' },
+    'san rafael': { latitude: 37.9735, longitude: -122.5311, name: 'San Rafael, CA' }
+  };
+
+  /**
+   * Parse latitude and longitude directly from coordinates or map links
+   * Supports e.g. "37.8560, -122.2836", "@37.8560,-122.2836", or Google Maps query URLs
+   */
+  function extractCoordinates(str) {
+    if (!str) return null;
+    var s = String(str);
+    var match = s.match(/(-?\d{1,2}\.\d{3,})\s*,\s*(-?\d{1,3}\.\d{3,})/);
+    if (match) {
+      var lat = parseFloat(match[1]);
+      var lon = parseFloat(match[2]);
+      if (!isNaN(lat) && !isNaN(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+        var cleanName = s.replace(/https?:\/\/\S+/gi, '')
+          .replace(/(-?\d{1,2}\.\d{3,})\s*,\s*(-?\d{1,3}\.\d{3,})/, '')
+          .replace(/[@()#]/g, '')
+          .trim();
+        return {
+          latitude: lat,
+          longitude: lon,
+          name: cleanName || 'Custom Diamond'
+        };
+      }
+    }
+    return null;
+  }
+
+  var GEOCODE_CACHE = {};
+
+  /**
+   * Live geocode lookup using Open-Meteo Geocoding API (client-side, free, no key required)
+   */
+  async function geocodeLocation(locationStr) {
+    if (!locationStr || typeof fetch !== 'function') return null;
+    var query = String(locationStr)
+      .replace(/https?:\/\/\S+/gi, '')
+      .replace(/\bfield\s*\d+\b/gi, '')
+      .replace(/\bdiamond\s*\d+\b/gi, '')
+      .replace(/[#@]/g, '')
+      .trim();
+    if (!query || query.length < 2) return null;
+
+    var cacheKey = query.toLowerCase();
+    if (GEOCODE_CACHE[cacheKey]) {
+      return GEOCODE_CACHE[cacheKey];
+    }
+
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      try {
+        var cached = window.sessionStorage.getItem('pbf_geo_' + cacheKey);
+        if (cached) {
+          var parsed = JSON.parse(cached);
+          if (parsed && typeof parsed.latitude === 'number' && typeof parsed.longitude === 'number') {
+            GEOCODE_CACHE[cacheKey] = parsed;
+            return parsed;
+          }
+        }
+      } catch (e) {}
+    }
+
+    try {
+      var url = 'https://geocoding-api.open-meteo.com/v1/search?name=' + encodeURIComponent(query) + '&count=1&language=en&format=json';
+      var res = await fetch(url);
+      if (!res.ok) return null;
+      var data = await res.json();
+      if (data && data.results && data.results.length > 0) {
+        var first = data.results[0];
+        var nameStr = first.name + (first.admin1 ? ', ' + first.admin1 : '');
+        var result = {
+          latitude: first.latitude,
+          longitude: first.longitude,
+          name: nameStr
+        };
+        GEOCODE_CACHE[cacheKey] = result;
+        if (typeof window !== 'undefined' && window.sessionStorage) {
+          try {
+            window.sessionStorage.setItem('pbf_geo_' + cacheKey, JSON.stringify(result));
+          } catch (e) {}
+        }
+        return result;
+      }
+    } catch (err) {
+      // Return null on network error to allow fallback
+    }
+    return null;
+  }
 
   function getCoordsForLocation(locationStr) {
     if (!locationStr) return DEFAULT_COORDS;
+
+    // 1. Direct coordinates regex check
+    var directCoords = extractCoordinates(locationStr);
+    if (directCoords) return directCoords;
+
     var lower = String(locationStr).toLowerCase();
-    var keys = Object.keys(FIELD_COORDS_MAP);
-    for (var i = 0; i < keys.length; i++) {
-      if (lower.indexOf(keys[i]) !== -1) {
-        return FIELD_COORDS_MAP[keys[i]];
+
+    // 2. Specific diamond/field check (longest keys first for specific matches)
+    var fieldKeys = Object.keys(FIELD_COORDS_MAP);
+    fieldKeys.sort(function(a, b) { return b.length - a.length; });
+    for (var i = 0; i < fieldKeys.length; i++) {
+      if (lower.indexOf(fieldKeys[i]) !== -1) {
+        return FIELD_COORDS_MAP[fieldKeys[i]];
       }
     }
+
+    // 3. Broad city fallbacks (only if no diamond/field matched)
+    var cityKeys = Object.keys(CITY_COORDS_MAP);
+    cityKeys.sort(function(a, b) { return b.length - a.length; });
+    for (var j = 0; j < cityKeys.length; j++) {
+      if (lower.indexOf(cityKeys[j]) !== -1) {
+        return CITY_COORDS_MAP[cityKeys[j]];
+      }
+    }
+
+    // 4. In-memory geocode cache check
+    var cleanKey = lower.replace(/https?:\/\/\S+/gi, '').replace(/\bfield\s*\d+\b/gi, '').trim();
+    if (GEOCODE_CACHE[cleanKey]) {
+      return GEOCODE_CACHE[cleanKey];
+    }
+
+    return DEFAULT_COORDS;
+  }
+
+  async function resolveCoordsForLocation(locationStr) {
+    if (!locationStr) return DEFAULT_COORDS;
+
+    var syncResult = getCoordsForLocation(locationStr);
+    if (syncResult !== DEFAULT_COORDS) {
+      return syncResult;
+    }
+
+    // Dynamic geocoding fallback
+    try {
+      var geocoded = await geocodeLocation(locationStr);
+      if (geocoded) return geocoded;
+    } catch (e) {}
+
     return DEFAULT_COORDS;
   }
 
@@ -501,7 +688,7 @@
     var parts = getPacificDateParts(eventDateIso);
     if (!parts) return null;
 
-    var coords = getCoordsForLocation(locationStr);
+    var coords = await resolveCoordsForLocation(locationStr);
     try {
       var data = await fetchForecast(coords.latitude, coords.longitude);
       var drainage = calculateFieldDrainage(data.hourly, parts.hourKey, data.daily);
@@ -750,21 +937,28 @@
     var elements = document.querySelectorAll('[data-weather-date]');
     if (!elements || elements.length === 0) return;
 
-    var dateKeys = new Set();
+    var groups = {};
     elements.forEach(function(el) {
       var dk = el.getAttribute('data-weather-date');
-      if (dk) dateKeys.add(dk);
+      var loc = el.getAttribute('data-weather-location') || 'Bushrod Park Field 1';
+      if (!dk) return;
+      var groupKey = dk + '::' + loc;
+      if (!groups[groupKey]) {
+        groups[groupKey] = { dateKey: dk, location: loc, elements: [] };
+      }
+      groups[groupKey].elements.push(el);
     });
 
-    dateKeys.forEach(async function(dk) {
-      var iso = dk + 'T20:00:00.000Z'; // 12:00 PM Pacific
+    var groupKeys = Object.keys(groups);
+    groupKeys.forEach(async function(gk) {
+      var grp = groups[gk];
+      var iso = grp.dateKey + 'T20:00:00.000Z'; // 12:00 PM Pacific
       try {
-        var forecast = await getForecastForGame(iso, 'Bushrod Park Field 1');
+        var forecast = await getForecastForGame(iso, grp.location);
         if (forecast && forecast.available) {
-          var matched = document.querySelectorAll('[data-weather-date="' + dk + '"]');
-          matched.forEach(function(el) {
+          grp.elements.forEach(function(el) {
             el.innerHTML =
-              '<span class="weather-card-pill ' + forecast.badgeClass + '" title="' + forecast.condition + ' · Prev 24h Rain: ' + forecast.totalRain24hFormatted + ' (' + forecast.statusLabel + ')">' +
+              '<span class="weather-card-pill ' + forecast.badgeClass + '" title="' + (forecast.locationName ? forecast.locationName + ' · ' : '') + forecast.condition + ' · Prev 24h Rain: ' + forecast.totalRain24hFormatted + ' (' + forecast.statusLabel + ')">' +
                 '<span>' + forecast.emoji + '</span> <span>' + forecast.temperature + '°F</span>' +
               '</span>';
             el.style.display = 'inline-flex';
@@ -777,7 +971,9 @@
   // Export to global window object
   window.WeatherService = {
     HEURISTIC_CONFIG: HEURISTIC_CONFIG,
+    extractCoordinates: extractCoordinates,
     getCoordsForLocation: getCoordsForLocation,
+    resolveCoordsForLocation: resolveCoordsForLocation,
     getWeatherCodeInfo: getWeatherCodeInfo,
     getPacificDateParts: getPacificDateParts,
     fetchForecast: fetchForecast,

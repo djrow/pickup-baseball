@@ -831,7 +831,7 @@ function renderCalendar(events) {
             <span class="sunday-time-icon">${timeIcon}</span>
             <span class="sunday-time-text">${timeText}</span>
           </div>
-          <div class="sunday-weather-badge" data-weather-date="${dateKey}" style="display: none; margin-top: 3px;"></div>
+          <div class="sunday-weather-badge" data-weather-date="${dateKey}" data-weather-location="${API.escapeHtml(game && game.location ? game.location : 'Bushrod Park Field 1')}" style="display: none; margin-top: 3px;"></div>
           <div class="sunday-game-location" title="${API.escapeHtml(locationTitle)}">
             📍 ${API.escapeHtml(locationName)}
           </div>
