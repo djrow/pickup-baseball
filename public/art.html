@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Community Art Studio - Pickup Baseball Foundation</title>
-  <link rel="stylesheet" href="/css/style.css?v=55">
+  <link rel="stylesheet" href="/css/style.css?v=56">
   <link rel="alternate" type="application/rss+xml" title="Sunday Pickup Baseball Highlights &amp; Updates" href="/feed.xml">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
@@ -53,8 +53,8 @@
         <a href="#section-pixel-diamond" class="art-tab-btn">
           <span>⚾</span> Pixel Diamond
         </a>
-        <a href="#section-equipment-trunk" class="art-tab-btn">
-          <span>🧳</span> Equipment Trunk
+        <a href="#section-dugout-wall" class="art-tab-btn">
+          <span>🧱</span> Dugout Wall
         </a>
         <a href="#section-chalkboard" class="art-tab-btn">
           <span>📋</span> Dugout Chalkboard
@@ -143,31 +143,32 @@
     </section>
 
     <!-- ============================================================== -->
-    <!-- 2. The "Equipment Trunk" Sticker & Stamp Wall                  -->
+    <!-- 2. The "Dugout Wall" Sticker & Tag Wall                         -->
     <!-- ============================================================== -->
-    <section id="section-equipment-trunk" class="art-card" style="border-top: 5px solid var(--secondary);">
+    <section id="section-dugout-wall" class="art-card" style="border-top: 5px solid var(--secondary);">
+      <a id="section-equipment-trunk" style="display: block; position: relative; top: -20px; visibility: hidden;"></a>
       <div class="flex-between">
         <div>
           <span class="badge badge-blue" style="font-size: 0.75rem; text-transform: uppercase; font-weight: 800;">Concept 2</span>
           <h2 style="color: var(--secondary); font-size: 1.4rem; margin: 6px 0 2px 0;">
-            🧳 The Vintage Equipment Trunk
+            🧱 The Dugout Wall Sticker &amp; Tag Wall
           </h2>
           <p style="font-size: 0.88rem; color: var(--text-muted); margin: 0;">
-            Slap retro baseball badges, patches, and equipment stickers onto the team trunk. Add a player note or click a sticker to peel it off!
+            Slap retro baseball badges, patches, and player tags onto the weathered dugout wall. Add a player note or click a sticker to peel it off!
           </p>
         </div>
       </div>
 
-      <!-- Trunk Surface Frame -->
-      <div class="trunk-outer-box">
+      <!-- Dugout Wall Surface Frame -->
+      <div class="trunk-outer-box dugout-wall-outer-box">
         <div style="text-align: center;">
-          <div class="trunk-header-plaque">
-            ★ PICKUP BASEBALL FOUNDATION · OAKLAND DUGOUT TRUNK ★
+          <div class="trunk-header-plaque dugout-wall-header-plaque">
+            ★ PICKUP BASEBALL FOUNDATION · HOME DUGOUT WALL · EST. 2026 ★
           </div>
         </div>
 
         <!-- Interactive Stage -->
-        <div id="trunk-canvas-stage" class="trunk-canvas-stage" title="Click anywhere on the trunk to slap your selected sticker!"></div>
+        <div id="trunk-canvas-stage" class="trunk-canvas-stage dugout-wall-stage" title="Click anywhere on the dugout wall to slap your selected sticker!"></div>
       </div>
 
       <!-- Sticker Tray -->
@@ -186,7 +187,7 @@
           </div>
           <div style="align-self: flex-end; display: flex; gap: 6px; flex-wrap: wrap;">
             <button type="button" id="btn-admin-clear-trunk" class="btn btn-outline btn-sm art-admin-only" style="display: none; color: var(--secondary); font-weight: 700;">
-              🛡️ Admin Peel All
+              🛡️ Admin Peel Wall
             </button>
             <button type="button" id="btn-clear-trunk" class="btn btn-outline btn-sm" style="color: var(--text-muted);">
               🧹 Peel My Stickers
@@ -272,8 +273,8 @@
   <footer id="site-footer" class="site-footer"></footer>
 
   <!-- Core Scripts -->
-  <script src="/js/api.js?v=55"></script>
-  <script src="/js/art.js?v=55"></script>
+  <script src="/js/api.js?v=56"></script>
+  <script src="/js/art.js?v=56"></script>
   <script>
     document.addEventListener('DOMContentLoaded', async () => {
       try {

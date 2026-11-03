@@ -431,7 +431,7 @@
     const clearBtn = document.getElementById('btn-clear-trunk');
     if (clearBtn) {
       clearBtn.addEventListener('click', () => {
-        if (confirm('Peel your stickers off the equipment trunk?')) {
+        if (confirm('Peel your stickers off the dugout wall?')) {
           placedStickers = [];
           renderPlacedStickers(stage);
           localStorage.removeItem('pbf_trunk_stickers');
@@ -443,11 +443,11 @@
     const adminClearBtn = document.getElementById('btn-admin-clear-trunk');
     if (adminClearBtn) {
       adminClearBtn.addEventListener('click', () => {
-        if (confirm('Admin: Clear all stickers off the community equipment trunk?')) {
+        if (confirm('Admin: Clear all stickers off the community dugout wall?')) {
           placedStickers = [];
           renderPlacedStickers(stage);
           localStorage.removeItem('pbf_trunk_stickers');
-          showToast('🛡️ Equipment trunk cleared by Admin.');
+          showToast('🛡️ Dugout wall cleared by Admin.');
         }
       });
     }
@@ -475,7 +475,7 @@
       el.addEventListener('click', (e) => {
         e.stopPropagation();
         const id = el.getAttribute('data-id');
-        const msg = isAdmin ? 'Admin: Permanently peel this sticker off the trunk?' : 'Peel this sticker off the trunk?';
+        const msg = isAdmin ? 'Admin: Permanently peel this sticker off the dugout wall?' : 'Peel this sticker off the dugout wall?';
         if (confirm(msg)) {
           placedStickers = placedStickers.filter(s => s.id !== id);
           renderPlacedStickers(stage);
