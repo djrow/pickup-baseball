@@ -12,6 +12,7 @@ import { renderFeedXmlResponse } from './feeds.js';
 import { authRouter, serveUserAvatar, getSettingsHandler, putSettingsHandler } from './routes/auth.js';
 import { eventsRouter } from './routes/events.js';
 import { postsRouter } from './routes/posts.js';
+import { mediaRouter } from './routes/media.js';
 
 export const app = new Hono().basePath('/api');
 
@@ -85,3 +86,4 @@ app.get('/feed.xml', (c) => renderFeedXmlResponse(c.env && c.env.DB, c.req.url))
 app.route('/auth', authRouter);
 app.route('/events', eventsRouter);
 app.route('/posts', postsRouter);
+app.route('/media', mediaRouter);

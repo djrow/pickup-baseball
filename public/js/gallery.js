@@ -1,0 +1,903 @@
+/**
+ * public/js/gallery.js
+ * Community Photo & Video Gallery and Zero-Login Media Drop
+ * Sunday Pickup Baseball Charity Platform
+ *
+ * Strict ES6 compatible (No optional chaining or nullish coalescing).
+ */
+
+(function() {
+  'use strict';
+
+  var currentFilterType = 'all';
+  var currentSortOrder = 'desc';
+  var galleryMedia = [];
+  var galleryAlbums = [];
+  var currentLightboxIndex = -1;
+  var currentPhotoItems = [];
+  var currentUser = null;
+  var selectedFileBase64 = null;
+  var selectedFileMime = null;
+
+  function slugify(text) {
+    return String(text || '')
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+  }
+
+  function formatDisplayDate(dateStr) {
+    if (!dateStr) return '';
+    try {
+      var parts = String(dateStr).split('-');
+      if (parts.length === 3) {
+        var d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+        return new Intl.DateTimeFormat(API.getLang ? API.getLang() : 'en', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric'
+        }).format(d);
+      }
+    } catch (e) {}
+    return dateStr;
+  }
+
+  function getSundayOffsetDate(sundayOffset) {
+    var now = new Date();
+    var day = now.getDay(); // 0 is Sunday
+    var diffToLastSunday = day === 0 ? 0 : day;
+    var targetSunday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - diffToLastSunday - (sundayOffset * 7));
+    var y = targetSunday.getFullYear();
+    var m = String(targetSunday.getMonth() + 1).padStart(2, '0');
+    var d = String(targetSunday.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + d;
+  }
+
+  // ---------------------------------------------------------------------------
+  // 1. Initialization
+  // ---------------------------------------------------------------------------
+  async function initGallery() {
+    try {
+      if (typeof API !== 'undefined' && API.renderNav) {
+        API.renderNav();
+      }
+      if (typeof API !== 'undefined' && API.renderFooter) {
+        API.renderFooter();
+      }
+      if (typeof API !== 'undefined' && API.getMe) {
+        try {
+          var meData = await API.getMe();
+          currentUser = meData && meData.user ? meData.user : null;
+        } catch (e) {
+          currentUser = null;
+        }
+      }
+    } catch (err) {
+      console.warn('[Gallery] Nav init error:', err);
+    }
+
+    setupToolbarListeners();
+    setupSubmissionForm();
+    setupLightbox();
+    await loadGalleryData();
+
+    // Check if URL contains an album anchor
+    if (window.location.hash && window.location.hash.startsWith('#album-')) {
+      var targetSlug = window.location.hash.replace('#album-', '');
+      setTimeout(function() {
+        jumpToAlbum(targetSlug);
+      }, 350);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 2. Data Fetching & Rendering
+  // ---------------------------------------------------------------------------
+  async function loadGalleryData() {
+    var photosContainer = document.getElementById('photos-albums-container');
+    var videosContainer = document.getElementById('videos-grid-container');
+
+    try {
+      var data = await API.getMedia({
+        type: currentFilterType,
+        order: currentSortOrder
+      });
+
+      galleryMedia = data && data.media ? data.media : [];
+      galleryAlbums = data && data.albums ? data.albums : [];
+
+      updateCounts();
+      renderAlbumBookmarks();
+      renderVideos();
+      renderPhotos();
+      populateAlbumSelectOptions();
+    } catch (err) {
+      console.error('[Gallery] Failed to load media:', err);
+      if (photosContainer) {
+        photosContainer.innerHTML = '<div class="alert alert-error">Failed to load photo gallery: ' + API.escapeHtml(err.message || 'Server error') + '</div>';
+      }
+      if (videosContainer) {
+        videosContainer.innerHTML = '<div class="alert alert-error">Failed to load video releases.</div>';
+      }
+    }
+  }
+
+  function updateCounts() {
+    var photoCount = 0;
+    var videoCount = 0;
+    for (var i = 0; i < galleryMedia.length; i++) {
+      if (galleryMedia[i].media_type === 'photo') photoCount++;
+      if (galleryMedia[i].media_type === 'video' || galleryMedia[i].media_type === 'youtube') videoCount++;
+    }
+
+    var countAll = document.getElementById('count-all');
+    var countPhotos = document.getElementById('count-photos');
+    var countVideos = document.getElementById('count-videos');
+
+    if (countAll) countAll.textContent = String(galleryMedia.length);
+    if (countPhotos) countPhotos.textContent = String(photoCount);
+    if (countVideos) countVideos.textContent = String(videoCount);
+
+    var orderLabel = currentSortOrder === 'asc' ? 'Chronological (Oldest First)' : 'Chronological (Newest First)';
+    var vLabel = document.getElementById('video-order-label');
+    var pLabel = document.getElementById('photo-order-label');
+    if (vLabel) vLabel.textContent = orderLabel;
+    if (pLabel) pLabel.textContent = orderLabel;
+  }
+
+  // ---------------------------------------------------------------------------
+  // 3. Album Bookmarks Bar (Quick Jump Navigation)
+  // ---------------------------------------------------------------------------
+  function renderAlbumBookmarks() {
+    var container = document.getElementById('album-bookmarks-bar');
+    if (!container) return;
+
+    var html = '<button type="button" class="album-bookmark-pill active" data-album="all"><span>🌟 All Albums (' + galleryMedia.length + ')</span></button>';
+
+    if (galleryAlbums && galleryAlbums.length > 0) {
+      for (var i = 0; i < galleryAlbums.length; i++) {
+        var alb = galleryAlbums[i];
+        var slug = slugify(alb.album);
+        var dateSpan = alb.latest_date ? formatDisplayDate(alb.latest_date) : '';
+        html += '<button type="button" class="album-bookmark-pill" data-album-slug="' + API.escapeHtml(slug) + '" data-album-name="' + API.escapeHtml(alb.album) + '">';
+        html += '<span>📌 ' + API.escapeHtml(alb.album) + '</span>';
+        html += '<span class="badge" style="background: rgba(0,56,49,0.12); color: var(--secondary); font-size: 0.75rem; margin-left: 4px;">' + alb.count + '</span>';
+        html += '</button>';
+      }
+    }
+
+    container.innerHTML = html;
+
+    container.querySelectorAll('.album-bookmark-pill').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        container.querySelectorAll('.album-bookmark-pill').forEach(function(b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+
+        var slug = btn.getAttribute('data-album-slug');
+        if (!slug || slug === 'all') {
+          var photosSection = document.getElementById('photos-section');
+          if (photosSection) photosSection.scrollIntoView({ behavior: 'smooth' });
+          if (history.pushState) history.pushState(null, null, '#');
+        } else {
+          jumpToAlbum(slug);
+        }
+      });
+    });
+  }
+
+  function jumpToAlbum(slug) {
+    var target = document.getElementById('album-' + slug);
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      target.classList.add('album-container-highlight');
+      setTimeout(function() {
+        target.classList.remove('album-container-highlight');
+      }, 1800);
+
+      if (history.pushState) {
+        history.pushState(null, null, '#album-' + slug);
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 4. Render Videos (YouTube & Direct Clips Chronological Stream)
+  // ---------------------------------------------------------------------------
+  function renderVideos() {
+    var container = document.getElementById('videos-grid-container');
+    var section = document.getElementById('videos-section');
+    if (!container || !section) return;
+
+    var videos = [];
+    for (var i = 0; i < galleryMedia.length; i++) {
+      var item = galleryMedia[i];
+      if (item.media_type === 'video' || item.media_type === 'youtube') {
+        videos.push(item);
+      }
+    }
+
+    if (currentFilterType === 'photo') {
+      section.style.display = 'none';
+      return;
+    }
+    section.style.display = 'block';
+
+    if (videos.length === 0) {
+      container.innerHTML = '<div class="feed-empty-state"><div class="feed-empty-state-icon">🎬</div><div class="feed-empty-state-title">No Video Releases Yet</div><p class="feed-empty-state-desc">Use the submission form below to add YouTube game highlights or clinic videos!</p></div>';
+      return;
+    }
+
+    var isManager = Boolean(currentUser && currentUser.canManageEvents);
+
+    var html = videos.map(function(vid) {
+      var dateLabel = formatDisplayDate(vid.date_taken);
+      var contributor = vid.contributor_name ? API.escapeHtml(vid.contributor_name) : 'Community';
+      var title = vid.title ? API.escapeHtml(vid.title) : 'Game Highlights';
+      var caption = vid.caption ? API.escapeHtml(vid.caption) : '';
+      var albumTag = vid.album ? API.escapeHtml(vid.album) : 'General';
+
+      var playerHtml = '';
+      if (vid.media_type === 'youtube') {
+        var ytId = API.getYouTubeId ? API.getYouTubeId(vid.file_url || vid.original_url) : null;
+        if (!ytId) {
+          var m = String(vid.file_url || vid.original_url || '').match(/([\w-]{11})/);
+          ytId = m ? m[1] : '';
+        }
+        var thumbUrl = ytId ? 'https://img.youtube.com/vi/' + ytId + '/hqdefault.jpg' : '/logo.svg';
+
+        playerHtml = `
+          <div class="video-facade-container" data-youtube-id="${API.escapeHtml(ytId)}">
+            <img src="${API.escapeHtml(thumbUrl)}" alt="${title}" class="video-facade-thumb" loading="lazy">
+            <button type="button" class="video-play-btn" aria-label="Play Video">▶</button>
+            <span class="video-badge-pill">YouTube HD</span>
+          </div>
+        `;
+      } else {
+        var safeVidUrl = API.safeUrl ? API.safeUrl(vid.file_url) : vid.file_url;
+        playerHtml = `
+          <div class="video-native-container">
+            <video src="${API.escapeHtml(safeVidUrl)}" controls playsinline preload="metadata" class="video-native-player"></video>
+          </div>
+        `;
+      }
+
+      var adminDeleteBtn = isManager ? `
+        <button type="button" class="btn btn-outline btn-xs btn-delete-media" data-media-id="${vid.id}" style="color: var(--danger); border-color: #fca5a5; margin-left: auto;">
+          🗑️ Delete
+        </button>
+      ` : '';
+
+      return `
+        <div class="card video-card" data-video-id="${vid.id}">
+          ${playerHtml}
+          <div class="video-card-body">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
+              <span class="badge badge-orange" style="font-size: 0.78rem;">📅 ${API.escapeHtml(dateLabel)}</span>
+              <span class="badge" style="background: var(--bg-subtle); color: var(--text-muted); font-size: 0.78rem;">📌 ${albumTag}</span>
+              <span style="font-size: 0.8rem; color: var(--text-muted);">By ${contributor}</span>
+              ${adminDeleteBtn}
+            </div>
+            <h3 style="font-size: 1.1rem; color: var(--text-main); margin: 0 0 6px 0; line-height: 1.3;">${title}</h3>
+            ${caption ? `<p style="font-size: 0.88rem; color: var(--text-muted); margin: 0; line-height: 1.4;">${caption}</p>` : ''}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    container.innerHTML = html;
+
+    // Attach YouTube Lite Facade Click Listeners
+    container.querySelectorAll('.video-facade-container').forEach(function(facade) {
+      facade.addEventListener('click', function() {
+        var ytId = facade.getAttribute('data-youtube-id');
+        if (!ytId) return;
+        var iframe = document.createElement('iframe');
+        iframe.setAttribute('src', 'https://www.youtube-nocookie.com/embed/' + encodeURIComponent(ytId) + '?autoplay=1&rel=0');
+        iframe.setAttribute('title', 'YouTube Video Player');
+        iframe.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture');
+        iframe.setAttribute('allowfullscreen', 'true');
+        iframe.className = 'video-embed-iframe';
+        facade.innerHTML = '';
+        facade.appendChild(iframe);
+      });
+    });
+
+    // Attach Admin Delete Listeners
+    container.querySelectorAll('.btn-delete-media').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var id = btn.getAttribute('data-media-id');
+        handleDeleteMedia(id);
+      });
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // 5. Render Photos (Grouped by Album in Chronological Order)
+  // ---------------------------------------------------------------------------
+  function renderPhotos() {
+    var container = document.getElementById('photos-albums-container');
+    var section = document.getElementById('photos-section');
+    if (!container || !section) return;
+
+    var photos = [];
+    for (var i = 0; i < galleryMedia.length; i++) {
+      var item = galleryMedia[i];
+      if (item.media_type === 'photo') {
+        photos.push(item);
+      }
+    }
+
+    if (currentFilterType === 'video') {
+      section.style.display = 'none';
+      return;
+    }
+    section.style.display = 'block';
+
+    if (photos.length === 0) {
+      container.innerHTML = '<div class="feed-empty-state"><div class="feed-empty-state-icon">📸</div><div class="feed-empty-state-title">No Photos in Gallery</div><p class="feed-empty-state-desc">Be the first to drop Sunday game photos using the zero-login submission form below!</p></div>';
+      return;
+    }
+
+    currentPhotoItems = photos;
+    var isManager = Boolean(currentUser && currentUser.canManageEvents);
+
+    // Group photos by Album name
+    var albumMap = {};
+    var albumOrder = [];
+    for (var p = 0; p < photos.length; p++) {
+      var photo = photos[p];
+      var albName = photo.album || 'General Community Moments';
+      if (!albumMap[albName]) {
+        albumMap[albName] = [];
+        albumOrder.push(albName);
+      }
+      albumMap[albName].push(photo);
+    }
+
+    var html = '';
+    for (var a = 0; a < albumOrder.length; a++) {
+      var albumName = albumOrder[a];
+      var albumPhotos = albumMap[albumName];
+      var slug = slugify(albumName);
+
+      var dates = albumPhotos.map(function(p) { return p.date_taken; }).filter(Boolean).sort();
+      var dateRangeStr = '';
+      if (dates.length > 0) {
+        var earliest = formatDisplayDate(dates[0]);
+        var latest = formatDisplayDate(dates[dates.length - 1]);
+        dateRangeStr = earliest === latest ? earliest : earliest + ' – ' + latest;
+      }
+
+      html += `
+        <div class="card photo-album-group" id="album-${slug}" style="margin-bottom: 32px; padding: 20px;">
+          <div class="photo-album-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; border-bottom: 1px solid var(--border); padding-bottom: 12px;">
+            <div>
+              <h3 style="font-size: 1.25rem; color: var(--secondary); margin: 0 0 4px 0; display: flex; align-items: center; gap: 8px;">
+                <span>📌</span> <span>${API.escapeHtml(albumName)}</span>
+                <span class="badge badge-green" style="font-size: 0.8rem;">${albumPhotos.length} ${albumPhotos.length === 1 ? 'photo' : 'photos'}</span>
+              </h3>
+              ${dateRangeStr ? `<span style="font-size: 0.85rem; color: var(--text-muted);">📅 Approximate Date: ${API.escapeHtml(dateRangeStr)}</span>` : ''}
+            </div>
+            <div>
+              <button type="button" class="btn btn-outline btn-xs btn-share-album" data-album-slug="${slug}" title="Copy direct link to this album">
+                🔗 Copy Album Link
+              </button>
+            </div>
+          </div>
+
+          <div class="photo-album-grid">
+      `;
+
+      for (var k = 0; k < albumPhotos.length; k++) {
+        var pt = albumPhotos[k];
+        var globalIndex = photos.indexOf(pt);
+        var ptDate = formatDisplayDate(pt.date_taken);
+        var ptContributor = pt.contributor_name ? API.escapeHtml(pt.contributor_name) : 'Community';
+        var ptTitle = pt.title ? API.escapeHtml(pt.title) : '';
+        var safeImgUrl = API.safeUrl ? API.safeUrl(pt.file_url) : pt.file_url;
+
+        var deleteBtn = isManager ? `
+          <button type="button" class="btn-delete-photo" data-media-id="${pt.id}" title="Delete Photo">✕</button>
+        ` : '';
+
+        html += `
+          <div class="photo-card" data-global-index="${globalIndex}">
+            <div class="photo-card-img-wrap">
+              <img src="${API.escapeHtml(safeImgUrl)}" alt="${ptTitle || 'Baseball Photo'}" loading="lazy" class="photo-card-img">
+              <div class="photo-card-overlay">
+                <span class="photo-card-date">📅 ${API.escapeHtml(ptDate)}</span>
+                <span class="photo-card-author">📷 ${ptContributor}</span>
+              </div>
+              ${deleteBtn}
+            </div>
+            ${ptTitle ? `<div class="photo-card-caption">${ptTitle}</div>` : ''}
+          </div>
+        `;
+      }
+
+      html += `
+          </div>
+        </div>
+      `;
+    }
+
+    container.innerHTML = html;
+
+    // Attach Lightbox click handlers
+    container.querySelectorAll('.photo-card').forEach(function(card) {
+      card.addEventListener('click', function(e) {
+        if (e.target.classList.contains('btn-delete-photo')) return;
+        var idx = parseInt(card.getAttribute('data-global-index'), 10);
+        if (!isNaN(idx)) openLightbox(idx);
+      });
+    });
+
+    // Attach Share Album Link listeners
+    container.querySelectorAll('.btn-share-album').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var slug = btn.getAttribute('data-album-slug');
+        var fullUrl = window.location.origin + window.location.pathname + '#album-' + slug;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(fullUrl).then(function() {
+            var origText = btn.textContent;
+            btn.textContent = '✓ Copied!';
+            setTimeout(function() { btn.textContent = origText; }, 2000);
+          });
+        } else {
+          prompt('Copy link to this album:', fullUrl);
+        }
+      });
+    });
+
+    // Attach Admin Delete listeners
+    container.querySelectorAll('.btn-delete-photo').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var id = btn.getAttribute('data-media-id');
+        handleDeleteMedia(id);
+      });
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // 6. Fullscreen Lightbox Modal
+  // ---------------------------------------------------------------------------
+  function setupLightbox() {
+    var modal = document.getElementById('gallery-lightbox');
+    var closeBtn = document.getElementById('lightbox-close');
+    var prevBtn = document.getElementById('lightbox-prev');
+    var nextBtn = document.getElementById('lightbox-next');
+
+    if (!modal) return;
+
+    if (closeBtn) closeBtn.addEventListener('click', closeLightbox);
+    if (prevBtn) prevBtn.addEventListener('click', prevLightbox);
+    if (nextBtn) nextBtn.addEventListener('click', nextLightbox);
+
+    modal.addEventListener('click', function(e) {
+      if (e.target === modal) closeLightbox();
+    });
+
+    window.addEventListener('keydown', function(e) {
+      if (modal.style.display !== 'none') {
+        if (e.key === 'Escape') closeLightbox();
+        if (e.key === 'ArrowLeft') prevLightbox();
+        if (e.key === 'ArrowRight') nextLightbox();
+      }
+    });
+  }
+
+  function openLightbox(index) {
+    if (index < 0 || index >= currentPhotoItems.length) return;
+    currentLightboxIndex = index;
+    updateLightboxContent();
+    var modal = document.getElementById('gallery-lightbox');
+    if (modal) modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeLightbox() {
+    var modal = document.getElementById('gallery-lightbox');
+    if (modal) modal.style.display = 'none';
+    document.body.style.overflow = '';
+  }
+
+  function prevLightbox() {
+    if (currentLightboxIndex > 0) {
+      currentLightboxIndex--;
+    } else {
+      currentLightboxIndex = currentPhotoItems.length - 1;
+    }
+    updateLightboxContent();
+  }
+
+  function nextLightbox() {
+    if (currentLightboxIndex < currentPhotoItems.length - 1) {
+      currentLightboxIndex++;
+    } else {
+      currentLightboxIndex = 0;
+    }
+    updateLightboxContent();
+  }
+
+  function updateLightboxContent() {
+    var photo = currentPhotoItems[currentLightboxIndex];
+    if (!photo) return;
+
+    var img = document.getElementById('lightbox-img');
+    var caption = document.getElementById('lightbox-caption');
+    var meta = document.getElementById('lightbox-meta');
+
+    if (img) {
+      img.src = API.safeUrl ? API.safeUrl(photo.file_url) : photo.file_url;
+      img.alt = photo.title || 'Baseball Gallery Photo';
+    }
+    if (caption) {
+      caption.textContent = photo.title || photo.caption || ('Photo ' + (currentLightboxIndex + 1) + ' of ' + currentPhotoItems.length);
+    }
+    if (meta) {
+      var d = formatDisplayDate(photo.date_taken);
+      var c = photo.contributor_name ? photo.contributor_name : 'Community Member';
+      var a = photo.album ? photo.album : 'General';
+      meta.textContent = '📅 ' + d + ' • 📷 By ' + c + ' • 📌 ' + a + ' (' + (currentLightboxIndex + 1) + '/' + currentPhotoItems.length + ')';
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 7. Community Zero-Login Submission Form
+  // ---------------------------------------------------------------------------
+  function setupSubmissionForm() {
+    var form = document.getElementById('media-submit-form');
+    var modeUploadBtn = document.getElementById('tab-mode-upload');
+    var modeLinkBtn = document.getElementById('tab-mode-link');
+    var uploadContainer = document.getElementById('mode-upload-container');
+    var linkContainer = document.getElementById('mode-link-container');
+    var fileInput = document.getElementById('media-file-input');
+    var browseBtn = document.getElementById('btn-browse-files');
+    var dropzone = document.getElementById('media-dropzone');
+    var dateInput = document.getElementById('media-date-input');
+    var albumSelect = document.getElementById('media-album-select');
+    var newAlbumWrap = document.getElementById('new-album-wrap');
+    var urlInput = document.getElementById('media-url-input');
+
+    // Default date input to most recent Sunday
+    if (dateInput) {
+      dateInput.value = getSundayOffsetDate(0);
+    }
+
+    // Quick Date Selector Buttons
+    document.querySelectorAll('.btn-quick-date').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        if (!dateInput) return;
+        var days = btn.getAttribute('data-days');
+        var sun = btn.getAttribute('data-sunday');
+        if (days === '0') {
+          dateInput.value = new Date().toISOString().slice(0, 10);
+        } else if (sun === 'last') {
+          dateInput.value = getSundayOffsetDate(0);
+        } else if (sun === 'prev') {
+          dateInput.value = getSundayOffsetDate(1);
+        }
+      });
+    });
+
+    // Mode Toggle Buttons (Upload vs Link)
+    if (modeUploadBtn && modeLinkBtn) {
+      modeUploadBtn.addEventListener('click', function() {
+        modeUploadBtn.className = 'btn btn-sm btn-primary submission-tab-btn active';
+        modeLinkBtn.className = 'btn btn-sm btn-outline submission-tab-btn';
+        if (uploadContainer) uploadContainer.style.display = 'block';
+        if (linkContainer) linkContainer.style.display = 'none';
+        updateLivePreview();
+      });
+
+      modeLinkBtn.addEventListener('click', function() {
+        modeLinkBtn.className = 'btn btn-sm btn-primary submission-tab-btn active';
+        modeUploadBtn.className = 'btn btn-sm btn-outline submission-tab-btn';
+        if (linkContainer) linkContainer.style.display = 'block';
+        if (uploadContainer) uploadContainer.style.display = 'none';
+        updateLivePreview();
+      });
+    }
+
+    // Dropzone & File Browse
+    if (browseBtn && fileInput) {
+      browseBtn.addEventListener('click', function() { fileInput.click(); });
+    }
+    if (dropzone && fileInput) {
+      dropzone.addEventListener('click', function(e) {
+        if (e.target !== browseBtn) fileInput.click();
+      });
+      dropzone.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        dropzone.classList.add('dropzone-dragover');
+      });
+      dropzone.addEventListener('dragleave', function() {
+        dropzone.classList.remove('dropzone-dragover');
+      });
+      dropzone.addEventListener('drop', function(e) {
+        e.preventDefault();
+        dropzone.classList.remove('dropzone-dragover');
+        if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          handleFileChosen(e.dataTransfer.files[0]);
+        }
+      });
+      fileInput.addEventListener('change', function() {
+        if (fileInput.files && fileInput.files.length > 0) {
+          handleFileChosen(fileInput.files[0]);
+        }
+      });
+    }
+
+    // Album Selection & Custom Album Name
+    if (albumSelect && newAlbumWrap) {
+      albumSelect.addEventListener('change', function() {
+        if (albumSelect.value === '__NEW__') {
+          newAlbumWrap.style.display = 'block';
+          var newInp = document.getElementById('media-new-album-input');
+          if (newInp) newInp.focus();
+        } else {
+          newAlbumWrap.style.display = 'none';
+        }
+      });
+    }
+
+    // URL change live preview
+    if (urlInput) {
+      urlInput.addEventListener('input', updateLivePreview);
+      urlInput.addEventListener('change', updateLivePreview);
+    }
+
+    // Form Submit
+    if (form) {
+      form.addEventListener('submit', handleFormSubmit);
+    }
+  }
+
+  function handleFileChosen(file) {
+    var fileNameLabel = document.getElementById('dropzone-file-name');
+    if (!file) return;
+
+    if (file.size > 15 * 1024 * 1024) {
+      alert('Selected file is too large (' + (file.size / 1024 / 1024).toFixed(1) + 'MB). Please choose a file under 15MB.');
+      return;
+    }
+
+    if (fileNameLabel) {
+      fileNameLabel.textContent = '✓ Selected: ' + file.name + ' (' + (file.size / 1024).toFixed(0) + ' KB)';
+    }
+
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      selectedFileBase64 = e.target.result;
+      selectedFileMime = file.type || 'image/jpeg';
+      updateLivePreview();
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function updateLivePreview() {
+    var previewBox = document.getElementById('media-preview-box');
+    var previewTarget = document.getElementById('media-preview-target');
+    var isLinkMode = document.getElementById('tab-mode-link') && document.getElementById('tab-mode-link').classList.contains('active');
+    var urlInput = document.getElementById('media-url-input');
+
+    if (!previewBox || !previewTarget) return;
+
+    if (isLinkMode) {
+      var url = urlInput ? urlInput.value.trim() : '';
+      if (!url) {
+        previewBox.style.display = 'none';
+        previewTarget.innerHTML = '';
+        return;
+      }
+
+      var ytId = API.getYouTubeId ? API.getYouTubeId(url) : null;
+      if (ytId) {
+        previewBox.style.display = 'block';
+        previewTarget.innerHTML = `
+          <div style="max-width: 400px; border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--border);">
+            <img src="https://img.youtube.com/vi/${API.escapeHtml(ytId)}/hqdefault.jpg" alt="YouTube Preview" style="width: 100%; display: block;">
+            <div style="padding: 8px 12px; background: var(--bg-subtle); font-size: 0.85rem; color: var(--secondary); font-weight: 600;">
+              ✓ YouTube Video Recognized (ID: ${API.escapeHtml(ytId)}) — will stream in video carousel!
+            </div>
+          </div>
+        `;
+      } else {
+        previewBox.style.display = 'block';
+        previewTarget.innerHTML = `
+          <div style="max-width: 400px; border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--border);">
+            <img src="${API.escapeHtml(url)}" alt="Remote Image" style="max-width: 100%; max-height: 250px; display: block;" onerror="this.onerror=null; this.src='/logo.svg';">
+            <div style="padding: 8px 12px; background: var(--bg-subtle); font-size: 0.85rem; color: var(--secondary); font-weight: 600;">
+              ✓ External Image / Facebook CDN — will be copied and permanently saved in PBF vault!
+            </div>
+          </div>
+        `;
+      }
+    } else {
+      if (selectedFileBase64) {
+        previewBox.style.display = 'block';
+        var isVideo = selectedFileMime && selectedFileMime.startsWith('video/');
+        if (isVideo) {
+          previewTarget.innerHTML = `
+            <video src="${selectedFileBase64}" controls style="max-width: 100%; max-height: 250px; border-radius: var(--radius-sm);"></video>
+          `;
+        } else {
+          previewTarget.innerHTML = `
+            <img src="${selectedFileBase64}" alt="Upload Preview" style="max-width: 100%; max-height: 250px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+          `;
+        }
+      } else {
+        previewBox.style.display = 'none';
+        previewTarget.innerHTML = '';
+      }
+    }
+  }
+
+  async function handleFormSubmit(e) {
+    e.preventDefault();
+    var alertBox = document.getElementById('media-submit-alert');
+    var submitBtn = document.getElementById('media-submit-btn');
+    var isLinkMode = document.getElementById('tab-mode-link') && document.getElementById('tab-mode-link').classList.contains('active');
+    var urlInput = document.getElementById('media-url-input');
+    var dateInput = document.getElementById('media-date-input');
+    var albumSelect = document.getElementById('media-album-select');
+    var newAlbumInput = document.getElementById('media-new-album-input');
+    var titleInput = document.getElementById('media-title-input');
+    var captionInput = document.getElementById('media-caption-input');
+    var contributorInput = document.getElementById('media-contributor-input');
+
+    if (alertBox) alertBox.innerHTML = '';
+
+    var dateTaken = dateInput ? dateInput.value.trim() : '';
+    if (!dateTaken) {
+      if (alertBox) alertBox.innerHTML = '<div class="alert alert-error">Please provide the approximate date the photo or video was taken.</div>';
+      return;
+    }
+
+    var chosenAlbum = 'General Community Moments';
+    if (albumSelect) {
+      if (albumSelect.value === '__NEW__') {
+        chosenAlbum = (newAlbumInput && newAlbumInput.value.trim()) ? newAlbumInput.value.trim() : 'New Album';
+      } else {
+        chosenAlbum = albumSelect.value;
+      }
+    }
+
+    var payload = {
+      date_taken: dateTaken,
+      album: chosenAlbum,
+      title: titleInput ? titleInput.value.trim() : '',
+      caption: captionInput ? captionInput.value.trim() : '',
+      contributor_name: contributorInput ? contributorInput.value.trim() : ''
+    };
+
+    if (isLinkMode) {
+      var url = urlInput ? urlInput.value.trim() : '';
+      if (!url) {
+        if (alertBox) alertBox.innerHTML = '<div class="alert alert-error">Please enter a valid YouTube or external image URL.</div>';
+        return;
+      }
+      payload.url = url;
+    } else {
+      if (!selectedFileBase64) {
+        if (alertBox) alertBox.innerHTML = '<div class="alert alert-error">Please select a photo or video file from your camera roll or desktop.</div>';
+        return;
+      }
+      payload.file_data = selectedFileBase64;
+      payload.mime_type = selectedFileMime;
+    }
+
+    try {
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = isLinkMode ? 'Copying & Saving Media…' : 'Uploading Media…';
+      }
+
+      var res = await API.submitMedia(payload);
+
+      if (alertBox) {
+        alertBox.innerHTML = `
+          <div class="alert alert-success" style="font-weight: 600;">
+            ${API.escapeHtml(res.message || '✓ Media successfully saved to the community gallery!')}
+          </div>
+        `;
+      }
+
+      // Reset form
+      selectedFileBase64 = null;
+      selectedFileMime = null;
+      var fileLabel = document.getElementById('dropzone-file-name');
+      if (fileLabel) fileLabel.textContent = '';
+      if (urlInput) urlInput.value = '';
+      if (titleInput) titleInput.value = '';
+      if (captionInput) captionInput.value = '';
+      if (newAlbumInput) newAlbumInput.value = '';
+      updateLivePreview();
+
+      // Refresh gallery
+      await loadGalleryData();
+
+      // Scroll to newly created album
+      var targetSlug = slugify(chosenAlbum);
+      setTimeout(function() {
+        jumpToAlbum(targetSlug);
+      }, 300);
+
+    } catch (err) {
+      if (alertBox) {
+        alertBox.innerHTML = '<div class="alert alert-error">' + API.escapeHtml(err.message || 'Failed to submit media.') + '</div>';
+      }
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = '🚀 Submit to Community Gallery';
+      }
+    }
+  }
+
+  function populateAlbumSelectOptions() {
+    var select = document.getElementById('media-album-select');
+    if (!select) return;
+
+    var curVal = select.value;
+    var html = '<option value="General Community Moments">General Community Moments</option>';
+
+    if (galleryAlbums && galleryAlbums.length > 0) {
+      for (var i = 0; i < galleryAlbums.length; i++) {
+        var a = galleryAlbums[i].album;
+        if (a && a !== 'General Community Moments') {
+          html += '<option value="' + API.escapeHtml(a) + '">' + API.escapeHtml(a) + '</option>';
+        }
+      }
+    }
+
+    html += '<option value="__NEW__">➕ Create New Album...</option>';
+    select.innerHTML = html;
+    if (curVal) select.value = curVal;
+  }
+
+  // ---------------------------------------------------------------------------
+  // 8. Toolbar Controls (Filters & Chronological Sort)
+  // ---------------------------------------------------------------------------
+  function setupToolbarListeners() {
+    var tabBtns = document.querySelectorAll('.gallery-tab-btn');
+    var sortSelect = document.getElementById('gallery-sort-select');
+
+    tabBtns.forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        tabBtns.forEach(function(b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        currentFilterType = btn.getAttribute('data-filter-type') || 'all';
+        renderVideos();
+        renderPhotos();
+      });
+    });
+
+    if (sortSelect) {
+      sortSelect.addEventListener('change', async function() {
+        currentSortOrder = sortSelect.value || 'desc';
+        await loadGalleryData();
+      });
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 9. Admin Media Deletion
+  // ---------------------------------------------------------------------------
+  async function handleDeleteMedia(id) {
+    if (!id) return;
+    if (!confirm('Are you sure you want to permanently delete this media item from the gallery?')) return;
+
+    try {
+      await API.deleteMedia(id);
+      await loadGalleryData();
+    } catch (err) {
+      alert(err.message || 'Failed to delete media item.');
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', initGallery);
+})();

@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Photo &amp; Video Gallery | Pickup Baseball Foundation</title>
+  <link rel="stylesheet" href="/css/style.css?v=55">
+  <link rel="alternate" type="application/rss+xml" title="Sunday Pickup Baseball Highlights &amp; Updates" href="/feed.xml">
+  <link rel="shortcut icon" href="/favicon.ico">
+  <link rel="icon" type="image/svg+xml" href="/logo.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16x16.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Pickup Baseball">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+</head>
+<body>
+
+  <!-- Site Header -->
+  <header class="site-header">
+    <div class="container" id="main-nav">
+      <div class="nav-wrap">
+        <a href="/index.html" class="brand">
+          <img src="/logo.svg" alt="Pickup Baseball Foundation Logo" class="brand-logo">
+          <span class="brand-text"><span class="brand-line">Pickup Baseball</span> <span class="brand-line">Foundation</span></span>
+          <span class="brand-short">PBF</span>
+        </a>
+        <div class="nav-links">
+          <a href="/gallery.html" class="nav-link-gallery active">📸 <span>Gallery</span></a>
+          <a href="/art.html" class="nav-link-art">🎨 <span>Art</span></a>
+          <a href="/donate.html" class="nav-link-donate">Donate</a>
+          <a href="/login.html" class="btn-login"><span class="btn-login-icon">⚾ </span><span>Log In</span></a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="container" style="margin-top: 24px; min-height: 70vh;">
+
+    <!-- Back / Breadcrumb Navigation -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+      <a href="/index.html" class="btn btn-outline btn-sm" style="font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">
+        ← Back to Upcoming Games
+      </a>
+      <a href="#submit-media-section" class="btn btn-primary btn-sm" style="display: inline-flex; align-items: center; gap: 6px; font-weight: 700;">
+        ➕ Drop Photos or Links
+      </a>
+    </div>
+
+    <!-- Gallery Hero Header -->
+    <section class="card" style="background: var(--bg-card); border-left: 5px solid var(--primary); margin-bottom: 24px;">
+      <div style="display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap;">
+        <span style="font-size: 2.4rem; line-height: 1;">📸</span>
+        <div style="flex: 1; min-width: 260px;">
+          <h1 style="color: var(--secondary); font-size: 1.65rem; margin-bottom: 6px;">
+            Community Photo &amp; Video Gallery
+          </h1>
+          <p style="color: var(--text-muted); font-size: 0.95rem; margin: 0; line-height: 1.5;">
+            Sunday game recaps, dugout celebrations, clinic clips, and community moments displayed in chronological order. Browse by album bookmark below or submit your own photos!
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Sticky Album Bookmarks Navigation Bar -->
+    <section id="album-bookmarks-container" class="card album-bookmarks-card" style="margin-bottom: 24px; padding: 14px 18px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; flex-wrap: wrap;">
+        <div style="font-weight: 700; color: var(--secondary); font-size: 0.95rem; display: flex; align-items: center; gap: 6px;">
+          <span>📌</span> <span>Jump to Photo Album:</span>
+        </div>
+        <small style="color: var(--text-muted);">Click any bookmark to jump directly to that album</small>
+      </div>
+      <div id="album-bookmarks-bar" class="album-bookmarks-scroll" role="navigation" aria-label="Photo Albums Bookmarks">
+        <button type="button" class="album-bookmark-pill active" data-album="all">
+          <span>🌟 All Albums</span>
+        </button>
+        <!-- Populated dynamically via JS -->
+      </div>
+    </section>
+
+    <!-- Gallery Controls & Filters Toolbar -->
+    <section class="card gallery-toolbar-card" style="margin-bottom: 28px; padding: 14px 18px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap;">
+        <!-- Format Tabs -->
+        <div class="gallery-format-tabs" role="tablist">
+          <button type="button" class="gallery-tab-btn active" data-filter-type="all">🌟 All Media (<span id="count-all">0</span>)</button>
+          <button type="button" class="gallery-tab-btn" data-filter-type="photo">📷 Photos (<span id="count-photos">0</span>)</button>
+          <button type="button" class="gallery-tab-btn" data-filter-type="video">🎬 Videos (<span id="count-videos">0</span>)</button>
+        </div>
+
+        <!-- Chronological Sort & Search -->
+        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+          <div class="gallery-sort-toggle">
+            <label for="gallery-sort-select" style="font-size: 0.85rem; font-weight: 600; color: var(--text-muted); margin-right: 4px;">Order:</label>
+            <select id="gallery-sort-select" class="form-control" style="width: auto; padding: 6px 10px; font-size: 0.85rem; border-radius: var(--radius-sm);">
+              <option value="desc" selected>📅 Chronological (Newest First)</option>
+              <option value="asc">📅 Chronological (Oldest First)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Main Content Area: Videos Section -->
+    <section id="videos-section" style="margin-bottom: 36px; display: block;">
+      <div class="section-title-wrap" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+        <h2 style="font-size: 1.35rem; color: var(--secondary); margin: 0; display: flex; align-items: center; gap: 8px;">
+          <span>🎬</span> <span>Video Releases &amp; YouTube Highlights</span>
+        </h2>
+        <span style="font-size: 0.85rem; color: var(--text-muted);" id="video-order-label">Ordered chronologically by date taken</span>
+      </div>
+      <div id="videos-grid-container" class="videos-grid-container">
+        <!-- Rendered via gallery.js -->
+        <p style="color: var(--text-muted); padding: 20px;">Loading video releases...</p>
+      </div>
+    </section>
+
+    <!-- Main Content Area: Photo Albums Section -->
+    <section id="photos-section" style="margin-bottom: 48px; display: block;">
+      <div class="section-title-wrap" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+        <h2 style="font-size: 1.35rem; color: var(--secondary); margin: 0; display: flex; align-items: center; gap: 8px;">
+          <span>📸</span> <span>Photo Albums &amp; Game Moments</span>
+        </h2>
+        <span style="font-size: 0.85rem; color: var(--text-muted);" id="photo-order-label">Ordered chronologically by date taken</span>
+      </div>
+      <div id="photos-albums-container">
+        <!-- Rendered via gallery.js with album anchors -->
+        <p style="color: var(--text-muted); padding: 20px;">Loading photo albums...</p>
+      </div>
+    </section>
+
+    <!-- Zero-Login Community Media Submission Portal -->
+    <section id="submit-media-section" class="card" style="margin-top: 48px; margin-bottom: 48px; border-top: 4px solid var(--primary); background: var(--bg-card);">
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; flex-wrap: wrap;">
+        <div>
+          <h2 style="font-size: 1.35rem; color: var(--secondary); margin: 0 0 4px 0; display: flex; align-items: center; gap: 8px;">
+            <span>📥</span> <span>Community Media Drop (Zero-Login)</span>
+          </h2>
+          <p style="color: var(--text-muted); font-size: 0.9rem; margin: 0;">
+            Snap game photos on your phone or have highlights to share? Drop files or paste links below — no Google account login required!
+          </p>
+        </div>
+        <span class="badge badge-green" style="font-size: 0.8rem; font-weight: 700;">✓ Public Submission Open</span>
+      </div>
+
+      <div id="media-submit-alert"></div>
+
+      <!-- Submission Mode Selector -->
+      <div class="submission-mode-tabs" style="display: flex; gap: 10px; margin-bottom: 20px;">
+        <button type="button" class="btn btn-sm btn-primary submission-tab-btn active" data-mode="upload" id="tab-mode-upload">
+          📁 Upload Photos from Phone / Computer
+        </button>
+        <button type="button" class="btn btn-sm btn-outline submission-tab-btn" data-mode="link" id="tab-mode-link">
+          🔗 Submit YouTube Link or Facebook/External Image Link
+        </button>
+      </div>
+
+      <form id="media-submit-form">
+        <!-- Upload Mode Container -->
+        <div id="mode-upload-container">
+          <div class="media-dropzone" id="media-dropzone">
+            <input type="file" id="media-file-input" accept="image/*,video/*" style="display: none;">
+            <div style="font-size: 2.2rem; margin-bottom: 8px;">📱</div>
+            <div style="font-weight: 700; color: var(--secondary); font-size: 1.05rem; margin-bottom: 4px;">
+              Tap to Choose Photos / Videos from Camera Roll
+            </div>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin: 0 0 12px 0;">
+              Or drag and drop files from your desktop (JPEG, PNG, WebP, MP4)
+            </p>
+            <button type="button" class="btn btn-outline btn-sm" id="btn-browse-files">
+              📂 Select Files
+            </button>
+            <div id="dropzone-file-name" style="margin-top: 10px; font-weight: 600; color: var(--primary); font-size: 0.9rem;"></div>
+          </div>
+        </div>
+
+        <!-- Link Mode Container -->
+        <div id="mode-link-container" style="display: none;">
+          <div class="form-group">
+            <label for="media-url-input" style="font-weight: 600;">Media Link (YouTube Video or Facebook/External Image URL) *</label>
+            <input type="url" id="media-url-input" class="form-control" placeholder="https://www.youtube.com/watch?v=... or https://...fbcdn.net/... or image URL">
+            <div class="help-box" style="margin-top: 8px; padding: 10px 14px; background: var(--bg-subtle); border-radius: var(--radius-sm); border: 1px solid var(--border); font-size: 0.82rem; color: var(--text-muted);">
+              <strong>💡 How Links Work:</strong><br>
+              • <strong>YouTube links:</strong> Stored as streaming video links with zero host bandwidth fees.<br>
+              • <strong>Facebook-hosted images &amp; web photos:</strong> Automatically copied over and stored permanently in PBF's vault so they never expire or break!
+            </div>
+          </div>
+        </div>
+
+        <!-- Metadata Form: Date, Album, Title, Contributor -->
+        <div class="grid-2col" style="margin-top: 20px;">
+          <!-- Approximate Date (User Specification) -->
+          <div class="form-group">
+            <label for="media-date-input" style="font-weight: 600;">Approximate Date Taken *</label>
+            <input type="date" id="media-date-input" class="form-control" required>
+            <div style="display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap;">
+              <button type="button" class="btn btn-outline btn-xs btn-quick-date" data-days="0">Today</button>
+              <button type="button" class="btn btn-outline btn-xs btn-quick-date" data-sunday="last">Last Sunday</button>
+              <button type="button" class="btn btn-outline btn-xs btn-quick-date" data-sunday="prev">2 Sundays Ago</button>
+            </div>
+          </div>
+
+          <!-- Photo Album Selector & Bookmark Group -->
+          <div class="form-group">
+            <label for="media-album-select" style="font-weight: 600;">Photo Album (Category) *</label>
+            <select id="media-album-select" class="form-control">
+              <option value="General">General Community Moments</option>
+              <!-- Filled with existing albums -->
+              <option value="__NEW__">➕ Create New Album...</option>
+            </select>
+            <div id="new-album-wrap" style="display: none; margin-top: 8px;">
+              <input type="text" id="media-new-album-input" class="form-control" placeholder="Enter new album name (e.g. Bushrod Opening, Fall Championship)..." maxlength="60">
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-2col" style="margin-top: 14px;">
+          <div class="form-group">
+            <label for="media-title-input" style="font-weight: 600;">Title / Headline (Optional)</label>
+            <input type="text" id="media-title-input" class="form-control" placeholder="e.g. 9th Inning Walk-Off Double" maxlength="100">
+          </div>
+          <div class="form-group">
+            <label for="media-contributor-input" style="font-weight: 600;">Your Name / Photo Credit (Optional)</label>
+            <input type="text" id="media-contributor-input" class="form-control" placeholder="e.g. Dave R. or Coach Sarah" maxlength="60">
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top: 14px;">
+          <label for="media-caption-input" style="font-weight: 600;">Story / Caption (Optional)</label>
+          <textarea id="media-caption-input" class="form-control" rows="2" placeholder="Tell the story behind the photo, inning details, or volunteer shoutouts..."></textarea>
+        </div>
+
+        <!-- Live Submission Preview -->
+        <div id="media-preview-box" class="subpanel" style="display: none; margin-top: 18px; border-style: dashed;">
+          <div style="font-size: 0.85rem; font-weight: 700; color: var(--text-muted); margin-bottom: 8px;">👀 Submission Preview:</div>
+          <div id="media-preview-target"></div>
+        </div>
+
+        <!-- Submit Button -->
+        <div style="margin-top: 24px; display: flex; justify-content: flex-end;">
+          <button type="submit" id="media-submit-btn" class="btn btn-primary" style="padding: 12px 24px; font-size: 1rem; font-weight: 700;">
+            🚀 Submit to Community Gallery
+          </button>
+        </div>
+      </form>
+    </section>
+
+  </main>
+
+  <!-- Fullscreen Lightbox Modal -->
+  <div id="gallery-lightbox" class="gallery-lightbox" role="dialog" aria-modal="true" style="display: none;">
+    <button type="button" class="lightbox-close-btn" id="lightbox-close" aria-label="Close Lightbox">✕</button>
+    <button type="button" class="lightbox-nav-btn lightbox-prev" id="lightbox-prev" aria-label="Previous Photo">❮</button>
+    <div class="lightbox-content-wrap">
+      <img src="" alt="" id="lightbox-img" class="lightbox-img">
+      <div class="lightbox-info-bar">
+        <div id="lightbox-caption" style="font-weight: 600; font-size: 1.05rem;"></div>
+        <div id="lightbox-meta" style="font-size: 0.85rem; color: #dbe4e0; margin-top: 4px;"></div>
+      </div>
+    </div>
+    <button type="button" class="lightbox-nav-btn lightbox-next" id="lightbox-next" aria-label="Next Photo">❯</button>
+  </div>
+
+  <!-- Site Footer -->
+  <footer id="site-footer" class="site-footer"></footer>
+
+  <script src="/js/api.js?v=55"></script>
+  <script src="/js/gallery.js?v=55"></script>
+</body>
+</html>

@@ -2193,4 +2193,120 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(styleCss.includes('.trunk-outer-box'), 'style.css must define .trunk-outer-box');
     assert.ok(styleCss.includes('.chalkboard-frame'), 'style.css must define .chalkboard-frame');
   });
+
+  await t9.test('T9.24: Community Photo & Video Gallery (Zero-Login Drop, Remote Image Copy, Chronological Order & Album Bookmarks)', async () => {
+    // 1. Verify gallery.html structure & components
+    const galleryHtmlPath = path.join(publicDir, 'gallery.html');
+    assert.ok(fs.existsSync(galleryHtmlPath), 'public/gallery.html must exist');
+    const galleryHtml = fs.readFileSync(galleryHtmlPath, 'utf8');
+    assert.ok(galleryHtml.includes('id="album-bookmarks-bar"'), 'gallery.html must contain #album-bookmarks-bar for album bookmarks');
+    assert.ok(galleryHtml.includes('id="videos-grid-container"'), 'gallery.html must contain #videos-grid-container');
+    assert.ok(galleryHtml.includes('id="photos-albums-container"'), 'gallery.html must contain #photos-albums-container');
+    assert.ok(galleryHtml.includes('id="submit-media-section"'), 'gallery.html must contain #submit-media-section');
+    assert.ok(galleryHtml.includes('id="media-submit-form"'), 'gallery.html must contain #media-submit-form');
+    assert.ok(galleryHtml.includes('id="media-date-input"'), 'gallery.html must ask for approximate date taken');
+    assert.ok(galleryHtml.includes('id="gallery-lightbox"'), 'gallery.html must contain #gallery-lightbox modal');
+    assert.ok(galleryHtml.includes('/js/gallery.js'), 'gallery.html must load /js/gallery.js');
+    assert.ok(galleryHtml.includes('/js/api.js'), 'gallery.html must load /js/api.js');
+
+    // 2. Verify public/js/gallery.js strict ES6 compliance
+    const galleryJsPath = path.join(publicDir, 'js', 'gallery.js');
+    assert.ok(fs.existsSync(galleryJsPath), 'public/js/gallery.js must exist');
+    const galleryJsCode = fs.readFileSync(galleryJsPath, 'utf8');
+    assert.ok(!galleryJsCode.includes('?.'), 'gallery.js must not contain optional chaining (?.)');
+    assert.ok(!galleryJsCode.includes('??'), 'gallery.js must not contain nullish coalescing (??)');
+    assert.ok(galleryJsCode.includes('initGallery'), 'gallery.js must implement initGallery');
+    assert.ok(galleryJsCode.includes('renderAlbumBookmarks'), 'gallery.js must implement renderAlbumBookmarks');
+    assert.ok(galleryJsCode.includes('renderVideos'), 'gallery.js must implement renderVideos');
+    assert.ok(galleryJsCode.includes('renderPhotos'), 'gallery.js must implement renderPhotos');
+    assert.ok(galleryJsCode.includes('jumpToAlbum'), 'gallery.js must implement jumpToAlbum');
+
+    // 3. Verify top navigation links & Service Worker
+    const apiJs = fs.readFileSync(path.join(publicDir, 'js', 'api.js'), 'utf8');
+    assert.ok(apiJs.includes('nav-link-gallery'), 'api.js must render .nav-link-gallery in API.renderNav()');
+    assert.ok(apiJs.includes('/gallery.html'), 'api.js must link to /gallery.html');
+
+    const indexHtml = fs.readFileSync(path.join(publicDir, 'index.html'), 'utf8');
+    assert.ok(indexHtml.includes('href="/gallery.html"'), 'index.html must include static fallback link to /gallery.html');
+
+    const swJs = fs.readFileSync(path.join(publicDir, 'sw.js'), 'utf8');
+    assert.ok(swJs.includes('/gallery.html'), 'sw.js must cache /gallery.html');
+    assert.ok(swJs.includes('/js/gallery.js'), 'sw.js must cache /js/gallery.js');
+
+    const styleCss = fs.readFileSync(path.join(publicDir, 'css', 'style.css'), 'utf8');
+    assert.ok(styleCss.includes('.nav-link-gallery'), 'style.css must define .nav-link-gallery');
+    assert.ok(styleCss.includes('.album-bookmarks-scroll'), 'style.css must define .album-bookmarks-scroll');
+    assert.ok(styleCss.includes('.album-bookmark-pill'), 'style.css must define .album-bookmark-pill');
+    assert.ok(styleCss.includes('.photo-card'), 'style.css must define .photo-card');
+    assert.ok(styleCss.includes('.video-facade-container'), 'style.css must define .video-facade-container');
+
+    // 4. API Acceptance: Query GET /api/media
+    const getRes = await fetch(`${baseUrl}/api/media`);
+    assert.equal(getRes.status, 200, 'GET /api/media must return 200');
+    const initialData = await getRes.json();
+    assert.ok(Array.isArray(initialData.media), 'GET /api/media must return media array');
+    assert.ok(Array.isArray(initialData.albums), 'GET /api/media must return albums array');
+    assert.ok(initialData.media.length >= 3, 'GET /api/media must contain seeded media items');
+
+    // 5. Zero-Login Submission with YouTube link (leave YouTube links as links)
+    const ytSubmitRes = await fetch(`${baseUrl}/api/media`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        title: 'Championship 9th Inning Rally',
+        date_taken: '2026-10-26',
+        album: 'Fall 2026 Season',
+        contributor_name: 'Marcus Rivera'
+      })
+    });
+    assert.equal(ytSubmitRes.status, 200, 'Zero-login YouTube submission must return 200');
+    const ytData = await ytSubmitRes.json();
+    assert.equal(ytData.item.media_type, 'youtube', 'YouTube submissions must be marked media_type: youtube');
+    assert.ok(ytData.item.file_url.includes('youtube.com'), 'YouTube link must be preserved as streaming link');
+    assert.equal(ytData.item.date_taken, '2026-10-26', 'Approximate date taken must be saved');
+
+    // 6. Zero-Login Submission copying remote/Facebook-hosted image ("copy it all")
+    const remoteImgUrl = `${baseUrl}/icons/favicon-32x32.png`;
+    const copyImgRes = await fetch(`${baseUrl}/api/media`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url: remoteImgUrl,
+        title: 'Copied Community Mascot Photo',
+        date_taken: '2026-10-12',
+        album: 'Bushrod Field Opening',
+        contributor_name: 'Sarah Chen'
+      })
+    });
+    assert.equal(copyImgRes.status, 200, 'Copying remote image must return 200');
+    const copyData = await copyImgRes.json();
+    assert.equal(copyData.item.media_type, 'photo', 'Copied image must be marked media_type: photo');
+    assert.ok(copyData.item.file_url.startsWith('/api/media/'), 'Copied image must be served from local /api/media/:id/file route');
+    assert.equal(copyData.item.original_url, remoteImgUrl, 'Original external image URL must be preserved');
+
+    // 7. Verify serving the copied image binary via GET /api/media/:id/file
+    const serveImgRes = await fetch(`${baseUrl}${copyData.item.file_url}`);
+    assert.equal(serveImgRes.status, 200, 'Serving copied image must return 200');
+    assert.ok(serveImgRes.headers.get('content-type').includes('image/'), 'Content-Type must be image');
+    const imgBuf = await serveImgRes.arrayBuffer();
+    assert.ok(imgBuf.byteLength > 0, 'Copied image binary must have non-zero size');
+
+    // 8. Verify Chronological Ordering (desc vs asc)
+    const descRes = await fetch(`${baseUrl}/api/media?order=desc`);
+    const descData = await descRes.json();
+    for (let i = 0; i < descData.media.length - 1; i++) {
+      assert.ok(descData.media[i].date_taken >= descData.media[i + 1].date_taken, 'order=desc must sort dates newest first');
+    }
+
+    const ascRes = await fetch(`${baseUrl}/api/media?order=asc`);
+    const ascData = await ascRes.json();
+    for (let i = 0; i < ascData.media.length - 1; i++) {
+      assert.ok(ascData.media[i].date_taken <= ascData.media[i + 1].date_taken, 'order=asc must sort dates oldest first');
+    }
+
+    // 9. Organizer Deletion of media item
+    const delRes = await apiReq('DELETE', `/api/media/${copyData.item.id}`, seedOrgCookie);
+    assert.equal(delRes.status, 200, 'Organizer must be able to delete media item');
+  });
 });
