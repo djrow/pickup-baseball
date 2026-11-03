@@ -148,13 +148,14 @@
    */
   async function geocodeLocation(locationStr) {
     if (!locationStr || typeof fetch !== 'function') return null;
-    var query = String(locationStr)
+    var rawStr = String(locationStr).slice(0, 100);
+    var query = rawStr
       .replace(/https?:\/\/\S+/gi, '')
       .replace(/\bfield\s*\d+\b/gi, '')
       .replace(/\bdiamond\s*\d+\b/gi, '')
-      .replace(/[#@]/g, '')
+      .replace(/[#@<>&"']/g, '')
       .trim();
-    if (!query || query.length < 2) return null;
+    if (!query || query.length < 2 || !/[a-zA-Z0-9]/.test(query)) return null;
 
     var cacheKey = query.toLowerCase();
     if (GEOCODE_CACHE[cacheKey]) {

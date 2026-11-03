@@ -453,6 +453,16 @@
     }
   }
 
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   function getDefaultTrunkStickers() {
     return [
       { id: 'stk_init_1', icon: '⚾', label: 'Game Ball', tag: 'Opening Day', x: 80, y: 70, rotation: -8, placedAt: 'Nov 2026' },
@@ -463,13 +473,23 @@
   }
 
   function renderPlacedStickers(stage) {
-    stage.innerHTML = placedStickers.map(stk => `
-      <div class="placed-trunk-sticker" id="${stk.id}" data-id="${stk.id}" style="left: ${stk.x}px; top: ${stk.y}px; transform: rotate(${stk.rotation}deg);" title="${stk.label}${stk.tag ? ': ' + stk.tag : ''}">
-        <span>${stk.icon}</span>
-        ${stk.tag ? `<div style="font-size: 0.65rem; background: rgba(0,0,0,0.75); color: #fff; padding: 1px 5px; border-radius: 3px; white-space: nowrap; font-weight: 700; transform: translateY(-4px);">${stk.tag}</div>` : ''}
-        ${isAdmin ? `<button type="button" class="admin-sticker-delete" data-id="${stk.id}" title="Admin: Delete sticker" style="position: absolute; top: -8px; right: -8px; width: 20px; height: 20px; border-radius: 50%; background: #ba0c2f; color: #fff; border: 1.5px solid #fff; font-size: 0.65rem; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0;">✖</button>` : ''}
-      </div>
-    `).join('');
+    stage.innerHTML = placedStickers.map(stk => {
+      const safeId = escapeHtml(stk.id);
+      const safeIcon = escapeHtml(stk.icon);
+      const safeLabel = escapeHtml(stk.label);
+      const safeTag = stk.tag ? escapeHtml(stk.tag) : '';
+      const safeX = typeof stk.x === 'number' ? stk.x : parseInt(stk.x, 10) || 0;
+      const safeY = typeof stk.y === 'number' ? stk.y : parseInt(stk.y, 10) || 0;
+      const safeRot = typeof stk.rotation === 'number' ? stk.rotation : parseInt(stk.rotation, 10) || 0;
+
+      return `
+        <div class="placed-trunk-sticker" id="${safeId}" data-id="${safeId}" style="left: ${safeX}px; top: ${safeY}px; transform: rotate(${safeRot}deg);" title="${safeLabel}${safeTag ? ': ' + safeTag : ''}">
+          <span>${safeIcon}</span>
+          ${safeTag ? `<div style="font-size: 0.65rem; background: rgba(0,0,0,0.75); color: #fff; padding: 1px 5px; border-radius: 3px; white-space: nowrap; font-weight: 700; transform: translateY(-4px);">${safeTag}</div>` : ''}
+          ${isAdmin ? `<button type="button" class="admin-sticker-delete" data-id="${safeId}" title="Admin: Delete sticker" style="position: absolute; top: -8px; right: -8px; width: 20px; height: 20px; border-radius: 50%; background: #ba0c2f; color: #fff; border: 1.5px solid #fff; font-size: 0.65rem; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0;">✖</button>` : ''}
+        </div>
+      `;
+    }).join('');
 
     stage.querySelectorAll('.placed-trunk-sticker').forEach(el => {
       el.addEventListener('click', (e) => {

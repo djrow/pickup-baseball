@@ -895,6 +895,48 @@
     }
   }
 
+  function compressImageIfLarge(file, callback) {
+    if (!file || !file.type || !file.type.startsWith('image/') || file.size < 1.5 * 1024 * 1024) {
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        callback(e.target.result, file.type || 'image/jpeg');
+      };
+      reader.readAsDataURL(file);
+      return;
+    }
+
+    var img = new Image();
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      img.onload = function() {
+        var canvas = document.createElement('canvas');
+        var maxDim = 2048;
+        var width = img.width;
+        var height = img.height;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            maxDim = height;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        var compressedB64 = canvas.toDataURL('image/jpeg', 0.85);
+        callback(compressedB64, 'image/jpeg');
+      };
+      img.onerror = function() {
+        callback(e.target.result, file.type || 'image/jpeg');
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
   function handleFileChosen(file) {
     var fileNameLabel = document.getElementById('dropzone-file-name');
     if (!file) return;
@@ -908,13 +950,11 @@
       fileNameLabel.textContent = '✓ Selected: ' + file.name + ' (' + (file.size / 1024).toFixed(0) + ' KB)';
     }
 
-    var reader = new FileReader();
-    reader.onload = function(e) {
-      selectedFileBase64 = e.target.result;
-      selectedFileMime = file.type || 'image/jpeg';
+    compressImageIfLarge(file, function(b64, mime) {
+      selectedFileBase64 = b64;
+      selectedFileMime = mime;
       updateLivePreview();
-    };
-    reader.readAsDataURL(file);
+    });
   }
 
   function updateLivePreview() {

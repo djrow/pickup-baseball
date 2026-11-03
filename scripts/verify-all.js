@@ -2310,21 +2310,31 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.equal(copyData.item.original_url, remoteImgUrl, 'Original external image URL must be preserved');
     assert.equal(copyData.item.is_approved, 0, 'Public photo submission must require admin approval (is_approved=0)');
 
-    // Verify unapproved media is hidden from public gallery
+    // Verify unapproved media is hidden from public gallery and unapproved file is 404 for unauthenticated public
     const unapprovedCheck = await fetch(`${baseUrl}/api/media`);
     const unapprovedData = await unapprovedCheck.json();
     assert.ok(!unapprovedData.media.some(m => m.id === copyData.item.id), 'Unapproved media must NOT be displayed in public gallery');
 
-    // 7. Verify serving the copied image binary via GET /api/media/:id/file
-    const serveImgRes = await fetch(`${baseUrl}${copyData.item.file_url}`);
-    assert.equal(serveImgRes.status, 200, 'Serving copied image must return 200');
-    assert.ok(serveImgRes.headers.get('content-type').includes('image/'), 'Content-Type must be image');
-    const imgBuf = await serveImgRes.arrayBuffer();
-    assert.ok(imgBuf.byteLength > 0, 'Copied image binary must have non-zero size');
+    // Moderation security check: unauthenticated public request to unapproved file returns 404
+    const unapprovedFileCheck = await fetch(`${baseUrl}${copyData.item.file_url}`);
+    assert.equal(unapprovedFileCheck.status, 404, 'Unapproved media file must return 404 to unauthenticated users');
+
+    // Organizer manager preview can access unapproved media file
+    const managerFilePreview = await fetch(`${baseUrl}${copyData.item.file_url}`, {
+      headers: { 'Cookie': seedOrgCookie }
+    });
+    assert.equal(managerFilePreview.status, 200, 'Organizer preview of unapproved file must return 200');
 
     // 8. Admin Approval Workflow: Organizer approves media item via PUT /api/media/:id/approve
     const approveRes = await apiReq('PUT', `/api/media/${copyData.item.id}/approve`, seedOrgCookie);
     assert.equal(approveRes.status, 200, 'Organizer must be able to approve pending media item');
+
+    // 7. Verify serving the copied image binary via GET /api/media/:id/file once approved
+    const serveImgRes = await fetch(`${baseUrl}${copyData.item.file_url}`);
+    assert.equal(serveImgRes.status, 200, 'Serving approved copied image must return 200');
+    assert.ok(serveImgRes.headers.get('content-type').includes('image/'), 'Content-Type must be image');
+    const imgBuf = await serveImgRes.arrayBuffer();
+    assert.ok(imgBuf.byteLength > 0, 'Copied image binary must have non-zero size');
 
     // Once approved, it appears in public gallery
     const approvedCheck = await fetch(`${baseUrl}/api/media`);

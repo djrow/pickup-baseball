@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { requireOrganizer } from '../security.js';
+import { requireOrganizer, getClientIp, checkRateLimit, isValidRasterImageBuffer } from '../security.js';
 import { arrayBufferToBase64, base64ToUint8Array, stripJpegMetadata } from '../security.js';
 
 export const mediaRouter = new Hono();
@@ -16,11 +16,34 @@ function isPrivateIpOrHost(hostname, isTestEnv = false) {
   if (isTestEnv && (h === 'localhost' || h === '127.0.0.1' || h === '::1')) {
     return false; // Allow local test harness to test image copying
   }
-  if (h === 'localhost' || h === '127.0.0.1' || h === '::1' || h.endsWith('.local')) return true;
-  if (/^10\.\d+\.\d+\.\d+$/.test(h)) return true;
-  if (/^192\.168\.\d+\.\d+$/.test(h)) return true;
-  if (/^169\.254\.\d+\.\d+$/.test(h)) return true;
-  if (/^172\.(1[6-9]|2[0-9]|3[0-1])\.\d+\.\d+$/.test(h)) return true;
+  if (h === 'localhost' || h === '::1' || h === '0.0.0.0' || h === '0' || h.endsWith('.local') || h.endsWith('.internal')) return true;
+
+  // IPv4 dotted decimal check
+  const ipv4Match = h.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (ipv4Match) {
+    const o1 = parseInt(ipv4Match[1], 10);
+    const o2 = parseInt(ipv4Match[2], 10);
+    const o3 = parseInt(ipv4Match[3], 10);
+    const o4 = parseInt(ipv4Match[4], 10);
+    if ([o1, o2, o3, o4].some(n => n < 0 || n > 255)) return true;
+    if (o1 === 127) return true; // 127.0.0.0/8 loopback
+    if (o1 === 10) return true;  // 10.0.0.0/8 private
+    if (o1 === 192 && o2 === 168) return true; // 192.168.0.0/16 private
+    if (o1 === 172 && (o2 >= 16 && o2 <= 31)) return true; // 172.16.0.0/12 private
+    if (o1 === 169 && o2 === 254) return true; // 169.254.0.0/16 link-local
+    if (o1 === 100 && (o2 >= 64 && o2 <= 127)) return true; // 100.64.0.0/10 carrier NAT
+    if (o1 === 0) return true; // 0.0.0.0/8 current network
+    if (o1 >= 224) return true; // 224.0.0.0/4 multicast & reserved
+  }
+
+  // Pure integer / hex IP representation check
+  if (/^\d+$/.test(h) || /^0x[0-9a-f]+$/i.test(h)) return true;
+
+  // IPv6 bracketed checks
+  if (h.startsWith('[') && h.endsWith(']')) {
+    const inner = h.slice(1, -1);
+    if (inner === '::1' || inner === '::' || inner.startsWith('fe80:') || inner.startsWith('fc00:') || inner.startsWith('fd00:') || inner.includes('::ffff:')) return true;
+  }
   return false;
 }
 
@@ -120,8 +143,17 @@ mediaRouter.get('/:id/file', async (c) => {
     const id = parseInt(c.req.param('id'), 10);
     if (!id || isNaN(id)) return c.text('Not found', 404);
 
-    const row = await c.env.DB.prepare('SELECT file_data, mime_type FROM media_items WHERE id = ?').bind(id).first();
+    const row = await c.env.DB.prepare('SELECT file_data, mime_type, is_approved FROM media_items WHERE id = ?').bind(id).first();
     if (!row || !row.file_data) return c.text('Not found', 404);
+
+    // Moderation security check: Only approved media or organizers/admins can view files
+    if (row.is_approved !== 1) {
+      const user = c.get('user');
+      const isManager = Boolean(user && (user.role === 'admin' || user.role === 'organizer' || user.canManageEvents));
+      if (!isManager) {
+        return c.text('Not found', 404);
+      }
+    }
 
     const rawData = String(row.file_data).trim();
     const etag = `W/"media-${id}-${rawData.length}"`;
@@ -146,14 +178,21 @@ mediaRouter.get('/:id/file', async (c) => {
     }
 
     const bytes = base64ToUint8Array(base64Payload);
+    const headers = {
+      'Content-Type': mimeType,
+      'Cache-Control': 'public, max-age=604800, stale-while-revalidate=2592000',
+      'ETag': etag,
+      'X-Content-Type-Options': 'nosniff',
+      'Content-Security-Policy': "default-src 'none'; sandbox"
+    };
+
+    if (mimeType === 'image/svg+xml') {
+      headers['Content-Disposition'] = 'inline; filename="media.svg"';
+    }
+
     return new Response(bytes.buffer, {
       status: 200,
-      headers: {
-        'Content-Type': mimeType,
-        'Cache-Control': 'public, max-age=604800, stale-while-revalidate=2592000',
-        'ETag': etag,
-        'X-Content-Type-Options': 'nosniff'
-      }
+      headers: headers
     });
   } catch (err) {
     console.error('[Media] Error serving file:', err);
@@ -167,6 +206,13 @@ mediaRouter.get('/:id/file', async (c) => {
 mediaRouter.post('/', async (c) => {
   const user = c.get('user');
   try {
+    // Rate limit zero-login uploads: 15 submissions per hour per IP
+    const clientIp = getClientIp(c);
+    const rateCheck = await checkRateLimit(c.env.DB, 'media_drop_' + clientIp, 15, 3600, c.env);
+    if (!rateCheck.allowed) {
+      return c.json({ error: 'Too many media uploads from this address. Please wait an hour before submitting more.' }, 429);
+    }
+
     const body = await c.req.json();
     const { title, caption, date_taken, album, contributor_name, event_id, url, file_data, mime_type } = body;
 
@@ -191,6 +237,8 @@ mediaRouter.post('/', async (c) => {
     let storedFileData = null;
     let storedMimeType = mime_type || 'image/jpeg';
     let storedFileSize = 0;
+
+    const ALLOWED_MIME = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif', 'image/avif', 'video/mp4', 'video/webm'];
 
     // Case 1: External URL submitted (YouTube or Facebook/external image link)
     if (url && String(url).trim()) {
@@ -225,14 +273,19 @@ mediaRouter.post('/', async (c) => {
         let fetchRes;
         try {
           fetchRes = await fetch(cleanUrl, {
+            redirect: 'manual',
             headers: {
               'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-              'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'
+              'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8'
             }
           });
         } catch (fetchErr) {
           console.error('[Media] Error copying remote image:', fetchErr);
           return c.json({ error: 'Could not connect to external image server: ' + fetchErr.message }, 400);
+        }
+
+        if (fetchRes.status >= 300 && fetchRes.status < 400) {
+          return c.json({ error: 'External image redirects are disallowed for security.' }, 400);
         }
 
         if (!fetchRes.ok) {
@@ -246,7 +299,12 @@ mediaRouter.post('/', async (c) => {
           return c.json({ error: 'Image exceeds maximum size limit of 15MB.' }, 400);
         }
 
-        storedMimeType = rawContentType.includes('image/') ? rawContentType.split(';')[0].trim() : 'image/jpeg';
+        const candidateMime = rawContentType.includes('image/') ? rawContentType.split(';')[0].trim() : 'image/jpeg';
+        if (!ALLOWED_MIME.includes(candidateMime)) {
+          return c.json({ error: 'Unsupported media format. Only JPEG, PNG, WebP, GIF, and AVIF are supported.' }, 400);
+        }
+
+        storedMimeType = candidateMime;
         let processedBuffer = arrayBuf;
 
         // If JPEG, strip EXIF metadata / GPS tags for player privacy
@@ -267,7 +325,7 @@ mediaRouter.post('/', async (c) => {
       if (rawB64.startsWith('data:')) {
         const parts = rawB64.split(';base64,');
         if (parts.length === 2) {
-          storedMimeType = parts[0].replace('data:', '');
+          storedMimeType = parts[0].replace('data:', '').toLowerCase().split(';')[0].trim();
           cleanB64 = parts[1];
         }
       }
@@ -275,6 +333,17 @@ mediaRouter.post('/', async (c) => {
       const bytes = base64ToUint8Array(cleanB64);
       if (bytes.byteLength > 15 * 1024 * 1024) {
         return c.json({ error: 'Uploaded file exceeds 15MB limit.' }, 400);
+      }
+
+      if (!ALLOWED_MIME.includes(storedMimeType)) {
+        return c.json({ error: 'Unsupported media format. Supported formats: JPEG, PNG, WebP, GIF, AVIF, MP4, WebM.' }, 400);
+      }
+
+      // Verify raster image magic bytes if image
+      if (storedMimeType.startsWith('image/') && ['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(storedMimeType)) {
+        if (!isValidRasterImageBuffer(bytes.buffer, storedMimeType)) {
+          return c.json({ error: 'Invalid or corrupted image file.' }, 400);
+        }
       }
 
       let processedBytes = bytes.buffer;
@@ -351,7 +420,9 @@ mediaRouter.put('/:id/approve', requireOrganizer, async (c) => {
     const id = parseInt(c.req.param('id'), 10);
     if (!id || isNaN(id)) return c.json({ error: 'Invalid ID' }, 400);
 
-    await c.env.DB.prepare('UPDATE media_items SET is_approved = 1 WHERE id = ?').bind(id).run();
+    const user = c.get('user');
+    const approverId = user ? user.id : null;
+    await c.env.DB.prepare('UPDATE media_items SET is_approved = 1, approved_by = ?, approved_at = CURRENT_TIMESTAMP WHERE id = ?').bind(approverId, id).run();
     return c.json({ success: true, message: 'Media item approved and published to gallery.' });
   } catch (err) {
     console.error('[Media] Error approving media item:', err);
@@ -364,7 +435,9 @@ mediaRouter.post('/:id/approve', requireOrganizer, async (c) => {
     const id = parseInt(c.req.param('id'), 10);
     if (!id || isNaN(id)) return c.json({ error: 'Invalid ID' }, 400);
 
-    await c.env.DB.prepare('UPDATE media_items SET is_approved = 1 WHERE id = ?').bind(id).run();
+    const user = c.get('user');
+    const approverId = user ? user.id : null;
+    await c.env.DB.prepare('UPDATE media_items SET is_approved = 1, approved_by = ?, approved_at = CURRENT_TIMESTAMP WHERE id = ?').bind(approverId, id).run();
     return c.json({ success: true, message: 'Media item approved and published to gallery.' });
   } catch (err) {
     console.error('[Media] Error approving media item:', err);
