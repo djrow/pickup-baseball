@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Photo &amp; Video Gallery | Pickup Baseball Foundation</title>
-  <link rel="stylesheet" href="/css/style.css?v=57">
+  <link rel="stylesheet" href="/css/style.css?v=58">
   <link rel="alternate" type="application/rss+xml" title="Sunday Pickup Baseball Highlights &amp; Updates" href="/feed.xml">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
@@ -69,8 +69,8 @@
         <div style="display: flex; align-items: center; gap: 8px;">
           <label for="gallery-sort-select" style="font-size: 0.82rem; font-weight: 600; color: var(--text-muted);">Timeline:</label>
           <select id="gallery-sort-select" class="form-control" style="width: auto; padding: 5px 10px; font-size: 0.82rem; border-radius: var(--radius-sm);">
-            <option value="desc" selected>📅 Newest First (Left = Recent, Right = Earlier)</option>
-            <option value="asc">📅 Oldest First (Left = Earlier, Right = Recent)</option>
+            <option value="asc" selected>📅 Chronological (Left = Earlier, Right = Later)</option>
+            <option value="desc">📅 Reverse Chronological (Left = Later, Right = Earlier)</option>
           </select>
         </div>
       </div>
@@ -105,7 +105,7 @@
       <!-- Time Direction Guidance Ribbon -->
       <div class="carousel-time-ribbon" id="photos-time-ribbon">
         <span class="ribbon-time-hint ribbon-hint-left" id="photos-ribbon-left">
-          <span class="ribbon-arrow">◀</span> <span class="ribbon-label" id="photos-ribbon-left-text">Later (Newer)</span>
+          <span class="ribbon-arrow">◀</span> <span class="ribbon-label" id="photos-ribbon-left-text">Earlier (Past Moments)</span>
         </span>
         <span class="ribbon-timeline-center">
           <span class="timeline-dot"></span>
@@ -115,7 +115,7 @@
           <span class="timeline-dot"></span>
         </span>
         <span class="ribbon-time-hint ribbon-hint-right" id="photos-ribbon-right">
-          <span class="ribbon-label" id="photos-ribbon-right-text">Earlier (Past Moments)</span> <span class="ribbon-arrow">▶</span>
+          <span class="ribbon-label" id="photos-ribbon-right-text">Later (Recent Moments)</span> <span class="ribbon-arrow">▶</span>
         </span>
       </div>
 
@@ -127,10 +127,10 @@
         </button>
 
         <!-- Left Gradient Edge Hint (Graphical Hint for items off-screen) -->
-        <div class="carousel-edge-hint edge-left" id="photos-edge-left" title="Scroll left for more photos">
+        <div class="carousel-edge-hint edge-left" id="photos-edge-left" title="Scroll left for earlier photos">
           <div class="edge-hint-content">
             <span class="edge-hint-chevron">◀</span>
-            <span class="edge-hint-caption" id="photos-edge-left-label">More</span>
+            <span class="edge-hint-caption" id="photos-edge-left-label">Earlier</span>
           </div>
         </div>
 
@@ -142,9 +142,9 @@
         </div>
 
         <!-- Right Gradient Edge Hint (Graphical Hint for items off-screen) -->
-        <div class="carousel-edge-hint edge-right" id="photos-edge-right" title="Scroll right for earlier photos">
+        <div class="carousel-edge-hint edge-right" id="photos-edge-right" title="Scroll right for later photos">
           <div class="edge-hint-content">
-            <span class="edge-hint-caption" id="photos-edge-right-label">Earlier</span>
+            <span class="edge-hint-caption" id="photos-edge-right-label">Later</span>
             <span class="edge-hint-chevron">▶</span>
           </div>
         </div>
@@ -178,7 +178,7 @@
       <!-- Time Direction Guidance Ribbon -->
       <div class="carousel-time-ribbon" id="videos-time-ribbon">
         <span class="ribbon-time-hint ribbon-hint-left" id="videos-ribbon-left">
-          <span class="ribbon-arrow">◀</span> <span class="ribbon-label" id="videos-ribbon-left-text">Later (Newer)</span>
+          <span class="ribbon-arrow">◀</span> <span class="ribbon-label" id="videos-ribbon-left-text">Earlier (Past Releases)</span>
         </span>
         <span class="ribbon-timeline-center">
           <span class="timeline-dot"></span>
@@ -188,7 +188,7 @@
           <span class="timeline-dot"></span>
         </span>
         <span class="ribbon-time-hint ribbon-hint-right" id="videos-ribbon-right">
-          <span class="ribbon-label" id="videos-ribbon-right-text">Earlier (Past Games)</span> <span class="ribbon-arrow">▶</span>
+          <span class="ribbon-label" id="videos-ribbon-right-text">Later (Recent Releases)</span> <span class="ribbon-arrow">▶</span>
         </span>
       </div>
 
@@ -200,10 +200,10 @@
         </button>
 
         <!-- Left Gradient Edge Hint -->
-        <div class="carousel-edge-hint edge-left" id="videos-edge-left" title="Scroll left for more videos">
+        <div class="carousel-edge-hint edge-left" id="videos-edge-left" title="Scroll left for earlier videos">
           <div class="edge-hint-content">
             <span class="edge-hint-chevron">◀</span>
-            <span class="edge-hint-caption" id="videos-edge-left-label">More</span>
+            <span class="edge-hint-caption" id="videos-edge-left-label">Earlier</span>
           </div>
         </div>
 
@@ -215,9 +215,9 @@
         </div>
 
         <!-- Right Gradient Edge Hint -->
-        <div class="carousel-edge-hint edge-right" id="videos-edge-right" title="Scroll right for earlier videos">
+        <div class="carousel-edge-hint edge-right" id="videos-edge-right" title="Scroll right for later videos">
           <div class="edge-hint-content">
-            <span class="edge-hint-caption" id="videos-edge-right-label">Earlier</span>
+            <span class="edge-hint-caption" id="videos-edge-right-label">Later</span>
             <span class="edge-hint-chevron">▶</span>
           </div>
         </div>
@@ -370,7 +370,7 @@
   <!-- Site Footer -->
   <footer id="site-footer" class="site-footer"></footer>
 
-  <script src="/js/api.js?v=57"></script>
-  <script src="/js/gallery.js?v=57"></script>
+  <script src="/js/api.js?v=58"></script>
+  <script src="/js/gallery.js?v=58"></script>
 </body>
 </html>

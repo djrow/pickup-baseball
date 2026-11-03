@@ -31,8 +31,8 @@ mediaRouter.get('/', async (c) => {
   try {
     const typeParam = c.req.query('type') || 'all';
     const albumParam = c.req.query('album') || '';
-    const orderParam = (c.req.query('order') || 'desc').toLowerCase();
-    const sortDir = orderParam === 'asc' ? 'ASC' : 'DESC';
+    const orderParam = (c.req.query('order') || 'asc').toLowerCase();
+    const sortDir = orderParam === 'desc' ? 'DESC' : 'ASC';
 
     let whereClauses = [];
     let bindings = [];

@@ -9,7 +9,7 @@
 (function() {
   'use strict';
 
-  var currentSortOrder = 'desc';
+  var currentSortOrder = 'asc';
   var galleryMedia = [];
   var galleryAlbums = [];
   var currentLightboxIndex = -1;
@@ -142,18 +142,18 @@
   }
 
   function updateTimelineLabels() {
-    var isDesc = currentSortOrder === 'desc';
+    var isAsc = currentSortOrder === 'asc';
 
-    // Photos Ribbon & Edge Hint labels
+    // Photos Ribbon & Edge Hint labels (Earlier on Left, Later on Right by default)
     var pRibbonLeft = document.getElementById('photos-ribbon-left-text');
     var pRibbonRight = document.getElementById('photos-ribbon-right-text');
     var pEdgeLeft = document.getElementById('photos-edge-left-label');
     var pEdgeRight = document.getElementById('photos-edge-right-label');
 
-    if (pRibbonLeft) pRibbonLeft.textContent = isDesc ? 'Later (Newer)' : 'Earlier (Past)';
-    if (pRibbonRight) pRibbonRight.textContent = isDesc ? 'Earlier (Past Moments)' : 'Later (Newer Moments)';
-    if (pEdgeLeft) pEdgeLeft.textContent = isDesc ? 'Newer' : 'Earlier';
-    if (pEdgeRight) pEdgeRight.textContent = isDesc ? 'Earlier' : 'Newer';
+    if (pRibbonLeft) pRibbonLeft.textContent = isAsc ? 'Earlier (Past Moments)' : 'Later (Newer Moments)';
+    if (pRibbonRight) pRibbonRight.textContent = isAsc ? 'Later (Recent Moments)' : 'Earlier (Past Moments)';
+    if (pEdgeLeft) pEdgeLeft.textContent = isAsc ? 'Earlier' : 'Newer';
+    if (pEdgeRight) pEdgeRight.textContent = isAsc ? 'Later' : 'Earlier';
 
     // Videos Ribbon & Edge Hint labels
     var vRibbonLeft = document.getElementById('videos-ribbon-left-text');
@@ -161,10 +161,10 @@
     var vEdgeLeft = document.getElementById('videos-edge-left-label');
     var vEdgeRight = document.getElementById('videos-edge-right-label');
 
-    if (vRibbonLeft) vRibbonLeft.textContent = isDesc ? 'Later (Newer)' : 'Earlier (Past)';
-    if (vRibbonRight) vRibbonRight.textContent = isDesc ? 'Earlier (Past Releases)' : 'Later (Newer Releases)';
-    if (vEdgeLeft) vEdgeLeft.textContent = isDesc ? 'Newer' : 'Earlier';
-    if (vEdgeRight) vEdgeRight.textContent = isDesc ? 'Earlier' : 'Newer';
+    if (vRibbonLeft) vRibbonLeft.textContent = isAsc ? 'Earlier (Past Releases)' : 'Later (Recent Releases)';
+    if (vRibbonRight) vRibbonRight.textContent = isAsc ? 'Later (Recent Releases)' : 'Earlier (Past Releases)';
+    if (vEdgeLeft) vEdgeLeft.textContent = isAsc ? 'Earlier' : 'Newer';
+    if (vEdgeRight) vEdgeRight.textContent = isAsc ? 'Later' : 'Earlier';
   }
 
   // ---------------------------------------------------------------------------
