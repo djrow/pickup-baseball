@@ -140,7 +140,8 @@
   var inMemoryCache = {};
 
   async function fetchForecast(lat, lon) {
-    var key = 'pbf_weather_v45_' + Number(lat).toFixed(4) + '_' + Number(lon).toFixed(4);
+    var ver = (window.API && window.API.CLIENT_VERSION) ? window.API.CLIENT_VERSION : '49';
+    var key = 'pbf_weather_v' + ver + '_' + Number(lat).toFixed(4) + '_' + Number(lon).toFixed(4);
 
     // 1. Check in-memory cache
     var mem = inMemoryCache[key];
@@ -165,6 +166,7 @@
       'latitude=' + encodeURIComponent(lat) +
       '&longitude=' + encodeURIComponent(lon) +
       '&hourly=precipitation,weathercode,temperature_2m' +
+      '&daily=precipitation_sum' +
       '&temperature_unit=fahrenheit' +
       '&precipitation_unit=inch' +
       '&timezone=America%2FLos_Angeles' +
@@ -190,7 +192,7 @@
   /**
    * Run the Field Drainage & Surface Moisture Heuristic
    */
-  function calculateFieldDrainage(hourlyData, targetHourKey) {
+  function calculateFieldDrainage(hourlyData, targetHourKey, dailyData) {
     if (!hourlyData || !hourlyData.time || !Array.isArray(hourlyData.time)) {
       return null;
     }
@@ -219,6 +221,22 @@
         message: '10-day forecast activates closer to game'
       };
     }
+
+    // Calculate 10-day rainfall prediction across the forecast window
+    var total10DayRain = 0;
+    if (dailyData && Array.isArray(dailyData.precipitation_sum) && dailyData.precipitation_sum.length > 0) {
+      var sliceDays = dailyData.precipitation_sum.slice(-10);
+      for (var d = 0; d < sliceDays.length; d++) {
+        total10DayRain += (Number(sliceDays[d]) || 0);
+      }
+    } else if (hourlyData && Array.isArray(hourlyData.precipitation) && hourlyData.precipitation.length > 0) {
+      // Fallback: sum up to 240 forecast hours (10 days * 24h)
+      var sliceHours = hourlyData.precipitation.slice(-240);
+      for (var h = 0; h < sliceHours.length; h++) {
+        total10DayRain += (Number(sliceHours[h]) || 0);
+      }
+    }
+    total10DayRain = Math.round(total10DayRain * 100) / 100;
 
     var gameTemp = Math.round(hourlyData.temperature_2m[targetIdx]);
     var gameCode = hourlyData.weathercode[targetIdx];
@@ -334,6 +352,10 @@
       isRain: gameWeather.isRain,
       totalRain24h: totalRain24h,
       totalRain24hFormatted: totalRain24h.toFixed(2) + '"',
+      rainfall10Day: total10DayRain,
+      rainfall10DayFormatted: total10DayRain.toFixed(2) + '"',
+      total10DayRain: total10DayRain,
+      total10DayRainFormatted: total10DayRain.toFixed(2) + '"',
       effectiveMoisture: effectiveMoisture,
       effectiveMoistureFormatted: effectiveMoisture.toFixed(2) + '"',
       hoursSinceRain: hoursSinceRain,
@@ -362,7 +384,7 @@
     var coords = getCoordsForLocation(locationStr);
     try {
       var data = await fetchForecast(coords.latitude, coords.longitude);
-      var drainage = calculateFieldDrainage(data.hourly, parts.hourKey);
+      var drainage = calculateFieldDrainage(data.hourly, parts.hourKey, data.daily);
       if (drainage && drainage.available) {
         drainage.locationName = coords.name;
         drainage.dateKey = parts.dateKey;
@@ -484,8 +506,16 @@
           </div>
         </div>
 
-        <!-- 4-Metric Grid -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 10px;">
+        <!-- Metrics Grid -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-top: 10px;">
+          <div style="background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px;">
+            <div style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">10-Day Rain Prediction</div>
+            <div style="font-size: 1.1rem; font-weight: 800; color: var(--secondary); margin-top: 2px;">
+              🌧️ ${r.rainfall10DayFormatted}
+            </div>
+            <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">10-day forecast accumulation</div>
+          </div>
+
           <div style="background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px;">
             <div style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">24h Rain Total</div>
             <div style="font-size: 1.1rem; font-weight: 800; color: var(--secondary); margin-top: 2px;">
@@ -549,11 +579,13 @@
         if (forecast && forecast.available) {
           var matched = document.querySelectorAll('[data-weather-date="' + dk + '"]');
           matched.forEach(function(el) {
-            el.innerHTML = `
-              <span class="weather-card-pill ${forecast.badgeClass}" title="${forecast.condition} · Prev 24h Rain: ${forecast.totalRain24hFormatted} (${forecast.statusLabel})" style="display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border-radius: var(--radius-full); font-size: 0.74rem; font-weight: 700; border: 1px solid var(--border);">
-                <span>${forecast.emoji}</span> <span>${forecast.temperature}°F</span>
-              </span>
-            `;
+            el.innerHTML =
+              '<span class="weather-card-pill ' + forecast.badgeClass + '" title="' + forecast.condition + ' · Prev 24h Rain: ' + forecast.totalRain24hFormatted + ' (' + forecast.statusLabel + ')">' +
+                '<span>' + forecast.emoji + '</span> <span>' + forecast.temperature + '°F</span>' +
+              '</span>' +
+              '<span class="weather-card-pill weather-rain-pill" title="10-Day Rainfall Prediction: ' + forecast.rainfall10DayFormatted + '">' +
+                '<span>🌧️ 10-Day Rain: ' + forecast.rainfall10DayFormatted + '</span>' +
+              '</span>';
             el.style.display = 'inline-flex';
           });
         }

@@ -552,6 +552,7 @@ function renderCalendarDrawer(dateKey, game, isPast) {
         <div class="drawer-meta" style="margin-top: 6px;">
           <span class="drawer-meta-item"><span>📅</span> <strong>${API.escapeHtml(dateFormatted)} (Target: 12:00 PM)</strong></span>
           <span class="drawer-meta-item"><span>📍</span> <strong>Location: TBA</strong></span>
+          <span class="drawer-meta-item drawer-weather-meta" id="drawer-weather-${dateKey}" style="display: none;"></span>
           <span class="drawer-meta-item" style="color: var(--text-muted);"><span>ℹ️</span> <em>RSVP not yet open</em></span>
         </div>
         <p style="margin: 8px 0 0 0; font-size: 0.86rem; color: var(--text-muted); line-height: 1.45;">
@@ -588,8 +589,12 @@ function renderCalendarDrawer(dateKey, game, isPast) {
     window.WeatherService.getForecastForGame(targetIso, loc).then(function(fc) {
       var wEl = document.getElementById('drawer-weather-' + dateKey);
       if (wEl && fc && fc.available) {
-        wEl.innerHTML = '<span>' + fc.emoji + '</span> <strong>' + fc.temperature + '°F ' + API.escapeHtml(fc.condition) + '</strong> <span style="font-size: 0.8rem; color: var(--text-muted);">(' + fc.totalRain24hFormatted + ' rain in prev 24h &bull; ' + API.escapeHtml(fc.statusLabel) + ')</span>';
+        wEl.innerHTML = '<span>' + fc.emoji + '</span> <strong>' + fc.temperature + '°F ' + API.escapeHtml(fc.condition) + '</strong> ' +
+          '<span class="drawer-rain-prediction" style="display: inline-flex; align-items: center; gap: 4px; font-weight: 700; color: var(--secondary); background: var(--bg-subtle); padding: 2px 8px; border-radius: var(--radius-full); border: 1px solid var(--border); font-size: 0.8rem;">🌧️ <strong>10-Day Rainfall Prediction:</strong> ' + fc.rainfall10DayFormatted + '</span> ' +
+          '<span style="font-size: 0.8rem; color: var(--text-muted);">(' + fc.totalRain24hFormatted + ' in 24h prior &bull; ' + API.escapeHtml(fc.statusLabel) + ')</span>';
         wEl.style.display = 'inline-flex';
+      } else if (wEl) {
+        wEl.style.display = 'none';
       }
     }).catch(function() {});
   }

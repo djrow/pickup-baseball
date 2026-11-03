@@ -1815,6 +1815,8 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.equal(rDry.status, 'good', 'Dry weather must result in status good');
     assert.equal(rDry.totalRain24h, 0);
     assert.equal(rDry.effectiveMoisture, 0);
+    assert.equal(rDry.rainfall10Day, 0, 'Dry weather must result in 0.00" 10-day rainfall');
+    assert.equal(rDry.rainfall10DayFormatted, '0.00"');
     assert.ok(rDry.prognosis.includes('No standing puddles'));
 
     // Test Drainage Heuristic: Scenario 2 - 0.80" Rain Saturday afternoon (Adequate time to drain)
@@ -1826,10 +1828,24 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     }, '2026-11-08T12:00');
     assert.equal(rSat.status, 'moderate', 'Rain that fell 20h ago and drained must be moderate/playable');
     assert.equal(rSat.totalRain24h, 0.80);
+    assert.equal(rSat.rainfall10Day, 0.80, '10-day rainfall must sum precipitation correctly');
+    assert.equal(rSat.rainfall10DayFormatted, '0.80"');
     assert.ok(rSat.effectiveMoisture < 0.10, 'Effective moisture must decay below 0.10" after 20 hours');
     assert.ok(rSat.recommendation.includes('Playable'));
 
-    // Test Drainage Heuristic: Scenario 3 - 0.60" Rain Sunday morning (Recent rain, puddles formed)
+    // Test Drainage Heuristic: Scenario 3 - Daily forecast object passed
+    const rDaily = ws.calculateFieldDrainage({
+      time: times,
+      precipitation: precipDry,
+      temperature_2m: temps,
+      weathercode: codes
+    }, '2026-11-08T12:00', {
+      precipitation_sum: [0, 0, 0, 0.05, 0.10, 0, 0, 0, 0, 0, 0.20, 0]
+    });
+    assert.equal(rDaily.rainfall10Day, 0.35, 'Daily forecast object must sum 10-day precipitation sum');
+    assert.equal(rDaily.rainfall10DayFormatted, '0.35"');
+
+    // Test Drainage Heuristic: Scenario 4 - 0.60" Rain Sunday morning (Recent rain, puddles formed)
     const rSun = ws.calculateFieldDrainage({
       time: times,
       precipitation: precipSunMorningRain,
@@ -1843,6 +1859,7 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     const appJs = fs.readFileSync(path.join(publicDir, 'js', 'app.js'), 'utf8');
     assert.ok(appJs.includes('sunday-weather-badge'), 'app.js must render .sunday-weather-badge container on calendar cards');
     assert.ok(appJs.includes('drawer-weather-'), 'app.js must render drawer weather element');
+    assert.ok(appJs.includes('10-Day Rainfall Prediction:'), 'app.js detail card drawer must display 10-day rainfall prediction');
     assert.ok(appJs.includes('populateCardWeatherBadges'), 'app.js must trigger WeatherService.populateCardWeatherBadges()');
 
     const eventHtml = fs.readFileSync(path.join(publicDir, 'event.html'), 'utf8');
@@ -1852,12 +1869,14 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
 
     const eventJs = fs.readFileSync(path.join(publicDir, 'js', 'event.js'), 'utf8');
     assert.ok(eventJs.includes('renderAssistantWidget'), 'event.js must call WeatherService.renderAssistantWidget');
+    assert.ok(eventJs.includes('10-Day Rain:'), 'event.js must display 10-day rainfall prediction');
     assert.ok(eventJs.includes('10-day forecast activates closer to game'), 'event.js must specify 10-day forecast activation window');
 
     const headersFile = fs.readFileSync(path.join(publicDir, '_headers'), 'utf8');
     assert.ok(headersFile.includes('https://api.open-meteo.com'), '_headers CSP connect-src must allow https://api.open-meteo.com');
 
     assert.ok(weatherJsCode.includes('forecast_days=10'), 'weather.js must query 10-day forecast horizon');
+    assert.ok(weatherJsCode.includes('10-Day Rain:'), 'weather.js must display 10-day rainfall prediction in calendar badges');
     assert.ok(weatherJsCode.includes('10-day weather forecasts'), 'weather.js must describe 10-day forecast in assistant widget');
 
     const adminHtml = fs.readFileSync(path.join(publicDir, 'admin.html'), 'utf8');

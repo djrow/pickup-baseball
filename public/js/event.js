@@ -287,6 +287,7 @@ function renderEventDetails() {
             <span style="font-weight: 800; color: var(--secondary); font-size: 1.05rem;">${fc.temperature}°F</span>
             <span style="font-size: 0.82rem; color: var(--text-muted); font-weight: 600;">${API.escapeHtml(fc.condition)}</span>
             <span class="badge ${fc.badgeClass}" style="font-size: 0.72rem; padding: 1px 6px;">${fc.statusLabel}</span>
+            <span style="display: inline-flex; align-items: center; gap: 4px; font-weight: 700; color: var(--secondary); background: var(--bg-subtle); padding: 2px 8px; border-radius: var(--radius-full); border: 1px solid var(--border); font-size: 0.76rem;">🌧️ 10-Day Rain: ${fc.rainfall10DayFormatted}</span>
           </div>
         `;
       }

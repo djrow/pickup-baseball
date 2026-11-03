@@ -3069,6 +3069,7 @@ footer.site-footer strong {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  flex-wrap: wrap;
 }
 
 .weather-card-pill {
@@ -3083,6 +3084,19 @@ footer.site-footer strong {
   background: var(--bg-card);
   color: var(--secondary);
   line-height: 1.2;
+}
+
+.weather-card-pill.weather-rain-pill {
+  background: var(--bg-subtle);
+  color: var(--secondary);
+  border-color: var(--border);
+  font-weight: 600;
+  font-size: 0.72rem;
+}
+
+.drawer-weather-meta {
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .smart-rainout-card {
