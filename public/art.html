@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Community Art Studio - Pickup Baseball Foundation</title>
-  <link rel="stylesheet" href="/css/style.css?v=53">
+  <link rel="stylesheet" href="/css/style.css?v=54">
   <link rel="alternate" type="application/rss+xml" title="Sunday Pickup Baseball Highlights &amp; Updates" href="/feed.xml">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
@@ -65,6 +65,20 @@
   <!-- Main Content -->
   <main class="container" style="margin-top: 32px; margin-bottom: 48px; max-width: 900px;">
 
+    <!-- Admin Moderation Bar (Visible only to Organizers and Admins) -->
+    <div id="art-admin-banner" class="alert alert-info" style="display: none; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 24px; border-left: 5px solid var(--secondary); box-shadow: var(--shadow-sm);">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span style="font-size: 1.3rem;">🛡️</span>
+        <div>
+          <strong style="color: var(--secondary);">Admin Moderation Active:</strong>
+          <span style="font-size: 0.86rem; color: var(--text-main);"> You have one-click sticker peel, no-cooldown tile editing, and board reset privileges across all three community canvases.</span>
+        </div>
+      </div>
+      <div>
+        <span class="badge badge-yellow" style="font-size: 0.74rem; font-weight: 700;">Organizer Controls</span>
+      </div>
+    </div>
+
     <!-- ============================================================== -->
     <!-- 1. The "r/pbf" Pixel Diamond Mosaic                            -->
     <!-- ============================================================== -->
@@ -117,6 +131,12 @@
           <button type="button" id="btn-reset-pixel-diamond" class="btn btn-outline btn-sm" style="color: var(--text-muted);">
             🔄 Reset Diamond
           </button>
+          <button type="button" id="btn-admin-bypass-cooldown" class="btn btn-outline btn-sm art-admin-only" style="display: none; font-weight: 700; color: var(--primary);">
+            ⚡ No Cooldown: OFF
+          </button>
+          <button type="button" id="btn-admin-reset-diamond" class="btn btn-outline btn-sm art-admin-only" style="display: none; color: var(--secondary); font-weight: 700;">
+            🛡️ Admin Reset Diamond
+          </button>
         </div>
       </div>
     </section>
@@ -163,9 +183,12 @@
             </label>
             <input type="text" id="sticker-tag-input" maxlength="28" placeholder="e.g. Bushrod 2026, Infield Single..." style="padding: 7px 12px; font-size: 0.88rem; border-radius: var(--radius-sm); border: 1.5px solid var(--border); width: 100%;">
           </div>
-          <div style="align-self: flex-end;">
+          <div style="align-self: flex-end; display: flex; gap: 6px; flex-wrap: wrap;">
+            <button type="button" id="btn-admin-clear-trunk" class="btn btn-outline btn-sm art-admin-only" style="display: none; color: var(--secondary); font-weight: 700;">
+              🛡️ Admin Peel All
+            </button>
             <button type="button" id="btn-clear-trunk" class="btn btn-outline btn-sm" style="color: var(--text-muted);">
-              🧹 Peel All Stickers
+              🧹 Peel My Stickers
             </button>
           </div>
         </div>
@@ -221,6 +244,9 @@
 
         <!-- Actions -->
         <div class="flex-row-wrap" style="gap: 6px;">
+          <button type="button" id="btn-admin-freeze-chalk" class="btn btn-outline btn-sm art-admin-only" style="display: none; font-weight: 700; color: var(--secondary);">
+            🔒 Lock Board: OFF
+          </button>
           <button type="button" id="btn-undo-chalk" class="btn btn-outline btn-sm" title="Undo last chalk stroke">
             ↩️ Undo
           </button>
@@ -245,15 +271,23 @@
   <footer id="site-footer" class="site-footer"></footer>
 
   <!-- Core Scripts -->
-  <script src="/js/api.js?v=53"></script>
-  <script src="/js/art.js?v=53"></script>
+  <script src="/js/api.js?v=54"></script>
+  <script src="/js/art.js?v=54"></script>
   <script>
     document.addEventListener('DOMContentLoaded', async () => {
       try {
         const cached = API.getCachedUser();
-        if (cached) API.renderNav(cached);
+        if (cached) {
+          API.renderNav(cached);
+          if (window.ArtStudio && typeof window.ArtStudio.setUser === 'function') {
+            window.ArtStudio.setUser(cached);
+          }
+        }
         const user = await API.getMe();
         API.renderNav(user);
+        if (window.ArtStudio && typeof window.ArtStudio.setUser === 'function') {
+          window.ArtStudio.setUser(user);
+        }
       } catch (e) {}
     });
   </script>

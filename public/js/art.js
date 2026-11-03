@@ -37,6 +37,28 @@
   let pixelGridData = [];
   let pixelCooldownSec = 0;
   let cooldownTimer = null;
+  let currentUser = null;
+  let isAdmin = false;
+  let adminBypassCooldown = false;
+  let chalkboardFrozen = false;
+
+  function setUser(user) {
+    currentUser = user;
+    isAdmin = Boolean(user && (user.isAdmin || user.role === 'admin' || user.canManageEvents));
+    updateAdminUi();
+    const stage = document.getElementById('trunk-canvas-stage');
+    if (stage) renderPlacedStickers(stage);
+  }
+
+  function updateAdminUi() {
+    const banner = document.getElementById('art-admin-banner');
+    if (banner) {
+      banner.style.display = isAdmin ? 'flex' : 'none';
+    }
+    document.querySelectorAll('.art-admin-only').forEach(el => {
+      el.style.display = isAdmin ? 'inline-flex' : 'none';
+    });
+  }
 
   function initPixelDiamond() {
     const canvas = document.getElementById('pixel-diamond-canvas');
@@ -90,7 +112,7 @@
       const y = Math.floor((clientY - rect.top) * scaleY);
 
       if (x >= 0 && x < PIXEL_GRID_SIZE && y >= 0 && y < PIXEL_GRID_SIZE) {
-        if (pixelCooldownSec > 0) {
+        if (pixelCooldownSec > 0 && !adminBypassCooldown) {
           showToast('⏳ Cooldown active! Wait ' + pixelCooldownSec + 's before placing another tile.');
           return;
         }
@@ -100,7 +122,9 @@
         renderPixelCanvas(ctx, canvas);
         localStorage.setItem('pbf_pixel_diamond_grid', JSON.stringify(pixelGridData));
 
-        startCooldown(5); // 5-second authentic cooldown
+        if (!adminBypassCooldown) {
+          startCooldown(5); // 5-second authentic cooldown
+        }
       }
     }
 
@@ -152,6 +176,31 @@
           pixelGridData = generateDefaultDiamondGrid();
           renderPixelCanvas(ctx, canvas);
           localStorage.removeItem('pbf_pixel_diamond_grid');
+        }
+      });
+    }
+
+    // Admin No-Cooldown toggle button
+    const adminBypassBtn = document.getElementById('btn-admin-bypass-cooldown');
+    if (adminBypassBtn) {
+      adminBypassBtn.addEventListener('click', () => {
+        adminBypassCooldown = !adminBypassCooldown;
+        adminBypassBtn.textContent = adminBypassCooldown ? '⚡ No Cooldown: ON' : '⚡ No Cooldown: OFF';
+        adminBypassBtn.style.background = adminBypassCooldown ? 'var(--primary)' : '';
+        adminBypassBtn.style.color = adminBypassCooldown ? '#fff' : 'var(--primary)';
+        showToast(adminBypassCooldown ? '⚡ Admin no-cooldown brush enabled!' : 'Cooldown timer restored.');
+      });
+    }
+
+    // Admin Force Reset button
+    const adminResetBtn = document.getElementById('btn-admin-reset-diamond');
+    if (adminResetBtn) {
+      adminResetBtn.addEventListener('click', () => {
+        if (confirm('Admin: Force reset the Community Diamond to the pristine baseball diamond template?')) {
+          pixelGridData = generateDefaultDiamondGrid();
+          renderPixelCanvas(ctx, canvas);
+          localStorage.removeItem('pbf_pixel_diamond_grid');
+          showToast('🛡️ Diamond reset to pristine template by Admin.');
         }
       });
     }
@@ -382,10 +431,23 @@
     const clearBtn = document.getElementById('btn-clear-trunk');
     if (clearBtn) {
       clearBtn.addEventListener('click', () => {
-        if (confirm('Clear all stickers off the equipment trunk?')) {
+        if (confirm('Peel your stickers off the equipment trunk?')) {
           placedStickers = [];
           renderPlacedStickers(stage);
           localStorage.removeItem('pbf_trunk_stickers');
+        }
+      });
+    }
+
+    // Admin Peel All Stickers button
+    const adminClearBtn = document.getElementById('btn-admin-clear-trunk');
+    if (adminClearBtn) {
+      adminClearBtn.addEventListener('click', () => {
+        if (confirm('Admin: Clear all stickers off the community equipment trunk?')) {
+          placedStickers = [];
+          renderPlacedStickers(stage);
+          localStorage.removeItem('pbf_trunk_stickers');
+          showToast('🛡️ Equipment trunk cleared by Admin.');
         }
       });
     }
@@ -402,9 +464,10 @@
 
   function renderPlacedStickers(stage) {
     stage.innerHTML = placedStickers.map(stk => `
-      <div class="placed-trunk-sticker" id="${stk.id}" data-id="${stk.id}" style="left: ${stk.x}px; top: ${stk.y}px; transform: rotate(${stk.rotation}deg);" title="${stk.label}${stk.tag ? ': ' + stk.tag : ''} (Click to peel off)">
+      <div class="placed-trunk-sticker" id="${stk.id}" data-id="${stk.id}" style="left: ${stk.x}px; top: ${stk.y}px; transform: rotate(${stk.rotation}deg);" title="${stk.label}${stk.tag ? ': ' + stk.tag : ''}">
         <span>${stk.icon}</span>
         ${stk.tag ? `<div style="font-size: 0.65rem; background: rgba(0,0,0,0.75); color: #fff; padding: 1px 5px; border-radius: 3px; white-space: nowrap; font-weight: 700; transform: translateY(-4px);">${stk.tag}</div>` : ''}
+        ${isAdmin ? `<button type="button" class="admin-sticker-delete" data-id="${stk.id}" title="Admin: Delete sticker" style="position: absolute; top: -8px; right: -8px; width: 20px; height: 20px; border-radius: 50%; background: #ba0c2f; color: #fff; border: 1.5px solid #fff; font-size: 0.65rem; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0;">✖</button>` : ''}
       </div>
     `).join('');
 
@@ -412,10 +475,12 @@
       el.addEventListener('click', (e) => {
         e.stopPropagation();
         const id = el.getAttribute('data-id');
-        if (confirm('Peel this sticker off the trunk?')) {
+        const msg = isAdmin ? 'Admin: Permanently peel this sticker off the trunk?' : 'Peel this sticker off the trunk?';
+        if (confirm(msg)) {
           placedStickers = placedStickers.filter(s => s.id !== id);
           renderPlacedStickers(stage);
           localStorage.setItem('pbf_trunk_stickers', JSON.stringify(placedStickers));
+          showToast(isAdmin ? '🛡️ Sticker removed by Admin.' : 'Sticker peeled off.');
         }
       });
     });
@@ -464,6 +529,10 @@
     saveHistoryState(ctx, canvas);
 
     function startDraw(e) {
+      if (chalkboardFrozen) {
+        showToast('🔒 The dugout chalkboard is currently locked by organizers.');
+        return;
+      }
       isDrawing = true;
       const rect = canvas.getBoundingClientRect();
       const clientX = e.touches ? e.touches[0].clientX : e.clientX;
@@ -592,6 +661,18 @@
         localStorage.setItem('pbf_chalkboard_data', canvas.toDataURL());
       });
     });
+
+    // Admin Freeze / Lock Board button
+    const adminFreezeBtn = document.getElementById('btn-admin-freeze-chalk');
+    if (adminFreezeBtn) {
+      adminFreezeBtn.addEventListener('click', () => {
+        chalkboardFrozen = !chalkboardFrozen;
+        adminFreezeBtn.textContent = chalkboardFrozen ? '🔒 Lock Board: ON (Read-Only)' : '🔒 Lock Board: OFF';
+        adminFreezeBtn.style.background = chalkboardFrozen ? 'var(--secondary)' : '';
+        adminFreezeBtn.style.color = chalkboardFrozen ? '#fff' : 'var(--secondary)';
+        showToast(chalkboardFrozen ? '🔒 Chalkboard locked in read-only mode by Admin.' : 'Chalkboard unlocked for all players.');
+      });
+    }
   }
 
   function saveHistoryState(ctx, canvas) {
@@ -709,5 +790,15 @@
     initEquipmentTrunk();
     initDugoutChalkboard();
   });
+
+  // Export to global window object
+  window.ArtStudio = {
+    setUser: setUser,
+    getIsAdmin: function() { return isAdmin; },
+    getIsChalkboardFrozen: function() { return chalkboardFrozen; },
+    initPixelDiamond: initPixelDiamond,
+    initEquipmentTrunk: initEquipmentTrunk,
+    initDugoutChalkboard: initDugoutChalkboard
+  };
 
 })(window);

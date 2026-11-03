@@ -2157,6 +2157,8 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(artHtml.includes('id="pixel-diamond-canvas"'), 'art.html must contain #pixel-diamond-canvas');
     assert.ok(artHtml.includes('id="trunk-canvas-stage"'), 'art.html must contain #trunk-canvas-stage');
     assert.ok(artHtml.includes('id="chalkboard-canvas"'), 'art.html must contain #chalkboard-canvas');
+    assert.ok(artHtml.includes('id="art-admin-banner"'), 'art.html must contain #art-admin-banner');
+    assert.ok(artHtml.includes('art-admin-only'), 'art.html must contain art-admin-only controls');
     assert.ok(artHtml.includes('/js/art.js'), 'art.html must script-load /js/art.js');
     assert.ok(artHtml.includes('/js/api.js'), 'art.html must script-load /js/api.js');
 
@@ -2169,6 +2171,8 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(artJsCode.includes('initPixelDiamond'), 'art.js must implement initPixelDiamond');
     assert.ok(artJsCode.includes('initEquipmentTrunk'), 'art.js must implement initEquipmentTrunk');
     assert.ok(artJsCode.includes('initDugoutChalkboard'), 'art.js must implement initDugoutChalkboard');
+    assert.ok(artJsCode.includes('setUser'), 'art.js must implement admin setUser');
+    assert.ok(artJsCode.includes('window.ArtStudio'), 'art.js must mount window.ArtStudio');
 
     // 3. Verify top navigation links
     const apiJs = fs.readFileSync(path.join(publicDir, 'js', 'api.js'), 'utf8');
