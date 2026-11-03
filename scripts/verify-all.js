@@ -2174,21 +2174,27 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(artJsCode.includes('setUser'), 'art.js must implement admin setUser');
     assert.ok(artJsCode.includes('window.ArtStudio'), 'art.js must mount window.ArtStudio');
 
-    // 3. Verify top navigation links
+    // 3. Verify Community Art Studio merged into gallery.html
+    const galleryHtml = fs.readFileSync(path.join(publicDir, 'gallery.html'), 'utf8');
+    assert.ok(galleryHtml.includes('id="pixel-diamond-canvas"'), 'gallery.html must house #pixel-diamond-canvas');
+    assert.ok(galleryHtml.includes('id="trunk-canvas-stage"'), 'gallery.html must house #trunk-canvas-stage');
+    assert.ok(galleryHtml.includes('id="chalkboard-canvas"'), 'gallery.html must house #chalkboard-canvas');
+    assert.ok(galleryHtml.includes('id="art-admin-banner"'), 'gallery.html must house #art-admin-banner');
+    assert.ok(galleryHtml.includes('/js/art.js'), 'gallery.html must script-load /js/art.js');
+
     const apiJs = fs.readFileSync(path.join(publicDir, 'js', 'api.js'), 'utf8');
-    assert.ok(apiJs.includes('nav-link-art'), 'api.js must render .nav-link-art in API.renderNav()');
-    assert.ok(apiJs.includes('/art.html'), 'api.js must link to /art.html');
+    assert.ok(apiJs.includes('nav-link-gallery'), 'api.js must render .nav-link-gallery in API.renderNav()');
+    assert.ok(apiJs.includes('/gallery.html'), 'api.js must link to /gallery.html');
 
     const indexHtml = fs.readFileSync(path.join(publicDir, 'index.html'), 'utf8');
-    assert.ok(indexHtml.includes('href="/art.html"'), 'index.html must include static fallback link to /art.html');
+    assert.ok(indexHtml.includes('href="/gallery.html"'), 'index.html must include link to /gallery.html');
 
     // 4. Verify Service Worker and CSS styling
     const swJs = fs.readFileSync(path.join(publicDir, 'sw.js'), 'utf8');
-    assert.ok(swJs.includes('/art.html'), 'sw.js must cache /art.html');
+    assert.ok(swJs.includes('/art.html') || swJs.includes('/gallery.html'), 'sw.js must cache art / gallery assets');
     assert.ok(swJs.includes('/js/art.js'), 'sw.js must cache /js/art.js');
 
     const styleCss = fs.readFileSync(path.join(publicDir, 'css', 'style.css'), 'utf8');
-    assert.ok(styleCss.includes('.nav-link-art'), 'style.css must define .nav-link-art');
     assert.ok(styleCss.includes('.pixel-canvas-frame'), 'style.css must define .pixel-canvas-frame');
     assert.ok(styleCss.includes('.trunk-outer-box'), 'style.css must define .trunk-outer-box');
     assert.ok(styleCss.includes('.chalkboard-frame'), 'style.css must define .chalkboard-frame');
@@ -2210,6 +2216,7 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(galleryHtml.includes('id="photos-paddle-next"'), 'gallery.html must contain right paddle for photo carousel');
     assert.ok(galleryHtml.includes('id="videos-paddle-prev"'), 'gallery.html must contain left paddle for video carousel');
     assert.ok(galleryHtml.includes('id="videos-paddle-next"'), 'gallery.html must contain right paddle for video carousel');
+    assert.ok(galleryHtml.includes('id="media-moderation-queue"'), 'gallery.html must contain #media-moderation-queue for admin approval');
     assert.ok(galleryHtml.includes('id="submit-media-section"'), 'gallery.html must contain #submit-media-section');
     assert.ok(galleryHtml.includes('id="media-submit-form"'), 'gallery.html must contain #media-submit-form');
     assert.ok(galleryHtml.includes('id="media-date-input"'), 'gallery.html must ask for approximate date taken');
@@ -2224,6 +2231,7 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(!galleryJsCode.includes('?.'), 'gallery.js must not contain optional chaining (?.)');
     assert.ok(!galleryJsCode.includes('??'), 'gallery.js must not contain nullish coalescing (??)');
     assert.ok(galleryJsCode.includes('initGallery'), 'gallery.js must implement initGallery');
+    assert.ok(galleryJsCode.includes('renderPendingQueue'), 'gallery.js must implement renderPendingQueue');
     assert.ok(galleryJsCode.includes('renderAlbumBookmarks'), 'gallery.js must implement renderAlbumBookmarks');
     assert.ok(galleryJsCode.includes('renderVideos'), 'gallery.js must implement renderVideos');
     assert.ok(galleryJsCode.includes('renderPhotos'), 'gallery.js must implement renderPhotos');
@@ -2280,6 +2288,7 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.equal(ytData.item.media_type, 'youtube', 'YouTube submissions must be marked media_type: youtube');
     assert.ok(ytData.item.file_url.includes('youtube.com'), 'YouTube link must be preserved as streaming link');
     assert.equal(ytData.item.date_taken, '2026-10-26', 'Approximate date taken must be saved');
+    assert.equal(ytData.item.is_approved, 0, 'Public YouTube submission must require admin approval (is_approved=0)');
 
     // 6. Zero-Login Submission copying remote/Facebook-hosted image ("copy it all")
     const remoteImgUrl = `${baseUrl}/icons/favicon-32x32.png`;
@@ -2299,6 +2308,12 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.equal(copyData.item.media_type, 'photo', 'Copied image must be marked media_type: photo');
     assert.ok(copyData.item.file_url.startsWith('/api/media/'), 'Copied image must be served from local /api/media/:id/file route');
     assert.equal(copyData.item.original_url, remoteImgUrl, 'Original external image URL must be preserved');
+    assert.equal(copyData.item.is_approved, 0, 'Public photo submission must require admin approval (is_approved=0)');
+
+    // Verify unapproved media is hidden from public gallery
+    const unapprovedCheck = await fetch(`${baseUrl}/api/media`);
+    const unapprovedData = await unapprovedCheck.json();
+    assert.ok(!unapprovedData.media.some(m => m.id === copyData.item.id), 'Unapproved media must NOT be displayed in public gallery');
 
     // 7. Verify serving the copied image binary via GET /api/media/:id/file
     const serveImgRes = await fetch(`${baseUrl}${copyData.item.file_url}`);
@@ -2307,7 +2322,16 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     const imgBuf = await serveImgRes.arrayBuffer();
     assert.ok(imgBuf.byteLength > 0, 'Copied image binary must have non-zero size');
 
-    // 8. Verify Chronological Ordering (desc vs asc)
+    // 8. Admin Approval Workflow: Organizer approves media item via PUT /api/media/:id/approve
+    const approveRes = await apiReq('PUT', `/api/media/${copyData.item.id}/approve`, seedOrgCookie);
+    assert.equal(approveRes.status, 200, 'Organizer must be able to approve pending media item');
+
+    // Once approved, it appears in public gallery
+    const approvedCheck = await fetch(`${baseUrl}/api/media`);
+    const approvedData = await approvedCheck.json();
+    assert.ok(approvedData.media.some(m => m.id === copyData.item.id), 'Approved media item must now appear in public gallery');
+
+    // 9. Verify Chronological Ordering (desc vs asc)
     const descRes = await fetch(`${baseUrl}/api/media?order=desc`);
     const descData = await descRes.json();
     for (let i = 0; i < descData.media.length - 1; i++) {
@@ -2320,7 +2344,7 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
       assert.ok(ascData.media[i].date_taken <= ascData.media[i + 1].date_taken, 'order=asc must sort dates oldest first');
     }
 
-    // 9. Organizer Deletion of media item
+    // 10. Organizer Deletion of media item
     const delRes = await apiReq('DELETE', `/api/media/${copyData.item.id}`, seedOrgCookie);
     assert.equal(delRes.status, 200, 'Organizer must be able to delete media item');
   });

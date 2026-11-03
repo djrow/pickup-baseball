@@ -137,6 +137,7 @@ export const CREATE_TABLES_SQL = [
     contributor_name TEXT,
     contributor_id INTEGER,
     event_id INTEGER,
+    is_approved INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`,
   `CREATE TABLE IF NOT EXISTS banned_emails (
@@ -160,7 +161,8 @@ export const CREATE_TABLES_SQL = [
   'CREATE INDEX IF NOT EXISTS idx_posts_created_at ON posts(created_at DESC)',
   'CREATE INDEX IF NOT EXISTS idx_media_date_taken ON media_items(date_taken DESC)',
   'CREATE INDEX IF NOT EXISTS idx_media_album ON media_items(album)',
-  'CREATE INDEX IF NOT EXISTS idx_media_type ON media_items(media_type)'
+  'CREATE INDEX IF NOT EXISTS idx_media_type ON media_items(media_type)',
+  'CREATE INDEX IF NOT EXISTS idx_media_approved ON media_items(is_approved)'
 ];
 
 export const ALTER_STATEMENTS = [
@@ -176,6 +178,7 @@ export const ALTER_STATEMENTS = [
   'ALTER TABLE attendees ADD COLUMN spectators_count INTEGER DEFAULT 0',
   'ALTER TABLE users ADD COLUMN bio TEXT',
   'ALTER TABLE users ADD COLUMN avatar_url TEXT',
+  'ALTER TABLE media_items ADD COLUMN is_approved INTEGER DEFAULT 0',
   "ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'player'",
   'ALTER TABLE users ADD COLUMN machine_badge INTEGER DEFAULT 0',
   'ALTER TABLE users ADD COLUMN field_badge INTEGER DEFAULT 0',
@@ -209,6 +212,10 @@ export async function ensureD1Schema(db, force = false) {
   } catch (e) {}
 
   try {
+    await db.prepare("UPDATE media_items SET is_approved = 1 WHERE is_approved IS NULL").run();
+  } catch (e) {}
+
+  try {
     const mediaCountRow = await db.prepare("SELECT COUNT(*) as c FROM media_items").first();
     if (mediaCountRow && mediaCountRow.c === 0) {
       const sampleSvg1 = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="800" height="500"><rect width="800" height="500" fill="#003831"/><circle cx="400" cy="250" r="140" fill="#FD5A1E"/><text x="400" y="260" font-family="sans-serif" font-size="32" font-weight="bold" fill="#ffffff" text-anchor="middle">Bushrod Field Opening Day</text><text x="400" y="300" font-family="sans-serif" font-size="18" fill="#ffffff" text-anchor="middle">Morning Field Drag &amp; Line Marking</text></svg>';
@@ -221,8 +228,8 @@ export async function ensureD1Schema(db, force = false) {
       const sampleB64_3 = btoa(sampleSvg3);
 
       const insertMedia = db.prepare(`
-        INSERT INTO media_items (title, caption, media_type, original_url, file_url, file_data, mime_type, file_size, album, date_taken, contributor_name)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO media_items (title, caption, media_type, original_url, file_url, file_data, mime_type, file_size, album, date_taken, contributor_name, is_approved)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
       `);
 
       await insertMedia.bind(

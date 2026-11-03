@@ -29,6 +29,9 @@ function isPrivateIpOrHost(hostname, isTestEnv = false) {
 // ---------------------------------------------------------------------------
 mediaRouter.get('/', async (c) => {
   try {
+    const user = c.get('user');
+    const isManager = Boolean(user && (user.role === 'admin' || user.role === 'organizer'));
+    const statusParam = c.req.query('status') || '';
     const typeParam = c.req.query('type') || 'all';
     const albumParam = c.req.query('album') || '';
     const orderParam = (c.req.query('order') || 'asc').toLowerCase();
@@ -36,6 +39,13 @@ mediaRouter.get('/', async (c) => {
 
     let whereClauses = [];
     let bindings = [];
+
+    // By default, public gallery only displays admin-approved media
+    if (statusParam === 'pending' && isManager) {
+      whereClauses.push("m.is_approved = 0");
+    } else {
+      whereClauses.push("m.is_approved = 1");
+    }
 
     if (typeParam === 'photo') {
       whereClauses.push("m.media_type = 'photo'");
@@ -55,7 +65,7 @@ mediaRouter.get('/', async (c) => {
     const querySql = `
       SELECT m.id, m.title, m.caption, m.media_type, m.original_url, m.file_url,
              m.mime_type, m.file_size, m.album, m.date_taken, m.contributor_name,
-             m.contributor_id, m.event_id, m.created_at, e.title as event_title
+             m.contributor_id, m.event_id, m.is_approved, m.created_at, e.title as event_title
       FROM media_items m
       LEFT JOIN events e ON m.event_id = e.id
       ${whereSql}
@@ -67,18 +77,34 @@ mediaRouter.get('/', async (c) => {
       ? await c.env.DB.prepare(querySql).bind(...bindings).all()
       : await c.env.DB.prepare(querySql).all();
 
-    // Fetch album metadata for quick bookmarks navigation
+    // Fetch album metadata for quick bookmarks navigation (only counting approved media)
     const { results: albums } = await c.env.DB.prepare(`
       SELECT album, COUNT(*) as count, MAX(date_taken) as latest_date, MIN(date_taken) as earliest_date
       FROM media_items
+      WHERE is_approved = 1
       GROUP BY album
-      ORDER BY latest_date DESC
+      ORDER BY latest_date ASC
     `).all();
+
+    // If manager, fetch pending moderation queue items
+    let pendingMedia = [];
+    if (isManager) {
+      const { results: pending } = await c.env.DB.prepare(`
+        SELECT m.id, m.title, m.caption, m.media_type, m.original_url, m.file_url,
+               m.mime_type, m.file_size, m.album, m.date_taken, m.contributor_name,
+               m.contributor_id, m.event_id, m.is_approved, m.created_at
+        FROM media_items m
+        WHERE m.is_approved = 0
+        ORDER BY m.created_at DESC
+      `).all();
+      pendingMedia = pending || [];
+    }
 
     c.header('Cache-Control', 'no-cache, no-store, must-revalidate');
     return c.json({
       media: media || [],
-      albums: albums || []
+      albums: albums || [],
+      pending: pendingMedia
     });
   } catch (err) {
     console.error('[Media] Error fetching gallery media:', err);
@@ -266,13 +292,17 @@ mediaRouter.post('/', async (c) => {
       return c.json({ error: 'Either a media URL (YouTube/image) or an uploaded file is required.' }, 400);
     }
 
+    // Check manager status: organizers/admins publish immediately, public submissions require approval
+    const isManager = Boolean(user && (user.role === 'admin' || user.role === 'organizer'));
+    const isApproved = isManager ? 1 : 0;
+
     // Insert media row into D1 / SQLite
     const insertSql = `
       INSERT INTO media_items (
         title, caption, media_type, original_url, file_url, file_data,
         mime_type, file_size, album, date_taken, contributor_name,
-        contributor_id, event_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        contributor_id, event_id, is_approved
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     // Temporary placeholder for file_url if photo
@@ -281,7 +311,7 @@ mediaRouter.post('/', async (c) => {
     const result = await c.env.DB.prepare(insertSql).bind(
       cleanTitle, cleanCaption, finalMediaType, originalUrl, tempFileUrl, storedFileData,
       storedMimeType, storedFileSize, cleanAlbum, cleanDate, cleanContributor,
-      user ? user.id : null, cleanEventId
+      user ? user.id : null, cleanEventId, isApproved
     ).run();
 
     const newId = result.meta.last_row_id;
@@ -293,7 +323,7 @@ mediaRouter.post('/', async (c) => {
     const createdItem = await c.env.DB.prepare(`
       SELECT m.id, m.title, m.caption, m.media_type, m.original_url, m.file_url,
              m.mime_type, m.file_size, m.album, m.date_taken, m.contributor_name,
-             m.contributor_id, m.event_id, m.created_at
+             m.contributor_id, m.event_id, m.is_approved, m.created_at
       FROM media_items m
       WHERE m.id = ?
     `).bind(newId).first();
@@ -301,13 +331,44 @@ mediaRouter.post('/', async (c) => {
     return c.json({
       success: true,
       item: createdItem,
-      message: finalMediaType === 'youtube'
-        ? '✓ YouTube link saved to gallery!'
-        : '✓ Image copied and permanently saved to community gallery!'
+      is_approved: isApproved,
+      requires_approval: isApproved === 0,
+      message: isApproved === 1
+        ? (finalMediaType === 'youtube' ? '✓ YouTube link saved and published!' : '✓ Image copied and published to gallery!')
+        : '✓ Thank you! Your photo or video has been submitted for admin approval before being displayed.'
     });
   } catch (err) {
     console.error('[Media] Error saving media submission:', err);
     return c.json({ error: 'Failed to process media submission.' }, 500);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// PUT & POST /api/media/:id/approve - Organizer/Admin Media Approval
+// ---------------------------------------------------------------------------
+mediaRouter.put('/:id/approve', requireOrganizer, async (c) => {
+  try {
+    const id = parseInt(c.req.param('id'), 10);
+    if (!id || isNaN(id)) return c.json({ error: 'Invalid ID' }, 400);
+
+    await c.env.DB.prepare('UPDATE media_items SET is_approved = 1 WHERE id = ?').bind(id).run();
+    return c.json({ success: true, message: 'Media item approved and published to gallery.' });
+  } catch (err) {
+    console.error('[Media] Error approving media item:', err);
+    return c.json({ error: 'Failed to approve media item.' }, 500);
+  }
+});
+
+mediaRouter.post('/:id/approve', requireOrganizer, async (c) => {
+  try {
+    const id = parseInt(c.req.param('id'), 10);
+    if (!id || isNaN(id)) return c.json({ error: 'Invalid ID' }, 400);
+
+    await c.env.DB.prepare('UPDATE media_items SET is_approved = 1 WHERE id = ?').bind(id).run();
+    return c.json({ success: true, message: 'Media item approved and published to gallery.' });
+  } catch (err) {
+    console.error('[Media] Error approving media item:', err);
+    return c.json({ error: 'Failed to approve media item.' }, 500);
   }
 });
 

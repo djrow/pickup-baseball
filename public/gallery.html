@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Photo &amp; Video Gallery | Pickup Baseball Foundation</title>
-  <link rel="stylesheet" href="/css/style.css?v=58">
+  <link rel="stylesheet" href="/css/style.css?v=59">
   <link rel="alternate" type="application/rss+xml" title="Sunday Pickup Baseball Highlights &amp; Updates" href="/feed.xml">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
@@ -30,8 +30,7 @@
           <span class="brand-short">PBF</span>
         </a>
         <div class="nav-links">
-          <a href="/gallery.html" class="nav-link-gallery active">📸 <span>Gallery</span></a>
-          <a href="/art.html" class="nav-link-art">🎨 <span>Art</span></a>
+          <a href="/gallery.html" class="nav-link-gallery active">📸 <span>Gallery &amp; Art</span></a>
           <a href="/donate.html" class="nav-link-donate">Donate</a>
           <a href="/login.html" class="btn-login"><span class="btn-login-icon">⚾ </span><span>Log In</span></a>
         </div>
@@ -53,16 +52,16 @@
     </div>
 
     <!-- Gallery Header Banner -->
-    <section class="card" style="background: var(--bg-card); border-left: 5px solid var(--primary); margin-bottom: 24px; padding: 16px 20px;">
+    <section class="card" style="background: var(--bg-card); border-left: 5px solid var(--primary); margin-bottom: 20px; padding: 16px 20px;">
       <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
         <div style="display: flex; align-items: center; gap: 14px;">
           <span style="font-size: 2.2rem; line-height: 1;">📸</span>
           <div>
             <h1 style="color: var(--secondary); font-size: 1.55rem; margin: 0 0 4px 0;">
-              Community Photo &amp; Video Gallery
+              Community Gallery &amp; Art Studio
             </h1>
             <p style="color: var(--text-muted); font-size: 0.9rem; margin: 0; line-height: 1.4;">
-              Full-width chronological carousels of Sunday baseball moments, celebrations, and video highlights.
+              Chronological Sunday baseball moments, YouTube highlight reels, and collaborative dugout art spaces.
             </p>
           </div>
         </div>
@@ -74,6 +73,29 @@
           </select>
         </div>
       </div>
+    </section>
+
+    <!-- Quick Navigation Pills Row -->
+    <div style="display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap;">
+      <a href="#photos-section" class="btn btn-outline btn-xs" style="font-weight: 700;">📷 Photos Reel</a>
+      <a href="#videos-section" class="btn btn-outline btn-xs" style="font-weight: 700;">🎬 Video Reel</a>
+      <a href="#community-art-section" class="btn btn-outline btn-xs" style="font-weight: 700; color: var(--secondary);">🎨 Community Art Studio</a>
+      <a href="#submit-media-section" class="btn btn-outline btn-xs" style="font-weight: 700; color: var(--primary);">📥 Drop Photos / Links</a>
+    </div>
+
+    <!-- Admin Moderation Queue (Visible only to Organizers and Admins when submissions are pending) -->
+    <section id="media-moderation-queue" class="card" style="display: none; border-left: 5px solid #f59e0b; background: var(--bg-card); margin-bottom: 28px; padding: 16px 20px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 12px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 1.4rem;">🛡️</span>
+          <div>
+            <h2 style="font-size: 1.15rem; color: var(--secondary); margin: 0;">Admin Moderation Queue</h2>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0;">Review and approve community photos and videos before they appear in the live gallery.</p>
+          </div>
+        </div>
+        <span class="badge badge-yellow" id="pending-count-badge" style="font-weight: 700;">0 Pending</span>
+      </div>
+      <div id="pending-media-list" class="pending-media-grid"></div>
     </section>
 
     <!-- ===================================================================== -->
@@ -230,11 +252,211 @@
 
     </section>
 
+    <!-- ===================================================================== -->
+    <!-- 3. COMMUNITY ART STUDIO (Merged from nav.art)                         -->
+    <!-- ===================================================================== -->
+    <section id="community-art-section" class="card" style="margin-top: 36px; margin-bottom: 40px; padding: 24px; border-top: 5px solid var(--secondary); background: var(--bg-card);">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 20px;">
+        <div>
+          <span class="badge badge-green" style="font-size: 0.75rem; text-transform: uppercase; font-weight: 800;">🎨 Community Art Studio</span>
+          <h2 style="color: var(--secondary); font-size: 1.45rem; margin: 6px 0 4px 0;">
+            Shared Ballpark Art Spaces
+          </h2>
+          <p style="font-size: 0.9rem; color: var(--text-muted); margin: 0;">
+            Leave your mark on Sunday baseball! Paint tiles on the Pixel Diamond, slap retro stickers on the Dugout Wall, or sketch plays on the Dugout Chalkboard.
+          </p>
+        </div>
+        <div class="art-nav-pill-row" style="margin: 0; display: flex; gap: 6px; flex-wrap: wrap;">
+          <a href="#section-pixel-diamond" class="btn btn-outline btn-xs">⚾ Pixel Diamond</a>
+          <a href="#section-dugout-wall" class="btn btn-outline btn-xs">🧱 Dugout Wall</a>
+          <a href="#section-chalkboard" class="btn btn-outline btn-xs">📋 Dugout Chalkboard</a>
+        </div>
+      </div>
+
+      <!-- Admin Moderation Bar (Visible only to Organizers and Admins) -->
+      <div id="art-admin-banner" class="alert alert-info" style="display: none; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 24px; border-left: 5px solid var(--secondary); box-shadow: var(--shadow-sm);">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 1.3rem;">🛡️</span>
+          <div>
+            <strong style="color: var(--secondary);">Art Admin Moderation Active:</strong>
+            <span style="font-size: 0.86rem; color: var(--text-main);"> You have one-click sticker peel, no-cooldown tile editing, and board reset privileges across all three community canvases.</span>
+          </div>
+        </div>
+        <div>
+          <span class="badge badge-yellow" style="font-size: 0.74rem; font-weight: 700;">Organizer Controls</span>
+        </div>
+      </div>
+
+      <!-- Concept 1: The "r/pbf" Pixel Diamond Mosaic -->
+      <div id="section-pixel-diamond" class="art-card" style="border-top: 5px solid var(--primary); margin-bottom: 32px; padding: 18px; border-radius: var(--radius-md); background: var(--bg-subtle);">
+        <div class="flex-between">
+          <div>
+            <span class="badge badge-green" style="font-size: 0.75rem; text-transform: uppercase; font-weight: 800;">Concept 1</span>
+            <h3 style="color: var(--secondary); font-size: 1.3rem; margin: 6px 0 2px 0;">
+              ⚾ The "r/pbf" Community Diamond Mosaic
+            </h3>
+            <p style="font-size: 0.88rem; color: var(--text-muted); margin: 0;">
+              A shared 64×64 pixel grid modeled after retro stadium scoreboards. Pick a color and place your tile on the diamond!
+            </p>
+          </div>
+          <div style="text-align: right;">
+            <span id="pixel-coord-display" class="badge badge-gray" style="font-size: 0.82rem; font-family: monospace;">📍 X: --, Y: --</span>
+          </div>
+        </div>
+
+        <div class="pixel-board-container" style="margin-top: 14px;">
+          <div class="pixel-canvas-frame">
+            <canvas id="pixel-diamond-canvas" width="64" height="64" aria-label="Interactive 64x64 pixel baseball diamond canvas"></canvas>
+          </div>
+
+          <div style="width: 100%; max-width: 384px;">
+            <div class="flex-between" style="font-size: 0.78rem; font-weight: 700; margin-bottom: 4px;">
+              <span id="pixel-cooldown-status" style="color: var(--primary);">✅ Tile Ready!</span>
+              <span style="color: var(--text-muted); font-size: 0.74rem;">Select color below &bull; Click to place</span>
+            </div>
+            <div style="width: 100%; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden;">
+              <div id="pixel-cooldown-bar" style="width: 0%; height: 100%; background: var(--primary); transition: width 0.3s ease;"></div>
+            </div>
+          </div>
+
+          <div>
+            <div style="font-size: 0.76rem; font-weight: 700; color: var(--text-muted); text-align: center; text-transform: uppercase; margin-bottom: 6px;">
+              Select Paint Color
+            </div>
+            <div id="pixel-palette-row" class="pixel-palette-row"></div>
+          </div>
+
+          <div class="flex-row-wrap" style="justify-content: center; margin-top: 6px;">
+            <button type="button" id="btn-download-pixel-diamond" class="btn btn-outline btn-sm">
+              📸 Download High-Res PNG
+            </button>
+            <button type="button" id="btn-reset-pixel-diamond" class="btn btn-outline btn-sm" style="color: var(--text-muted);">
+              🔄 Reset Diamond
+            </button>
+            <button type="button" id="btn-admin-bypass-cooldown" class="btn btn-outline btn-sm art-admin-only" style="display: none; font-weight: 700; color: var(--primary);">
+              ⚡ No Cooldown: OFF
+            </button>
+            <button type="button" id="btn-admin-reset-diamond" class="btn btn-outline btn-sm art-admin-only" style="display: none; color: var(--secondary); font-weight: 700;">
+              🛡️ Admin Reset Diamond
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Concept 2: The Dugout Wall Sticker & Tag Wall -->
+      <div id="section-dugout-wall" class="art-card" style="border-top: 5px solid var(--secondary); margin-bottom: 32px; padding: 18px; border-radius: var(--radius-md); background: var(--bg-subtle);">
+        <a id="section-equipment-trunk" style="display: block; position: relative; top: -20px; visibility: hidden;"></a>
+        <div class="flex-between">
+          <div>
+            <span class="badge badge-blue" style="font-size: 0.75rem; text-transform: uppercase; font-weight: 800;">Concept 2</span>
+            <h3 style="color: var(--secondary); font-size: 1.3rem; margin: 6px 0 2px 0;">
+              🧱 The Dugout Wall Sticker &amp; Tag Wall
+            </h3>
+            <p style="font-size: 0.88rem; color: var(--text-muted); margin: 0;">
+              Slap retro baseball badges, patches, and player tags onto the weathered dugout wall. Add a player note or click a sticker to peel it off!
+            </p>
+          </div>
+        </div>
+
+        <div class="trunk-outer-box dugout-wall-outer-box" style="margin-top: 14px;">
+          <div style="text-align: center;">
+            <div class="trunk-header-plaque dugout-wall-header-plaque">
+              ★ PICKUP BASEBALL FOUNDATION · HOME DUGOUT WALL · EST. 2026 ★
+            </div>
+          </div>
+          <div id="trunk-canvas-stage" class="trunk-canvas-stage dugout-wall-stage" title="Click anywhere on the dugout wall to slap your selected sticker!"></div>
+        </div>
+
+        <div style="margin-top: 14px;">
+          <div style="font-size: 0.78rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px;">
+            1. Choose Your Sticker:
+          </div>
+          <div id="sticker-shelf" class="sticker-shelf"></div>
+
+          <div class="flex-between" style="margin-top: 12px; gap: 12px; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 200px;">
+              <label for="sticker-tag-input" style="font-size: 0.78rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; display: block; margin-bottom: 4px;">
+                2. Optional Custom Caption / Name:
+              </label>
+              <input type="text" id="sticker-tag-input" maxlength="28" placeholder="e.g. Bushrod 2026, Infield Single..." style="padding: 7px 12px; font-size: 0.88rem; border-radius: var(--radius-sm); border: 1.5px solid var(--border); width: 100%;">
+            </div>
+            <div style="align-self: flex-end; display: flex; gap: 6px; flex-wrap: wrap;">
+              <button type="button" id="btn-admin-clear-trunk" class="btn btn-outline btn-sm art-admin-only" style="display: none; color: var(--secondary); font-weight: 700;">
+                🛡️ Admin Peel Wall
+              </button>
+              <button type="button" id="btn-clear-trunk" class="btn btn-outline btn-sm" style="color: var(--text-muted);">
+                🧹 Peel My Stickers
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Concept 3: The Dugout Chalkboard Daily Doodle Slate -->
+      <div id="section-chalkboard" class="art-card" style="border-top: 5px solid #2A9D8F; padding: 18px; border-radius: var(--radius-md); background: var(--bg-subtle);">
+        <div class="flex-between">
+          <div>
+            <span class="badge badge-yellow" style="font-size: 0.75rem; text-transform: uppercase; font-weight: 800;">Concept 3</span>
+            <h3 style="color: var(--secondary); font-size: 1.3rem; margin: 6px 0 2px 0;">
+              📋 The Dugout Chalkboard Slate
+            </h3>
+            <p style="font-size: 0.88rem; color: var(--text-muted); margin: 0;">
+              Draw freehand plays, sign your name, or sketch ballpark diagrams in dusty chalk right on the dugout slate.
+            </p>
+          </div>
+        </div>
+
+        <div class="chalkboard-frame" style="margin-top: 14px;">
+          <canvas id="chalkboard-canvas" height="400" aria-label="Interactive Dugout Chalkboard Drawing Canvas"></canvas>
+        </div>
+
+        <div class="chalk-toolbar" style="margin-top: 12px;">
+          <div class="flex-row-wrap" style="gap: 8px;">
+            <span style="font-size: 0.78rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Chalk:</span>
+            <button type="button" class="chalk-btn selected" data-chalk-color="#F8F9FA" title="Chalk White" style="background: #F8F9FA;"></button>
+            <button type="button" class="chalk-btn" data-chalk-color="#FDE047" title="Mustard Yellow" style="background: #FDE047;"></button>
+            <button type="button" class="chalk-btn" data-chalk-color="#F472B6" title="Chalk Pink" style="background: #F472B6;"></button>
+            <button type="button" class="chalk-btn" data-chalk-color="#86EFAC" title="Mint Green" style="background: #86EFAC;"></button>
+            <button type="button" class="chalk-btn" data-chalk-color="#7DD3FC" title="Sky Blue" style="background: #7DD3FC;"></button>
+            <button type="button" class="chalk-btn" data-chalk-color="eraser" title="Felt Eraser" style="background: #1c2b27; border: 2px dashed #94a3b8; display: flex; align-items: center; justify-content: center; font-size: 0.9rem;">🧽</button>
+
+            <select id="chalk-size-select" style="padding: 4px 8px; font-size: 0.8rem; border-radius: 4px; border: 1px solid var(--border); margin-left: 6px;" aria-label="Chalk stroke thickness">
+              <option value="3">Fine Tip (3px)</option>
+              <option value="6" selected>Medium Chalk (6px)</option>
+              <option value="12">Broad Chalk (12px)</option>
+            </select>
+          </div>
+
+          <div class="flex-row-wrap" style="gap: 6px;">
+            <span style="font-size: 0.78rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Stencils:</span>
+            <button type="button" class="btn btn-outline btn-sm chalk-stencil-btn" data-stencil="playball">⚾ Play Ball!</button>
+            <button type="button" class="btn btn-outline btn-sm chalk-stencil-btn" data-stencil="strikezone">🎯 Strike Zone</button>
+            <button type="button" class="btn btn-outline btn-sm chalk-stencil-btn" data-stencil="noon">⏰ Noon</button>
+          </div>
+
+          <div class="flex-row-wrap" style="gap: 6px;">
+            <button type="button" id="btn-admin-freeze-chalk" class="btn btn-outline btn-sm art-admin-only" style="display: none; font-weight: 700; color: var(--secondary);">
+              🔒 Lock Board: OFF
+            </button>
+            <button type="button" id="btn-undo-chalk" class="btn btn-outline btn-sm" title="Undo last chalk stroke">
+              ↩️ Undo
+            </button>
+            <button type="button" id="btn-wipe-chalk" class="btn btn-outline btn-sm" style="color: var(--text-muted);" title="Wipe board clean">
+              🧹 Wipe Board
+            </button>
+            <button type="button" id="btn-download-chalk" class="btn btn-primary btn-sm" title="Save chalkboard drawing as PNG">
+              📸 Save Image
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- Hidden element to satisfy legacy count element references if any -->
     <div style="display: none;"><span id="count-all">0</span><span id="photo-order-label"></span></div>
 
     <!-- ===================================================================== -->
-    <!-- 3. ZERO-LOGIN COMMUNITY MEDIA SUBMISSION PORTAL                       -->
+    <!-- 4. ZERO-LOGIN COMMUNITY MEDIA SUBMISSION PORTAL                       -->
     <!-- ===================================================================== -->
     <section id="submit-media-section" class="card" style="margin-top: 32px; margin-bottom: 48px; border-top: 4px solid var(--primary); background: var(--bg-card);">
       <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; flex-wrap: wrap;">
@@ -370,7 +592,8 @@
   <!-- Site Footer -->
   <footer id="site-footer" class="site-footer"></footer>
 
-  <script src="/js/api.js?v=58"></script>
-  <script src="/js/gallery.js?v=58"></script>
+  <script src="/js/api.js?v=59"></script>
+  <script src="/js/art.js?v=59"></script>
+  <script src="/js/gallery.js?v=59"></script>
 </body>
 </html>

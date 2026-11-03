@@ -106,13 +106,19 @@
 
       galleryMedia = data && data.media ? data.media : [];
       galleryAlbums = data && data.albums ? data.albums : [];
+      var pendingMedia = data && data.pending ? data.pending : [];
 
+      renderPendingQueue(pendingMedia);
       updateCounts();
       updateTimelineLabels();
       renderAlbumBookmarks();
       renderPhotos();
       renderVideos();
       populateAlbumSelectOptions();
+
+      if (typeof window !== 'undefined' && window.ArtStudio && typeof window.ArtStudio.setUser === 'function') {
+        window.ArtStudio.setUser(currentUser);
+      }
     } catch (err) {
       console.error('[Gallery] Failed to load media:', err);
       if (photosContainer) {
@@ -122,6 +128,107 @@
         videosContainer.innerHTML = '<div class="alert alert-error" style="margin: 20px;">Failed to load video carousel.</div>';
       }
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 2b. Admin Media Moderation Queue
+  // ---------------------------------------------------------------------------
+  function renderPendingQueue(pendingList) {
+    var queueSection = document.getElementById('media-moderation-queue');
+    var listContainer = document.getElementById('pending-media-list');
+    var countBadge = document.getElementById('pending-count-badge');
+    var isManager = Boolean(currentUser && currentUser.canManageEvents);
+
+    if (!queueSection || !listContainer) return;
+
+    if (!isManager || !pendingList || pendingList.length === 0) {
+      queueSection.style.display = 'none';
+      return;
+    }
+
+    queueSection.style.display = 'block';
+    if (countBadge) countBadge.textContent = pendingList.length + ' Pending Approval';
+
+    var html = pendingList.map(function(item) {
+      var dateLabel = formatDisplayDate(item.date_taken);
+      var contributor = item.contributor_name ? API.escapeHtml(item.contributor_name) : 'Community User';
+      var title = item.title ? API.escapeHtml(item.title) : (item.media_type === 'youtube' ? 'YouTube Video' : 'Photo Submission');
+      var album = item.album ? API.escapeHtml(item.album) : 'General';
+      var thumbHtml = '';
+
+      if (item.media_type === 'youtube') {
+        var ytId = API.getYouTubeId ? API.getYouTubeId(item.file_url || item.original_url) : null;
+        if (!ytId) {
+          var m = String(item.file_url || item.original_url || '').match(/([\w-]{11})/);
+          ytId = m ? m[1] : '';
+        }
+        var thumbUrl = ytId ? 'https://img.youtube.com/vi/' + ytId + '/hqdefault.jpg' : '/logo.svg';
+        thumbHtml = '<img src="' + API.escapeHtml(thumbUrl) + '" alt="' + title + '" class="pending-media-thumb">';
+      } else {
+        var safeImgUrl = API.safeUrl ? API.safeUrl(item.file_url) : item.file_url;
+        thumbHtml = '<img src="' + API.escapeHtml(safeImgUrl) + '" alt="' + title + '" class="pending-media-thumb">';
+      }
+
+      return `
+        <div class="pending-media-card" id="pending-card-${item.id}">
+          <div class="pending-media-thumb-wrap">
+            ${thumbHtml}
+            <span class="badge badge-yellow" style="position: absolute; top: 6px; left: 6px; font-size: 0.72rem; font-weight: 700;">⏳ Awaiting Approval</span>
+          </div>
+          <div class="pending-media-body">
+            <div style="font-weight: 700; font-size: 0.92rem; color: var(--secondary);">${title}</div>
+            <div style="font-size: 0.78rem; color: var(--text-muted);">
+              <span>📅 ${API.escapeHtml(dateLabel)}</span> &bull; <span>📌 ${album}</span>
+            </div>
+            <div style="font-size: 0.78rem; color: var(--text-muted);">By ${contributor}</div>
+            ${item.caption ? `<div style="font-size: 0.8rem; color: var(--text-main); margin-top: 4px; font-style: italic;">"${API.escapeHtml(item.caption)}"</div>` : ''}
+            <div class="pending-media-actions">
+              <button type="button" class="btn-approve-media" data-media-id="${item.id}">
+                ✓ Approve
+              </button>
+              <button type="button" class="btn-reject-media" data-media-id="${item.id}">
+                ✕ Reject
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    listContainer.innerHTML = html;
+
+    listContainer.querySelectorAll('.btn-approve-media').forEach(function(btn) {
+      btn.addEventListener('click', async function() {
+        var id = btn.getAttribute('data-media-id');
+        btn.disabled = true;
+        btn.textContent = 'Approving...';
+        try {
+          await API.approveMedia(id);
+          await loadGalleryData();
+        } catch (e) {
+          alert(e.message || 'Failed to approve media.');
+          btn.disabled = false;
+          btn.textContent = '✓ Approve';
+        }
+      });
+    });
+
+    listContainer.querySelectorAll('.btn-reject-media').forEach(function(btn) {
+      btn.addEventListener('click', async function() {
+        var id = btn.getAttribute('data-media-id');
+        if (!confirm('Reject and permanently delete this pending submission?')) return;
+        btn.disabled = true;
+        btn.textContent = 'Rejecting...';
+        try {
+          await API.deleteMedia(id);
+          await loadGalleryData();
+        } catch (e) {
+          alert(e.message || 'Failed to reject media.');
+          btn.disabled = false;
+          btn.textContent = '✕ Reject';
+        }
+      });
+    });
   }
 
   function updateCounts() {
@@ -896,9 +1003,10 @@
       var res = await API.submitMedia(payload);
 
       if (alertBox) {
+        var alertClass = res.requires_approval ? 'alert-info' : 'alert-success';
         alertBox.innerHTML = `
-          <div class="alert alert-success" style="font-weight: 600;">
-            ${API.escapeHtml(res.message || '✓ Media successfully saved to the community gallery!')}
+          <div class="alert ${alertClass}" style="font-weight: 600;">
+            ${API.escapeHtml(res.message || '✓ Media successfully saved!')}
           </div>
         `;
       }
@@ -917,11 +1025,13 @@
       // Refresh gallery
       await loadGalleryData();
 
-      // Scroll carousel to newly created album
-      var targetSlug = slugify(chosenAlbum);
-      setTimeout(function() {
-        jumpToAlbum(targetSlug);
-      }, 350);
+      // If published immediately, scroll to album
+      if (!res.requires_approval) {
+        var targetSlug = slugify(chosenAlbum);
+        setTimeout(function() {
+          jumpToAlbum(targetSlug);
+        }, 350);
+      }
 
     } catch (err) {
       if (alertBox) {

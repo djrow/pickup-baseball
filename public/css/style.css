@@ -4051,6 +4051,80 @@ footer.site-footer strong {
   background: var(--giants-orange-light);
 }
 
+/* Admin Media Moderation Queue */
+.pending-media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  margin-top: 12px;
+}
+.pending-media-card {
+  border: 1.5px solid #f59e0b;
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.15);
+}
+.pending-media-thumb-wrap {
+  position: relative;
+  width: 100%;
+  height: 140px;
+  background: #000;
+  overflow: hidden;
+}
+.pending-media-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.pending-media-body {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+.pending-media-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.btn-approve-media {
+  flex: 1;
+  background: #15803d;
+  color: #fff;
+  border: none;
+  font-weight: 700;
+  font-size: 0.82rem;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.btn-approve-media:hover {
+  background: #166534;
+}
+.btn-reject-media {
+  flex: 1;
+  background: transparent;
+  color: #dc2626;
+  border: 1px solid #fca5a5;
+  font-weight: 600;
+  font-size: 0.82rem;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-reject-media:hover {
+  background: #fef2f2;
+  border-color: #dc2626;
+}
+
 .gallery-lightbox {
   position: fixed;
   top: 0;

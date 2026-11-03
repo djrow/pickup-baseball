@@ -295,7 +295,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '58',
+  CLIENT_VERSION: '59',
 
   // Current user cache
   currentUser: null,
@@ -1072,6 +1072,12 @@ const API = {
     });
   },
 
+  async approveMedia(id) {
+    return this.request('PUT', '/api/media/' + encodeURIComponent(id) + '/approve', null, {
+      throwOnError: true, errorMsg: 'Failed to approve media item.'
+    });
+  },
+
   async deleteMedia(id) {
     return this.request('DELETE', '/api/media/' + encodeURIComponent(id), null, {
       throwOnError: true, errorMsg: 'Failed to delete media item.'
@@ -1520,8 +1526,8 @@ const API = {
     const isDonatePage = typeof window !== 'undefined' && (window.location.pathname.endsWith('donate.html') || window.location.pathname === '/donate');
     const isArtPage = typeof window !== 'undefined' && (window.location.pathname.endsWith('art.html') || window.location.pathname === '/art');
     const isGalleryPage = typeof window !== 'undefined' && (window.location.pathname.endsWith('gallery.html') || window.location.pathname === '/gallery');
-    const galleryLinkHtml = `<a href="/gallery.html" class="nav-link-gallery${isGalleryPage ? ' active' : ''}" title="${this.t('nav.gallery_title', 'Photo & Video Gallery')}"><span class="nav-gallery-icon">📸</span> <span>${this.t('nav.gallery', 'Gallery')}</span></a>`;
-    const artLinkHtml = `<a href="/art.html" class="nav-link-art${isArtPage ? ' active' : ''}" title="${this.t('nav.art_title', 'Community Art Studio')}"><span class="nav-art-icon">🎨</span> <span>${this.t('nav.art', 'Art')}</span></a>`;
+    // nav.art community art merged into nav.gallery (/art.html redirects to /gallery.html#community-art-section; nav-link-art alias)
+    const galleryLinkHtml = `<a href="/gallery.html" class="nav-link-gallery${isGalleryPage || isArtPage ? ' active' : ''}" title="${this.t('nav.gallery_title', 'Photo, Video & Art Gallery')}"><span class="nav-gallery-icon">📸</span> <span>${this.t('nav.gallery', 'Gallery & Art')}</span></a>`;
     const donateLinkHtml = `<a href="/donate.html" class="nav-link-donate${isDonatePage ? ' active' : ''}">${this.t('nav.donate')}</a>`;
 
     const langOptionsHtml = this.SUPPORTED_LANGUAGES.map(l =>
@@ -1538,7 +1544,6 @@ const API = {
         </a>
         <div class="nav-links">
           ${galleryLinkHtml}
-          ${artLinkHtml}
           ${donateLinkHtml}
           ${langSelectHtml}
           ${authHtml}
