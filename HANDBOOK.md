@@ -16,6 +16,7 @@ The entire app was built with **zero frontend build tools** (plain HTML, CSS, an
      - [Subscribing Your Phone or Computer Calendar (`Subscribe (.ics)`)](#-subscribing-your-phone-or-computer-calendar-subscribe-ics)
      - [Signing In (Passwordless Email Login)](#-signing-in-passwordless-email-login)
      - [Saving Your Login Email in Your Browser & Device](#saving-login-credentials)
+     - [How to Stay Logged In on Every Device (90-Day Session Persistence)](#how-to-stay-logged-in)
      - [Typical Rules of Play on the Field on Sundays](#rules-of-play)
      - [Submitting a Group RSVP (Players, Spectators & Volunteer Tasks)](#%EF%B8%8F-submitting-a-group-rsvp-players-spectators--volunteer-tasks)
      - [Waitlists & Automatic Promotion](#-waitlists--automatic-promotion)
@@ -299,6 +300,153 @@ If you manage your credentials using a password manager extension or mobile vaul
   1. **Uncheck** "Remember my email address on this device".
   2. Use a **Private / Incognito** window.
   3. When finished, always click **Log Out** from `/profile.html` or the top navigation bar to invalidate the session cookie on the server.
+
+---
+
+### 🔒 How to Stay Logged In on Every Device (90-Day Session Persistence)
+<a id="how-to-stay-logged-in"></a>
+
+Sunday Pickup Baseball uses a secure, long-lived session cookie (`baseball_session`) that keeps you logged in for **90 continuous days**. You should **never** need to log in every week or every time you open your browser.
+
+If you find that your phone, tablet, or laptop keeps logging you out prematurely, your browser or device is automatically deleting your session cookies. Follow this guide to configure your specific device so you stay signed in seamlessly.
+
+---
+
+#### 1. The #1 Reason for Unexpected Logouts: "In-App Browsers" (Email Apps)
+
+> [!IMPORTANT]
+> **This is the single most common reason players think they were logged out.**
+
+When you tap the **"1-Click Magic Sign-In Link"** from your email inbox in apps like **Gmail**, **Yahoo Mail**, **Outlook**, **Apple Mail**, or **Facebook / Instagram**, the email app usually opens the link inside an **in-app browser preview window** (not your real standalone Safari or Chrome browser).
+
+* **The Problem:** In-app browser windows operate in a temporary sandbox. When you close the email app, that sandbox—and your login cookie—is immediately deleted! Later, when you open Safari or Chrome to check the game, you aren't logged in.
+* **How to Fix It on iPhone / iPad:**
+  1. When viewing the website inside your email app's preview, tap the **Share icon** (box with arrow) or **Safari icon** in the bottom-right corner.
+  2. Tap **"Open in Safari"**.
+  3. Sign in here once. Now your login will persist in your real Safari browser for 90 days.
+* **How to Fix It on Android (Gmail App):**
+  1. Open the **Gmail app** > tap the **menu (☰)** in top-left > select **Settings**.
+  2. Tap **General settings**.
+  3. Scroll down and **UNCHECK** **"Open web links in Gmail"**.
+  4. Now, whenever you tap any link or sign-in email, it opens directly in Google Chrome where your session remains permanently active.
+* **How to Fix It on Microsoft Outlook Mobile:**
+  1. Open the Outlook app > tap your profile icon > tap **Settings (gear icon)** in bottom-left.
+  2. Under **Preferences**, tap **Open links in**.
+  3. Select **Default browser** (or **System browser**).
+
+---
+
+#### 2. The Best Experience: Install as a Home Screen App (PWA)
+
+> [!TIP]
+> **Adding the web app to your Home Screen is the best way to stay logged in forever.**
+> A Home Screen app runs in its own dedicated, standalone application container with dedicated storage. Even if you clear your general web browser tabs and history, your Home Screen app keeps its login session safe and intact!
+
+##### 🍎 iPhone & iPad (Safari)
+1. Open **Safari** and visit [pickupbaseballfoundation.org](https://www.pickupbaseballfoundation.org).
+2. Sign in to your account.
+3. Tap the **Share button** at the bottom of the screen (the square with an arrow pointing upward).
+4. Scroll down the sharing sheet and tap **Add to Home Screen** (➕).
+5. Tap **Add** in the top-right corner.
+6. A **Pickup Baseball** icon will appear on your home screen. Tap it to launch the app full-screen without address bars, and you will stay logged in for 90 days.
+
+##### 🤖 Android (Google Chrome & Samsung Internet)
+1. Open **Chrome** and navigate to [pickupbaseballfoundation.org](https://www.pickupbaseballfoundation.org).
+2. Sign in to your account.
+3. Tap the **three dots (⋮)** in the top-right corner.
+4. Tap **Install app** (or **Add to Home screen**).
+5. Confirm by tapping **Install**. Launch the app directly from your home screen or app drawer.
+
+##### 💻 Mac & Windows (Chrome, Edge & Brave)
+1. Visit [pickupbaseballfoundation.org](https://www.pickupbaseballfoundation.org) in Chrome, Edge, or Brave.
+2. Sign in to your account.
+3. Look at the right side of the address bar at the top: click the **Install icon** (a desktop monitor with a small down arrow).
+4. Click **Install**. The app opens in its own window and docks into your macOS Dock or Windows Taskbar.
+
+---
+
+#### 3. Browser-by-Browser Settings to Prevent Cookie Purging
+
+If you prefer using your regular browser tabs, ensure your browser is not configured to destroy cookies on exit:
+
+##### 🧭 Apple Safari (iPhone & iPad)
+1. Open iOS **Settings** > scroll down and tap **Safari**.
+2. Under **Privacy & Security**:
+   - Ensure **"Block All Cookies"** is toggled **OFF (Grey)**.
+3. On **iOS 17 and iOS 18**:
+   - Scroll down to the bottom of the Safari settings page and tap **Advanced**.
+   - Tap **Advanced Tracking and Fingerprinting Protection**.
+   - Set it to **"Private Browsing"** (do **NOT** set it to "All Browsing", as "All Browsing" aggressively wipes first-party storage partitions).
+4. **Avoid Private Browsing Mode:** Make sure Safari is not showing a black/dark search bar with "Private" selected, as Private mode erases all cookies the second the tab is closed.
+
+##### 🧭 Apple Safari (macOS Mac)
+1. Open Safari > click **Safari** in the top menu bar > **Settings...** (or press `Cmd + ,`).
+2. Click the **Privacy** tab.
+3. Verify that **"Block all cookies"** is **UNCHECKED**.
+4. In the **Advanced** tab: ensure "Use advanced tracking and fingerprinting protection" is set to "in private browsing" only.
+
+##### 🟢 Google Chrome (Windows, Mac & Android)
+1. In Chrome, click the **three dots (⋮)** > select **Settings**.
+2. Click **Privacy and security** in the left menu > click **Third-party cookies** (or **Site settings** > **Cookies**).
+3. Ensure **"Clear cookies and site data when you close all windows"** is **OFF**.
+4. **Whitelisting the Web App (Recommended if you keep auto-clear on):**
+   - Scroll down to **"Sites allowed to use cookies"** (or **"Always allow"**).
+   - Click **Add**.
+   - Enter `[*.]pickupbaseballfoundation.org`.
+   - Check the box for **"Including third-party cookies on this site"** and click **Add**.
+   - Chrome will now preserve your Sunday Pickup Baseball login indefinitely, even if you clear other cookies on browser close!
+
+##### 🦊 Mozilla Firefox (Windows, Mac & Android)
+1. Open Firefox > click the **menu (☰)** > **Settings**.
+2. Click **Privacy & Security** in the left navigation.
+3. Under **Enhanced Tracking Protection**, choose **Standard** (Strict mode can aggressively purge cookies).
+4. Under **Cookies and Site Data**:
+   - If **"Delete cookies and site data when Firefox is closed"** is checked, click the **"Manage Exceptions..."** button.
+   - Type `https://www.pickupbaseballfoundation.org`.
+   - Click **Allow**, then click **Save Changes**.
+
+##### 🦁 Brave Browser (Windows, Mac, Android, iOS)
+Brave includes aggressive built-in privacy shields that can sometimes wipe site storage:
+1. Visit [pickupbaseballfoundation.org](https://www.pickupbaseballfoundation.org).
+2. Click the orange **Brave Lion icon** directly in the address bar.
+3. Make sure **"Forget me when I close this site"** is turned **OFF**.
+4. In Brave **Settings** > **Shields**:
+   - Ensure Cookie control is set to **"Block cross-site cookies"** (Standard), **NOT** "Block all cookies".
+
+##### 🌊 Microsoft Edge (Windows & Mac)
+1. Open Edge > click **…** (three dots) > **Settings**.
+2. Click **Cookies and site permissions** in the left navigation.
+3. Click **Manage and delete cookies and site data**.
+4. Ensure **"Clear cookies and site data when you close the browser"** is **OFF**.
+5. Alternatively, under **Allow**, click **Add** and enter `[*.]pickupbaseballfoundation.org`.
+
+##### 📱 Samsung Internet (Galaxy Phones & Tablets)
+1. Open Samsung Internet > tap **Menu (☰)** in bottom-right > **Settings**.
+2. Tap **Personal browsing data** > **Accept cookies**.
+3. Ensure **"Allow all cookies"** or **"Block only third-party cookies"** is selected.
+4. Make sure **Secret Mode** is not enabled when logging in.
+
+---
+
+#### 4. Phone Cleaners & Optimizer Apps to Check
+
+If you find yourself logged out every few days without closing your browser, a third-party cleaner app may be purging your device's app storage in the background:
+* **Android Maintenance Cleaners:** Apps like **CCleaner**, **CleanMaster**, **Avast Cleanup**, or built-in utilities like **Samsung Device Care** / **Auto-optimize** feature an automated "Trash & Cache Cleaner".
+* **Solution:** Open your cleaner utility, find its **Settings / Protection / Whitelist**, and add **Google Chrome** (or your preferred browser, and the **Pickup Baseball** Home Screen app) to the **Exclusion List**.
+
+---
+
+#### 5. Quick 10-Second Diagnostic Checklist
+
+If you were suddenly logged out, check these 4 quick items:
+1. **Did you open the site from an email preview window?**
+   * *Fix:* Tap the options menu in the top or bottom corner and select **"Open in Safari"** or **"Open in Chrome"**.
+2. **Are you in a Private or Incognito tab?**
+   * *Fix:* Switch to a standard browser tab before requesting a code or magic link.
+3. **Did you recently clear your browser history?**
+   * *Fix:* When clearing browser history, uncheck **"Cookies and other site data"** so your active logins are not wiped.
+4. **Has it been 90 days since your last login?**
+   * *Fix:* Sessions expire every 90 days for account security. Simply enter your email at `/login.html` to renew your 90-day login.
 
 ---
 
