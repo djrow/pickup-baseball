@@ -1101,7 +1101,7 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
   });
 
   await t9.test('T9.3: All primary HTML pages contain PWA manifest & mobile meta tags', () => {
-    const htmlFiles = ['index.html', 'archive.html', 'event.html', 'admin.html', 'donate.html', 'login.html', 'profile.html'];
+    const htmlFiles = ['index.html', 'archive.html', 'event.html', 'admin.html', 'donate.html', 'login.html', 'profile.html', 'art.html'];
     for (const file of htmlFiles) {
       const filePath = path.join(publicDir, file);
       assert.ok(fs.existsSync(filePath), file + ' must exist');
@@ -1689,7 +1689,7 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(feedFunctionExists, 'functions/feed.xml.js must exist for Cloudflare Pages edge rendering');
 
     // 9. Verify zero ES2020+ incompatible syntax (?. or ??) in client JS
-    const jsFiles = ['api.js', 'app.js', 'admin.js', 'event.js', 'archive.js', 'login.js', 'profile.js', 'weather.js'];
+    const jsFiles = ['api.js', 'app.js', 'admin.js', 'event.js', 'archive.js', 'login.js', 'profile.js', 'weather.js', 'art.js'];
     for (const file of jsFiles) {
       const code = fs.readFileSync(path.join(publicDir, 'js', file), 'utf8');
       const lines = code.split('\n');
@@ -2147,5 +2147,46 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
         assert.equal(v, CURRENT_APP_VERSION, `${entry} asset ?v=${v} must match CURRENT_APP_VERSION (${CURRENT_APP_VERSION})`);
       }
     }
+  });
+
+  await t9.test('T9.23: Community Art Studio (Pixel Diamond, Equipment Trunk & Dugout Chalkboard)', async () => {
+    // 1. Verify art.html exists and contains the three shared art spaces
+    const artHtmlPath = path.join(publicDir, 'art.html');
+    assert.ok(fs.existsSync(artHtmlPath), 'public/art.html must exist');
+    const artHtml = fs.readFileSync(artHtmlPath, 'utf8');
+    assert.ok(artHtml.includes('id="pixel-diamond-canvas"'), 'art.html must contain #pixel-diamond-canvas');
+    assert.ok(artHtml.includes('id="trunk-canvas-stage"'), 'art.html must contain #trunk-canvas-stage');
+    assert.ok(artHtml.includes('id="chalkboard-canvas"'), 'art.html must contain #chalkboard-canvas');
+    assert.ok(artHtml.includes('/js/art.js'), 'art.html must script-load /js/art.js');
+    assert.ok(artHtml.includes('/js/api.js'), 'art.html must script-load /js/api.js');
+
+    // 2. Verify public/js/art.js exists and is valid strict ES6
+    const artJsPath = path.join(publicDir, 'js', 'art.js');
+    assert.ok(fs.existsSync(artJsPath), 'public/js/art.js must exist');
+    const artJsCode = fs.readFileSync(artJsPath, 'utf8');
+    assert.ok(!artJsCode.includes('?.'), 'art.js must not contain optional chaining (?.)');
+    assert.ok(!artJsCode.includes('??'), 'art.js must not contain nullish coalescing (??)');
+    assert.ok(artJsCode.includes('initPixelDiamond'), 'art.js must implement initPixelDiamond');
+    assert.ok(artJsCode.includes('initEquipmentTrunk'), 'art.js must implement initEquipmentTrunk');
+    assert.ok(artJsCode.includes('initDugoutChalkboard'), 'art.js must implement initDugoutChalkboard');
+
+    // 3. Verify top navigation links
+    const apiJs = fs.readFileSync(path.join(publicDir, 'js', 'api.js'), 'utf8');
+    assert.ok(apiJs.includes('nav-link-art'), 'api.js must render .nav-link-art in API.renderNav()');
+    assert.ok(apiJs.includes('/art.html'), 'api.js must link to /art.html');
+
+    const indexHtml = fs.readFileSync(path.join(publicDir, 'index.html'), 'utf8');
+    assert.ok(indexHtml.includes('href="/art.html"'), 'index.html must include static fallback link to /art.html');
+
+    // 4. Verify Service Worker and CSS styling
+    const swJs = fs.readFileSync(path.join(publicDir, 'sw.js'), 'utf8');
+    assert.ok(swJs.includes('/art.html'), 'sw.js must cache /art.html');
+    assert.ok(swJs.includes('/js/art.js'), 'sw.js must cache /js/art.js');
+
+    const styleCss = fs.readFileSync(path.join(publicDir, 'css', 'style.css'), 'utf8');
+    assert.ok(styleCss.includes('.nav-link-art'), 'style.css must define .nav-link-art');
+    assert.ok(styleCss.includes('.pixel-canvas-frame'), 'style.css must define .pixel-canvas-frame');
+    assert.ok(styleCss.includes('.trunk-outer-box'), 'style.css must define .trunk-outer-box');
+    assert.ok(styleCss.includes('.chalkboard-frame'), 'style.css must define .chalkboard-frame');
   });
 });

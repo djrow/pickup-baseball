@@ -295,7 +295,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '52',
+  CLIENT_VERSION: '53',
 
   // Current user cache
   currentUser: null,
@@ -1494,6 +1494,8 @@ const API = {
     }
 
     const isDonatePage = typeof window !== 'undefined' && (window.location.pathname.endsWith('donate.html') || window.location.pathname === '/donate');
+    const isArtPage = typeof window !== 'undefined' && (window.location.pathname.endsWith('art.html') || window.location.pathname === '/art');
+    const artLinkHtml = `<a href="/art.html" class="nav-link-art${isArtPage ? ' active' : ''}" title="${this.t('nav.art_title', 'Community Art Studio')}"><span class="nav-art-icon">🎨</span> <span>${this.t('nav.art', 'Art')}</span></a>`;
     const donateLinkHtml = `<a href="/donate.html" class="nav-link-donate${isDonatePage ? ' active' : ''}">${this.t('nav.donate')}</a>`;
 
     const langOptionsHtml = this.SUPPORTED_LANGUAGES.map(l =>
@@ -1509,6 +1511,7 @@ const API = {
           <span class="brand-short">PBF</span>
         </a>
         <div class="nav-links">
+          ${artLinkHtml}
           ${donateLinkHtml}
           ${langSelectHtml}
           ${authHtml}
