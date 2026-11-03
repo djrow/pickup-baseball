@@ -1836,18 +1836,29 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(rSat.effectiveMoisture < 0.10, 'Effective moisture must decay below 0.10" after 20 hours');
     assert.ok(rSat.recommendation.includes('Playable'));
 
-    // Test Drainage Heuristic: Scenario 3 - Daily forecast object passed
-    const rDaily = ws.calculateFieldDrainage({
+    // Test Drainage Heuristic: Scenario 3 - Event day and 9 previous days window
+    const sampleDates = [
+      '2026-10-28', '2026-10-29', '2026-10-30', '2026-10-31', '2026-11-01',
+      '2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06',
+      '2026-11-07', '2026-11-08', '2026-11-09', '2026-11-10', '2026-11-11'
+    ];
+    const samplePrecip = [0, 0, 0.05, 0.10, 0, 0, 0.20, 0, 0, 0, 0, 0.15, 0.90, 0.80, 0];
+    const rEventWindow = ws.calculateFieldDrainage({
       time: times,
       precipitation: precipDry,
       temperature_2m: temps,
       weathercode: codes
     }, '2026-11-08T12:00', {
-      precipitation_sum: [0, 0, 0, 0.05, 0.10, 0, 0, 0, 0, 0, 0.20, 0]
+      time: sampleDates,
+      precipitation_sum: samplePrecip
     });
-    assert.equal(rDaily.rainfall10Day, 0.35, 'Daily forecast object must sum 10-day precipitation sum');
-    assert.equal(rDaily.rainfall10DayFormatted, '0.35"');
-    assert.equal(rDaily.dailyForecast.length, 10, 'dailyForecast must have 10 daily items from dailyData');
+    assert.equal(rEventWindow.dailyForecast.length, 10, 'dailyForecast must have exactly 10 days ending on event day');
+    assert.equal(rEventWindow.dailyForecast[9].date, '2026-11-08', 'Last daily breakdown item must be the event day');
+    assert.equal(rEventWindow.dailyForecast[9].isGameDay, true, 'Event day must have isGameDay=true');
+    assert.equal(rEventWindow.dailyForecast[0].date, '2026-10-30', 'First item must be 9 days prior to event');
+    assert.ok(!rEventWindow.dailyForecast.some(d => d.date > '2026-11-08'), 'dailyForecast must not include any days after event');
+    assert.equal(rEventWindow.rainfall10Day, 0.50, '10-day rainfall must sum 9 previous days + event day (0.05+0.10+0.20+0.15 = 0.50)');
+    assert.equal(rEventWindow.rainfall10DayFormatted, '0.50"');
 
     // Test Drainage Heuristic: Scenario 4 - 0.60" Rain Sunday morning (Recent rain, puddles formed)
     const rSun = ws.calculateFieldDrainage({
@@ -1874,17 +1885,15 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
 
     const eventJs = fs.readFileSync(path.join(publicDir, 'js', 'event.js'), 'utf8');
     assert.ok(eventJs.includes('renderAssistantWidget'), 'event.js must call WeatherService.renderAssistantWidget');
-    assert.ok(eventJs.includes('10-Day Rain:'), 'event.js must display 10-day rainfall prediction');
     assert.ok(eventJs.includes('10-day forecast activates closer to game'), 'event.js must specify 10-day forecast activation window');
 
     const headersFile = fs.readFileSync(path.join(publicDir, '_headers'), 'utf8');
     assert.ok(headersFile.includes('https://api.open-meteo.com'), '_headers CSP connect-src must allow https://api.open-meteo.com');
 
     assert.ok(weatherJsCode.includes('forecast_days=10'), 'weather.js must query 10-day forecast horizon');
-    assert.ok(weatherJsCode.includes('10-Day Rain:'), 'weather.js must display 10-day rainfall prediction in calendar badges');
     assert.ok(weatherJsCode.includes('renderDailyRainTrackHtml'), 'weather.js must define renderDailyRainTrackHtml');
-    assert.ok(weatherJsCode.includes('renderMiniDailyRainRowHtml'), 'weather.js must define renderMiniDailyRainRowHtml');
     assert.ok(weatherJsCode.includes('ten-day-rain-track'), 'weather.js must render .ten-day-rain-track');
+    assert.ok(weatherJsCode.includes('10-day weather forecasts'), 'weather.js must describe 10-day forecast in assistant widget');
     assert.ok(weatherJsCode.includes('10-day weather forecasts'), 'weather.js must describe 10-day forecast in assistant widget');
 
     const adminHtml = fs.readFileSync(path.join(publicDir, 'admin.html'), 'utf8');

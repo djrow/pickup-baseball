@@ -171,7 +171,7 @@
       '&precipitation_unit=inch' +
       '&timezone=America%2FLos_Angeles' +
       '&forecast_days=10' +
-      '&past_days=2';
+      '&past_days=10';
 
     var res = await fetch(url);
     if (!res.ok) {
@@ -190,31 +190,36 @@
   }
 
   /**
-   * Helper: Build 10-day daily forecast breakdown from dailyData or hourlyData
+   * Helper: Build 10-day daily forecast breakdown for the event day and 9 previous days
    */
   function buildDailyForecast(dailyData, hourlyData, targetDateKey) {
     var days = [];
     var weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-    if (dailyData && Array.isArray(dailyData.precipitation_sum) && dailyData.precipitation_sum.length > 0) {
-      var slicePrecip = dailyData.precipitation_sum.slice(-10);
-      var sliceTimes = (dailyData.time && Array.isArray(dailyData.time)) ? dailyData.time.slice(-10) : [];
-      var sliceCodes = (dailyData.weathercode && Array.isArray(dailyData.weathercode)) ? dailyData.weathercode.slice(-10) : [];
-      var sliceProb = (dailyData.precipitation_probability_max && Array.isArray(dailyData.precipitation_probability_max)) ? dailyData.precipitation_probability_max.slice(-10) : [];
-      var sliceMax = (dailyData.temperature_2m_max && Array.isArray(dailyData.temperature_2m_max)) ? dailyData.temperature_2m_max.slice(-10) : [];
-      var sliceMin = (dailyData.temperature_2m_min && Array.isArray(dailyData.temperature_2m_min)) ? dailyData.temperature_2m_min.slice(-10) : [];
+    if (dailyData && Array.isArray(dailyData.time) && dailyData.time.length > 0) {
+      var targetIdx = -1;
+      if (targetDateKey) {
+        targetIdx = dailyData.time.indexOf(targetDateKey);
+      }
+      var endIdx = targetIdx !== -1 ? targetIdx + 1 : dailyData.time.length;
+      var startIdx = Math.max(0, endIdx - 10);
 
-      for (var i = 0; i < slicePrecip.length; i++) {
-        var dateStr = sliceTimes[i] || '';
+      var sliceTimes = dailyData.time.slice(startIdx, endIdx);
+      var slicePrecip = dailyData.precipitation_sum ? dailyData.precipitation_sum.slice(startIdx, endIdx) : [];
+      var sliceCodes = dailyData.weathercode ? dailyData.weathercode.slice(startIdx, endIdx) : [];
+      var sliceProb = dailyData.precipitation_probability_max ? dailyData.precipitation_probability_max.slice(startIdx, endIdx) : [];
+      var sliceMax = dailyData.temperature_2m_max ? dailyData.temperature_2m_max.slice(startIdx, endIdx) : [];
+      var sliceMin = dailyData.temperature_2m_min ? dailyData.temperature_2m_min.slice(startIdx, endIdx) : [];
+
+      for (var i = 0; i < sliceTimes.length; i++) {
+        var dateStr = sliceTimes[i];
+        var parts = dateStr.split('-');
         var weekdayShort = '';
         var monthDay = '';
-        if (dateStr) {
-          var parts = dateStr.split('-');
-          if (parts.length === 3) {
-            var dateObj = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), 12, 0, 0);
-            weekdayShort = weekdays[dateObj.getDay()] || '';
-            monthDay = parseInt(parts[1], 10) + '/' + parseInt(parts[2], 10);
-          }
+        if (parts.length === 3) {
+          var dateObj = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), 12, 0, 0);
+          weekdayShort = weekdays[dateObj.getDay()] || '';
+          monthDay = parseInt(parts[1], 10) + '/' + parseInt(parts[2], 10);
         }
         var rainVal = Math.round((Number(slicePrecip[i]) || 0) * 100) / 100;
         var code = sliceCodes[i] || 0;
@@ -232,7 +237,23 @@
           prob: sliceProb[i] != null ? Math.round(sliceProb[i]) : null,
           tempMax: sliceMax[i] != null ? Math.round(sliceMax[i]) : null,
           tempMin: sliceMin[i] != null ? Math.round(sliceMin[i]) : null,
-          isGameDay: Boolean(targetDateKey && dateStr && dateStr === targetDateKey)
+          isGameDay: Boolean(targetDateKey && dateStr === targetDateKey)
+        });
+      }
+    } else if (dailyData && Array.isArray(dailyData.precipitation_sum) && dailyData.precipitation_sum.length > 0) {
+      var pSlice = dailyData.precipitation_sum.slice(-10);
+      for (var pi = 0; pi < pSlice.length; pi++) {
+        var pVal = Math.round((Number(pSlice[pi]) || 0) * 100) / 100;
+        days.push({
+          date: '',
+          dayName: 'Day ' + (pi + 1),
+          dayMonth: '',
+          rain: pVal,
+          rainFormatted: pVal.toFixed(2) + '"',
+          code: 0,
+          emoji: '☀️',
+          condition: 'Clear',
+          isGameDay: pi === pSlice.length - 1
         });
       }
     } else if (hourlyData && Array.isArray(hourlyData.time) && hourlyData.time.length > 0) {
@@ -254,7 +275,14 @@
           byDate[dKey].temps.push(hourlyData.temperature_2m[h]);
         }
       }
-      var sliceDateKeys = dateOrder.slice(-10);
+      var hTargetIdx = -1;
+      if (targetDateKey) {
+        hTargetIdx = dateOrder.indexOf(targetDateKey);
+      }
+      var hEndIdx = hTargetIdx !== -1 ? hTargetIdx + 1 : dateOrder.length;
+      var hStartIdx = Math.max(0, hEndIdx - 10);
+      var sliceDateKeys = dateOrder.slice(hStartIdx, hEndIdx);
+
       for (var j = 0; j < sliceDateKeys.length; j++) {
         var dk = sliceDateKeys[j];
         var item = byDate[dk];
@@ -654,7 +682,7 @@
             <div style="font-size: 1.1rem; font-weight: 800; color: var(--secondary); margin-top: 2px;">
               🌧️ ${r.rainfall10DayFormatted}
             </div>
-            <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">10-day forecast accumulation</div>
+            <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">Event day &amp; 9 previous days</div>
           </div>
 
           <div style="background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px;">
@@ -694,10 +722,10 @@
           <div style="margin-top: 14px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px;">
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
               <div style="font-size: 0.8rem; font-weight: 700; color: var(--secondary); display: inline-flex; align-items: center; gap: 5px;">
-                🌧️ <strong>10-Day Rainfall Prediction (Daily Breakdown)</strong>
+                🌧️ <strong>10-Day Rainfall Prediction: ${r.rainfall10DayFormatted}</strong>
               </div>
               <div style="font-size: 0.74rem; color: var(--text-muted); font-weight: 600;">
-                10-Day Forecast Total: <strong style="color: var(--secondary);">${r.rainfall10DayFormatted}</strong>
+                Event day &amp; 9 previous days
               </div>
             </div>
             ${renderDailyRainTrackHtml(r.dailyForecast)}
@@ -735,18 +763,11 @@
         if (forecast && forecast.available) {
           var matched = document.querySelectorAll('[data-weather-date="' + dk + '"]');
           matched.forEach(function(el) {
-            var miniRow = renderMiniDailyRainRowHtml(forecast.dailyForecast);
             el.innerHTML =
-              '<div style="display: inline-flex; align-items: center; gap: 4px; width: 100%; flex-wrap: wrap;">' +
-                '<span class="weather-card-pill ' + forecast.badgeClass + '" title="' + forecast.condition + ' · Prev 24h Rain: ' + forecast.totalRain24hFormatted + ' (' + forecast.statusLabel + ')">' +
-                  '<span>' + forecast.emoji + '</span> <span>' + forecast.temperature + '°F</span>' +
-                '</span>' +
-                '<span class="weather-card-pill weather-rain-pill" title="10-Day Rainfall Prediction: ' + forecast.rainfall10DayFormatted + '">' +
-                  '<span>🌧️ 10-Day Rain: ' + forecast.rainfall10DayFormatted + '</span>' +
-                '</span>' +
-              '</div>' +
-              miniRow;
-            el.style.display = 'block';
+              '<span class="weather-card-pill ' + forecast.badgeClass + '" title="' + forecast.condition + ' · Prev 24h Rain: ' + forecast.totalRain24hFormatted + ' (' + forecast.statusLabel + ')">' +
+                '<span>' + forecast.emoji + '</span> <span>' + forecast.temperature + '°F</span>' +
+              '</span>';
+            el.style.display = 'inline-flex';
           });
         }
       } catch (e) {}

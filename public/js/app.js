@@ -594,18 +594,17 @@ function renderCalendarDrawer(dateKey, game, isPast) {
       if (fc && fc.available) {
         if (wEl) {
           wEl.innerHTML = '<span>' + fc.emoji + '</span> <strong>' + fc.temperature + '°F ' + API.escapeHtml(fc.condition) + '</strong> ' +
-            '<span class="drawer-rain-prediction" style="display: inline-flex; align-items: center; gap: 4px; font-weight: 700; color: var(--secondary); background: var(--bg-subtle); padding: 2px 8px; border-radius: var(--radius-full); border: 1px solid var(--border); font-size: 0.8rem;">🌧️ <strong>10-Day Rainfall Prediction:</strong> ' + fc.rainfall10DayFormatted + '</span> ' +
-            '<span style="font-size: 0.8rem; color: var(--text-muted);">(' + fc.totalRain24hFormatted + ' in 24h prior &bull; ' + API.escapeHtml(fc.statusLabel) + ')</span>';
+            '<span style="font-size: 0.8rem; color: var(--text-muted);">(' + fc.totalRain24hFormatted + ' rain in 24h prior &bull; ' + API.escapeHtml(fc.statusLabel) + ')</span>';
           wEl.style.display = 'inline-flex';
         }
         if (stripEl && fc.dailyForecast && fc.dailyForecast.length > 0 && typeof window.WeatherService.renderDailyRainTrackHtml === 'function') {
           stripEl.innerHTML =
             '<div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 6px;">' +
               '<span style="font-size: 0.82rem; font-weight: 700; color: var(--secondary); display: inline-flex; align-items: center; gap: 5px;">' +
-                '🌧️ <strong>10-Day Rainfall Prediction (Daily Breakdown)</strong>' +
+                '🌧️ <strong>10-Day Rainfall Prediction: ' + fc.rainfall10DayFormatted + '</strong>' +
               '</span>' +
-              '<span style="font-size: 0.76rem; color: var(--text-muted); font-weight: 600;">' +
-                '10-Day Total: <strong style="color: var(--secondary);">' + fc.rainfall10DayFormatted + '</strong>' +
+              '<span style="font-size: 0.74rem; color: var(--text-muted); font-weight: 600;">' +
+                'Event day &amp; 9 previous days' +
               '</span>' +
             '</div>' +
             window.WeatherService.renderDailyRainTrackHtml(fc.dailyForecast);
