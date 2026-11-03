@@ -1,6 +1,6 @@
 /**
  * public/js/gallery.js
- * Community Photo & Video Gallery and Zero-Login Media Drop
+ * Community Photo & Video Gallery with Full-Width Chronological Carousels
  * Sunday Pickup Baseball Charity Platform
  *
  * Strict ES6 compatible (No optional chaining or nullish coalescing).
@@ -9,7 +9,6 @@
 (function() {
   'use strict';
 
-  var currentFilterType = 'all';
   var currentSortOrder = 'desc';
   var galleryMedia = [];
   var galleryAlbums = [];
@@ -80,6 +79,8 @@
     setupToolbarListeners();
     setupSubmissionForm();
     setupLightbox();
+    setupCarouselPaddles();
+
     await loadGalleryData();
 
     // Check if URL contains an album anchor
@@ -87,7 +88,7 @@
       var targetSlug = window.location.hash.replace('#album-', '');
       setTimeout(function() {
         jumpToAlbum(targetSlug);
-      }, 350);
+      }, 400);
     }
   }
 
@@ -100,7 +101,6 @@
 
     try {
       var data = await API.getMedia({
-        type: currentFilterType,
         order: currentSortOrder
       });
 
@@ -108,17 +108,18 @@
       galleryAlbums = data && data.albums ? data.albums : [];
 
       updateCounts();
+      updateTimelineLabels();
       renderAlbumBookmarks();
-      renderVideos();
       renderPhotos();
+      renderVideos();
       populateAlbumSelectOptions();
     } catch (err) {
       console.error('[Gallery] Failed to load media:', err);
       if (photosContainer) {
-        photosContainer.innerHTML = '<div class="alert alert-error">Failed to load photo gallery: ' + API.escapeHtml(err.message || 'Server error') + '</div>';
+        photosContainer.innerHTML = '<div class="alert alert-error" style="margin: 20px;">Failed to load photo carousel: ' + API.escapeHtml(err.message || 'Server error') + '</div>';
       }
       if (videosContainer) {
-        videosContainer.innerHTML = '<div class="alert alert-error">Failed to load video releases.</div>';
+        videosContainer.innerHTML = '<div class="alert alert-error" style="margin: 20px;">Failed to load video carousel.</div>';
       }
     }
   }
@@ -138,28 +139,52 @@
     if (countAll) countAll.textContent = String(galleryMedia.length);
     if (countPhotos) countPhotos.textContent = String(photoCount);
     if (countVideos) countVideos.textContent = String(videoCount);
+  }
 
-    var orderLabel = currentSortOrder === 'asc' ? 'Chronological (Oldest First)' : 'Chronological (Newest First)';
-    var vLabel = document.getElementById('video-order-label');
-    var pLabel = document.getElementById('photo-order-label');
-    if (vLabel) vLabel.textContent = orderLabel;
-    if (pLabel) pLabel.textContent = orderLabel;
+  function updateTimelineLabels() {
+    var isDesc = currentSortOrder === 'desc';
+
+    // Photos Ribbon & Edge Hint labels
+    var pRibbonLeft = document.getElementById('photos-ribbon-left-text');
+    var pRibbonRight = document.getElementById('photos-ribbon-right-text');
+    var pEdgeLeft = document.getElementById('photos-edge-left-label');
+    var pEdgeRight = document.getElementById('photos-edge-right-label');
+
+    if (pRibbonLeft) pRibbonLeft.textContent = isDesc ? 'Later (Newer)' : 'Earlier (Past)';
+    if (pRibbonRight) pRibbonRight.textContent = isDesc ? 'Earlier (Past Moments)' : 'Later (Newer Moments)';
+    if (pEdgeLeft) pEdgeLeft.textContent = isDesc ? 'Newer' : 'Earlier';
+    if (pEdgeRight) pEdgeRight.textContent = isDesc ? 'Earlier' : 'Newer';
+
+    // Videos Ribbon & Edge Hint labels
+    var vRibbonLeft = document.getElementById('videos-ribbon-left-text');
+    var vRibbonRight = document.getElementById('videos-ribbon-right-text');
+    var vEdgeLeft = document.getElementById('videos-edge-left-label');
+    var vEdgeRight = document.getElementById('videos-edge-right-label');
+
+    if (vRibbonLeft) vRibbonLeft.textContent = isDesc ? 'Later (Newer)' : 'Earlier (Past)';
+    if (vRibbonRight) vRibbonRight.textContent = isDesc ? 'Earlier (Past Releases)' : 'Later (Newer Releases)';
+    if (vEdgeLeft) vEdgeLeft.textContent = isDesc ? 'Newer' : 'Earlier';
+    if (vEdgeRight) vEdgeRight.textContent = isDesc ? 'Earlier' : 'Newer';
   }
 
   // ---------------------------------------------------------------------------
-  // 3. Album Bookmarks Bar (Quick Jump Navigation)
+  // 3. Album Bookmarks Bar (Quick Jump Navigation into Photo Carousel)
   // ---------------------------------------------------------------------------
   function renderAlbumBookmarks() {
     var container = document.getElementById('album-bookmarks-bar');
     if (!container) return;
 
-    var html = '<button type="button" class="album-bookmark-pill active" data-album="all"><span>🌟 All Albums (' + galleryMedia.length + ')</span></button>';
+    var photoCount = 0;
+    for (var i = 0; i < galleryMedia.length; i++) {
+      if (galleryMedia[i].media_type === 'photo') photoCount++;
+    }
+
+    var html = '<button type="button" class="album-bookmark-pill active" data-album="all"><span>🌟 All Albums (' + photoCount + ')</span></button>';
 
     if (galleryAlbums && galleryAlbums.length > 0) {
-      for (var i = 0; i < galleryAlbums.length; i++) {
-        var alb = galleryAlbums[i];
+      for (var a = 0; a < galleryAlbums.length; a++) {
+        var alb = galleryAlbums[a];
         var slug = slugify(alb.album);
-        var dateSpan = alb.latest_date ? formatDisplayDate(alb.latest_date) : '';
         html += '<button type="button" class="album-bookmark-pill" data-album-slug="' + API.escapeHtml(slug) + '" data-album-name="' + API.escapeHtml(alb.album) + '">';
         html += '<span>📌 ' + API.escapeHtml(alb.album) + '</span>';
         html += '<span class="badge" style="background: rgba(0,56,49,0.12); color: var(--secondary); font-size: 0.75rem; margin-left: 4px;">' + alb.count + '</span>';
@@ -176,9 +201,7 @@
 
         var slug = btn.getAttribute('data-album-slug');
         if (!slug || slug === 'all') {
-          var photosSection = document.getElementById('photos-section');
-          if (photosSection) photosSection.scrollIntoView({ behavior: 'smooth' });
-          if (history.pushState) history.pushState(null, null, '#');
+          jumpToAlbum('all');
         } else {
           jumpToAlbum(slug);
         }
@@ -186,14 +209,37 @@
     });
   }
 
+  /**
+   * Jump photo carousel directly to the first photo in that particular album.
+   */
   function jumpToAlbum(slug) {
-    var target = document.getElementById('album-' + slug);
-    if (target) {
-      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      target.classList.add('album-container-highlight');
+    var photoTrack = document.getElementById('photos-albums-container');
+    if (!photoTrack) return;
+
+    if (!slug || slug === 'all') {
+      photoTrack.scrollTo({ left: 0, behavior: 'smooth' });
+      highlightActiveBookmark('all');
+      if (history.pushState) history.pushState(null, null, '#');
+      return;
+    }
+
+    // Find the first photo card belonging to this album
+    var targetCard = photoTrack.querySelector('.photo-card[data-album-slug="' + slug + '"]');
+    if (targetCard) {
+      // Calculate scroll offset within horizontal track
+      var targetOffsetLeft = targetCard.offsetLeft - photoTrack.offsetLeft;
+      photoTrack.scrollTo({
+        left: Math.max(0, targetOffsetLeft - 16),
+        behavior: 'smooth'
+      });
+
+      // Provide visual flash highlight on the targeted photo
+      targetCard.classList.add('photo-jump-focus');
       setTimeout(function() {
-        target.classList.remove('album-container-highlight');
-      }, 1800);
+        targetCard.classList.remove('photo-jump-focus');
+      }, 1900);
+
+      highlightActiveBookmark(slug);
 
       if (history.pushState) {
         history.pushState(null, null, '#album-' + slug);
@@ -201,8 +247,139 @@
     }
   }
 
+  function highlightActiveBookmark(slug) {
+    var container = document.getElementById('album-bookmarks-bar');
+    if (!container) return;
+
+    container.querySelectorAll('.album-bookmark-pill').forEach(function(btn) {
+      var s = btn.getAttribute('data-album-slug');
+      if ((!slug || slug === 'all') && (!s || s === 'all')) {
+        btn.classList.add('active');
+        btn.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
+      } else if (s === slug) {
+        btn.classList.add('active');
+        btn.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
+      } else {
+        btn.classList.remove('active');
+      }
+    });
+  }
+
   // ---------------------------------------------------------------------------
-  // 4. Render Videos (YouTube & Direct Clips Chronological Stream)
+  // 4. Render Photo Carousel (Full-Width, Compact Vertical Height, Horizontal)
+  // ---------------------------------------------------------------------------
+  function renderPhotos() {
+    var container = document.getElementById('photos-albums-container');
+    var section = document.getElementById('photos-section');
+    if (!container || !section) return;
+
+    var photos = [];
+    for (var i = 0; i < galleryMedia.length; i++) {
+      var item = galleryMedia[i];
+      if (item.media_type === 'photo') {
+        photos.push(item);
+      }
+    }
+
+    currentPhotoItems = photos;
+
+    if (photos.length === 0) {
+      container.innerHTML = '<div style="padding: 40px; text-align: center; color: var(--text-muted); width: 100%;"><span style="font-size: 1.8rem;">📸</span><br>No photos uploaded yet. Use the media drop below to add Sunday game memories!</div>';
+      updateCarouselEdgeHints(container, 'photos-paddle-prev', 'photos-paddle-next', 'photos-edge-left', 'photos-edge-right');
+      return;
+    }
+
+    var isManager = Boolean(currentUser && currentUser.canManageEvents);
+
+    var html = photos.map(function(pt, idx) {
+      var ptDate = formatDisplayDate(pt.date_taken);
+      var ptContributor = pt.contributor_name ? API.escapeHtml(pt.contributor_name) : 'Community';
+      var ptTitle = pt.title ? API.escapeHtml(pt.title) : '';
+      var ptAlbum = pt.album || 'General';
+      var ptAlbumSlug = slugify(ptAlbum);
+      var safeImgUrl = API.safeUrl ? API.safeUrl(pt.file_url) : pt.file_url;
+
+      var deleteBtn = isManager ? `
+        <button type="button" class="btn-delete-photo" data-media-id="${pt.id}" title="Delete Photo">✕</button>
+      ` : '';
+
+      return `
+        <div class="photo-card" id="photo-card-${pt.id}" data-global-index="${idx}" data-album-slug="${API.escapeHtml(ptAlbumSlug)}" data-album-name="${API.escapeHtml(ptAlbum)}">
+          <div class="photo-card-img-wrap">
+            <img src="${API.escapeHtml(safeImgUrl)}" alt="${ptTitle || 'Baseball Photo'}" loading="lazy" class="photo-card-img">
+            <div class="photo-card-overlay">
+              <div class="photo-card-meta-row">
+                <span>📅 ${API.escapeHtml(ptDate)}</span>
+                <span class="photo-card-album-tag" title="Album: ${API.escapeHtml(ptAlbum)}">📌 ${API.escapeHtml(ptAlbum)}</span>
+              </div>
+              ${ptTitle ? `<div class="photo-card-caption">${ptTitle}</div>` : ''}
+            </div>
+            ${deleteBtn}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    container.innerHTML = html;
+
+    // Attach Lightbox click handlers
+    container.querySelectorAll('.photo-card').forEach(function(card) {
+      card.addEventListener('click', function(e) {
+        if (e.target.classList.contains('btn-delete-photo')) return;
+        var idx = parseInt(card.getAttribute('data-global-index'), 10);
+        if (!isNaN(idx)) openLightbox(idx);
+      });
+    });
+
+    // Attach Admin Delete listeners
+    container.querySelectorAll('.btn-delete-photo').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var id = btn.getAttribute('data-media-id');
+        handleDeleteMedia(id);
+      });
+    });
+
+    // Setup scroll listeners for photo carousel hints
+    updateCarouselEdgeHints(container, 'photos-paddle-prev', 'photos-paddle-next', 'photos-edge-left', 'photos-edge-right');
+    container.addEventListener('scroll', function() {
+      updateCarouselEdgeHints(container, 'photos-paddle-prev', 'photos-paddle-next', 'photos-edge-left', 'photos-edge-right');
+      syncPhotoScrollWithBookmarks();
+    }, { passive: true });
+  }
+
+  /**
+   * Sync active bookmark pill as user scrolls horizontally through the photo carousel.
+   */
+  var scrollSyncTimeout = null;
+  function syncPhotoScrollWithBookmarks() {
+    if (scrollSyncTimeout) clearTimeout(scrollSyncTimeout);
+    scrollSyncTimeout = setTimeout(function() {
+      var photoTrack = document.getElementById('photos-albums-container');
+      if (!photoTrack) return;
+
+      var cards = photoTrack.querySelectorAll('.photo-card');
+      if (!cards || cards.length === 0) return;
+
+      var trackLeft = photoTrack.scrollLeft;
+      var currentVisibleSlug = null;
+
+      for (var i = 0; i < cards.length; i++) {
+        var card = cards[i];
+        if (card.offsetLeft >= trackLeft - 20) {
+          currentVisibleSlug = card.getAttribute('data-album-slug');
+          break;
+        }
+      }
+
+      if (currentVisibleSlug) {
+        highlightActiveBookmark(currentVisibleSlug);
+      }
+    }, 150);
+  }
+
+  // ---------------------------------------------------------------------------
+  // 5. Render Video Carousel (Full-Width, Dedicated Section)
   // ---------------------------------------------------------------------------
   function renderVideos() {
     var container = document.getElementById('videos-grid-container');
@@ -217,14 +394,9 @@
       }
     }
 
-    if (currentFilterType === 'photo') {
-      section.style.display = 'none';
-      return;
-    }
-    section.style.display = 'block';
-
     if (videos.length === 0) {
-      container.innerHTML = '<div class="feed-empty-state"><div class="feed-empty-state-icon">🎬</div><div class="feed-empty-state-title">No Video Releases Yet</div><p class="feed-empty-state-desc">Use the submission form below to add YouTube game highlights or clinic videos!</p></div>';
+      container.innerHTML = '<div style="padding: 40px; text-align: center; color: var(--text-muted); width: 100%;"><span style="font-size: 1.8rem;">🎬</span><br>No video releases yet. Paste YouTube highlights in the submission form below!</div>';
+      updateCarouselEdgeHints(container, 'videos-paddle-prev', 'videos-paddle-next', 'videos-edge-left', 'videos-edge-right');
       return;
     }
 
@@ -263,23 +435,22 @@
       }
 
       var adminDeleteBtn = isManager ? `
-        <button type="button" class="btn btn-outline btn-xs btn-delete-media" data-media-id="${vid.id}" style="color: var(--danger); border-color: #fca5a5; margin-left: auto;">
+        <button type="button" class="btn btn-outline btn-xs btn-delete-media" data-media-id="${vid.id}" style="color: var(--danger); border-color: #fca5a5; margin-left: auto; padding: 2px 6px;">
           🗑️ Delete
         </button>
       ` : '';
 
       return `
-        <div class="card video-card" data-video-id="${vid.id}">
+        <div class="video-card" data-video-id="${vid.id}">
           ${playerHtml}
           <div class="video-card-body">
-            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
-              <span class="badge badge-orange" style="font-size: 0.78rem;">📅 ${API.escapeHtml(dateLabel)}</span>
-              <span class="badge" style="background: var(--bg-subtle); color: var(--text-muted); font-size: 0.78rem;">📌 ${albumTag}</span>
-              <span style="font-size: 0.8rem; color: var(--text-muted);">By ${contributor}</span>
+            <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px; flex-wrap: wrap;">
+              <span class="badge badge-orange" style="font-size: 0.72rem; padding: 2px 6px;">📅 ${API.escapeHtml(dateLabel)}</span>
+              <span class="badge" style="background: var(--bg-subtle); color: var(--text-muted); font-size: 0.72rem; padding: 2px 6px;">📌 ${albumTag}</span>
               ${adminDeleteBtn}
             </div>
-            <h3 style="font-size: 1.1rem; color: var(--text-main); margin: 0 0 6px 0; line-height: 1.3;">${title}</h3>
-            ${caption ? `<p style="font-size: 0.88rem; color: var(--text-muted); margin: 0; line-height: 1.4;">${caption}</p>` : ''}
+            <h3 style="font-size: 0.95rem; color: var(--text-main); margin: 0 0 2px 0; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${title}</h3>
+            <p style="font-size: 0.78rem; color: var(--text-muted); margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">By ${contributor}${caption ? ' · ' + caption : ''}</p>
           </div>
         </div>
       `;
@@ -311,158 +482,84 @@
         handleDeleteMedia(id);
       });
     });
+
+    // Setup scroll listeners for video carousel hints
+    updateCarouselEdgeHints(container, 'videos-paddle-prev', 'videos-paddle-next', 'videos-edge-left', 'videos-edge-right');
+    container.addEventListener('scroll', function() {
+      updateCarouselEdgeHints(container, 'videos-paddle-prev', 'videos-paddle-next', 'videos-edge-left', 'videos-edge-right');
+    }, { passive: true });
   }
 
   // ---------------------------------------------------------------------------
-  // 5. Render Photos (Grouped by Album in Chronological Order)
+  // 6. Carousel Paddles & Edge Hints Controller
   // ---------------------------------------------------------------------------
-  function renderPhotos() {
-    var container = document.getElementById('photos-albums-container');
-    var section = document.getElementById('photos-section');
-    if (!container || !section) return;
+  function setupCarouselPaddles() {
+    var pTrack = document.getElementById('photos-albums-container');
+    var pPrev = document.getElementById('photos-paddle-prev');
+    var pNext = document.getElementById('photos-paddle-next');
 
-    var photos = [];
-    for (var i = 0; i < galleryMedia.length; i++) {
-      var item = galleryMedia[i];
-      if (item.media_type === 'photo') {
-        photos.push(item);
-      }
-    }
-
-    if (currentFilterType === 'video') {
-      section.style.display = 'none';
-      return;
-    }
-    section.style.display = 'block';
-
-    if (photos.length === 0) {
-      container.innerHTML = '<div class="feed-empty-state"><div class="feed-empty-state-icon">📸</div><div class="feed-empty-state-title">No Photos in Gallery</div><p class="feed-empty-state-desc">Be the first to drop Sunday game photos using the zero-login submission form below!</p></div>';
-      return;
-    }
-
-    currentPhotoItems = photos;
-    var isManager = Boolean(currentUser && currentUser.canManageEvents);
-
-    // Group photos by Album name
-    var albumMap = {};
-    var albumOrder = [];
-    for (var p = 0; p < photos.length; p++) {
-      var photo = photos[p];
-      var albName = photo.album || 'General Community Moments';
-      if (!albumMap[albName]) {
-        albumMap[albName] = [];
-        albumOrder.push(albName);
-      }
-      albumMap[albName].push(photo);
-    }
-
-    var html = '';
-    for (var a = 0; a < albumOrder.length; a++) {
-      var albumName = albumOrder[a];
-      var albumPhotos = albumMap[albumName];
-      var slug = slugify(albumName);
-
-      var dates = albumPhotos.map(function(p) { return p.date_taken; }).filter(Boolean).sort();
-      var dateRangeStr = '';
-      if (dates.length > 0) {
-        var earliest = formatDisplayDate(dates[0]);
-        var latest = formatDisplayDate(dates[dates.length - 1]);
-        dateRangeStr = earliest === latest ? earliest : earliest + ' – ' + latest;
-      }
-
-      html += `
-        <div class="card photo-album-group" id="album-${slug}" style="margin-bottom: 32px; padding: 20px;">
-          <div class="photo-album-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; border-bottom: 1px solid var(--border); padding-bottom: 12px;">
-            <div>
-              <h3 style="font-size: 1.25rem; color: var(--secondary); margin: 0 0 4px 0; display: flex; align-items: center; gap: 8px;">
-                <span>📌</span> <span>${API.escapeHtml(albumName)}</span>
-                <span class="badge badge-green" style="font-size: 0.8rem;">${albumPhotos.length} ${albumPhotos.length === 1 ? 'photo' : 'photos'}</span>
-              </h3>
-              ${dateRangeStr ? `<span style="font-size: 0.85rem; color: var(--text-muted);">📅 Approximate Date: ${API.escapeHtml(dateRangeStr)}</span>` : ''}
-            </div>
-            <div>
-              <button type="button" class="btn btn-outline btn-xs btn-share-album" data-album-slug="${slug}" title="Copy direct link to this album">
-                🔗 Copy Album Link
-              </button>
-            </div>
-          </div>
-
-          <div class="photo-album-grid">
-      `;
-
-      for (var k = 0; k < albumPhotos.length; k++) {
-        var pt = albumPhotos[k];
-        var globalIndex = photos.indexOf(pt);
-        var ptDate = formatDisplayDate(pt.date_taken);
-        var ptContributor = pt.contributor_name ? API.escapeHtml(pt.contributor_name) : 'Community';
-        var ptTitle = pt.title ? API.escapeHtml(pt.title) : '';
-        var safeImgUrl = API.safeUrl ? API.safeUrl(pt.file_url) : pt.file_url;
-
-        var deleteBtn = isManager ? `
-          <button type="button" class="btn-delete-photo" data-media-id="${pt.id}" title="Delete Photo">✕</button>
-        ` : '';
-
-        html += `
-          <div class="photo-card" data-global-index="${globalIndex}">
-            <div class="photo-card-img-wrap">
-              <img src="${API.escapeHtml(safeImgUrl)}" alt="${ptTitle || 'Baseball Photo'}" loading="lazy" class="photo-card-img">
-              <div class="photo-card-overlay">
-                <span class="photo-card-date">📅 ${API.escapeHtml(ptDate)}</span>
-                <span class="photo-card-author">📷 ${ptContributor}</span>
-              </div>
-              ${deleteBtn}
-            </div>
-            ${ptTitle ? `<div class="photo-card-caption">${ptTitle}</div>` : ''}
-          </div>
-        `;
-      }
-
-      html += `
-          </div>
-        </div>
-      `;
-    }
-
-    container.innerHTML = html;
-
-    // Attach Lightbox click handlers
-    container.querySelectorAll('.photo-card').forEach(function(card) {
-      card.addEventListener('click', function(e) {
-        if (e.target.classList.contains('btn-delete-photo')) return;
-        var idx = parseInt(card.getAttribute('data-global-index'), 10);
-        if (!isNaN(idx)) openLightbox(idx);
+    if (pPrev && pTrack) {
+      pPrev.addEventListener('click', function() {
+        var distance = Math.max(260, pTrack.clientWidth * 0.75);
+        pTrack.scrollBy({ left: -distance, behavior: 'smooth' });
       });
-    });
-
-    // Attach Share Album Link listeners
-    container.querySelectorAll('.btn-share-album').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        var slug = btn.getAttribute('data-album-slug');
-        var fullUrl = window.location.origin + window.location.pathname + '#album-' + slug;
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(fullUrl).then(function() {
-            var origText = btn.textContent;
-            btn.textContent = '✓ Copied!';
-            setTimeout(function() { btn.textContent = origText; }, 2000);
-          });
-        } else {
-          prompt('Copy link to this album:', fullUrl);
-        }
+    }
+    if (pNext && pTrack) {
+      pNext.addEventListener('click', function() {
+        var distance = Math.max(260, pTrack.clientWidth * 0.75);
+        pTrack.scrollBy({ left: distance, behavior: 'smooth' });
       });
-    });
+    }
 
-    // Attach Admin Delete listeners
-    container.querySelectorAll('.btn-delete-photo').forEach(function(btn) {
-      btn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        var id = btn.getAttribute('data-media-id');
-        handleDeleteMedia(id);
+    var vTrack = document.getElementById('videos-grid-container');
+    var vPrev = document.getElementById('videos-paddle-prev');
+    var vNext = document.getElementById('videos-paddle-next');
+
+    if (vPrev && vTrack) {
+      vPrev.addEventListener('click', function() {
+        var distance = Math.max(340, vTrack.clientWidth * 0.75);
+        vTrack.scrollBy({ left: -distance, behavior: 'smooth' });
       });
-    });
+    }
+    if (vNext && vTrack) {
+      vNext.addEventListener('click', function() {
+        var distance = Math.max(340, vTrack.clientWidth * 0.75);
+        vTrack.scrollBy({ left: distance, behavior: 'smooth' });
+      });
+    }
+  }
+
+  function updateCarouselEdgeHints(trackEl, prevBtnId, nextBtnId, leftHintId, rightHintId) {
+    if (!trackEl) return;
+    var prevBtn = document.getElementById(prevBtnId);
+    var nextBtn = document.getElementById(nextBtnId);
+    var leftHint = document.getElementById(leftHintId);
+    var rightHint = document.getElementById(rightHintId);
+
+    var scrollLeft = trackEl.scrollLeft;
+    var maxScrollLeft = trackEl.scrollWidth - trackEl.clientWidth;
+
+    // Check left boundary (at start)
+    if (scrollLeft <= 10) {
+      if (prevBtn) prevBtn.classList.add('paddle-disabled');
+      if (leftHint) leftHint.classList.add('edge-hidden');
+    } else {
+      if (prevBtn) prevBtn.classList.remove('paddle-disabled');
+      if (leftHint) leftHint.classList.remove('edge-hidden');
+    }
+
+    // Check right boundary (at end)
+    if (scrollLeft >= maxScrollLeft - 10 || maxScrollLeft <= 0) {
+      if (nextBtn) nextBtn.classList.add('paddle-disabled');
+      if (rightHint) rightHint.classList.add('edge-hidden');
+    } else {
+      if (nextBtn) nextBtn.classList.remove('paddle-disabled');
+      if (rightHint) rightHint.classList.remove('edge-hidden');
+    }
   }
 
   // ---------------------------------------------------------------------------
-  // 6. Fullscreen Lightbox Modal
+  // 7. Fullscreen Lightbox Modal
   // ---------------------------------------------------------------------------
   function setupLightbox() {
     var modal = document.getElementById('gallery-lightbox');
@@ -546,7 +643,7 @@
   }
 
   // ---------------------------------------------------------------------------
-  // 7. Community Zero-Login Submission Form
+  // 8. Community Zero-Login Submission Form
   // ---------------------------------------------------------------------------
   function setupSubmissionForm() {
     var form = document.getElementById('media-submit-form');
@@ -820,11 +917,11 @@
       // Refresh gallery
       await loadGalleryData();
 
-      // Scroll to newly created album
+      // Scroll carousel to newly created album
       var targetSlug = slugify(chosenAlbum);
       setTimeout(function() {
         jumpToAlbum(targetSlug);
-      }, 300);
+      }, 350);
 
     } catch (err) {
       if (alertBox) {
@@ -860,21 +957,10 @@
   }
 
   // ---------------------------------------------------------------------------
-  // 8. Toolbar Controls (Filters & Chronological Sort)
+  // 9. Toolbar Controls (Chronological Sort)
   // ---------------------------------------------------------------------------
   function setupToolbarListeners() {
-    var tabBtns = document.querySelectorAll('.gallery-tab-btn');
     var sortSelect = document.getElementById('gallery-sort-select');
-
-    tabBtns.forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        tabBtns.forEach(function(b) { b.classList.remove('active'); });
-        btn.classList.add('active');
-        currentFilterType = btn.getAttribute('data-filter-type') || 'all';
-        renderVideos();
-        renderPhotos();
-      });
-    });
 
     if (sortSelect) {
       sortSelect.addEventListener('change', async function() {
@@ -885,7 +971,7 @@
   }
 
   // ---------------------------------------------------------------------------
-  // 9. Admin Media Deletion
+  // 10. Admin Media Deletion
   // ---------------------------------------------------------------------------
   async function handleDeleteMedia(id) {
     if (!id) return;

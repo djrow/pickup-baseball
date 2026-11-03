@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Photo &amp; Video Gallery | Pickup Baseball Foundation</title>
-  <link rel="stylesheet" href="/css/style.css?v=56">
+  <link rel="stylesheet" href="/css/style.css?v=57">
   <link rel="alternate" type="application/rss+xml" title="Sunday Pickup Baseball Highlights &amp; Updates" href="/feed.xml">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
@@ -40,7 +40,7 @@
   </header>
 
   <!-- Main Content -->
-  <main class="container" style="margin-top: 24px; min-height: 70vh;">
+  <main class="container" style="margin-top: 20px; min-height: 70vh;">
 
     <!-- Back / Breadcrumb Navigation -->
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
@@ -52,93 +52,194 @@
       </a>
     </div>
 
-    <!-- Gallery Hero Header -->
-    <section class="card" style="background: var(--bg-card); border-left: 5px solid var(--primary); margin-bottom: 24px;">
-      <div style="display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap;">
-        <span style="font-size: 2.4rem; line-height: 1;">📸</span>
-        <div style="flex: 1; min-width: 260px;">
-          <h1 style="color: var(--secondary); font-size: 1.65rem; margin-bottom: 6px;">
-            Community Photo &amp; Video Gallery
-          </h1>
-          <p style="color: var(--text-muted); font-size: 0.95rem; margin: 0; line-height: 1.5;">
-            Sunday game recaps, dugout celebrations, clinic clips, and community moments displayed in chronological order. Browse by album bookmark below or submit your own photos!
-          </p>
-        </div>
-      </div>
-    </section>
-
-    <!-- Sticky Album Bookmarks Navigation Bar -->
-    <section id="album-bookmarks-container" class="card album-bookmarks-card" style="margin-bottom: 24px; padding: 14px 18px;">
-      <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; flex-wrap: wrap;">
-        <div style="font-weight: 700; color: var(--secondary); font-size: 0.95rem; display: flex; align-items: center; gap: 6px;">
-          <span>📌</span> <span>Jump to Photo Album:</span>
-        </div>
-        <small style="color: var(--text-muted);">Click any bookmark to jump directly to that album</small>
-      </div>
-      <div id="album-bookmarks-bar" class="album-bookmarks-scroll" role="navigation" aria-label="Photo Albums Bookmarks">
-        <button type="button" class="album-bookmark-pill active" data-album="all">
-          <span>🌟 All Albums</span>
-        </button>
-        <!-- Populated dynamically via JS -->
-      </div>
-    </section>
-
-    <!-- Gallery Controls & Filters Toolbar -->
-    <section class="card gallery-toolbar-card" style="margin-bottom: 28px; padding: 14px 18px;">
-      <div style="display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap;">
-        <!-- Format Tabs -->
-        <div class="gallery-format-tabs" role="tablist">
-          <button type="button" class="gallery-tab-btn active" data-filter-type="all">🌟 All Media (<span id="count-all">0</span>)</button>
-          <button type="button" class="gallery-tab-btn" data-filter-type="photo">📷 Photos (<span id="count-photos">0</span>)</button>
-          <button type="button" class="gallery-tab-btn" data-filter-type="video">🎬 Videos (<span id="count-videos">0</span>)</button>
-        </div>
-
-        <!-- Chronological Sort & Search -->
-        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-          <div class="gallery-sort-toggle">
-            <label for="gallery-sort-select" style="font-size: 0.85rem; font-weight: 600; color: var(--text-muted); margin-right: 4px;">Order:</label>
-            <select id="gallery-sort-select" class="form-control" style="width: auto; padding: 6px 10px; font-size: 0.85rem; border-radius: var(--radius-sm);">
-              <option value="desc" selected>📅 Chronological (Newest First)</option>
-              <option value="asc">📅 Chronological (Oldest First)</option>
-            </select>
+    <!-- Gallery Header Banner -->
+    <section class="card" style="background: var(--bg-card); border-left: 5px solid var(--primary); margin-bottom: 24px; padding: 16px 20px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
+        <div style="display: flex; align-items: center; gap: 14px;">
+          <span style="font-size: 2.2rem; line-height: 1;">📸</span>
+          <div>
+            <h1 style="color: var(--secondary); font-size: 1.55rem; margin: 0 0 4px 0;">
+              Community Photo &amp; Video Gallery
+            </h1>
+            <p style="color: var(--text-muted); font-size: 0.9rem; margin: 0; line-height: 1.4;">
+              Full-width chronological carousels of Sunday baseball moments, celebrations, and video highlights.
+            </p>
           </div>
         </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <label for="gallery-sort-select" style="font-size: 0.82rem; font-weight: 600; color: var(--text-muted);">Timeline:</label>
+          <select id="gallery-sort-select" class="form-control" style="width: auto; padding: 5px 10px; font-size: 0.82rem; border-radius: var(--radius-sm);">
+            <option value="desc" selected>📅 Newest First (Left = Recent, Right = Earlier)</option>
+            <option value="asc">📅 Oldest First (Left = Earlier, Right = Recent)</option>
+          </select>
+        </div>
       </div>
     </section>
 
-    <!-- Main Content Area: Videos Section -->
-    <section id="videos-section" style="margin-bottom: 36px; display: block;">
-      <div class="section-title-wrap" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
-        <h2 style="font-size: 1.35rem; color: var(--secondary); margin: 0; display: flex; align-items: center; gap: 8px;">
-          <span>🎬</span> <span>Video Releases &amp; YouTube Highlights</span>
-        </h2>
-        <span style="font-size: 0.85rem; color: var(--text-muted);" id="video-order-label">Ordered chronologically by date taken</span>
+    <!-- ===================================================================== -->
+    <!-- 1. PHOTO CAROUSEL SECTION                                             -->
+    <!-- ===================================================================== -->
+    <section id="photos-section" class="carousel-section" style="margin-bottom: 36px;">
+      
+      <!-- Section Title & Album Bookmarks Header -->
+      <div class="carousel-header-wrap" style="margin-bottom: 12px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 8px;">
+          <h2 style="font-size: 1.3rem; color: var(--secondary); margin: 0; display: flex; align-items: center; gap: 8px;">
+            <span>📷</span> <span>Community Photos Reel</span>
+            <span class="badge badge-green" id="count-photos" style="font-size: 0.78rem;">0</span>
+          </h2>
+          <div style="font-size: 0.82rem; color: var(--text-muted);">
+            💡 Click any album bookmark below to jump the photo carousel directly to that album:
+          </div>
+        </div>
+
+        <!-- Sticky Album Bookmarks Navigation List -->
+        <div id="album-bookmarks-bar" class="album-bookmarks-scroll" role="navigation" aria-label="Photo Albums Bookmarks">
+          <button type="button" class="album-bookmark-pill active" data-album="all">
+            <span>🌟 All Albums</span>
+          </button>
+          <!-- Populated dynamically via JS -->
+        </div>
       </div>
-      <div id="videos-grid-container" class="videos-grid-container">
-        <!-- Rendered via gallery.js -->
-        <p style="color: var(--text-muted); padding: 20px;">Loading video releases...</p>
+
+      <!-- Time Direction Guidance Ribbon -->
+      <div class="carousel-time-ribbon" id="photos-time-ribbon">
+        <span class="ribbon-time-hint ribbon-hint-left" id="photos-ribbon-left">
+          <span class="ribbon-arrow">◀</span> <span class="ribbon-label" id="photos-ribbon-left-text">Later (Newer)</span>
+        </span>
+        <span class="ribbon-timeline-center">
+          <span class="timeline-dot"></span>
+          <span class="timeline-track-line"></span>
+          <span class="timeline-center-label">Chronological Timeline · Scroll or Drag</span>
+          <span class="timeline-track-line"></span>
+          <span class="timeline-dot"></span>
+        </span>
+        <span class="ribbon-time-hint ribbon-hint-right" id="photos-ribbon-right">
+          <span class="ribbon-label" id="photos-ribbon-right-text">Earlier (Past Moments)</span> <span class="ribbon-arrow">▶</span>
+        </span>
       </div>
+
+      <!-- Carousel Stage with Floating Paddles and Gradient Edge Hints -->
+      <div class="carousel-stage-wrap">
+        <!-- Floating Left Paddle -->
+        <button type="button" class="carousel-paddle paddle-left" id="photos-paddle-prev" aria-label="Scroll Carousel Left">
+          ❮
+        </button>
+
+        <!-- Left Gradient Edge Hint (Graphical Hint for items off-screen) -->
+        <div class="carousel-edge-hint edge-left" id="photos-edge-left" title="Scroll left for more photos">
+          <div class="edge-hint-content">
+            <span class="edge-hint-chevron">◀</span>
+            <span class="edge-hint-caption" id="photos-edge-left-label">More</span>
+          </div>
+        </div>
+
+        <!-- The Horizontal Photo Carousel Track (Asserted by verify-all.js) -->
+        <div id="photos-albums-container" class="carousel-track photo-carousel-track" tabindex="0" role="region" aria-label="Photo Carousel">
+          <div style="color: var(--text-muted); padding: 40px; text-align: center; width: 100%;">
+            Loading photo carousel...
+          </div>
+        </div>
+
+        <!-- Right Gradient Edge Hint (Graphical Hint for items off-screen) -->
+        <div class="carousel-edge-hint edge-right" id="photos-edge-right" title="Scroll right for earlier photos">
+          <div class="edge-hint-content">
+            <span class="edge-hint-caption" id="photos-edge-right-label">Earlier</span>
+            <span class="edge-hint-chevron">▶</span>
+          </div>
+        </div>
+
+        <!-- Floating Right Paddle -->
+        <button type="button" class="carousel-paddle paddle-right" id="photos-paddle-next" aria-label="Scroll Carousel Right">
+          ❯
+        </button>
+      </div>
+
     </section>
 
-    <!-- Main Content Area: Photo Albums Section -->
-    <section id="photos-section" style="margin-bottom: 48px; display: block;">
-      <div class="section-title-wrap" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
-        <h2 style="font-size: 1.35rem; color: var(--secondary); margin: 0; display: flex; align-items: center; gap: 8px;">
-          <span>📸</span> <span>Photo Albums &amp; Game Moments</span>
-        </h2>
-        <span style="font-size: 0.85rem; color: var(--text-muted);" id="photo-order-label">Ordered chronologically by date taken</span>
+    <!-- ===================================================================== -->
+    <!-- 2. VIDEO CAROUSEL SECTION                                             -->
+    <!-- ===================================================================== -->
+    <section id="videos-section" class="carousel-section" style="margin-bottom: 40px;">
+      
+      <!-- Section Title -->
+      <div class="carousel-header-wrap" style="margin-bottom: 12px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+          <h2 style="font-size: 1.3rem; color: var(--secondary); margin: 0; display: flex; align-items: center; gap: 8px;">
+            <span>🎬</span> <span>Video Releases &amp; Highlights Reel</span>
+            <span class="badge badge-orange" id="count-videos" style="font-size: 0.78rem;">0</span>
+          </h2>
+          <span style="font-size: 0.82rem; color: var(--text-muted);" id="video-order-label">
+            Full-width chronological video carousel
+          </span>
+        </div>
       </div>
-      <div id="photos-albums-container">
-        <!-- Rendered via gallery.js with album anchors -->
-        <p style="color: var(--text-muted); padding: 20px;">Loading photo albums...</p>
+
+      <!-- Time Direction Guidance Ribbon -->
+      <div class="carousel-time-ribbon" id="videos-time-ribbon">
+        <span class="ribbon-time-hint ribbon-hint-left" id="videos-ribbon-left">
+          <span class="ribbon-arrow">◀</span> <span class="ribbon-label" id="videos-ribbon-left-text">Later (Newer)</span>
+        </span>
+        <span class="ribbon-timeline-center">
+          <span class="timeline-dot"></span>
+          <span class="timeline-track-line"></span>
+          <span class="timeline-center-label">Video Releases · Scroll or Click Play</span>
+          <span class="timeline-track-line"></span>
+          <span class="timeline-dot"></span>
+        </span>
+        <span class="ribbon-time-hint ribbon-hint-right" id="videos-ribbon-right">
+          <span class="ribbon-label" id="videos-ribbon-right-text">Earlier (Past Games)</span> <span class="ribbon-arrow">▶</span>
+        </span>
       </div>
+
+      <!-- Carousel Stage with Floating Paddles and Gradient Edge Hints -->
+      <div class="carousel-stage-wrap">
+        <!-- Floating Left Paddle -->
+        <button type="button" class="carousel-paddle paddle-left" id="videos-paddle-prev" aria-label="Scroll Video Carousel Left">
+          ❮
+        </button>
+
+        <!-- Left Gradient Edge Hint -->
+        <div class="carousel-edge-hint edge-left" id="videos-edge-left" title="Scroll left for more videos">
+          <div class="edge-hint-content">
+            <span class="edge-hint-chevron">◀</span>
+            <span class="edge-hint-caption" id="videos-edge-left-label">More</span>
+          </div>
+        </div>
+
+        <!-- The Horizontal Video Carousel Track (Asserted by verify-all.js) -->
+        <div id="videos-grid-container" class="carousel-track video-carousel-track" tabindex="0" role="region" aria-label="Video Carousel">
+          <div style="color: var(--text-muted); padding: 40px; text-align: center; width: 100%;">
+            Loading video releases carousel...
+          </div>
+        </div>
+
+        <!-- Right Gradient Edge Hint -->
+        <div class="carousel-edge-hint edge-right" id="videos-edge-right" title="Scroll right for earlier videos">
+          <div class="edge-hint-content">
+            <span class="edge-hint-caption" id="videos-edge-right-label">Earlier</span>
+            <span class="edge-hint-chevron">▶</span>
+          </div>
+        </div>
+
+        <!-- Floating Right Paddle -->
+        <button type="button" class="carousel-paddle paddle-right" id="videos-paddle-next" aria-label="Scroll Video Carousel Right">
+          ❯
+        </button>
+      </div>
+
     </section>
 
-    <!-- Zero-Login Community Media Submission Portal -->
-    <section id="submit-media-section" class="card" style="margin-top: 48px; margin-bottom: 48px; border-top: 4px solid var(--primary); background: var(--bg-card);">
+    <!-- Hidden element to satisfy legacy count element references if any -->
+    <div style="display: none;"><span id="count-all">0</span><span id="photo-order-label"></span></div>
+
+    <!-- ===================================================================== -->
+    <!-- 3. ZERO-LOGIN COMMUNITY MEDIA SUBMISSION PORTAL                       -->
+    <!-- ===================================================================== -->
+    <section id="submit-media-section" class="card" style="margin-top: 32px; margin-bottom: 48px; border-top: 4px solid var(--primary); background: var(--bg-card);">
       <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; flex-wrap: wrap;">
         <div>
-          <h2 style="font-size: 1.35rem; color: var(--secondary); margin: 0 0 4px 0; display: flex; align-items: center; gap: 8px;">
+          <h2 style="font-size: 1.3rem; color: var(--secondary); margin: 0 0 4px 0; display: flex; align-items: center; gap: 8px;">
             <span>📥</span> <span>Community Media Drop (Zero-Login)</span>
           </h2>
           <p style="color: var(--text-muted); font-size: 0.9rem; margin: 0;">
@@ -269,7 +370,7 @@
   <!-- Site Footer -->
   <footer id="site-footer" class="site-footer"></footer>
 
-  <script src="/js/api.js?v=56"></script>
-  <script src="/js/gallery.js?v=56"></script>
+  <script src="/js/api.js?v=57"></script>
+  <script src="/js/gallery.js?v=57"></script>
 </body>
 </html>

@@ -2202,6 +2202,14 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(galleryHtml.includes('id="album-bookmarks-bar"'), 'gallery.html must contain #album-bookmarks-bar for album bookmarks');
     assert.ok(galleryHtml.includes('id="videos-grid-container"'), 'gallery.html must contain #videos-grid-container');
     assert.ok(galleryHtml.includes('id="photos-albums-container"'), 'gallery.html must contain #photos-albums-container');
+    assert.ok(galleryHtml.includes('id="photos-time-ribbon"'), 'gallery.html must contain photo carousel time guidance ribbon');
+    assert.ok(galleryHtml.includes('id="videos-time-ribbon"'), 'gallery.html must contain video carousel time guidance ribbon');
+    assert.ok(galleryHtml.includes('id="photos-edge-left"'), 'gallery.html must contain left graphical edge hint for earlier/later photos');
+    assert.ok(galleryHtml.includes('id="photos-edge-right"'), 'gallery.html must contain right graphical edge hint for earlier/later photos');
+    assert.ok(galleryHtml.includes('id="photos-paddle-prev"'), 'gallery.html must contain left paddle for photo carousel');
+    assert.ok(galleryHtml.includes('id="photos-paddle-next"'), 'gallery.html must contain right paddle for photo carousel');
+    assert.ok(galleryHtml.includes('id="videos-paddle-prev"'), 'gallery.html must contain left paddle for video carousel');
+    assert.ok(galleryHtml.includes('id="videos-paddle-next"'), 'gallery.html must contain right paddle for video carousel');
     assert.ok(galleryHtml.includes('id="submit-media-section"'), 'gallery.html must contain #submit-media-section');
     assert.ok(galleryHtml.includes('id="media-submit-form"'), 'gallery.html must contain #media-submit-form');
     assert.ok(galleryHtml.includes('id="media-date-input"'), 'gallery.html must ask for approximate date taken');
@@ -2220,6 +2228,8 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(galleryJsCode.includes('renderVideos'), 'gallery.js must implement renderVideos');
     assert.ok(galleryJsCode.includes('renderPhotos'), 'gallery.js must implement renderPhotos');
     assert.ok(galleryJsCode.includes('jumpToAlbum'), 'gallery.js must implement jumpToAlbum');
+    assert.ok(galleryJsCode.includes('setupCarouselPaddles'), 'gallery.js must implement setupCarouselPaddles');
+    assert.ok(galleryJsCode.includes('updateCarouselEdgeHints'), 'gallery.js must implement updateCarouselEdgeHints');
 
     // 3. Verify top navigation links & Service Worker
     const apiJs = fs.readFileSync(path.join(publicDir, 'js', 'api.js'), 'utf8');
@@ -2237,6 +2247,11 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(styleCss.includes('.nav-link-gallery'), 'style.css must define .nav-link-gallery');
     assert.ok(styleCss.includes('.album-bookmarks-scroll'), 'style.css must define .album-bookmarks-scroll');
     assert.ok(styleCss.includes('.album-bookmark-pill'), 'style.css must define .album-bookmark-pill');
+    assert.ok(styleCss.includes('.carousel-stage-wrap'), 'style.css must define .carousel-stage-wrap');
+    assert.ok(styleCss.includes('.carousel-track'), 'style.css must define .carousel-track');
+    assert.ok(styleCss.includes('.carousel-paddle'), 'style.css must define .carousel-paddle');
+    assert.ok(styleCss.includes('.carousel-edge-hint'), 'style.css must define .carousel-edge-hint');
+    assert.ok(styleCss.includes('.photo-jump-focus'), 'style.css must define .photo-jump-focus');
     assert.ok(styleCss.includes('.photo-card'), 'style.css must define .photo-card');
     assert.ok(styleCss.includes('.video-facade-container'), 'style.css must define .video-facade-container');
 
