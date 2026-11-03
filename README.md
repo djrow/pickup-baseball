@@ -297,7 +297,7 @@ Cloudflare Pages hosts both the static files in `public/` and the serverless Hon
    - `CNAME` `@` → `pickup-baseball.pages.dev` (*Proxied / Orange cloud*)
    - `CNAME` `send` → `send.forge.rmta.net` (*DNS only / Grey cloud* — for Resend)
    - `TXT` `resend._domainkey` → *(Your Resend DKIM public key)*
-   - `TXT` `_dmarc` → `v=DMARC1; p=quarantine; rua=mailto:pickupbaseballfoundation@gmail.com`
+   - `TXT` `_dmarc` → `v=DMARC1; p=quarantine;` *(Anti-spoofing policy. Omit `rua=` unless routing daily XML telemetry to an automated DMARC analyzer)*
    - `TXT` `@` → `v=spf1 include:_spf.google.com include:amazonses.com ~all`
 3. **Edge Bot & WAF Protection (`Cloudflare Dashboard → Security`)**:
    - **Security → Bots**: Enable **Bot Fight Mode**.
