@@ -373,9 +373,22 @@ mediaRouter.post('/:id/approve', requireOrganizer, async (c) => {
 });
 
 // ---------------------------------------------------------------------------
-// DELETE /api/media/:id - Organizer/Admin Deletion
+// DELETE & POST /api/media/:id - Organizer/Admin Deletion
 // ---------------------------------------------------------------------------
 mediaRouter.delete('/:id', requireOrganizer, async (c) => {
+  try {
+    const id = parseInt(c.req.param('id'), 10);
+    if (!id || isNaN(id)) return c.json({ error: 'Invalid ID' }, 400);
+
+    await c.env.DB.prepare('DELETE FROM media_items WHERE id = ?').bind(id).run();
+    return c.json({ success: true, message: 'Media item deleted.' });
+  } catch (err) {
+    console.error('[Media] Error deleting media item:', err);
+    return c.json({ error: 'Failed to delete media item.' }, 500);
+  }
+});
+
+mediaRouter.post('/:id/delete', requireOrganizer, async (c) => {
   try {
     const id = parseInt(c.req.param('id'), 10);
     if (!id || isNaN(id)) return c.json({ error: 'Invalid ID' }, 400);

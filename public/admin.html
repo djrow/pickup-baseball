@@ -47,6 +47,7 @@
         <h1 style="color: var(--secondary); font-size: 1.8rem; margin-top: 4px;">Game & Org Manager</h1>
       </div>
       <div class="flex-row-wrap">
+        <a href="#admin-media-carousel-section" class="btn btn-outline">🖼️ Carousels Media</a>
         <a href="#admin-security-section" id="admin-security-nav-btn" class="btn btn-outline">🛡️ Access Control &amp; Guest Policy</a>
         <a href="/api/events/admin/backup-db" id="btn-backup-db" class="btn btn-outline" download>📥 Backup Database (.sql)</a>
         <button id="quick-sunday-btn" class="btn btn-primary">⚡ 1-Click: Post Next Sunday @ Noon</button>
@@ -273,6 +274,41 @@
       <div style="margin-top: 36px; padding-top: 24px; border-top: 1px solid var(--border);">
         <h3 style="font-size: 1.15rem; color: var(--secondary); margin-bottom: 12px;">Published Community Highlights</h3>
         <div id="admin-posts-container"><p class="text-muted-sm">Loading highlights...</p></div>
+      </div>
+    </section>
+
+    <!-- Photo & Video Display Carousels Management -->
+    <section id="admin-media-carousel-section" class="card" style="margin-top: 36px;">
+      <div class="flex-between" style="margin-bottom: 16px;">
+        <div>
+          <h2 class="card-title" style="margin-bottom: 2px;">🖼️ Photo &amp; Video Display Carousels</h2>
+          <p class="text-muted-sm">
+            Manage all community photos and videos currently live in the public display carousels. Admins can preview items, filter by format, and remove unwanted media.
+          </p>
+        </div>
+        <div class="flex-row-wrap" style="gap: 8px;">
+          <a href="/gallery.html" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm">👁️ View Live Carousels →</a>
+          <button type="button" id="admin-refresh-media-btn" class="btn btn-outline btn-sm">🔄 Refresh</button>
+        </div>
+      </div>
+
+      <div id="admin-media-alert"></div>
+
+      <!-- Live Filter & Search Controls -->
+      <div class="flex-between" style="margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;" id="admin-media-type-filter">
+          <button type="button" class="btn btn-sm btn-outline active admin-media-filter-btn" data-type="all">All Media</button>
+          <button type="button" class="btn btn-sm btn-outline admin-media-filter-btn" data-type="photo">📷 Photos</button>
+          <button type="button" class="btn btn-sm btn-outline admin-media-filter-btn" data-type="video">🎬 Videos &amp; YouTube</button>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; flex: 1; max-width: 400px; min-width: 220px;">
+          <input type="text" id="admin-media-search-input" placeholder="🔍 Search by title, album, contributor..." style="font-size: 0.84rem; padding: 6px 12px; width: 100%;" aria-label="Search media in carousels">
+          <span id="admin-media-count-badge" class="badge badge-gray" style="white-space: nowrap;">0 items</span>
+        </div>
+      </div>
+
+      <div id="admin-media-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px;">
+        <p style="color: var(--text-muted); padding: 24px; text-align: center; grid-column: 1 / -1;">Loading carousel media...</p>
       </div>
     </section>
 

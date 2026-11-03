@@ -2344,8 +2344,31 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
       assert.ok(ascData.media[i].date_taken <= ascData.media[i + 1].date_taken, 'order=asc must sort dates oldest first');
     }
 
-    // 10. Organizer Deletion of media item
+    // 10. Organizer/Admin Deletion of media item from carousels (DELETE & POST /api/media/:id/delete)
     const delRes = await apiReq('DELETE', `/api/media/${copyData.item.id}`, seedOrgCookie);
-    assert.equal(delRes.status, 200, 'Organizer must be able to delete media item');
+    assert.equal(delRes.status, 200, 'Organizer must be able to delete media item via DELETE');
+
+    // Confirm item is removed from public carousels
+    const afterDelRes = await fetch(`${baseUrl}/api/media`);
+    const afterDelData = await afterDelRes.json();
+    assert.ok(!afterDelData.media.some(m => m.id === copyData.item.id), 'Deleted photo must no longer be present in gallery carousels');
+
+    // Verify deletion via POST /api/media/:id/delete fallback
+    const ytDelRes = await apiReq('POST', `/api/media/${ytData.item.id}/delete`, seedAdminCookie);
+    assert.equal(ytDelRes.status, 200, 'Admin must be able to delete YouTube video via POST /delete');
+
+    // Verify UI components for admin carousel photo and video removal
+    const adminHtml = fs.readFileSync(path.join(publicDir, 'admin.html'), 'utf8');
+    assert.ok(adminHtml.includes('id="admin-media-carousel-section"'), 'admin.html must contain #admin-media-carousel-section');
+    assert.ok(adminHtml.includes('id="admin-media-grid"'), 'admin.html must contain #admin-media-grid');
+
+    const adminJs = fs.readFileSync(path.join(publicDir, 'js', 'admin.js'), 'utf8');
+    assert.ok(adminJs.includes('setupMediaCarouselsAdmin'), 'admin.js must implement setupMediaCarouselsAdmin');
+    assert.ok(adminJs.includes('btn-admin-remove-media'), 'admin.js must provide btn-admin-remove-media to remove items from carousels');
+
+    assert.ok(galleryHtml.includes('id="lightbox-delete-btn"'), 'gallery.html must provide #lightbox-delete-btn in lightbox modal');
+    assert.ok(galleryJsCode.includes('btn-delete-photo'), 'gallery.js must wire .btn-delete-photo');
+    assert.ok(galleryJsCode.includes('btn-delete-video'), 'gallery.js must wire .btn-delete-video');
+    assert.ok(galleryJsCode.includes('isManagerUser'), 'gallery.js must check isManagerUser');
   });
 });

@@ -58,6 +58,7 @@ async function initAdmin() {
   setupDefaultTemplateEditor();
   setupCreateForm();
   setupCommunityHighlightsAdmin();
+  await setupMediaCarouselsAdmin();
   await loadAdminGames();
 
   if (user.isAdmin) {
@@ -1500,6 +1501,154 @@ async function loadAdminPosts() {
   } catch (err) {
     container.innerHTML = '<p style="color: var(--danger);">Failed to load highlights.</p>';
   }
+}
+
+// ---------------------------------------------------------------------------
+// Photo & Video Display Carousels Management
+// ---------------------------------------------------------------------------
+let allCarouselMedia = [];
+let activeMediaTypeFilter = 'all';
+
+async function setupMediaCarouselsAdmin() {
+  const container = document.getElementById('admin-media-grid');
+  const countBadge = document.getElementById('admin-media-count-badge');
+  const alertEl = document.getElementById('admin-media-alert');
+  const refreshBtn = document.getElementById('admin-refresh-media-btn');
+  const searchInput = document.getElementById('admin-media-search-input');
+  const filterBtns = document.querySelectorAll('.admin-media-filter-btn');
+
+  if (!container) return;
+
+  async function loadMediaItems() {
+    container.innerHTML = '<p style="color: var(--text-muted); padding: 24px; text-align: center; grid-column: 1 / -1;">Loading carousel media...</p>';
+    try {
+      const data = await API.getMedia({ order: 'desc' });
+      allCarouselMedia = (data && data.media) ? data.media : [];
+      renderMediaItems();
+    } catch (err) {
+      container.innerHTML = '<div class="alert alert-error" style="grid-column: 1 / -1;">Failed to load carousel media: ' + API.escapeHtml(err.message || 'Error') + '</div>';
+    }
+  }
+
+  function renderMediaItems() {
+    const query = (searchInput ? searchInput.value : '').toLowerCase().trim();
+    let filtered = allCarouselMedia;
+
+    if (activeMediaTypeFilter === 'photo') {
+      filtered = filtered.filter(m => m.media_type === 'photo');
+    } else if (activeMediaTypeFilter === 'video') {
+      filtered = filtered.filter(m => m.media_type === 'video' || m.media_type === 'youtube');
+    }
+
+    if (query) {
+      filtered = filtered.filter(m => {
+        const title = (m.title || '').toLowerCase();
+        const caption = (m.caption || '').toLowerCase();
+        const album = (m.album || '').toLowerCase();
+        const contributor = (m.contributor_name || '').toLowerCase();
+        return title.includes(query) || caption.includes(query) || album.includes(query) || contributor.includes(query);
+      });
+    }
+
+    if (countBadge) {
+      countBadge.textContent = `${filtered.length} item${filtered.length === 1 ? '' : 's'}`;
+    }
+
+    if (filtered.length === 0) {
+      container.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; padding: 32px 16px; background: var(--bg-subtle); border-radius: var(--radius-sm); color: var(--text-muted);"><span style="font-size: 1.6rem;">🖼️</span><br>No matching media found in the carousels.</div>';
+      return;
+    }
+
+    container.innerHTML = filtered.map(item => {
+      const isVideo = item.media_type === 'video' || item.media_type === 'youtube';
+      let thumbUrl = '/logo.svg';
+      if (item.media_type === 'youtube') {
+        const ytId = API.getYouTubeId ? API.getYouTubeId(item.file_url || item.original_url) : null;
+        thumbUrl = ytId ? `https://img.youtube.com/vi/${ytId}/hqdefault.jpg` : '/logo.svg';
+      } else {
+        thumbUrl = API.safeUrl ? API.safeUrl(item.file_url) : item.file_url;
+      }
+
+      const typeBadge = item.media_type === 'youtube'
+        ? '<span class="badge badge-orange" style="font-size: 0.7rem;">▶️ YouTube</span>'
+        : (item.media_type === 'video'
+          ? '<span class="badge badge-blue" style="font-size: 0.7rem;">🎬 Video</span>'
+          : '<span class="badge badge-green" style="font-size: 0.7rem;">📷 Photo</span>');
+
+      const dateLabel = item.date_taken ? API.escapeHtml(item.date_taken) : '';
+      const album = item.album ? API.escapeHtml(item.album) : 'General';
+      const contributor = item.contributor_name ? API.escapeHtml(item.contributor_name) : 'Community';
+      const title = item.title ? API.escapeHtml(item.title) : (isVideo ? 'Game Video' : 'Game Photo');
+
+      return `
+        <div class="card" id="admin-media-card-${item.id}" style="display: flex; flex-direction: column; justify-content: space-between; margin-bottom: 0; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-sm);">
+          <div>
+            <div style="position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: var(--radius-sm); overflow: hidden; background: #0c1f1a; margin-bottom: 10px;">
+              <img src="${API.escapeHtml(thumbUrl)}" alt="${title}" style="width: 100%; height: 100%; object-fit: cover; display: block;" loading="lazy">
+              <div style="position: absolute; top: 6px; left: 6px;">${typeBadge}</div>
+              ${dateLabel ? `<div style="position: absolute; bottom: 6px; left: 6px; background: rgba(0,0,0,0.7); color: #fff; font-size: 0.7rem; font-weight: 700; padding: 2px 6px; border-radius: 4px;">📅 ${dateLabel}</div>` : ''}
+            </div>
+            <h4 style="margin: 0 0 4px 0; font-size: 0.95rem; color: var(--secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${title}">${title}</h4>
+            <div style="font-size: 0.78rem; color: var(--text-muted); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 6px;">
+              <span>📌 ${album}</span> &bull; <span>By ${contributor}</span>
+            </div>
+            ${item.caption ? `<p style="font-size: 0.78rem; color: var(--text-main); margin: 0 0 8px 0; line-height: 1.3; max-height: 2.6em; overflow: hidden; font-style: italic;">"${API.escapeHtml(item.caption)}"</p>` : ''}
+          </div>
+          <button type="button" class="btn btn-outline btn-sm btn-admin-remove-media" data-id="${item.id}" data-type="${item.media_type}" style="color: var(--danger); border-color: #fca5a5; width: 100%; font-weight: 700; margin-top: 10px;">
+            🗑️ Remove from Carousel
+          </button>
+        </div>
+      `;
+    }).join('');
+
+    container.querySelectorAll('.btn-admin-remove-media').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const id = btn.getAttribute('data-id');
+        const type = btn.getAttribute('data-type');
+        const typeLabel = (type === 'video' || type === 'youtube') ? 'video' : 'photo';
+        if (!confirm(`Are you sure you want to permanently remove this ${typeLabel} from the display carousels?`)) return;
+
+        btn.disabled = true;
+        btn.textContent = 'Removing...';
+        try {
+          await API.deleteMedia(id);
+          allCarouselMedia = allCarouselMedia.filter(m => String(m.id) !== String(id));
+          renderMediaItems();
+          if (alertEl) {
+            alertEl.innerHTML = `<div class="alert alert-success" style="padding: 10px 14px; margin-bottom: 12px;">✓ ${typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1)} successfully removed from the carousel.</div>`;
+            setTimeout(() => { alertEl.innerHTML = ''; }, 4000);
+          }
+        } catch (err) {
+          alert('Failed to delete media item: ' + (err.message || 'Error'));
+          btn.disabled = false;
+          btn.textContent = '🗑️ Remove from Carousel';
+        }
+      });
+    });
+  }
+
+  filterBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      filterBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      activeMediaTypeFilter = btn.getAttribute('data-type') || 'all';
+      renderMediaItems();
+    });
+  });
+
+  if (searchInput) {
+    searchInput.addEventListener('input', () => {
+      renderMediaItems();
+    });
+  }
+
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', () => {
+      loadMediaItems();
+    });
+  }
+
+  await loadMediaItems();
 }
 
 document.addEventListener('DOMContentLoaded', initAdmin);

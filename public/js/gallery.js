@@ -53,23 +53,36 @@
     return y + '-' + m + '-' + d;
   }
 
+  function isManagerUser() {
+    var u = currentUser || (typeof API !== 'undefined' && (API.currentUser || (API.getCachedUser && API.getCachedUser())));
+    return Boolean(u && (u.canManageEvents || u.isAdmin || u.role === 'admin' || u.role === 'organizer'));
+  }
+
   // ---------------------------------------------------------------------------
   // 1. Initialization
   // ---------------------------------------------------------------------------
   async function initGallery() {
     try {
-      if (typeof API !== 'undefined' && API.renderNav) {
-        API.renderNav();
-      }
-      if (typeof API !== 'undefined' && API.renderFooter) {
-        API.renderFooter();
-      }
-      if (typeof API !== 'undefined' && API.getMe) {
-        try {
-          var meData = await API.getMe();
-          currentUser = meData && meData.user ? meData.user : null;
-        } catch (e) {
-          currentUser = null;
+      if (typeof API !== 'undefined') {
+        if (API.getCachedUser) {
+          currentUser = API.getCachedUser();
+        }
+        if (API.currentUser) {
+          currentUser = API.currentUser;
+        }
+        if (API.getMe) {
+          try {
+            var meData = await API.getMe();
+            currentUser = (meData && meData.user) ? meData.user : (meData && meData.id ? meData : (API.currentUser || currentUser));
+          } catch (e) {
+            currentUser = API.currentUser || currentUser || null;
+          }
+        }
+        if (API.renderNav) {
+          API.renderNav(currentUser);
+        }
+        if (API.renderFooter) {
+          API.renderFooter();
         }
       }
     } catch (err) {
@@ -137,7 +150,7 @@
     var queueSection = document.getElementById('media-moderation-queue');
     var listContainer = document.getElementById('pending-media-list');
     var countBadge = document.getElementById('pending-count-badge');
-    var isManager = Boolean(currentUser && currentUser.canManageEvents);
+    var isManager = isManagerUser();
 
     if (!queueSection || !listContainer) return;
 
@@ -396,7 +409,7 @@
       return;
     }
 
-    var isManager = Boolean(currentUser && currentUser.canManageEvents);
+    var isManager = isManagerUser();
 
     var html = photos.map(function(pt, idx) {
       var ptDate = formatDisplayDate(pt.date_taken);
@@ -407,7 +420,7 @@
       var safeImgUrl = API.safeUrl ? API.safeUrl(pt.file_url) : pt.file_url;
 
       var deleteBtn = isManager ? `
-        <button type="button" class="btn-delete-photo" data-media-id="${pt.id}" title="Delete Photo">✕</button>
+        <button type="button" class="btn-delete-photo" data-media-id="${pt.id}" title="Remove Photo from Carousel" aria-label="Remove Photo from Carousel">🗑️</button>
       ` : '';
 
       return `
@@ -432,6 +445,7 @@
     // Attach Lightbox click handlers
     container.querySelectorAll('.photo-card').forEach(function(card) {
       card.addEventListener('click', function(e) {
+        if (e.target.closest && e.target.closest('.btn-delete-photo')) return;
         if (e.target.classList.contains('btn-delete-photo')) return;
         var idx = parseInt(card.getAttribute('data-global-index'), 10);
         if (!isNaN(idx)) openLightbox(idx);
@@ -442,8 +456,9 @@
     container.querySelectorAll('.btn-delete-photo').forEach(function(btn) {
       btn.addEventListener('click', function(e) {
         e.stopPropagation();
+        e.preventDefault();
         var id = btn.getAttribute('data-media-id');
-        handleDeleteMedia(id);
+        handleDeleteMedia(id, 'photo');
       });
     });
 
@@ -507,7 +522,7 @@
       return;
     }
 
-    var isManager = Boolean(currentUser && currentUser.canManageEvents);
+    var isManager = isManagerUser();
 
     var html = videos.map(function(vid) {
       var dateLabel = formatDisplayDate(vid.date_taken);
@@ -530,20 +545,22 @@
             <img src="${API.escapeHtml(thumbUrl)}" alt="${title}" class="video-facade-thumb" loading="lazy">
             <button type="button" class="video-play-btn" aria-label="Play Video">▶</button>
             <span class="video-badge-pill">YouTube HD</span>
+            ${isManager ? `<button type="button" class="btn-delete-video" data-media-id="${vid.id}" title="Remove Video from Carousel" aria-label="Remove Video from Carousel">🗑️</button>` : ''}
           </div>
         `;
       } else {
         var safeVidUrl = API.safeUrl ? API.safeUrl(vid.file_url) : vid.file_url;
         playerHtml = `
-          <div class="video-native-container">
+          <div class="video-native-container" style="position: relative;">
             <video src="${API.escapeHtml(safeVidUrl)}" controls playsinline preload="metadata" class="video-native-player"></video>
+            ${isManager ? `<button type="button" class="btn-delete-video" data-media-id="${vid.id}" title="Remove Video from Carousel" aria-label="Remove Video from Carousel">🗑️</button>` : ''}
           </div>
         `;
       }
 
       var adminDeleteBtn = isManager ? `
-        <button type="button" class="btn btn-outline btn-xs btn-delete-media" data-media-id="${vid.id}" style="color: var(--danger); border-color: #fca5a5; margin-left: auto; padding: 2px 6px;">
-          🗑️ Delete
+        <button type="button" class="btn btn-outline btn-xs btn-delete-media" data-media-id="${vid.id}" title="Remove Video from Carousel" style="color: var(--danger); border-color: #fca5a5; font-size: 0.72rem; padding: 2px 8px; margin-left: auto; cursor: pointer;">
+          🗑️ Remove
         </button>
       ` : '';
 
@@ -567,7 +584,9 @@
 
     // Attach YouTube Lite Facade Click Listeners
     container.querySelectorAll('.video-facade-container').forEach(function(facade) {
-      facade.addEventListener('click', function() {
+      facade.addEventListener('click', function(e) {
+        if (e.target.closest && (e.target.closest('.btn-delete-video') || e.target.closest('.btn-delete-media'))) return;
+        if (e.target.classList.contains('btn-delete-video') || e.target.classList.contains('btn-delete-media')) return;
         var ytId = facade.getAttribute('data-youtube-id');
         if (!ytId) return;
         var iframe = document.createElement('iframe');
@@ -582,11 +601,12 @@
     });
 
     // Attach Admin Delete Listeners
-    container.querySelectorAll('.btn-delete-media').forEach(function(btn) {
+    container.querySelectorAll('.btn-delete-video, .btn-delete-media').forEach(function(btn) {
       btn.addEventListener('click', function(e) {
         e.stopPropagation();
+        e.preventDefault();
         var id = btn.getAttribute('data-media-id');
-        handleDeleteMedia(id);
+        handleDeleteMedia(id, 'video');
       });
     });
 
@@ -673,12 +693,22 @@
     var closeBtn = document.getElementById('lightbox-close');
     var prevBtn = document.getElementById('lightbox-prev');
     var nextBtn = document.getElementById('lightbox-next');
+    var deleteBtn = document.getElementById('lightbox-delete-btn');
 
     if (!modal) return;
 
     if (closeBtn) closeBtn.addEventListener('click', closeLightbox);
     if (prevBtn) prevBtn.addEventListener('click', prevLightbox);
     if (nextBtn) nextBtn.addEventListener('click', nextLightbox);
+    if (deleteBtn) {
+      deleteBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var photo = currentPhotoItems[currentLightboxIndex];
+        if (photo && photo.id) {
+          handleDeleteMedia(photo.id, 'photo');
+        }
+      });
+    }
 
     modal.addEventListener('click', function(e) {
       if (e.target === modal) closeLightbox();
@@ -746,6 +776,11 @@
       var c = photo.contributor_name ? photo.contributor_name : 'Community Member';
       var a = photo.album ? photo.album : 'General';
       meta.textContent = '📅 ' + d + ' • 📷 By ' + c + ' • 📌 ' + a + ' (' + (currentLightboxIndex + 1) + '/' + currentPhotoItems.length + ')';
+    }
+
+    var deleteBtn = document.getElementById('lightbox-delete-btn');
+    if (deleteBtn) {
+      deleteBtn.style.display = isManagerUser() ? 'inline-flex' : 'none';
     }
   }
 
@@ -1081,17 +1116,21 @@
   }
 
   // ---------------------------------------------------------------------------
-  // 10. Admin Media Deletion
+  // 10. Admin Media Deletion from Carousels
   // ---------------------------------------------------------------------------
-  async function handleDeleteMedia(id) {
+  async function handleDeleteMedia(id, mediaType) {
     if (!id) return;
-    if (!confirm('Are you sure you want to permanently delete this media item from the gallery?')) return;
+    var typeLabel = mediaType === 'video' ? 'video' : 'photo';
+    if (!confirm('Are you sure you want to permanently remove this ' + typeLabel + ' from the display carousel?')) return;
 
     try {
       await API.deleteMedia(id);
+      if (typeof closeLightbox === 'function') {
+        closeLightbox();
+      }
       await loadGalleryData();
     } catch (err) {
-      alert(err.message || 'Failed to delete media item.');
+      alert(err.message || 'Failed to remove ' + typeLabel + ' from carousel.');
     }
   }
 
