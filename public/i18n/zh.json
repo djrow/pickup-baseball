@@ -257,5 +257,7 @@
   "hero.handbook_btn": "📖 手册与比赛规则 ↗",
   "rules.summary": "⚾ 周日典型比赛规则：人人上场、发球机投球、连续击球、安全第一。",
   "rules.full_link": "📖 在网站手册中阅读完整的周日比赛规则 ↗",
-  "footer.copyright": "© 2026 Pickup Baseball Foundation。根据知识共享署名-非商业性使用 4.0 国际许可协议（CC BY-NC 4.0）授权。"
+  "footer.copyright": "© 2026 Pickup Baseball Foundation。根据知识共享署名-非商业性使用 4.0 国际许可协议（CC BY-NC 4.0）授权。",
+  "nav.gallery": "图库与艺术",
+  "nav.gallery_title": "照片、视频与社区艺术展厅"
 }

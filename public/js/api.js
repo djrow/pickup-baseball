@@ -7,6 +7,8 @@ const EN_DICT = {
   "nav.community": "Community",
   "nav.calendar": "Calendar",
   "nav.archive": "Archive",
+  "nav.gallery": "Gallery & Art",
+  "nav.gallery_title": "Photo, Video & Art Gallery",
   "nav.donate": "Donate",
   "nav.handbook": "Handbook",
   "nav.login": "Log In",
@@ -295,7 +297,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '68',
+  CLIENT_VERSION: '69',
 
   // Current user cache
   currentUser: null,
@@ -343,12 +345,29 @@ const API = {
     return this.SUPPORTED_LANGUAGES.find(l => l.code === langCode) || this.SUPPORTED_LANGUAGES[0];
   },
 
-  t(key, vars = {}) {
+  t(key, fallbackOrVars = {}, maybeVars = {}) {
+    let fallback = null;
+    let vars = {};
+
+    if (typeof fallbackOrVars === 'string') {
+      fallback = fallbackOrVars;
+      vars = (maybeVars && typeof maybeVars === 'object') ? maybeVars : {};
+    } else if (fallbackOrVars && typeof fallbackOrVars === 'object') {
+      vars = fallbackOrVars;
+    }
+
     const lang = this.getLang();
     const dict = this.i18nCache[lang] || EN_DICT;
-    let str = (dict && dict[key] !== undefined) ? dict[key] : (EN_DICT[key] !== undefined ? EN_DICT[key] : key);
-    for (const [k, v] of Object.entries(vars)) {
-      str = str.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v));
+    let str = (dict && dict[key] !== undefined)
+      ? dict[key]
+      : (EN_DICT[key] !== undefined
+          ? EN_DICT[key]
+          : (fallback !== null ? fallback : key));
+
+    if (vars && typeof vars === 'object') {
+      for (const [k, v] of Object.entries(vars)) {
+        str = str.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v));
+      }
     }
     return str;
   },
