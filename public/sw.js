@@ -1,5 +1,5 @@
 // Service Worker for Pickup Baseball Foundation PWA
-const CACHE_NAME = 'pbf-cache-v69';
+const CACHE_NAME = 'pbf-cache-v70';
 
 const STATIC_ASSETS = [
   '/',

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Photo &amp; Video Gallery | Pickup Baseball Foundation</title>
-  <link rel="stylesheet" href="/css/style.css?v=69">
+  <link rel="stylesheet" href="/css/style.css?v=70">
   <link rel="alternate" type="application/rss+xml" title="Sunday Pickup Baseball Highlights &amp; Updates" href="/feed.xml">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
@@ -492,10 +492,10 @@
       <!-- Submission Mode Selector -->
       <div class="submission-mode-tabs" style="display: flex; gap: 10px; margin-bottom: 20px;">
         <button type="button" class="btn btn-sm btn-primary submission-tab-btn active" data-mode="upload" id="tab-mode-upload">
-          📁 Upload Photos from Phone / Computer
+          📁 Upload Files from Phone / Computer
         </button>
         <button type="button" class="btn btn-sm btn-outline submission-tab-btn" data-mode="link" id="tab-mode-link">
-          🔗 Submit YouTube Link or Facebook/External Image Link
+          🔗 Submit Video Link (YouTube / Drive) or Photo Link
         </button>
       </div>
 
@@ -509,8 +509,9 @@
               Tap to Choose Photos / Videos from Camera Roll
             </div>
             <p style="color: var(--text-muted); font-size: 0.85rem; margin: 0 0 12px 0;">
-              Or drag and drop files from your desktop (Max 50MB · Original Full Quality · No Compression)<br>
-              <span style="font-size: 0.8rem;">Supported Photos: JPG, PNG, WebP, GIF, AVIF · Videos: MP4, WebM</span>
+              Or drag and drop files from your desktop (Max 50MB direct upload · Original Quality)<br>
+              <span style="font-size: 0.8rem;">Supported: Photos (JPG, PNG, WebP, GIF, AVIF) &amp; Video clips (MP4, WebM up to 50MB).<br>
+              <strong>Have a large game video (over 50MB or 1GB+)?</strong> Use the <em>Submit Video Link</em> tab to paste a YouTube or Google Drive link with zero size limits!</span>
             </p>
             <button type="button" class="btn btn-outline btn-sm" id="btn-browse-files">
               📂 Select Files
@@ -522,12 +523,13 @@
         <!-- Link Mode Container -->
         <div id="mode-link-container" style="display: none;">
           <div class="form-group">
-            <label for="media-url-input" style="font-weight: 600;">Media Link (YouTube Video or Facebook/External Image URL) *</label>
-            <input type="url" id="media-url-input" class="form-control" placeholder="https://www.youtube.com/watch?v=... or https://...fbcdn.net/... or image URL">
+            <label for="media-url-input" style="font-weight: 600;">Media Link (YouTube, Google Drive, Direct MP4, or External Photo URL) *</label>
+            <input type="url" id="media-url-input" class="form-control" placeholder="https://www.youtube.com/watch?v=... or https://drive.google.com/file/d/... or image/video URL">
             <div class="help-box" style="margin-top: 8px; padding: 10px 14px; background: var(--bg-subtle); border-radius: var(--radius-sm); border: 1px solid var(--border); font-size: 0.82rem; color: var(--text-muted);">
               <strong>💡 How Links Work:</strong><br>
-              • <strong>YouTube links:</strong> Stored as streaming video links with zero host bandwidth fees.<br>
-              • <strong>Facebook-hosted images &amp; web photos:</strong> Automatically copied over and stored permanently in PBF's vault so they never expire or break!
+              • <strong>Large Videos (1GB+):</strong> Full game recordings or video files of any size (even 1GB+) can be shared via <strong>YouTube</strong> or <strong>Google Drive</strong> share links! They stream directly in the video carousel with zero file size limits.<br>
+              • <strong>Direct Video Links (.mp4 / .webm):</strong> Hosted streaming links play directly in the video carousel.<br>
+              • <strong>Web &amp; Facebook-hosted photos:</strong> Automatically copied over and stored permanently in PBF's vault so they never expire or break!
             </div>
           </div>
         </div>
@@ -639,8 +641,8 @@
   <!-- Site Footer -->
   <footer id="site-footer" class="site-footer"></footer>
 
-  <script src="/js/api.js?v=69"></script>
-  <script src="/js/art.js?v=69"></script>
-  <script src="/js/gallery.js?v=69"></script>
+  <script src="/js/api.js?v=70"></script>
+  <script src="/js/art.js?v=70"></script>
+  <script src="/js/gallery.js?v=70"></script>
 </body>
 </html>

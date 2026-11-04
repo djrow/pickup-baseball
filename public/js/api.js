@@ -297,7 +297,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '69',
+  CLIENT_VERSION: '70',
 
   // Current user cache
   currentUser: null,
@@ -1631,6 +1631,18 @@ const API = {
     const id = this.getYouTubeId(url);
     if (!id) return '';
     return 'https://www.youtube-nocookie.com/embed/' + id;
+  },
+
+  getGoogleDriveId(url) {
+    if (!url) return null;
+    const match = String(url).match(/(?:drive\.google\.com\/(?:file\/d\/|open\?id=)|docs\.google\.com\/file\/d\/)([\w-]{25,})/i);
+    return match ? match[1] : null;
+  },
+
+  getGoogleDriveEmbedUrl(url) {
+    const id = this.getGoogleDriveId(url);
+    if (!id) return '';
+    return 'https://drive.google.com/file/d/' + id + '/preview';
   },
 
   safeUrl(rawUrl) {

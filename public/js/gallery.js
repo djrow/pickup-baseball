@@ -596,6 +596,12 @@
 
       var canDelete = canUserDeleteMedia(vid);
       var playerHtml = '';
+      var gDriveId = API.getGoogleDriveId ? API.getGoogleDriveId(vid.file_url || vid.original_url) : null;
+      if (!gDriveId && String(vid.file_url || '').indexOf('drive.google.com/file/d/') !== -1) {
+        var mDrive = String(vid.file_url).match(/drive\.google\.com\/file\/d\/([\w-]{25,})/);
+        if (mDrive) gDriveId = mDrive[1];
+      }
+
       if (vid.media_type === 'youtube') {
         var ytId = API.getYouTubeId ? API.getYouTubeId(vid.file_url || vid.original_url) : null;
         if (!ytId) {
@@ -609,6 +615,15 @@
             <img src="${API.escapeHtml(thumbUrl)}" alt="${title}" class="video-facade-thumb" loading="lazy">
             <button type="button" class="video-play-btn" aria-label="Play Video">▶</button>
             <span class="video-badge-pill">YouTube HD</span>
+            ${canDelete ? `<button type="button" class="btn-delete-video" data-media-id="${vid.id}" title="${isManager ? 'Remove Video from Carousel' : 'Take Down Your Video'}" aria-label="Take Down Video">🗑️</button>` : ''}
+          </div>
+        `;
+      } else if (gDriveId) {
+        var previewUrl = 'https://drive.google.com/file/d/' + encodeURIComponent(gDriveId) + '/preview';
+        playerHtml = `
+          <div class="video-facade-container video-gdrive-container" style="position: relative; width: 100%; height: 210px; background: #000; border-radius: var(--radius-sm); overflow: hidden;">
+            <iframe src="${API.escapeHtml(previewUrl)}" allow="autoplay; fullscreen" style="width: 100%; height: 100%; border: none;" title="${title}"></iframe>
+            <span class="video-badge-pill" style="position: absolute; top: 8px; left: 8px; background: rgba(0,0,0,0.7); color: #fff; font-size: 0.7rem; padding: 2px 8px; border-radius: 4px;">Google Drive HD</span>
             ${canDelete ? `<button type="button" class="btn-delete-video" data-media-id="${vid.id}" title="${isManager ? 'Remove Video from Carousel' : 'Take Down Your Video'}" aria-label="Take Down Video">🗑️</button>` : ''}
           </div>
         `;
@@ -1055,13 +1070,39 @@
       }
 
       var ytId = API.getYouTubeId ? API.getYouTubeId(url) : null;
+      var gDriveId = API.getGoogleDriveId ? API.getGoogleDriveId(url) : null;
+      var isDirectVideo = /\.(mp4|webm)($|[?#])/i.test(url);
+
       if (ytId) {
         previewBox.style.display = 'block';
         previewTarget.innerHTML = `
           <div style="max-width: 400px; border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--border);">
             <img src="https://img.youtube.com/vi/${API.escapeHtml(ytId)}/hqdefault.jpg" alt="YouTube Preview" style="width: 100%; display: block;">
             <div style="padding: 8px 12px; background: var(--bg-subtle); font-size: 0.85rem; color: var(--secondary); font-weight: 600;">
-              ✓ YouTube Video Recognized (ID: ${API.escapeHtml(ytId)}) — will stream in video carousel!
+              ✓ YouTube Video Recognized (ID: ${API.escapeHtml(ytId)}) — will stream in video carousel without file size limits (1GB+ supported)!
+            </div>
+          </div>
+        `;
+      } else if (gDriveId) {
+        previewBox.style.display = 'block';
+        previewTarget.innerHTML = `
+          <div style="max-width: 400px; border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--border); padding: 16px; background: var(--bg-subtle); text-align: center;">
+            <div style="font-size: 2rem; margin-bottom: 6px;">🎬</div>
+            <div style="font-weight: 700; color: var(--secondary); font-size: 0.95rem; margin-bottom: 4px;">
+              ✓ Google Drive Video Recognized
+            </div>
+            <div style="font-size: 0.82rem; color: var(--text-muted);">
+              File ID: ${API.escapeHtml(gDriveId)} — will stream directly in the video carousel without size limits (1GB+ full games supported)!
+            </div>
+          </div>
+        `;
+      } else if (isDirectVideo) {
+        previewBox.style.display = 'block';
+        previewTarget.innerHTML = `
+          <div style="max-width: 400px; border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--border);">
+            <video src="${API.escapeHtml(url)}" controls style="width: 100%; max-height: 220px; display: block;"></video>
+            <div style="padding: 8px 12px; background: var(--bg-subtle); font-size: 0.85rem; color: var(--secondary); font-weight: 600;">
+              ✓ Direct Video Stream Link (.mp4 / .webm) — will stream directly in video carousel!
             </div>
           </div>
         `;

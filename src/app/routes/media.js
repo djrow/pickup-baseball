@@ -10,6 +10,12 @@ function extractYouTubeId(url) {
   return match ? match[1] : null;
 }
 
+function extractGoogleDriveFileId(url) {
+  if (!url) return null;
+  const match = String(url).match(/(?:drive\.google\.com\/(?:file\/d\/|open\?id=)|docs\.google\.com\/file\/d\/)([\w-]{25,})/i);
+  return match ? match[1] : null;
+}
+
 function isPrivateIpOrHost(hostname, isTestEnv = false) {
   if (!hostname) return true;
   const h = hostname.toLowerCase().trim();
@@ -297,11 +303,12 @@ mediaRouter.post('/', async (c) => {
     const ALLOWED_MIME = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif', 'image/avif', 'video/mp4', 'video/webm'];
     const MAX_MEDIA_BYTES = 50 * 1024 * 1024; // 50MB max photo & video submission limit
 
-    // Case 1: External URL submitted (YouTube or Facebook/external image link)
+    // Case 1: External URL submitted (YouTube, Google Drive, Direct Video, or Facebook/external image link)
     if (url && String(url).trim()) {
       const cleanUrl = String(url).trim();
       originalUrl = cleanUrl;
       const ytId = extractYouTubeId(cleanUrl);
+      const gDriveId = extractGoogleDriveFileId(cleanUrl);
 
       if (ytId) {
         // "leave the youtube links as links"
@@ -309,6 +316,20 @@ mediaRouter.post('/', async (c) => {
         fileUrl = 'https://www.youtube.com/watch?v=' + ytId;
         storedFileData = null;
         storedMimeType = 'text/html';
+        storedFileSize = 0;
+      } else if (gDriveId) {
+        // Large videos or media hosted in Google Drive (supports 1GB+ without worker payload limits)
+        finalMediaType = 'video';
+        fileUrl = 'https://drive.google.com/file/d/' + gDriveId + '/preview';
+        storedFileData = null;
+        storedMimeType = 'video/mp4';
+        storedFileSize = 0;
+      } else if (/\.(mp4|webm)(\?.*)?$/i.test(cleanUrl)) {
+        // Direct streaming video links
+        finalMediaType = 'video';
+        fileUrl = cleanUrl;
+        storedFileData = null;
+        storedMimeType = cleanUrl.toLowerCase().includes('.webm') ? 'video/webm' : 'video/mp4';
         storedFileSize = 0;
       } else {
         // "copy over the facebook hosted images. images hosted on other sites are fine, too. copy it all."
@@ -514,8 +535,10 @@ mediaRouter.post('/', async (c) => {
     ).run();
 
     const newId = result.meta.last_row_id;
-    // Always serve photos and non-youtube uploads via same-origin /api/media/:id/file proxy
-    if (finalMediaType !== 'youtube') {
+    // Serve copied photos and direct binary uploads via same-origin /api/media/:id/file proxy
+    // (External YouTube, Google Drive previews, and direct streaming links stay as direct links)
+    const isDirectExternalVideo = Boolean(finalMediaType === 'youtube' || extractGoogleDriveFileId(originalUrl) || /\.(mp4|webm)(\?.*)?$/i.test(originalUrl || ''));
+    if (!isDirectExternalVideo) {
       fileUrl = '/api/media/' + newId + '/file';
       await c.env.DB.prepare('UPDATE media_items SET file_url = ? WHERE id = ?').bind(fileUrl, newId).run();
     }
