@@ -2354,7 +2354,26 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
       assert.ok(ascData.media[i].date_taken <= ascData.media[i + 1].date_taken, 'order=asc must sort dates oldest first');
     }
 
-    // 10. Organizer/Admin Deletion of media item from carousels (DELETE & POST /api/media/:id/delete)
+    // 10. Organizer/Admin Edit of media item (PUT /api/media/:id)
+    const updateRes = await apiReq('PUT', `/api/media/${copyData.item.id}`, seedOrgCookie, {
+      title: 'Updated Championship Photo Title',
+      caption: 'Updated dramatic dugout celebration caption.',
+      album: 'Tournament Highlights',
+      date_taken: '2026-10-25',
+      contributor_name: 'David Rowland',
+      is_approved: 1
+    });
+    assert.equal(updateRes.status, 200, 'Organizer must be able to update media item metadata via PUT');
+    assert.equal(updateRes.data.item.title, 'Updated Championship Photo Title', 'Updated title must be reflected in response');
+    assert.equal(updateRes.data.item.album, 'Tournament Highlights', 'Updated album must be reflected in response');
+
+    // Verify GET /api/media?status=all returns all items for managers
+    const allMediaRes = await apiReq('GET', '/api/media?status=all', seedOrgCookie);
+    assert.equal(allMediaRes.status, 200, 'GET /api/media?status=all must return 200 for manager');
+    assert.ok(Array.isArray(allMediaRes.data.media), 'media array must be present');
+    assert.ok(allMediaRes.data.media.some(m => m.id === copyData.item.id), 'Updated media item must be in all media list');
+
+    // 11. Organizer/Admin Deletion of media item from carousels (DELETE & POST /api/media/:id/delete)
     const delRes = await apiReq('DELETE', `/api/media/${copyData.item.id}`, seedOrgCookie);
     assert.equal(delRes.status, 200, 'Organizer must be able to delete media item via DELETE');
 
@@ -2367,14 +2386,18 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     const ytDelRes = await apiReq('POST', `/api/media/${ytData.item.id}/delete`, seedAdminCookie);
     assert.equal(ytDelRes.status, 200, 'Admin must be able to delete YouTube video via POST /delete');
 
-    // Verify UI components for admin carousel photo and video removal
+    // Verify UI components for admin carousel photo and video editing & removal
     const adminHtml = fs.readFileSync(path.join(publicDir, 'admin.html'), 'utf8');
     assert.ok(adminHtml.includes('id="admin-media-carousel-section"'), 'admin.html must contain #admin-media-carousel-section');
     assert.ok(adminHtml.includes('id="admin-media-grid"'), 'admin.html must contain #admin-media-grid');
+    assert.ok(adminHtml.includes('admin-media-status-btn'), 'admin.html must include status filter buttons');
 
     const adminJs = fs.readFileSync(path.join(publicDir, 'js', 'admin.js'), 'utf8');
     assert.ok(adminJs.includes('setupMediaCarouselsAdmin'), 'admin.js must implement setupMediaCarouselsAdmin');
     assert.ok(adminJs.includes('btn-admin-remove-media'), 'admin.js must provide btn-admin-remove-media to remove items from carousels');
+    assert.ok(adminJs.includes('btn-admin-edit-media'), 'admin.js must provide btn-admin-edit-media to edit items');
+    assert.ok(adminJs.includes('admin-media-edit-form'), 'admin.js must provide media edit form');
+    assert.ok(adminJs.includes('updateMedia'), 'admin.js must call updateMedia');
 
     assert.ok(galleryHtml.includes('id="lightbox-delete-btn"'), 'gallery.html must provide #lightbox-delete-btn in lightbox modal');
     assert.ok(galleryJsCode.includes('btn-delete-photo'), 'gallery.js must wire .btn-delete-photo');

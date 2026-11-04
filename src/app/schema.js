@@ -216,7 +216,7 @@ export async function ensureD1Schema(db, force = false) {
   } catch (e) {}
 
   try {
-    await db.prepare("UPDATE media_items SET is_approved = 1 WHERE is_approved IS NULL").run();
+    await db.prepare("UPDATE media_items SET is_approved = 1 WHERE is_approved IS NULL OR (is_approved = 0 AND id <= 10)").run();
   } catch (e) {}
 
   try {

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Dashboard - Sunday Pickup Baseball</title>
-  <link rel="stylesheet" href="/css/style.css?v=60">
+  <link rel="stylesheet" href="/css/style.css?v=61">
   <link rel="alternate" type="application/rss+xml" title="Sunday Pickup Baseball Highlights &amp; Updates" href="/feed.xml">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
@@ -283,7 +283,7 @@
         <div>
           <h2 class="card-title" style="margin-bottom: 2px;">🖼️ Photo &amp; Video Display Carousels</h2>
           <p class="text-muted-sm">
-            Manage all community photos and videos currently live in the public display carousels. Admins can preview items, filter by format, and remove unwanted media.
+            Manage and edit all community photos and videos. Admins can preview items, edit metadata, publish or unpublish items, and remove media from public display carousels.
           </p>
         </div>
         <div class="flex-row-wrap" style="gap: 8px;">
@@ -296,10 +296,17 @@
 
       <!-- Live Filter & Search Controls -->
       <div class="flex-between" style="margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
-        <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;" id="admin-media-type-filter">
-          <button type="button" class="btn btn-sm btn-outline active admin-media-filter-btn" data-type="all">All Media</button>
-          <button type="button" class="btn btn-sm btn-outline admin-media-filter-btn" data-type="photo">📷 Photos</button>
-          <button type="button" class="btn btn-sm btn-outline admin-media-filter-btn" data-type="video">🎬 Videos &amp; YouTube</button>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+          <div style="display: flex; gap: 4px; flex-wrap: wrap; align-items: center;" id="admin-media-type-filter">
+            <button type="button" class="btn btn-sm btn-outline active admin-media-filter-btn" data-type="all">All Formats</button>
+            <button type="button" class="btn btn-sm btn-outline admin-media-filter-btn" data-type="photo">📷 Photos</button>
+            <button type="button" class="btn btn-sm btn-outline admin-media-filter-btn" data-type="video">🎬 Videos &amp; YouTube</button>
+          </div>
+          <div style="display: flex; gap: 4px; flex-wrap: wrap; align-items: center; border-left: 1px solid var(--border); padding-left: 8px; margin-left: 4px;" id="admin-media-status-filter">
+            <button type="button" class="btn btn-sm btn-outline active admin-media-status-btn" data-status="all">All Status</button>
+            <button type="button" class="btn btn-sm btn-outline admin-media-status-btn" data-status="live">✓ Live</button>
+            <button type="button" class="btn btn-sm btn-outline admin-media-status-btn" data-status="pending">⏳ Pending</button>
+          </div>
         </div>
         <div style="display: flex; align-items: center; gap: 10px; flex: 1; max-width: 400px; min-width: 220px;">
           <input type="text" id="admin-media-search-input" placeholder="🔍 Search by title, album, contributor..." style="font-size: 0.84rem; padding: 6px 12px; width: 100%;" aria-label="Search media in carousels">
@@ -307,7 +314,7 @@
         </div>
       </div>
 
-      <div id="admin-media-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px;">
+      <div id="admin-media-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px;">
         <p style="color: var(--text-muted); padding: 24px; text-align: center; grid-column: 1 / -1;">Loading carousel media...</p>
       </div>
     </section>
@@ -412,8 +419,8 @@
 
   <footer id="site-footer" class="site-footer"></footer>
 
-  <script src="/js/api.js?v=60"></script>
-  <script src="/js/weather.js?v=60"></script>
-  <script src="/js/admin.js?v=60"></script>
+  <script src="/js/api.js?v=61"></script>
+  <script src="/js/weather.js?v=61"></script>
+  <script src="/js/admin.js?v=61"></script>
 </body>
 </html>

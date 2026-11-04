@@ -53,7 +53,7 @@ function isPrivateIpOrHost(hostname, isTestEnv = false) {
 mediaRouter.get('/', async (c) => {
   try {
     const user = c.get('user');
-    const isManager = Boolean(user && (user.role === 'admin' || user.role === 'organizer'));
+    const isManager = Boolean(user && (user.role === 'admin' || user.role === 'organizer' || user.isAdmin || user.canManageEvents));
     const statusParam = c.req.query('status') || '';
     const typeParam = c.req.query('type') || 'all';
     const albumParam = c.req.query('album') || '';
@@ -66,6 +66,8 @@ mediaRouter.get('/', async (c) => {
     // By default, public gallery only displays admin-approved media
     if (statusParam === 'pending' && isManager) {
       whereClauses.push("m.is_approved = 0");
+    } else if (statusParam === 'all' && isManager) {
+      // Admin/organizer viewing all media items (both approved and pending)
     } else {
       whereClauses.push("m.is_approved = 1");
     }
@@ -149,7 +151,7 @@ mediaRouter.get('/:id/file', async (c) => {
     // Moderation security check: Only approved media or organizers/admins can view files
     if (row.is_approved !== 1) {
       const user = c.get('user');
-      const isManager = Boolean(user && (user.role === 'admin' || user.role === 'organizer' || user.canManageEvents));
+      const isManager = Boolean(user && (user.role === 'admin' || user.role === 'organizer' || user.isAdmin || user.canManageEvents));
       if (!isManager) {
         return c.text('Not found', 404);
       }
@@ -362,7 +364,7 @@ mediaRouter.post('/', async (c) => {
     }
 
     // Check manager status: organizers/admins publish immediately, public submissions require approval
-    const isManager = Boolean(user && (user.role === 'admin' || user.role === 'organizer'));
+    const isManager = Boolean(user && (user.role === 'admin' || user.role === 'organizer' || user.isAdmin || user.canManageEvents));
     const isApproved = isManager ? 1 : 0;
 
     // Insert media row into D1 / SQLite
@@ -444,6 +446,71 @@ mediaRouter.post('/:id/approve', requireOrganizer, async (c) => {
     return c.json({ error: 'Failed to approve media item.' }, 500);
   }
 });
+
+// ---------------------------------------------------------------------------
+// PUT & POST /api/media/:id - Organizer/Admin Media Update
+// ---------------------------------------------------------------------------
+async function handleMediaUpdate(c) {
+  try {
+    const id = parseInt(c.req.param('id'), 10);
+    if (!id || isNaN(id)) return c.json({ error: 'Invalid ID' }, 400);
+
+    const existing = await c.env.DB.prepare('SELECT * FROM media_items WHERE id = ?').bind(id).first();
+    if (!existing) return c.json({ error: 'Media item not found' }, 404);
+
+    const user = c.get('user');
+    const body = await c.req.json().catch(() => ({}));
+
+    const title = typeof body.title === 'string' ? body.title.trim() : existing.title;
+    const caption = typeof body.caption === 'string' ? body.caption.trim() : (existing.caption || '');
+    const album = typeof body.album === 'string' ? (body.album.trim() || 'General') : (existing.album || 'General');
+
+    let dateTaken = existing.date_taken;
+    if (typeof body.date_taken === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.date_taken.trim())) {
+      dateTaken = body.date_taken.trim();
+    }
+
+    const contributorName = typeof body.contributor_name === 'string' ? body.contributor_name.trim() : existing.contributor_name;
+
+    let isApproved = existing.is_approved;
+    let approverId = existing.approved_by;
+    let approvedAt = existing.approved_at;
+
+    if (body.is_approved !== undefined) {
+      const newApproved = (body.is_approved === 1 || body.is_approved === true || body.is_approved === '1') ? 1 : 0;
+      if (newApproved === 1 && existing.is_approved !== 1) {
+        isApproved = 1;
+        approverId = user ? user.id : null;
+        approvedAt = new Date().toISOString();
+      } else if (newApproved === 0) {
+        isApproved = 0;
+      }
+    }
+
+    await c.env.DB.prepare(`
+      UPDATE media_items
+      SET title = ?, caption = ?, album = ?, date_taken = ?, contributor_name = ?,
+          is_approved = ?, approved_by = ?, approved_at = ?
+      WHERE id = ?
+    `).bind(title, caption, album, dateTaken, contributorName, isApproved, approverId, approvedAt, id).run();
+
+    const updatedItem = await c.env.DB.prepare(`
+      SELECT m.id, m.title, m.caption, m.media_type, m.original_url, m.file_url,
+             m.mime_type, m.file_size, m.album, m.date_taken, m.contributor_name,
+             m.contributor_id, m.event_id, m.is_approved, m.created_at
+      FROM media_items m
+      WHERE m.id = ?
+    `).bind(id).first();
+
+    return c.json({ success: true, item: updatedItem, message: 'Media item updated successfully.' });
+  } catch (err) {
+    console.error('[Media] Error updating media item:', err);
+    return c.json({ error: 'Failed to update media item.' }, 500);
+  }
+}
+
+mediaRouter.put('/:id', requireOrganizer, handleMediaUpdate);
+mediaRouter.post('/:id/update', requireOrganizer, handleMediaUpdate);
 
 // ---------------------------------------------------------------------------
 // DELETE & POST /api/media/:id - Organizer/Admin Deletion

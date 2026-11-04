@@ -295,7 +295,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '60',
+  CLIENT_VERSION: '61',
 
   // Current user cache
   currentUser: null,
@@ -1060,6 +1060,7 @@ const API = {
     if (p.type) q.set('type', p.type);
     if (p.album) q.set('album', p.album);
     if (p.order) q.set('order', p.order);
+    if (p.status) q.set('status', p.status);
     const qs = q.toString() ? '?' + q.toString() : '';
     return this.request('GET', '/api/media' + qs, null, {
       noStore: true, throwOnError: true, errorMsg: 'Failed to load community gallery.'
@@ -1075,6 +1076,12 @@ const API = {
   async approveMedia(id) {
     return this.request('PUT', '/api/media/' + encodeURIComponent(id) + '/approve', null, {
       throwOnError: true, errorMsg: 'Failed to approve media item.'
+    });
+  },
+
+  async updateMedia(id, payload) {
+    return this.request('PUT', '/api/media/' + encodeURIComponent(id), payload || {}, {
+      throwOnError: true, errorMsg: 'Failed to update media item.'
     });
   },
 

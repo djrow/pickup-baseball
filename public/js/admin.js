@@ -1508,6 +1508,7 @@ async function loadAdminPosts() {
 // ---------------------------------------------------------------------------
 let allCarouselMedia = [];
 let activeMediaTypeFilter = 'all';
+let activeMediaStatusFilter = 'all';
 
 async function setupMediaCarouselsAdmin() {
   const container = document.getElementById('admin-media-grid');
@@ -1516,13 +1517,14 @@ async function setupMediaCarouselsAdmin() {
   const refreshBtn = document.getElementById('admin-refresh-media-btn');
   const searchInput = document.getElementById('admin-media-search-input');
   const filterBtns = document.querySelectorAll('.admin-media-filter-btn');
+  const statusBtns = document.querySelectorAll('.admin-media-status-btn');
 
   if (!container) return;
 
   async function loadMediaItems() {
     container.innerHTML = '<p style="color: var(--text-muted); padding: 24px; text-align: center; grid-column: 1 / -1;">Loading carousel media...</p>';
     try {
-      const data = await API.getMedia({ order: 'desc' });
+      const data = await API.getMedia({ order: 'desc', status: 'all' });
       allCarouselMedia = (data && data.media) ? data.media : [];
       renderMediaItems();
     } catch (err) {
@@ -1538,6 +1540,12 @@ async function setupMediaCarouselsAdmin() {
       filtered = filtered.filter(m => m.media_type === 'photo');
     } else if (activeMediaTypeFilter === 'video') {
       filtered = filtered.filter(m => m.media_type === 'video' || m.media_type === 'youtube');
+    }
+
+    if (activeMediaStatusFilter === 'live') {
+      filtered = filtered.filter(m => m.is_approved === 1);
+    } else if (activeMediaStatusFilter === 'pending') {
+      filtered = filtered.filter(m => m.is_approved === 0);
     }
 
     if (query) {
@@ -1575,6 +1583,10 @@ async function setupMediaCarouselsAdmin() {
           ? '<span class="badge badge-blue" style="font-size: 0.7rem;">🎬 Video</span>'
           : '<span class="badge badge-green" style="font-size: 0.7rem;">📷 Photo</span>');
 
+      const statusBadge = item.is_approved === 1
+        ? '<span class="badge badge-green" style="font-size: 0.7rem;">✓ Live</span>'
+        : '<span class="badge badge-orange" style="font-size: 0.7rem;">⏳ Pending</span>';
+
       const dateLabel = item.date_taken ? API.escapeHtml(item.date_taken) : '';
       const album = item.album ? API.escapeHtml(item.album) : 'General';
       const contributor = item.contributor_name ? API.escapeHtml(item.contributor_name) : 'Community';
@@ -1584,8 +1596,11 @@ async function setupMediaCarouselsAdmin() {
         <div class="card" id="admin-media-card-${item.id}" style="display: flex; flex-direction: column; justify-content: space-between; margin-bottom: 0; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-sm);">
           <div>
             <div style="position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: var(--radius-sm); overflow: hidden; background: #0c1f1a; margin-bottom: 10px;">
-              <img src="${API.escapeHtml(thumbUrl)}" alt="${title}" style="width: 100%; height: 100%; object-fit: cover; display: block;" loading="lazy">
-              <div style="position: absolute; top: 6px; left: 6px;">${typeBadge}</div>
+              <img src="${API.escapeHtml(thumbUrl)}" alt="${title}" onerror="this.onerror=null;this.src='/logo.svg';" style="width: 100%; height: 100%; object-fit: cover; display: block;" loading="lazy">
+              <div style="position: absolute; top: 6px; left: 6px; display: flex; gap: 4px; flex-wrap: wrap;">
+                ${typeBadge}
+                ${statusBadge}
+              </div>
               ${dateLabel ? `<div style="position: absolute; bottom: 6px; left: 6px; background: rgba(0,0,0,0.7); color: #fff; font-size: 0.7rem; font-weight: 700; padding: 2px 6px; border-radius: 4px;">📅 ${dateLabel}</div>` : ''}
             </div>
             <h4 style="margin: 0 0 4px 0; font-size: 0.95rem; color: var(--secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${title}">${title}</h4>
@@ -1594,13 +1609,156 @@ async function setupMediaCarouselsAdmin() {
             </div>
             ${item.caption ? `<p style="font-size: 0.78rem; color: var(--text-main); margin: 0 0 8px 0; line-height: 1.3; max-height: 2.6em; overflow: hidden; font-style: italic;">"${API.escapeHtml(item.caption)}"</p>` : ''}
           </div>
-          <button type="button" class="btn btn-outline btn-sm btn-admin-remove-media" data-id="${item.id}" data-type="${item.media_type}" style="color: var(--danger); border-color: #fca5a5; width: 100%; font-weight: 700; margin-top: 10px;">
-            🗑️ Remove from Carousel
-          </button>
+
+          <div style="margin-top: 10px;">
+            <div class="flex-row-wrap" style="gap: 6px;">
+              <button type="button" class="btn btn-outline btn-sm btn-admin-edit-media" data-id="${item.id}" style="flex: 1; font-weight: 700; font-size: 0.78rem; padding: 5px 8px;">
+                ✏️ Edit
+              </button>
+              ${item.is_approved === 0 ? `
+              <button type="button" class="btn btn-outline btn-sm btn-admin-publish-media" data-id="${item.id}" style="color: var(--secondary); border-color: var(--secondary); font-weight: 700; font-size: 0.78rem; padding: 5px 8px;">
+                ✓ Publish
+              </button>` : ''}
+              <button type="button" class="btn btn-outline btn-sm btn-admin-remove-media" data-id="${item.id}" data-type="${item.media_type}" style="color: var(--danger); border-color: #fca5a5; font-weight: 700; font-size: 0.78rem; padding: 5px 8px;">
+                🗑️ Remove
+              </button>
+            </div>
+
+            <!-- Inline Edit Form -->
+            <div id="edit-media-panel-${item.id}" style="display: none; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border);">
+              <div id="edit-media-alert-${item.id}"></div>
+              <form class="admin-media-edit-form" data-id="${item.id}" style="display: flex; flex-direction: column; gap: 8px;">
+                <div>
+                  <label for="edit-media-title-${item.id}" style="font-size: 0.74rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 2px;">Title</label>
+                  <input type="text" id="edit-media-title-${item.id}" value="${API.escapeHtml(item.title || '')}" style="width: 100%; padding: 5px 8px; font-size: 0.82rem;" class="form-input" required>
+                </div>
+                <div>
+                  <label for="edit-media-caption-${item.id}" style="font-size: 0.74rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 2px;">Caption / Story</label>
+                  <textarea id="edit-media-caption-${item.id}" rows="2" style="width: 100%; padding: 5px 8px; font-size: 0.82rem; resize: vertical;" class="form-input">${API.escapeHtml(item.caption || '')}</textarea>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+                  <div>
+                    <label for="edit-media-album-${item.id}" style="font-size: 0.74rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 2px;">Album</label>
+                    <input type="text" id="edit-media-album-${item.id}" value="${API.escapeHtml(item.album || 'General')}" style="width: 100%; padding: 5px 8px; font-size: 0.82rem;" class="form-input">
+                  </div>
+                  <div>
+                    <label for="edit-media-date-${item.id}" style="font-size: 0.74rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 2px;">Date Taken</label>
+                    <input type="date" id="edit-media-date-${item.id}" value="${API.escapeHtml(item.date_taken || '')}" style="width: 100%; padding: 5px 8px; font-size: 0.82rem;" class="form-input">
+                  </div>
+                </div>
+                <div>
+                  <label for="edit-media-contributor-${item.id}" style="font-size: 0.74rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 2px;">Contributor Name</label>
+                  <input type="text" id="edit-media-contributor-${item.id}" value="${API.escapeHtml(item.contributor_name || '')}" style="width: 100%; padding: 5px 8px; font-size: 0.82rem;" class="form-input">
+                </div>
+                <div style="margin-top: 2px;">
+                  <label style="display: flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer;">
+                    <input type="checkbox" id="edit-media-approved-${item.id}" ${item.is_approved === 1 ? 'checked' : ''}>
+                    <span>Live in Carousel</span>
+                  </label>
+                </div>
+                <div style="display: flex; gap: 6px; margin-top: 4px;">
+                  <button type="submit" class="btn btn-primary btn-sm btn-save-media" data-id="${item.id}" style="flex: 1; font-size: 0.78rem; padding: 5px 8px;">💾 Save</button>
+                  <button type="button" class="btn btn-outline btn-sm btn-cancel-edit-media" data-id="${item.id}" style="font-size: 0.78rem; padding: 5px 8px;">Cancel</button>
+                </div>
+              </form>
+            </div>
+          </div>
         </div>
       `;
     }).join('');
 
+    // Wire up Edit toggle
+    container.querySelectorAll('.btn-admin-edit-media').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-id');
+        const panel = document.getElementById(`edit-media-panel-${id}`);
+        if (panel) {
+          panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        }
+      });
+    });
+
+    // Wire up Cancel edit
+    container.querySelectorAll('.btn-cancel-edit-media').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-id');
+        const panel = document.getElementById(`edit-media-panel-${id}`);
+        if (panel) panel.style.display = 'none';
+      });
+    });
+
+    // Wire up Save edit
+    container.querySelectorAll('.admin-media-edit-form').forEach(form => {
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = form.getAttribute('data-id');
+        const titleEl = document.getElementById(`edit-media-title-${id}`);
+        const captionEl = document.getElementById(`edit-media-caption-${id}`);
+        const albumEl = document.getElementById(`edit-media-album-${id}`);
+        const dateEl = document.getElementById(`edit-media-date-${id}`);
+        const contribEl = document.getElementById(`edit-media-contributor-${id}`);
+        const approvedEl = document.getElementById(`edit-media-approved-${id}`);
+
+        const title = (titleEl ? titleEl.value : '').trim();
+        const caption = (captionEl ? captionEl.value : '').trim();
+        const album = (albumEl ? albumEl.value : '').trim() || 'General';
+        const date_taken = (dateEl ? dateEl.value : '').trim();
+        const contributor_name = (contribEl ? contribEl.value : '').trim();
+        const is_approved = approvedEl && approvedEl.checked ? 1 : 0;
+
+        const saveBtn = form.querySelector('.btn-save-media');
+        const alertPanel = document.getElementById(`edit-media-alert-${id}`);
+        if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving...'; }
+
+        try {
+          const res = await API.updateMedia(id, {
+            title, caption, album, date_taken, contributor_name, is_approved
+          });
+          const updated = (res && res.item) ? res.item : { id: parseInt(id, 10), title, caption, album, date_taken, contributor_name, is_approved };
+          const idx = allCarouselMedia.findIndex(m => String(m.id) === String(id));
+          if (idx !== -1) {
+            allCarouselMedia[idx] = Object.assign({}, allCarouselMedia[idx], updated);
+          }
+          if (alertEl) {
+            alertEl.innerHTML = `<div class="alert alert-success" style="padding: 10px 14px; margin-bottom: 12px;">✓ Media item "${API.escapeHtml(title)}" updated successfully.</div>`;
+            setTimeout(() => { alertEl.innerHTML = ''; }, 4000);
+          }
+          renderMediaItems();
+        } catch (err) {
+          if (alertPanel) {
+            alertPanel.innerHTML = `<div class="alert alert-error" style="padding: 8px 12px; margin-bottom: 8px;">Failed to save: ${API.escapeHtml(err.message || 'Error')}</div>`;
+          } else {
+            alert('Failed to update media: ' + (err.message || 'Error'));
+          }
+          if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 Save'; }
+        }
+      });
+    });
+
+    // Wire up Publish button
+    container.querySelectorAll('.btn-admin-publish-media').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.getAttribute('data-id');
+        btn.disabled = true;
+        btn.textContent = 'Publishing...';
+        try {
+          await API.approveMedia(id);
+          const found = allCarouselMedia.find(m => String(m.id) === String(id));
+          if (found) found.is_approved = 1;
+          if (alertEl) {
+            alertEl.innerHTML = `<div class="alert alert-success" style="padding: 10px 14px; margin-bottom: 12px;">✓ Media item published live to carousels.</div>`;
+            setTimeout(() => { alertEl.innerHTML = ''; }, 4000);
+          }
+          renderMediaItems();
+        } catch (err) {
+          alert('Failed to publish media: ' + (err.message || 'Error'));
+          btn.disabled = false;
+          btn.textContent = '✓ Publish';
+        }
+      });
+    });
+
+    // Wire up Remove button
     container.querySelectorAll('.btn-admin-remove-media').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         const id = btn.getAttribute('data-id');
@@ -1621,7 +1779,7 @@ async function setupMediaCarouselsAdmin() {
         } catch (err) {
           alert('Failed to delete media item: ' + (err.message || 'Error'));
           btn.disabled = false;
-          btn.textContent = '🗑️ Remove from Carousel';
+          btn.textContent = '🗑️ Remove';
         }
       });
     });
@@ -1632,6 +1790,15 @@ async function setupMediaCarouselsAdmin() {
       filterBtns.forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       activeMediaTypeFilter = btn.getAttribute('data-type') || 'all';
+      renderMediaItems();
+    });
+  });
+
+  statusBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      statusBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      activeMediaStatusFilter = btn.getAttribute('data-status') || 'all';
       renderMediaItems();
     });
   });
