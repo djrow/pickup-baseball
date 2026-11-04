@@ -967,44 +967,43 @@
     }
   }
 
-  function compressImageIfLarge(file, callback) {
-    if (!file || !file.type || !file.type.startsWith('image/') || file.size < 1.5 * 1024 * 1024) {
-      var reader = new FileReader();
-      reader.onload = function(e) {
-        callback(e.target.result, file.type || 'image/jpeg');
-      };
-      reader.readAsDataURL(file);
-      return;
-    }
+  var ALLOWED_UPLOAD_MIME = [
+    'image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif', 'image/avif',
+    'video/mp4', 'video/webm'
+  ];
 
-    var img = new Image();
+  var ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.avif', '.mp4', '.webm'];
+
+  function isAllowedMediaType(file) {
+    if (!file) return false;
+    var type = (file.type || '').toLowerCase();
+    if (ALLOWED_UPLOAD_MIME.indexOf(type) !== -1) return true;
+    var name = (file.name || '').toLowerCase();
+    for (var i = 0; i < ALLOWED_EXTENSIONS.length; i++) {
+      if (name.endsWith(ALLOWED_EXTENSIONS[i])) return true;
+    }
+    return false;
+  }
+
+  // Preserve full original quality: NO canvas resizing or lossy re-encoding!
+  function readFileWithoutCompression(file, callback) {
     var reader = new FileReader();
     reader.onload = function(e) {
-      img.onload = function() {
-        var canvas = document.createElement('canvas');
-        var maxDim = 2048;
-        var width = img.width;
-        var height = img.height;
-        if (width > maxDim || height > maxDim) {
-          if (width > height) {
-            height = Math.round((height * maxDim) / width);
-            width = maxDim;
-          } else {
-            width = Math.round((width * maxDim) / height);
-            maxDim = height;
-          }
-        }
-        canvas.width = width;
-        canvas.height = height;
-        var ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, width, height);
-        var compressedB64 = canvas.toDataURL('image/jpeg', 0.85);
-        callback(compressedB64, 'image/jpeg');
-      };
-      img.onerror = function() {
-        callback(e.target.result, file.type || 'image/jpeg');
-      };
-      img.src = e.target.result;
+      var mime = file.type;
+      if (!mime) {
+        var name = (file.name || '').toLowerCase();
+        if (name.endsWith('.png')) mime = 'image/png';
+        else if (name.endsWith('.webp')) mime = 'image/webp';
+        else if (name.endsWith('.gif')) mime = 'image/gif';
+        else if (name.endsWith('.avif')) mime = 'image/avif';
+        else if (name.endsWith('.mp4')) mime = 'video/mp4';
+        else if (name.endsWith('.webm')) mime = 'video/webm';
+        else mime = 'image/jpeg';
+      }
+      callback(e.target.result, mime);
+    };
+    reader.onerror = function() {
+      alert('Could not read the selected file from your device.');
     };
     reader.readAsDataURL(file);
   }
@@ -1013,18 +1012,26 @@
     var fileNameLabel = document.getElementById('dropzone-file-name');
     if (!file) return;
 
-    if (file.size > 15 * 1024 * 1024) {
-      alert('Selected file is too large (' + (file.size / 1024 / 1024).toFixed(1) + 'MB). Please choose a file under 15MB.');
+    if (!isAllowedMediaType(file)) {
+      alert('Unsupported file format (' + (file.type || file.name) + ').\n\nPlease select web-compatible media:\n• Photos: JPG/JPEG, PNG, WebP, GIF, or AVIF (HEIC/TIFF files must be converted to JPG or PNG before submitting)\n• Videos: MP4 or WebM (MOV/AVI/MKV files are disallowed as they do not stream natively across web browsers).');
+      return;
+    }
+
+    var maxBytes = 50 * 1024 * 1024; // 50MB max file size
+    if (file.size > maxBytes) {
+      alert('Selected file is too large (' + (file.size / 1024 / 1024).toFixed(1) + 'MB). Please choose a photo or video under 50MB.');
       return;
     }
 
     if (fileNameLabel) {
-      fileNameLabel.textContent = '✓ Selected: ' + file.name + ' (' + (file.size / 1024).toFixed(0) + ' KB)';
+      var sizeMb = (file.size / (1024 * 1024)).toFixed(2);
+      var sizeText = file.size > 1024 * 1024 ? sizeMb + ' MB' : (file.size / 1024).toFixed(0) + ' KB';
+      fileNameLabel.textContent = '✓ Selected: ' + file.name + ' (' + sizeText + ') · Full uncompressed quality';
     }
 
     selectedFileName = file.name;
 
-    compressImageIfLarge(file, function(b64, mime) {
+    readFileWithoutCompression(file, function(b64, mime) {
       selectedFileBase64 = b64;
       selectedFileMime = mime;
       updateLivePreview();

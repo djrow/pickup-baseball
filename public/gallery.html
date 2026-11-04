@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Photo &amp; Video Gallery | Pickup Baseball Foundation</title>
-  <link rel="stylesheet" href="/css/style.css?v=67">
+  <link rel="stylesheet" href="/css/style.css?v=68">
   <link rel="alternate" type="application/rss+xml" title="Sunday Pickup Baseball Highlights &amp; Updates" href="/feed.xml">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
@@ -503,13 +503,14 @@
         <!-- Upload Mode Container -->
         <div id="mode-upload-container">
           <div class="media-dropzone" id="media-dropzone">
-            <input type="file" id="media-file-input" accept="image/*,video/*" style="display: none;">
+            <input type="file" id="media-file-input" accept="image/jpeg,image/png,image/webp,image/gif,image/avif,video/mp4,video/webm" style="display: none;">
             <div style="font-size: 2.2rem; margin-bottom: 8px;">📱</div>
             <div style="font-weight: 700; color: var(--secondary); font-size: 1.05rem; margin-bottom: 4px;">
               Tap to Choose Photos / Videos from Camera Roll
             </div>
             <p style="color: var(--text-muted); font-size: 0.85rem; margin: 0 0 12px 0;">
-              Or drag and drop files from your desktop (JPEG, PNG, WebP, MP4)
+              Or drag and drop files from your desktop (Max 50MB · Original Full Quality · No Compression)<br>
+              <span style="font-size: 0.8rem;">Supported Photos: JPG, PNG, WebP, GIF, AVIF · Videos: MP4, WebM</span>
             </p>
             <button type="button" class="btn btn-outline btn-sm" id="btn-browse-files">
               📂 Select Files
@@ -638,8 +639,8 @@
   <!-- Site Footer -->
   <footer id="site-footer" class="site-footer"></footer>
 
-  <script src="/js/api.js?v=67"></script>
-  <script src="/js/art.js?v=67"></script>
-  <script src="/js/gallery.js?v=67"></script>
+  <script src="/js/api.js?v=68"></script>
+  <script src="/js/art.js?v=68"></script>
+  <script src="/js/gallery.js?v=68"></script>
 </body>
 </html>

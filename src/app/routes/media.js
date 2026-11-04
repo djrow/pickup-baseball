@@ -295,6 +295,7 @@ mediaRouter.post('/', async (c) => {
     let storedFileSize = 0;
 
     const ALLOWED_MIME = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif', 'image/avif', 'video/mp4', 'video/webm'];
+    const MAX_MEDIA_BYTES = 50 * 1024 * 1024; // 50MB max photo & video submission limit
 
     // Case 1: External URL submitted (YouTube or Facebook/external image link)
     if (url && String(url).trim()) {
@@ -351,13 +352,13 @@ mediaRouter.post('/', async (c) => {
         const rawContentType = (fetchRes.headers.get('content-type') || '').toLowerCase();
         const arrayBuf = await fetchRes.arrayBuffer();
 
-        if (arrayBuf.byteLength > 15 * 1024 * 1024) {
-          return c.json({ error: 'Image exceeds maximum size limit of 15MB.' }, 400);
+        if (arrayBuf.byteLength > MAX_MEDIA_BYTES) {
+          return c.json({ error: 'Image exceeds maximum size limit of 50MB.' }, 400);
         }
 
         const candidateMime = rawContentType.includes('image/') ? rawContentType.split(';')[0].trim() : 'image/jpeg';
         if (!ALLOWED_MIME.includes(candidateMime)) {
-          return c.json({ error: 'Unsupported media format. Only JPEG, PNG, WebP, GIF, and AVIF are supported.' }, 400);
+          return c.json({ error: 'Unsupported media format (' + candidateMime + '). Only JPEG, PNG, WebP, GIF, and AVIF are supported.' }, 400);
         }
 
         storedMimeType = candidateMime;
@@ -387,12 +388,12 @@ mediaRouter.post('/', async (c) => {
       }
 
       const bytes = base64ToUint8Array(cleanB64);
-      if (bytes.byteLength > 15 * 1024 * 1024) {
-        return c.json({ error: 'Uploaded file exceeds 15MB limit.' }, 400);
+      if (bytes.byteLength > MAX_MEDIA_BYTES) {
+        return c.json({ error: 'Uploaded file exceeds 50MB limit.' }, 400);
       }
 
       if (!ALLOWED_MIME.includes(storedMimeType)) {
-        return c.json({ error: 'Unsupported media format. Supported formats: JPEG, PNG, WebP, GIF, AVIF, MP4, WebM.' }, 400);
+        return c.json({ error: 'Unsupported media format (' + storedMimeType + '). To ensure reliable web playback, please upload standard formats: JPG, PNG, WebP, GIF, AVIF for photos, or MP4, WebM for videos (HEIC, TIFF, MOV, and AVI are disallowed).' }, 400);
       }
 
       // Verify raster image magic bytes if image
@@ -473,6 +474,15 @@ mediaRouter.post('/', async (c) => {
         } catch (err) {
           console.warn('[Media] Google Apps Script upload failed, falling back to local D1:', err.message);
         }
+      }
+
+      // If Google Drive is not configured or failed, protect D1 database from payloads > 10MB
+      if (storedFileData && storedFileSize > 10 * 1024 * 1024) {
+        return c.json({
+          error: appscriptUrl
+            ? 'Google Drive upload service was unreachable and file exceeds 10MB local database limit. Please verify your Google Apps Script Web App connection in Admin Settings.'
+            : 'Files over 10MB require Google Drive storage. Please configure the Google Apps Script Web App in Admin Settings, or upload a file under 10MB for local storage.'
+        }, 400);
       }
     } else {
       return c.json({ error: 'Either a media URL (YouTube/image) or an uploaded file is required.' }, 400);
