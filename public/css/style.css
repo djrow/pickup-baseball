@@ -3414,6 +3414,16 @@ footer.site-footer strong {
   touch-action: none;
   box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
 }
+.unified-dugout-stage .trunk-canvas-stage {
+  border: none !important;
+  background: transparent !important;
+  height: 100% !important;
+  width: 100% !important;
+  box-shadow: none !important;
+}
+.placed-trunk-sticker {
+  pointer-events: auto;
+}
 .sticker-shelf {
   display: flex;
   flex-wrap: wrap;

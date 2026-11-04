@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Photo &amp; Video Gallery | Pickup Baseball Foundation</title>
-  <link rel="stylesheet" href="/css/style.css?v=66">
+  <link rel="stylesheet" href="/css/style.css?v=67">
   <link rel="alternate" type="application/rss+xml" title="Sunday Pickup Baseball Highlights &amp; Updates" href="/feed.xml">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
@@ -343,74 +343,72 @@
         </div>
       </div>
 
-      <!-- Concept 2: The Dugout Wall Sticker & Tag Wall -->
+      <!-- Combined Concept 2 & 3: The Dugout Chalkboard & Sticker Wall -->
       <div id="section-dugout-wall" class="art-card" style="border-top: 5px solid var(--secondary); margin-bottom: 32px; padding: 18px; border-radius: var(--radius-md); background: var(--bg-subtle);">
         <a id="section-equipment-trunk" style="display: block; position: relative; top: -20px; visibility: hidden;"></a>
+        <a id="section-chalkboard" style="display: block; position: relative; top: -20px; visibility: hidden;"></a>
+
         <div class="flex-between">
           <div>
-            <span class="badge badge-blue" style="font-size: 0.75rem; text-transform: uppercase; font-weight: 800;">Concept 2</span>
+            <span class="badge badge-yellow" style="font-size: 0.75rem; text-transform: uppercase; font-weight: 800;">Community Canvas</span>
             <h3 style="color: var(--secondary); font-size: 1.3rem; margin: 6px 0 2px 0;">
-              🧱 The Dugout Wall Sticker &amp; Tag Wall
+              📋 The Dugout Chalkboard &amp; Sticker Wall
             </h3>
             <p style="font-size: 0.88rem; color: var(--text-muted); margin: 0;">
-              Slap retro baseball badges, patches, and player tags onto the weathered dugout wall. Add a player note or click a sticker to peel it off!
+              Draw dusty chalk plays, sign the slate, and slap retro baseball badges &amp; emoji stickers anywhere on the dugout wall!
             </p>
           </div>
         </div>
 
-        <div class="trunk-outer-box dugout-wall-outer-box" style="margin-top: 14px;">
-          <div style="text-align: center;">
-            <div class="trunk-header-plaque dugout-wall-header-plaque">
-              ★ PICKUP BASEBALL FOUNDATION · HOME DUGOUT WALL · EST. 2026 ★
+        <!-- Unified Chalkboard & Sticker Stage Frame -->
+        <div class="chalkboard-frame trunk-outer-box dugout-wall-outer-box" style="margin-top: 14px; position: relative; padding: 12px;">
+          <div style="text-align: center; margin-bottom: 8px;">
+            <div class="trunk-header-plaque dugout-wall-header-plaque" style="display: inline-block; margin-bottom: 8px;">
+              ★ PICKUP BASEBALL FOUNDATION · HOME DUGOUT CHALKBOARD &amp; STICKER WALL · EST. 2026 ★
             </div>
           </div>
-          <div id="trunk-canvas-stage" class="trunk-canvas-stage dugout-wall-stage" title="Click anywhere on the dugout wall to slap your selected sticker!"></div>
-        </div>
 
-        <div style="margin-top: 14px;">
-          <div style="font-size: 0.78rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px;">
-            1. Choose Your Sticker:
-          </div>
-          <div id="sticker-shelf" class="sticker-shelf"></div>
-
-          <div class="flex-between" style="margin-top: 12px; gap: 12px; flex-wrap: wrap;">
-            <div style="flex: 1; min-width: 200px;">
-              <label for="sticker-tag-input" style="font-size: 0.78rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; display: block; margin-bottom: 4px;">
-                2. Optional Custom Caption / Name:
-              </label>
-              <input type="text" id="sticker-tag-input" maxlength="28" placeholder="e.g. Bushrod 2026, Infield Single..." style="padding: 7px 12px; font-size: 0.88rem; border-radius: var(--radius-sm); border: 1.5px solid var(--border); width: 100%;">
-            </div>
-            <div style="align-self: flex-end; display: flex; gap: 6px; flex-wrap: wrap;">
-              <button type="button" id="btn-admin-clear-trunk" class="btn btn-outline btn-sm art-admin-only" style="display: none; color: var(--secondary); font-weight: 700;">
-                🛡️ Admin Peel Wall
-              </button>
-              <button type="button" id="btn-clear-trunk" class="btn btn-outline btn-sm" style="color: var(--text-muted);">
-                🧹 Peel My Stickers
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Concept 3: The Dugout Chalkboard Daily Doodle Slate -->
-      <div id="section-chalkboard" class="art-card" style="border-top: 5px solid #2A9D8F; padding: 18px; border-radius: var(--radius-md); background: var(--bg-subtle);">
-        <div class="flex-between">
-          <div>
-            <span class="badge badge-yellow" style="font-size: 0.75rem; text-transform: uppercase; font-weight: 800;">Concept 3</span>
-            <h3 style="color: var(--secondary); font-size: 1.3rem; margin: 6px 0 2px 0;">
-              📋 The Dugout Chalkboard Slate
-            </h3>
-            <p style="font-size: 0.88rem; color: var(--text-muted); margin: 0;">
-              Draw freehand plays, sign your name, or sketch ballpark diagrams in dusty chalk right on the dugout slate.
-            </p>
+          <!-- Interactive Stage: Chalk Canvas with Sticker Stage Layer -->
+          <div class="unified-dugout-stage" style="position: relative; width: 100%; height: 420px; overflow: hidden; border-radius: 6px; background: #1c2b27; box-shadow: inset 0 0 20px rgba(0,0,0,0.6);">
+            <canvas id="chalkboard-canvas" height="420" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block;" aria-label="Interactive Dugout Chalkboard Drawing Canvas"></canvas>
+            <div id="trunk-canvas-stage" class="trunk-canvas-stage dugout-wall-stage" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: transparent; z-index: 2;" title="Dugout Chalkboard &amp; Sticker Stage"></div>
           </div>
         </div>
 
-        <div class="chalkboard-frame" style="margin-top: 14px;">
-          <canvas id="chalkboard-canvas" height="400" aria-label="Interactive Dugout Chalkboard Drawing Canvas"></canvas>
+        <!-- Unified Tool Switcher & Controls Bar -->
+        <div style="display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); padding-bottom: 12px;">
+          <div style="display: flex; gap: 8px;">
+            <button type="button" id="btn-mode-chalk" class="btn btn-primary btn-sm active" style="font-weight: 700;">
+              ✏️ Dusty Chalk Drawing
+            </button>
+            <button type="button" id="btn-mode-stickers" class="btn btn-outline btn-sm" style="font-weight: 700;">
+              🏷️ Slap Stickers &amp; Emojis
+            </button>
+          </div>
+          <div class="flex-row-wrap" style="gap: 6px;">
+            <button type="button" id="btn-admin-freeze-chalk" class="btn btn-outline btn-sm art-admin-only" style="display: none; font-weight: 700; color: var(--secondary);">
+              🔒 Lock Board: OFF
+            </button>
+            <button type="button" id="btn-admin-clear-trunk" class="btn btn-outline btn-sm art-admin-only" style="display: none; color: var(--secondary); font-weight: 700;">
+              🛡️ Admin Peel Wall
+            </button>
+            <button type="button" id="btn-undo-chalk" class="btn btn-outline btn-sm" title="Undo last chalk stroke">
+              ↩️ Undo Chalk
+            </button>
+            <button type="button" id="btn-clear-trunk" class="btn btn-outline btn-sm" style="color: var(--text-muted);" title="Peel all stickers off the wall">
+              🧹 Peel Stickers
+            </button>
+            <button type="button" id="btn-wipe-chalk" class="btn btn-outline btn-sm" style="color: var(--text-muted);" title="Wipe chalk markings">
+              🧽 Wipe Chalk
+            </button>
+            <button type="button" id="btn-download-chalk" class="btn btn-primary btn-sm" title="Save chalkboard drawing and stickers as PNG">
+              📸 Save Artwork
+            </button>
+          </div>
         </div>
 
-        <div class="chalk-toolbar" style="margin-top: 12px;">
+        <!-- Mode 1: Chalk Tools Panel -->
+        <div id="chalk-tools-panel" class="chalk-toolbar" style="margin-top: 12px;">
           <div class="flex-row-wrap" style="gap: 8px;">
             <span style="font-size: 0.78rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Chalk:</span>
             <button type="button" class="chalk-btn selected" data-chalk-color="#F8F9FA" title="Chalk White" style="background: #F8F9FA;"></button>
@@ -427,26 +425,44 @@
             </select>
           </div>
 
+          <!-- Quick Stencils -->
           <div class="flex-row-wrap" style="gap: 6px;">
             <span style="font-size: 0.78rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Stencils:</span>
             <button type="button" class="btn btn-outline btn-sm chalk-stencil-btn" data-stencil="playball">⚾ Play Ball!</button>
             <button type="button" class="btn btn-outline btn-sm chalk-stencil-btn" data-stencil="strikezone">🎯 Strike Zone</button>
             <button type="button" class="btn btn-outline btn-sm chalk-stencil-btn" data-stencil="noon">⏰ Noon</button>
           </div>
+        </div>
 
-          <div class="flex-row-wrap" style="gap: 6px;">
-            <button type="button" id="btn-admin-freeze-chalk" class="btn btn-outline btn-sm art-admin-only" style="display: none; font-weight: 700; color: var(--secondary);">
-              🔒 Lock Board: OFF
-            </button>
-            <button type="button" id="btn-undo-chalk" class="btn btn-outline btn-sm" title="Undo last chalk stroke">
-              ↩️ Undo
-            </button>
-            <button type="button" id="btn-wipe-chalk" class="btn btn-outline btn-sm" style="color: var(--text-muted);" title="Wipe board clean">
-              🧹 Wipe Board
-            </button>
-            <button type="button" id="btn-download-chalk" class="btn btn-primary btn-sm" title="Save chalkboard drawing as PNG">
-              📸 Save Image
-            </button>
+        <!-- Mode 2: Sticker Shelf & Tag Panel -->
+        <div id="sticker-tools-panel" style="display: none; margin-top: 14px;">
+          <div class="flex-between" style="margin-bottom: 6px; flex-wrap: wrap; gap: 6px;">
+            <div style="font-size: 0.78rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">
+              1. Select Emoji / Badge Sticker:
+            </div>
+            <div id="sticker-category-tabs" class="flex-row-wrap" style="gap: 4px;">
+              <button type="button" class="btn btn-xs btn-primary active sticker-cat-tab" data-cat="all">All</button>
+              <button type="button" class="btn btn-xs btn-outline sticker-cat-tab" data-cat="gear">⚾ Gear</button>
+              <button type="button" class="btn btn-xs btn-outline sticker-cat-tab" data-cat="awards">🏆 Awards</button>
+              <button type="button" class="btn btn-xs btn-outline sticker-cat-tab" data-cat="dugout">🌭 Dugout</button>
+              <button type="button" class="btn btn-xs btn-outline sticker-cat-tab" data-cat="vibes">🔥 Vibes</button>
+            </div>
+          </div>
+
+          <div id="sticker-shelf" class="sticker-shelf" style="max-height: 180px; overflow-y: auto;"></div>
+
+          <div class="flex-between" style="margin-top: 12px; gap: 12px; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 200px;">
+              <label for="sticker-tag-input" style="font-size: 0.78rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; display: block; margin-bottom: 4px;">
+                2. Optional Custom Caption / Name:
+              </label>
+              <input type="text" id="sticker-tag-input" maxlength="28" placeholder="e.g. Bushrod 2026, Infield Single..." style="padding: 7px 12px; font-size: 0.88rem; border-radius: var(--radius-sm); border: 1.5px solid var(--border); width: 100%;">
+            </div>
+            <div style="align-self: flex-end;">
+              <span style="font-size: 0.82rem; color: var(--text-muted);">
+                👉 Tap anywhere on the chalkboard above to slap your sticker! Click any placed sticker to peel it off.
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -622,8 +638,8 @@
   <!-- Site Footer -->
   <footer id="site-footer" class="site-footer"></footer>
 
-  <script src="/js/api.js?v=66"></script>
-  <script src="/js/art.js?v=66"></script>
-  <script src="/js/gallery.js?v=66"></script>
+  <script src="/js/api.js?v=67"></script>
+  <script src="/js/art.js?v=67"></script>
+  <script src="/js/gallery.js?v=67"></script>
 </body>
 </html>

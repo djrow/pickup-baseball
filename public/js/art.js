@@ -338,46 +338,148 @@
   }
 
   // -------------------------------------------------------------
-  // 2. Equipment Trunk Sticker Wall
+  // 2. Equipment Trunk & Dugout Sticker Wall
   // -------------------------------------------------------------
   const STICKER_LIST = [
-    { id: 'ball', icon: '⚾', label: 'Official Ball' },
-    { id: 'cap', icon: '🧢', label: 'Green & Gold Cap' },
-    { id: 'bats', icon: '🪵', label: 'Ash Wood Bats' },
-    { id: 'mitt', icon: '🧤', label: 'Catcher Mitt' },
-    { id: 'hotdog', icon: '🌭', label: 'Ballpark Dog' },
-    { id: 'tree', icon: '🌲', label: 'Oakland Tree' },
-    { id: 'trophy', icon: '🏆', label: 'Pickup MVP' },
-    { id: 'flame', icon: '⚡', label: '100mph Heater' },
-    { id: 'pennant', icon: '🚩', label: 'PBF Pennant' },
-    { id: 'cleats', icon: '👟', label: 'Molded Cleats' }
+    // Gear
+    { id: 'ball', icon: '⚾', label: 'Official Ball', category: 'gear' },
+    { id: 'cap', icon: '🧢', label: 'Green & Gold Cap', category: 'gear' },
+    { id: 'bats', icon: '🪵', label: 'Ash Wood Bats', category: 'gear' },
+    { id: 'mitt', icon: '🧤', label: 'Catcher Mitt', category: 'gear' },
+    { id: 'cleats', icon: '👟', label: 'Molded Cleats', category: 'gear' },
+    { id: 'stk_helmet', icon: '🪖', label: 'Batting Helmet', category: 'gear' },
+    { id: 'stk_whistle', icon: '📢', label: 'Coach Whistle', category: 'gear' },
+    { id: 'stk_diamond', icon: '💎', label: 'The Diamond', category: 'gear' },
+    { id: 'stk_shades', icon: '🕶️', label: 'Fielding Shades', category: 'gear' },
+
+    // Awards & Plays
+    { id: 'trophy', icon: '🏆', label: 'Pickup MVP', category: 'awards' },
+    { id: 'pennant', icon: '🚩', label: 'PBF Pennant', category: 'awards' },
+    { id: 'stk_medal', icon: '🥇', label: 'Gold Glove', category: 'awards' },
+    { id: 'stk_bomb', icon: '💣', label: 'Grand Slam', category: 'awards' },
+    { id: 'stk_k', icon: '🎯', label: 'Punchout Strike', category: 'awards' },
+    { id: 'stk_crown', icon: '👑', label: 'Home Run King', category: 'awards' },
+    { id: 'stk_star', icon: '⭐', label: 'All-Star Pick', category: 'awards' },
+    { id: 'stk_ribbon', icon: '🎗️', label: 'Hustle Award', category: 'awards' },
+
+    // Dugout Refreshments
+    { id: 'hotdog', icon: '🌭', label: 'Ballpark Dog', category: 'dugout' },
+    { id: 'stk_seeds', icon: '🌻', label: 'Sunflower Seeds', category: 'dugout' },
+    { id: 'stk_bubblegum', icon: '🍬', label: 'Bubble Gum', category: 'dugout' },
+    { id: 'stk_peanuts', icon: '🥜', label: 'Roasted Peanuts', category: 'dugout' },
+    { id: 'stk_drink', icon: '🥤', label: 'Cold Beverage', category: 'dugout' },
+    { id: 'stk_pretzel', icon: '🥨', label: 'Warm Pretzel', category: 'dugout' },
+    { id: 'stk_sundae', icon: '🍦', label: 'Helmet Sundae', category: 'dugout' },
+    { id: 'stk_ice', icon: '🧊', label: 'Gatorade Cooler', category: 'dugout' },
+    { id: 'stk_apple', icon: '🍎', label: 'Field Apple', category: 'dugout' },
+
+    // Game Day Vibes & Cheers
+    { id: 'flame', icon: '⚡', label: '100mph Heater', category: 'vibes' },
+    { id: 'tree', icon: '🌲', label: 'Oakland Tree', category: 'vibes' },
+    { id: 'stk_fire', icon: '🔥', label: 'On Fire!', category: 'vibes' },
+    { id: 'stk_jay', icon: '🐦', label: 'Bushrod Scrub Jay', category: 'vibes' },
+    { id: 'stk_clap', icon: '👏', label: 'Good Hustle', category: 'vibes' },
+    { id: 'stk_bump', icon: '👊', label: 'Dugout Bump', category: 'vibes' },
+    { id: 'stk_flex', icon: '💪', label: 'No Doubt', category: 'vibes' },
+    { id: 'stk_sun', icon: '☀️', label: 'California Sun', category: 'vibes' },
+    { id: 'stk_rocket', icon: '🚀', label: 'Moonshot', category: 'vibes' },
+    { id: 'stk_heart', icon: '💚', label: 'Oakland Love', category: 'vibes' }
   ];
 
   let selectedSticker = STICKER_LIST[0];
   let placedStickers = [];
+  let currentStickerCategory = 'all';
+
+  function renderStickerShelf(category) {
+    const shelf = document.getElementById('sticker-shelf');
+    if (!shelf) return;
+    const cat = category || currentStickerCategory || 'all';
+    const filtered = cat === 'all'
+      ? STICKER_LIST
+      : STICKER_LIST.filter(s => s.category === cat);
+
+    shelf.innerHTML = filtered.map(s => `
+      <button type="button" class="sticker-item-btn ${selectedSticker && selectedSticker.id === s.id ? 'selected' : ''}" data-sticker-id="${s.id}" title="${s.label}">
+        <span>${s.icon}</span> <span style="font-size: 0.82rem; font-weight: 700;">${s.label}</span>
+      </button>
+    `).join('');
+
+    shelf.querySelectorAll('.sticker-item-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        shelf.querySelectorAll('.sticker-item-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        const sid = btn.getAttribute('data-sticker-id');
+        selectedSticker = STICKER_LIST.find(s => s.id === sid) || STICKER_LIST[0];
+      });
+    });
+  }
+
+  function setupUnifiedBoardControls() {
+    const btnChalk = document.getElementById('btn-mode-chalk');
+    const btnStickers = document.getElementById('btn-mode-stickers');
+    const chalkPanel = document.getElementById('chalk-tools-panel');
+    const stickerPanel = document.getElementById('sticker-tools-panel');
+    const stage = document.getElementById('trunk-canvas-stage');
+
+    function setMode(mode) {
+      if (mode === 'chalk') {
+        if (btnChalk) {
+          btnChalk.classList.add('btn-primary', 'active');
+          btnChalk.classList.remove('btn-outline');
+        }
+        if (btnStickers) {
+          btnStickers.classList.remove('btn-primary', 'active');
+          btnStickers.classList.add('btn-outline');
+        }
+        if (chalkPanel) chalkPanel.style.display = 'flex';
+        if (stickerPanel) stickerPanel.style.display = 'none';
+        if (stage) stage.style.pointerEvents = 'none';
+      } else {
+        if (btnStickers) {
+          btnStickers.classList.add('btn-primary', 'active');
+          btnStickers.classList.remove('btn-outline');
+        }
+        if (btnChalk) {
+          btnChalk.classList.remove('btn-primary', 'active');
+          btnChalk.classList.add('btn-outline');
+        }
+        if (stickerPanel) stickerPanel.style.display = 'block';
+        if (chalkPanel) chalkPanel.style.display = 'none';
+        if (stage) stage.style.pointerEvents = 'auto';
+      }
+    }
+
+    if (btnChalk) {
+      btnChalk.addEventListener('click', () => setMode('chalk'));
+    }
+    if (btnStickers) {
+      btnStickers.addEventListener('click', () => setMode('stickers'));
+    }
+
+    // Default to chalk mode
+    setMode('chalk');
+
+    // Category tab filter click handlers
+    document.querySelectorAll('.sticker-cat-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.sticker-cat-tab').forEach(t => {
+          t.classList.remove('btn-primary', 'active');
+          t.classList.add('btn-outline');
+        });
+        tab.classList.add('btn-primary', 'active');
+        tab.classList.remove('btn-outline');
+        currentStickerCategory = tab.getAttribute('data-cat') || 'all';
+        renderStickerShelf(currentStickerCategory);
+      });
+    });
+  }
 
   function initEquipmentTrunk() {
     const stage = document.getElementById('trunk-canvas-stage');
     if (!stage) return;
 
-    // Render sticker buttons in tray
-    const shelf = document.getElementById('sticker-shelf');
-    if (shelf) {
-      shelf.innerHTML = STICKER_LIST.map((s, idx) => `
-        <button type="button" class="sticker-item-btn ${idx === 0 ? 'selected' : ''}" data-sticker-id="${s.id}" title="${s.label}">
-          <span>${s.icon}</span> <span style="font-size: 0.82rem; font-weight: 700;">${s.label}</span>
-        </button>
-      `).join('');
-
-      shelf.querySelectorAll('.sticker-item-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          shelf.querySelectorAll('.sticker-item-btn').forEach(b => b.classList.remove('selected'));
-          btn.classList.add('selected');
-          const sid = btn.getAttribute('data-sticker-id');
-          selectedSticker = STICKER_LIST.find(s => s.id === sid) || STICKER_LIST[0];
-        });
-      });
-    }
+    renderStickerShelf('all');
+    setupUnifiedBoardControls();
 
     // Load saved stickers
     const saved = localStorage.getItem('pbf_trunk_stickers');
@@ -528,7 +630,7 @@
         // Save state before resizing
         const temp = ctx.getImageData(0, 0, canvas.width, canvas.height);
         canvas.width = rect.width;
-        canvas.height = 400;
+        canvas.height = 420;
         ctx.putImageData(temp, 0, 0);
       }
     }
@@ -661,13 +763,48 @@
       });
     }
 
-    // Download Doodle button
+    // Download Artwork button (Composites Chalk Doodle + Slapped Stickers)
     const downloadBtn = document.getElementById('btn-download-chalk');
     if (downloadBtn) {
       downloadBtn.addEventListener('click', () => {
+        const offscreen = document.createElement('canvas');
+        offscreen.width = canvas.width;
+        offscreen.height = canvas.height;
+        const offCtx = offscreen.getContext('2d');
+
+        // 1. Draw chalk slate drawing
+        offCtx.drawImage(canvas, 0, 0);
+
+        // 2. Draw placed stickers
+        placedStickers.forEach(stk => {
+          const safeX = typeof stk.x === 'number' ? stk.x : parseInt(stk.x, 10) || 0;
+          const safeY = typeof stk.y === 'number' ? stk.y : parseInt(stk.y, 10) || 0;
+          const safeRot = typeof stk.rotation === 'number' ? stk.rotation : parseInt(stk.rotation, 10) || 0;
+
+          offCtx.save();
+          offCtx.translate(safeX + 24, safeY + 24);
+          offCtx.rotate((safeRot * Math.PI) / 180);
+          offCtx.font = '32px sans-serif';
+          offCtx.textAlign = 'center';
+          offCtx.textBaseline = 'middle';
+          offCtx.fillText(stk.icon, 0, 0);
+
+          if (stk.tag) {
+            offCtx.font = 'bold 11px sans-serif';
+            const tagMetrics = offCtx.measureText(stk.tag);
+            const padX = 6;
+            const padY = 3;
+            offCtx.fillStyle = 'rgba(0,0,0,0.85)';
+            offCtx.fillRect(-tagMetrics.width / 2 - padX, 18 - padY, tagMetrics.width + (padX * 2), 16 + (padY * 2));
+            offCtx.fillStyle = '#FFFFFF';
+            offCtx.fillText(stk.tag, 0, 26);
+          }
+          offCtx.restore();
+        });
+
         const a = document.createElement('a');
-        a.download = 'pbf-chalkboard-' + new Date().toISOString().slice(0, 10) + '.png';
-        a.href = canvas.toDataURL('image/png');
+        a.download = 'pbf-dugout-wall-' + new Date().toISOString().slice(0, 10) + '.png';
+        a.href = offscreen.toDataURL('image/png');
         a.click();
       });
     }
