@@ -270,7 +270,7 @@ mediaRouter.post('/', async (c) => {
     }
 
     const body = await c.req.json();
-    const { title, caption, date_taken, album, contributor_name, event_id, url, file_data, mime_type } = body;
+    const { title, caption, date_taken, album, contributor_name, event_id, url, file_data, mime_type, file_name } = body;
 
     // Validate approximate date (required by user specification)
     let cleanDate = date_taken ? String(date_taken).trim() : '';
@@ -427,8 +427,29 @@ mediaRouter.post('/', async (c) => {
 
       if (appscriptUrl) {
         try {
-          const safeFilename = (cleanTitle ? cleanTitle.replace(/[^a-zA-Z0-9_-]/g, '_') : 'baseball_upload') +
-            (storedMimeType.startsWith('video/') ? '.mp4' : '.jpg');
+          // Generate a clean, unique, descriptive filename for Google Drive
+          const now = new Date();
+          const dateStamp = now.toISOString().replace(/[-:T]/g, '').slice(0, 14);
+          const randSuffix = Math.random().toString(36).substring(2, 6);
+
+          let baseName = '';
+          if (cleanTitle && cleanTitle !== 'Community Submission') {
+            baseName = cleanTitle.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 40);
+          } else if (file_name && typeof file_name === 'string') {
+            const withoutExt = file_name.replace(/\.[^/.]+$/, '');
+            baseName = withoutExt.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 40);
+          }
+
+          if (!baseName || baseName === 'Community_Submission') {
+            baseName = 'PBF_Media';
+          }
+          baseName = baseName.replace(/_+/g, '_').replace(/^_+|_+$/g, '');
+
+          const ext = storedMimeType.startsWith('video/')
+            ? (storedMimeType === 'video/webm' ? '.webm' : '.mp4')
+            : (storedMimeType === 'image/png' ? '.png' : (storedMimeType === 'image/webp' ? '.webp' : '.jpg'));
+
+          const safeFilename = `${baseName}_${dateStamp}_${randSuffix}${ext}`;
 
           const asRes = await fetch(appscriptUrl, {
             method: 'POST',

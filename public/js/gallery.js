@@ -17,6 +17,7 @@
   var currentUser = null;
   var selectedFileBase64 = null;
   var selectedFileMime = null;
+  var selectedFileName = null;
 
   function slugify(text) {
     return String(text || '')
@@ -1021,6 +1022,8 @@
       fileNameLabel.textContent = '✓ Selected: ' + file.name + ' (' + (file.size / 1024).toFixed(0) + ' KB)';
     }
 
+    selectedFileName = file.name;
+
     compressImageIfLarge(file, function(b64, mime) {
       selectedFileBase64 = b64;
       selectedFileMime = mime;
@@ -1143,6 +1146,7 @@
       }
       payload.file_data = selectedFileBase64;
       payload.mime_type = selectedFileMime;
+      if (selectedFileName) payload.file_name = selectedFileName;
     }
 
     try {
@@ -1195,6 +1199,7 @@
       // Reset form
       selectedFileBase64 = null;
       selectedFileMime = null;
+      selectedFileName = null;
       var fileLabel = document.getElementById('dropzone-file-name');
       if (fileLabel) fileLabel.textContent = '';
       if (urlInput) urlInput.value = '';
