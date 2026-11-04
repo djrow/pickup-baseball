@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Photo &amp; Video Gallery | Pickup Baseball Foundation</title>
-  <link rel="stylesheet" href="/css/style.css?v=64">
+  <link rel="stylesheet" href="/css/style.css?v=65">
   <link rel="alternate" type="application/rss+xml" title="Sunday Pickup Baseball Highlights &amp; Updates" href="/feed.xml">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
@@ -564,6 +564,17 @@
           <div id="media-preview-target"></div>
         </div>
 
+        <!-- Manager Direct Publish Option -->
+        <div id="media-manager-options" style="display: none; margin-top: 14px; padding: 10px 14px; background: var(--bg-subtle); border-radius: var(--radius-sm); border: 1px dashed var(--border);">
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 0.88rem; font-weight: 600; cursor: pointer; color: var(--secondary);">
+            <input type="checkbox" id="media-publish-immediately" name="publish_immediately">
+            <span>⚡ Publish immediately to live carousels (bypass moderation queue)</span>
+          </label>
+          <p style="margin: 4px 0 0 24px; font-size: 0.78rem; color: var(--text-muted);">
+            Leave unchecked to submit this photo to the Pending Moderation Queue for review.
+          </p>
+        </div>
+
         <!-- Submit Button -->
         <div style="margin-top: 24px; display: flex; justify-content: flex-end;">
           <button type="submit" id="media-submit-btn" class="btn btn-primary" style="padding: 12px 24px; font-size: 1rem; font-weight: 700;">
@@ -611,8 +622,8 @@
   <!-- Site Footer -->
   <footer id="site-footer" class="site-footer"></footer>
 
-  <script src="/js/api.js?v=64"></script>
-  <script src="/js/art.js?v=64"></script>
-  <script src="/js/gallery.js?v=64"></script>
+  <script src="/js/api.js?v=65"></script>
+  <script src="/js/art.js?v=65"></script>
+  <script src="/js/gallery.js?v=65"></script>
 </body>
 </html>

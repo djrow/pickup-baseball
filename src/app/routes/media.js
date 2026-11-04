@@ -126,10 +126,21 @@ mediaRouter.get('/', async (c) => {
     }
 
     c.header('Cache-Control', 'no-cache, no-store, must-revalidate');
+    const normalizeItem = (m) => {
+      if (!m) return m;
+      if (m.media_type !== 'youtube') {
+        return {
+          ...m,
+          file_url: `/api/media/${m.id}/file`
+        };
+      }
+      return m;
+    };
+
     return c.json({
-      media: media || [],
+      media: (media || []).map(normalizeItem),
       albums: albums || [],
-      pending: pendingMedia
+      pending: (pendingMedia || []).map(normalizeItem)
     });
   } catch (err) {
     console.error('[Media] Error fetching gallery media:', err);
@@ -145,8 +156,8 @@ mediaRouter.get('/:id/file', async (c) => {
     const id = parseInt(c.req.param('id'), 10);
     if (!id || isNaN(id)) return c.text('Not found', 404);
 
-    const row = await c.env.DB.prepare('SELECT file_data, mime_type, is_approved FROM media_items WHERE id = ?').bind(id).first();
-    if (!row || !row.file_data) return c.text('Not found', 404);
+    const row = await c.env.DB.prepare('SELECT file_data, file_url, original_url, mime_type, is_approved FROM media_items WHERE id = ?').bind(id).first();
+    if (!row) return c.text('Not found', 404);
 
     // Moderation security check: Only approved media or organizers/admins can view files
     if (row.is_approved !== 1) {
@@ -157,6 +168,49 @@ mediaRouter.get('/:id/file', async (c) => {
       }
     }
 
+    // 1. If stored in Google Drive / external vault (file_data is null)
+    if (!row.file_data) {
+      const remoteUrl = (row.original_url && row.original_url.startsWith('http'))
+        ? row.original_url
+        : ((row.file_url && row.file_url.startsWith('http')) ? row.file_url : null);
+
+      if (!remoteUrl) return c.text('Not found', 404);
+
+      const etag = `W/"remote-media-${id}"`;
+      if (c.req.header('If-None-Match') === etag) {
+        return new Response(null, {
+          status: 304,
+          headers: {
+            'ETag': etag,
+            'Cache-Control': 'public, max-age=604800, stale-while-revalidate=2592000'
+          }
+        });
+      }
+
+      const upstreamRes = await fetch(remoteUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) PickupBaseball/1.0'
+        }
+      });
+      if (!upstreamRes.ok) {
+        return c.text('Upstream file unavailable', upstreamRes.status);
+      }
+
+      const upstreamBuffer = await upstreamRes.arrayBuffer();
+      const contentType = upstreamRes.headers.get('content-type') || row.mime_type || 'image/jpeg';
+
+      return new Response(upstreamBuffer, {
+        status: 200,
+        headers: {
+          'Content-Type': contentType,
+          'Cache-Control': 'public, max-age=604800, stale-while-revalidate=2592000',
+          'ETag': etag,
+          'X-Content-Type-Options': 'nosniff'
+        }
+      });
+    }
+
+    // 2. If stored in D1 database
     const rawData = String(row.file_data).trim();
     const etag = `W/"media-${id}-${rawData.length}"`;
 
@@ -403,9 +457,11 @@ mediaRouter.post('/', async (c) => {
       return c.json({ error: 'Either a media URL (YouTube/image) or an uploaded file is required.' }, 400);
     }
 
-    // Check manager status: organizers/admins publish immediately, public submissions require approval
+    // Approval status: by default submissions require review so organizers/admins can review before publishing
+    // Organizers/admins can optionally pass publish_immediately: true or auto_approve: true to bypass review
     const isManager = Boolean(user && (user.role === 'admin' || user.role === 'organizer' || user.isAdmin || user.canManageEvents));
-    const isApproved = isManager ? 1 : 0;
+    const publishImmediately = Boolean(body.publish_immediately === true || body.publish_immediately === 'true' || body.auto_approve === true);
+    const isApproved = (isManager && publishImmediately) ? 1 : 0;
     const deleteToken = generateToken();
 
     // Insert media row into D1 / SQLite
@@ -427,7 +483,8 @@ mediaRouter.post('/', async (c) => {
     ).run();
 
     const newId = result.meta.last_row_id;
-    if (!fileUrl) {
+    // Always serve photos and non-youtube uploads via same-origin /api/media/:id/file proxy
+    if (finalMediaType !== 'youtube') {
       fileUrl = '/api/media/' + newId + '/file';
       await c.env.DB.prepare('UPDATE media_items SET file_url = ? WHERE id = ?').bind(fileUrl, newId).run();
     }

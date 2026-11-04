@@ -872,6 +872,11 @@
       dateInput.value = getSundayOffsetDate(0);
     }
 
+    var managerOpts = document.getElementById('media-manager-options');
+    if (managerOpts && isManagerUser()) {
+      managerOpts.style.display = 'block';
+    }
+
     // Quick Date Selector Buttons
     document.querySelectorAll('.btn-quick-date').forEach(function(btn) {
       btn.addEventListener('click', function() {
@@ -1118,6 +1123,11 @@
       caption: captionInput ? captionInput.value.trim() : '',
       contributor_name: contributorInput ? contributorInput.value.trim() : ''
     };
+
+    var publishCheckbox = document.getElementById('media-publish-immediately');
+    if (publishCheckbox && publishCheckbox.checked) {
+      payload.publish_immediately = true;
+    }
 
     if (isLinkMode) {
       var url = urlInput ? urlInput.value.trim() : '';
