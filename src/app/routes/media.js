@@ -134,7 +134,10 @@ mediaRouter.get('/', async (c) => {
     c.header('Cache-Control', 'no-cache, no-store, must-revalidate');
     const normalizeItem = (m) => {
       if (!m) return m;
-      if (m.media_type !== 'youtube') {
+      const isDirectExternal = m.media_type === 'youtube' ||
+        Boolean(m.file_url && (m.file_url.includes('drive.google.com') || /\.(mp4|webm)($|[?#])/i.test(m.file_url))) ||
+        Boolean(m.original_url && (m.original_url.includes('drive.google.com') || /\.(mp4|webm)($|[?#])/i.test(m.original_url)));
+      if (!isDirectExternal) {
         return {
           ...m,
           file_url: `/api/media/${m.id}/file`
@@ -202,10 +205,9 @@ mediaRouter.get('/:id/file', async (c) => {
         return c.text('Upstream file unavailable', upstreamRes.status);
       }
 
-      const upstreamBuffer = await upstreamRes.arrayBuffer();
       const contentType = upstreamRes.headers.get('content-type') || row.mime_type || 'image/jpeg';
 
-      return new Response(upstreamBuffer, {
+      return new Response(upstreamRes.body, {
         status: 200,
         headers: {
           'Content-Type': contentType,

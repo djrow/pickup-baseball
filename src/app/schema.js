@@ -215,6 +215,7 @@ export async function ensureD1Schema(db, force = false) {
     await db.prepare("UPDATE users SET is_admin = 1 WHERE role = 'admin'").run();
     await db.prepare("UPDATE users SET role = 'player' WHERE role IS NULL").run();
     await db.prepare("UPDATE users SET role = 'organizer' WHERE role = 'facilitator'").run();
+    await db.prepare("UPDATE events SET location = 'Bushrod Park Field 1' WHERE location = 'Bushrod Part Field 1'").run();
   } catch (e) {}
 
   try {
