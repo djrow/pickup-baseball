@@ -295,7 +295,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '61',
+  CLIENT_VERSION: '62',
 
   // Current user cache
   currentUser: null,
@@ -1085,9 +1085,14 @@ const API = {
     });
   },
 
-  async deleteMedia(id) {
-    return this.request('DELETE', '/api/media/' + encodeURIComponent(id), null, {
-      throwOnError: true, errorMsg: 'Failed to delete media item.'
+  async deleteMedia(id, token) {
+    const headers = {};
+    if (token) headers['X-Delete-Token'] = token;
+    const qs = token ? '?token=' + encodeURIComponent(token) : '';
+    return this.request('DELETE', '/api/media/' + encodeURIComponent(id) + qs, null, {
+      headers,
+      throwOnError: true,
+      errorMsg: 'Failed to delete media item.'
     });
   },
 

@@ -140,6 +140,7 @@ export const CREATE_TABLES_SQL = [
     is_approved INTEGER DEFAULT 0,
     approved_by INTEGER DEFAULT NULL,
     approved_at DATETIME DEFAULT NULL,
+    delete_token TEXT DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`,
   `CREATE TABLE IF NOT EXISTS banned_emails (
@@ -183,6 +184,7 @@ export const ALTER_STATEMENTS = [
   'ALTER TABLE media_items ADD COLUMN is_approved INTEGER DEFAULT 0',
   'ALTER TABLE media_items ADD COLUMN approved_by INTEGER DEFAULT NULL',
   'ALTER TABLE media_items ADD COLUMN approved_at DATETIME DEFAULT NULL',
+  'ALTER TABLE media_items ADD COLUMN delete_token TEXT',
   "ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'player'",
   'ALTER TABLE users ADD COLUMN machine_badge INTEGER DEFAULT 0',
   'ALTER TABLE users ADD COLUMN field_badge INTEGER DEFAULT 0',

@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { requireOrganizer, getClientIp, checkRateLimit, isValidRasterImageBuffer } from '../security.js';
+import { requireOrganizer, getClientIp, checkRateLimit, isValidRasterImageBuffer, generateToken } from '../security.js';
 import { arrayBufferToBase64, base64ToUint8Array, stripJpegMetadata } from '../security.js';
 
 export const mediaRouter = new Hono();
@@ -366,14 +366,15 @@ mediaRouter.post('/', async (c) => {
     // Check manager status: organizers/admins publish immediately, public submissions require approval
     const isManager = Boolean(user && (user.role === 'admin' || user.role === 'organizer' || user.isAdmin || user.canManageEvents));
     const isApproved = isManager ? 1 : 0;
+    const deleteToken = generateToken();
 
     // Insert media row into D1 / SQLite
     const insertSql = `
       INSERT INTO media_items (
         title, caption, media_type, original_url, file_url, file_data,
         mime_type, file_size, album, date_taken, contributor_name,
-        contributor_id, event_id, is_approved
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        contributor_id, event_id, is_approved, delete_token
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     // Temporary placeholder for file_url if photo
@@ -382,7 +383,7 @@ mediaRouter.post('/', async (c) => {
     const result = await c.env.DB.prepare(insertSql).bind(
       cleanTitle, cleanCaption, finalMediaType, originalUrl, tempFileUrl, storedFileData,
       storedMimeType, storedFileSize, cleanAlbum, cleanDate, cleanContributor,
-      user ? user.id : null, cleanEventId, isApproved
+      user ? user.id : null, cleanEventId, isApproved, deleteToken
     ).run();
 
     const newId = result.meta.last_row_id;
@@ -402,6 +403,7 @@ mediaRouter.post('/', async (c) => {
     return c.json({
       success: true,
       item: createdItem,
+      delete_token: deleteToken,
       is_approved: isApproved,
       requires_approval: isApproved === 0,
       message: isApproved === 1
@@ -513,30 +515,44 @@ mediaRouter.put('/:id', requireOrganizer, handleMediaUpdate);
 mediaRouter.post('/:id/update', requireOrganizer, handleMediaUpdate);
 
 // ---------------------------------------------------------------------------
-// DELETE & POST /api/media/:id - Organizer/Admin Deletion
+// DELETE & POST /api/media/:id - Uploader Takedown & Admin Deletion
 // ---------------------------------------------------------------------------
-mediaRouter.delete('/:id', requireOrganizer, async (c) => {
+async function handleMediaDelete(c) {
   try {
     const id = parseInt(c.req.param('id'), 10);
     if (!id || isNaN(id)) return c.json({ error: 'Invalid ID' }, 400);
 
+    const existing = await c.env.DB.prepare('SELECT id, contributor_id, delete_token FROM media_items WHERE id = ?').bind(id).first();
+    if (!existing) return c.json({ error: 'Media item not found' }, 404);
+
+    const user = c.get('user');
+    const isManager = Boolean(user && (user.role === 'admin' || user.role === 'organizer' || user.isAdmin || user.canManageEvents));
+    const isOwnerUser = Boolean(user && existing.contributor_id && user.id === existing.contributor_id);
+
+    // Read deletion token from headers, query string, or POST request body
+    const tokenHeader = c.req.header('X-Delete-Token') || c.req.header('x-delete-token');
+    const tokenQuery = c.req.query('token');
+    let tokenBody = null;
+    if (c.req.method === 'POST') {
+      try {
+        const b = await c.req.json().catch(() => ({}));
+        tokenBody = b && b.token ? b.token : null;
+      } catch (e) {}
+    }
+    const providedToken = String(tokenHeader || tokenQuery || tokenBody || '').trim();
+    const isOwnerToken = Boolean(existing.delete_token && providedToken && existing.delete_token === providedToken);
+
+    if (!isManager && !isOwnerUser && !isOwnerToken) {
+      return c.json({ error: 'Access denied: You do not have permission to take down this submission.' }, 403);
+    }
+
     await c.env.DB.prepare('DELETE FROM media_items WHERE id = ?').bind(id).run();
-    return c.json({ success: true, message: 'Media item deleted.' });
+    return c.json({ success: true, message: 'Media submission taken down and deleted.' });
   } catch (err) {
     console.error('[Media] Error deleting media item:', err);
     return c.json({ error: 'Failed to delete media item.' }, 500);
   }
-});
+}
 
-mediaRouter.post('/:id/delete', requireOrganizer, async (c) => {
-  try {
-    const id = parseInt(c.req.param('id'), 10);
-    if (!id || isNaN(id)) return c.json({ error: 'Invalid ID' }, 400);
-
-    await c.env.DB.prepare('DELETE FROM media_items WHERE id = ?').bind(id).run();
-    return c.json({ success: true, message: 'Media item deleted.' });
-  } catch (err) {
-    console.error('[Media] Error deleting media item:', err);
-    return c.json({ error: 'Failed to delete media item.' }, 500);
-  }
-});
+mediaRouter.delete('/:id', handleMediaDelete);
+mediaRouter.post('/:id/delete', handleMediaDelete);

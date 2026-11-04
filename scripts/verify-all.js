@@ -2382,9 +2382,46 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     const afterDelData = await afterDelRes.json();
     assert.ok(!afterDelData.media.some(m => m.id === copyData.item.id), 'Deleted photo must no longer be present in gallery carousels');
 
-    // Verify deletion via POST /api/media/:id/delete fallback
-    const ytDelRes = await apiReq('POST', `/api/media/${ytData.item.id}/delete`, seedAdminCookie);
-    assert.equal(ytDelRes.status, 200, 'Admin must be able to delete YouTube video via POST /delete');
+    // 12. Uploader Takedown Workflow:
+    // Verify zero-login submission returns delete_token
+    assert.ok(ytData.delete_token, 'Zero-login submission must return delete_token');
+
+    // Unauthenticated attempt to delete without token -> 403
+    const unauthDelRes = await fetch(`${baseUrl}/api/media/${ytData.item.id}`, { method: 'DELETE' });
+    assert.equal(unauthDelRes.status, 403, 'Unauthorized delete attempt without token must return 403');
+
+    // Zero-login uploader takedown using delete token in X-Delete-Token header -> 200
+    const tokenDelRes = await fetch(`${baseUrl}/api/media/${ytData.item.id}`, {
+      method: 'DELETE',
+      headers: { 'X-Delete-Token': ytData.delete_token }
+    });
+    assert.equal(tokenDelRes.status, 200, 'Uploader must be able to take down submission using delete_token');
+
+    // Authenticated non-admin player submits photo and takes it down via session ownership
+    const playerUploadRes = await fetch(`${baseUrl}/api/media`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Cookie': seedPlayerCookie
+      },
+      body: JSON.stringify({
+        url: remoteImgUrl,
+        title: 'Player Uploaded Game Photo',
+        date_taken: '2026-10-18',
+        album: 'General Community Moments',
+        contributor_name: 'Player Contributor'
+      })
+    });
+    assert.equal(playerUploadRes.status, 200, 'Player upload must return 200');
+    const playerData = await playerUploadRes.json();
+    assert.ok(playerData.item && playerData.item.id, 'Player upload must return created item');
+
+    // Player takes down their own submission via DELETE without requiring organizer/admin role
+    const playerTakedownRes = await fetch(`${baseUrl}/api/media/${playerData.item.id}`, {
+      method: 'DELETE',
+      headers: { 'Cookie': seedPlayerCookie }
+    });
+    assert.equal(playerTakedownRes.status, 200, 'Signed-in player must be able to take down their own submission');
 
     // Verify UI components for admin carousel photo and video editing & removal
     const adminHtml = fs.readFileSync(path.join(publicDir, 'admin.html'), 'utf8');
@@ -2400,8 +2437,10 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(adminJs.includes('updateMedia'), 'admin.js must call updateMedia');
 
     assert.ok(galleryHtml.includes('id="lightbox-delete-btn"'), 'gallery.html must provide #lightbox-delete-btn in lightbox modal');
+    assert.ok(galleryHtml.includes('id="user-submissions-container"'), 'gallery.html must provide #user-submissions-container');
     assert.ok(galleryJsCode.includes('btn-delete-photo'), 'gallery.js must wire .btn-delete-photo');
     assert.ok(galleryJsCode.includes('btn-delete-video'), 'gallery.js must wire .btn-delete-video');
-    assert.ok(galleryJsCode.includes('isManagerUser'), 'gallery.js must check isManagerUser');
+    assert.ok(galleryJsCode.includes('canUserDeleteMedia'), 'gallery.js must wire canUserDeleteMedia');
+    assert.ok(galleryJsCode.includes('getMySubmissions'), 'gallery.js must wire getMySubmissions');
   });
 });

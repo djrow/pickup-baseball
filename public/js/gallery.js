@@ -59,6 +59,51 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Uploader Ownership & Takedown Token Storage
+  // ---------------------------------------------------------------------------
+  var SUBMISSIONS_STORAGE_KEY = 'pbf_my_media_submissions';
+
+  function getMySubmissions() {
+    try {
+      var raw = localStorage.getItem(SUBMISSIONS_STORAGE_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function saveMySubmission(record) {
+    if (!record || !record.id) return;
+    try {
+      var all = getMySubmissions();
+      all[record.id] = Object.assign({}, all[record.id] || {}, record);
+      localStorage.setItem(SUBMISSIONS_STORAGE_KEY, JSON.stringify(all));
+    } catch (e) {}
+  }
+
+  function removeMySubmission(id) {
+    try {
+      var all = getMySubmissions();
+      delete all[id];
+      localStorage.setItem(SUBMISSIONS_STORAGE_KEY, JSON.stringify(all));
+    } catch (e) {}
+  }
+
+  function canUserDeleteMedia(item) {
+    if (!item || !item.id) return false;
+    if (isManagerUser()) return true;
+    if (currentUser && item.contributor_id && currentUser.id === item.contributor_id) return true;
+    var my = getMySubmissions();
+    if (my[item.id]) return true;
+    return false;
+  }
+
+  function getMediaDeleteToken(id) {
+    var my = getMySubmissions();
+    return (my[id] && my[id].token) ? my[id].token : null;
+  }
+
+  // ---------------------------------------------------------------------------
   // 1. Initialization
   // ---------------------------------------------------------------------------
   async function initGallery() {
@@ -103,6 +148,21 @@
         jumpToAlbum(targetSlug);
       }, 400);
     }
+
+    // Check if URL has takedown parameter e.g. /gallery.html?takedown=123&token=abc
+    try {
+      var urlParams = new URLSearchParams(window.location.search);
+      var takedownId = urlParams.get('takedown');
+      var takedownToken = urlParams.get('token');
+      if (takedownId) {
+        if (takedownToken) {
+          saveMySubmission({ id: parseInt(takedownId, 10), token: takedownToken });
+        }
+        setTimeout(function() {
+          handleDeleteMedia(takedownId, 'submission');
+        }, 500);
+      }
+    } catch (e) {}
   }
 
   // ---------------------------------------------------------------------------
@@ -128,6 +188,7 @@
       renderPhotos();
       renderVideos();
       populateAlbumSelectOptions();
+      renderUserSubmissionsTray();
 
       if (typeof window !== 'undefined' && window.ArtStudio && typeof window.ArtStudio.setUser === 'function') {
         window.ArtStudio.setUser(currentUser);
@@ -419,8 +480,9 @@
       var ptAlbumSlug = slugify(ptAlbum);
       var safeImgUrl = API.safeUrl ? API.safeUrl(pt.file_url) : pt.file_url;
 
-      var deleteBtn = isManager ? `
-        <button type="button" class="btn-delete-photo" data-media-id="${pt.id}" title="Remove Photo from Carousel" aria-label="Remove Photo from Carousel">🗑️</button>
+      var canDelete = canUserDeleteMedia(pt);
+      var deleteBtn = canDelete ? `
+        <button type="button" class="btn-delete-photo" data-media-id="${pt.id}" title="${isManager ? 'Remove Photo from Carousel' : 'Take Down Your Photo'}" aria-label="Take Down Photo">🗑️</button>
       ` : '';
 
       return `
@@ -531,6 +593,7 @@
       var caption = vid.caption ? API.escapeHtml(vid.caption) : '';
       var albumTag = vid.album ? API.escapeHtml(vid.album) : 'General';
 
+      var canDelete = canUserDeleteMedia(vid);
       var playerHtml = '';
       if (vid.media_type === 'youtube') {
         var ytId = API.getYouTubeId ? API.getYouTubeId(vid.file_url || vid.original_url) : null;
@@ -545,7 +608,7 @@
             <img src="${API.escapeHtml(thumbUrl)}" alt="${title}" class="video-facade-thumb" loading="lazy">
             <button type="button" class="video-play-btn" aria-label="Play Video">▶</button>
             <span class="video-badge-pill">YouTube HD</span>
-            ${isManager ? `<button type="button" class="btn-delete-video" data-media-id="${vid.id}" title="Remove Video from Carousel" aria-label="Remove Video from Carousel">🗑️</button>` : ''}
+            ${canDelete ? `<button type="button" class="btn-delete-video" data-media-id="${vid.id}" title="${isManager ? 'Remove Video from Carousel' : 'Take Down Your Video'}" aria-label="Take Down Video">🗑️</button>` : ''}
           </div>
         `;
       } else {
@@ -553,14 +616,14 @@
         playerHtml = `
           <div class="video-native-container" style="position: relative;">
             <video src="${API.escapeHtml(safeVidUrl)}" controls playsinline preload="metadata" class="video-native-player"></video>
-            ${isManager ? `<button type="button" class="btn-delete-video" data-media-id="${vid.id}" title="Remove Video from Carousel" aria-label="Remove Video from Carousel">🗑️</button>` : ''}
+            ${canDelete ? `<button type="button" class="btn-delete-video" data-media-id="${vid.id}" title="${isManager ? 'Remove Video from Carousel' : 'Take Down Your Video'}" aria-label="Take Down Video">🗑️</button>` : ''}
           </div>
         `;
       }
 
-      var adminDeleteBtn = isManager ? `
-        <button type="button" class="btn btn-outline btn-xs btn-delete-media" data-media-id="${vid.id}" title="Remove Video from Carousel" style="color: var(--danger); border-color: #fca5a5; font-size: 0.72rem; padding: 2px 8px; margin-left: auto; cursor: pointer;">
-          🗑️ Remove
+      var adminDeleteBtn = canDelete ? `
+        <button type="button" class="btn btn-outline btn-xs btn-delete-media" data-media-id="${vid.id}" title="${isManager ? 'Remove Video from Carousel' : 'Take Down Your Video'}" style="color: var(--danger); border-color: #fca5a5; font-size: 0.72rem; padding: 2px 8px; margin-left: auto; cursor: pointer;">
+          🗑️ ${isManager ? 'Remove' : 'Take Down'}
         </button>
       ` : '';
 
@@ -780,7 +843,10 @@
 
     var deleteBtn = document.getElementById('lightbox-delete-btn');
     if (deleteBtn) {
-      deleteBtn.style.display = isManagerUser() ? 'inline-flex' : 'none';
+      var canDelete = canUserDeleteMedia(photo);
+      deleteBtn.style.display = canDelete ? 'inline-flex' : 'none';
+      deleteBtn.textContent = isManagerUser() ? '🗑️ Remove Photo from Carousel' : '🗑️ Take Down Your Photo';
+      deleteBtn.setAttribute('data-media-id', photo.id);
     }
   }
 
@@ -1077,13 +1143,43 @@
 
       var res = await API.submitMedia(payload);
 
+      if (res && res.item) {
+        saveMySubmission({
+          id: res.item.id,
+          title: res.item.title || payload.title || 'Submission #' + res.item.id,
+          token: res.delete_token,
+          date_taken: res.item.date_taken || payload.date_taken,
+          media_type: res.item.media_type || (payload.url ? 'youtube' : 'photo'),
+          file_url: res.item.file_url,
+          is_approved: res.is_approved
+        });
+      }
+
       if (alertBox) {
         var alertClass = res.requires_approval ? 'alert-info' : 'alert-success';
+        var takedownHtml = (res && res.item) ? `
+          <div style="margin-top: 8px;">
+            <button type="button" class="btn btn-outline btn-xs btn-immediate-takedown" data-id="${res.item.id}" data-type="${res.item.media_type || 'photo'}" style="color: var(--danger); border-color: #fca5a5; font-size: 0.78rem; padding: 4px 10px;">
+              🗑️ Take down this submission
+            </button>
+          </div>
+        ` : '';
+
         alertBox.innerHTML = `
           <div class="alert ${alertClass}" style="font-weight: 600;">
             ${API.escapeHtml(res.message || '✓ Media successfully saved!')}
+            ${takedownHtml}
           </div>
         `;
+
+        var immediateBtn = alertBox.querySelector('.btn-immediate-takedown');
+        if (immediateBtn) {
+          immediateBtn.addEventListener('click', function() {
+            var subId = immediateBtn.getAttribute('data-id');
+            var subType = immediateBtn.getAttribute('data-type');
+            handleDeleteMedia(subId, subType);
+          });
+        }
       }
 
       // Reset form
@@ -1156,22 +1252,133 @@
   }
 
   // ---------------------------------------------------------------------------
-  // 10. Admin Media Deletion from Carousels
+  // 10. Media Deletion & Uploader Takedown
   // ---------------------------------------------------------------------------
   async function handleDeleteMedia(id, mediaType) {
     if (!id) return;
     var typeLabel = mediaType === 'video' ? 'video' : 'photo';
-    if (!confirm('Are you sure you want to permanently remove this ' + typeLabel + ' from the display carousel?')) return;
+    var isManager = isManagerUser();
+    var confirmMsg = isManager
+      ? 'Are you sure you want to permanently remove this ' + typeLabel + ' from the display carousel?'
+      : 'Are you sure you want to take down your submitted ' + typeLabel + '? It will be permanently removed from the website.';
+
+    if (!confirm(confirmMsg)) return;
+
+    var token = getMediaDeleteToken(id);
 
     try {
-      await API.deleteMedia(id);
+      await API.deleteMedia(id, token);
+      removeMySubmission(id);
       if (typeof closeLightbox === 'function') {
         closeLightbox();
       }
       await loadGalleryData();
+      renderUserSubmissionsTray();
+      var alertBox = document.getElementById('media-submit-alert');
+      if (alertBox) {
+        alertBox.innerHTML = '<div class="alert alert-success" style="font-weight: 600;">✓ Submission taken down and permanently removed.</div>';
+        setTimeout(function() { alertBox.innerHTML = ''; }, 4000);
+      }
     } catch (err) {
-      alert(err.message || 'Failed to remove ' + typeLabel + ' from carousel.');
+      alert(err.message || 'Failed to remove ' + typeLabel + '.');
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 11. User Submissions & Takedown Manager Tray
+  // ---------------------------------------------------------------------------
+  function renderUserSubmissionsTray() {
+    var container = document.getElementById('user-submissions-container');
+    var list = document.getElementById('user-submissions-list');
+    var countBadge = document.getElementById('user-submissions-count');
+    if (!container || !list) return;
+
+    var mySubs = getMySubmissions();
+
+    // If logged in, also populate items matching currentUser.id
+    if (currentUser && currentUser.id && galleryMedia && galleryMedia.length > 0) {
+      galleryMedia.forEach(function(item) {
+        if (item.contributor_id === currentUser.id && !mySubs[item.id]) {
+          mySubs[item.id] = {
+            id: item.id,
+            title: item.title,
+            caption: item.caption,
+            date_taken: item.date_taken,
+            media_type: item.media_type,
+            file_url: item.file_url,
+            is_approved: item.is_approved
+          };
+        }
+      });
+    }
+
+    var myIds = Object.keys(mySubs);
+    if (myIds.length === 0) {
+      container.style.display = 'none';
+      list.innerHTML = '';
+      return;
+    }
+
+    container.style.display = 'block';
+    if (countBadge) {
+      countBadge.textContent = myIds.length + ' item' + (myIds.length === 1 ? '' : 's');
+    }
+
+    var items = myIds.map(function(id) {
+      var local = mySubs[id];
+      var live = (galleryMedia || []).find(function(m) { return String(m.id) === String(id); });
+      return Object.assign({}, local, live || {});
+    });
+
+    list.innerHTML = items.map(function(item) {
+      var isVideo = item.media_type === 'video' || item.media_type === 'youtube';
+      var thumbUrl = '/logo.svg';
+      if (item.media_type === 'youtube') {
+        var ytId = API.getYouTubeId ? API.getYouTubeId(item.file_url || item.original_url) : null;
+        thumbUrl = ytId ? 'https://img.youtube.com/vi/' + ytId + '/hqdefault.jpg' : '/logo.svg';
+      } else {
+        thumbUrl = API.safeUrl ? API.safeUrl(item.file_url) : item.file_url;
+      }
+
+      var statusBadge = item.is_approved === 1
+        ? '<span class="badge badge-green" style="font-size: 0.7rem;">✓ Live in Carousel</span>'
+        : '<span class="badge badge-orange" style="font-size: 0.7rem;">⏳ Pending Review</span>';
+
+      var typeBadge = item.media_type === 'youtube'
+        ? '<span class="badge badge-orange" style="font-size: 0.7rem;">▶️ YouTube</span>'
+        : (item.media_type === 'video' ? '<span class="badge badge-blue" style="font-size: 0.7rem;">🎬 Video</span>' : '<span class="badge badge-green" style="font-size: 0.7rem;">📷 Photo</span>');
+
+      var title = item.title ? API.escapeHtml(item.title) : (isVideo ? 'Game Video' : 'Game Photo');
+      var dateTaken = item.date_taken ? API.escapeHtml(item.date_taken) : '';
+
+      return `
+        <div class="card" id="user-sub-${item.id}" style="padding: 10px; margin-bottom: 0; border: 1px solid var(--border); border-radius: var(--radius-sm); display: flex; flex-direction: column; justify-content: space-between;">
+          <div>
+            <div style="position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: 4px; overflow: hidden; background: #0c1f1a; margin-bottom: 8px;">
+              <img src="${API.escapeHtml(thumbUrl)}" alt="${title}" onerror="this.onerror=null;this.src='/logo.svg';" style="width: 100%; height: 100%; object-fit: cover; display: block;" loading="lazy">
+              <div style="position: absolute; top: 4px; left: 4px; display: flex; gap: 4px; flex-wrap: wrap;">
+                ${typeBadge}
+                ${statusBadge}
+              </div>
+            </div>
+            <h4 style="font-size: 0.88rem; margin: 0 0 2px 0; color: var(--secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${title}">${title}</h4>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 6px;">📅 ${dateTaken || 'Recent'}</div>
+          </div>
+          <button type="button" class="btn btn-outline btn-xs btn-user-takedown" data-id="${item.id}" data-type="${item.media_type || 'photo'}" style="color: var(--danger); border-color: #fca5a5; font-weight: 700; width: 100%; margin-top: 6px; padding: 4px 8px;">
+            🗑️ Take Down Submission
+          </button>
+        </div>
+      `;
+    }).join('');
+
+    list.querySelectorAll('.btn-user-takedown').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        var id = btn.getAttribute('data-id');
+        var type = btn.getAttribute('data-type');
+        handleDeleteMedia(id, type);
+      });
+    });
   }
 
   document.addEventListener('DOMContentLoaded', initGallery);

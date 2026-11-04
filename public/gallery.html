@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Photo &amp; Video Gallery | Pickup Baseball Foundation</title>
-  <link rel="stylesheet" href="/css/style.css?v=61">
+  <link rel="stylesheet" href="/css/style.css?v=62">
   <link rel="alternate" type="application/rss+xml" title="Sunday Pickup Baseball Highlights &amp; Updates" href="/feed.xml">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
@@ -571,6 +571,22 @@
           </button>
         </div>
       </form>
+
+      <!-- User's Submissions & Takedown Section -->
+      <div id="user-submissions-container" style="display: none; margin-top: 32px; border-top: 1px dashed var(--border); padding-top: 20px;">
+        <div class="flex-between" style="margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+          <div>
+            <h3 style="font-size: 1.05rem; color: var(--secondary); margin: 0 0 2px 0;">
+              📁 Your Uploads &amp; Submissions
+            </h3>
+            <p style="color: var(--text-muted); font-size: 0.82rem; margin: 0;">
+              Photos, videos, or links submitted from this device or account. You can take down your submission at any time.
+            </p>
+          </div>
+          <span id="user-submissions-count" class="badge badge-gray" style="font-size: 0.75rem;">0 items</span>
+        </div>
+        <div id="user-submissions-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px;"></div>
+      </div>
     </section>
 
   </main>
@@ -595,8 +611,8 @@
   <!-- Site Footer -->
   <footer id="site-footer" class="site-footer"></footer>
 
-  <script src="/js/api.js?v=61"></script>
-  <script src="/js/art.js?v=61"></script>
-  <script src="/js/gallery.js?v=61"></script>
+  <script src="/js/api.js?v=62"></script>
+  <script src="/js/art.js?v=62"></script>
+  <script src="/js/gallery.js?v=62"></script>
 </body>
 </html>
