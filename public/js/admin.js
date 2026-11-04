@@ -1283,15 +1283,15 @@ function setupAdminSecurity() {
       testAppscriptBtn.textContent = 'Testing...';
       if (appscriptAlert) appscriptAlert.innerHTML = '<span style="font-size: 0.8rem; color: var(--text-muted);">Contacting Google Apps Script Web App...</span>';
       try {
-        const res = await fetch(url);
-        const data = await res.json().catch(() => null);
-        if (res.ok && data && (data.status === 'ok' || data.success !== false)) {
+        const res = await API.testAppscript(url);
+        if (res && res.success) {
           if (appscriptAlert) {
-            appscriptAlert.innerHTML = '<span style="font-size: 0.8rem; color: var(--success); font-weight: 700;">✓ Connected successfully! Your Google Apps Script Web App is online and ready.</span>';
+            appscriptAlert.innerHTML = '<span style="font-size: 0.8rem; color: var(--success); font-weight: 700;">✓ Connected successfully! Google Apps Script Web App is online and ready for Drive storage.</span>';
           }
         } else {
+          const errMsg = (res && res.error) ? res.error : 'Unexpected response';
           if (appscriptAlert) {
-            appscriptAlert.innerHTML = '<span style="font-size: 0.8rem; color: var(--orange); font-weight: 700;">⚠️ Connected to URL (HTTP ' + res.status + '), but unexpected response format. Make sure you selected "Execute as: Me" and "Who has access: Anyone".</span>';
+            appscriptAlert.innerHTML = '<span style="font-size: 0.8rem; color: var(--danger); font-weight: 700;">✕ ' + API.escapeHtml(errMsg) + '</span>';
           }
         }
       } catch (err) {

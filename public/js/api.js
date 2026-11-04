@@ -295,7 +295,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '63',
+  CLIENT_VERSION: '64',
 
   // Current user cache
   currentUser: null,
@@ -1277,6 +1277,10 @@ const API = {
 
   async updateSettings(settings) {
     return this.request('PUT', '/api/settings', settings);
+  },
+
+  async testAppscript(url) {
+    return this.request('POST', '/api/settings/test-appscript', { url });
   },
 
   renderEditGameFieldsHtml(prefix, ev) {

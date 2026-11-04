@@ -525,3 +525,70 @@ export async function putSettingsHandler(c) {
     message: 'Settings saved.'
   });
 }
+
+export async function testAppscriptHandler(c) {
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    let targetUrl = (body && body.url ? String(body.url) : '').trim();
+    if (!targetUrl && c.env && c.env.DB) {
+      try {
+        const row = await c.env.DB.prepare("SELECT value FROM app_settings WHERE key = 'appscript_upload_url'").first();
+        targetUrl = (row && row.value) ? row.value.trim() : '';
+      } catch (e) {}
+    }
+    if (!targetUrl && c.env && c.env.APPSCRIPT_UPLOAD_URL) {
+      targetUrl = c.env.APPSCRIPT_UPLOAD_URL.trim();
+    }
+
+    if (!targetUrl) {
+      return c.json({ success: false, error: 'No Google Apps Script URL provided.' }, 400);
+    }
+
+    if (!/^https:\/\/script\.google\.com\/macros\/s\/[a-zA-Z0-9_\-]+\/exec/i.test(targetUrl)) {
+      return c.json({ success: false, error: 'Invalid Google Apps Script URL. Expected format: https://script.google.com/macros/s/.../exec' }, 400);
+    }
+
+    const res = await fetch(targetUrl, {
+      method: 'GET',
+      redirect: 'follow',
+      headers: {
+        'Accept': 'application/json'
+      }
+    });
+
+    if (res.status === 403) {
+      return c.json({
+        success: false,
+        error: 'Google Apps Script returned 403 Forbidden. Ensure "Who has access" is set to "Anyone" in your Apps Script deployment configuration.'
+      }, 400);
+    }
+
+    if (!res.ok) {
+      return c.json({
+        success: false,
+        error: `Google Apps Script returned HTTP ${res.status}: ${res.statusText}`
+      }, 400);
+    }
+
+    const data = await res.json().catch(() => null);
+    if (!data || (data.status !== 'ok' && data.success === false)) {
+      return c.json({
+        success: false,
+        error: `Unexpected response from Apps Script: ${JSON.stringify(data || {})}`
+      }, 400);
+    }
+
+    return c.json({
+      success: true,
+      message: 'Connected successfully to Google Apps Script Web App!',
+      app: data.app || 'Google Apps Script Uploader',
+      timestamp: data.timestamp || new Date().toISOString()
+    });
+  } catch (err) {
+    return c.json({
+      success: false,
+      error: `Connection failed: ${err.message || 'Network error'}`
+    }, 500);
+  }
+}
+

@@ -2112,6 +2112,14 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     const appscriptGet = await apiReq('GET', '/api/settings');
     assert.equal(appscriptGet.data.appscript_upload_url, 'https://script.google.com/macros/s/test_fake_appscript_id/exec');
 
+    // Test POST /api/settings/test-appscript endpoint validation
+    const testAppscriptNoAuth = await apiReq('POST', '/api/settings/test-appscript', null, { url: 'https://invalid.com' });
+    assert.equal(testAppscriptNoAuth.status, 401, 'Unauthenticated test-appscript call must return 401');
+
+    const testAppscriptInvalidUrl = await apiReq('POST', '/api/settings/test-appscript', seedAdminCookie, { url: 'https://invalid-domain.com/something' });
+    assert.equal(testAppscriptInvalidUrl.status, 400, 'Invalid URL format must return 400');
+    assert.ok(testAppscriptInvalidUrl.data.error.includes('Expected format'), 'Should return clear URL format error');
+
     // Reset appscript setting
     await apiReq('PUT', '/api/settings', seedAdminCookie, { appscript_upload_url: '' });
 

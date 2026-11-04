@@ -9,7 +9,7 @@ import { CURRENT_APP_VERSION } from './version.js';
 import { ensureD1Schema } from './schema.js';
 import { SESSION_COOKIE_NAME, getUserFromSession, requireAdmin } from './security.js';
 import { renderFeedXmlResponse } from './feeds.js';
-import { authRouter, serveUserAvatar, getSettingsHandler, putSettingsHandler } from './routes/auth.js';
+import { authRouter, serveUserAvatar, getSettingsHandler, putSettingsHandler, testAppscriptHandler } from './routes/auth.js';
 import { eventsRouter } from './routes/events.js';
 import { postsRouter } from './routes/posts.js';
 import { mediaRouter } from './routes/media.js';
@@ -81,6 +81,7 @@ app.get('/health', (c) => c.json({
 app.get('/users/:id/avatar', serveUserAvatar);
 app.get('/settings', getSettingsHandler);
 app.put('/settings', requireAdmin, putSettingsHandler);
+app.post('/settings/test-appscript', requireAdmin, testAppscriptHandler);
 app.get('/feed.xml', (c) => renderFeedXmlResponse(c.env && c.env.DB, c.req.url));
 
 app.route('/auth', authRouter);
