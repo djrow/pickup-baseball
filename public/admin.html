@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Dashboard - Sunday Pickup Baseball</title>
-  <link rel="stylesheet" href="/css/style.css?v=62">
+  <link rel="stylesheet" href="/css/style.css?v=63">
   <link rel="alternate" type="application/rss+xml" title="Sunday Pickup Baseball Highlights &amp; Updates" href="/feed.xml">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
@@ -379,6 +379,38 @@
         <div id="settings-alert" style="margin-top: 8px;"></div>
       </div>
 
+      <!-- Google Drive & Apps Script Storage Setting -->
+      <div class="subpanel" style="margin-bottom: 24px;">
+        <div class="flex-between" style="margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+          <div>
+            <h3 style="margin: 0; color: var(--secondary); font-size: 1.05rem;">☁️ Google Drive &amp; Apps Script Media Storage</h3>
+            <p class="text-muted-sm" style="margin: 2px 0 0 0;">
+              Route community photo and video uploads directly into your Google Drive via Apps Script to save Cloudflare D1 database storage.
+            </p>
+          </div>
+          <span id="appscript-status-badge" class="badge badge-gray">Local D1 Storage (Default)</span>
+        </div>
+
+        <form id="appscript-settings-form" style="margin-top: 12px; display: flex; flex-direction: column; gap: 10px;">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="setting-appscript-url" style="font-weight: 600; font-size: 0.88rem;">Google Apps Script Web App URL</label>
+            <div style="display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap;">
+              <input type="url" id="setting-appscript-url" placeholder="https://script.google.com/macros/s/.../exec" style="flex: 1; min-width: 260px; padding: 8px 12px; font-size: 0.88rem;">
+              <button type="button" id="btn-test-appscript" class="btn btn-outline btn-sm">🔌 Test Connection</button>
+              <button type="submit" id="btn-save-appscript" class="btn btn-primary btn-sm">💾 Save URL</button>
+            </div>
+          </div>
+        </form>
+        <div id="appscript-settings-alert" style="margin-top: 8px;"></div>
+
+        <div style="margin-top: 10px; background: var(--bg-subtle); border-radius: var(--radius-sm); border: 1px solid var(--border); padding: 10px 14px; font-size: 0.82rem; color: var(--text-muted); line-height: 1.4;">
+          <strong>💡 1-Minute Setup Instructions:</strong><br>
+          1. Go to <a href="https://script.google.com" target="_blank" rel="noopener noreferrer" style="color: var(--primary); text-decoration: underline;">script.google.com</a> and click <em>New Project</em>.<br>
+          2. Paste the code from <code style="font-size: 0.8rem; background: var(--bg-card); padding: 2px 4px; border-radius: 3px;">scripts/google-drive-uploader.gs</code> into <code style="font-size: 0.8rem; background: var(--bg-card); padding: 2px 4px; border-radius: 3px;">Code.gs</code>.<br>
+          3. Click <strong>Deploy &gt; New Deployment</strong>, choose type <strong>Web app</strong>, set <em>Execute as: Me</em> and <em>Who has access: Anyone</em>, then paste the Web App URL above!
+        </div>
+      </div>
+
       <!-- Banned Email Addresses Section -->
       <div class="subpanel-card" style="padding: 18px;">
         <div class="flex-between" style="margin-bottom: 12px;">
@@ -419,8 +451,8 @@
 
   <footer id="site-footer" class="site-footer"></footer>
 
-  <script src="/js/api.js?v=62"></script>
-  <script src="/js/weather.js?v=62"></script>
-  <script src="/js/admin.js?v=62"></script>
+  <script src="/js/api.js?v=63"></script>
+  <script src="/js/weather.js?v=63"></script>
+  <script src="/js/admin.js?v=63"></script>
 </body>
 </html>

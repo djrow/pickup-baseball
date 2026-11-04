@@ -494,12 +494,34 @@ export async function serveUserAvatar(c) {
 
 export async function getSettingsHandler(c) {
   const requireLogin = await getRequireLoginSetting(c.env.DB, c.env);
-  return c.json({ require_login_to_rsvp: requireLogin });
+  let appscriptUrl = (c.env && c.env.APPSCRIPT_UPLOAD_URL) || '';
+  if (c.env && c.env.DB) {
+    try {
+      const row = await c.env.DB.prepare("SELECT value FROM app_settings WHERE key = 'appscript_upload_url'").first();
+      if (row && row.value) appscriptUrl = row.value;
+    } catch (e) {}
+  }
+  return c.json({
+    require_login_to_rsvp: requireLogin,
+    appscript_upload_url: appscriptUrl
+  });
 }
 
 export async function putSettingsHandler(c) {
-  const { require_login_to_rsvp } = await c.req.json();
-  const val = require_login_to_rsvp ? 'true' : 'false';
-  await c.env.DB.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('require_login_to_rsvp', ?)").bind(val).run();
-  return c.json({ success: true, require_login_to_rsvp: val === 'true', message: 'Settings saved.' });
+  const body = await c.req.json().catch(() => ({}));
+  let requireLoginVal = null;
+  if (body.require_login_to_rsvp !== undefined) {
+    requireLoginVal = body.require_login_to_rsvp ? 'true' : 'false';
+    await c.env.DB.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('require_login_to_rsvp', ?)").bind(requireLoginVal).run();
+  }
+  if (body.appscript_upload_url !== undefined) {
+    const cleanUrl = String(body.appscript_upload_url).trim();
+    await c.env.DB.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('appscript_upload_url', ?)").bind(cleanUrl).run();
+  }
+  return c.json({
+    success: true,
+    require_login_to_rsvp: requireLoginVal !== null ? (requireLoginVal === 'true') : undefined,
+    appscript_upload_url: body.appscript_upload_url !== undefined ? String(body.appscript_upload_url).trim() : undefined,
+    message: 'Settings saved.'
+  });
 }

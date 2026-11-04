@@ -1222,7 +1222,87 @@ function setupAdminSecurity() {
       if (requireLoginCheckbox && s && s.require_login_to_rsvp !== undefined) {
         requireLoginCheckbox.checked = Boolean(s.require_login_to_rsvp);
       }
+      const appscriptInput = document.getElementById('setting-appscript-url');
+      const appscriptBadge = document.getElementById('appscript-status-badge');
+      if (appscriptInput && s && s.appscript_upload_url !== undefined) {
+        appscriptInput.value = s.appscript_upload_url || '';
+        if (appscriptBadge) {
+          if (s.appscript_upload_url && s.appscript_upload_url.trim()) {
+            appscriptBadge.className = 'badge badge-green';
+            appscriptBadge.textContent = '☁️ Active (Google Drive)';
+          } else {
+            appscriptBadge.className = 'badge badge-gray';
+            appscriptBadge.textContent = 'Local D1 Storage (Default)';
+          }
+        }
+      }
     } catch (e) {}
+  }
+
+  const appscriptForm = document.getElementById('appscript-settings-form');
+  const appscriptInput = document.getElementById('setting-appscript-url');
+  const appscriptBadge = document.getElementById('appscript-status-badge');
+  const appscriptAlert = document.getElementById('appscript-settings-alert');
+  const testAppscriptBtn = document.getElementById('btn-test-appscript');
+
+  if (appscriptForm) {
+    appscriptForm.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const url = (appscriptInput ? appscriptInput.value : '').trim();
+      if (appscriptAlert) appscriptAlert.innerHTML = '<span style="font-size: 0.8rem; color: var(--text-muted);">Saving Google Apps Script URL...</span>';
+      try {
+        const res = await API.updateSettings({ appscript_upload_url: url });
+        if (appscriptAlert) {
+          appscriptAlert.innerHTML = res.error
+            ? '<span style="font-size: 0.8rem; color: var(--danger);">' + API.escapeHtml(res.error) + '</span>'
+            : '<span style="font-size: 0.8rem; color: var(--success); font-weight: 700;">✓ Storage setting saved! ' + (url ? 'Future uploads will save directly into Google Drive.' : 'Reverted to local D1 storage.') + '</span>';
+        }
+        if (appscriptBadge) {
+          if (url) {
+            appscriptBadge.className = 'badge badge-green';
+            appscriptBadge.textContent = '☁️ Active (Google Drive)';
+          } else {
+            appscriptBadge.className = 'badge badge-gray';
+            appscriptBadge.textContent = 'Local D1 Storage (Default)';
+          }
+        }
+      } catch (err) {
+        if (appscriptAlert) appscriptAlert.innerHTML = '<span style="font-size: 0.8rem; color: var(--danger);">Failed to save Google Apps Script URL.</span>';
+      }
+    });
+  }
+
+  if (testAppscriptBtn) {
+    testAppscriptBtn.addEventListener('click', async function() {
+      const url = (appscriptInput ? appscriptInput.value : '').trim();
+      if (!url) {
+        alert('Please enter your Google Apps Script Web App URL first.');
+        return;
+      }
+      testAppscriptBtn.disabled = true;
+      testAppscriptBtn.textContent = 'Testing...';
+      if (appscriptAlert) appscriptAlert.innerHTML = '<span style="font-size: 0.8rem; color: var(--text-muted);">Contacting Google Apps Script Web App...</span>';
+      try {
+        const res = await fetch(url);
+        const data = await res.json().catch(() => null);
+        if (res.ok && data && (data.status === 'ok' || data.success !== false)) {
+          if (appscriptAlert) {
+            appscriptAlert.innerHTML = '<span style="font-size: 0.8rem; color: var(--success); font-weight: 700;">✓ Connected successfully! Your Google Apps Script Web App is online and ready.</span>';
+          }
+        } else {
+          if (appscriptAlert) {
+            appscriptAlert.innerHTML = '<span style="font-size: 0.8rem; color: var(--orange); font-weight: 700;">⚠️ Connected to URL (HTTP ' + res.status + '), but unexpected response format. Make sure you selected "Execute as: Me" and "Who has access: Anyone".</span>';
+          }
+        }
+      } catch (err) {
+        if (appscriptAlert) {
+          appscriptAlert.innerHTML = '<span style="font-size: 0.8rem; color: var(--danger); font-weight: 700;">✕ Connection failed: ' + API.escapeHtml(err.message || 'Error') + '. Ensure the Web App is deployed with "Who has access: Anyone".</span>';
+        }
+      } finally {
+        testAppscriptBtn.disabled = false;
+        testAppscriptBtn.textContent = '🔌 Test Connection';
+      }
+    });
   }
 
   if (requireLoginCheckbox) {

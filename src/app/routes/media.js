@@ -359,6 +359,46 @@ mediaRouter.post('/', async (c) => {
       storedFileSize = processedBytes.byteLength;
       finalMediaType = (storedMimeType && storedMimeType.startsWith('video/')) ? 'video' : 'photo';
       originalUrl = null;
+
+      // Check if Google Apps Script upload URL is configured for Google Drive storage
+      let appscriptUrl = (c.env && c.env.APPSCRIPT_UPLOAD_URL) || null;
+      if (!appscriptUrl && c.env && c.env.DB) {
+        try {
+          const row = await c.env.DB.prepare("SELECT value FROM app_settings WHERE key = 'appscript_upload_url'").first();
+          if (row && row.value && String(row.value).trim()) {
+            appscriptUrl = String(row.value).trim();
+          }
+        } catch (e) {}
+      }
+
+      if (appscriptUrl) {
+        try {
+          const safeFilename = (cleanTitle ? cleanTitle.replace(/[^a-zA-Z0-9_-]/g, '_') : 'baseball_upload') +
+            (storedMimeType.startsWith('video/') ? '.mp4' : '.jpg');
+
+          const asRes = await fetch(appscriptUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'upload',
+              base64: storedFileData,
+              mimeType: storedMimeType,
+              filename: safeFilename
+            })
+          });
+
+          if (asRes.ok) {
+            const asJson = await asRes.json().catch(() => null);
+            if (asJson && asJson.success && asJson.fileUrl) {
+              fileUrl = asJson.fileUrl;
+              originalUrl = asJson.downloadUrl || asJson.previewUrl || fileUrl;
+              storedFileData = null; // Free up D1 space completely! Store zero binary bytes in D1!
+            }
+          }
+        } catch (err) {
+          console.warn('[Media] Google Apps Script upload failed, falling back to local D1:', err.message);
+        }
+      }
     } else {
       return c.json({ error: 'Either a media URL (YouTube/image) or an uploaded file is required.' }, 400);
     }
@@ -522,7 +562,7 @@ async function handleMediaDelete(c) {
     const id = parseInt(c.req.param('id'), 10);
     if (!id || isNaN(id)) return c.json({ error: 'Invalid ID' }, 400);
 
-    const existing = await c.env.DB.prepare('SELECT id, contributor_id, delete_token FROM media_items WHERE id = ?').bind(id).first();
+    const existing = await c.env.DB.prepare('SELECT id, file_url, original_url, contributor_id, delete_token FROM media_items WHERE id = ?').bind(id).first();
     if (!existing) return c.json({ error: 'Media item not found' }, 404);
 
     const user = c.get('user');
@@ -544,6 +584,26 @@ async function handleMediaDelete(c) {
 
     if (!isManager && !isOwnerUser && !isOwnerToken) {
       return c.json({ error: 'Access denied: You do not have permission to take down this submission.' }, 403);
+    }
+
+    // Attempt Google Drive file deletion if managed via Apps Script
+    let appscriptUrl = (c.env && c.env.APPSCRIPT_UPLOAD_URL) || null;
+    if (!appscriptUrl && c.env && c.env.DB) {
+      try {
+        const row = await c.env.DB.prepare("SELECT value FROM app_settings WHERE key = 'appscript_upload_url'").first();
+        if (row && row.value) appscriptUrl = row.value.trim();
+      } catch (e) {}
+    }
+    if (appscriptUrl && (existing.file_url || existing.original_url)) {
+      const combined = `${existing.file_url || ''} ${existing.original_url || ''}`;
+      const match = combined.match(/(?:lh3\.googleusercontent\.com\/d\/|id=|file\/d\/)([\w-]{25,})/);
+      if (match && match[1]) {
+        fetch(appscriptUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'delete', fileId: match[1] })
+        }).catch(() => {});
+      }
     }
 
     await c.env.DB.prepare('DELETE FROM media_items WHERE id = ?').bind(id).run();

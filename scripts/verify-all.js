@@ -2102,6 +2102,19 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.equal(anonBlocked.status, 401, 'Anonymous RSVP must be blocked when require_login_to_rsvp is enabled');
     await apiReq('PUT', '/api/settings', seedAdminCookie, { require_login_to_rsvp: false });
 
+    // Test appscript_upload_url setting persistence for Google Drive storage
+    const appscriptSet = await apiReq('PUT', '/api/settings', seedAdminCookie, {
+      appscript_upload_url: 'https://script.google.com/macros/s/test_fake_appscript_id/exec'
+    });
+    assert.equal(appscriptSet.status, 200, 'Setting appscript_upload_url must return 200');
+    assert.equal(appscriptSet.data.appscript_upload_url, 'https://script.google.com/macros/s/test_fake_appscript_id/exec');
+
+    const appscriptGet = await apiReq('GET', '/api/settings');
+    assert.equal(appscriptGet.data.appscript_upload_url, 'https://script.google.com/macros/s/test_fake_appscript_id/exec');
+
+    // Reset appscript setting
+    await apiReq('PUT', '/api/settings', seedAdminCookie, { appscript_upload_url: '' });
+
     // 2. Banned emails lifecycle
     const banRes = await apiReq('POST', '/api/auth/banned-emails', seedAdminCookie, {
       email: 'banned-test@example.com',
@@ -2428,9 +2441,11 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(adminHtml.includes('id="admin-media-carousel-section"'), 'admin.html must contain #admin-media-carousel-section');
     assert.ok(adminHtml.includes('id="admin-media-grid"'), 'admin.html must contain #admin-media-grid');
     assert.ok(adminHtml.includes('admin-media-status-btn'), 'admin.html must include status filter buttons');
+    assert.ok(adminHtml.includes('setting-appscript-url'), 'admin.html must contain #setting-appscript-url for Google Drive');
 
     const adminJs = fs.readFileSync(path.join(publicDir, 'js', 'admin.js'), 'utf8');
     assert.ok(adminJs.includes('setupMediaCarouselsAdmin'), 'admin.js must implement setupMediaCarouselsAdmin');
+    assert.ok(adminJs.includes('appscript_upload_url'), 'admin.js must handle appscript_upload_url');
     assert.ok(adminJs.includes('btn-admin-remove-media'), 'admin.js must provide btn-admin-remove-media to remove items from carousels');
     assert.ok(adminJs.includes('btn-admin-edit-media'), 'admin.js must provide btn-admin-edit-media to edit items');
     assert.ok(adminJs.includes('admin-media-edit-form'), 'admin.js must provide media edit form');
