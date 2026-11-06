@@ -598,10 +598,18 @@ function renderCalendarDrawer(dateKey, game, isPast) {
           wEl.style.display = 'inline-flex';
         }
         if (stripEl && fc.dailyForecast && fc.dailyForecast.length > 0 && typeof window.WeatherService.renderDailyRainTrackHtml === 'function') {
+          var todaySnippet = '';
+          if (fc.todayForecast) {
+            todaySnippet =
+              '<span class="badge" style="font-size: 0.72rem; padding: 2px 8px; font-weight: 700; background: rgba(0, 56, 49, 0.09); color: var(--secondary); border: 1.5px solid var(--secondary); border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">' +
+                '📍 Today\'s Rain: <strong>' + fc.todayForecast.rainFormatted + '</strong> (' + (fc.todayForecast.dayName || 'Today') + ')' +
+              '</span>';
+          }
           stripEl.innerHTML =
             '<div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 6px;">' +
-              '<span style="font-size: 0.82rem; font-weight: 700; color: var(--secondary); display: inline-flex; align-items: center; gap: 5px;">' +
-                '🌧️ <strong>10-Day Rainfall Prediction: ' + fc.rainfall10DayFormatted + '</strong>' +
+              '<span style="font-size: 0.82rem; font-weight: 700; color: var(--secondary); display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap;">' +
+                '<span>🌧️ <strong>10-Day Rainfall Prediction: ' + fc.rainfall10DayFormatted + '</strong></span>' +
+                todaySnippet +
               '</span>' +
               '<span style="font-size: 0.74rem; color: var(--text-muted); font-weight: 600;">' +
                 'Event day &amp; 9 previous days' +

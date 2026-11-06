@@ -1864,6 +1864,18 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.equal(rEventWindow.rainfall10Day, 0.50, '10-day rainfall must sum 9 previous days + event day (0.05+0.10+0.20+0.15 = 0.50)');
     assert.equal(rEventWindow.rainfall10DayFormatted, '0.50"');
 
+    // Verify Today's rainfall prediction marking in 10-day daily breakdown
+    const todayTestList = ws.buildDailyForecast({
+      time: sampleDates,
+      precipitation_sum: samplePrecip
+    }, null, '2026-11-08', '2026-11-06');
+    const todayItem = todayTestList.find(d => d.date === '2026-11-06');
+    assert.ok(todayItem, 'Today must be present in 10-day forecast');
+    assert.equal(todayItem.isToday, true, 'Today item must have isToday=true');
+    const trackHtml = ws.renderDailyRainTrackHtml(todayTestList);
+    assert.ok(trackHtml.includes('is-today'), 'renderDailyRainTrackHtml must apply .is-today class');
+    assert.ok(trackHtml.includes('today-pill'), 'renderDailyRainTrackHtml must render .today-pill');
+
     // Test Drainage Heuristic: Scenario 4 - 0.60" Rain Sunday morning (Recent rain, puddles formed)
     const rSun = ws.calculateFieldDrainage({
       time: times,

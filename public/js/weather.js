@@ -391,11 +391,38 @@
   }
 
   /**
+   * Helper: Get current date key in America/Los_Angeles timezone (YYYY-MM-DD)
+   */
+  function getPacificTodayDateKey() {
+    try {
+      var formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Los_Angeles',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      });
+      var parts = formatter.formatToParts(new Date());
+      var partMap = {};
+      for (var i = 0; i < parts.length; i++) {
+        partMap[parts[i].type] = parts[i].value;
+      }
+      return partMap.year + '-' + partMap.month + '-' + partMap.day;
+    } catch (e) {
+      var now = new Date();
+      var y = now.getFullYear();
+      var m = String(now.getMonth() + 1).padStart(2, '0');
+      var d = String(now.getDate()).padStart(2, '0');
+      return y + '-' + m + '-' + d;
+    }
+  }
+
+  /**
    * Helper: Build 10-day daily forecast breakdown for the event day and 9 previous days
    */
-  function buildDailyForecast(dailyData, hourlyData, targetDateKey) {
+  function buildDailyForecast(dailyData, hourlyData, targetDateKey, todayDateKey) {
     var days = [];
     var weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    var currentTodayKey = todayDateKey || getPacificTodayDateKey();
 
     if (dailyData && Array.isArray(dailyData.time) && dailyData.time.length > 0) {
       var targetIdx = -1;
@@ -425,6 +452,8 @@
         var rainVal = Math.round((Number(slicePrecip[i]) || 0) * 100) / 100;
         var code = sliceCodes[i] || 0;
         var wInfo = getWeatherCodeInfo(code);
+        var isGame = Boolean(targetDateKey && dateStr === targetDateKey);
+        var isToday = Boolean(currentTodayKey && dateStr === currentTodayKey);
 
         days.push({
           date: dateStr,
@@ -438,13 +467,15 @@
           prob: sliceProb[i] != null ? Math.round(sliceProb[i]) : null,
           tempMax: sliceMax[i] != null ? Math.round(sliceMax[i]) : null,
           tempMin: sliceMin[i] != null ? Math.round(sliceMin[i]) : null,
-          isGameDay: Boolean(targetDateKey && dateStr === targetDateKey)
+          isGameDay: isGame,
+          isToday: isToday
         });
       }
     } else if (dailyData && Array.isArray(dailyData.precipitation_sum) && dailyData.precipitation_sum.length > 0) {
       var pSlice = dailyData.precipitation_sum.slice(-10);
       for (var pi = 0; pi < pSlice.length; pi++) {
         var pVal = Math.round((Number(pSlice[pi]) || 0) * 100) / 100;
+        var isLast = (pi === pSlice.length - 1);
         days.push({
           date: '',
           dayName: 'Day ' + (pi + 1),
@@ -454,7 +485,8 @@
           code: 0,
           emoji: '☀️',
           condition: 'Clear',
-          isGameDay: pi === pSlice.length - 1
+          isGameDay: isLast,
+          isToday: false
         });
       }
     } else if (hourlyData && Array.isArray(hourlyData.time) && hourlyData.time.length > 0) {
@@ -494,6 +526,8 @@
         var pInfo = getWeatherCodeInfo(item.code);
         var pMax = item.temps.length ? Math.round(Math.max.apply(null, item.temps)) : null;
         var pMin = item.temps.length ? Math.round(Math.min.apply(null, item.temps)) : null;
+        var hIsGame = Boolean(targetDateKey && dk === targetDateKey);
+        var hIsToday = Boolean(currentTodayKey && dk === currentTodayKey);
 
         days.push({
           date: dk,
@@ -507,7 +541,8 @@
           prob: null,
           tempMax: pMax,
           tempMin: pMin,
-          isGameDay: Boolean(targetDateKey && dk === targetDateKey)
+          isGameDay: hIsGame,
+          isToday: hIsToday
         });
       }
     }
@@ -553,8 +588,12 @@
     var dailyForecast = buildDailyForecast(dailyData, hourlyData, targetDateKey);
 
     var total10DayRain = 0;
+    var todayForecast = null;
     for (var di = 0; di < dailyForecast.length; di++) {
       total10DayRain += dailyForecast[di].rain;
+      if (dailyForecast[di].isToday) {
+        todayForecast = dailyForecast[di];
+      }
     }
     total10DayRain = Math.round(total10DayRain * 100) / 100;
 
@@ -734,6 +773,9 @@
       rainfall10DayFormatted: total10DayRain.toFixed(2) + '"',
       total10DayRain: total10DayRain,
       total10DayRainFormatted: total10DayRain.toFixed(2) + '"',
+      todayForecast: todayForecast,
+      todayRain: todayForecast ? todayForecast.rain : 0,
+      todayRainFormatted: todayForecast ? todayForecast.rainFormatted : '0.00"',
       dailyForecast: dailyForecast,
       effectiveMoisture: effectiveMoisture,
       effectiveMoistureFormatted: effectiveMoisture.toFixed(2) + '"',
@@ -786,16 +828,28 @@
     if (!dailyList || !Array.isArray(dailyList) || dailyList.length === 0) return '';
     var cols = dailyList.map(function(d) {
       var isGame = Boolean(d.isGameDay);
+      var isToday = Boolean(d.isToday);
       var hasRain = d.rain > 0;
       var rainClass = hasRain ? 'has-rain' : '';
       var gameClass = isGame ? 'is-game-day' : '';
-      var title = (d.dayName || '') + ' ' + (d.dayMonth || '') + ': ' + d.rainFormatted + ' (' + (d.condition || '') + ')' + (isGame ? ' — Game Day' : '');
-      return '<div class="ten-day-rain-col ' + gameClass + '" title="' + (window.API ? window.API.escapeHtml(title) : title) + '">' +
+      var todayClass = isToday ? 'is-today' : '';
+
+      var labels = [];
+      if (isToday) labels.push('Today');
+      if (isGame) labels.push('Game Day');
+      var tagStr = labels.length > 0 ? ' — ' + labels.join(' & ') : '';
+      var title = (d.dayName || '') + ' ' + (d.dayMonth || '') + ': ' + d.rainFormatted + ' (' + (d.condition || '') + ')' + tagStr;
+
+      var pills = [];
+      if (isToday) pills.push('<span class="today-pill">Today</span>');
+      if (isGame) pills.push('<span class="game-day-pill">Game</span>');
+
+      return '<div class="ten-day-rain-col ' + gameClass + (todayClass ? ' ' + todayClass : '') + '" title="' + (window.API ? window.API.escapeHtml(title) : title) + '">' +
         '<span class="day-title">' + (d.dayName || '') + '</span>' +
         '<span class="day-date">' + (d.dayMonth || '') + '</span>' +
         '<span class="day-emoji">' + (d.emoji || '☀️') + '</span>' +
         '<span class="day-rain ' + rainClass + '">' + d.rainFormatted + '</span>' +
-        (isGame ? '<span class="game-day-pill">Game</span>' : '') +
+        (pills.length > 0 ? '<div style="display:flex; flex-direction:column; align-items:center; gap:2px; margin-top:2px;">' + pills.join('') + '</div>' : '') +
       '</div>';
     });
     return '<div class="ten-day-rain-track">' + cols.join('') + '</div>';
@@ -812,17 +866,22 @@
     }
     var bars = dailyList.map(function(d) {
       var isGame = Boolean(d.isGameDay);
+      var isToday = Boolean(d.isToday);
       var hasRain = d.rain > 0;
       var heightPx = 3;
       if (hasRain) {
         heightPx = Math.max(5, Math.min(14, Math.round((d.rain / (maxRain || 1)) * 14)));
       }
-      var barColor = isGame ? 'var(--primary)' : (hasRain ? '#0284c7' : 'var(--border)');
-      var title = (d.dayName || '') + ' ' + (d.dayMonth || '') + ': ' + d.rainFormatted + (isGame ? ' (Game Day)' : '');
+      var barColor = isGame ? 'var(--primary)' : (isToday ? 'var(--secondary)' : (hasRain ? '#0284c7' : 'var(--border)'));
+      var tags = [];
+      if (isToday) tags.push('Today');
+      if (isGame) tags.push('Game Day');
+      var tagSuffix = tags.length > 0 ? ' (' + tags.join(' & ') + ')' : '';
+      var title = (d.dayName || '') + ' ' + (d.dayMonth || '') + ': ' + d.rainFormatted + tagSuffix;
       var letter = d.dayName ? d.dayName.charAt(0) : '';
-      return '<div class="mini-rain-day" title="' + (window.API ? window.API.escapeHtml(title) : title) + '" style="flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 2px;">' +
+      return '<div class="mini-rain-day' + (isToday ? ' mini-today' : '') + '" title="' + (window.API ? window.API.escapeHtml(title) : title) + '" style="flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 2px;">' +
         '<span class="mini-rain-bar" style="display: block; width: 100%; max-width: 8px; height: ' + heightPx + 'px; background: ' + barColor + '; border-radius: 2px;"></span>' +
-        '<span class="mini-rain-label" style="font-size: 0.6rem; line-height: 1; color: ' + (isGame ? 'var(--primary)' : 'var(--text-muted)') + '; font-weight: ' + (isGame ? '800' : '600') + ';">' + letter + '</span>' +
+        '<span class="mini-rain-label" style="font-size: 0.6rem; line-height: 1; color: ' + (isGame ? 'var(--primary)' : (isToday ? 'var(--secondary)' : 'var(--text-muted)')) + '; font-weight: ' + (isGame || isToday ? '800' : '600') + ';">' + letter + '</span>' +
       '</div>';
     });
     return '<div class="card-10day-rain-row" style="display: flex; gap: 2px; align-items: flex-end; width: 100%; padding-top: 3px; border-top: 1px dashed var(--border); margin-top: 3px;">' + bars.join('') + '</div>';
@@ -994,8 +1053,13 @@
         ${(r.dailyForecast && r.dailyForecast.length > 0) ? `
           <div style="margin-top: 14px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px;">
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
-              <div style="font-size: 0.8rem; font-weight: 700; color: var(--secondary); display: inline-flex; align-items: center; gap: 5px;">
-                🌧️ <strong>10-Day Rainfall Prediction: ${r.rainfall10DayFormatted}</strong>
+              <div style="font-size: 0.8rem; font-weight: 700; color: var(--secondary); display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <span>🌧️ <strong>10-Day Rainfall Prediction: ${r.rainfall10DayFormatted}</strong></span>
+                ${r.todayForecast ? `
+                  <span class="badge" style="font-size: 0.72rem; padding: 2px 8px; font-weight: 700; background: rgba(0, 56, 49, 0.09); color: var(--secondary); border: 1.5px solid var(--secondary); border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
+                    📍 Today's Rain: <strong>${r.todayForecast.rainFormatted}</strong> (${r.todayForecast.dayName || 'Today'})
+                  </span>
+                ` : ''}
               </div>
               <div style="font-size: 0.74rem; color: var(--text-muted); font-weight: 600;">
                 Event day &amp; 9 previous days
@@ -1062,6 +1126,7 @@
     resolveCoordsForLocation: resolveCoordsForLocation,
     getWeatherCodeInfo: getWeatherCodeInfo,
     getPacificDateParts: getPacificDateParts,
+    getPacificTodayDateKey: getPacificTodayDateKey,
     fetchForecast: fetchForecast,
     calculateFieldDrainage: calculateFieldDrainage,
     buildDailyForecast: buildDailyForecast,
