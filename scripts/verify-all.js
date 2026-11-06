@@ -2195,13 +2195,17 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(artJsCode.includes('setUser'), 'art.js must implement admin setUser');
     assert.ok(artJsCode.includes('window.ArtStudio'), 'art.js must mount window.ArtStudio');
 
-    // 3. Verify Community Art Studio merged into gallery.html
+    // 3. Verify Community Art Studio retired from gallery.html & archived in docs
     const galleryHtml = fs.readFileSync(path.join(publicDir, 'gallery.html'), 'utf8');
-    assert.ok(galleryHtml.includes('id="pixel-diamond-canvas"'), 'gallery.html must house #pixel-diamond-canvas');
-    assert.ok(galleryHtml.includes('id="trunk-canvas-stage"'), 'gallery.html must house #trunk-canvas-stage');
-    assert.ok(galleryHtml.includes('id="chalkboard-canvas"'), 'gallery.html must house #chalkboard-canvas');
-    assert.ok(galleryHtml.includes('id="art-admin-banner"'), 'gallery.html must house #art-admin-banner');
-    assert.ok(galleryHtml.includes('/js/art.js'), 'gallery.html must script-load /js/art.js');
+    assert.ok(!galleryHtml.includes('id="community-art-section"'), 'gallery.html must have retired #community-art-section');
+    assert.ok(!galleryHtml.includes('id="pixel-diamond-canvas"'), 'gallery.html must not house #pixel-diamond-canvas');
+    assert.ok(!galleryHtml.includes('id="trunk-canvas-stage"'), 'gallery.html must not house #trunk-canvas-stage');
+
+    const archiveDocPath = path.join(__dirname, '..', 'docs', 'COMMUNITY_ART_STUDIO_ARCHIVE.md');
+    assert.ok(fs.existsSync(archiveDocPath), 'docs/COMMUNITY_ART_STUDIO_ARCHIVE.md must exist');
+    const archiveDoc = fs.readFileSync(archiveDocPath, 'utf8');
+    assert.ok(archiveDoc.includes('Pixel Diamond'), 'archive doc must detail Pixel Diamond');
+    assert.ok(archiveDoc.includes('Dugout Chalkboard'), 'archive doc must detail Chalkboard & Sticker Wall');
 
     const apiJs = fs.readFileSync(path.join(publicDir, 'js', 'api.js'), 'utf8');
     assert.ok(apiJs.includes('nav-link-gallery'), 'api.js must render .nav-link-gallery in API.renderNav()');
