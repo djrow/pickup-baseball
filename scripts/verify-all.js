@@ -1820,6 +1820,10 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(Array.isArray(rDry.dailyForecast), 'calculateFieldDrainage must return dailyForecast array');
     assert.ok(rDry.dailyForecast.length > 0, 'dailyForecast array must contain entries');
     assert.ok(rDry.prognosis.includes('No standing puddles'));
+    assert.ok(Array.isArray(rDry.hourlyBreakdown), 'rDry must contain hourlyBreakdown');
+    const lastHourlyItem = rDry.hourlyBreakdown[rDry.hourlyBreakdown.length - 1];
+    assert.ok(lastHourlyItem.time.endsWith('T18:00'), 'hourlyBreakdown must extend through 6:00 PM (18:00) on event day');
+    assert.ok(rDry.hourlyBreakdown.some(h => h.isGameTime), 'hourlyBreakdown must flag game window hours');
 
     // Test Drainage Heuristic: Scenario 2 - 0.80" Rain Saturday afternoon (Adequate time to drain)
     const rSat = ws.calculateFieldDrainage({

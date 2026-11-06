@@ -563,9 +563,14 @@
     var gameWeather = getWeatherCodeInfo(gameCode);
 
     // Slice 24 hours immediately prior to game start (e.g. Sat 12:00 PM -> Sun 12:00 PM)
+    // and extend through 6:00 PM on the day of the event (18:00)
     var startIdx = targetIdx - 24;
     if (startIdx < 0) startIdx = 0;
-    var endIdx = targetIdx;
+
+    var target6pmKey = targetDateKey ? (targetDateKey + 'T18:00') : null;
+    var idx6pm = target6pmKey ? times.indexOf(target6pmKey) : -1;
+    var endIdx = (idx6pm !== -1) ? (idx6pm + 1) : Math.min(times.length, targetIdx + 7);
+    if (endIdx < targetIdx) endIdx = targetIdx;
 
     var hourlyTimes = times.slice(startIdx, endIdx);
     var hourlyPrecip = hourlyData.precipitation.slice(startIdx, endIdx);
@@ -573,45 +578,73 @@
     var hourlyCodes = hourlyData.weathercode.slice(startIdx, endIdx);
 
     var totalRain24h = 0;
+    var gameHoursRain = 0;
     var effectiveMoisture = 0;
-    var lastRainIdx = -1;
+    var lastPreGameRainIdx = -1;
+    var lastGameRainIdx = -1;
     var maxHourlyRain = 0;
     var hourlyBreakdown = [];
 
+    var preGameCount = Math.max(0, targetIdx - startIdx);
     var count = hourlyPrecip.length;
+
     for (var i = 0; i < count; i++) {
       var r = hourlyPrecip[i] || 0;
-      totalRain24h += r;
-      if (r > maxHourlyRain) maxHourlyRain = r;
+      var actualIdx = startIdx + i;
+      var isGameTime = (actualIdx >= targetIdx);
 
-      // Hours remaining before 12:00 PM warmups:
-      // i=23 -> 1h before game (11am-12pm)
-      // i=0  -> 24h before game (Sat 12pm-1pm)
-      var hoursBeforeGame = count - i;
+      if (!isGameTime) {
+        totalRain24h += r;
+        if (r > maxHourlyRain) maxHourlyRain = r;
 
-      // Exponential drainage decay:
-      var retentionFactor = Math.exp(-hoursBeforeGame / HEURISTIC_CONFIG.DRAINAGE_DECAY_HOURS);
-      effectiveMoisture += (r * retentionFactor);
+        // Hours remaining before 12:00 PM warmups:
+        // i=preGameCount-1 -> 1h before game (11am-12pm)
+        // i=0              -> preGameCount hours before game (Sat 12pm-1pm)
+        var hoursBeforeGame = preGameCount - i;
 
-      if (r >= 0.008) {
-        lastRainIdx = i;
+        // Exponential drainage decay:
+        var retentionFactor = Math.exp(-hoursBeforeGame / HEURISTIC_CONFIG.DRAINAGE_DECAY_HOURS);
+        effectiveMoisture += (r * retentionFactor);
+
+        if (r >= 0.008) {
+          lastPreGameRainIdx = i;
+        }
+
+        hourlyBreakdown.push({
+          time: hourlyTimes[i],
+          rain: r,
+          hoursBefore: hoursBeforeGame,
+          retention: retentionFactor,
+          temp: Math.round(hourlyTemps[i]),
+          code: hourlyCodes[i],
+          isGameTime: false
+        });
+      } else {
+        // Game-time hours (12:00 PM through 6:00 PM)
+        gameHoursRain += r;
+        if (r > maxHourlyRain) maxHourlyRain = r;
+
+        if (r >= 0.008) {
+          lastGameRainIdx = i;
+        }
+
+        hourlyBreakdown.push({
+          time: hourlyTimes[i],
+          rain: r,
+          hoursBefore: 0,
+          retention: 1,
+          temp: Math.round(hourlyTemps[i]),
+          code: hourlyCodes[i],
+          isGameTime: true
+        });
       }
-
-      hourlyBreakdown.push({
-        time: hourlyTimes[i],
-        rain: r,
-        hoursBefore: hoursBeforeGame,
-        retention: retentionFactor,
-        temp: Math.round(hourlyTemps[i]),
-        code: hourlyCodes[i]
-      });
     }
 
-    // Determine how long ago rain stopped
+    // Determine how long ago rain stopped prior to 12:00 PM warmups
     var hoursSinceRain = 24;
     var rainDryingNote = 'No measurable rain in previous 24 hours';
-    if (lastRainIdx !== -1) {
-      hoursSinceRain = count - (lastRainIdx + 1);
+    if (lastPreGameRainIdx !== -1) {
+      hoursSinceRain = preGameCount - (lastPreGameRainIdx + 1);
       if (hoursSinceRain === 0) {
         rainDryingNote = 'Rain active right up to 12:00 PM warmups';
       } else {
@@ -662,6 +695,29 @@
       recommendation = 'Playable! Molded rubber cleats recommended for traction; keep gear off the damp grass.';
     }
 
+    // Active rain during game hours (12:00 PM - 6:00 PM)
+    if (gameHoursRain >= 0.10) {
+      status = 'rainout_risk';
+      statusLabel = 'Rainout Expected (Game-Time Rain)';
+      badgeClass = 'badge-rainout';
+      statusColor = '#dc2626';
+      statusBg = '#fee2e2';
+      statusBorder = '#fca5a5';
+      statusIcon = '🌧️';
+      prognosis = 'Rain forecast during the game window (' + gameHoursRain.toFixed(2) + '" between 12 PM - 6 PM). High likelihood of rainout.';
+      recommendation = 'Organizers should monitor radar and broadcast an emergency update if showers persist.';
+    } else if (gameHoursRain >= 0.03 && status === 'good') {
+      status = 'alert';
+      statusLabel = 'Scattered Showers During Game';
+      badgeClass = 'badge-orange';
+      statusColor = '#FD5A1E';
+      statusBg = '#fff2ed';
+      statusBorder = '#fed3c4';
+      statusIcon = '🌦️';
+      prognosis += ' Scattered showers forecast during afternoon play (' + gameHoursRain.toFixed(2) + '" between 12 PM - 6 PM).';
+      recommendation = 'Bring light rain gear or jackets for the bench. Game may experience brief delays.';
+    }
+
     return {
       available: true,
       targetHourKey: targetHourKey,
@@ -672,6 +728,8 @@
       isRain: gameWeather.isRain,
       totalRain24h: totalRain24h,
       totalRain24hFormatted: totalRain24h.toFixed(2) + '"',
+      gameHoursRain: Math.round(gameHoursRain * 100) / 100,
+      gameHoursRainFormatted: (Math.round(gameHoursRain * 100) / 100).toFixed(2) + '"',
       rainfall10Day: total10DayRain,
       rainfall10DayFormatted: total10DayRain.toFixed(2) + '"',
       total10DayRain: total10DayRain,
@@ -803,9 +861,22 @@
     var r = forecastResult;
     var fieldName = options && options.locationName ? options.locationName : (r.locationName || 'Bushrod Park Field');
 
-    // Build hourly 24h timeline
+    // Build hourly timeline (extending through 6:00 PM on event day)
     var timelineHtml = '';
     if (r.hourlyBreakdown && r.hourlyBreakdown.length > 0) {
+      var startDayName = 'Sat';
+      var endDayName = 'Sun';
+      if (r.hourlyBreakdown.length > 0) {
+        var firstItemDate = r.hourlyBreakdown[0].time.split('T')[0];
+        var lastItemDate = r.hourlyBreakdown[r.hourlyBreakdown.length - 1].time.split('T')[0];
+        var daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        var d1 = new Date(firstItemDate + 'T12:00:00.000Z');
+        var d2 = new Date(lastItemDate + 'T12:00:00.000Z');
+        if (!isNaN(d1.getTime())) startDayName = daysOfWeek[d1.getUTCDay()];
+        if (!isNaN(d2.getTime())) endDayName = daysOfWeek[d2.getUTCDay()];
+      }
+      var timelineRangeLabel = startDayName + ' 12 PM → ' + endDayName + ' 6 PM';
+
       var timelineItems = r.hourlyBreakdown.map(function(item) {
         var hParts = item.time.split('T')[1].split(':');
         var hourNum = parseInt(hParts[0], 10);
@@ -814,15 +885,16 @@
         var shortTime = hourLabel + ampm;
         var hasRain = item.rain >= 0.008;
         var barHeight = hasRain ? Math.min(100, Math.max(25, item.rain * 200)) : 4;
-        var barColor = hasRain ? 'var(--primary)' : 'var(--border)';
+        var isGame = Boolean(item.isGameTime);
+        var barColor = hasRain ? (isGame ? 'var(--secondary)' : 'var(--primary)') : 'var(--border)';
 
         return `
-          <div class="drainage-col" style="flex: 1; min-width: 18px; display: flex; flex-direction: column; align-items: center; gap: 3px;" title="${item.time}: ${item.rain.toFixed(2)} in/hr (${item.temp}°F)">
-            <div style="font-size: 0.65rem; color: var(--text-muted); font-weight: 600;">${shortTime}</div>
+          <div class="drainage-col" style="flex: 1; min-width: 18px; display: flex; flex-direction: column; align-items: center; gap: 3px; ${isGame ? 'background: rgba(0, 56, 49, 0.05); border-radius: 4px; padding: 2px 0;' : ''}" title="${item.time}${isGame ? ' (Game Window 12-6 PM)' : ' (Pre-Game Drainage)'}: ${item.rain.toFixed(2)} in/hr (${item.temp}°F)">
+            <div style="font-size: 0.65rem; color: ${isGame ? 'var(--secondary)' : 'var(--text-muted)'}; font-weight: ${isGame ? '700' : '600'};">${shortTime}</div>
             <div style="height: 48px; width: 100%; display: flex; align-items: flex-end; justify-content: center;">
               <div style="width: 80%; height: ${barHeight}%; background: ${barColor}; border-radius: 2px;"></div>
             </div>
-            <div style="font-size: 0.6rem; color: ${hasRain ? 'var(--primary)' : 'var(--text-muted)'}; font-weight: 700;">
+            <div style="font-size: 0.6rem; color: ${hasRain ? (isGame ? 'var(--secondary)' : 'var(--primary)') : 'var(--text-muted)'}; font-weight: 700;">
               ${hasRain ? item.rain.toFixed(2) : '0'}
             </div>
           </div>
@@ -831,9 +903,9 @@
 
       timelineHtml = `
         <div style="margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border);">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 4px;">
             <span style="font-size: 0.82rem; font-weight: 700; color: var(--secondary);">
-              📊 24-Hour Rainfall Drainage Timeline (Sat 12 PM → Sun 12 PM)
+              📊 Hourly Rain &amp; Drainage Timeline (${timelineRangeLabel})
             </span>
             <span style="font-size: 0.74rem; color: var(--text-muted);">
               Rainfall (inches per hour)
