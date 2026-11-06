@@ -14,13 +14,31 @@ initDatabase();
 
 app.use((req, res, next) => {
   res.setHeader('X-App-Version', CURRENT_APP_VERSION);
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  if (!req.path.startsWith('/api/')) {
+    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://challenges.cloudflare.com https://api.open-meteo.com https://geocoding-api.open-meteo.com; frame-src https://challenges.cloudflare.com https://www.youtube-nocookie.com https://www.youtube.com; media-src 'self' https: data:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
+  }
   next();
 });
 
 const uploadsDir = path.join(process.env.DATA_DIR || path.join(__dirname, '..', 'data'), 'uploads', 'avatars');
 app.use('/uploads/avatars', express.static(uploadsDir));
 
-app.get(['/handbook', '/rules'], (req, res) => res.redirect(301, '/handbook.html'));
+app.get(['/handbook', '/rules'], (req, res) => {
+  res.writeHead(301, {
+    'Location': '/handbook.html',
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
+    'Content-Security-Policy': "default-src 'self'; frame-ancestors 'none'",
+    'Content-Length': '0'
+  });
+  res.end();
+});
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() });

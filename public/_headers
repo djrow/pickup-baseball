@@ -25,6 +25,16 @@
   Content-Type: application/manifest+json; charset=utf-8
   Cache-Control: public, max-age=3600
 
+/crossdomain.xml
+  Content-Type: application/xml; charset=utf-8
+  Cache-Control: public, max-age=86400
+  X-Content-Type-Options: nosniff
+
+/clientaccesspolicy.xml
+  Content-Type: application/xml; charset=utf-8
+  Cache-Control: public, max-age=86400
+  X-Content-Type-Options: nosniff
+
 /i18n/*
   Cache-Control: public, max-age=86400, stale-while-revalidate=604800
 

@@ -16,6 +16,41 @@ import { mediaRouter } from './routes/media.js';
 
 export const app = new Hono().basePath('/api');
 
+// Global security headers middleware (runs first, ensures every response has security headers)
+app.use('*', async (c, next) => {
+  await next();
+  c.header('X-App-Version', CURRENT_APP_VERSION);
+  c.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  c.header('X-Content-Type-Options', 'nosniff');
+  c.header('X-Frame-Options', 'DENY');
+  c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+  c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+  c.header('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
+});
+
+app.onError((err, c) => {
+  console.error('[API Error]', err);
+  c.header('X-App-Version', CURRENT_APP_VERSION);
+  c.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  c.header('X-Content-Type-Options', 'nosniff');
+  c.header('X-Frame-Options', 'DENY');
+  c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+  c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+  c.header('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
+  return c.json({ error: 'Internal server error.' }, 500);
+});
+
+app.notFound((c) => {
+  c.header('X-App-Version', CURRENT_APP_VERSION);
+  c.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  c.header('X-Content-Type-Options', 'nosniff');
+  c.header('X-Frame-Options', 'DENY');
+  c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+  c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+  c.header('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
+  return c.json({ error: 'Endpoint not found.' }, 404);
+});
+
 app.use('*', async (c, next) => {
   if (c.env && c.env.DB) {
     await ensureD1Schema(c.env.DB);
@@ -26,7 +61,16 @@ app.use('*', async (c, next) => {
   // Enforce custom domain WAF on Cloudflare Pages preview domains
   if (reqUrl.hostname.endsWith('.pages.dev')) {
     if (c.req.method === 'GET' || c.req.method === 'HEAD') {
-      return c.redirect(`https://www.pickupbaseballfoundation.org${reqUrl.pathname}${reqUrl.search}`, 301);
+      return new Response(null, {
+        status: 301,
+        headers: {
+          'Location': `https://www.pickupbaseballfoundation.org${reqUrl.pathname}${reqUrl.search}`,
+          'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
+          'X-Content-Type-Options': 'nosniff',
+          'X-Frame-Options': 'DENY',
+          'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'"
+        }
+      });
     }
     return c.json({ error: 'Direct origin/preview API access is disabled. Please use www.pickupbaseballfoundation.org.' }, 403);
   }
@@ -63,13 +107,6 @@ app.use('*', async (c, next) => {
   }
 
   await next();
-  c.header('X-App-Version', CURRENT_APP_VERSION);
-  c.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
-  c.header('X-Content-Type-Options', 'nosniff');
-  c.header('X-Frame-Options', 'DENY');
-  c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
-  c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
-  c.header('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
 });
 
 app.get('/version', (c) => c.json({ version: CURRENT_APP_VERSION }));

@@ -54,7 +54,22 @@ const { renderFeedXmlResponse } = require('../src/app/feeds.js');
 const app = express();
 app.use((req, res, next) => {
   res.setHeader('X-App-Version', CURRENT_APP_VERSION);
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
   next();
+});
+app.get(['/handbook', '/rules'], (req, res) => {
+  res.writeHead(301, {
+    'Location': '/handbook.html',
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
+    'Content-Length': '0'
+  });
+  res.end();
 });
 app.use(express.static(path.join(__dirname, '..', 'public')));
 app.get('/feed.xml', async (req, res) => {
@@ -2552,5 +2567,41 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     } finally {
       global.fetch = origFetch;
     }
+  });
+
+  await t9.test('T9.26: ZAP DAST Security Hardening (Global Headers, 0-Byte Redirects & Cross-Domain Policy)', async () => {
+    // 1. Verify crossdomain.xml & clientaccesspolicy.xml exist and restrict access
+    const crossdomainPath = path.join(publicDir, 'crossdomain.xml');
+    const clientaccessPath = path.join(publicDir, 'clientaccesspolicy.xml');
+    assert.ok(fs.existsSync(crossdomainPath), 'crossdomain.xml must exist');
+    assert.ok(fs.existsSync(clientaccessPath), 'clientaccesspolicy.xml must exist');
+
+    const crossdomainContent = fs.readFileSync(crossdomainPath, 'utf8');
+    assert.ok(crossdomainContent.includes('permitted-cross-domain-policies="none"'), 'crossdomain.xml must forbid cross-domain policies');
+
+    // 2. Verify security headers on standard API response
+    const apiRes = await fetch(`${baseUrl}/api/version`);
+    assert.equal(apiRes.status, 200);
+    assert.equal(apiRes.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(apiRes.headers.get('x-frame-options'), 'DENY');
+    assert.ok(apiRes.headers.get('strict-transport-security'), 'HSTS header must be set');
+    assert.ok(apiRes.headers.get('content-security-policy'), 'CSP header must be set');
+
+    // 3. Verify security headers on 404 API response
+    const notFoundRes = await fetch(`${baseUrl}/api/non-existent-endpoint`);
+    assert.equal(notFoundRes.status, 404);
+    assert.equal(notFoundRes.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(notFoundRes.headers.get('x-frame-options'), 'DENY');
+    assert.ok(notFoundRes.headers.get('strict-transport-security'), 'HSTS header must be set on 404');
+    assert.ok(notFoundRes.headers.get('content-security-policy'), 'CSP header must be set on 404');
+
+    // 4. Verify 301 redirects return 0 content-length / empty body
+    const redirectRes = await fetch(`${baseUrl}/handbook`, { redirect: 'manual' });
+    assert.equal(redirectRes.status, 301);
+    assert.equal(redirectRes.headers.get('location'), '/handbook.html');
+    assert.equal(redirectRes.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(redirectRes.headers.get('x-frame-options'), 'DENY');
+    const redirectBody = await redirectRes.text();
+    assert.equal(redirectBody.length, 0, 'Redirect response must have 0-byte body to avoid information leak flags');
   });
 });
