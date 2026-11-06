@@ -256,7 +256,7 @@ export async function sendRainoutEmail(env, origin, { email, name, event, note, 
   const dateFormatted = formatEmailEventDate(event.event_date);
 
   const subject = `🌧️ Sunday Pickup Baseball Rained Out: ${event.title}`;
-  const text = `Hi ${name},\n\nToday's pickup baseball game has been called due to rain and field conditions.\n\nEvent: ${event.title}\nOriginally Scheduled: ${dateFormatted}\nLocation: ${event.location}\n${note ? `Organizer Note:\n"${note}"\n\n` : ''}Any volunteer task or equipment commitments you made for today are excused.\n\nThe discussion board on the event page remains open:\n${manageLink}\n\nStay dry, and see you on the field next Sunday!\n- ${appName}`;
+  const text = `Hi ${name},\n\nThe pickup baseball game scheduled for ${dateFormatted} (${event.title}) has been called due to rain and field conditions.\n\nEvent: ${event.title}\nOriginally Scheduled: ${dateFormatted}\nLocation: ${event.location}\n${note ? `Organizer Note:\n"${note}"\n\n` : ''}Any volunteer task or equipment commitments you made for this game are excused.\n\nThe discussion board on the event page remains open:\n${manageLink}\n\nStay dry, and see you on the field next Sunday!\n- ${appName}`;
 
   const html = renderEmailLayout({
     origin,
@@ -266,12 +266,12 @@ export async function sendRainoutEmail(env, origin, { email, name, event, note, 
     headingHtml: '🌧️ Game Called Due to Rain',
     bodyHtml: `
       <p style="color: #0c1f1a; font-size: 16px;">Hi <strong>${escapeHtml(name)}</strong>,</p>
-      <p style="color: #475569; font-size: 15px;">Today's pickup baseball game (<strong>${escapeHtml(event.title)}</strong>) has been called due to rain and wet field conditions.</p>
+      <p style="color: #475569; font-size: 15px;">The pickup baseball game scheduled for <strong>${escapeHtml(dateFormatted)}</strong> (<strong>${escapeHtml(event.title)}</strong>) has been called due to rain and wet field conditions.</p>
       ${note ? `<div style="background: #f1f5f9; border-left: 4px solid #0284c7; padding: 14px 18px; margin: 18px 0; border-radius: 6px;"><strong style="color: #0f172a; display: block; font-size: 13px; text-transform: uppercase; margin-bottom: 4px;">Organizer Note:</strong><p style="margin: 0; color: #334155; font-size: 15px; font-style: italic;">"${escapeHtml(note)}"</p></div>` : ''}
       <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; margin: 18px 0; border-radius: 6px;">
         <p style="margin: 3px 0; color: #64748b; font-size: 14px;"><strong>📅 Scheduled:</strong> ${escapeHtml(dateFormatted)}</p>
         <p style="margin: 3px 0; color: #64748b; font-size: 14px;"><strong>📍 Field:</strong> ${escapeHtml(event.location)}</p>
-        <p style="margin: 6px 0 0; color: #0284c7; font-weight: 600; font-size: 14px;">✓ Your task and equipment commitments are excused for today.</p>
+        <p style="margin: 6px 0 0; color: #0284c7; font-weight: 600; font-size: 14px;">✓ Your task and equipment commitments are excused for this game.</p>
       </div>`,
     ctaUrl: manageLink,
     ctaLabel: 'Open Event Discussion Board →',
@@ -288,7 +288,7 @@ export async function sendReopenEmail(env, origin, { email, name, event, note, m
   const dateFormatted = formatEmailEventDate(event.event_date);
 
   const subject = `⚾ Game is BACK ON! Sunday Pickup Baseball: ${event.title}`;
-  const text = `Hi ${name},\n\nGreat news! The field or weather conditions have cleared up and today's pickup baseball game is BACK ON!\n\nEvent: ${event.title}\nWhen: ${dateFormatted}\nWhere: ${event.location}\n${note ? `Organizer Note:\n"${note}"\n\n` : ''}Your roster spot is active. Grab your gear and see you on the field!\n\nCheck the live roster & event page:\n${manageLink}\n\nPlay ball!\n- ${appName}`;
+  const text = `Hi ${name},\n\nGreat news! The field or weather conditions have cleared up and the pickup baseball game scheduled for ${dateFormatted} (${event.title}) is BACK ON!\n\nEvent: ${event.title}\nWhen: ${dateFormatted}\nWhere: ${event.location}\n${note ? `Organizer Note:\n"${note}"\n\n` : ''}Your roster spot is active. Grab your gear and see you on the field!\n\nCheck the live roster & event page:\n${manageLink}\n\nPlay ball!\n- ${appName}`;
 
   const html = renderEmailLayout({
     origin,
@@ -296,7 +296,7 @@ export async function sendReopenEmail(env, origin, { email, name, event, note, m
     headingHtml: '⚾ Game is BACK ON!',
     bodyHtml: `
       <p style="color: #0c1f1a; font-size: 16px;">Hi <strong>${escapeHtml(name)}</strong>,</p>
-      <p style="color: #546e66; font-size: 15px;">Great news! Weather or field conditions have cleared up and today's game (<strong>${escapeHtml(event.title)}</strong>) is officially BACK ON!</p>
+      <p style="color: #546e66; font-size: 15px;">Great news! Weather or field conditions have cleared up and the pickup baseball game scheduled for <strong>${escapeHtml(dateFormatted)}</strong> (<strong>${escapeHtml(event.title)}</strong>) is officially BACK ON!</p>
       ${note ? `<div style="background: #fff7ed; border-left: 4px solid #FD5A1E; padding: 14px 18px; margin: 18px 0; border-radius: 6px;"><strong style="color: #9a3412; display: block; font-size: 13px; text-transform: uppercase; margin-bottom: 4px;">Organizer Note:</strong><p style="margin: 0; color: #7c2d12; font-size: 15px; font-style: italic;">"${escapeHtml(note)}"</p></div>` : ''}
       <div style="background: #f5f8f7; border-left: 4px solid #003831; border: 1px solid #dbe4e0; padding: 16px; margin: 18px 0; border-radius: 6px;">
         <p style="margin: 3px 0; color: #0c1f1a; font-size: 14px;"><strong>📅 When:</strong> ${escapeHtml(dateFormatted)}</p>

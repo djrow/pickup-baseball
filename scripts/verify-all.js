@@ -2486,4 +2486,71 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(galleryJsCode.includes('canUserDeleteMedia'), 'gallery.js must wire canUserDeleteMedia');
     assert.ok(galleryJsCode.includes('getMySubmissions'), 'gallery.js must wire getMySubmissions');
   });
+
+  await t9.test('T9.25: Rainout and Reopen Email Notifications Relative Date Accuracy', async () => {
+    const { sendRainoutEmail, sendReopenEmail } = await import('../src/app/mailer.js');
+
+    let sentPayload = null;
+    const mockEnv = {
+      APP_NAME: 'Sunday Pickup Baseball Test',
+      RESEND_API_KEY: 'mock-key'
+    };
+
+    const origFetch = global.fetch;
+    global.fetch = async (url, opts) => {
+      if (typeof url === 'string' && url.includes('api.resend.com')) {
+        sentPayload = JSON.parse(opts.body);
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ id: 'mock-msg-id' })
+        };
+      }
+      return origFetch(url, opts);
+    };
+
+    try {
+      const mockEvent = {
+        id: 999,
+        title: 'Bushrod Sunday Pickup Baseball',
+        event_date: '2026-11-15T12:00:00.000Z',
+        location: 'Bushrod Park - Field 1'
+      };
+
+      // Test sendRainoutEmail
+      await sendRainoutEmail(mockEnv, 'https://pickupbaseballfoundation.org', {
+        email: 'player@example.com',
+        name: 'Alex Rivera',
+        event: mockEvent,
+        note: 'Forecast calls for 0.8 inches of rain',
+        managementToken: 'test-token'
+      });
+
+      assert.ok(sentPayload, 'sendRainoutEmail must dispatch email payload');
+      assert.ok(!sentPayload.text.includes("Today's pickup baseball game"), 'Rainout email text must not assume event is today');
+      assert.ok(!sentPayload.html.includes("Today's pickup baseball game"), 'Rainout email HTML must not assume event is today');
+      assert.ok(sentPayload.text.includes('The pickup baseball game scheduled for'), 'Rainout text must state the game is scheduled for that day');
+      assert.ok(sentPayload.html.includes('The pickup baseball game scheduled for'), 'Rainout HTML must state the game is scheduled for that day');
+      assert.ok(sentPayload.text.includes('commitments you made for this game are excused'), 'Task commitments must refer to this game, not today');
+      assert.ok(sentPayload.html.includes('commitments are excused for this game'), 'HTML commitments must refer to this game, not today');
+
+      // Test sendReopenEmail
+      sentPayload = null;
+      await sendReopenEmail(mockEnv, 'https://pickupbaseballfoundation.org', {
+        email: 'player@example.com',
+        name: 'Alex Rivera',
+        event: mockEvent,
+        note: 'Clouds passed, infield is chalked and ready',
+        managementToken: 'test-token'
+      });
+
+      assert.ok(sentPayload, 'sendReopenEmail must dispatch email payload');
+      assert.ok(!sentPayload.text.includes("today's pickup baseball game is BACK ON"), 'Reopen email text must not assume event is today');
+      assert.ok(!sentPayload.html.includes("today's game"), 'Reopen email HTML must not assume event is today');
+      assert.ok(sentPayload.text.includes('the pickup baseball game scheduled for'), 'Reopen text must refer to scheduled date');
+      assert.ok(sentPayload.html.includes('the pickup baseball game scheduled for'), 'Reopen HTML must refer to scheduled date');
+    } finally {
+      global.fetch = origFetch;
+    }
+  });
 });
