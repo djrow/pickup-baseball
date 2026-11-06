@@ -282,7 +282,19 @@
 
   // Parse ISO date string to Pacific Time parts (America/Los_Angeles)
   function getPacificDateParts(isoStr) {
-    var d = new Date(isoStr);
+    if (!isoStr) return null;
+    var str = String(isoStr).trim();
+    // Normalize date-only string (e.g. "2026-11-15") to target noon Pacific (20:00 UTC in standard time)
+    // so JS Date doesn't parse it as UTC midnight and roll back to the previous calendar day in Pacific
+    if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+      str = str + 'T20:00:00.000Z';
+    } else if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}/.test(str)) {
+      str = str.replace(' ', 'T');
+      if (str.indexOf('Z') === -1 && str.indexOf('+') === -1 && str.indexOf('-') === -1) {
+        str = str + 'Z';
+      }
+    }
+    var d = new Date(str);
     if (isNaN(d.getTime())) return null;
     try {
       var formatter = new Intl.DateTimeFormat('en-US', {
@@ -349,7 +361,8 @@
       }
     } catch (e) {}
 
-    // 3. Request fresh forecast from Open-Meteo
+    // Open-Meteo counts today as day 1, so literal forecast_days=10 only yields 9 days in advance.
+    // To guarantee the full 10-day forecast horizon activates when events are 10 days away, we query forecast_days=16.
     var url = 'https://api.open-meteo.com/v1/forecast?' +
       'latitude=' + encodeURIComponent(lat) +
       '&longitude=' + encodeURIComponent(lon) +
@@ -358,7 +371,7 @@
       '&temperature_unit=fahrenheit' +
       '&precipitation_unit=inch' +
       '&timezone=America%2FLos_Angeles' +
-      '&forecast_days=10' +
+      '&forecast_days=16' +
       '&past_days=10';
 
     var res = await fetch(url);
