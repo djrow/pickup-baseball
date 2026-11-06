@@ -144,6 +144,7 @@ export async function renderFeedXmlResponse(db, requestUrl) {
       headers: {
         'Content-Type': 'application/rss+xml; charset=utf-8',
         'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
         'X-Content-Type-Options': 'nosniff',
         'X-App-Version': CURRENT_APP_VERSION
       }
