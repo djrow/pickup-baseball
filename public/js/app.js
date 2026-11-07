@@ -280,6 +280,15 @@ function setupCalendarControls() {
       toggleSubscribePanel();
     });
   }
+
+  let resizeTimer = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      renderCalendar();
+    }, 120);
+  });
+
   calendarControlsBound = true;
 }
 
@@ -720,12 +729,12 @@ function renderCalendar(events) {
     });
   }
 
-  // Generate prospective Sundays for at least 8 weeks out from anchorDate
+  // Generate prospective Sundays for up to 24 weeks out from anchorDate
   const prospectiveSunday = new Date(anchorDate);
   if (prospectiveSunday.getDay() !== 0) { // Sunday
     prospectiveSunday.setDate(prospectiveSunday.getDate() + (7 - prospectiveSunday.getDay()));
   }
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 24; i++) {
     const key = getPacificDateKey(prospectiveSunday);
     if (key >= anchorKey && !upcomingMap.has(key)) {
       const [sy, sm, sd] = key.split('-').map(Number);
@@ -745,11 +754,27 @@ function renderCalendar(events) {
   // Sort upcoming dates chronologically
   const upcomingItems = Array.from(upcomingMap.values()).sort((a, b) => a.dateKey.localeCompare(b.dateKey));
 
-  // Take the next 5 upcoming dates
-  const selectedUpcoming = upcomingItems.slice(0, 5);
+  // Dynamically compute columns that fit in the calendar grid container
+  // so the card displays full complete rows without leaving trailing blank space
+  let containerWidth = 960;
+  if (typeof window !== 'undefined' && gridContainer && gridContainer.clientWidth > 0) {
+    containerWidth = gridContainer.clientWidth;
+  }
+  const isMobile = (typeof window !== 'undefined' && window.innerWidth <= 768);
+  const minColWidth = isMobile ? 130 : 160;
+  const colGap = isMobile ? 8 : 12;
+  const cols = Math.max(1, Math.floor((containerWidth + colGap) / (minColWidth + colGap)));
 
-  // Combine: 1 most recent past event + next 5 upcoming dates
-  const gameDates = [pastItem, ...selectedUpcoming];
+  // Target 2 complete rows on tablet/desktop, or 3 complete rows on 2-col mobile
+  const targetRows = (cols <= 2) ? 3 : 2;
+  const targetTotalCards = cols * targetRows;
+
+  // Fill all card slots with scheduled games and dates
+  const neededUpcoming = Math.max(1, targetTotalCards - (pastItem ? 1 : 0));
+  const selectedUpcoming = upcomingItems.slice(0, neededUpcoming);
+
+  // Combine: 1 most recent past event + upcoming scheduled games to fill complete rows
+  const gameDates = pastItem ? [pastItem, ...selectedUpcoming] : selectedUpcoming;
 
   // Update header label with visible month range (e.g. "Oct – Nov 2026" or "November 2026")
   if (gameDates.length > 0) {
@@ -857,7 +882,7 @@ function renderCalendar(events) {
   }
 
   gridContainer.innerHTML = `
-    <div class="calendar-sunday-track">
+    <div class="calendar-sunday-track" style="grid-template-columns: repeat(${cols}, minmax(0, 1fr));">
       ${cardsHtml}
     </div>
   `;
