@@ -838,17 +838,24 @@
       if (isToday) labels.push('Today');
       if (isGame) labels.push('Game Day');
       var tagStr = labels.length > 0 ? ' — ' + labels.join(' & ') : '';
-      var title = (d.dayName || '') + ' ' + (d.dayMonth || '') + ': ' + d.rainFormatted + ' (' + (d.condition || '') + ')' + tagStr;
+      var probStr = (d.prob != null && d.prob > 0) ? ' — ' + d.prob + '% rain chance' : '';
+      var title = (d.dayName || '') + ' ' + (d.dayMonth || '') + ': ' + d.rainFormatted + ' (' + (d.condition || '') + probStr + ')' + tagStr;
 
       var pills = [];
       if (isToday) pills.push('<span class="today-pill">Today</span>');
       if (isGame) pills.push('<span class="game-day-pill">Game</span>');
+
+      var probHtml = '';
+      if (d.prob != null && d.prob >= 20) {
+        probHtml = '<span class="day-prob" style="font-size: 0.65rem; color: #0284c7; font-weight: 700; margin-top: 1px;">💧 ' + d.prob + '%</span>';
+      }
 
       return '<div class="ten-day-rain-col ' + gameClass + (todayClass ? ' ' + todayClass : '') + '" title="' + (window.API ? window.API.escapeHtml(title) : title) + '">' +
         '<span class="day-title">' + (d.dayName || '') + '</span>' +
         '<span class="day-date">' + (d.dayMonth || '') + '</span>' +
         '<span class="day-emoji">' + (d.emoji || '☀️') + '</span>' +
         '<span class="day-rain ' + rainClass + '">' + d.rainFormatted + '</span>' +
+        probHtml +
         (pills.length > 0 ? '<div style="display:flex; flex-direction:column; align-items:center; gap:2px; margin-top:2px;">' + pills.join('') + '</div>' : '') +
       '</div>';
     });
@@ -868,16 +875,20 @@
       var isGame = Boolean(d.isGameDay);
       var isToday = Boolean(d.isToday);
       var hasRain = d.rain > 0;
+      var hasChance = !hasRain && d.prob != null && d.prob >= 35;
       var heightPx = 3;
       if (hasRain) {
         heightPx = Math.max(5, Math.min(14, Math.round((d.rain / (maxRain || 1)) * 14)));
+      } else if (hasChance) {
+        heightPx = 5;
       }
-      var barColor = isGame ? 'var(--primary)' : (isToday ? 'var(--secondary)' : (hasRain ? '#0284c7' : 'var(--border)'));
+      var barColor = isGame ? 'var(--primary)' : (isToday ? 'var(--secondary)' : (hasRain ? '#0284c7' : (hasChance ? '#7dd3fc' : 'var(--border)')));
       var tags = [];
       if (isToday) tags.push('Today');
       if (isGame) tags.push('Game Day');
       var tagSuffix = tags.length > 0 ? ' (' + tags.join(' & ') + ')' : '';
-      var title = (d.dayName || '') + ' ' + (d.dayMonth || '') + ': ' + d.rainFormatted + tagSuffix;
+      var probSuffix = (d.prob != null && d.prob > 0) ? ' [' + d.prob + '% rain chance]' : '';
+      var title = (d.dayName || '') + ' ' + (d.dayMonth || '') + ': ' + d.rainFormatted + probSuffix + tagSuffix;
       var letter = d.dayName ? d.dayName.charAt(0) : '';
       return '<div class="mini-rain-day' + (isToday ? ' mini-today' : '') + '" title="' + (window.API ? window.API.escapeHtml(title) : title) + '" style="flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 2px;">' +
         '<span class="mini-rain-bar" style="display: block; width: 100%; max-width: 8px; height: ' + heightPx + 'px; background: ' + barColor + '; border-radius: 2px;"></span>' +
