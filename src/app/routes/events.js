@@ -235,7 +235,7 @@ eventsRouter.get('/admin/backup-db', requireAdmin, async (c) => {
     const tables = [
       'users', 'events', 'event_duties', 'attendees',
       'duty_assignments', 'comments', 'default_duties',
-      'posts', 'banned_emails', 'app_settings'
+      'posts', 'banned_emails', 'app_settings', 'batting_practice_signups'
     ];
     const timestamp = new Date().toISOString();
     const dateStr = timestamp.slice(0, 10);
@@ -378,6 +378,16 @@ eventsRouter.get('/:id', async (c) => {
         LEFT JOIN users u ON c.user_id = u.id
         WHERE c.event_id = ?
         ORDER BY c.created_at ASC
+      `).bind(eventId),
+      db.prepare(`
+        SELECT bp.id, bp.event_id, bp.user_id, bp.attendee_id, bp.slot_number,
+          bp.player_name, bp.notes, bp.created_at,
+          ${AVATAR_EXPR} as avatar_url,
+          u.role as user_role
+        FROM batting_practice_signups bp
+        LEFT JOIN users u ON bp.user_id = u.id
+        WHERE bp.event_id = ?
+        ORDER BY bp.slot_number ASC
       `).bind(eventId)
     ];
 
@@ -453,9 +463,10 @@ eventsRouter.get('/:id', async (c) => {
     const attendees = batchRes[2].results || [];
     const waitlist = batchRes[3].results || [];
     const comments = batchRes[4].results || [];
+    const bpSignups = batchRes[5].results || [];
     const requireLogin = await getRequireLoginSetting(db, c.env);
 
-    const myRsvp = (batchRes[5] && batchRes[5].results && batchRes[5].results[0]) || null;
+    const myRsvp = (batchRes[6] && batchRes[6].results && batchRes[6].results[0]) || null;
     if (myRsvp) {
       myRsvp.duty_ids = JSON.parse(myRsvp.duty_ids || '[]');
     }
@@ -555,6 +566,15 @@ eventsRouter.get('/:id', async (c) => {
     const totalConfirmedSpectators = attendees.reduce((sum, a) => sum + (a.spectators_count || 0), 0);
     const totalWaitlistPlayers = waitlist.reduce((sum, w) => sum + (w.players_count != null ? w.players_count : (1 + (w.additional_guests || 0))), 0);
 
+    const decoratedBpSignups = bpSignups.map(s => ({
+      ...s,
+      is_mine: Boolean(
+        (user && s.user_id && s.user_id === user.id) ||
+        (myRsvp && s.attendee_id && s.attendee_id === myRsvp.id) ||
+        (myRsvp && s.player_name && myRsvp.name && s.player_name.trim().toLowerCase() === myRsvp.name.trim().toLowerCase())
+      )
+    }));
+
     return c.json({
       event: {
         ...event,
@@ -570,6 +590,7 @@ eventsRouter.get('/:id', async (c) => {
       attendees: canViewRoster ? attendees : [],
       waitlist: canViewRoster ? waitlist : [],
       comments,
+      bp_signups: decoratedBpSignups,
       myRsvp,
       canViewRoster,
       totalAttendees: totalConfirmedPlayers,
@@ -772,7 +793,8 @@ eventsRouter.post('/:id/rsvp', async (c) => {
     let {
       name, email, gear_bringing, duty_ids, redeem_hero_credit,
       management_token, status, players_count, spectators_count,
-      additional_guests, guest_names, cf_turnstile_response
+      additional_guests, guest_names, cf_turnstile_response,
+      bp_signup, bp_slot
     } = await c.req.json();
     status = status === 'declined' ? 'declined' : 'attending';
 
@@ -977,6 +999,7 @@ eventsRouter.post('/:id/rsvp', async (c) => {
       }
     } else if (finalStatus !== 'attending') {
       await db.prepare('DELETE FROM duty_assignments WHERE attendee_id = ?').bind(attendeeId).run();
+      await db.prepare('DELETE FROM batting_practice_signups WHERE event_id = ? AND (attendee_id = ? OR (user_id IS NOT NULL AND user_id = ?))').bind(eventId, attendeeId, userId).run();
     }
 
     const origin = new URL(c.req.url).origin;
@@ -1031,6 +1054,27 @@ eventsRouter.post('/:id/rsvp', async (c) => {
       }
       if (heroCreditEarned) confirmMsg += ' 🛡️ Short-notice urgent shift cover (<48 hrs): +1 Backup Hero Credit awarded!';
       if (heroCreditRedeemed) confirmMsg += ' 🛡️ 1 Backup Hero Credit redeemed for Tier 1 early access.';
+
+      if (bp_signup && playersCount > 0) {
+        try {
+          const existingBp = await db.prepare('SELECT id, slot_number FROM batting_practice_signups WHERE event_id = ? AND (attendee_id = ? OR (user_id IS NOT NULL AND user_id = ?))').bind(eventId, attendeeId, userId).first();
+          if (!existingBp) {
+            const { results: taken } = await db.prepare('SELECT slot_number FROM batting_practice_signups WHERE event_id = ?').bind(eventId).all();
+            const takenSet = new Set((taken || []).map(r => r.slot_number));
+            let targetSlot = bp_slot ? parseInt(bp_slot, 10) : 1;
+            if (isNaN(targetSlot) || targetSlot < 1 || takenSet.has(targetSlot)) {
+              targetSlot = 1;
+              while (takenSet.has(targetSlot)) targetSlot++;
+            }
+            await db.prepare('INSERT INTO batting_practice_signups (event_id, user_id, attendee_id, slot_number, player_name, notes) VALUES (?, ?, ?, ?, ?, ?)').bind(
+              eventId, userId, attendeeId, targetSlot, name, ''
+            ).run();
+            confirmMsg += ` ⚾ Reserved Batting Practice slot #${targetSlot}!`;
+          }
+        } catch (bpErr) {
+          console.warn('[BP-RSVP] Auto-signup error:', bpErr);
+        }
+      }
 
       return c.json({
         success: true,
@@ -1131,9 +1175,10 @@ eventsRouter.delete('/:id/attendees/:attendeeId', requireOrganizer, async (c) =>
   try {
     const eventId = parseInt(c.req.param('id'), 10);
     const attendeeId = parseInt(c.req.param('attendeeId'), 10);
-    const existing = await c.env.DB.prepare('SELECT status FROM attendees WHERE id = ? AND event_id = ?').bind(attendeeId, eventId).first();
+    const existing = await c.env.DB.prepare('SELECT status, user_id FROM attendees WHERE id = ? AND event_id = ?').bind(attendeeId, eventId).first();
     await c.env.DB.batch([
       c.env.DB.prepare('DELETE FROM duty_assignments WHERE attendee_id = ?').bind(attendeeId),
+      c.env.DB.prepare('DELETE FROM batting_practice_signups WHERE event_id = ? AND (attendee_id = ? OR (user_id IS NOT NULL AND user_id = ?))').bind(eventId, attendeeId, existing ? existing.user_id : null),
       c.env.DB.prepare('DELETE FROM attendees WHERE id = ? AND event_id = ?').bind(attendeeId, eventId)
     ]);
     if (existing && existing.status === 'attending') {
@@ -1143,6 +1188,237 @@ eventsRouter.delete('/:id/attendees/:attendeeId', requireOrganizer, async (c) =>
   } catch (err) {
     console.error('[RSVP] Error removing attendee:', err);
     return c.json({ error: 'Failed to remove attendee.' }, 500);
+  }
+});
+
+// ==========================================
+// BATTING PRACTICE (BP) ORDER SIGNUP ROUTES
+// ==========================================
+
+eventsRouter.get('/:id/bp-order', async (c) => {
+  try {
+    const eventId = parseInt(c.req.param('id'), 10);
+    const user = c.get('user');
+    const token = c.req.query('token');
+    const db = c.env.DB;
+
+    const event = await db.prepare('SELECT id, title, status FROM events WHERE id = ?').bind(eventId).first();
+    if (!event) return c.json({ error: 'Event not found.' }, 404);
+
+    let myAttendee = null;
+    if (user) {
+      myAttendee = await db.prepare('SELECT id, name FROM attendees WHERE event_id = ? AND (user_id = ? OR email = ?)').bind(eventId, user.id, user.email).first();
+    } else if (token) {
+      myAttendee = await db.prepare('SELECT id, name FROM attendees WHERE event_id = ? AND management_token = ?').bind(eventId, token).first();
+    }
+
+    const { results: rows } = await db.prepare(`
+      SELECT bp.id, bp.event_id, bp.user_id, bp.attendee_id, bp.slot_number,
+        bp.player_name, bp.notes, bp.created_at,
+        ${AVATAR_EXPR} as avatar_url,
+        u.role as user_role
+      FROM batting_practice_signups bp
+      LEFT JOIN users u ON bp.user_id = u.id
+      WHERE bp.event_id = ?
+      ORDER BY bp.slot_number ASC
+    `).bind(eventId).all();
+
+    const signups = (rows || []).map(s => ({
+      ...s,
+      is_mine: Boolean(
+        (user && s.user_id && s.user_id === user.id) ||
+        (myAttendee && s.attendee_id && s.attendee_id === myAttendee.id) ||
+        (myAttendee && s.player_name && myAttendee.name && s.player_name.trim().toLowerCase() === myAttendee.name.trim().toLowerCase())
+      )
+    }));
+
+    return c.json({ event_id: eventId, bp_signups: signups });
+  } catch (err) {
+    console.error('[BP-Order] Error fetching batting practice order:', err);
+    return c.json({ error: 'Failed to fetch batting practice order.' }, 500);
+  }
+});
+
+eventsRouter.post('/:id/bp-order', async (c) => {
+  try {
+    const eventId = parseInt(c.req.param('id'), 10);
+    const user = c.get('user');
+    const db = c.env.DB;
+
+    const event = await db.prepare('SELECT id, status FROM events WHERE id = ?').bind(eventId).first();
+    if (!event) return c.json({ error: 'Event not found.' }, 404);
+    if (event.status === 'rainout') {
+      return c.json({ error: 'Batting practice is unavailable because this game was called for rain.' }, 400);
+    }
+
+    const body = await c.req.json().catch(() => ({}));
+    let playerName = String(body.player_name || (user ? user.name : '')).trim();
+    let slotNumber = parseInt(body.slot_number, 10);
+    let notes = String(body.notes || '').trim().slice(0, 200);
+    const managementToken = body.management_token || c.req.query('token');
+    let attendeeId = body.attendee_id ? parseInt(body.attendee_id, 10) : null;
+
+    if (!playerName) {
+      return c.json({ error: 'Player name is required to sign up for batting practice.' }, 400);
+    }
+    playerName = playerName.slice(0, 100);
+
+    if (!attendeeId) {
+      let att = null;
+      if (user) {
+        att = await db.prepare('SELECT id, name FROM attendees WHERE event_id = ? AND (user_id = ? OR email = ?)').bind(eventId, user.id, user.email).first();
+      } else if (managementToken) {
+        att = await db.prepare('SELECT id, name FROM attendees WHERE event_id = ? AND management_token = ?').bind(eventId, managementToken).first();
+      }
+      if (att) attendeeId = att.id;
+    }
+
+    const { results: existingSlots } = await db.prepare('SELECT id, slot_number, user_id, attendee_id, player_name FROM batting_practice_signups WHERE event_id = ?').bind(eventId).all();
+    const existingList = existingSlots || [];
+
+    if (isNaN(slotNumber) || slotNumber < 1) {
+      const takenNums = new Set(existingList.map(s => s.slot_number));
+      slotNumber = 1;
+      while (takenNums.has(slotNumber)) slotNumber++;
+    }
+
+    if (slotNumber > 50) {
+      return c.json({ error: 'Slot number cannot exceed 50.' }, 400);
+    }
+
+    const slotOccupant = existingList.find(s => s.slot_number === slotNumber);
+    const isOrganizer = Boolean(user && (user.canManageEvents || user.isAdmin));
+
+    const myCurrentSlot = existingList.find(s =>
+      (user && s.user_id && s.user_id === user.id) ||
+      (attendeeId && s.attendee_id && s.attendee_id === attendeeId) ||
+      (!isOrganizer && s.player_name && s.player_name.toLowerCase() === playerName.toLowerCase())
+    );
+
+    if (slotOccupant) {
+      if (myCurrentSlot && slotOccupant.id === myCurrentSlot.id) {
+        await db.prepare('UPDATE batting_practice_signups SET notes = ?, player_name = ? WHERE id = ?').bind(notes, playerName, slotOccupant.id).run();
+        return c.json({ success: true, message: `Updated Batting Practice slot #${slotNumber}!`, slot_number: slotNumber });
+      }
+      return c.json({ error: `Slot #${slotNumber} is already claimed by ${slotOccupant.player_name}. Please choose another slot.` }, 400);
+    }
+
+    if (myCurrentSlot && !isOrganizer) {
+      await db.prepare('UPDATE batting_practice_signups SET slot_number = ?, player_name = ?, notes = ? WHERE id = ?').bind(
+        slotNumber, playerName, notes, myCurrentSlot.id
+      ).run();
+      return c.json({ success: true, message: `Moved to Batting Practice slot #${slotNumber}!`, slot_number: slotNumber });
+    }
+
+    const ins = await db.prepare(`
+      INSERT INTO batting_practice_signups (event_id, user_id, attendee_id, slot_number, player_name, notes)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).bind(eventId, user ? user.id : null, attendeeId, slotNumber, playerName, notes).run();
+
+    return c.json({
+      success: true,
+      message: `Signed up for Batting Practice slot #${slotNumber}!`,
+      signup_id: ins.meta ? ins.meta.last_row_id : null,
+      slot_number: slotNumber
+    });
+  } catch (err) {
+    console.error('[BP-Order] Error saving BP signup:', err);
+    return c.json({ error: 'Failed to sign up for batting practice.' }, 500);
+  }
+});
+
+eventsRouter.put('/:id/bp-order/:signupId', async (c) => {
+  try {
+    const eventId = parseInt(c.req.param('id'), 10);
+    const signupId = parseInt(c.req.param('signupId'), 10);
+    const user = c.get('user');
+    const db = c.env.DB;
+
+    const existing = await db.prepare('SELECT * FROM batting_practice_signups WHERE id = ? AND event_id = ?').bind(signupId, eventId).first();
+    if (!existing) return c.json({ error: 'Batting practice signup not found.' }, 404);
+
+    const isOrganizer = Boolean(user && (user.canManageEvents || user.isAdmin));
+    const isOwner = Boolean(user && existing.user_id && existing.user_id === user.id);
+
+    const body = await c.req.json().catch(() => ({}));
+    const managementToken = body.management_token || c.req.query('token');
+    let isGuestOwner = false;
+    if (managementToken && existing.attendee_id) {
+      const att = await db.prepare('SELECT id FROM attendees WHERE id = ? AND management_token = ?').bind(existing.attendee_id, managementToken).first();
+      if (att) isGuestOwner = true;
+    }
+
+    if (!isOrganizer && !isOwner && !isGuestOwner) {
+      return c.json({ error: 'You are not authorized to update this batting practice slot.' }, 403);
+    }
+
+    let targetSlot = body.slot_number !== undefined ? parseInt(body.slot_number, 10) : existing.slot_number;
+    let playerName = body.player_name ? String(body.player_name).trim().slice(0, 100) : existing.player_name;
+    let notes = body.notes !== undefined ? String(body.notes).trim().slice(0, 200) : existing.notes;
+
+    if (isNaN(targetSlot) || targetSlot < 1 || targetSlot > 50) {
+      return c.json({ error: 'Invalid slot number.' }, 400);
+    }
+
+    if (targetSlot !== existing.slot_number) {
+      const slotOccupant = await db.prepare('SELECT id, player_name FROM batting_practice_signups WHERE event_id = ? AND slot_number = ? AND id != ?').bind(eventId, targetSlot, signupId).first();
+      if (slotOccupant) {
+        return c.json({ error: `Slot #${targetSlot} is already claimed by ${slotOccupant.player_name}.` }, 400);
+      }
+    }
+
+    await db.prepare('UPDATE batting_practice_signups SET slot_number = ?, player_name = ?, notes = ? WHERE id = ?').bind(
+      targetSlot, playerName, notes, signupId
+    ).run();
+
+    return c.json({ success: true, message: `Batting practice slot updated to #${targetSlot}.`, slot_number: targetSlot });
+  } catch (err) {
+    console.error('[BP-Order] Error updating signup:', err);
+    return c.json({ error: 'Failed to update batting practice slot.' }, 500);
+  }
+});
+
+eventsRouter.delete('/:id/bp-order/:signupId', async (c) => {
+  try {
+    const eventId = parseInt(c.req.param('id'), 10);
+    const signupId = parseInt(c.req.param('signupId'), 10);
+    const user = c.get('user');
+    const db = c.env.DB;
+
+    const existing = await db.prepare('SELECT * FROM batting_practice_signups WHERE id = ? AND event_id = ?').bind(signupId, eventId).first();
+    if (!existing) return c.json({ error: 'Batting practice signup not found.' }, 404);
+
+    const isOrganizer = Boolean(user && (user.canManageEvents || user.isAdmin));
+    const isOwner = Boolean(user && existing.user_id && existing.user_id === user.id);
+
+    const body = await c.req.json().catch(() => ({}));
+    const managementToken = body.management_token || c.req.query('token');
+    let isGuestOwner = false;
+    if (managementToken && existing.attendee_id) {
+      const att = await db.prepare('SELECT id FROM attendees WHERE id = ? AND management_token = ?').bind(existing.attendee_id, managementToken).first();
+      if (att) isGuestOwner = true;
+    }
+
+    if (!isOrganizer && !isOwner && !isGuestOwner) {
+      return c.json({ error: 'You are not authorized to remove this batting practice signup.' }, 403);
+    }
+
+    await db.prepare('DELETE FROM batting_practice_signups WHERE id = ?').bind(signupId).run();
+    return c.json({ success: true, message: `Removed from Batting Practice slot #${existing.slot_number}.` });
+  } catch (err) {
+    console.error('[BP-Order] Error deleting signup:', err);
+    return c.json({ error: 'Failed to withdraw from batting practice order.' }, 500);
+  }
+});
+
+eventsRouter.post('/:id/bp-order/clear', requireOrganizer, async (c) => {
+  try {
+    const eventId = parseInt(c.req.param('id'), 10);
+    await c.env.DB.prepare('DELETE FROM batting_practice_signups WHERE event_id = ?').bind(eventId).run();
+    return c.json({ success: true, message: 'Batting practice order cleared.' });
+  } catch (err) {
+    console.error('[BP-Order] Error clearing order:', err);
+    return c.json({ error: 'Failed to clear batting practice order.' }, 500);
   }
 });
 

@@ -124,6 +124,18 @@ CREATE TABLE IF NOT EXISTS app_settings (
   value TEXT
 );
 
+CREATE TABLE IF NOT EXISTS batting_practice_signups (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  attendee_id INTEGER REFERENCES attendees(id) ON DELETE SET NULL,
+  slot_number INTEGER NOT NULL,
+  player_name TEXT NOT NULL,
+  notes TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(event_id, slot_number)
+);
+
 CREATE TABLE IF NOT EXISTS posts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   title TEXT NOT NULL,
@@ -141,6 +153,7 @@ CREATE INDEX IF NOT EXISTS idx_events_date ON events(event_date);
 CREATE INDEX IF NOT EXISTS idx_attendees_event ON attendees(event_id);
 CREATE INDEX IF NOT EXISTS idx_comments_event ON comments(event_id);
 CREATE INDEX IF NOT EXISTS idx_posts_created_at ON posts(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_bp_signups_event ON batting_practice_signups(event_id, slot_number);
 
 -- Default Duties Template
 INSERT OR IGNORE INTO default_duties (title, description, slots_needed, sort_order) VALUES

@@ -2615,4 +2615,198 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(apiJs.includes('renderCookieNotice'), 'api.js must provide renderCookieNotice');
     assert.ok(apiJs.includes('cookie-notice-banner'), 'api.js must render cookie-notice-banner');
   });
+
+  await t9.test('T9.27: Batting Practice (BP) Order Signup Sheet Lifecycle & Permissions', async () => {
+    // 1. Verify static HTML & JS integration
+    const eventHtml = fs.readFileSync(path.join(publicDir, 'event.html'), 'utf8');
+    assert.ok(eventHtml.includes('id="bp-order-section"'), 'event.html must include bp-order-section');
+    assert.ok(eventHtml.includes('id="bp-slots-grid"'), 'event.html must include bp-slots-grid');
+    assert.ok(eventHtml.includes('id="bp-signup-modal"'), 'event.html must include bp-signup-modal');
+    assert.ok(eventHtml.includes('id="rsvp-bp-signup"'), 'event.html must include rsvp-bp-signup checkbox');
+
+    const eventJs = fs.readFileSync(path.join(publicDir, 'js', 'event.js'), 'utf8');
+    assert.ok(eventJs.includes('function renderBpOrder'), 'event.js must define renderBpOrder');
+    assert.ok(eventJs.includes('function openBpModal'), 'event.js must define openBpModal');
+    assert.ok(eventJs.includes('function setupBpOrderUi'), 'event.js must define setupBpOrderUi');
+
+    const apiJs = fs.readFileSync(path.join(publicDir, 'js', 'api.js'), 'utf8');
+    assert.ok(apiJs.includes('getBpOrder'), 'api.js must provide getBpOrder');
+    assert.ok(apiJs.includes('postBpSignup'), 'api.js must provide postBpSignup');
+    assert.ok(apiJs.includes('updateBpSignup'), 'api.js must provide updateBpSignup');
+    assert.ok(apiJs.includes('deleteBpSignup'), 'api.js must provide deleteBpSignup');
+    assert.ok(apiJs.includes('clearBpOrder'), 'api.js must provide clearBpOrder');
+
+    // 2. Create a test event for BP order testing using organizer session
+    const createEvRes = await fetch(`${baseUrl}/api/events`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Cookie': seedOrgCookie },
+      body: JSON.stringify({
+        title: 'BP Order Test Game',
+        location: 'Bushrod Park Field 1',
+        event_date: new Date(Date.now() + 86400000 * 5).toISOString(),
+        use_default_duties: true
+      })
+    });
+    assert.equal(createEvRes.status, 200);
+    const { event: bpEvent } = await createEvRes.json();
+    assert.ok(bpEvent && bpEvent.id);
+
+    // 3. GET event details - verify bp_signups is empty initially
+    const getEvRes = await fetch(`${baseUrl}/api/events/${bpEvent.id}`);
+    assert.equal(getEvRes.status, 200);
+    const evData = await getEvRes.json();
+    assert.ok(Array.isArray(evData.bp_signups), 'bp_signups must be an array');
+    assert.equal(evData.bp_signups.length, 0);
+
+    // 4. Standalone GET /api/events/:id/bp-order
+    const getBpRes = await fetch(`${baseUrl}/api/events/${bpEvent.id}/bp-order`);
+    assert.equal(getBpRes.status, 200);
+    const bpData = await getBpRes.json();
+    assert.equal(bpData.event_id, bpEvent.id);
+    assert.deepEqual(bpData.bp_signups, []);
+
+    // 5. Player 1 claims Slot #1
+    const p1ClaimRes = await fetch(`${baseUrl}/api/events/${bpEvent.id}/bp-order`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Cookie': seedPlayerCookie },
+      body: JSON.stringify({
+        slot_number: 1,
+        notes: 'Lefty pull hitter'
+      })
+    });
+    assert.equal(p1ClaimRes.status, 200);
+    const p1Claim = await p1ClaimRes.json();
+    assert.equal(p1Claim.success, true);
+    assert.equal(p1Claim.slot_number, 1);
+    const p1SignupId = p1Claim.signup_id;
+    assert.ok(p1SignupId);
+
+    // 6. Player 2 attempt to claim Slot #1 -> 400 slot already claimed
+    const p2DoubleRes = await fetch(`${baseUrl}/api/events/${bpEvent.id}/bp-order`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        player_name: 'Jordan Guest',
+        slot_number: 1
+      })
+    });
+    assert.equal(p2DoubleRes.status, 400);
+    const p2DoubleErr = await p2DoubleRes.json();
+    assert.ok(p2DoubleErr.error.includes('already claimed'));
+
+    // 7. Player 2 claims open Slot #2
+    const p2ClaimRes = await fetch(`${baseUrl}/api/events/${bpEvent.id}/bp-order`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        player_name: 'Jordan Guest',
+        slot_number: 2,
+        notes: 'Round 1 warmup'
+      })
+    });
+    assert.equal(p2ClaimRes.status, 200);
+    const p2Claim = await p2ClaimRes.json();
+    assert.equal(p2Claim.success, true);
+    assert.equal(p2Claim.slot_number, 2);
+    const p2SignupId = p2Claim.signup_id;
+
+    // 8. Player 1 moves to Slot #5 via POST
+    const p1MoveRes = await fetch(`${baseUrl}/api/events/${bpEvent.id}/bp-order`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Cookie': seedPlayerCookie },
+      body: JSON.stringify({
+        slot_number: 5,
+        notes: 'Moved to round 1 anchor'
+      })
+    });
+    assert.equal(p1MoveRes.status, 200);
+    const p1Move = await p1MoveRes.json();
+    assert.equal(p1Move.slot_number, 5);
+
+    // Verify Slot #1 is now open and Slot #5 is occupied
+    const checkOrderRes = await fetch(`${baseUrl}/api/events/${bpEvent.id}/bp-order`);
+    const { bp_signups: currentSignups } = await checkOrderRes.json();
+    assert.equal(currentSignups.length, 2);
+    assert.equal(currentSignups.some(s => s.slot_number === 1), false, 'Slot 1 must now be open');
+    assert.equal(currentSignups.some(s => s.slot_number === 5), true, 'Slot 5 must be claimed by Player 1');
+
+    // 9. Update notes via PUT
+    const updateRes = await fetch(`${baseUrl}/api/events/${bpEvent.id}/bp-order/${p1SignupId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Cookie': seedPlayerCookie },
+      body: JSON.stringify({
+        notes: 'Hits righty, prefers fastballs'
+      })
+    });
+    assert.equal(updateRes.status, 200);
+
+    // 10. Unauthorized user attempt to edit Player 1 slot -> 403
+    const unauthPut = await fetch(`${baseUrl}/api/events/${bpEvent.id}/bp-order/${p1SignupId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        player_name: 'Hijacker',
+        notes: 'Unauthorized edit'
+      })
+    });
+    assert.equal(unauthPut.status, 403);
+
+    // 11. RSVP with bp_signup: true auto-claims next open slot (Slot #1)
+    const rsvpWithBpRes = await fetch(`${baseUrl}/api/events/${bpEvent.id}/rsvp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Alex Slugger',
+        email: 'slugger_alex_test@example.com',
+        players_count: 1,
+        bp_signup: true
+      })
+    });
+    assert.equal(rsvpWithBpRes.status, 200);
+    const rsvpBpData = await rsvpWithBpRes.json();
+    assert.ok(rsvpBpData.message.includes('Batting Practice slot #1'));
+
+    // Verify 3 signups exist now
+    const orderAfterRsvp = await (await fetch(`${baseUrl}/api/events/${bpEvent.id}/bp-order`)).json();
+    assert.equal(orderAfterRsvp.bp_signups.length, 3);
+    const slot1Occupant = orderAfterRsvp.bp_signups.find(s => s.slot_number === 1);
+    assert.ok(slot1Occupant && slot1Occupant.player_name.includes('Alex Slugger'));
+
+    // 12. Delete / withdraw from BP slot
+    const deleteRes = await fetch(`${baseUrl}/api/events/${bpEvent.id}/bp-order/${p1SignupId}`, {
+      method: 'DELETE',
+      headers: { 'Cookie': seedPlayerCookie }
+    });
+    assert.equal(deleteRes.status, 200);
+
+    // 13. Organizer clear order
+    const clearRes = await fetch(`${baseUrl}/api/events/${bpEvent.id}/bp-order/clear`, {
+      method: 'POST',
+      headers: { 'Cookie': seedOrgCookie }
+    });
+    assert.equal(clearRes.status, 200);
+    const clearedOrder = await (await fetch(`${baseUrl}/api/events/${bpEvent.id}/bp-order`)).json();
+    assert.equal(clearedOrder.bp_signups.length, 0);
+
+    // 14. Call rainout and verify BP signup returns 400
+    await fetch(`${baseUrl}/api/events/${bpEvent.id}/rainout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Cookie': seedOrgCookie },
+      body: JSON.stringify({ rainout_note: 'Standing water on diamond.' })
+    });
+    const rainoutBpRes = await fetch(`${baseUrl}/api/events/${bpEvent.id}/bp-order`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Cookie': seedPlayerCookie },
+      body: JSON.stringify({ slot_number: 1 })
+    });
+    assert.equal(rainoutBpRes.status, 400);
+    const rainoutBpErr = await rainoutBpRes.json();
+    assert.ok(rainoutBpErr.error.includes('rain'));
+
+    // Cleanup test event
+    await fetch(`${baseUrl}/api/events/${bpEvent.id}`, {
+      method: 'DELETE',
+      headers: { 'Cookie': seedAdminCookie }
+    });
+  });
 });

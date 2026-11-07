@@ -33,6 +33,7 @@ async function initEvent() {
     if (eventData && eventData.event) {
       renderEventDetails();
       renderAttendeesRoster();
+      renderBpOrder();
       renderComments();
       setupRsvpState();
     }
@@ -40,6 +41,7 @@ async function initEvent() {
 
   setupRsvpForm();
   setupCommentForm();
+  setupBpOrderUi();
   await loadEventData();
 }
 
@@ -57,6 +59,7 @@ function applyLoadedEventToDom(res, preserveAlertHtml) {
   }
   renderEventDetails();
   renderAttendeesRoster();
+  renderBpOrder();
   renderComments();
   setupRsvpState(preserveAlertHtml);
   renderOrganizerRainoutPanel();
@@ -121,6 +124,7 @@ async function loadEventData(preserveAlertHtml) {
         duties: res.duties,
         attendees: res.attendees,
         comments: res.comments,
+        bp_signups: res.bp_signups,
         totalAttendees: res.totalAttendees,
         totalSpectators: res.totalSpectators,
         totalHeadcount: res.totalHeadcount,
@@ -375,6 +379,16 @@ function renderAttendeesRoster() {
           const roleBadges = [];
           if (pCount > 0) {
             roleBadges.push(`<span class="badge badge-green" style="font-size: 0.7rem;">⚾ ${pCount} ${pCount === 1 ? 'Player' : 'Players'}</span>`);
+          }
+
+          const bpList = (eventData && eventData.bp_signups) || [];
+          const aBp = bpList.find(function(s) {
+            return (a.user_id && s.user_id === a.user_id) ||
+              (s.attendee_id && s.attendee_id === a.id) ||
+              (s.player_name && a.name && s.player_name.trim().toLowerCase() === a.name.trim().toLowerCase());
+          });
+          if (aBp) {
+            roleBadges.push(`<span class="badge badge-orange" style="font-size: 0.7rem; font-weight: 700;">⚾ BP #${aBp.slot_number}</span>`);
           }
           if (sCount > 0) {
             if (pCount === 0 && translatedDuties) {
@@ -994,6 +1008,12 @@ async function setupRsvpState(preserveAlertHtml) {
     }
   }
 
+  const rsvpBpCb = document.getElementById('rsvp-bp-signup');
+  if (rsvpBpCb) {
+    const hasMyBp = Boolean(eventData.bp_signups && eventData.bp_signups.some(function(s) { return s.is_mine; }));
+    rsvpBpCb.checked = hasMyBp;
+  }
+
   renderTasksChecklist(true);
   updateGroupSummaryUi();
 }
@@ -1424,6 +1444,9 @@ function setupRsvpForm() {
     const redeemHeroEl = document.getElementById('redeem-hero-credit-checkbox');
     const redeemHeroCredit = Boolean(redeemHeroEl && redeemHeroEl.checked);
 
+    const bpSignupEl = document.getElementById('rsvp-bp-signup');
+    const bpSignup = Boolean(bpSignupEl && bpSignupEl.checked);
+
     const payload = {
       status: 'attending',
       name: name,
@@ -1435,6 +1458,7 @@ function setupRsvpForm() {
       gear_bringing: gear,
       duty_ids: checkedDuties,
       redeem_hero_credit: redeemHeroCredit,
+      bp_signup: bpSignup,
       management_token: guestToken
     };
 
@@ -1593,5 +1617,287 @@ window.toggleEditEventPanel = function() {
   }
 };
 const toggleEditEventPanel = window.toggleEditEventPanel;
+
+// ==========================================
+// BATTING PRACTICE (BP) ORDER UI & LOGIC
+// ==========================================
+
+function renderBpOrder() {
+  const container = document.getElementById('bp-slots-grid');
+  if (!container || !eventData) return;
+
+  const bpSection = document.getElementById('bp-order-section');
+  const isRainout = Boolean(eventData.event && eventData.event.status === 'rainout');
+  if (bpSection) {
+    bpSection.style.opacity = isRainout ? '0.6' : '1';
+  }
+
+  const signups = eventData.bp_signups || [];
+  const signupMap = new Map();
+  let maxSlot = 15;
+  for (let i = 0; i < signups.length; i++) {
+    const s = signups[i];
+    signupMap.set(s.slot_number, s);
+    if (s.slot_number > maxSlot) maxSlot = s.slot_number;
+  }
+
+  const totalDisplaySlots = Math.max(15, maxSlot);
+
+  const badgeEl = document.getElementById('bp-slots-badge');
+  if (badgeEl) {
+    badgeEl.textContent = `${signups.length}/${totalDisplaySlots} Slots`;
+  }
+
+  const isOrganizer = Boolean(API.currentUser && (API.currentUser.canManageEvents || API.currentUser.isAdmin));
+  const orgControls = document.getElementById('bp-organizer-controls');
+  if (orgControls) {
+    orgControls.style.display = (isOrganizer && signups.length > 0) ? 'inline-flex' : 'none';
+  }
+
+  const mySignup = signups.find(function(s) { return s.is_mine; });
+  const quickJoinBtn = document.getElementById('bp-quick-join-btn');
+  if (quickJoinBtn) {
+    if (isRainout) {
+      quickJoinBtn.disabled = true;
+      quickJoinBtn.textContent = 'Game Called (Rainout)';
+    } else if (mySignup) {
+      quickJoinBtn.disabled = false;
+      quickJoinBtn.innerHTML = `⭐ ${API.escapeHtml(API.t('event.bp_your_slot', 'Your Spot'))}: Slot #${mySignup.slot_number}`;
+      quickJoinBtn.onclick = function() { openBpModal(mySignup.slot_number, mySignup); };
+    } else {
+      quickJoinBtn.disabled = false;
+      quickJoinBtn.innerHTML = `⚡ ${API.escapeHtml(API.t('event.bp_quick_claim', 'Claim Next Slot'))}`;
+      quickJoinBtn.onclick = function() {
+        let nextSlot = 1;
+        while (signupMap.has(nextSlot)) nextSlot++;
+        openBpModal(nextSlot, null);
+      };
+    }
+  }
+
+  let html = '';
+  for (let slot = 1; slot <= totalDisplaySlots; slot++) {
+    const item = signupMap.get(slot);
+    let groupLbl = 'Round 1';
+    if (slot > 10) {
+      groupLbl = 'Round 3';
+    } else if (slot > 5) {
+      groupLbl = 'Round 2';
+    }
+
+    if (item) {
+      const isMine = Boolean(item.is_mine);
+      const safeAvatar = API.safeAvatarUrl(item.avatar_url);
+      const avatarImg = safeAvatar
+        ? `<img src="${API.escapeHtml(safeAvatar)}" alt="${API.escapeHtml(item.player_name)}" class="roster-avatar" style="width: 34px; height: 34px; border-radius: 50%;" loading="lazy">`
+        : `<span class="roster-avatar-placeholder" style="width: 34px; height: 34px; font-size: 0.85rem; border-radius: 50%;">${API.escapeHtml((item.player_name || 'P').charAt(0).toUpperCase())}</span>`;
+
+      html += `
+        <div class="bp-slot-card is-taken ${isMine ? 'is-mine' : ''}" data-slot="${slot}">
+          <div class="bp-slot-num-badge">
+            <span>#${slot}</span>
+            <span class="bp-slot-round-lbl">${groupLbl}</span>
+          </div>
+          ${avatarImg}
+          <div class="bp-slot-details">
+            <div class="bp-slot-name-row">
+              <span class="bp-slot-name">${API.escapeHtml(item.player_name)}</span>
+              ${isMine ? `<span class="badge badge-green" style="font-size: 0.65rem; padding: 2px 6px;">${API.escapeHtml(API.t('event.bp_your_slot', 'Your Spot'))}</span>` : ''}
+            </div>
+            ${item.notes ? `<div class="bp-slot-notes">🎯 ${API.escapeHtml(item.notes)}</div>` : ''}
+          </div>
+          <div class="bp-slot-actions">
+            ${(isMine || isOrganizer) && !isRainout ? `
+              <button type="button" class="bp-slot-icon-btn" onclick="openBpModal(${slot}, ${item.id})" title="Edit or move slot">✏️</button>
+              <button type="button" class="bp-slot-icon-btn" onclick="handleDeleteBpSignup(${item.id})" title="Remove from lineup" style="color: var(--danger);">✕</button>
+            ` : ''}
+          </div>
+        </div>
+      `;
+    } else {
+      html += `
+        <div class="bp-slot-card is-open" data-slot="${slot}">
+          <div class="bp-slot-num-badge" style="opacity: 0.7;">
+            <span>#${slot}</span>
+            <span class="bp-slot-round-lbl">${groupLbl}</span>
+          </div>
+          <div class="bp-slot-details">
+            <div class="bp-slot-name" style="color: var(--text-muted); font-size: 0.88rem; font-weight: normal;">
+              ${API.escapeHtml(API.t('event.bp_open_slot', 'Open Slot'))}
+            </div>
+          </div>
+          <div class="bp-slot-actions">
+            ${!isRainout ? `
+              <button type="button" class="bp-claim-slot-btn" onclick="openBpModal(${slot}, null)">
+                + ${API.escapeHtml(API.t('event.bp_claim_btn', 'Claim Slot'))}
+              </button>
+            ` : '<span style="font-size: 0.75rem; color: var(--text-muted);">Unavailable</span>'}
+          </div>
+        </div>
+      `;
+    }
+  }
+
+  container.innerHTML = html;
+}
+
+function openBpModal(preferredSlot, existingSignupOrId) {
+  const modal = document.getElementById('bp-signup-modal');
+  if (!modal) return;
+
+  const titleEl = document.getElementById('bp-modal-title');
+  const signupIdInput = document.getElementById('bp-form-signup-id');
+  const nameInput = document.getElementById('bp-player-name');
+  const slotSelect = document.getElementById('bp-slot-select');
+  const notesInput = document.getElementById('bp-player-notes');
+
+  let signupObj = null;
+  if (existingSignupOrId && typeof existingSignupOrId === 'object') {
+    signupObj = existingSignupOrId;
+  } else if (existingSignupOrId) {
+    const list = (eventData && eventData.bp_signups) || [];
+    signupObj = list.find(function(s) { return s.id === existingSignupOrId; });
+  }
+
+  const signups = (eventData && eventData.bp_signups) || [];
+  const takenMap = new Map();
+  signups.forEach(function(s) { takenMap.set(s.slot_number, s); });
+
+  let maxSlot = 20;
+  signups.forEach(function(s) { if (s.slot_number > maxSlot) maxSlot = s.slot_number + 1; });
+  let selectHtml = '';
+  for (let i = 1; i <= maxSlot; i++) {
+    const occ = takenMap.get(i);
+    const isCurrent = signupObj && signupObj.slot_number === i;
+    if (!occ || isCurrent) {
+      selectHtml += `<option value="${i}" ${i === preferredSlot ? 'selected' : ''}>Slot #${i} (Open)</option>`;
+    } else {
+      selectHtml += `<option value="${i}" disabled>Slot #${i} (${API.escapeHtml(occ.player_name)})</option>`;
+    }
+  }
+  slotSelect.innerHTML = selectHtml;
+
+  if (signupObj) {
+    titleEl.textContent = `Edit Batting Practice Slot #${signupObj.slot_number}`;
+    signupIdInput.value = signupObj.id;
+    nameInput.value = signupObj.player_name || '';
+    slotSelect.value = String(signupObj.slot_number);
+    notesInput.value = signupObj.notes || '';
+  } else {
+    titleEl.textContent = `Sign Up for Batting Practice Slot #${preferredSlot}`;
+    signupIdInput.value = '';
+    const rsvpNameEl = document.getElementById('rsvp-name');
+    nameInput.value = (API.currentUser && API.currentUser.name) || (rsvpNameEl && rsvpNameEl.value) || '';
+    slotSelect.value = String(preferredSlot);
+    notesInput.value = '';
+  }
+
+  modal.style.display = 'flex';
+  nameInput.focus();
+}
+window.openBpModal = openBpModal;
+
+function closeBpModal() {
+  const modal = document.getElementById('bp-signup-modal');
+  if (modal) modal.style.display = 'none';
+}
+window.closeBpModal = closeBpModal;
+
+async function handleDeleteBpSignup(signupId) {
+  if (!confirm('Withdraw from this batting practice slot?')) return;
+  const alertEl = document.getElementById('bp-alert');
+  try {
+    const res = await API.deleteBpSignup(eventId, signupId, { management_token: guestToken });
+    if (res.error) {
+      if (alertEl) alertEl.innerHTML = `<div class="alert alert-error">${API.escapeHtml(res.error)}</div>`;
+    } else {
+      if (alertEl) alertEl.innerHTML = `<div class="alert alert-success">${API.escapeHtml(res.message)}</div>`;
+      await loadEventData(true);
+    }
+  } catch (err) {
+    console.error('Error removing BP signup:', err);
+  }
+}
+window.handleDeleteBpSignup = handleDeleteBpSignup;
+
+function setupBpOrderUi() {
+  const modal = document.getElementById('bp-signup-modal');
+  const closeBtn = document.getElementById('bp-modal-close');
+  const cancelBtn = document.getElementById('bp-modal-cancel');
+  const form = document.getElementById('bp-signup-form');
+  const clearBtn = document.getElementById('bp-clear-btn');
+
+  if (closeBtn) closeBtn.onclick = closeBpModal;
+  if (cancelBtn) cancelBtn.onclick = closeBpModal;
+  if (modal) {
+    modal.onclick = function(e) {
+      if (e.target === modal) closeBpModal();
+    };
+  }
+
+  if (clearBtn) {
+    clearBtn.onclick = async function() {
+      if (!confirm('Are you sure you want to clear the entire batting practice order?')) return;
+      const alertEl = document.getElementById('bp-alert');
+      try {
+        const res = await API.clearBpOrder(eventId);
+        if (res.error) {
+          if (alertEl) alertEl.innerHTML = `<div class="alert alert-error">${API.escapeHtml(res.error)}</div>`;
+        } else {
+          if (alertEl) alertEl.innerHTML = `<div class="alert alert-success">${API.escapeHtml(res.message)}</div>`;
+          await loadEventData(true);
+        }
+      } catch (e) {
+        console.error('Error clearing BP order:', e);
+      }
+    };
+  }
+
+  if (form) {
+    form.onsubmit = async function(e) {
+      e.preventDefault();
+      const signupId = document.getElementById('bp-form-signup-id').value;
+      const playerName = document.getElementById('bp-player-name').value;
+      const slotNumber = parseInt(document.getElementById('bp-slot-select').value, 10);
+      const notes = document.getElementById('bp-player-notes').value;
+      const submitBtn = document.getElementById('bp-modal-submit');
+      const alertEl = document.getElementById('bp-alert');
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Saving...';
+
+      try {
+        let res;
+        const payload = {
+          player_name: playerName,
+          slot_number: slotNumber,
+          notes: notes,
+          management_token: guestToken
+        };
+        if (signupId) {
+          res = await API.updateBpSignup(eventId, signupId, payload);
+        } else {
+          res = await API.postBpSignup(eventId, payload);
+        }
+
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Confirm BP Slot';
+
+        if (res.error) {
+          alert('Error: ' + res.error);
+        } else {
+          closeBpModal();
+          if (alertEl) alertEl.innerHTML = `<div class="alert alert-success">${API.escapeHtml(res.message)}</div>`;
+          await loadEventData(true);
+        }
+      } catch (err) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Confirm BP Slot';
+        console.error('Error saving BP signup:', err);
+        alert('Failed to save batting practice slot. Please try again.');
+      }
+    };
+  }
+}
 
 document.addEventListener('DOMContentLoaded', initEvent);

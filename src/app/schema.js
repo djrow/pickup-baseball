@@ -158,6 +158,17 @@ export const CREATE_TABLES_SQL = [
     count INTEGER DEFAULT 0,
     window_start INTEGER NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS batting_practice_signups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    attendee_id INTEGER REFERENCES attendees(id) ON DELETE SET NULL,
+    slot_number INTEGER NOT NULL,
+    player_name TEXT NOT NULL,
+    notes TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(event_id, slot_number)
+  )`,
   'CREATE INDEX IF NOT EXISTS idx_events_date ON events(event_date)',
   'CREATE INDEX IF NOT EXISTS idx_attendees_event ON attendees(event_id)',
   'CREATE INDEX IF NOT EXISTS idx_comments_event ON comments(event_id)',
@@ -165,7 +176,8 @@ export const CREATE_TABLES_SQL = [
   'CREATE INDEX IF NOT EXISTS idx_media_date_taken ON media_items(date_taken DESC)',
   'CREATE INDEX IF NOT EXISTS idx_media_album ON media_items(album)',
   'CREATE INDEX IF NOT EXISTS idx_media_type ON media_items(media_type)',
-  'CREATE INDEX IF NOT EXISTS idx_media_approved ON media_items(is_approved)'
+  'CREATE INDEX IF NOT EXISTS idx_media_approved ON media_items(is_approved)',
+  'CREATE INDEX IF NOT EXISTS idx_bp_signups_event ON batting_practice_signups(event_id, slot_number)'
 ];
 
 export const ALTER_STATEMENTS = [

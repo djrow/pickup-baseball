@@ -211,6 +211,15 @@ const EN_DICT = {
   "event.message_label": "Message",
   "event.message_placeholder": "Field update, gear questions, or post-game shoutouts...",
   "event.post_comment_btn": "Post to Discussion",
+  "event.bp_title": "Batting Practice (BP) Order",
+  "event.bp_subtitle": "12:30 PM – 1:30 PM machine-pitch warmup • Shag outfield fly balls while other rounds hit!",
+  "event.bp_quick_claim": "Claim Next Slot",
+  "event.bp_your_slot": "Your Spot",
+  "event.bp_open_slot": "Open Slot",
+  "event.bp_claim_btn": "Claim Slot",
+  "event.bp_leave_btn": "Withdraw",
+  "event.bp_change_btn": "Change",
+  "event.bp_rsvp_checkbox": "⚾ Sign me up for Batting Practice (BP) order (12:30 PM warmup)",
   "login.title": "Player Sign-In",
   "login.subtitle": "No password needed. We'll send a 6-digit code or magic link to your email.",
   "login.name_label": "Name",
@@ -297,7 +306,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '85',
+  CLIENT_VERSION: '86',
 
   // Current user cache
   currentUser: null,
@@ -1178,6 +1187,35 @@ const API = {
 
   async sendReminders(id) {
     return this.request('POST', '/api/events/' + id + '/send-reminders');
+  },
+
+  async getBpOrder(eventId, token = '') {
+    const url = '/api/events/' + eventId + '/bp-order' + (token ? '?token=' + encodeURIComponent(token) : '');
+    return this.request('GET', url);
+  },
+
+  async postBpSignup(eventId, payload) {
+    return this.request('POST', '/api/events/' + eventId + '/bp-order', payload, {
+      invalidateKeys: ['pickup_cached_event_' + eventId]
+    });
+  },
+
+  async updateBpSignup(eventId, signupId, payload) {
+    return this.request('PUT', '/api/events/' + eventId + '/bp-order/' + signupId, payload, {
+      invalidateKeys: ['pickup_cached_event_' + eventId]
+    });
+  },
+
+  async deleteBpSignup(eventId, signupId, payload) {
+    return this.request('DELETE', '/api/events/' + eventId + '/bp-order/' + signupId, payload || {}, {
+      invalidateKeys: ['pickup_cached_event_' + eventId]
+    });
+  },
+
+  async clearBpOrder(eventId) {
+    return this.request('POST', '/api/events/' + eventId + '/bp-order/clear', {}, {
+      invalidateKeys: ['pickup_cached_event_' + eventId]
+    });
   },
 
   async sendLoginCode(email, name = '') {
