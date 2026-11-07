@@ -2586,6 +2586,7 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.equal(apiRes.headers.get('x-frame-options'), 'DENY');
     assert.ok(apiRes.headers.get('strict-transport-security'), 'HSTS header must be set');
     assert.ok(apiRes.headers.get('content-security-policy'), 'CSP header must be set');
+    assert.ok(apiRes.headers.get('content-security-policy').includes("object-src 'none'"), 'CSP must restrict object-src to none');
 
     // 3. Verify security headers on 404 API response
     const notFoundRes = await fetch(`${baseUrl}/api/non-existent-endpoint`);
@@ -2594,6 +2595,7 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.equal(notFoundRes.headers.get('x-frame-options'), 'DENY');
     assert.ok(notFoundRes.headers.get('strict-transport-security'), 'HSTS header must be set on 404');
     assert.ok(notFoundRes.headers.get('content-security-policy'), 'CSP header must be set on 404');
+    assert.ok(notFoundRes.headers.get('content-security-policy').includes("object-src 'none'"), '404 CSP must restrict object-src to none');
 
     // 4. Verify 301 redirects return 0 content-length / empty body
     const redirectRes = await fetch(`${baseUrl}/handbook`, { redirect: 'manual' });
@@ -2603,5 +2605,14 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.equal(redirectRes.headers.get('x-frame-options'), 'DENY');
     const redirectBody = await redirectRes.text();
     assert.equal(redirectBody.length, 0, 'Redirect response must have 0-byte body to avoid information leak flags');
+
+    // 5. Verify Cookie Disclaimer and object-src in public assets
+    const headersFile = fs.readFileSync(path.join(publicDir, '_headers'), 'utf8');
+    assert.ok(headersFile.includes("object-src 'none'"), '_headers CSP must contain object-src none');
+    assert.ok(headersFile.includes('upgrade-insecure-requests;'), '_headers CSP must contain upgrade-insecure-requests');
+
+    const apiJs = fs.readFileSync(path.join(publicDir, 'js', 'api.js'), 'utf8');
+    assert.ok(apiJs.includes('renderCookieNotice'), 'api.js must provide renderCookieNotice');
+    assert.ok(apiJs.includes('cookie-notice-banner'), 'api.js must render cookie-notice-banner');
   });
 });

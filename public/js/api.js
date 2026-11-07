@@ -297,7 +297,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '82',
+  CLIENT_VERSION: '83',
 
   // Current user cache
   currentUser: null,
@@ -1684,15 +1684,51 @@ const API = {
       chat: `<svg ${attrs}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`
     };
     return icons[name] || '';
+  },
+
+  renderCookieNotice() {
+    if (typeof document === 'undefined' || typeof window === 'undefined') return;
+    try {
+      if (localStorage.getItem('pbf_cookie_consent') === '1') return;
+    } catch (e) {}
+    if (document.getElementById('cookie-notice-banner')) return;
+
+    const banner = document.createElement('aside');
+    banner.id = 'cookie-notice-banner';
+    banner.className = 'cookie-notice-banner';
+    banner.setAttribute('role', 'region');
+    banner.setAttribute('aria-label', 'Cookie and privacy notice');
+    banner.style.cssText = 'position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); width: calc(100% - 32px); max-width: 660px; background: #003831; color: #ffffff; padding: 14px 18px; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.35); z-index: 99999; display: flex; align-items: center; justify-content: space-between; gap: 14px; font-size: 0.88rem; line-height: 1.4; border: 1px solid rgba(255,255,255,0.18);';
+
+    banner.innerHTML = '<div style="display: flex; align-items: center; gap: 10px;">' +
+      '<span style="font-size: 1.3rem;">🍪</span>' +
+      '<span><strong>Cookie &amp; Privacy Notice:</strong> We only use essential session cookies and Cloudflare security cookies to prevent spam and keep your account safe. We do not use third-party tracking or advertising cookies.</span>' +
+      '</div>' +
+      '<button type="button" id="cookie-notice-dismiss" class="btn btn-primary btn-sm" style="background: #FD5A1E; color: #ffffff; border: none; font-weight: 700; white-space: nowrap; padding: 6px 14px; border-radius: 6px; cursor: pointer;">Got It</button>';
+
+    document.body.appendChild(banner);
+    const dismissBtn = document.getElementById('cookie-notice-dismiss');
+    if (dismissBtn) {
+      dismissBtn.addEventListener('click', function() {
+        try {
+          localStorage.setItem('pbf_cookie_consent', '1');
+        } catch (e) {}
+        banner.remove();
+      });
+    }
   }
 };
 
 window.API = API;
 API.initTheme();
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => API.initI18n());
+  document.addEventListener('DOMContentLoaded', () => {
+    API.initI18n();
+    API.renderCookieNotice();
+  });
 } else {
   API.initI18n();
+  API.renderCookieNotice();
 }
 
 // Register PWA Service Worker

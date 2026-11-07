@@ -25,7 +25,7 @@ app.use('*', async (c, next) => {
   c.header('X-Frame-Options', 'DENY');
   c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
   c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
-  c.header('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
+  c.header('Content-Security-Policy', "default-src 'none'; object-src 'none'; frame-ancestors 'none';");
 });
 
 app.onError((err, c) => {
@@ -36,7 +36,7 @@ app.onError((err, c) => {
   c.header('X-Frame-Options', 'DENY');
   c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
   c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
-  c.header('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
+  c.header('Content-Security-Policy', "default-src 'none'; object-src 'none'; frame-ancestors 'none';");
   return c.json({ error: 'Internal server error.' }, 500);
 });
 
@@ -47,7 +47,7 @@ app.notFound((c) => {
   c.header('X-Frame-Options', 'DENY');
   c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
   c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
-  c.header('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
+  c.header('Content-Security-Policy', "default-src 'none'; object-src 'none'; frame-ancestors 'none';");
   return c.json({ error: 'Endpoint not found.' }, 404);
 });
 
