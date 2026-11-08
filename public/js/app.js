@@ -533,6 +533,9 @@ function renderCalendarDrawer(dateKey, game, isPast) {
         <a href="${gCalUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm" style="font-size: 0.82rem;" title="Add this game to Google Calendar">
           📅 Google Cal ↗
         </a>
+        <a href="/event.html?id=${game.id}#bp-order-section" class="btn btn-outline btn-sm" style="font-weight: 700; font-size: 0.82rem; display: inline-flex; align-items: center; gap: 4px;">
+          ⚾ BP Signup Sheet
+        </a>
         <a href="/event.html?id=${game.id}" class="btn btn-primary" style="font-weight: 700; font-size: 0.88rem;">
           ${API.escapeHtml(API.t('calendar.view_details', 'RSVP & View Game Details →'))}
         </a>
@@ -656,6 +659,11 @@ function renderCalendar(events) {
   let trueNextGameKey = null;
   if (upcomingScheduled.length > 0) {
     trueNextGameKey = getPacificDateKey(upcomingScheduled[0].event_date);
+    const routineBpLink = document.getElementById('routine-bp-link');
+    if (routineBpLink) {
+      routineBpLink.href = '/event.html?id=' + upcomingScheduled[0].id + '#bp-order-section';
+      routineBpLink.innerHTML = '⚾ View Next Game BP Signup Sheet →';
+    }
   } else {
     // If no scheduled events exist, the immediate upcoming Sunday from today is the target
     const nextSun = new Date(now);

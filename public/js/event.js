@@ -1648,6 +1648,17 @@ function renderBpOrder() {
     badgeEl.textContent = `${signups.length}/${totalDisplaySlots} Slots`;
   }
 
+  const metaBpSummary = document.getElementById('event-bp-summary');
+  if (metaBpSummary) {
+    if (isRainout) {
+      metaBpSummary.textContent = 'Cancelled (Rainout)';
+      metaBpSummary.style.color = 'var(--danger)';
+    } else {
+      metaBpSummary.textContent = `${signups.length}/${totalDisplaySlots} Slots Claimed`;
+      metaBpSummary.style.color = 'var(--primary)';
+    }
+  }
+
   const isOrganizer = Boolean(API.currentUser && (API.currentUser.canManageEvents || API.currentUser.isAdmin));
   const orgControls = document.getElementById('bp-organizer-controls');
   if (orgControls) {
