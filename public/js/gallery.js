@@ -1227,9 +1227,13 @@
           </div>
         ` : '';
 
+        var defaultMsg = res.requires_approval
+          ? '✓ Thank you! Once uploaded, David will approve it then it will be displayed in the webapp.'
+          : '✓ Media successfully saved!';
+
         alertBox.innerHTML = `
           <div class="alert ${alertClass}" style="font-weight: 600;">
-            ${API.escapeHtml(res.message || '✓ Media successfully saved!')}
+            ${API.escapeHtml(res.message || defaultMsg)}
             ${takedownHtml}
           </div>
         `;

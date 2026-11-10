@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Photo &amp; Video Gallery | Pickup Baseball Foundation</title>
-  <link rel="stylesheet" href="/css/style.css?v=87">
+  <link rel="stylesheet" href="/css/style.css?v=88">
   <link rel="alternate" type="application/rss+xml" title="Sunday Pickup Baseball Highlights &amp; Updates" href="/feed.xml">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
@@ -238,6 +238,14 @@
         <span class="badge badge-green" style="font-size: 0.8rem; font-weight: 700;">✓ Public Submission Open</span>
       </div>
 
+      <!-- Moderation Approval Notice -->
+      <div class="upload-approval-notice" style="background: var(--bg-subtle); border-left: 4px solid var(--primary); border-radius: var(--radius-sm); padding: 12px 16px; margin-bottom: 18px; display: flex; align-items: center; gap: 12px;">
+        <span style="font-size: 1.35rem; line-height: 1;">🛡️</span>
+        <div style="font-size: 0.9rem; color: var(--text-main); line-height: 1.4;">
+          <strong>Moderation Notice:</strong> Once uploaded, David will approve it then it will be displayed in the webapp.
+        </div>
+      </div>
+
       <div id="media-submit-alert"></div>
 
       <!-- Submission Mode Selector -->
@@ -267,6 +275,9 @@
             <button type="button" class="btn btn-outline btn-sm" id="btn-browse-files">
               📂 Select Files
             </button>
+            <div style="font-size: 0.82rem; color: var(--secondary); font-weight: 600; margin-top: 10px;">
+              🛡️ Once uploaded, David will approve it then it will be displayed in the webapp.
+            </div>
             <div id="dropzone-file-name" style="margin-top: 10px; font-weight: 600; color: var(--primary); font-size: 0.9rem;"></div>
           </div>
         </div>
@@ -345,8 +356,12 @@
           </p>
         </div>
 
-        <!-- Submit Button -->
-        <div style="margin-top: 24px; display: flex; justify-content: flex-end;">
+        <!-- Submit Button & Notice -->
+        <div style="margin-top: 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+          <div style="font-size: 0.85rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
+            <span>🛡️</span>
+            <span>Once uploaded, David will approve it then it will be displayed in the webapp.</span>
+          </div>
           <button type="submit" id="media-submit-btn" class="btn btn-primary" style="padding: 12px 24px; font-size: 1rem; font-weight: 700;">
             🚀 Submit to Community Gallery
           </button>
@@ -392,7 +407,7 @@
   <!-- Site Footer -->
   <footer id="site-footer" class="site-footer"></footer>
 
-  <script src="/js/api.js?v=87"></script>
-  <script src="/js/gallery.js?v=87"></script>
+  <script src="/js/api.js?v=88"></script>
+  <script src="/js/gallery.js?v=88"></script>
 </body>
 </html>

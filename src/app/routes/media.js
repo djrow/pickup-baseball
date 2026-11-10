@@ -561,7 +561,7 @@ mediaRouter.post('/', async (c) => {
       requires_approval: isApproved === 0,
       message: isApproved === 1
         ? (finalMediaType === 'youtube' ? '✓ YouTube link saved and published!' : '✓ Image copied and published to gallery!')
-        : '✓ Thank you! Your photo or video has been submitted for admin approval before being displayed.'
+        : '✓ Thank you! Once uploaded, David will approve it then it will be displayed in the webapp.'
     });
   } catch (err) {
     console.error('[Media] Error saving media submission:', err);

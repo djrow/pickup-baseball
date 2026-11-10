@@ -2277,6 +2277,7 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(galleryHtml.includes('id="media-submit-form"'), 'gallery.html must contain #media-submit-form');
     assert.ok(galleryHtml.includes('id="media-date-input"'), 'gallery.html must ask for approximate date taken');
     assert.ok(galleryHtml.includes('id="gallery-lightbox"'), 'gallery.html must contain #gallery-lightbox modal');
+    assert.ok(galleryHtml.includes('Once uploaded, David will approve it then it will be displayed in the webapp'), 'gallery.html must notify user that David will approve uploads before display');
     assert.ok(galleryHtml.includes('/js/gallery.js'), 'gallery.html must load /js/gallery.js');
     assert.ok(galleryHtml.includes('/js/api.js'), 'gallery.html must load /js/api.js');
 
