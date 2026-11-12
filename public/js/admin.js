@@ -134,11 +134,24 @@ function renderEditableTaskRows(containerId, list, removeFnName, emptyHtml) {
           <input type="number" class="editable-task-slots" min="1" max="15" value="${duty.slots_needed || 1}" required style="padding: 6px 8px; font-size: 0.9rem; text-align: center;">
         </div>
         <div style="text-align: right; padding-top: 18px;">
-          <button type="button" onclick="${removeFnName}(${idx})" title="Remove task" style="background: none; border: none; cursor: pointer; color: var(--danger); font-size: 1.15rem; line-height: 1;">🗑️</button>
+          <button type="button" data-action="remove-task-row" data-row-idx="${idx}" data-remove-fn="${removeFnName}" title="Remove task" style="background: none; border: none; cursor: pointer; color: var(--danger); font-size: 1.15rem; line-height: 1;">🗑️</button>
         </div>
       </div>
     `;
   }).join('');
+
+  if (!container.dataset.cspBound) {
+    container.dataset.cspBound = '1';
+    container.addEventListener('click', function(e) {
+      const btn = e.target.closest('[data-action="remove-task-row"]');
+      if (!btn || !container.contains(btn)) return;
+      const fnName = btn.dataset.removeFn;
+      const rowIdx = parseInt(btn.dataset.rowIdx, 10);
+      if (fnName && typeof window[fnName] === 'function' && !isNaN(rowIdx)) {
+        window[fnName](rowIdx);
+      }
+    });
+  }
 }
 
 function renderTaskBuilder() {
@@ -520,15 +533,15 @@ function renderAdminGameCardHtml(ev) {
         </div>
 
         <div class="admin-game-actions">
-          <button type="button" onclick="toggleTaskManager(${ev.id})" class="btn btn-primary btn-compact-admin">🛡️ Tasks (${ev.duty_count})</button>
-          <button type="button" onclick="toggleEditGamePanel(${ev.id})" class="btn btn-outline btn-compact-admin">✏️ Edit</button>
-          <button type="button" onclick="toggleQuickTurnout(${ev.id})" class="btn btn-outline btn-compact-admin" style="font-weight: 700; color: var(--secondary);">📊 Turnout</button>
-          <button type="button" onclick="toggleAdminWeatherPanel(${ev.id})" class="btn btn-outline btn-compact-admin" id="btn-admin-weather-${ev.id}" style="font-weight: 600;">🌧️ Field Drainage</button>
+          <button type="button" data-action="toggle-tasks" data-event-id="${ev.id}" class="btn btn-primary btn-compact-admin">🛡️ Tasks (${ev.duty_count})</button>
+          <button type="button" data-action="toggle-edit-game" data-event-id="${ev.id}" class="btn btn-outline btn-compact-admin">✏️ Edit</button>
+          <button type="button" data-action="toggle-quick-turnout" data-event-id="${ev.id}" class="btn btn-outline btn-compact-admin" style="font-weight: 700; color: var(--secondary);">📊 Turnout</button>
+          <button type="button" data-action="toggle-weather" data-event-id="${ev.id}" class="btn btn-outline btn-compact-admin" id="btn-admin-weather-${ev.id}" style="font-weight: 600;">🌧️ Field Drainage</button>
           <a href="/event.html?id=${ev.id}" class="btn btn-outline btn-compact-admin" target="_blank" rel="noopener noreferrer">View ↗</a>
           <a href="/event.html?id=${ev.id}" class="btn ${isRainout ? 'btn-danger' : 'btn-outline'} btn-compact-admin">${isRainout ? '🌧️ Manage' : '🌧️ Rainout'}</a>
           ${isAdmin ? `
-            <button type="button" onclick="sendReminders(${ev.id})" class="btn btn-outline btn-compact-admin">📧 Remind</button>
-            <button type="button" onclick="deleteGame(${ev.id})" class="btn btn-danger btn-compact-admin">Delete</button>
+            <button type="button" data-action="send-reminders" data-event-id="${ev.id}" class="btn btn-outline btn-compact-admin">📧 Remind</button>
+            <button type="button" data-action="delete-game" data-event-id="${ev.id}" class="btn btn-danger btn-compact-admin">Delete</button>
           ` : ''}
         </div>
       </div>
@@ -545,10 +558,10 @@ function renderAdminGameCardHtml(ev) {
               </div>
             </div>
           </div>
-          <form id="quick-turnout-form-${ev.id}" onsubmit="saveAdminQuickTurnout(event, ${ev.id})" style="display: flex; align-items: center; gap: 6px; margin: 0;">
+          <form id="quick-turnout-form-${ev.id}" data-action="save-quick-turnout" data-event-id="${ev.id}" style="display: flex; align-items: center; gap: 6px; margin: 0;">
             <input type="number" id="quick-turnout-input-${ev.id}" value="${ev.actual_attendance != null ? ev.actual_attendance : ''}" min="0" max="200" placeholder="e.g. 18" required style="width: 75px; padding: 4px 8px; font-weight: 700; font-size: 0.9rem; border-radius: 4px; border: 1.5px solid var(--border);">
             <button type="submit" id="quick-turnout-btn-${ev.id}" class="btn btn-primary btn-compact-admin">💾 Save</button>
-            <button type="button" onclick="toggleQuickTurnout(${ev.id})" class="btn btn-outline btn-compact-admin">Cancel</button>
+            <button type="button" data-action="toggle-quick-turnout" data-event-id="${ev.id}" class="btn btn-outline btn-compact-admin">Cancel</button>
           </form>
         </div>
         <div id="quick-turnout-alert-${ev.id}"></div>
@@ -564,8 +577,8 @@ function renderAdminGameCardHtml(ev) {
           <h4 style="color: var(--secondary); font-size: 0.95rem; margin: 0 0 10px 0;">✏️ Edit Game Details</h4>
           ${API.renderEditGameFieldsHtml(editPrefix, ev)}
           <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-            <button type="button" id="save-game-btn-${ev.id}" onclick="saveEditedGame(${ev.id})" class="btn btn-primary btn-compact-admin">💾 Save Changes</button>
-            <button type="button" onclick="toggleEditGamePanel(${ev.id})" class="btn btn-outline btn-compact-admin">Cancel</button>
+            <button type="button" id="save-game-btn-${ev.id}" data-action="save-edited-game" data-event-id="${ev.id}" class="btn btn-primary btn-compact-admin">💾 Save Changes</button>
+            <button type="button" data-action="toggle-edit-game" data-event-id="${ev.id}" class="btn btn-outline btn-compact-admin">Cancel</button>
           </div>
         </div>
       </div>
@@ -633,6 +646,33 @@ function renderAdminGamesList(query) {
 
   if (openTaskManagerEventId) {
     renderTaskManagerContent(openTaskManagerEventId);
+  }
+
+  if (!container.dataset.cspBound) {
+    container.dataset.cspBound = '1';
+    container.addEventListener('click', function(e) {
+      const btn = e.target.closest('[data-action]');
+      if (!btn || !container.contains(btn)) return;
+      const action = btn.dataset.action;
+      const eventId = parseInt(btn.dataset.eventId, 10);
+      if (action === 'toggle-tasks') return window.toggleTaskManager(eventId);
+      if (action === 'toggle-edit-game') return window.toggleEditGamePanel(eventId);
+      if (action === 'toggle-quick-turnout') return window.toggleQuickTurnout(eventId);
+      if (action === 'toggle-weather') return window.toggleAdminWeatherPanel(eventId);
+      if (action === 'send-reminders') return window.sendReminders(eventId);
+      if (action === 'delete-game') return window.deleteGame(eventId);
+      if (action === 'save-edited-game') return window.saveEditedGame(eventId);
+      if (action === 'edit-duty') {
+        return window.editDutyInline(eventId, parseInt(btn.dataset.dutyId, 10), btn.dataset.title, btn.dataset.desc, parseInt(btn.dataset.slots, 10));
+      }
+      if (action === 'delete-duty') return window.deleteDutyInline(eventId, parseInt(btn.dataset.dutyId, 10));
+      if (action === 'add-duty') return window.addDutyToEvent(eventId);
+    });
+    container.addEventListener('submit', function(e) {
+      const form = e.target.closest('form[data-action="save-quick-turnout"]');
+      if (!form || !container.contains(form)) return;
+      window.saveAdminQuickTurnout(e, parseInt(form.dataset.eventId, 10));
+    });
   }
 }
 
@@ -834,8 +874,8 @@ async function renderTaskManagerContent(eventId) {
                   </div>
                 </div>
                 <div style="display: flex; gap: 8px; align-items: center;">
-                  <button onclick="editDutyInline(${eventId}, ${d.id}, '${safeTitle}', '${safeDesc}', ${d.slots_needed})" class="btn btn-outline btn-sm" style="font-size: 0.78rem; padding: 4px 8px;">✏️ Edit</button>
-                  <button onclick="deleteDutyInline(${eventId}, ${d.id})" class="btn btn-danger btn-sm" style="font-size: 0.78rem; padding: 4px 8px;">🗑️ Delete</button>
+                  <button type="button" data-action="edit-duty" data-event-id="${eventId}" data-duty-id="${d.id}" data-title="${safeTitle}" data-desc="${safeDesc}" data-slots="${d.slots_needed}" class="btn btn-outline btn-sm" style="font-size: 0.78rem; padding: 4px 8px;">✏️ Edit</button>
+                  <button type="button" data-action="delete-duty" data-event-id="${eventId}" data-duty-id="${d.id}" class="btn btn-danger btn-sm" style="font-size: 0.78rem; padding: 4px 8px;">🗑️ Delete</button>
                 </div>
               </div>
             `;
@@ -848,7 +888,7 @@ async function renderTaskManagerContent(eventId) {
             <input type="text" id="new-duty-title-${eventId}" placeholder="Task Name (e.g. Bring Cooler)" style="padding: 6px 10px; font-size: 0.85rem;">
             <input type="text" id="new-duty-desc-${eventId}" placeholder="Details (e.g. 5gal cooler + ice)" style="padding: 6px 10px; font-size: 0.85rem;">
             <input type="number" id="new-duty-slots-${eventId}" min="1" max="15" value="1" placeholder="Slots" style="padding: 6px 8px; font-size: 0.85rem; text-align: center;">
-            <button onclick="addDutyToEvent(${eventId})" class="btn btn-primary btn-sm">Add Task</button>
+            <button type="button" data-action="add-duty" data-event-id="${eventId}" class="btn btn-primary btn-sm">Add Task</button>
           </div>
         </div>
       </div>
@@ -1770,7 +1810,7 @@ async function setupMediaCarouselsAdmin() {
         <div class="card" id="admin-media-card-${item.id}" style="display: flex; flex-direction: column; justify-content: space-between; margin-bottom: 0; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-sm);">
           <div>
             <div style="position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: var(--radius-sm); overflow: hidden; background: #0c1f1a; margin-bottom: 10px;">
-              <img src="${API.escapeHtml(thumbUrl)}" alt="${title}" onerror="this.onerror=null;this.src='/logo.svg';" style="width: 100%; height: 100%; object-fit: cover; display: block;" loading="lazy">
+              <img src="${API.escapeHtml(thumbUrl)}" alt="${title}" data-fallback="/logo.svg" style="width: 100%; height: 100%; object-fit: cover; display: block;" loading="lazy">
               <div style="position: absolute; top: 6px; left: 6px; display: flex; gap: 4px; flex-wrap: wrap;">
                 ${typeBadge}
                 ${statusBadge}

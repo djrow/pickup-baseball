@@ -153,16 +153,477 @@
     });
   }
 
+  var dmChannelKeyCache = {};
+  var dmKeyInFlight = {};
+  var activeKeyEpochByChannel = {};
+  var decryptedAttBlobUrls = {};
+
+  function findChannelById(channelId) {
+    for (var i = 0; i < state.channels.length; i++) {
+      if (String(state.channels[i].id) === String(channelId) || state.channels[i].slug === String(channelId)) {
+        return state.channels[i];
+      }
+    }
+    return null;
+  }
+
+  function isDmChannel(ch) {
+    return Boolean(ch && (ch.channel_type === 'dm' || ch.channel_type === 'group_dm'));
+  }
+
+  function isPrivateBoardChannel(ch) {
+    return Boolean(ch && !isDmChannel(ch) && (ch.is_private === 1 || ch.is_private === true || ch.min_role_read === 'invite'));
+  }
+
+  function requiresE2eeChannel(ch) {
+    return isDmChannel(ch) || isPrivateBoardChannel(ch);
+  }
+
+  function getActiveChannelEpoch(channelId) {
+    var ch = findChannelById(channelId);
+    var chNum = ch ? ch.id : Number(channelId);
+    return activeKeyEpochByChannel[chNum] || 1;
+  }
+
+  function createE2eeError(code, msg, extra) {
+    var err = new Error(msg);
+    err.code = code;
+    if (extra && typeof extra === 'object') {
+      Object.assign(err, extra);
+    }
+    return err;
+  }
+
+  function parseJwkSafe(raw) {
+    if (!raw) return null;
+    if (typeof raw === 'object') return raw;
+    try {
+      return JSON.parse(raw);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function getChannelParticipantIds(ch) {
+    var ids = [];
+    var seen = {};
+    var addId = function (v) {
+      var n = Number(v);
+      if (n && !seen[n]) {
+        seen[n] = true;
+        ids.push(n);
+      }
+    };
+    if (ch && Array.isArray(ch.member_ids)) {
+      for (var i = 0; i < ch.member_ids.length; i++) {
+        addId(ch.member_ids[i]);
+      }
+    }
+    if (ch && ch.created_by) {
+      addId(ch.created_by);
+    }
+    if (ch && typeof ch.slug === 'string') {
+      var m = ch.slug.match(/^dm-((?:\d+-)+\d+)$/);
+      if (m && m[1]) {
+        var parts = m[1].split('-');
+        for (var p = 0; p < parts.length; p++) {
+          addId(parts[p]);
+        }
+      }
+    }
+    if (state.user && state.user.id) {
+      addId(state.user.id);
+    }
+    ids.sort(function (a, b) { return a - b; });
+    return ids;
+  }
+
+  function memberSetsEqual(aList, bList) {
+    var aSet = {};
+    var bSet = {};
+    var aUnique = 0;
+    var bUnique = 0;
+    for (var i = 0; i < (aList || []).length; i++) {
+      var av = Number(aList[i]);
+      if (av && !aSet[av]) { aSet[av] = true; aUnique++; }
+    }
+    for (var j = 0; j < (bList || []).length; j++) {
+      var bv = Number(bList[j]);
+      if (bv && !bSet[bv]) { bSet[bv] = true; bUnique++; }
+    }
+    if (aUnique !== bUnique) return false;
+    var keys = Object.keys(aSet);
+    for (var k = 0; k < keys.length; k++) {
+      if (!bSet[keys[k]]) return false;
+    }
+    return true;
+  }
+
+  function fetchAndUnwrapChannelShare(channelId, requestedEpoch, idKeys, exactEpoch) {
+    var qs = (exactEpoch && requestedEpoch) ? ('?key_epoch=' + encodeURIComponent(requestedEpoch)) : '';
+    return apiRequest('GET', '/api/keys/channel/' + encodeURIComponent(channelId) + qs).then(function (res) {
+      if (!res.ok || !res.data || !res.data.wrappedKeyBase64) {
+        return null;
+      }
+      var share = res.data;
+      var actualEpoch = Number(share.keyEpoch || share.key_epoch || requestedEpoch || 1);
+      var cacheKey = 'dm_aes_ch_' + String(channelId) + '_ep_' + String(actualEpoch);
+      var sharedUserIds = Array.isArray(share.sharedUserIds || share.shared_user_ids)
+        ? (share.sharedUserIds || share.shared_user_ids).map(Number)
+        : null;
+      var epPub = parseJwkSafe(share.senderEphemeralPubJwk || share.sender_ephemeral_pub_jwk);
+      var pubPromise = epPub
+        ? Promise.resolve(epPub)
+        : apiRequest('GET', '/api/keys/identity/' + encodeURIComponent(share.senderUserId || share.sender_user_id)).then(function (idRes) {
+            if (!idRes.ok || !idRes.data) {
+              throw createE2eeError('E2EE_PEER_KEY_MISSING', 'Sender public key could not be retrieved.');
+            }
+            return parseJwkSafe(idRes.data.ecdh_public_key_jwk);
+          });
+
+      return pubPromise.then(function (senderPubJwk) {
+        if (!senderPubJwk) {
+          throw createE2eeError('E2EE_PEER_KEY_MISSING', 'Missing sender ECDH public key.');
+        }
+        return root.ClubhouseCrypto.deriveEcdhSharedKey(idKeys.ecdhPrivateKey, senderPubJwk);
+      }).then(function (sharedWrappingKey) {
+        return root.ClubhouseCrypto.unwrapChannelKey(share.wrappedKeyBase64, sharedWrappingKey, share.wrapIv || share.wrap_iv, false);
+      }).then(function (channelKey) {
+        dmChannelKeyCache[cacheKey] = channelKey;
+        if (!exactEpoch) {
+          activeKeyEpochByChannel[Number(channelId)] = actualEpoch;
+        }
+        return root.ClubhouseCrypto.idbPut(cacheKey, channelKey).then(function () {
+          return { key: channelKey, keyEpoch: actualEpoch, sharedUserIds: sharedUserIds };
+        });
+      });
+    });
+  }
+
+  function publishRotatedChannelKey(chNum, epoch, participantIds, idKeys, forceRotate) {
+    return apiRequest('GET', '/api/keys/users?ids=' + encodeURIComponent(participantIds.join(','))).then(function (usersRes) {
+      if (!usersRes.ok || !usersRes.data) {
+        throw createE2eeError('E2EE_PEER_KEY_MISSING', 'Failed to fetch recipient public keys.');
+      }
+      var pubMap = {};
+      var rows = Array.isArray(usersRes.data.users) ? usersRes.data.users : [];
+      for (var r = 0; r < rows.length; r++) {
+        pubMap[Number(rows[r].user_id || rows[r].userId)] = parseJwkSafe(rows[r].ecdh_public_key_jwk);
+      }
+      var missingUserIds = [];
+      for (var p = 0; p < participantIds.length; p++) {
+        if (!pubMap[participantIds[p]]) {
+          missingUserIds.push(participantIds[p]);
+        }
+      }
+      if (missingUserIds.length > 0) {
+        throw createE2eeError(
+          'E2EE_PEER_NOT_ENROLLED',
+          'One or more invited members have not set up their E2EE Key Vault yet.',
+          { missingUserIds: missingUserIds }
+        );
+      }
+
+      var generatedKey;
+      return root.ClubhouseCrypto.generateChannelKey().then(function (chKey) {
+        generatedKey = chKey;
+        return Promise.all(participantIds.map(function (uid) {
+          return root.ClubhouseCrypto.deriveEcdhSharedKey(idKeys.ecdhPrivateKey, pubMap[uid]).then(function (shared) {
+            return root.ClubhouseCrypto.wrapChannelKey(generatedKey, shared).then(function (wrapped) {
+              return {
+                recipient_user_id: uid,
+                key_epoch: epoch,
+                wrapped_key_base64: wrapped.wrappedKeyBase64,
+                wrap_iv: wrapped.wrapIv
+              };
+            });
+          });
+        }));
+      }).then(function (shares) {
+        return apiRequest('POST', '/api/keys/channel/' + encodeURIComponent(chNum) + '/share', {
+          key_epoch: epoch,
+          force_rotate: Boolean(forceRotate),
+          shares: shares
+        });
+      }).then(function (shareRes) {
+        if (!shareRes.ok) {
+          throw new Error((shareRes.data && shareRes.data.error) || 'Failed to publish encrypted channel key shares');
+        }
+        if (shareRes.data && shareRes.data.alreadyInitialized) {
+          return fetchAndUnwrapChannelShare(chNum, epoch, idKeys, false).then(function (unwrappedObj) {
+            return unwrappedObj ? unwrappedObj.key : null;
+          });
+        }
+        return root.ClubhouseCrypto.toNonExtractableAesKey(generatedKey).then(function (nonExtKey) {
+          var newCacheKey = 'dm_aes_ch_' + String(chNum) + '_ep_' + String(epoch);
+          dmChannelKeyCache[newCacheKey] = nonExtKey;
+          activeKeyEpochByChannel[chNum] = epoch;
+          return root.ClubhouseCrypto.idbPut(newCacheKey, nonExtKey).then(function () {
+            return nonExtKey;
+          });
+        });
+      });
+    });
+  }
+
+  /**
+   * Retrieve, initialize, or rotate an ECDH-wrapped AES-GCM-256 key for a DM or Private Board.
+   */
+  function ensureChannelE2eeKey(channelId, options) {
+    var opts = options || {};
+    var ch = findChannelById(channelId);
+    var chNum = ch ? ch.id : Number(channelId);
+    var readonly = Boolean(opts.readonly);
+    var requestedEpoch = opts.keyEpoch ? Number(opts.keyEpoch) : (readonly ? 1 : getActiveChannelEpoch(chNum));
+    var isPrivate = isPrivateBoardChannel(ch);
+    var cacheKey = 'dm_aes_ch_' + String(chNum) + '_ep_' + String(requestedEpoch);
+    var inflightKey = cacheKey + (readonly ? '_ro' : '_rw') + (opts.forceRotate ? '_rot' : '');
+
+    if (readonly && dmChannelKeyCache[cacheKey]) {
+      return Promise.resolve(dmChannelKeyCache[cacheKey]);
+    }
+    if (!readonly && !isPrivate && !opts.forceRotate && dmChannelKeyCache[cacheKey]) {
+      return Promise.resolve(dmChannelKeyCache[cacheKey]);
+    }
+    if (!root.ClubhouseCrypto) {
+      return Promise.reject(createE2eeError('E2EE_UNAVAILABLE', 'Web Crypto engine unavailable in this browser.'));
+    }
+    if (dmKeyInFlight[inflightKey]) {
+      return dmKeyInFlight[inflightKey];
+    }
+
+    var work = root.ClubhouseCrypto.idbGet(cacheKey).then(function (cached) {
+      if (cached && readonly) {
+        dmChannelKeyCache[cacheKey] = cached;
+        return cached;
+      }
+      if (cached && !isPrivate && !opts.forceRotate) {
+        dmChannelKeyCache[cacheKey] = cached;
+        return cached;
+      }
+      return root.ClubhouseCrypto.getStoredIdentityKeys().then(function (idKeys) {
+        if (!idKeys || !idKeys.ecdhPrivateKey) {
+          throw createE2eeError('E2EE_IDENTITY_REQUIRED', 'Set up or unlock your E2EE Key Vault to use encrypted DMs and private boards.');
+        }
+        return fetchAndUnwrapChannelShare(chNum, requestedEpoch, idKeys, readonly).then(function (unwrappedObj) {
+          var participantIds = getChannelParticipantIds(ch || { id: chNum });
+          if (readonly) {
+            if (!unwrappedObj) {
+              throw createE2eeError('E2EE_NO_CHANNEL_KEY', 'No encrypted key share found on server.');
+            }
+            return unwrappedObj.key;
+          }
+
+          if (unwrappedObj && !opts.forceRotate) {
+            if (!isPrivate || !unwrappedObj.sharedUserIds || memberSetsEqual(unwrappedObj.sharedUserIds, participantIds)) {
+              return unwrappedObj.key;
+            }
+            // Private board invite list changed: rotate epoch so removed users lose access & new invitees receive a key
+            var nextEpoch = Number(unwrappedObj.keyEpoch || 1) + 1;
+            return publishRotatedChannelKey(chNum, nextEpoch, participantIds, idKeys, true);
+          }
+
+          if (isDmChannel(ch) && participantIds.length < 2) {
+            throw createE2eeError('E2EE_PARTICIPANTS_UNKNOWN', 'Unable to determine participants for ECDH key exchange.');
+          }
+          if (participantIds.length < 1) {
+            throw createE2eeError('E2EE_PARTICIPANTS_UNKNOWN', 'At least one member is required for ECDH key exchange.');
+          }
+          var targetEpoch = opts.forceRotate && unwrappedObj ? (Number(unwrappedObj.keyEpoch || 1) + 1) : (unwrappedObj ? unwrappedObj.keyEpoch : 1);
+          return publishRotatedChannelKey(chNum, targetEpoch, participantIds, idKeys, Boolean(opts.forceRotate));
+        });
+      });
+    });
+
+    dmKeyInFlight[inflightKey] = work;
+    return work.then(function (resKey) {
+      delete dmKeyInFlight[inflightKey];
+      return resKey;
+    }, function (err) {
+      delete dmKeyInFlight[inflightKey];
+      throw err;
+    });
+  }
+
+  function ensureDmChannelKey(channelId, options) {
+    return ensureChannelE2eeKey(channelId, options);
+  }
+
+  function getDmE2eeStatus(channelId) {
+    var ch = findChannelById(channelId);
+    var isDm = isDmChannel(ch);
+    var isPriv = isPrivateBoardChannel(ch);
+    if (!isDm && !isPriv) {
+      return Promise.resolve({ isDm: false, isPrivateBoard: false, requiresE2ee: false, ready: true });
+    }
+    return ensureChannelE2eeKey(ch.id, { readonly: false }).then(function () {
+      return { isDm: isDm, isPrivateBoard: isPriv, requiresE2ee: true, ready: true };
+    }).catch(function (err) {
+      return {
+        isDm: isDm,
+        isPrivateBoard: isPriv,
+        requiresE2ee: true,
+        ready: false,
+        reason: (err && err.code) || 'E2EE_UNAVAILABLE',
+        message: (err && err.message) || 'E2EE unavailable',
+        missingUserIds: (err && err.missingUserIds) || []
+      };
+    });
+  }
+
+  function clearCachedDmKeys() {
+    dmChannelKeyCache = {};
+    dmKeyInFlight = {};
+    activeKeyEpochByChannel = {};
+    var urls = Object.keys(decryptedAttBlobUrls);
+    for (var i = 0; i < urls.length; i++) {
+      try { URL.revokeObjectURL(decryptedAttBlobUrls[urls[i]]); } catch (e) {}
+    }
+    decryptedAttBlobUrls = {};
+  }
+
+  /**
+   * Compute key fingerprints & 1:1 Safety Number + verify/key-change pin state for a DM or Private Board.
+   */
+  function getChannelVerificationInfo(channelId) {
+    var ch = findChannelById(channelId);
+    if (!ch || !requiresE2eeChannel(ch) || !root.ClubhouseCrypto) {
+      return Promise.resolve({ supported: false, reason: 'NOT_E2EE_CHANNEL' });
+    }
+    var participantIds = getChannelParticipantIds(ch);
+    var myId = state.user ? Number(state.user.id) : 0;
+
+    return Promise.all([
+      root.ClubhouseCrypto.getStoredIdentityKeys(),
+      participantIds.length > 0
+        ? apiRequest('GET', '/api/keys/users?ids=' + encodeURIComponent(participantIds.join(',')))
+        : Promise.resolve({ ok: true, data: { users: [] } })
+    ]).then(function (results) {
+      var idKeys = results[0];
+      var usersRes = results[1];
+      var rows = (usersRes && usersRes.ok && usersRes.data && Array.isArray(usersRes.data.users)) ? usersRes.data.users : [];
+      var keyByUid = {};
+      for (var i = 0; i < rows.length; i++) {
+        keyByUid[Number(rows[i].user_id || rows[i].userId)] = parseJwkSafe(rows[i].ecdh_public_key_jwk);
+      }
+
+      var myPubJwk = (idKeys && idKeys.ecdhPublicJwk) ? idKeys.ecdhPublicJwk : (keyByUid[myId] || null);
+      var peerIds = [];
+      for (var p = 0; p < participantIds.length; p++) {
+        if (participantIds[p] !== myId) peerIds.push(participantIds[p]);
+      }
+
+      var myFpPromise = myPubJwk ? root.ClubhouseCrypto.computeKeyFingerprint(myPubJwk) : Promise.resolve('');
+      var peerPromises = peerIds.map(function (pid) {
+        var peerPub = keyByUid[pid] || null;
+        var memberRec = null;
+        for (var m = 0; m < state.members.length; m++) {
+          if (Number(state.members[m].id) === pid) { memberRec = state.members[m]; break; }
+        }
+        var peerName = (memberRec && memberRec.name) ? memberRec.name : ('Player #' + pid);
+        if (!peerPub) {
+          return Promise.resolve({
+            userId: pid,
+            name: peerName,
+            hasKey: false,
+            fingerprint: '',
+            verified: false,
+            keyChangedWarning: false
+          });
+        }
+        return root.ClubhouseCrypto.computeKeyFingerprint(peerPub).then(function (fp) {
+          return root.ClubhouseCrypto.getPeerVerificationState(pid, fp).then(function (pinState) {
+            return {
+              userId: pid,
+              name: peerName,
+              hasKey: true,
+              pubJwk: peerPub,
+              fingerprint: fp,
+              verified: Boolean(pinState && pinState.verified),
+              keyChangedWarning: Boolean(pinState && pinState.keyChangedWarning),
+              verifiedAt: (pinState && pinState.verifiedAt) || null
+            };
+          });
+        });
+      });
+
+      return Promise.all([myFpPromise, Promise.all(peerPromises)]).then(function (resolved) {
+        var myFp = resolved[0];
+        var peers = resolved[1];
+        var isOneToOneDm = isDmChannel(ch) && peers.length === 1;
+        if (isOneToOneDm && myPubJwk && peers[0].hasKey && peers[0].pubJwk) {
+          return root.ClubhouseCrypto.computeSafetyNumber(myId, myPubJwk, peers[0].userId, peers[0].pubJwk).then(function (safetyNum) {
+            return {
+              supported: true,
+              isOneToOne: true,
+              channelId: ch.id,
+              myUserId: myId,
+              myFingerprint: myFp,
+              safetyNumber: safetyNum,
+              peers: peers,
+              allVerified: peers.length > 0 && peers[0].verified && !peers[0].keyChangedWarning,
+              anyKeyChanged: Boolean(peers[0].keyChangedWarning)
+            };
+          });
+        }
+        var anyChanged = false;
+        var allVer = peers.length > 0;
+        for (var k = 0; k < peers.length; k++) {
+          if (peers[k].keyChangedWarning) anyChanged = true;
+          if (!peers[k].verified || peers[k].keyChangedWarning) allVer = false;
+        }
+        return {
+          supported: true,
+          isOneToOne: isOneToOneDm,
+          channelId: ch.id,
+          myUserId: myId,
+          myFingerprint: myFp,
+          safetyNumber: '',
+          peers: peers,
+          allVerified: allVer,
+          anyKeyChanged: anyChanged
+        };
+      });
+    });
+  }
+
+  function verifyPeerIdentityKey(peerUserId, fingerprint) {
+    if (!root.ClubhouseCrypto || typeof root.ClubhouseCrypto.markPeerFingerprintVerified !== 'function') {
+      return Promise.reject(new Error('Crypto engine unavailable.'));
+    }
+    return root.ClubhouseCrypto.markPeerFingerprintVerified(peerUserId, fingerprint);
+  }
+
   /**
    * Decrypt a message if it carries an encryption_iv/iv and E2EE is available.
    */
   function maybeDecryptMessage(msg) {
     var iv = msg ? (msg.encryption_iv || msg.iv) : null;
-    if (!msg || !iv || !msg.content || msg.deleted_at) {
+    if (!msg || !iv || !msg.content || msg.deleted_at || msg.is_hidden) {
       return Promise.resolve(msg);
     }
     if (!root.ClubhouseCrypto) {
       return Promise.resolve(msg);
+    }
+    var ch = findChannelById(msg.channel_id);
+    if (requiresE2eeChannel(ch)) {
+      var lockedLabel = isDmChannel(ch)
+        ? '🔒 Encrypted DM — unlock your E2EE Key Vault to decrypt.'
+        : '🔒 Encrypted Private Board — unlock your E2EE Key Vault to decrypt.';
+      return ensureChannelE2eeKey(msg.channel_id, { readonly: true, keyEpoch: msg.key_epoch || 1 }).then(function (e2eeKey) {
+        return root.ClubhouseCrypto.decryptPayload(e2eeKey, msg.content, iv);
+      }).then(function (plaintext) {
+        var copy = Object.assign({}, msg);
+        copy.decrypted_content = plaintext;
+        copy.is_e2ee_decrypted = true;
+        copy.is_e2ee_locked = false;
+        return copy;
+      }).catch(function () {
+        var copy = Object.assign({}, msg);
+        copy.is_e2ee_locked = true;
+        copy.decrypted_content = lockedLabel;
+        return copy;
+      });
     }
     return root.ClubhouseCrypto.deriveFallbackChannelKey(msg.channel_id, msg.key_epoch || 1).then(function (channelKey) {
       return root.ClubhouseCrypto.decryptPayload(channelKey, msg.content, iv);
@@ -172,7 +633,6 @@
       copy.is_e2ee_decrypted = true;
       return copy;
     }).catch(function () {
-      // If content was stored as readable text with a tag or custom key, preserve content gracefully
       var copy = Object.assign({}, msg);
       copy.decrypted_content = msg.content;
       return copy;
@@ -287,16 +747,23 @@
     var embedType = opts.embedType || null;
     var embedData = opts.embedData || null;
 
-    var ch = null;
-    for (var i = 0; i < state.channels.length; i++) {
-      if (String(state.channels[i].id) === String(channelId) || state.channels[i].slug === String(channelId)) {
-        ch = state.channels[i];
-        break;
-      }
-    }
+    var ch = findChannelById(channelId);
+    var needsE2ee = requiresE2eeChannel(ch);
 
     var prepPromise;
-    if (opts.encryptWithWebCrypto && ch && ch.is_encrypted && root.ClubhouseCrypto && text) {
+    if (needsE2ee) {
+      var targetEncText = text || (attachmentIds.length > 0 ? '📎 Shared encrypted attachment' : '');
+      prepPromise = ensureChannelE2eeKey(ch.id, { readonly: false }).then(function (e2eeKey) {
+        return root.ClubhouseCrypto.encryptPayload(e2eeKey, targetEncText);
+      }).then(function (enc) {
+        return {
+          content: enc.ciphertextB64,
+          encryption_iv: enc.ivB64,
+          key_epoch: getActiveChannelEpoch(ch.id),
+          plaintextPreview: targetEncText
+        };
+      });
+    } else if (opts.encryptWithWebCrypto && ch && ch.is_encrypted && root.ClubhouseCrypto && text) {
       var targetChId = ch.id;
       prepPromise = root.ClubhouseCrypto.deriveFallbackChannelKey(targetChId, 1).then(function (channelKey) {
         return root.ClubhouseCrypto.encryptPayload(channelKey, text);
@@ -315,7 +782,9 @@
       });
     }
 
+    var localPlaintext = null;
     return prepPromise.then(function (prepared) {
+      localPlaintext = prepared.plaintextPreview || null;
       return apiRequest('POST', '/api/channels/' + encodeURIComponent(channelId) + '/messages', {
         content: prepared.content,
         iv: prepared.encryption_iv,
@@ -331,6 +800,11 @@
         throw new Error((res.data && res.data.error) || 'Failed to send message');
       }
       return maybeDecryptMessage(res.data).then(function (msg) {
+        if (localPlaintext && (!msg.decrypted_content || msg.is_e2ee_locked)) {
+          msg.decrypted_content = localPlaintext;
+          msg.is_e2ee_decrypted = true;
+          msg.is_e2ee_locked = false;
+        }
         upsertMessageInState(msg);
         saveMessagesToIdb([msg]);
         emit('message_created', msg);
@@ -349,7 +823,9 @@
       category: opts.category || 'Text Channels',
       channel_type: opts.channel_type || 'text',
       topic: opts.topic || '',
-      is_encrypted: Boolean(opts.is_encrypted),
+      is_encrypted: Boolean(opts.is_encrypted || opts.is_private),
+      is_private: Boolean(opts.is_private),
+      min_role_write: opts.min_role_write || undefined,
       dm_user_id: opts.dm_user_id || null,
       member_ids: memberIds
     }).then(function (res) {
@@ -376,26 +852,53 @@
     });
   }
 
-  function editMessage(messageId, newContent) {
-    return apiRequest('PATCH', '/api/messages/' + encodeURIComponent(messageId), {
-      content: newContent
-    }).then(function (res) {
-      if (!res.ok) {
-        throw new Error((res.data && res.data.error) || 'Failed to edit message');
-      }
-      var chKeys = Object.keys(state.messagesByChannel);
-      for (var c = 0; c < chKeys.length; c++) {
-        var list = state.messagesByChannel[chKeys[c]] || [];
-        for (var i = 0; i < list.length; i++) {
-          if (Number(list[i].id) === Number(messageId)) {
-            list[i].content = newContent;
-            list[i].decrypted_content = newContent;
-            list[i].edited_at = (res.data && res.data.edited_at) || new Date().toISOString();
-          }
+  function findMessageChannelId(messageId) {
+    var chKeys = Object.keys(state.messagesByChannel);
+    for (var c = 0; c < chKeys.length; c++) {
+      var list = state.messagesByChannel[chKeys[c]] || [];
+      for (var i = 0; i < list.length; i++) {
+        if (Number(list[i].id) === Number(messageId)) {
+          return Number(chKeys[c]);
         }
       }
-      emit('message_edited', { id: messageId, content: newContent });
-      return res.data;
+    }
+    return null;
+  }
+
+  function editMessage(messageId, newContent) {
+    var chId = findMessageChannelId(messageId);
+    var ch = chId ? findChannelById(chId) : null;
+    var needsE2ee = requiresE2eeChannel(ch);
+
+    var prep = needsE2ee
+      ? ensureChannelE2eeKey(ch.id, { readonly: false }).then(function (e2eeKey) {
+          return root.ClubhouseCrypto.encryptPayload(e2eeKey, newContent).then(function (enc) {
+            return { content: enc.ciphertextB64, iv: enc.ivB64, encryption_iv: enc.ivB64 };
+          });
+        })
+      : Promise.resolve({ content: newContent });
+
+    return prep.then(function (payload) {
+      return apiRequest('PATCH', '/api/messages/' + encodeURIComponent(messageId), payload).then(function (res) {
+        if (!res.ok) {
+          throw new Error((res.data && res.data.error) || 'Failed to edit message');
+        }
+        var chKeys = Object.keys(state.messagesByChannel);
+        for (var c = 0; c < chKeys.length; c++) {
+          var list = state.messagesByChannel[chKeys[c]] || [];
+          for (var i = 0; i < list.length; i++) {
+            if (Number(list[i].id) === Number(messageId)) {
+              list[i].content = payload.content;
+              list[i].iv = payload.iv || list[i].iv;
+              list[i].encryption_iv = payload.encryption_iv || list[i].encryption_iv;
+              list[i].decrypted_content = newContent;
+              list[i].edited_at = (res.data && res.data.edited_at) || new Date().toISOString();
+            }
+          }
+        }
+        emit('message_edited', { id: messageId, content: newContent });
+        return res.data;
+      });
     });
   }
 
@@ -454,57 +957,81 @@
     var progressCb = typeof onProgress === 'function' ? onProgress : function () {};
     progressCb(2, 'Preparing file & stripping metadata...');
 
+    var ch = findChannelById(channelId);
+    var needsE2ee = requiresE2eeChannel(ch);
+
     return file.arrayBuffer().then(function (rawBuf) {
       var cleanBuf = rawBuf;
       if ((file.type === 'image/jpeg' || file.type === 'image/jpg') && root.ClubhouseCrypto) {
         cleanBuf = root.ClubhouseCrypto.stripJpegMetadata(rawBuf);
       }
-      progressCb(10, 'Initializing upload session...');
-      return apiRequest('POST', '/api/attachments/init', {
-        channel_id: Number(channelId),
-        file_name: file.name,
-        mime_type: file.type || 'application/octet-stream',
-        file_size: cleanBuf.byteLength
-      }).then(function (initRes) {
-        if (!initRes.ok) {
-          throw new Error((initRes.data && initRes.data.error) || 'Failed to initialize attachment upload');
-        }
-        var attachmentId = initRes.data.attachmentId || initRes.data.attachment_id;
-        var uploadUrl = initRes.data.uploadUrl || initRes.data.upload_url;
-        var storageProvider = initRes.data.storageProvider || initRes.data.storage_provider ||
-          (initRes.data.uploadMode === 'gdrive_resumable' ? 'gdrive' : 'local');
 
-        if (storageProvider === 'gdrive' && uploadUrl && uploadUrl.indexOf('googleapis.com') !== -1) {
-          return uploadChunksToGDrive(uploadUrl, cleanBuf, file.type, progressCb).then(function (gdriveMeta) {
-            progressCb(95, 'Finalizing Google Drive attachment...');
-            var resolvedDriveId = (gdriveMeta && gdriveMeta.id) ? gdriveMeta.id : initRes.data.driveFileId;
-            return apiRequest('POST', '/api/attachments/' + encodeURIComponent(attachmentId) + '/complete', {
-              drive_file_id: resolvedDriveId,
-              gdrive_file_id: resolvedDriveId
+      var prepAtt = needsE2ee
+        ? ensureChannelE2eeKey(ch.id, { readonly: false }).then(function (e2eeKey) {
+            progressCb(6, 'Encrypting attachment end-to-end...');
+            return root.ClubhouseCrypto.encryptBinaryBuffer(e2eeKey, cleanBuf).then(function (enc) {
+              return { buffer: enc.encryptedBuffer, isEncrypted: 1, iv: enc.ivB64 };
             });
+          })
+        : Promise.resolve({ buffer: cleanBuf, isEncrypted: 0, iv: null });
+
+      return prepAtt.then(function (prepared) {
+        var uploadBuf = prepared.buffer;
+        progressCb(10, 'Initializing upload session...');
+        return apiRequest('POST', '/api/attachments/init', {
+          channel_id: Number(channelId),
+          file_name: file.name,
+          mime_type: file.type || 'application/octet-stream',
+          file_size: uploadBuf.byteLength,
+          is_encrypted: prepared.isEncrypted,
+          iv: prepared.iv
+        }).then(function (initRes) {
+          if (!initRes.ok) {
+            throw new Error((initRes.data && initRes.data.error) || 'Failed to initialize attachment upload');
+          }
+          var attachmentId = initRes.data.attachmentId || initRes.data.attachment_id;
+          var uploadUrl = initRes.data.uploadUrl || initRes.data.upload_url;
+          var storageProvider = initRes.data.storageProvider || initRes.data.storage_provider ||
+            (initRes.data.uploadMode === 'gdrive_resumable' ? 'gdrive' : 'local');
+
+          if (storageProvider === 'gdrive' && uploadUrl && uploadUrl.indexOf('googleapis.com') !== -1) {
+            return uploadChunksToGDrive(uploadUrl, uploadBuf, prepared.isEncrypted ? 'application/octet-stream' : file.type, progressCb).then(function (gdriveMeta) {
+              progressCb(95, 'Finalizing Google Drive attachment...');
+              var resolvedDriveId = (gdriveMeta && gdriveMeta.id) ? gdriveMeta.id : initRes.data.driveFileId;
+              return apiRequest('POST', '/api/attachments/' + encodeURIComponent(attachmentId) + '/complete', {
+                drive_file_id: resolvedDriveId,
+                gdrive_file_id: resolvedDriveId
+              });
+            }).then(function (compRes) {
+              if (!compRes.ok) {
+                throw new Error((compRes.data && compRes.data.error) || 'Failed to complete Google Drive upload');
+              }
+              progressCb(100, 'Upload complete!');
+              var outAtt = compRes.data.attachment || { id: attachmentId, file_name: file.name, mime_type: file.type, file_size: uploadBuf.byteLength };
+              outAtt.is_encrypted = prepared.isEncrypted;
+              outAtt.iv = prepared.iv;
+              return outAtt;
+            });
+          }
+
+          // Local dev / test fallback binary upload
+          progressCb(40, 'Uploading media stream...');
+          return apiRequest('PUT', uploadUrl, uploadBuf).then(function (putRes) {
+            if (!putRes.ok) {
+              throw new Error((putRes.data && putRes.data.error) || 'Upload stream failed');
+            }
+            progressCb(85, 'Verifying integrity...');
+            return apiRequest('POST', '/api/attachments/' + encodeURIComponent(attachmentId) + '/complete', {});
           }).then(function (compRes) {
             if (!compRes.ok) {
-              throw new Error((compRes.data && compRes.data.error) || 'Failed to complete Google Drive upload');
+              throw new Error((compRes.data && compRes.data.error) || 'Upload completion failed');
             }
             progressCb(100, 'Upload complete!');
-            return compRes.data.attachment || { id: attachmentId, file_name: file.name, mime_type: file.type, file_size: cleanBuf.byteLength };
+            var outAtt = compRes.data.attachment || { id: attachmentId, file_name: file.name, mime_type: file.type, file_size: uploadBuf.byteLength };
+            outAtt.is_encrypted = prepared.isEncrypted;
+            outAtt.iv = prepared.iv;
+            return outAtt;
           });
-        }
-
-        // Local dev / test fallback binary upload
-        progressCb(40, 'Uploading media stream...');
-        return apiRequest('PUT', uploadUrl, cleanBuf).then(function (putRes) {
-          if (!putRes.ok) {
-            throw new Error((putRes.data && putRes.data.error) || 'Upload stream failed');
-          }
-          progressCb(85, 'Verifying integrity...');
-          return apiRequest('POST', '/api/attachments/' + encodeURIComponent(attachmentId) + '/complete', {});
-        }).then(function (compRes) {
-          if (!compRes.ok) {
-            throw new Error((compRes.data && compRes.data.error) || 'Upload completion failed');
-          }
-          progressCb(100, 'Upload complete!');
-          return compRes.data.attachment || { id: attachmentId, file_name: file.name, mime_type: file.type, file_size: cleanBuf.byteLength };
         });
       });
     });
@@ -614,12 +1141,24 @@
       for (var i = 0; i < list.length; i++) {
         if (String(list[i].id) === String(ev.target_id)) {
           list[i].content = payload.content || list[i].content;
-          list[i].decrypted_content = payload.content || list[i].decrypted_content;
-          list[i].edited_at = payload.edited_at || new Date().toISOString();
+          if (payload.iv || payload.encryption_iv) {
+            list[i].iv = payload.iv || payload.encryption_iv;
+            list[i].encryption_iv = payload.encryption_iv || payload.iv;
+            list[i].edited_at = payload.edited_at || new Date().toISOString();
+            maybeDecryptMessage(list[i]).then(function (dec) {
+              upsertMessageInState(dec);
+              emit('sync_message_edit', { channelId: chId, messageId: ev.target_id, payload: payload });
+            });
+          } else {
+            list[i].decrypted_content = payload.content || list[i].decrypted_content;
+            list[i].edited_at = payload.edited_at || new Date().toISOString();
+          }
           break;
         }
       }
-      emit('sync_message_edit', { channelId: chId, messageId: ev.target_id, payload: payload });
+      if (!payload.iv && !payload.encryption_iv) {
+        emit('sync_message_edit', { channelId: chId, messageId: ev.target_id, payload: payload });
+      }
     } else if (ev.event_type === 'message_delete') {
       for (var j = 0; j < list.length; j++) {
         if (String(list[j].id) === String(ev.target_id)) {
@@ -891,6 +1430,58 @@
     return false;
   }
 
+  /**
+   * Fetch and decrypt an E2EE binary attachment into an in-memory Object URL.
+   */
+  function decryptAttachmentToBlobUrl(att, channelId) {
+    if (!att || !att.id || !att.is_encrypted || !att.iv) {
+      return Promise.resolve(null);
+    }
+    var cacheKey = String(att.id);
+    if (decryptedAttBlobUrls[cacheKey]) {
+      return Promise.resolve(decryptedAttBlobUrls[cacheKey]);
+    }
+    var chId = Number(channelId || att.channel_id);
+    var epoch = 1;
+    var list = state.messagesByChannel[chId] || [];
+    for (var i = 0; i < list.length; i++) {
+      if (Number(list[i].id) === Number(att.message_id) && list[i].key_epoch) {
+        epoch = Number(list[i].key_epoch);
+        break;
+      }
+    }
+    return ensureChannelE2eeKey(chId, { readonly: true, keyEpoch: epoch }).then(function (e2eeKey) {
+      return fetch('/api/attachments/' + encodeURIComponent(att.id) + '/stream', {
+        credentials: 'same-origin'
+      }).then(function (res) {
+        if (!res.ok) throw new Error('Attachment fetch failed');
+        return res.arrayBuffer();
+      }).then(function (cipherBuf) {
+        return root.ClubhouseCrypto.decryptBinaryBuffer(e2eeKey, cipherBuf, att.iv);
+      }).then(function (plainBuf) {
+        var blob = new Blob([plainBuf], { type: att.mime_type || 'application/octet-stream' });
+        var url = URL.createObjectURL(blob);
+        decryptedAttBlobUrls[cacheKey] = url;
+        return url;
+      });
+    });
+  }
+
+  /**
+   * Re-decrypt any locked/pending encrypted messages for a channel (or all channels) after vault unlock.
+   */
+  function redecryptChannelMessages(channelId) {
+    var chIds = channelId ? [Number(channelId)] : Object.keys(state.messagesByChannel);
+    return Promise.all(chIds.map(function (cid) {
+      var list = state.messagesByChannel[cid] || [];
+      if (list.length === 0) return Promise.resolve([]);
+      return decryptMessageList(list).then(function (decList) {
+        state.messagesByChannel[cid] = decList;
+        return decList;
+      });
+    }));
+  }
+
   var ClubhouseStore = {
     state: state,
     subscribe: subscribe,
@@ -915,6 +1506,17 @@
     unmuteUserPersonal: unmuteUserPersonal,
     isUserMutedByMe: isUserMutedByMe,
     uploadAttachment: uploadAttachment,
+    getDmE2eeStatus: getDmE2eeStatus,
+    ensureChannelE2eeKey: ensureChannelE2eeKey,
+    getActiveChannelEpoch: getActiveChannelEpoch,
+    getChannelVerificationInfo: getChannelVerificationInfo,
+    verifyPeerIdentityKey: verifyPeerIdentityKey,
+    decryptAttachmentToBlobUrl: decryptAttachmentToBlobUrl,
+    redecryptChannelMessages: redecryptChannelMessages,
+    clearCachedDmKeys: clearCachedDmKeys,
+    isDmChannel: isDmChannel,
+    isPrivateBoardChannel: isPrivateBoardChannel,
+    requiresE2eeChannel: requiresE2eeChannel,
     pollDeltaSync: pollDeltaSync,
     startAdaptiveSyncLoop: startAdaptiveSyncLoop,
     stopAdaptiveSyncLoop: stopAdaptiveSyncLoop,

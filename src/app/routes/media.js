@@ -1148,6 +1148,14 @@ attachmentsRouter.post('/:id/promote-to-gallery', requireAdmin, async (c) => {
     return c.json({ error: 'Attachment not found.' }, 404);
   }
 
+  if (attachment.is_encrypted) {
+    return c.json({ error: 'Encrypted E2EE attachments cannot be promoted to the public gallery.' }, 400);
+  }
+  const srcChannel = await chatDb.prepare('SELECT channel_type, is_private, min_role_read FROM channels WHERE id = ?').bind(attachment.channel_id).first();
+  if (srcChannel && (srcChannel.channel_type === 'dm' || srcChannel.channel_type === 'group_dm' || srcChannel.is_private === 1 || srcChannel.min_role_read === 'invite')) {
+    return c.json({ error: 'Private DM and invite-only board attachments cannot be promoted to the public gallery.' }, 400);
+  }
+
   const body = await c.req.json().catch(() => ({}));
   const title = String(body.title || attachment.file_name || 'Clubhouse Highlight').trim();
   const caption = String(body.caption || '').trim();

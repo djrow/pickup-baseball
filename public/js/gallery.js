@@ -1110,7 +1110,7 @@
         previewBox.style.display = 'block';
         previewTarget.innerHTML = `
           <div style="max-width: 400px; border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--border);">
-            <img src="${API.escapeHtml(url)}" alt="Remote Image" style="max-width: 100%; max-height: 250px; display: block;" onerror="this.onerror=null; this.src='/logo.svg';">
+            <img src="${API.escapeHtml(url)}" alt="Remote Image" style="max-width: 100%; max-height: 250px; display: block;" data-fallback="/logo.svg">
             <div style="padding: 8px 12px; background: var(--bg-subtle); font-size: 0.85rem; color: var(--secondary); font-weight: 600;">
               ✓ External Image / Facebook CDN — will be copied and permanently saved in PBF vault!
             </div>
@@ -1422,7 +1422,7 @@
         <div class="card" id="user-sub-${item.id}" style="padding: 10px; margin-bottom: 0; border: 1px solid var(--border); border-radius: var(--radius-sm); display: flex; flex-direction: column; justify-content: space-between;">
           <div>
             <div style="position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: 4px; overflow: hidden; background: #0c1f1a; margin-bottom: 8px;">
-              <img src="${API.escapeHtml(thumbUrl)}" alt="${title}" onerror="this.onerror=null;this.src='/logo.svg';" style="width: 100%; height: 100%; object-fit: cover; display: block;" loading="lazy">
+              <img src="${API.escapeHtml(thumbUrl)}" alt="${title}" data-fallback="/logo.svg" style="width: 100%; height: 100%; object-fit: cover; display: block;" loading="lazy">
               <div style="position: absolute; top: 4px; left: 4px; display: flex; gap: 4px; flex-wrap: wrap;">
                 ${typeBadge}
                 ${statusBadge}

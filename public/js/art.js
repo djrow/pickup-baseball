@@ -942,10 +942,22 @@
   }
 
   // Initialize all three engines when DOM is ready
-  document.addEventListener('DOMContentLoaded', () => {
+  document.addEventListener('DOMContentLoaded', async () => {
     initPixelDiamond();
     initEquipmentTrunk();
     initDugoutChalkboard();
+    try {
+      if (window.API) {
+        const cached = API.getCachedUser();
+        if (cached) {
+          API.renderNav(cached);
+          setUser(cached);
+        }
+        const user = await API.getMe();
+        API.renderNav(user);
+        setUser(user);
+      }
+    } catch (e) {}
   });
 
   // Export to global window object

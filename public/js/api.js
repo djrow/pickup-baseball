@@ -308,7 +308,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '97',
+  CLIENT_VERSION: '98',
 
   // Current user cache
   currentUser: null,
@@ -1813,6 +1813,14 @@ const API = {
 
 window.API = API;
 API.initTheme();
+// Global CSP-safe image fallback handler (replaces inline onerror attributes)
+document.addEventListener('error', (e) => {
+  const t = e.target;
+  if (t && t.tagName === 'IMG' && t.dataset && t.dataset.fallback && !t.dataset.fallbackApplied) {
+    t.dataset.fallbackApplied = '1';
+    t.src = t.dataset.fallback;
+  }
+}, true);
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
     API.initI18n();

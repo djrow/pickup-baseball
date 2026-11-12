@@ -431,7 +431,7 @@ function renderAttendeesRoster() {
                   </div>
                   <div style="display: flex; gap: 5px; align-items: center; flex-wrap: wrap;">
                     ${roleBadges.join('')}
-                    ${canMod ? `<button type="button" onclick="removeRosterAttendee(${a.id})" title="Remove from roster" style="background:none;border:none;cursor:pointer;font-size:0.85rem;color:var(--danger);padding:0 2px;">🗑️</button>` : ''}
+                    ${canMod ? `<button type="button" data-action="remove-attendee" data-attendee-id="${a.id}" title="Remove from roster" style="background:none;border:none;cursor:pointer;font-size:0.85rem;color:var(--danger);padding:0 2px;">🗑️</button>` : ''}
                   </div>
                 </div>
                 ${a.guest_names ? `<div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 3px;">👥 <em>${API.escapeHtml(API.t('event.guests_prefix', 'Group:'))} ${API.escapeHtml(a.guest_names)}</em></div>` : ''}
@@ -476,7 +476,7 @@ function renderAttendeesRoster() {
                     </div>
                     <div style="display: flex; gap: 6px; align-items: center;">
                       <span class="badge badge-orange" style="font-size: 0.68rem; font-weight: 700;">Waitlist #${idx + 1}</span>
-                      ${canMod ? `<button type="button" onclick="removeRosterAttendee(${w.id})" title="Remove from waitlist" style="background:none;border:none;cursor:pointer;font-size:0.85rem;color:var(--danger);padding:0 2px;">🗑️</button>` : ''}
+                      ${canMod ? `<button type="button" data-action="remove-attendee" data-attendee-id="${w.id}" title="Remove from waitlist" style="background:none;border:none;cursor:pointer;font-size:0.85rem;color:var(--danger);padding:0 2px;">🗑️</button>` : ''}
                     </div>
                   </div>
                   ${w.guest_names ? `<div style="font-size: 0.76rem; color: var(--text-muted); margin-top: 2px;">👥 <em>${API.escapeHtml(API.t('event.guests_prefix', 'Group:'))} ${API.escapeHtml(w.guest_names)}</em></div>` : ''}
@@ -490,6 +490,16 @@ function renderAttendeesRoster() {
   }
 
   container.innerHTML = rosterHtml + waitlistHtml;
+  if (!container.dataset.cspBound) {
+    container.dataset.cspBound = '1';
+    container.addEventListener('click', function(e) {
+      const btn = e.target.closest('[data-action="remove-attendee"]');
+      if (!btn || !container.contains(btn)) return;
+      if (typeof window.removeRosterAttendee === 'function') {
+        window.removeRosterAttendee(parseInt(btn.dataset.attendeeId, 10));
+      }
+    });
+  }
 }
 
 function renderComments() {
@@ -523,7 +533,7 @@ function renderComments() {
             </div>
             <div style="display: flex; gap: 8px; align-items: center;">
               <span class="comment-time">${API.formatDateTime(c.created_at)}</span>
-              ${canMod ? `<button type="button" onclick="deleteDiscussionComment(${c.id})" title="Delete comment" style="background:none;border:none;cursor:pointer;font-size:0.85rem;color:var(--danger);padding:0 2px;">🗑️</button>` : ''}
+              ${canMod ? `<button type="button" data-action="delete-comment" data-comment-id="${c.id}" title="Delete comment" style="background:none;border:none;cursor:pointer;font-size:0.85rem;color:var(--danger);padding:0 2px;">🗑️</button>` : ''}
             </div>
           </div>
           <div class="comment-body">${API.escapeHtml(c.content)}</div>
@@ -531,6 +541,17 @@ function renderComments() {
       </div>
     `;
   }).join('');
+
+  if (!container.dataset.cspBound) {
+    container.dataset.cspBound = '1';
+    container.addEventListener('click', function(e) {
+      const btn = e.target.closest('[data-action="delete-comment"]');
+      if (!btn || !container.contains(btn)) return;
+      if (typeof window.deleteDiscussionComment === 'function') {
+        window.deleteDiscussionComment(parseInt(btn.dataset.commentId, 10));
+      }
+    });
+  }
 }
 
 window.deleteDiscussionComment = async function(commentId) {
@@ -1250,7 +1271,7 @@ function renderOrganizerAttendancePanel() {
           </div>
         </div>
         <div id="attendance-edit-controls-${ev.id}">
-          <button type="button" onclick="showInlineAttendanceEdit()" class="btn btn-outline btn-sm">
+          <button type="button" data-action="show-inline-attendance-edit" class="btn btn-outline btn-sm">
             ✏️ Edit Headcount
           </button>
         </div>
@@ -1271,7 +1292,7 @@ function renderOrganizerAttendancePanel() {
               </div>
             </div>
           </div>
-          <form id="quick-attendance-form" style="display: flex; align-items: center; gap: 8px; margin: 0;" onsubmit="saveQuickAttendance(event)">
+          <form id="quick-attendance-form" data-action="save-quick-attendance" style="display: flex; align-items: center; gap: 8px; margin: 0;">
             <input type="number" id="quick-attendance-input" min="0" max="200" placeholder="e.g. 18" required style="width: 85px; padding: 6px 10px; font-weight: 700; font-size: 1rem; border-radius: 6px; border: 1.5px solid var(--border);">
             <button type="submit" id="quick-attendance-save-btn" class="btn btn-primary btn-sm">💾 Save Turnout</button>
           </form>
@@ -1279,6 +1300,24 @@ function renderOrganizerAttendancePanel() {
         <div id="quick-attendance-alert" style="margin-top: 6px;"></div>
       </div>
     `;
+  }
+
+  if (!panel.dataset.cspBound) {
+    panel.dataset.cspBound = '1';
+    panel.addEventListener('click', function(e) {
+      const btn = e.target.closest('[data-action]');
+      if (!btn || !panel.contains(btn)) return;
+      if (btn.dataset.action === 'show-inline-attendance-edit') {
+        window.showInlineAttendanceEdit();
+      } else if (btn.dataset.action === 'cancel-inline-attendance-edit') {
+        renderOrganizerAttendancePanel();
+      }
+    });
+    panel.addEventListener('submit', function(e) {
+      const form = e.target.closest('form[data-action="save-quick-attendance"]');
+      if (!form || !panel.contains(form)) return;
+      window.saveQuickAttendance(e);
+    });
   }
 }
 
@@ -1301,10 +1340,10 @@ window.showInlineAttendanceEdit = function() {
             </div>
           </div>
         </div>
-        <form id="quick-attendance-form" style="display: flex; align-items: center; gap: 8px; margin: 0;" onsubmit="saveQuickAttendance(event)">
+        <form id="quick-attendance-form" data-action="save-quick-attendance" style="display: flex; align-items: center; gap: 8px; margin: 0;">
           <input type="number" id="quick-attendance-input" value="${ev.actual_attendance != null ? ev.actual_attendance : ''}" min="0" max="200" placeholder="e.g. 18" required style="width: 85px; padding: 6px 10px; font-weight: 700; font-size: 1rem; border-radius: 6px; border: 1.5px solid var(--border);">
           <button type="submit" id="quick-attendance-save-btn" class="btn btn-primary btn-sm">💾 Save</button>
-          <button type="button" onclick="renderOrganizerAttendancePanel()" class="btn btn-outline btn-sm">Cancel</button>
+          <button type="button" data-action="cancel-inline-attendance-edit" class="btn btn-outline btn-sm">Cancel</button>
         </form>
       </div>
       <div id="quick-attendance-alert" style="margin-top: 6px;"></div>
@@ -1739,8 +1778,8 @@ function renderBpOrder() {
           </div>
           <div class="bp-slot-actions">
             ${(isMine || isOrganizer) && !isRainout ? `
-              <button type="button" class="bp-slot-icon-btn" onclick="openBpModal(${slot}, ${item.id})" title="Edit or move slot">✏️</button>
-              <button type="button" class="bp-slot-icon-btn" onclick="handleDeleteBpSignup(${item.id})" title="Remove from lineup" style="color: var(--danger);">✕</button>
+              <button type="button" class="bp-slot-icon-btn" data-action="edit-bp-slot" data-slot="${slot}" data-signup-id="${item.id}" title="Edit or move slot">✏️</button>
+              <button type="button" class="bp-slot-icon-btn" data-action="delete-bp-slot" data-signup-id="${item.id}" title="Remove from lineup" style="color: var(--danger);">✕</button>
             ` : ''}
           </div>
         </div>
@@ -1759,7 +1798,7 @@ function renderBpOrder() {
           </div>
           <div class="bp-slot-actions">
             ${!isRainout ? `
-              <button type="button" class="bp-claim-slot-btn" onclick="openBpModal(${slot}, null)">
+              <button type="button" class="bp-claim-slot-btn" data-action="claim-bp-slot" data-slot="${slot}">
                 + ${API.escapeHtml(API.t('event.bp_claim_btn', 'Claim Slot'))}
               </button>
             ` : '<span style="font-size: 0.75rem; color: var(--text-muted);">Unavailable</span>'}
@@ -1770,6 +1809,21 @@ function renderBpOrder() {
   }
 
   container.innerHTML = html;
+  if (!container.dataset.cspBound) {
+    container.dataset.cspBound = '1';
+    container.addEventListener('click', function(e) {
+      const btn = e.target.closest('[data-action]');
+      if (!btn || !container.contains(btn)) return;
+      const action = btn.dataset.action;
+      if (action === 'edit-bp-slot') {
+        openBpModal(parseInt(btn.dataset.slot, 10), parseInt(btn.dataset.signupId, 10));
+      } else if (action === 'claim-bp-slot') {
+        openBpModal(parseInt(btn.dataset.slot, 10), null);
+      } else if (action === 'delete-bp-slot' && typeof window.handleDeleteBpSignup === 'function') {
+        window.handleDeleteBpSignup(parseInt(btn.dataset.signupId, 10));
+      }
+    });
+  }
 }
 
 function openBpModal(preferredSlot, existingSignupOrId) {

@@ -547,4 +547,407 @@ module.exports = async function runTier5(t, ctx) {
       await ctx.apiReq('DELETE', `/api/events/${restrictedEventId}`, ctx.adminCookie);
     }
   });
+
+  await t.test('T5.9: Members Directory Last-Name Abbreviation & Duplicate Collision Rules', async () => {
+    const emailPrefix = `abbr_test_${Date.now()}`;
+    const insertedIds = [];
+    const testUsers = [
+      { name: 'John Smith', email: `${emailPrefix}_1@example.com` },
+      { name: 'John Sanchez', email: `${emailPrefix}_2@example.com` },
+      { name: 'Jane Smith', email: `${emailPrefix}_3@example.com` },
+      { name: 'Solo', email: `${emailPrefix}_4@example.com` }
+    ];
+
+    for (const tu of testUsers) {
+      const ins = ctx.baseballDb.prepare(
+        "INSERT INTO users (name, email, role) VALUES (?, ?, 'player')"
+      ).run(tu.name, tu.email);
+      insertedIds.push(ins.lastInsertRowid);
+    }
+
+    try {
+      const bootRes = await ctx.apiReq('GET', '/api/bootstrap', ctx.playerCookie);
+      assert.equal(bootRes.status, 200);
+      const members = bootRes.data.members || [];
+
+      const byId = new Map(members.map((m) => [m.id, m.name]));
+      assert.equal(byId.get(insertedIds[0]), 'John Sm.', 'Duplicate first+last-initial user #1 must use first two letters of last name');
+      assert.equal(byId.get(insertedIds[1]), 'John Sa.', 'Duplicate first+last-initial user #2 must use first two letters of last name');
+      assert.equal(byId.get(insertedIds[2]), 'Jane S.', 'Unique first+last-initial user must use single initial');
+      assert.equal(byId.get(insertedIds[3]), 'Solo', 'Single-word name must stay intact');
+
+      // Standard seeded full-name users must also not expose full last names
+      const charlie = members.find((m) => m.id === ctx.playerUser.id);
+      assert.ok(charlie, 'Seeded player must appear in bootstrap members');
+      assert.ok(!charlie.name.includes('Player'), `Expected abbreviated last name for seeded player, got "${charlie.name}"`);
+      assert.match(charlie.name, /\s+[A-Za-z]{1,2}\.$/, 'Abbreviated member name must end with 1-2 letter last initial + period');
+
+      const clubhouseJs = fs.readFileSync(path.join(__dirname, '..', '..', 'public', 'js', 'clubhouse.js'), 'utf8');
+      assert.ok(clubhouseJs.includes('function abbreviateMemberNames('), 'clubhouse.js must define abbreviateMemberNames');
+      assert.ok(!clubhouseJs.includes('?.'), 'clubhouse.js must remain strict ES6 (no ?.)');
+      assert.ok(!clubhouseJs.includes('??'), 'clubhouse.js must remain strict ES6 (no ??)');
+    } finally {
+      for (const uid of insertedIds) {
+        ctx.baseballDb.prepare('DELETE FROM users WHERE id = ?').run(uid);
+      }
+    }
+  });
+
+  await t.test('T5.10: Direct Messages Real ECDH E2EE Key Exchange, Zero-Knowledge Storage & DM Isolation', async () => {
+    const subtle = globalThis.crypto.subtle;
+    ctx.chatDb.prepare('DELETE FROM chat_rate_limits WHERE key IN (?, ?)').run(
+      `user_${ctx.playerUser.id}_msgs`,
+      `user_${ctx.facilitatorUser.id}_msgs`
+    );
+
+    // 1. Both participants generate real ECDH P-256 + ECDSA P-256 identities and publish public keys
+    async function enrollKeypair(cookie) {
+      const ecdh = await subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey', 'deriveBits']);
+      const ecdsa = await subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+      const ecdhPubJwk = await subtle.exportKey('jwk', ecdh.publicKey);
+      const ecdsaPubJwk = await subtle.exportKey('jwk', ecdsa.publicKey);
+      const putRes = await ctx.apiReq('PUT', '/api/keys/identity', cookie, {
+        ecdh_public_key_jwk: ecdhPubJwk,
+        ecdsa_public_key_jwk: ecdsaPubJwk,
+        encrypted_private_vault: 'test_vault_blob_t5_10',
+        vault_salt: 'AAAAAAAAAAAAAAAAAAAAAA==',
+        vault_iv: 'AAAAAAAAAAAAAAAA'
+      });
+      assert.equal(putRes.status, 200);
+      return { ecdh, ecdsa, ecdhPubJwk };
+    }
+
+    const aliceKeys = await enrollKeypair(ctx.playerCookie);
+    const bobKeys = await enrollKeypair(ctx.facilitatorCookie);
+
+    // 2. Alice opens a DM with Bob
+    const dmRes = await ctx.apiReq('POST', '/api/channels', ctx.playerCookie, {
+      name: 'DM: Secret Practice Plan',
+      channel_type: 'dm',
+      dm_user_id: ctx.facilitatorUser.id,
+      is_encrypted: true
+    });
+    assert.ok(dmRes.status === 200 || dmRes.status === 201);
+    const dmId = dmRes.data.channel.id;
+    assert.ok(Array.isArray(dmRes.data.channel.member_ids));
+    assert.ok(dmRes.data.channel.member_ids.includes(ctx.playerUser.id));
+    assert.ok(dmRes.data.channel.member_ids.includes(ctx.facilitatorUser.id));
+
+    // 3. Server rejects unencrypted plaintext DM messages & enforces strict DM isolation (even from Admin)
+    const plaintextReject = await ctx.apiReq('POST', `/api/channels/${dmId}/messages`, ctx.playerCookie, {
+      content: 'Unencrypted message must fail'
+    });
+    assert.equal(plaintextReject.status, 400, 'DM POST without encryption_iv must be rejected');
+
+    const adminBootstrap = await ctx.apiReq('GET', '/api/bootstrap', ctx.adminCookie);
+    assert.equal(adminBootstrap.status, 200);
+    assert.ok(
+      !(adminBootstrap.data.channels || []).some((ch) => Number(ch.id) === Number(dmId)),
+      'Non-participant Admin must NOT see Alice-Bob DM in /api/bootstrap'
+    );
+    const adminReadDm = await ctx.apiReq('GET', `/api/channels/${dmId}/messages`, ctx.adminCookie);
+    assert.equal(adminReadDm.status, 403, 'Non-participant Admin must receive 403 reading DM');
+
+    // 4. Alice generates random AES-GCM-256 DM key, wraps via pairwise ECDH P-256 for Alice & Bob
+    const dmKey = await subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
+    const rawDmKeyBuf = await subtle.exportKey('raw', dmKey);
+
+    const peerKeysRes = await ctx.apiReq('GET', `/api/keys/users?ids=${ctx.playerUser.id},${ctx.facilitatorUser.id}`, ctx.playerCookie);
+    assert.equal(peerKeysRes.status, 200);
+    assert.equal(peerKeysRes.data.users.length, 2);
+
+    const shares = [];
+    for (const participant of peerKeysRes.data.users) {
+      const peerPubKey = await subtle.importKey(
+        'jwk',
+        JSON.parse(participant.ecdh_public_key_jwk),
+        { name: 'ECDH', namedCurve: 'P-256' },
+        true,
+        []
+      );
+      const sharedWrapKey = await subtle.deriveKey(
+        { name: 'ECDH', public: peerPubKey },
+        aliceKeys.ecdh.privateKey,
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['encrypt', 'decrypt']
+      );
+      const wrapIv = globalThis.crypto.getRandomValues(new Uint8Array(12));
+      const wrappedBuf = await subtle.encrypt({ name: 'AES-GCM', iv: wrapIv, tagLength: 128 }, sharedWrapKey, rawDmKeyBuf);
+      shares.push({
+        recipient_user_id: participant.user_id,
+        key_epoch: 1,
+        wrapped_key_base64: Buffer.from(wrappedBuf).toString('base64'),
+        wrap_iv: Buffer.from(wrapIv).toString('base64')
+      });
+    }
+
+    const sharePost = await ctx.apiReq('POST', `/api/keys/channel/${dmId}/share`, ctx.playerCookie, {
+      key_epoch: 1,
+      shares
+    });
+    assert.equal(sharePost.status, 200);
+    assert.equal(sharePost.data.count, 2);
+
+    // Admin still gets 403 trying to read DM key share
+    const adminKeyGet = await ctx.apiReq('GET', `/api/keys/channel/${dmId}`, ctx.adminCookie);
+    assert.equal(adminKeyGet.status, 403);
+
+    // 5. Alice encrypts DM locally and posts ciphertext
+    const secretText = 'Meet at 3rd base dugout at 9am — bring batting gloves';
+    const msgIv = globalThis.crypto.getRandomValues(new Uint8Array(12));
+    const cipherBuf = await subtle.encrypt(
+      { name: 'AES-GCM', iv: msgIv, tagLength: 128 },
+      dmKey,
+      new TextEncoder().encode(secretText)
+    );
+    const cipherB64 = Buffer.from(cipherBuf).toString('base64');
+    const ivB64 = Buffer.from(msgIv).toString('base64');
+
+    const postCipher = await ctx.apiReq('POST', `/api/channels/${dmId}/messages`, ctx.playerCookie, {
+      content: cipherB64,
+      iv: ivB64,
+      encryption_iv: ivB64,
+      key_epoch: 1
+    });
+    assert.equal(postCipher.status, 201);
+    const msgId = postCipher.data.id;
+
+    // 6. Verify CHAT_DB stores ONLY ciphertext (server cannot read plaintext)
+    const dbMsg = ctx.chatDb.prepare('SELECT content, iv FROM messages WHERE id = ?').get(msgId);
+    assert.equal(dbMsg.iv, ivB64);
+    assert.equal(dbMsg.content, cipherB64);
+    assert.ok(!dbMsg.content.includes('dugout'), 'Database must not contain plaintext words');
+
+    // 7. Bob fetches wrapped DM key share, unwraps via ECDH(Bob.priv, Alice.pub), and decrypts message
+    const bobShareRes = await ctx.apiReq('GET', `/api/keys/channel/${dmId}`, ctx.facilitatorCookie);
+    assert.equal(bobShareRes.status, 200);
+    const aliceIdentityForBob = await ctx.apiReq('GET', `/api/keys/identity/${bobShareRes.data.senderUserId}`, ctx.facilitatorCookie);
+    assert.equal(aliceIdentityForBob.status, 200);
+    assert.equal(aliceIdentityForBob.data.encrypted_private_vault, undefined, 'Identity lookup must strip private vault');
+
+    const alicePubForBob = await subtle.importKey(
+      'jwk',
+      JSON.parse(aliceIdentityForBob.data.ecdh_public_key_jwk),
+      { name: 'ECDH', namedCurve: 'P-256' },
+      true,
+      []
+    );
+    const bobSharedWrapKey = await subtle.deriveKey(
+      { name: 'ECDH', public: alicePubForBob },
+      bobKeys.ecdh.privateKey,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['encrypt', 'decrypt']
+    );
+    const bobRawDmKey = await subtle.decrypt(
+      { name: 'AES-GCM', iv: Buffer.from(bobShareRes.data.wrapIv, 'base64'), tagLength: 128 },
+      bobSharedWrapKey,
+      Buffer.from(bobShareRes.data.wrappedKeyBase64, 'base64')
+    );
+    const bobDmKey = await subtle.importKey('raw', bobRawDmKey, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+
+    const bobMsgsRes = await ctx.apiReq('GET', `/api/channels/${dmId}/messages`, ctx.facilitatorCookie);
+    assert.equal(bobMsgsRes.status, 200);
+    const fetchedMsg = bobMsgsRes.data.messages.find((m) => m.id === msgId);
+    assert.ok(fetchedMsg);
+    const decryptedBuf = await subtle.decrypt(
+      { name: 'AES-GCM', iv: Buffer.from(fetchedMsg.iv, 'base64'), tagLength: 128 },
+      bobDmKey,
+      Buffer.from(fetchedMsg.content, 'base64')
+    );
+    assert.equal(new TextDecoder().decode(decryptedBuf), secretText, 'Bob must decrypt Alice E2EE DM identically');
+
+    // 8. Reject unencrypted edit on DM, allow encrypted edit, and block DM attachment promotion to public gallery
+    const unencEdit = await ctx.apiReq('PATCH', `/api/messages/${msgId}`, ctx.playerCookie, { content: 'Plaintext edit' });
+    assert.equal(unencEdit.status, 400);
+
+    const attInit = await ctx.apiReq('POST', '/api/attachments/init', ctx.playerCookie, {
+      channel_id: dmId,
+      file_name: 'secret_diagram.png',
+      mime_type: 'image/png',
+      file_size: 16,
+      is_encrypted: 1,
+      iv: ivB64
+    });
+    assert.equal(attInit.status, 200);
+    const promoBlocked = await ctx.apiReq('POST', `/api/attachments/${attInit.data.attachmentId}/promote-to-gallery`, ctx.adminCookie, {
+      title: 'Should Fail'
+    });
+    assert.equal(promoBlocked.status, 400, 'Encrypted/DM attachment must not be promotable to public gallery');
+
+    // 9. Verify honest UI labeling & strict ES6 compliance
+    const clubhouseJs = fs.readFileSync(path.join(__dirname, '..', '..', 'public', 'js', 'clubhouse.js'), 'utf8');
+    const storeJs = fs.readFileSync(path.join(__dirname, '..', '..', 'public', 'js', 'store.js'), 'utf8');
+    const cryptoJs = fs.readFileSync(path.join(__dirname, '..', '..', 'public', 'js', 'crypto.js'), 'utf8');
+    assert.ok(clubhouseJs.includes('End-to-End Encrypted (ECDH)'), 'clubhouse.js must mark DMs as ECDH E2EE');
+    assert.ok(clubhouseJs.includes('Moderated Board'), 'clubhouse.js must label public boards honestly as Moderated Board');
+    assert.ok(storeJs.includes('ensureDmChannelKey'), 'store.js must wire ECDH DM key manager');
+    for (const [fname, code] of [['clubhouse.js', clubhouseJs], ['store.js', storeJs], ['crypto.js', cryptoJs]]) {
+      assert.ok(!code.includes('?.'), `${fname} must not contain ?.`);
+      assert.ok(!code.includes('??'), `${fname} must not contain ??`);
+    }
+  });
+
+  await t.test('T5.11: Strict CSP (no unsafe-inline scripts), Private Board ECDH E2EE & DM Safety Number Verification', async () => {
+    const fs = require('fs');
+    const path = require('path');
+    const rootDir = path.join(__dirname, '..', '..');
+
+    // 1. Verify no 'unsafe-inline' in script-src across headers, Hono index.js, and Express server.js
+    for (const rel of ['public/_headers', 'src/app/index.js', 'src/server.js']) {
+      const content = fs.readFileSync(path.join(rootDir, rel), 'utf8');
+      const scriptSrcMatch = content.match(/script-src[^;"'\n]*(?:'[^']*'[^;\n]*)*/gi) || [];
+      for (const directive of scriptSrcMatch) {
+        assert.ok(!directive.includes("'unsafe-inline'"), `${rel} script-src must not include 'unsafe-inline'`);
+      }
+    }
+
+    // 2. Verify zero inline <script> tags across HTML and zero inline on*= handlers across HTML & JS
+    const publicDir = path.join(rootDir, 'public');
+    for (const entry of fs.readdirSync(publicDir)) {
+      if (entry.endsWith('.html')) {
+        const html = fs.readFileSync(path.join(publicDir, entry), 'utf8');
+        assert.ok(!/<script(?![^>]*\bsrc=)/i.test(html), `${entry} must not contain inline <script> blocks`);
+        assert.ok(!/\son(click|change|submit|load|error|input|keydown)=/i.test(html), `${entry} must not contain inline event handlers`);
+      }
+    }
+    const jsDir = path.join(publicDir, 'js');
+    for (const entry of fs.readdirSync(jsDir)) {
+      if (entry.endsWith('.js')) {
+        const js = fs.readFileSync(path.join(jsDir, entry), 'utf8');
+        assert.ok(!/\son(click|change|submit|load|error|input|keydown)=["'`]/i.test(js), `js/${entry} must not emit inline HTML event handlers`);
+      }
+    }
+
+    // 3. Private / Invite-Only Board creation, strict non-invitee blocking, ECDH key sharing & epoch rotation
+    const subtle = globalThis.crypto.subtle;
+    async function enrollUserIdentity(cookie) {
+      const ecdh = await subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey', 'deriveBits']);
+      const ecdsa = await subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+      const ecdhPubJwk = await subtle.exportKey('jwk', ecdh.publicKey);
+      const ecdsaPubJwk = await subtle.exportKey('jwk', ecdsa.publicKey);
+      const putRes = await ctx.apiReq('PUT', '/api/keys/identity', cookie, {
+        ecdh_public_key_jwk: JSON.stringify(ecdhPubJwk),
+        ecdsa_public_key_jwk: JSON.stringify(ecdsaPubJwk)
+      });
+      assert.equal(putRes.status, 200);
+      return { ecdh, ecdhPubJwk };
+    }
+
+    const adminIdKeys = await enrollUserIdentity(ctx.adminCookie);
+    const aliceIdKeys = await enrollUserIdentity(ctx.playerCookie);
+    const bobIdKeys = await enrollUserIdentity(ctx.facilitatorCookie);
+
+    const privCreate = await ctx.apiReq('POST', '/api/channels', ctx.adminCookie, {
+      name: 'captains-vault',
+      category: 'Private Huddles',
+      topic: 'Secret strategy',
+      is_private: true,
+      member_ids: [ctx.playerUser.id]
+    });
+    assert.equal(privCreate.status, 201);
+    const privCh = privCreate.data.channel;
+    assert.equal(privCh.is_private, 1);
+    assert.equal(privCh.min_role_read, 'invite');
+    assert.equal(privCh.is_encrypted, 1);
+    assert.ok(Array.isArray(privCh.member_ids) && privCh.member_ids.includes(ctx.playerUser.id));
+
+    // Non-invited Facilitator must NOT see or access the private board or publish/read keys
+    const facBoot = await ctx.apiReq('GET', '/api/bootstrap', ctx.facilitatorCookie);
+    assert.ok(!(facBoot.data.channels || []).some((c) => c.id === privCh.id), 'Non-invited user must not see private board in bootstrap');
+    const facMsgs = await ctx.apiReq('GET', `/api/channels/${privCh.id}/messages`, ctx.facilitatorCookie);
+    assert.equal(facMsgs.status, 403);
+    const facKeyGet = await ctx.apiReq('GET', `/api/keys/channel/${privCh.id}`, ctx.facilitatorCookie);
+    assert.equal(facKeyGet.status, 403);
+
+    // Plaintext post on private board rejected (400)
+    const plainPrivPost = await ctx.apiReq('POST', `/api/channels/${privCh.id}/messages`, ctx.adminCookie, {
+      content: 'Unencrypted private board leak'
+    });
+    assert.equal(plainPrivPost.status, 400);
+
+    // Admin wraps epoch 1 board key via ECDH for [admin, player]
+    const epoch1Key = await subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
+    const rawEp1 = await subtle.exportKey('raw', epoch1Key);
+    const keysRes = await ctx.apiReq('GET', `/api/keys/users?ids=${ctx.adminUser.id},${ctx.playerUser.id}`, ctx.adminCookie);
+    assert.equal(keysRes.status, 200);
+
+    const sharesEp1 = [];
+    for (const uRow of keysRes.data.users) {
+      const peerPub = await subtle.importKey('jwk', JSON.parse(uRow.ecdh_public_key_jwk), { name: 'ECDH', namedCurve: 'P-256' }, true, []);
+      const wrapKey = await subtle.deriveKey({ name: 'ECDH', public: peerPub }, adminIdKeys.ecdh.privateKey, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+      const wrapIv = globalThis.crypto.getRandomValues(new Uint8Array(12));
+      const wrapped = await subtle.encrypt({ name: 'AES-GCM', iv: wrapIv, tagLength: 128 }, wrapKey, rawEp1);
+      sharesEp1.push({
+        recipient_user_id: uRow.user_id,
+        key_epoch: 1,
+        wrapped_key_base64: Buffer.from(wrapped).toString('base64'),
+        wrap_iv: Buffer.from(wrapIv).toString('base64')
+      });
+    }
+    const shareRes1 = await ctx.apiReq('POST', `/api/keys/channel/${privCh.id}/share`, ctx.adminCookie, {
+      key_epoch: 1,
+      shares: sharesEp1
+    });
+    assert.equal(shareRes1.status, 200);
+
+    // Encrypted message stored as opaque ciphertext in CHAT_DB
+    const privIv = globalThis.crypto.getRandomValues(new Uint8Array(12));
+    const privCipher = await subtle.encrypt({ name: 'AES-GCM', iv: privIv, tagLength: 128 }, epoch1Key, new TextEncoder().encode('Secret batting lineup #1'));
+    const privPost = await ctx.apiReq('POST', `/api/channels/${privCh.id}/messages`, ctx.adminCookie, {
+      content: Buffer.from(privCipher).toString('base64'),
+      encryption_iv: Buffer.from(privIv).toString('base64'),
+      key_epoch: 1
+    });
+    assert.equal(privPost.status, 201);
+    const dbPrivRow = ctx.chatDb.prepare('SELECT content FROM messages WHERE id = ?').get(privPost.data.id);
+    assert.ok(!dbPrivRow.content.includes('lineup'), 'Private board DB content must stay ciphertext');
+
+    // Update invite list to replace Player with Facilitator and publish epoch 2 shares
+    const patchRes = await ctx.apiReq('PATCH', `/api/channels/${privCh.id}`, ctx.adminCookie, {
+      member_ids: [ctx.facilitatorUser.id]
+    });
+    assert.equal(patchRes.status, 200);
+    assert.ok(patchRes.data.channel.member_ids.includes(ctx.facilitatorUser.id));
+    assert.ok(!patchRes.data.channel.member_ids.includes(ctx.playerUser.id));
+
+    const playerRemovedMsg = await ctx.apiReq('GET', `/api/channels/${privCh.id}/messages`, ctx.playerCookie);
+    assert.equal(playerRemovedMsg.status, 403, 'Removed member must immediately lose private board access');
+
+    const ep2ShareCheck = await ctx.apiReq('GET', `/api/keys/channel/${privCh.id}`, ctx.facilitatorCookie);
+    assert.equal(ep2ShareCheck.status, 404, 'Newly invited member does not have old epoch 1 share until rotation');
+
+    // 4. DM Safety Number Symmetry & MITM Key-Swap Warning via ClubhouseCrypto
+    const ClubhouseCrypto = require('../../public/js/crypto.js');
+    const snAliceView = await ClubhouseCrypto.computeSafetyNumber(
+      ctx.playerUser.id,
+      aliceIdKeys.ecdhPubJwk,
+      ctx.facilitatorUser.id,
+      bobIdKeys.ecdhPubJwk
+    );
+    const snBobView = await ClubhouseCrypto.computeSafetyNumber(
+      ctx.facilitatorUser.id,
+      bobIdKeys.ecdhPubJwk,
+      ctx.playerUser.id,
+      aliceIdKeys.ecdhPubJwk
+    );
+    assert.equal(snAliceView, snBobView, 'Both DM parties must derive the identical 60-digit safety number');
+    assert.match(snAliceView, /^(\d{5} ){11}\d{5}$/, 'Safety number must be formatted as 12 groups of 5 digits');
+
+    const bobFp = await ClubhouseCrypto.computeKeyFingerprint(bobIdKeys.ecdhPubJwk);
+    assert.match(bobFp, /^([0-9A-F]{4} ){7}[0-9A-F]{4}$/, 'Key fingerprint must be formatted as 8 hex blocks');
+
+    await ClubhouseCrypto.markPeerFingerprintVerified(ctx.facilitatorUser.id, bobFp);
+    const samePin = await ClubhouseCrypto.getPeerVerificationState(ctx.facilitatorUser.id, bobFp);
+    assert.equal(samePin.verified, true);
+    assert.equal(samePin.keyChangedWarning, false);
+
+    // Simulate active MITM swapping Bob's public key
+    const attackerKey = await subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey', 'deriveBits']);
+    const attackerFp = await ClubhouseCrypto.computeKeyFingerprint(await subtle.exportKey('jwk', attackerKey.publicKey));
+    const swappedPin = await ClubhouseCrypto.getPeerVerificationState(ctx.facilitatorUser.id, attackerFp);
+    assert.equal(swappedPin.verified, false, 'Swapped MITM key must invalidate verified badge');
+    assert.equal(swappedPin.keyChangedWarning, true, 'Swapped MITM key must raise keyChangedWarning');
+  });
 };

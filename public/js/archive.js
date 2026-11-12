@@ -144,7 +144,7 @@ function renderArchiveList(events, container) {
                         ${API.escapeHtml(API.t('home.online_rsvps_sub', { count: ev.attendee_count }))}
                       </span>
                       ${canManage ? `
-                        <button type="button" onclick="quickEditArchiveTurnout(${ev.id}, ${ev.actual_attendance})" class="btn btn-outline btn-sm" style="font-size: 0.72rem; padding: 2px 6px; margin-top: 4px; align-self: flex-start;">
+                        <button type="button" data-action="edit-archive-turnout" data-event-id="${ev.id}" data-attendance="${ev.actual_attendance}" class="btn btn-outline btn-sm" style="font-size: 0.72rem; padding: 2px 6px; margin-top: 4px; align-self: flex-start;">
                           ✏️ Edit Turnout
                         </button>
                       ` : ''}
@@ -156,7 +156,7 @@ function renderArchiveList(events, container) {
                         ${API.icon('users', 16)} ${API.escapeHtml(API.t('home.on_roster_count', { count: ev.attendee_count }))}
                       </span>
                       ${canManage ? `
-                        <button type="button" onclick="quickRecordArchiveTurnout(${ev.id})" class="btn btn-primary btn-sm" style="font-size: 0.75rem; padding: 2px 8px; margin-top: 4px; align-self: flex-start;">
+                        <button type="button" data-action="record-archive-turnout" data-event-id="${ev.id}" class="btn btn-primary btn-sm" style="font-size: 0.75rem; padding: 2px 8px; margin-top: 4px; align-self: flex-start;">
                           📊 Record Turnout
                         </button>
                       ` : ''}
@@ -173,6 +173,21 @@ function renderArchiveList(events, container) {
       }).join('')}
     </div>
   `;
+
+  if (!container.dataset.cspBound) {
+    container.dataset.cspBound = '1';
+    container.addEventListener('click', function(e) {
+      const btn = e.target.closest('[data-action]');
+      if (!btn || !container.contains(btn)) return;
+      const action = btn.dataset.action;
+      const eventId = parseInt(btn.dataset.eventId, 10);
+      if (action === 'edit-archive-turnout') {
+        window.quickEditArchiveTurnout(eventId, parseInt(btn.dataset.attendance, 10));
+      } else if (action === 'record-archive-turnout') {
+        window.quickRecordArchiveTurnout(eventId);
+      }
+    });
+  }
 }
 
 window.quickRecordArchiveTurnout = async function(eventId) {

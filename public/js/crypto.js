@@ -585,6 +585,161 @@
     });
   }
 
+  /**
+   * Retrieve locally stored identity keys from IndexedDB.
+   */
+  function getStoredIdentityKeys() {
+    return Promise.all([
+      idbGet('identity_ecdh_private'),
+      idbGet('identity_ecdh_public_jwk'),
+      idbGet('identity_ecdsa_private'),
+      idbGet('identity_ecdsa_public_jwk')
+    ]).then(function (res) {
+      if (!res[0] || !res[1]) return null;
+      return {
+        ecdhPrivateKey: res[0],
+        ecdhPublicJwk: res[1],
+        ecdsaPrivateKey: res[2] || null,
+        ecdsaPublicJwk: res[3] || null
+      };
+    });
+  }
+
+  /**
+   * Re-import an extractable AES-GCM-256 key as non-extractable for safe local IndexedDB caching.
+   */
+  function toNonExtractableAesKey(extractableKey) {
+    return subtle.exportKey('raw', extractableKey).then(function (rawBuf) {
+      return subtle.importKey(
+        'raw',
+        rawBuf,
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['encrypt', 'decrypt']
+      );
+    });
+  }
+
+  function parseJwkObject(jwkOrStr) {
+    if (!jwkOrStr) return null;
+    if (typeof jwkOrStr === 'object') return jwkOrStr;
+    try {
+      return JSON.parse(jwkOrStr);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function canonicalEcdhPubString(ecdhPublicJwk) {
+    var jwk = parseJwkObject(ecdhPublicJwk);
+    if (!jwk || !jwk.x || !jwk.y) return '';
+    return 'PBF-ECDH|' + String(jwk.kty || 'EC') + '|' + String(jwk.crv || 'P-256') + '|' + String(jwk.x) + '|' + String(jwk.y);
+  }
+
+  /**
+   * Compute a 128-bit formatted hex fingerprint (8 groups of 4 chars) for an ECDH public JWK.
+   */
+  function computeKeyFingerprint(ecdhPublicJwk) {
+    var canon = canonicalEcdhPubString(ecdhPublicJwk);
+    if (!canon || !subtle) return Promise.resolve('');
+    var enc = new TextEncoder();
+    return subtle.digest('SHA-256', enc.encode(canon)).then(function (hashBuf) {
+      var bytes = new Uint8Array(hashBuf);
+      var hexParts = [];
+      for (var i = 0; i < 16; i += 2) {
+        var b1 = bytes[i].toString(16).toUpperCase();
+        var b2 = bytes[i + 1].toString(16).toUpperCase();
+        if (b1.length < 2) b1 = '0' + b1;
+        if (b2.length < 2) b2 = '0' + b2;
+        hexParts.push(b1 + b2);
+      }
+      return hexParts.join(' ');
+    });
+  }
+
+  /**
+   * Compute a symmetric 60-digit (12 x 5-digit) Signal-style safety number for a 1:1 DM pair.
+   */
+  function computeSafetyNumber(myUserId, myPubJwk, peerUserId, peerPubJwk) {
+    var myCanon = canonicalEcdhPubString(myPubJwk);
+    var peerCanon = canonicalEcdhPubString(peerPubJwk);
+    if (!myCanon || !peerCanon || !subtle) return Promise.resolve('');
+
+    var pair = [
+      { id: Number(myUserId || 0), canon: myCanon },
+      { id: Number(peerUserId || 0), canon: peerCanon }
+    ].sort(function (a, b) {
+      if (a.id !== b.id) return a.id - b.id;
+      return a.canon < b.canon ? -1 : (a.canon > b.canon ? 1 : 0);
+    });
+
+    var seed = 'PBF-SAFETY-v1|' + String(pair[0].id) + '|' + pair[0].canon + '|' + String(pair[1].id) + '|' + pair[1].canon;
+    var enc = new TextEncoder();
+    return subtle.digest('SHA-256', enc.encode(seed)).then(function (d1) {
+      return subtle.digest('SHA-256', new Uint8Array(d1)).then(function (d2) {
+        var bytes = new Uint8Array(64);
+        bytes.set(new Uint8Array(d1), 0);
+        bytes.set(new Uint8Array(d2), 32);
+        var groups = [];
+        for (var g = 0; g < 12; g++) {
+          var off = g * 3;
+          var val = ((bytes[off] << 16) | (bytes[off + 1] << 8) | bytes[off + 2]) % 100000;
+          var s = String(val);
+          while (s.length < 5) s = '0' + s;
+          groups.push(s);
+        }
+        return groups.join(' ');
+      });
+    });
+  }
+
+  function getPeerVerificationState(peerUserId, currentFingerprint) {
+    var storeKey = 'peer_key_pin_' + String(peerUserId);
+    return idbGet(storeKey).then(function (pin) {
+      if (!pin) {
+        if (currentFingerprint) {
+          return idbPut(storeKey, {
+            lastSeenFingerprint: currentFingerprint,
+            verifiedFingerprint: null,
+            verifiedAt: null
+          }).then(function () {
+            return { verified: false, keyChangedWarning: false, verifiedAt: null };
+          });
+        }
+        return { verified: false, keyChangedWarning: false, verifiedAt: null };
+      }
+      var verifiedFp = pin.verifiedFingerprint || null;
+      var lastSeenFp = pin.lastSeenFingerprint || null;
+      var verified = Boolean(verifiedFp && currentFingerprint && verifiedFp === currentFingerprint);
+      var keyChangedWarning = Boolean(
+        currentFingerprint &&
+        ((verifiedFp && verifiedFp !== currentFingerprint) ||
+         (lastSeenFp && lastSeenFp !== currentFingerprint))
+      );
+      return {
+        verified: verified,
+        keyChangedWarning: keyChangedWarning,
+        verifiedAt: pin.verifiedAt || null,
+        previousFingerprint: verifiedFp || lastSeenFp || null
+      };
+    });
+  }
+
+  function markPeerFingerprintVerified(peerUserId, fingerprint) {
+    if (!peerUserId || !fingerprint) {
+      return Promise.reject(new Error('Valid peer ID and key fingerprint are required.'));
+    }
+    var storeKey = 'peer_key_pin_' + String(peerUserId);
+    var record = {
+      lastSeenFingerprint: fingerprint,
+      verifiedFingerprint: fingerprint,
+      verifiedAt: new Date().toISOString()
+    };
+    return idbPut(storeKey, record).then(function () {
+      return record;
+    });
+  }
+
   var ClubhouseCrypto = {
     stripJpegMetadata: stripJpegMetadata,
     arrayBufferToBase64: arrayBufferToBase64,
@@ -605,6 +760,12 @@
     enrollIdentityWithPassphrase: enrollIdentityWithPassphrase,
     restoreIdentityFromServerVault: restoreIdentityFromServerVault,
     hasLocalIdentityKeys: hasLocalIdentityKeys,
+    getStoredIdentityKeys: getStoredIdentityKeys,
+    toNonExtractableAesKey: toNonExtractableAesKey,
+    computeKeyFingerprint: computeKeyFingerprint,
+    computeSafetyNumber: computeSafetyNumber,
+    getPeerVerificationState: getPeerVerificationState,
+    markPeerFingerprintVerified: markPeerFingerprintVerified,
     idbGet: idbGet,
     idbPut: idbPut
   };

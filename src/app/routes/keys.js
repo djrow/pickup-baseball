@@ -5,7 +5,7 @@
 
 import { Hono } from 'hono';
 import { requireAuth, canAccessChannel } from '../security.js';
-import { resolveChannel, canUserAccessChannel } from './chat.js';
+import { resolveChannel, canUserAccessChannel, isPrivateEncryptedBoard } from './chat.js';
 
 export const keysRouter = new Hono();
 
@@ -285,7 +285,13 @@ keysRouter.post('/channel/:channelId/share', requireAuth, async (c) => {
     return c.json({ error: 'Channel not found.' }, 404);
   }
 
-  if (!canAccessChannel(user, channel, 'read') && !(await canUserAccessChannel(chatDb, user, channel, 'read'))) {
+  const isDm = channel.channel_type === 'dm' || channel.channel_type === 'group_dm';
+  const isPrivateBoard = isPrivateEncryptedBoard(channel);
+  const isKeyShared = isDm || isPrivateBoard;
+  const hasChannelAccess = isKeyShared
+    ? await canUserAccessChannel(chatDb, user, channel, 'read')
+    : (canAccessChannel(user, channel, 'read') || await canUserAccessChannel(chatDb, user, channel, 'read'));
+  if (!hasChannelAccess) {
     return c.json({ error: 'Access denied: insufficient permissions for this channel.' }, 403);
   }
 
@@ -296,6 +302,24 @@ keysRouter.post('/channel/:channelId/share', requireAuth, async (c) => {
     }
 
     const defaultEpoch = body.key_epoch || body.keyEpoch || 1;
+    let validMembers = null;
+    if (isKeyShared) {
+      const { results: memberRows } = await chatDb.prepare(
+        'SELECT user_id FROM channel_members WHERE channel_id = ?'
+      ).bind(channel.id).all();
+      validMembers = new Set((memberRows || []).map((r) => Number(r.user_id)));
+      if (channel.created_by) validMembers.add(Number(channel.created_by));
+
+      if (!body.force_rotate) {
+        const existingEpochShare = await chatDb.prepare(
+          'SELECT 1 FROM channel_key_shares WHERE channel_id = ? AND key_epoch = ? LIMIT 1'
+        ).bind(channel.id, defaultEpoch).first();
+        if (existingEpochShare) {
+          return c.json({ success: true, alreadyInitialized: true, count: 0 });
+        }
+      }
+    }
+
     const batchStatements = [];
 
     for (const share of body.shares) {
@@ -309,6 +333,12 @@ keysRouter.post('/channel/:channelId/share', requireAuth, async (c) => {
         return c.json({
           error: 'Invalid share payload: recipient_user_id, wrapped_key_base64, and wrap_iv are required.'
         }, 400);
+      }
+
+      if (isKeyShared && validMembers && !validMembers.has(Number(recipientUserId))) {
+        return c.json({
+          error: 'Recipient is not a member of this encrypted conversation or private board.'
+        }, 403);
       }
 
       if (String(wrappedKey).length > MAX_WRAPPED_KEY_CHARS) {
@@ -377,30 +407,58 @@ keysRouter.get('/channel/:channelId', requireAuth, async (c) => {
     return c.json({ error: 'Channel not found.' }, 404);
   }
 
-  if (!canAccessChannel(user, channel, 'read') && !(await canUserAccessChannel(chatDb, user, channel, 'read'))) {
+  const isDm = channel.channel_type === 'dm' || channel.channel_type === 'group_dm';
+  const isPrivateBoard = isPrivateEncryptedBoard(channel);
+  const isKeyShared = isDm || isPrivateBoard;
+  const hasChannelAccess = isKeyShared
+    ? await canUserAccessChannel(chatDb, user, channel, 'read')
+    : (canAccessChannel(user, channel, 'read') || await canUserAccessChannel(chatDb, user, channel, 'read'));
+  if (!hasChannelAccess) {
     return c.json({ error: 'Access denied: insufficient permissions for this channel.' }, 403);
   }
 
   try {
-    const share = await chatDb.prepare(`
-      SELECT 
-        channel_id,
-        key_epoch,
-        recipient_user_id,
-        sender_user_id,
-        wrapped_key_base64,
-        wrap_iv,
-        sender_ephemeral_pub_jwk,
-        created_at
-      FROM channel_key_shares
-      WHERE channel_id = ? AND recipient_user_id = ?
-      ORDER BY key_epoch DESC
-      LIMIT 1
-    `).bind(channel.id, user.id).first();
+    const requestedEpochRaw = c.req.query('key_epoch');
+    const requestedEpoch = requestedEpochRaw ? parseInt(requestedEpochRaw, 10) : null;
+    const share = (requestedEpoch && !isNaN(requestedEpoch))
+      ? await chatDb.prepare(`
+          SELECT
+            channel_id,
+            key_epoch,
+            recipient_user_id,
+            sender_user_id,
+            wrapped_key_base64,
+            wrap_iv,
+            sender_ephemeral_pub_jwk,
+            created_at
+          FROM channel_key_shares
+          WHERE channel_id = ? AND recipient_user_id = ? AND key_epoch = ?
+          LIMIT 1
+        `).bind(channel.id, user.id, requestedEpoch).first()
+      : await chatDb.prepare(`
+          SELECT
+            channel_id,
+            key_epoch,
+            recipient_user_id,
+            sender_user_id,
+            wrapped_key_base64,
+            wrap_iv,
+            sender_ephemeral_pub_jwk,
+            created_at
+          FROM channel_key_shares
+          WHERE channel_id = ? AND recipient_user_id = ?
+          ORDER BY key_epoch DESC
+          LIMIT 1
+        `).bind(channel.id, user.id).first();
 
     if (!share) {
       return c.json({ error: 'No channel key share found for user.' }, 404);
     }
+
+    const { results: sharedRows } = await chatDb.prepare(
+      'SELECT recipient_user_id FROM channel_key_shares WHERE channel_id = ? AND key_epoch = ?'
+    ).bind(channel.id, share.key_epoch).all();
+    const sharedUserIds = (sharedRows || []).map((r) => Number(r.recipient_user_id));
 
     return c.json({
       channelId: share.channel_id,
@@ -417,6 +475,8 @@ keysRouter.get('/channel/:channelId', requireAuth, async (c) => {
       wrap_iv: share.wrap_iv,
       senderEphemeralPubJwk: share.sender_ephemeral_pub_jwk,
       sender_ephemeral_pub_jwk: share.sender_ephemeral_pub_jwk,
+      sharedUserIds,
+      shared_user_ids: sharedUserIds,
       createdAt: share.created_at,
       created_at: share.created_at
     });

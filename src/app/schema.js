@@ -455,6 +455,7 @@ export const CREATE_CHAT_TABLES_SQL = [
     min_role_read TEXT NOT NULL DEFAULT 'player',
     min_role_write TEXT NOT NULL DEFAULT 'player',
     is_encrypted INTEGER NOT NULL DEFAULT 1,
+    is_private INTEGER NOT NULL DEFAULT 0,
     linked_event_id INTEGER DEFAULT NULL,
     retention_days INTEGER DEFAULT 365,
     sort_order INTEGER NOT NULL DEFAULT 0,
@@ -643,7 +644,8 @@ export const CHAT_ALTER_STATEMENTS = [
   'ALTER TABLE messages ADD COLUMN hidden_by_name TEXT DEFAULT NULL',
   'ALTER TABLE messages ADD COLUMN hidden_reason TEXT DEFAULT NULL',
   'ALTER TABLE messages ADD COLUMN original_content TEXT DEFAULT NULL',
-  'ALTER TABLE messages ADD COLUMN original_iv TEXT DEFAULT NULL'
+  'ALTER TABLE messages ADD COLUMN original_iv TEXT DEFAULT NULL',
+  'ALTER TABLE channels ADD COLUMN is_private INTEGER NOT NULL DEFAULT 0'
 ];
 
 const migratedChatDbs = new WeakSet();

@@ -7,7 +7,7 @@
   <link rel="shortcut icon" href="/favicon.ico" />
   <link rel="icon" type="image/svg+xml" href="/logo.svg" />
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png" />
-  <link rel="stylesheet" href="/css/clubhouse.css?v=97" />
+  <link rel="stylesheet" href="/css/clubhouse.css?v=98" />
 </head>
 <body class="clubhouse-body">
   <div class="clubhouse-app" id="clubhouse-app">
@@ -80,7 +80,8 @@
         <div class="ch-stage-title-wrap">
           <button type="button" class="ch-icon-btn ch-mobile-toggle-btn" id="btn-mobile-sidebar" aria-label="Open channels and DMs" title="Channels &amp; DMs">☰</button>
           <span class="ch-stage-title" id="ch-active-channel-name">#general</span>
-          <span class="ch-e2ee-badge" id="ch-active-e2ee-badge">🔒 E2EE Verified</span>
+          <span class="ch-e2ee-badge" id="ch-active-e2ee-badge">🛡️ Moderated Board</span>
+          <button type="button" class="ch-promote-btn hidden" id="btn-dm-verify-key" title="Verify E2EE Key Fingerprints & Safety Number">🛡️ Verify Key</button>
           <span class="ch-stage-topic" id="ch-active-channel-topic">Main community hangout for all players.</span>
         </div>
         <div class="ch-stage-actions">
@@ -98,6 +99,11 @@
       <div class="ch-muted-banner hidden" id="ch-muted-banner" role="status">
         <span id="ch-muted-banner-text">You are currently muted in Clubhouse by a moderator.</span>
         <a href="/index.html" class="ch-rsvp-btn" style="text-decoration:none;white-space:nowrap;">Sunday Games →</a>
+      </div>
+
+      <div class="ch-muted-banner hidden" id="ch-dm-e2ee-banner" role="status" style="background:rgba(16,185,129,0.12);border-color:rgba(16,185,129,0.35);color:#d1fae5;">
+        <span id="ch-dm-e2ee-banner-text">🔐 Set up or unlock your E2EE Key Vault to encrypt &amp; read Direct Messages.</span>
+        <button type="button" class="ch-send-btn" id="btn-dm-open-vault" style="white-space:nowrap;">🔐 Open E2EE Vault</button>
       </div>
 
       <!-- Collapsible Voice / Video / Screen-Share Stage -->
@@ -263,7 +269,8 @@
         <button type="button" class="ch-rsvp-btn" id="btn-restore-keys">Restore from Vault</button>
       </div>
 
-      <div id="ch-vault-status-msg" style="font-size:12px;color:var(--ch-green);margin-bottom:12px;"></div>
+      <div id="ch-vault-status-msg" style="font-size:12px;color:var(--ch-green);margin-bottom:8px;"></div>
+      <div id="ch-vault-own-fp" class="hidden" style="font-size:11.5px;color:var(--ch-text-secondary);background:rgba(255,255,255,0.04);border:1px solid var(--ch-border);border-radius:6px;padding:8px 10px;margin-bottom:12px;font-family:monospace;word-break:break-word;"></div>
 
       <div class="ch-widget-card" id="ch-admin-storage-widget" style="margin-bottom:0;">
         <div class="ch-widget-title">
@@ -316,6 +323,16 @@
         <label style="font-size:12px;font-weight:700;display:block;margin-bottom:4px;">Topic / Description</label>
         <input type="text" class="ch-input" id="board-topic-input" placeholder="What should players post here?" maxlength="200" />
 
+        <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;margin-bottom:10px;cursor:pointer;">
+          <input type="checkbox" id="board-private-checkbox" />
+          <span><strong>🔒 Private / Invite-Only Board (ECDH E2EE)</strong> — Only selected members can access &amp; decrypt</span>
+        </label>
+
+        <div id="board-invite-wrap" class="hidden" style="margin-bottom:10px;">
+          <label style="font-size:12px;font-weight:700;display:block;margin-bottom:4px;">Invited Members</label>
+          <div id="board-invite-members-list" style="max-height:140px;overflow-y:auto;border:1px solid var(--ch-border);border-radius:6px;padding:6px 8px;background:rgba(0,0,0,0.18);"></div>
+        </div>
+
         <div id="ch-board-status-msg" style="font-size:12px;color:#ff8a80;margin-bottom:10px;"></div>
 
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
@@ -326,6 +343,39 @@
           </div>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- ====================================================================
+       DM & PRIVATE BOARD KEY FINGERPRINT / SAFETY NUMBER VERIFICATION MODAL
+       ==================================================================== -->
+  <div class="ch-modal-backdrop hidden" id="ch-verify-modal">
+    <div class="ch-modal" role="dialog" aria-labelledby="ch-verify-modal-title">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <h3 id="ch-verify-modal-title" style="margin:0;font-size:17px;">🛡️ Verify E2EE Security Keys</h3>
+        <button type="button" class="ch-icon-btn" id="btn-close-verify-modal">✕</button>
+      </div>
+      <p style="font-size:12.5px;color:var(--ch-text-secondary);margin-top:0;">
+        Compare these numbers in person or on a trusted call to verify there is no active man-in-the-middle key swap.
+      </p>
+
+      <div id="ch-verify-warning" class="hidden" style="background:rgba(245,158,11,0.16);border:1px solid rgba(245,158,11,0.5);color:#fde68a;border-radius:6px;padding:8px 10px;font-size:12px;margin-bottom:10px;">
+        ⚠️ <strong>Security Key Changed!</strong> One or more participants' ECDH public keys differ from what you previously saw. Re-verify before sending sensitive messages.
+      </div>
+
+      <div id="ch-verify-safety-wrap" class="hidden" style="margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+          <span style="font-size:12px;font-weight:700;">Shared 60-Digit Safety Number</span>
+          <button type="button" class="ch-promote-btn" id="btn-copy-safety-number">📋 Copy</button>
+        </div>
+        <div id="ch-verify-safety-number" style="font-family:monospace;font-size:13.5px;letter-spacing:0.6px;line-height:1.65;background:rgba(0,0,0,0.28);border:1px solid var(--ch-border);border-radius:6px;padding:10px;text-align:center;user-select:all;"></div>
+      </div>
+
+      <div id="ch-verify-peers-list" style="max-height:190px;overflow-y:auto;margin-bottom:10px;font-size:12px;"></div>
+      <div id="ch-verify-status-msg" style="font-size:12px;color:var(--ch-green);margin-bottom:8px;"></div>
+      <div style="display:flex;justify-content:flex-end;">
+        <button type="button" class="ch-rsvp-btn" id="btn-done-verify-modal">Done</button>
+      </div>
     </div>
   </div>
 
@@ -351,9 +401,9 @@
     </div>
   </div>
 
-  <script src="/js/crypto.js?v=97"></script>
-  <script src="/js/store.js?v=97"></script>
-  <script src="/js/rtc.js?v=97"></script>
-  <script src="/js/clubhouse.js?v=97"></script>
+  <script src="/js/crypto.js?v=98"></script>
+  <script src="/js/store.js?v=98"></script>
+  <script src="/js/rtc.js?v=98"></script>
+  <script src="/js/clubhouse.js?v=98"></script>
 </body>
 </html>

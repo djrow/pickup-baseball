@@ -61,6 +61,45 @@
     uiState.reasonAction = null;
   }
 
+  function renderBoardInviteMembersList(selectedMemberIds) {
+    var wrapEl = el('board-invite-wrap');
+    var listEl = el('board-invite-members-list');
+    var privCb = el('board-private-checkbox');
+    var typeSel = el('board-type-select');
+    if (!wrapEl || !listEl || !privCb) return;
+
+    var isVoice = typeSel && typeSel.value === 'voice';
+    privCb.disabled = Boolean(isVoice);
+    if (isVoice) privCb.checked = false;
+
+    if (!privCb.checked) {
+      wrapEl.classList.add('hidden');
+      return;
+    }
+    wrapEl.classList.remove('hidden');
+
+    var selectedMap = {};
+    for (var s = 0; s < (selectedMemberIds || []).length; s++) {
+      selectedMap[Number(selectedMemberIds[s])] = true;
+    }
+
+    var myId = Store.state.user ? Number(Store.state.user.id) : 0;
+    var members = Store.state.members || [];
+    var html = '';
+    for (var i = 0; i < members.length; i++) {
+      var m = members[i];
+      if (!m || Number(m.id) === myId) continue;
+      var checkedAttr = selectedMap[Number(m.id)] ? ' checked' : '';
+      var keyBadge = m.hasKeys
+        ? '<span style="color:var(--ch-green);font-size:11px;">🔐 E2EE</span>'
+        : '<span style="color:#fbbf24;font-size:11px;">⏳ Needs Vault</span>';
+      html += '<label style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 2px;font-size:12px;cursor:pointer;">';
+      html += '<span><input type="checkbox" class="board-invite-member-cb" value="' + Number(m.id) + '"' + checkedAttr + ' /> ' + escapeHtml(m.name || ('Player #' + m.id)) + '</span>';
+      html += keyBadge + '</label>';
+    }
+    listEl.innerHTML = html || '<div style="font-size:12px;color:var(--ch-text-muted);">Only you (creator) will be added for now.</div>';
+  }
+
   function openBoardModal(channelOrNull) {
     var modal = el('ch-board-modal');
     var titleEl = el('ch-board-modal-title');
@@ -70,6 +109,7 @@
     var typeSel = el('board-type-select');
     var writeSel = el('board-write-role-select');
     var topicInput = el('board-topic-input');
+    var privCb = el('board-private-checkbox');
     var statusEl = el('ch-board-status-msg');
     var deleteBtn = el('btn-delete-board');
     if (!modal || !nameInput) return;
@@ -81,6 +121,9 @@
     if (typeSel) typeSel.value = ch ? (ch.channel_type || 'text') : 'text';
     if (writeSel) writeSel.value = ch ? (ch.min_role_write || 'player') : 'player';
     if (topicInput) topicInput.value = ch ? (ch.topic || '') : '';
+    var isPriv = Boolean(ch && (ch.is_private === 1 || ch.is_private === true || ch.min_role_read === 'invite'));
+    if (privCb) privCb.checked = isPriv;
+    renderBoardInviteMembersList(ch && Array.isArray(ch.member_ids) ? ch.member_ids : []);
     if (statusEl) statusEl.textContent = '';
 
     if (titleEl) {
@@ -346,8 +389,9 @@
           var isActive = Number(item.id) === Number(uiState.activeChannelId);
           var isVoice = item.channel_type === 'voice';
           var isDmCh = item.channel_type === 'dm' || item.channel_type === 'group_dm';
-          var lockBadge = item.is_encrypted ? '<span class="ch-lock-icon" title="End-to-End Encrypted">🔒</span>' : '';
-          var roleIcon = (item.min_role_read && item.min_role_read !== 'player') ? '<span class="ch-lock-icon" title="Role-Gated">🛡️</span>' : '';
+          var isPrivateCh = !isDmCh && (item.is_private === 1 || item.is_private === true || item.min_role_read === 'invite');
+          var lockBadge = (isDmCh || isPrivateCh) ? '<span class="ch-lock-icon" title="' + (isDmCh ? 'End-to-End Encrypted DM (ECDH)' : 'Private Invite-Only Board (ECDH E2EE)') + '">🔒</span>' : '';
+          var roleIcon = (!isPrivateCh && item.min_role_read && item.min_role_read !== 'player') ? '<span class="ch-lock-icon" title="Role-Gated">🛡️</span>' : '';
           var editBtnHtml = (canEditBoard && !isDmCh)
             ? '<button type="button" class="ch-channel-edit-btn" data-edit-board-id="' + item.id + '" title="Edit or Delete Board">✏️</button>'
             : '';
@@ -452,18 +496,29 @@
 
     if (titleEl) titleEl.textContent = target.name;
     if (topicEl) topicEl.textContent = target.topic || '';
+    var isDmChannelActive = target.channel_type === 'dm' || target.channel_type === 'group_dm';
+    var isPrivateBoardActive = !isDmChannelActive && (target.is_private === 1 || target.is_private === true || target.min_role_read === 'invite');
+    var isE2eeChannelActive = isDmChannelActive || isPrivateBoardActive;
     if (e2eeBadge) {
-      if (target.is_encrypted) {
-        e2eeBadge.textContent = '🔒 E2EE Verified';
+      if (isDmChannelActive) {
+        e2eeBadge.textContent = '🔒 End-to-End Encrypted (ECDH)';
+        e2eeBadge.style.display = 'inline-block';
+      } else if (isPrivateBoardActive) {
+        e2eeBadge.textContent = '🔒 Private Board (ECDH E2EE)';
         e2eeBadge.style.display = 'inline-block';
       } else {
-        e2eeBadge.textContent = '📢 Public / Server-Indexed';
+        e2eeBadge.textContent = '🛡️ Moderated Board';
         e2eeBadge.style.display = 'inline-block';
       }
     }
     if (inputEl) {
-      inputEl.placeholder = 'Message ' + target.name + ' — Press Enter to send';
+      inputEl.placeholder = isE2eeChannelActive
+        ? ('Encrypted message in ' + target.name + ' — Press Enter to send')
+        : ('Message ' + target.name + ' — Press Enter to send');
     }
+
+    refreshDmE2eeNotice(target);
+    refreshVerifyKeyButton(target);
 
     renderChannelSidebar();
     renderMessageStream();
@@ -473,6 +528,173 @@
 
     Store.fetchChannelMessages(target.id).then(function () {
       renderMessageStream();
+    }).catch(function () {});
+  }
+
+  function refreshDmE2eeNotice(channel) {
+    var bannerEl = el('ch-dm-e2ee-banner');
+    var textEl = el('ch-dm-e2ee-banner-text');
+    var vaultBtn = el('btn-dm-open-vault');
+    if (!bannerEl) return;
+
+    var ch = channel || uiState.activeChannel;
+    var isE2eeCh = Store.requiresE2eeChannel ? Store.requiresE2eeChannel(ch) : (ch && (ch.channel_type === 'dm' || ch.channel_type === 'group_dm' || ch.is_private === 1));
+    if (!ch || !isE2eeCh || !Store.state.user) {
+      bannerEl.classList.add('hidden');
+      return;
+    }
+
+    Store.getDmE2eeStatus(ch.id).then(function (status) {
+      if (!uiState.activeChannel || Number(uiState.activeChannel.id) !== Number(ch.id)) return;
+      if (status && status.ready) {
+        bannerEl.classList.add('hidden');
+        return;
+      }
+      bannerEl.classList.remove('hidden');
+      if (status && status.reason === 'E2EE_PEER_NOT_ENROLLED') {
+        if (textEl) {
+          textEl.textContent = (status.isPrivateBoard)
+            ? '⏳ Private Board E2EE requires all invited members to set up 🔐 E2EE Key Vault. Waiting on invited member(s) to enroll.'
+            : '⏳ Direct Messages require both players to set up 🔐 E2EE Key Vault. Waiting on recipient to enroll their key vault.';
+        }
+        if (vaultBtn) vaultBtn.style.display = 'none';
+      } else {
+        if (textEl) {
+          textEl.textContent = '🔐 Set up or restore your E2EE Key Vault on this browser to encrypt & read this conversation.';
+        }
+        if (vaultBtn) vaultBtn.style.display = '';
+      }
+    }).catch(function () {});
+  }
+
+  function refreshVerifyKeyButton(channel) {
+    var btn = el('btn-dm-verify-key');
+    if (!btn) return;
+    var ch = channel || uiState.activeChannel;
+    var isE2eeCh = Store.requiresE2eeChannel ? Store.requiresE2eeChannel(ch) : (ch && (ch.channel_type === 'dm' || ch.channel_type === 'group_dm'));
+    if (!ch || !isE2eeCh || !Store.state.user || typeof Store.getChannelVerificationInfo !== 'function') {
+      btn.classList.add('hidden');
+      return;
+    }
+    btn.classList.remove('hidden');
+    btn.textContent = '🛡️ Verify Key';
+    btn.style.color = '';
+    btn.style.borderColor = '';
+    Store.getChannelVerificationInfo(ch.id).then(function (info) {
+      if (!uiState.activeChannel || Number(uiState.activeChannel.id) !== Number(ch.id)) return;
+      if (!info || !info.supported) return;
+      if (info.anyKeyChanged) {
+        btn.textContent = '⚠️ Key Changed!';
+        btn.style.color = '#fde68a';
+        btn.style.borderColor = '#f59e0b';
+      } else if (info.allVerified) {
+        btn.textContent = '✓ Key Verified';
+        btn.style.color = '#6ee7b7';
+        btn.style.borderColor = 'rgba(16,185,129,0.5)';
+      } else {
+        btn.textContent = '🛡️ Verify Key';
+        btn.style.color = '';
+        btn.style.borderColor = '';
+      }
+    }).catch(function () {});
+  }
+
+  function openVerifyKeysModal() {
+    var modal = el('ch-verify-modal');
+    var warnEl = el('ch-verify-warning');
+    var safetyWrap = el('ch-verify-safety-wrap');
+    var safetyNumEl = el('ch-verify-safety-number');
+    var peersEl = el('ch-verify-peers-list');
+    var statusEl = el('ch-verify-status-msg');
+    if (!modal || !uiState.activeChannel || typeof Store.getChannelVerificationInfo !== 'function') return;
+
+    if (statusEl) statusEl.textContent = '';
+    if (peersEl) peersEl.innerHTML = '<div style="color:var(--ch-text-muted);">Computing cryptographic fingerprints...</div>';
+    modal.classList.remove('hidden');
+
+    Store.getChannelVerificationInfo(uiState.activeChannel.id).then(function (info) {
+      if (!info || !info.supported) {
+        if (peersEl) peersEl.innerHTML = '<div>Key verification is available on E2EE DMs and Private Boards.</div>';
+        return;
+      }
+      if (warnEl) {
+        if (info.anyKeyChanged) warnEl.classList.remove('hidden');
+        else warnEl.classList.add('hidden');
+      }
+      if (safetyWrap && safetyNumEl) {
+        if (info.isOneToOne && info.safetyNumber) {
+          safetyWrap.classList.remove('hidden');
+          safetyNumEl.textContent = info.safetyNumber;
+        } else {
+          safetyWrap.classList.add('hidden');
+          safetyNumEl.textContent = '';
+        }
+      }
+
+      var html = '';
+      html += '<div style="padding:8px;border:1px solid var(--ch-border);border-radius:6px;margin-bottom:8px;">';
+      html += '<div style="font-weight:700;margin-bottom:3px;">Your Key Fingerprint</div>';
+      html += '<div style="font-family:monospace;font-size:11.5px;color:var(--ch-text-secondary);word-break:break-word;">' +
+        escapeHtml(info.myFingerprint || 'Not enrolled on this browser yet') + '</div></div>';
+
+      var peers = info.peers || [];
+      for (var i = 0; i < peers.length; i++) {
+        var p = peers[i];
+        html += '<div style="padding:8px;border:1px solid var(--ch-border);border-radius:6px;margin-bottom:8px;">';
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px;">';
+        html += '<strong>' + escapeHtml(p.name) + '</strong>';
+        if (p.hasKey) {
+          if (p.keyChangedWarning) {
+            html += '<button type="button" class="ch-promote-btn btn-verify-peer-fp" data-peer-id="' + Number(p.userId) + '" data-fp="' + escapeHtml(p.fingerprint) + '" style="border-color:#f59e0b;color:#fde68a;">⚠️ Re-Verify New Key</button>';
+          } else if (p.verified) {
+            html += '<span style="color:#6ee7b7;font-weight:700;">✓ Verified</span>';
+          } else {
+            html += '<button type="button" class="ch-promote-btn btn-verify-peer-fp" data-peer-id="' + Number(p.userId) + '" data-fp="' + escapeHtml(p.fingerprint) + '">✓ Mark Verified</button>';
+          }
+        } else {
+          html += '<span style="color:#fbbf24;">⏳ No E2EE Vault</span>';
+        }
+        html += '</div>';
+        html += '<div style="font-family:monospace;font-size:11.5px;color:var(--ch-text-secondary);word-break:break-word;">' +
+          escapeHtml(p.fingerprint || 'Waiting for member to enroll key vault') + '</div>';
+        html += '</div>';
+      }
+      if (peersEl) {
+        peersEl.innerHTML = html;
+        var vBtns = peersEl.querySelectorAll('.btn-verify-peer-fp');
+        for (var b = 0; b < vBtns.length; b++) {
+          vBtns[b].addEventListener('click', function () {
+            var uid = Number(this.getAttribute('data-peer-id'));
+            var fp = this.getAttribute('data-fp');
+            Store.verifyPeerIdentityKey(uid, fp).then(function () {
+              if (statusEl) statusEl.textContent = '✓ Key fingerprint pinned & marked verified on this device.';
+              refreshVerifyKeyButton();
+              openVerifyKeysModal();
+            }).catch(function (err) {
+              if (statusEl) statusEl.textContent = 'Error: ' + err.message;
+            });
+          });
+        }
+      }
+    }).catch(function (err) {
+      if (peersEl) peersEl.innerHTML = '<div style="color:#ff8a80;">Failed to load key info: ' + escapeHtml(err && err.message || '') + '</div>';
+    });
+  }
+
+  function refreshOwnVaultFingerprint() {
+    var fpBox = el('ch-vault-own-fp');
+    if (!fpBox || !CryptoEngine || typeof CryptoEngine.getStoredIdentityKeys !== 'function') return;
+    CryptoEngine.getStoredIdentityKeys().then(function (keys) {
+      if (!keys || !keys.ecdhPublicJwk || typeof CryptoEngine.computeKeyFingerprint !== 'function') {
+        fpBox.classList.add('hidden');
+        return;
+      }
+      return CryptoEngine.computeKeyFingerprint(keys.ecdhPublicJwk).then(function (fp) {
+        if (fp) {
+          fpBox.textContent = 'Your ECDH Identity Key Fingerprint: ' + fp;
+          fpBox.classList.remove('hidden');
+        }
+      });
     }).catch(function () {});
   }
 
@@ -527,9 +749,21 @@
   function renderAttachmentItem(att) {
     var streamUrl = '/api/attachments/' + encodeURIComponent(att.id) + '/stream';
     var mime = String(att.mime_type || '').toLowerCase();
+    var isEncryptedAtt = Boolean(att.is_encrypted && att.iv);
+    var activeIsDm = Boolean(uiState.activeChannel && (uiState.activeChannel.channel_type === 'dm' || uiState.activeChannel.channel_type === 'group_dm'));
     var html = '<div class="ch-attachment-card">';
 
-    if (mime.indexOf('image/') === 0) {
+    if (isEncryptedAtt) {
+      if (mime.indexOf('image/') === 0) {
+        html += '<img data-e2ee-att-id="' + escapeHtml(att.id) + '" alt="' + escapeHtml(att.file_name) + '" style="min-height:48px;background:rgba(0,0,0,0.2);" />';
+      } else if (mime.indexOf('video/') === 0) {
+        html += '<video controls preload="metadata" data-e2ee-att-id="' + escapeHtml(att.id) + '"></video>';
+      } else if (mime.indexOf('audio/') === 0) {
+        html += '<audio controls preload="metadata" data-e2ee-att-id="' + escapeHtml(att.id) + '"></audio>';
+      } else {
+        html += '<a href="#decrypting" data-e2ee-att-id="' + escapeHtml(att.id) + '" download="' + escapeHtml(att.file_name) + '" style="color:var(--ch-accent);">🔒 ' + escapeHtml(att.file_name) + ' (Decrypting...)</a>';
+      }
+    } else if (mime.indexOf('image/') === 0) {
       html += '<img src="' + escapeHtml(streamUrl) + '" alt="' + escapeHtml(att.file_name) + '" loading="lazy" />';
     } else if (mime.indexOf('video/') === 0) {
       html += '<video controls preload="metadata" src="' + escapeHtml(streamUrl) + '"></video>';
@@ -540,10 +774,10 @@
     }
 
     html += '<div class="ch-attachment-footer">';
-    html += '<span>' + escapeHtml(att.file_name) + '</span>';
+    html += '<span>' + escapeHtml(att.file_name) + (isEncryptedAtt ? ' 🔒' : '') + '</span>';
 
     var u = Store.state.user;
-    if (u && (u.role === 'admin' || u.isAdmin)) {
+    if (u && (u.role === 'admin' || u.isAdmin) && !isEncryptedAtt && !activeIsDm) {
       if (att.promoted_media_id) {
         html += '<span class="ch-badge badge-sunday">✓ In Gallery (#' + att.promoted_media_id + ')</span>';
       } else {
@@ -552,6 +786,40 @@
     }
     html += '</div></div>';
     return html;
+  }
+
+  function hydrateEncryptedAttachments(streamEl, msgs, channelId) {
+    if (!streamEl || !Array.isArray(msgs) || typeof Store.decryptAttachmentToBlobUrl !== 'function') return;
+    var attMap = {};
+    for (var i = 0; i < msgs.length; i++) {
+      var atts = Array.isArray(msgs[i].attachments) ? msgs[i].attachments : [];
+      for (var j = 0; j < atts.length; j++) {
+        if (atts[j] && atts[j].is_encrypted && atts[j].iv) {
+          attMap[String(atts[j].id)] = atts[j];
+        }
+      }
+    }
+    var targets = streamEl.querySelectorAll('[data-e2ee-att-id]');
+    for (var t = 0; t < targets.length; t++) {
+      (function (node) {
+        var attId = node.getAttribute('data-e2ee-att-id');
+        var attObj = attMap[String(attId)];
+        if (!attObj) return;
+        Store.decryptAttachmentToBlobUrl(attObj, channelId).then(function (blobUrl) {
+          if (!blobUrl) return;
+          if (node.tagName === 'A') {
+            node.setAttribute('href', blobUrl);
+            node.textContent = '🔒 ' + (attObj.file_name || 'Download file');
+          } else {
+            node.setAttribute('src', blobUrl);
+          }
+        }).catch(function () {
+          if (node.tagName === 'A') {
+            node.textContent = '🔒 Locked attachment — unlock E2EE Vault';
+          }
+        });
+      })(targets[t]);
+    }
   }
 
   function renderMessageStream() {
@@ -675,6 +943,7 @@
 
     streamEl.innerHTML = html;
     streamEl.scrollTop = streamEl.scrollHeight;
+    hydrateEncryptedAttachments(streamEl, filtered, chId);
 
     // Bind reaction buttons
     var rxBtns = streamEl.querySelectorAll('[data-rx-msg]');
@@ -1158,6 +1427,47 @@
     }).catch(function () {});
   }
 
+  /**
+   * Abbreviate last names in member directory: "First L.", or "First La."
+   * when two or more distinct users share the same first name + last initial.
+   */
+  function abbreviateMemberNames(records) {
+    var list = Array.isArray(records) ? records : [];
+    var seenIds = {};
+    var keyCounts = {};
+    var parsed = [];
+
+    for (var i = 0; i < list.length; i++) {
+      var rec = list[i];
+      var raw = (rec && rec.name) ? String(rec.name).trim() : '';
+      var parts = raw ? raw.split(/\s+/) : [];
+      var first = parts.length > 1 ? parts.slice(0, parts.length - 1).join(' ') : (parts[0] || '');
+      var last = parts.length > 1 ? parts[parts.length - 1].replace(/\.+$/, '') : '';
+      var key = (first && last) ? (first.toLowerCase() + '|' + last.charAt(0).toLowerCase()) : '';
+      var uid = rec && (rec.user_id || rec.id);
+      var personId = uid ? ('u:' + String(uid)) : ('i:' + i);
+      if (key && !seenIds[personId]) {
+        seenIds[personId] = true;
+        keyCounts[key] = (keyCounts[key] || 0) + 1;
+      }
+      parsed.push({ raw: raw, first: first, last: last, key: key });
+    }
+
+    var out = [];
+    for (var j = 0; j < parsed.length; j++) {
+      var p = parsed[j];
+      if (!p.raw) {
+        out.push('Player');
+      } else if (!p.last) {
+        out.push(p.raw);
+      } else {
+        var len = keyCounts[p.key] > 1 ? 2 : 1;
+        out.push(p.first + ' ' + p.last.slice(0, len) + '.');
+      }
+    }
+    return out;
+  }
+
   function renderMembersDirectory() {
     var dirEl = el('ch-members-directory');
     if (!dirEl) return;
@@ -1166,7 +1476,8 @@
       dirEl.innerHTML = '<div style="color:var(--ch-text-muted);font-size:12.5px;">🔒 Sign in to view Clubhouse members.</div>';
       return;
     }
-    var members = Array.isArray(Store.state.members) && Store.state.members.length > 0
+    var hasBootstrapMembers = Array.isArray(Store.state.members) && Store.state.members.length > 0;
+    var members = hasBootstrapMembers
       ? Store.state.members
       : ((uiState.upcomingData && Array.isArray(uiState.upcomingData.attendees)) ? uiState.upcomingData.attendees : []);
 
@@ -1178,10 +1489,31 @@
       }
     }
 
+    var selfDisplayName = '';
+    var memberNames = [];
+    if (hasBootstrapMembers) {
+      for (var k = 0; k < members.length; k++) {
+        var mkId = Number(members[k].id || members[k].user_id);
+        if (mkId === Number(u.id)) {
+          selfDisplayName = members[k].name;
+        }
+        memberNames.push(members[k].name);
+      }
+      if (!selfDisplayName) {
+        selfDisplayName = abbreviateMemberNames([u].concat(members))[0];
+      }
+    } else {
+      var abbrList = abbreviateMemberNames([u].concat(members));
+      selfDisplayName = abbrList[0];
+      for (var aIdx = 0; aIdx < members.length; aIdx++) {
+        memberNames.push(abbrList[aIdx + 1]);
+      }
+    }
+
     var html = '';
     if (u) {
       html += '<div style="padding:6px;border-bottom:1px solid var(--ch-border);">';
-      html += '<strong>' + escapeHtml(u.name) + ' (You)</strong> ';
+      html += '<strong>' + escapeHtml(selfDisplayName) + ' (You)</strong> ';
       html += '<span class="ch-badge role-admin">' + escapeHtml(u.role || 'player') + '</span>';
       if (u.isModerator && u.role !== 'admin') {
         html += ' <span class="ch-badge role-mod">🛡️ Mod</span>';
@@ -1195,13 +1527,14 @@
       var m = members[i];
       var mId = Number(m.id || m.user_id);
       if (u && mId === Number(u.id)) continue;
+      var memberDisplayName = memberNames[i] || m.name || 'Player';
       var isPlaying = Boolean(sundayUserIds[mId] || m.status === 'attending');
       var isMod = Boolean(m.isModerator || m.is_moderator || m.role === 'admin');
       var isChatMuted = Boolean(m.chatMuted || m.chat_muted);
       var isPersonallyMuted = Boolean(mId && Store.isUserMutedByMe(mId));
 
       html += '<div style="padding:6px;border-bottom:1px solid var(--ch-border);display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">';
-      html += '<div style="min-width:0;"><span>' + escapeHtml(m.name) + '</span> ';
+      html += '<div style="min-width:0;"><span>' + escapeHtml(memberDisplayName) + '</span> ';
       if (isPlaying) {
         html += '<span class="ch-badge badge-sunday">⚾ Playing</span> ';
       }
@@ -1214,9 +1547,9 @@
       html += '</div>';
       if (u && mId) {
         html += '<div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">';
-        html += '<button type="button" class="ch-thread-btn" data-dm-uid="' + mId + '" data-dm-name="' + escapeHtml(m.name) + '" title="Direct Message">💬 DM</button>';
+        html += '<button type="button" class="ch-thread-btn" data-dm-uid="' + mId + '" data-dm-name="' + escapeHtml(memberDisplayName) + '" title="Direct Message">💬 DM</button>';
         html += '<button type="button" class="ch-thread-btn" data-personal-mute-uid="' + mId + '" data-personal-mute-active="' + (isPersonallyMuted ? '1' : '0') + '" title="Mute/Unmute this player in Clubhouse only">' + (isPersonallyMuted ? '🔊 Unmute' : '🔇 Mute') + '</button>';
-        html += '<button type="button" class="ch-thread-btn" data-report-uid="' + mId + '" data-report-uname="' + escapeHtml(m.name) + '" title="Report User to Moderators">🚩 Report</button>';
+        html += '<button type="button" class="ch-thread-btn" data-report-uid="' + mId + '" data-report-uname="' + escapeHtml(memberDisplayName) + '" title="Report User to Moderators">🚩 Report</button>';
         html += '</div>';
       }
       html += '</div>';
@@ -1543,6 +1876,18 @@
           attachmentIds: attIds
         }).then(function () {
           renderMessageStream();
+          refreshDmE2eeNotice();
+        }).catch(function (err) {
+          composerInput.value = text;
+          uiState.pendingAttachmentIds = attIds;
+          refreshDmE2eeNotice();
+          if (err && err.code === 'E2EE_IDENTITY_REQUIRED') {
+            var vm = el('ch-vault-modal');
+            if (vm) vm.classList.remove('hidden');
+          } else if (err && err.message) {
+            var typingEl = el('ch-typing-indicator');
+            if (typingEl) typingEl.textContent = '⚠️ ' + err.message;
+          }
         });
       });
     }
@@ -1588,8 +1933,26 @@
     var closeBoardBtn = el('btn-close-board-modal');
     var cancelBoardBtn = el('btn-cancel-board-modal');
     var deleteBoardBtn = el('btn-delete-board');
+    var boardPrivCb = el('board-private-checkbox');
+    var boardTypeSel = el('board-type-select');
     if (closeBoardBtn) closeBoardBtn.addEventListener('click', closeBoardModal);
     if (cancelBoardBtn) cancelBoardBtn.addEventListener('click', closeBoardModal);
+    if (boardPrivCb) {
+      boardPrivCb.addEventListener('change', function () {
+        var checkedIds = [];
+        var cbs = document.querySelectorAll('.board-invite-member-cb:checked');
+        for (var i = 0; i < cbs.length; i++) checkedIds.push(Number(cbs[i].value));
+        renderBoardInviteMembersList(checkedIds);
+      });
+    }
+    if (boardTypeSel) {
+      boardTypeSel.addEventListener('change', function () {
+        var checkedIds = [];
+        var cbs = document.querySelectorAll('.board-invite-member-cb:checked');
+        for (var i = 0; i < cbs.length; i++) checkedIds.push(Number(cbs[i].value));
+        renderBoardInviteMembersList(checkedIds);
+      });
+    }
     if (boardForm) {
       boardForm.addEventListener('submit', function (ev) {
         ev.preventDefault();
@@ -1599,6 +1962,17 @@
         var typeVal = (el('board-type-select') && el('board-type-select').value) || 'text';
         var writeVal = (el('board-write-role-select') && el('board-write-role-select').value) || 'player';
         var topicVal = (el('board-topic-input') && el('board-topic-input').value || '').trim();
+        var isPrivateVal = Boolean(boardPrivCb && boardPrivCb.checked && typeVal !== 'voice');
+        var invitedMemberIds = [];
+        if (isPrivateVal) {
+          var memberCbs = document.querySelectorAll('.board-invite-member-cb:checked');
+          for (var m = 0; m < memberCbs.length; m++) {
+            invitedMemberIds.push(Number(memberCbs[m].value));
+          }
+          if (Store.state.user && Store.state.user.id) {
+            invitedMemberIds.push(Number(Store.state.user.id));
+          }
+        }
         var statusEl = el('ch-board-status-msg');
         if (!nameVal) {
           if (statusEl) statusEl.textContent = 'Board name is required.';
@@ -1609,13 +1983,19 @@
           category: catVal,
           channel_type: typeVal,
           min_role_write: writeVal,
-          topic: topicVal
+          topic: topicVal,
+          is_private: isPrivateVal,
+          is_encrypted: isPrivateVal ? true : undefined,
+          member_ids: isPrivateVal ? invitedMemberIds : undefined
         };
         var op = editId ? Store.updateChannel(editId, payload) : Store.createChannel(payload);
         op.then(function (ch) {
           closeBoardModal();
           renderChannelSidebar();
           if (ch && ch.id) {
+            if (isPrivateVal && Store.ensureChannelE2eeKey) {
+              Store.ensureChannelE2eeKey(ch.id, { readonly: false }).catch(function () {});
+            }
             if (!editId || Number(uiState.activeChannelId) === Number(ch.id)) {
               selectTextChannel(ch.id);
             }
@@ -1899,6 +2279,7 @@
 
     // Vault modal
     var vaultBtn = el('rail-vault-btn');
+    var dmOpenVaultBtn = el('btn-dm-open-vault');
     var vaultModal = el('ch-vault-modal');
     var closeVaultBtn = el('btn-close-vault-modal');
     var enrollBtn = el('btn-enroll-keys');
@@ -1908,11 +2289,48 @@
       vaultBtn.addEventListener('click', function () {
         vaultModal.classList.remove('hidden');
         loadStorageStatusWidget();
+        refreshOwnVaultFingerprint();
+      });
+    }
+    if (dmOpenVaultBtn && vaultModal) {
+      dmOpenVaultBtn.addEventListener('click', function () {
+        vaultModal.classList.remove('hidden');
+        loadStorageStatusWidget();
+        refreshOwnVaultFingerprint();
       });
     }
     if (closeVaultBtn && vaultModal) {
       closeVaultBtn.addEventListener('click', function () {
         vaultModal.classList.add('hidden');
+      });
+    }
+
+    // DM / Private Board Key Fingerprint & Safety Number modal
+    var verifyKeyBtn = el('btn-dm-verify-key');
+    var verifyModal = el('ch-verify-modal');
+    var closeVerifyBtn = el('btn-close-verify-modal');
+    var doneVerifyBtn = el('btn-done-verify-modal');
+    var copySafetyBtn = el('btn-copy-safety-number');
+    if (verifyKeyBtn) {
+      verifyKeyBtn.addEventListener('click', openVerifyKeysModal);
+    }
+    if (closeVerifyBtn && verifyModal) {
+      closeVerifyBtn.addEventListener('click', function () { verifyModal.classList.add('hidden'); });
+    }
+    if (doneVerifyBtn && verifyModal) {
+      doneVerifyBtn.addEventListener('click', function () { verifyModal.classList.add('hidden'); });
+    }
+    if (copySafetyBtn) {
+      copySafetyBtn.addEventListener('click', function () {
+        var safetyEl = el('ch-verify-safety-number');
+        var statusEl = el('ch-verify-status-msg');
+        var val = safetyEl ? safetyEl.textContent.trim() : '';
+        if (!val) return;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(val).then(function () {
+            if (statusEl) statusEl.textContent = '✓ Safety number copied to clipboard.';
+          }).catch(function () {});
+        }
       });
     }
     if (enrollBtn) {
@@ -1928,6 +2346,13 @@
         if (statusEl) statusEl.textContent = 'Generating ECDH/ECDSA P-256 keys & deriving 600,000-iteration PBKDF2 vault...';
         CryptoEngine.enrollIdentityWithPassphrase(pass, relayToggle && relayToggle.checked).then(function () {
           if (statusEl) statusEl.textContent = '✓ E2EE Identity Keys enrolled & encrypted backup vault stored!';
+          Store.clearCachedDmKeys();
+          return Store.redecryptChannelMessages(uiState.activeChannelId);
+        }).then(function () {
+          renderMessageStream();
+          refreshDmE2eeNotice();
+          refreshOwnVaultFingerprint();
+          refreshVerifyKeyButton();
         }).catch(function (err) {
           if (statusEl) statusEl.textContent = 'Error: ' + err.message;
         });
@@ -1945,6 +2370,13 @@
         if (statusEl) statusEl.textContent = 'Unwrapping PBKDF2-SHA256 vault...';
         CryptoEngine.restoreIdentityFromServerVault(pass).then(function () {
           if (statusEl) statusEl.textContent = '✓ E2EE Private Keys restored to local IndexedDB!';
+          Store.clearCachedDmKeys();
+          return Store.redecryptChannelMessages(uiState.activeChannelId);
+        }).then(function () {
+          renderMessageStream();
+          refreshDmE2eeNotice();
+          refreshOwnVaultFingerprint();
+          refreshVerifyKeyButton();
         }).catch(function (err) {
           if (statusEl) statusEl.textContent = 'Restore failed: ' + err.message;
         });
