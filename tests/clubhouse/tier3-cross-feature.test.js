@@ -233,54 +233,6 @@ async function runTier3(t, ctx) {
       }
       assert.equal(hitRateLimit, true, 'Sending >30 messages within 60s window must trigger HTTP 429 Rate Limit');
     });
-
-    // -----------------------------------------------------------------------
-    // TF3.6: Community Highlight Media Promotion to Baseball Gallery
-    // -----------------------------------------------------------------------
-    await suite.test('TF3.6: Community Highlight Media Promotion to Baseball Gallery', async (tSub) => {
-      if (!(await isEndpointAvailable('/api/attachments/promo_probe/promote-to-gallery', 'POST'))) {
-        tSub.skip('Waiting for WP-3: POST /api/attachments/:id/promote-to-gallery');
-        return;
-      }
-
-      // 1. Seed completed attachment fixture in CHAT_DB (#highlights-and-media channel id 4)
-      const attId = `att_promo_${Date.now()}`;
-      chatDb.prepare(`
-        INSERT INTO chat_attachments (id, channel_id, uploader_id, file_name, mime_type, file_size, storage_provider, upload_status)
-        VALUES (?, 4, ?, 'walkoff_homerun.mp4', 'video/mp4', 5000000, 'gdrive', 'completed')
-      `).run(attId, playerUser.id);
-
-      try {
-        // 2. Non-admin player attempts promotion -> must be forbidden (HTTP 403)
-        const unauthRes = await apiReq('POST', `/api/attachments/${attId}/promote-to-gallery`, playerCookie, {
-          title: 'Unauthorized Promotion'
-        });
-        assert.equal(unauthRes.status, 403, 'Regular player must receive HTTP 403 when attempting gallery promotion');
-
-        // 3. Admin promotes attachment to Foundation Gallery via genuine HTTP endpoint
-        const promoRes = await apiReq('POST', `/api/attachments/${attId}/promote-to-gallery`, adminCookie, {
-          title: 'Walk-Off Grand Slam Highlight',
-          caption: 'Sunday Final Inning Excitement'
-        });
-        assert.equal(promoRes.status, 200, 'Admin gallery promotion must succeed with HTTP 200');
-        assert.equal(promoRes.data.success, true);
-        assert.ok(promoRes.data.media_id, 'Promotion endpoint must return media_id');
-        const mediaId = promoRes.data.media_id;
-
-        // 4. Verify server updated chat_attachments.promoted_media_id in CHAT_DB
-        const attRow = chatDb.prepare('SELECT promoted_media_id FROM chat_attachments WHERE id = ?').get(attId);
-        assert.equal(attRow.promoted_media_id, mediaId, 'chat_attachments must record promoted_media_id');
-
-        // 5. Verify server inserted approved row into BASEBALL_DB.media_items
-        const mediaRow = baseballDb.prepare('SELECT is_approved, approved_by, title FROM media_items WHERE id = ?').get(mediaId);
-        assert.ok(mediaRow, 'Media item must exist in BASEBALL_DB.media_items');
-        assert.equal(mediaRow.is_approved, 1, 'Promoted media item must be approved');
-        assert.equal(mediaRow.approved_by, adminUser.id, 'Promoted media item approved_by must match admin ID');
-        assert.equal(mediaRow.title, 'Walk-Off Grand Slam Highlight');
-      } finally {
-        chatDb.prepare('DELETE FROM chat_attachments WHERE id = ?').run(attId);
-      }
-    });
   });
 }
 

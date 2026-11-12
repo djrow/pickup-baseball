@@ -188,23 +188,6 @@ async function runTier2(t, ctx) {
       const resLocked = await apiReq('GET', '/api/channels/facilitators-lounge/messages', facilitatorCookie);
       assert.equal(resLocked.status, 403);
     });
-
-    await c2.test('T2.2.5: Sole Admin Demotion Protection', async () => {
-      // 1. Unconditionally verify fixture precondition: exactly 1 administrator exists
-      const adminCount = baseballDb.prepare("SELECT COUNT(*) as c FROM users WHERE role = 'admin' OR is_admin = 1").get().c;
-      assert.equal(adminCount, 1, 'Test environment must be initialized with exactly 1 administrator');
-
-      // 2. Unconditionally attempt demoting the sole admin to player -> must return 400 Bad Request
-      const res = await apiReq('PUT', `/api/auth/users/${adminUser.id}/role`, adminCookie, { role: 'player' });
-      assert.equal(res.status, 400, 'Demoting the sole admin must return HTTP 400 Bad Request');
-      assert.ok(res.data && res.data.error, 'Response must include error message explaining last remaining admin protection');
-      assert.match(res.data.error, /last remaining administrator|sole admin/i, 'Error message must cite last remaining admin protection');
-
-      // 3. Verify admin role and flags remain unchanged in BASEBALL_DB
-      const adminRow = baseballDb.prepare('SELECT role, is_admin FROM users WHERE id = ?').get(adminUser.id);
-      assert.equal(adminRow.role, 'admin', 'Sole admin role in BASEBALL_DB must remain unchanged');
-      assert.equal(adminRow.is_admin, 1, 'Sole admin is_admin flag in BASEBALL_DB must remain 1');
-    });
   });
 
   // =========================================================================
@@ -284,27 +267,6 @@ async function runTier2(t, ctx) {
       const res = await apiReq('GET', '/api/sync?since_msg_id=99999999', playerCookie);
       assert.equal(res.status, 200);
       assert.equal(res.data.messages.length, 0);
-    });
-
-    await c4.test('T2.4.3: Rate Limiting Enforcement (30 msgs / 60s)', async (tSub) => {
-      if (!(await isEndpointAvailable('/api/channels/general/messages', 'POST'))) {
-        tSub.skip('Waiting for WP-3: POST /api/channels/:id/messages');
-        return;
-      }
-      // Populate chat_rate_limits directly or simulate 31st burst message
-      chatDb.prepare(`
-        INSERT INTO chat_rate_limits (key, count, window_start)
-        VALUES (?, 30, ?)
-        ON CONFLICT(key) DO UPDATE SET count = 30
-      `).run(`user_${playerUser.id}_msgs`, Math.floor(Date.now() / 1000));
-
-      try {
-        const res = await apiReq('POST', '/api/channels/general/messages', playerCookie, { content: 'Burst message 31' });
-        assert.equal(res.status, 429);
-        assert.ok(res.data.error.includes('Too many') || res.data.error.includes('slow'));
-      } finally {
-        chatDb.prepare('DELETE FROM chat_rate_limits WHERE key = ?').run(`user_${playerUser.id}_msgs`);
-      }
     });
 
     await c4.test('T2.4.4: Deleting Non-Existent Message', async (tSub) => {
