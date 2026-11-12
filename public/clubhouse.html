@@ -7,7 +7,7 @@
   <link rel="shortcut icon" href="/favicon.ico" />
   <link rel="icon" type="image/svg+xml" href="/logo.svg" />
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png" />
-  <link rel="stylesheet" href="/css/clubhouse.css?v=98" />
+  <link rel="stylesheet" href="/css/clubhouse.css?v=99" />
 </head>
 <body class="clubhouse-body">
   <div class="clubhouse-app" id="clubhouse-app">
@@ -33,6 +33,9 @@
         📖
       </a>
       <div class="ch-rail-spacer"></div>
+      <button type="button" class="ch-rail-btn" id="rail-covenant-btn" title="Clubhouse Behavior Covenant">
+        📜
+      </button>
       <button type="button" class="ch-rail-btn" id="rail-vault-btn" title="E2EE Security Vault, Privacy Relay &amp; 5 TB Drive Status">
         🔐
       </button>
@@ -92,8 +95,11 @@
       </header>
 
       <div class="ch-auth-banner hidden" id="ch-auth-banner" role="alert">
-        <span>Sign in with your Pickup Baseball account to read messages, chat, and join Voice Lounges.</span>
-        <a href="/login.html?redirect=%2Fclubhouse.html" class="ch-send-btn" style="text-decoration:none;white-space:nowrap;">Sign In →</a>
+        <span>Sign in with your Pickup Baseball account to read messages, chat, and join Voice Lounges. By using the Clubhouse, you implicitly agree to our <strong>Behavior Covenant</strong> (no dehumanization, no harassment).</span>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <button type="button" class="ch-covenant-link" id="btn-open-covenant-guest">📜 Read Covenant</button>
+          <a href="/login.html?redirect=%2Fclubhouse.html" class="ch-send-btn" style="text-decoration:none;white-space:nowrap;">Sign In →</a>
+        </div>
       </div>
 
       <div class="ch-muted-banner hidden" id="ch-muted-banner" role="status">
@@ -131,6 +137,10 @@
           <textarea class="ch-composer-input" id="ch-composer-input" placeholder="Message #general — Press Enter to send, Shift+Enter for newline" rows="1"></textarea>
           <button type="submit" class="ch-send-btn" id="ch-send-btn">Send</button>
         </form>
+        <div class="ch-covenant-strip" id="ch-covenant-strip">
+          <span>By using the Clubhouse, you implicitly agree to our Behavior Covenant: <strong>no dehumanization</strong>, <strong>no harassment</strong>, sportsmanship &amp; privacy.</span>
+          <button type="button" class="ch-covenant-link" id="btn-open-covenant">📜 Full Covenant</button>
+        </div>
       </div>
     </main>
 
@@ -401,9 +411,36 @@
     </div>
   </div>
 
-  <script src="/js/crypto.js?v=98"></script>
-  <script src="/js/store.js?v=98"></script>
-  <script src="/js/rtc.js?v=98"></script>
-  <script src="/js/clubhouse.js?v=98"></script>
+  <!-- ====================================================================
+       CLUBHOUSE BEHAVIOR COVENANT MODAL (IMPLICIT AGREEMENT)
+       ==================================================================== -->
+  <div class="ch-modal-backdrop hidden" id="ch-covenant-modal">
+    <div class="ch-modal ch-covenant-modal" role="dialog" aria-labelledby="ch-covenant-modal-title">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <h3 id="ch-covenant-modal-title" style="margin:0;font-size:17px;">📜 Clubhouse Behavior Covenant</h3>
+        <button type="button" class="ch-icon-btn" id="btn-close-covenant-modal" aria-label="Close Behavior Covenant">✕</button>
+      </div>
+      <p class="ch-covenant-intro">
+        By accessing, reading, messaging, sharing media, or joining voice in the Bushrod Clubhouse, you implicitly agree to uphold these community standards:
+      </p>
+      <ul class="ch-covenant-list">
+        <li><strong>No Dehumanization:</strong> Zero slurs, hate speech, targeted humiliation, or treating any person as less than human based on identity, background, ability, or status.</li>
+        <li><strong>No Harassment or Unwanted Contact:</strong> No intimidation, stalking, pile-ons, threats, verbal abuse, or continuing unwanted DMs after someone asks you to stop or mutes you.</li>
+        <li><strong>Welcoming Sportsmanship:</strong> Co-ed, inclusive, all skill levels (beginners to college veterans). Hype great plays on both teams and leave mocking or aggressive trash-talk out of the dugout.</li>
+        <li><strong>Respect Privacy &amp; Never Doxx:</strong> Protect teammates' full names, contact details, locations, and private messages. Do not screenshot or share private boards, E2EE DMs, or personal info outside the Clubhouse without consent.</li>
+        <li><strong>Constructive Disagreement &amp; Field Separation:</strong> Critique ideas cleanly, never attack people. A disagreement or personal mute in chat must never carry over into hostility, exclusion, or unsafe play at Sunday pickup games.</li>
+        <li><strong>No Spam, Scams, or Unsafe Links:</strong> Keep boards focused on baseball and community coordination—no phishing, malicious files, or unapproved commercial solicitation.</li>
+        <li><strong>Accountable Stewardship:</strong> Report violations via <code>🚩</code> with a clear reason. Moderators may hide messages or mute persistent or severe violators from Clubhouse while keeping Sunday pickup baseball fair and accessible.</li>
+      </ul>
+      <div style="display:flex;justify-content:flex-end;margin-top:12px;">
+        <button type="button" class="ch-send-btn" id="btn-done-covenant-modal">Got It</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/crypto.js?v=99"></script>
+  <script src="/js/store.js?v=99"></script>
+  <script src="/js/rtc.js?v=99"></script>
+  <script src="/js/clubhouse.js?v=99"></script>
 </body>
 </html>

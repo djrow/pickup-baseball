@@ -1089,3 +1089,60 @@ html, body.clubhouse-body {
     box-shadow: 8px 0 28px rgba(0, 0, 0, 0.55);
   }
 }
+
+/* Implicit Behavior Covenant Strip & Modal */
+.ch-covenant-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--ch-text-secondary);
+}
+
+.ch-covenant-link {
+  background: transparent;
+  border: 1px solid rgba(52, 211, 153, 0.35);
+  color: var(--ch-accent);
+  border-radius: 5px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ch-covenant-link:hover {
+  background-color: rgba(52, 211, 153, 0.14);
+}
+
+.ch-covenant-modal {
+  max-width: 560px;
+}
+
+.ch-covenant-intro {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ch-text-secondary);
+  margin: 0 0 10px;
+}
+
+.ch-covenant-list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 56vh;
+  overflow-y: auto;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ch-text-primary);
+}
+
+.ch-covenant-list li strong {
+  color: var(--ch-accent);
+}

@@ -950,4 +950,22 @@ module.exports = async function runTier5(t, ctx) {
     assert.equal(swappedPin.verified, false, 'Swapped MITM key must invalidate verified badge');
     assert.equal(swappedPin.keyChangedWarning, true, 'Swapped MITM key must raise keyChangedWarning');
   });
+
+  await t.test('T5.12: Implicit Behavior Covenant present in Clubhouse UI and strict ES6/CSP preserved', async () => {
+    const fs = require('fs');
+    const path = require('path');
+    const rootDir = path.join(__dirname, '..', '..');
+
+    const clubhouseHtml = fs.readFileSync(path.join(rootDir, 'public', 'clubhouse.html'), 'utf8');
+    const clubhouseJs = fs.readFileSync(path.join(rootDir, 'public', 'js', 'clubhouse.js'), 'utf8');
+
+    assert.ok(clubhouseHtml.includes('id="ch-covenant-strip"'), 'clubhouse.html must show implicit covenant strip');
+    assert.ok(clubhouseHtml.includes('id="ch-covenant-modal"'), 'clubhouse.html must include full Behavior Covenant modal');
+    assert.ok(/implicitly agree/i.test(clubhouseHtml), 'clubhouse.html must state implicit agreement by using Clubhouse');
+    assert.ok(/no dehumanization/i.test(clubhouseHtml), 'clubhouse.html must explicitly prohibit dehumanization');
+    assert.ok(/no harassment/i.test(clubhouseHtml), 'clubhouse.html must explicitly prohibit harassment');
+    assert.ok(clubhouseJs.includes('openCovenantModal'), 'clubhouse.js must wire Behavior Covenant modal triggers');
+    assert.ok(!clubhouseJs.includes('?.') && !clubhouseJs.includes('??'), 'clubhouse.js must remain strict ES6');
+    assert.ok(!/\son(click|change|submit|load|error|input|keydown)=/i.test(clubhouseHtml), 'clubhouse.html must have zero inline handlers');
+  });
 };

@@ -2305,6 +2305,30 @@
       });
     }
 
+    // Clubhouse Behavior Covenant modal
+    var railCovenantBtn = el('rail-covenant-btn');
+    var openCovenantBtn = el('btn-open-covenant');
+    var openCovenantGuestBtn = el('btn-open-covenant-guest');
+    var covenantModal = el('ch-covenant-modal');
+    var closeCovenantBtn = el('btn-close-covenant-modal');
+    var doneCovenantBtn = el('btn-done-covenant-modal');
+    function openCovenantModal() {
+      if (covenantModal) covenantModal.classList.remove('hidden');
+    }
+    function closeCovenantModal() {
+      if (covenantModal) covenantModal.classList.add('hidden');
+    }
+    if (railCovenantBtn) railCovenantBtn.addEventListener('click', openCovenantModal);
+    if (openCovenantBtn) openCovenantBtn.addEventListener('click', openCovenantModal);
+    if (openCovenantGuestBtn) openCovenantGuestBtn.addEventListener('click', openCovenantModal);
+    if (closeCovenantBtn) closeCovenantBtn.addEventListener('click', closeCovenantModal);
+    if (doneCovenantBtn) doneCovenantBtn.addEventListener('click', closeCovenantModal);
+    if (covenantModal) {
+      covenantModal.addEventListener('click', function (ev) {
+        if (ev.target === covenantModal) closeCovenantModal();
+      });
+    }
+
     // DM / Private Board Key Fingerprint & Safety Number modal
     var verifyKeyBtn = el('btn-dm-verify-key');
     var verifyModal = el('ch-verify-modal');
