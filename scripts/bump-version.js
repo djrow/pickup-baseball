@@ -32,23 +32,25 @@ if (!/^\d+$/.test(nextVersion)) {
   process.exit(1);
 }
 
+const toLf = (text) => text.replace(/\r\n/g, '\n');
+
 const versionUpdated = currentSrc.replace(
   /CURRENT_APP_VERSION\s*=\s*'\d+'/,
   `CURRENT_APP_VERSION = '${nextVersion}'`
 );
-fs.writeFileSync(versionFile, versionUpdated, 'utf8');
+fs.writeFileSync(versionFile, toLf(versionUpdated), 'utf8');
 
 const swUpdated = fs.readFileSync(swFile, 'utf8').replace(
   /const CACHE_NAME = 'pbf-cache-v\d+';/,
   `const CACHE_NAME = 'pbf-cache-v${nextVersion}';`
 );
-fs.writeFileSync(swFile, swUpdated, 'utf8');
+fs.writeFileSync(swFile, toLf(swUpdated), 'utf8');
 
 const apiUpdated = fs.readFileSync(apiFile, 'utf8').replace(
   /CLIENT_VERSION:\s*'\d+'/,
   `CLIENT_VERSION: '${nextVersion}'`
 );
-fs.writeFileSync(apiFile, apiUpdated, 'utf8');
+fs.writeFileSync(apiFile, toLf(apiUpdated), 'utf8');
 
 let htmlCount = 0;
 for (const entry of fs.readdirSync(publicDir)) {
@@ -57,7 +59,7 @@ for (const entry of fs.readdirSync(publicDir)) {
   const before = fs.readFileSync(htmlPath, 'utf8');
   const after = before.replace(/((?:href|src)="\/(?:css|js)\/[^"?]+)\?v=\d+"/g, `$1?v=${nextVersion}"`);
   if (after !== before) {
-    fs.writeFileSync(htmlPath, after, 'utf8');
+    fs.writeFileSync(htmlPath, toLf(after), 'utf8');
     htmlCount++;
   }
 }
