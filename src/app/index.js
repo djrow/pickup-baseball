@@ -18,6 +18,7 @@ import { chatRouter } from './routes/chat.js';
 import { voiceRouter, rtcRouter } from './routes/rtc.js';
 import { baseballRouter } from './routes/baseball.js';
 import { waiverRouter } from './routes/waiver.js';
+import { gifsRouter } from './routes/gifs.js';
 
 export const app = new Hono().basePath('/api');
 
@@ -157,4 +158,5 @@ app.route('/voice', voiceRouter);
 app.route('/rtc', rtcRouter);
 app.route('/baseball', baseballRouter);
 app.route('/waiver', waiverRouter);
+app.route('/gifs', gifsRouter);
 app.route('/', chatRouter);

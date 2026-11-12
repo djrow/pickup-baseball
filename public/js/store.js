@@ -792,6 +792,7 @@
         key_epoch: prepared.key_epoch,
         parent_message_id: parentMessageId,
         attachment_ids: attachmentIds,
+        message_type: needsE2ee ? 'text' : (opts.message_type || opts.messageType || 'text'),
         embed_type: embedType,
         embed_data: embedData
       });

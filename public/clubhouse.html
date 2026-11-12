@@ -7,7 +7,7 @@
   <link rel="shortcut icon" href="/favicon.ico" />
   <link rel="icon" type="image/svg+xml" href="/logo.svg" />
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png" />
-  <link rel="stylesheet" href="/css/clubhouse.css?v=101" />
+  <link rel="stylesheet" href="/css/clubhouse.css?v=102" />
 </head>
 <body class="clubhouse-body">
   <div class="clubhouse-app" id="clubhouse-app">
@@ -18,9 +18,6 @@
     <nav class="ch-rail" aria-label="Clubhouse Navigation Rail">
       <button type="button" class="ch-rail-btn active" id="rail-home-btn" title="Pickup Baseball Clubhouse">
         ⚾
-      </button>
-      <button type="button" class="ch-rail-btn" id="rail-dm-btn" title="Direct Messages">
-        💬
       </button>
       <div class="ch-rail-divider"></div>
       <a href="/index.html" class="ch-rail-btn" title="Sunday Game Schedule &amp; RSVPs">
@@ -136,8 +133,32 @@
           </div>
         </div>
         <div class="ch-typing-indicator" id="ch-typing-indicator"></div>
+        <div class="ch-gif-picker hidden" id="ch-gif-picker" role="dialog" aria-label="Clubhouse GIF Selector">
+          <div class="ch-gif-picker-header">
+            <span class="ch-gif-picker-title">🎞️ Clubhouse GIFs</span>
+            <div class="ch-gif-tabs" id="ch-gif-tabs">
+              <button type="button" class="ch-gif-tab active" data-gif-tab="all">All</button>
+              <button type="button" class="ch-gif-tab" data-gif-tab="starter">Starter Pack</button>
+              <button type="button" class="ch-gif-tab" data-gif-tab="drive">5 TB Drive</button>
+            </div>
+            <button type="button" class="ch-icon-btn" id="btn-close-gif-picker" aria-label="Close GIF selector">✕</button>
+          </div>
+          <div class="ch-gif-controls">
+            <input type="search" class="ch-gif-input" id="ch-gif-search-input" placeholder="Filter GIFs by title or tag (local, 0 server calls)..." />
+          </div>
+          <form class="ch-gif-import-form" id="ch-gif-import-form">
+            <input type="url" class="ch-gif-input" id="ch-gif-url-input" placeholder="Paste https:// link to a webhosted .gif or .webp..." required />
+            <input type="text" class="ch-gif-input ch-gif-title-input" id="ch-gif-title-input" placeholder="Short label (optional)" maxlength="80" />
+            <button type="submit" class="ch-send-btn ch-gif-import-btn" id="btn-import-gif-url">Save &amp; Post</button>
+          </form>
+          <div class="ch-gif-import-status" id="ch-gif-import-status">Saved once to 5 TB Google Drive &amp; edge-cached (0 D1 binary storage; encrypted inside E2EE DMs).</div>
+          <div class="ch-gif-grid" id="ch-gif-grid">
+            <!-- Populated dynamically by clubhouse.js -->
+          </div>
+        </div>
         <form class="ch-composer-box" id="ch-composer-form">
           <button type="button" class="ch-icon-btn" id="btn-attach-file" title="Upload Photo or HD Video (EXIF GPS Auto-Stripped)">📎</button>
+          <button type="button" class="ch-icon-btn ch-gif-trigger-btn" id="btn-open-gif-picker" title="Open GIF Selector or Paste GIF Link">GIF</button>
           <input type="file" id="ch-file-input" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime,audio/mpeg,audio/ogg,audio/wav,application/pdf" style="display:none" />
           <textarea class="ch-composer-input" id="ch-composer-input" placeholder="Message #general — Press Enter to send, Shift+Enter for newline" rows="1"></textarea>
           <button type="submit" class="ch-send-btn" id="ch-send-btn">Send</button>
@@ -439,9 +460,9 @@
     </div>
   </div>
 
-  <script src="/js/crypto.js?v=101"></script>
-  <script src="/js/store.js?v=101"></script>
-  <script src="/js/rtc.js?v=101"></script>
-  <script src="/js/clubhouse.js?v=101"></script>
+  <script src="/js/crypto.js?v=102"></script>
+  <script src="/js/store.js?v=102"></script>
+  <script src="/js/rtc.js?v=102"></script>
+  <script src="/js/clubhouse.js?v=102"></script>
 </body>
 </html>

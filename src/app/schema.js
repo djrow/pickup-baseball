@@ -627,6 +627,25 @@ export const CREATE_CHAT_TABLES_SQL = [
     PRIMARY KEY (muter_user_id, muted_user_id)
   )`,
 
+  // 14. Clubhouse Community GIF Library (Metadata only in D1; binary hosted in 5 TB Google Drive)
+  `CREATE TABLE IF NOT EXISTS clubhouse_gifs (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    tags TEXT DEFAULT '',
+    mime_type TEXT NOT NULL DEFAULT 'image/gif',
+    file_size INTEGER NOT NULL DEFAULT 0,
+    source_url TEXT DEFAULT NULL,
+    sha256 TEXT DEFAULT NULL,
+    storage_provider TEXT NOT NULL DEFAULT 'gdrive',
+    drive_file_id TEXT DEFAULT NULL,
+    local_data_base64 TEXT DEFAULT NULL,
+    added_by INTEGER NOT NULL,
+    added_by_name TEXT DEFAULT '',
+    is_public INTEGER NOT NULL DEFAULT 1,
+    use_count INTEGER NOT NULL DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`,
+
   // Indexes
   'CREATE INDEX IF NOT EXISTS idx_messages_channel_id ON messages(channel_id, id ASC)',
   'CREATE INDEX IF NOT EXISTS idx_messages_parent_id ON messages(parent_message_id, id ASC)',
@@ -635,7 +654,10 @@ export const CREATE_CHAT_TABLES_SQL = [
   'CREATE INDEX IF NOT EXISTS idx_rtc_signals_recipient ON rtc_signals(recipient_user_id, id ASC)',
   'CREATE INDEX IF NOT EXISTS idx_sync_events_id ON sync_events(id ASC)',
   'CREATE INDEX IF NOT EXISTS idx_chat_reports_status ON chat_reports(status, id DESC)',
-  'CREATE INDEX IF NOT EXISTS idx_user_mutes_muter ON user_mutes(muter_user_id)'
+  'CREATE INDEX IF NOT EXISTS idx_user_mutes_muter ON user_mutes(muter_user_id)',
+  'CREATE INDEX IF NOT EXISTS idx_clubhouse_gifs_public ON clubhouse_gifs(is_public, use_count DESC, created_at DESC)',
+  'CREATE INDEX IF NOT EXISTS idx_clubhouse_gifs_source ON clubhouse_gifs(source_url)',
+  'CREATE INDEX IF NOT EXISTS idx_clubhouse_gifs_sha256 ON clubhouse_gifs(sha256)'
 ];
 
 export const CHAT_ALTER_STATEMENTS = [

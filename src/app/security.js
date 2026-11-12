@@ -454,3 +454,79 @@ export function rejectIfChatMuted(c, user) {
   }
   return null;
 }
+
+export function isPrivateIpOrHost(hostname, isTestEnv = false) {
+  if (!hostname) return true;
+  const h = hostname.toLowerCase().trim();
+  if (isTestEnv && (h === 'localhost' || h === '127.0.0.1' || h === '::1')) {
+    return false;
+  }
+  if (h === 'localhost' || h === '::1' || h === '0.0.0.0' || h === '0' || h.endsWith('.local') || h.endsWith('.internal') || h.endsWith('.localhost')) {
+    return true;
+  }
+
+  const ipv4Match = h.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (ipv4Match) {
+    const o1 = parseInt(ipv4Match[1], 10);
+    const o2 = parseInt(ipv4Match[2], 10);
+    const o3 = parseInt(ipv4Match[3], 10);
+    const o4 = parseInt(ipv4Match[4], 10);
+    if ([o1, o2, o3, o4].some((n) => n < 0 || n > 255)) return true;
+    if (o1 === 127 || o1 === 10 || o1 === 0 || o1 >= 224) return true;
+    if (o1 === 192 && o2 === 168) return true;
+    if (o1 === 172 && o2 >= 16 && o2 <= 31) return true;
+    if (o1 === 169 && o2 === 254) return true;
+    if (o1 === 100 && o2 >= 64 && o2 <= 127) return true;
+  }
+
+  if (/^\d+$/.test(h) || /^0x[0-9a-f]+$/i.test(h)) return true;
+
+  if (h.startsWith('[') && h.endsWith(']')) {
+    const inner = h.slice(1, -1);
+    if (
+      inner === '::1' ||
+      inner === '::' ||
+      inner.startsWith('fe80:') ||
+      inner.startsWith('fc00:') ||
+      inner.startsWith('fd00:') ||
+      inner.includes('::ffff:')
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function validateExternalGifUrl(rawUrl, options = {}) {
+  const isTestEnv = Boolean(options.isTestEnv);
+  const str = String(rawUrl || '').trim();
+  if (!str || str.length > 2048) {
+    return { ok: false, status: 400, error: 'Please provide a valid GIF URL (max 2048 chars).' };
+  }
+  let parsed;
+  try {
+    parsed = new URL(str);
+  } catch (e) {
+    return { ok: false, status: 400, error: 'Invalid URL provided.' };
+  }
+
+  const allowHttpInTest = isTestEnv && (parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost');
+  if (parsed.protocol !== 'https:' && !(allowHttpInTest && parsed.protocol === 'http:')) {
+    return { ok: false, status: 400, error: 'Only HTTPS GIF links are allowed.' };
+  }
+  if (parsed.username || parsed.password) {
+    return { ok: false, status: 400, error: 'URLs containing embedded credentials are not allowed.' };
+  }
+  if (!isTestEnv && parsed.port && parsed.port !== '443') {
+    return { ok: false, status: 400, error: 'Non-standard ports are not allowed for remote GIF links.' };
+  }
+  if (isPrivateIpOrHost(parsed.hostname, isTestEnv)) {
+    return { ok: false, status: 403, error: 'Private or local addresses cannot be fetched.' };
+  }
+  if (!isTestEnv && !parsed.hostname.includes('.')) {
+    return { ok: false, status: 400, error: 'Remote GIF URL must use a public domain name.' };
+  }
+
+  parsed.hash = '';
+  return { ok: true, url: parsed.toString() };
+}

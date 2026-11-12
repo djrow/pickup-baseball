@@ -1,0 +1,76 @@
+{
+  "gifs": [
+    {
+      "id": "starter-home-run",
+      "title": "Home Run!",
+      "tags": "home run hr dinger celebration baseball",
+      "url": "/gifs/home-run.gif",
+      "width": 96,
+      "height": 56,
+      "source": "starter"
+    },
+    {
+      "id": "starter-safe",
+      "title": "Safe!",
+      "tags": "safe slide base umpire call baseball",
+      "url": "/gifs/safe.gif",
+      "width": 96,
+      "height": 56,
+      "source": "starter"
+    },
+    {
+      "id": "starter-strikeout",
+      "title": "Strikeout!",
+      "tags": "strikeout k whiff pitcher punchout baseball",
+      "url": "/gifs/strikeout.gif",
+      "width": 96,
+      "height": 56,
+      "source": "starter"
+    },
+    {
+      "id": "starter-play-ball",
+      "title": "Play Ball!",
+      "tags": "play ball sunday game morning first pitch",
+      "url": "/gifs/play-ball.gif",
+      "width": 96,
+      "height": 56,
+      "source": "starter"
+    },
+    {
+      "id": "starter-rally-cap",
+      "title": "Rally Cap!",
+      "tags": "rally cap comeback dugout hype team",
+      "url": "/gifs/rally-cap.gif",
+      "width": 96,
+      "height": 56,
+      "source": "starter"
+    },
+    {
+      "id": "starter-goodwill",
+      "title": "Good Game / Goodwill!",
+      "tags": "goodwill gg highfive respect friends team",
+      "url": "/gifs/goodwill.gif",
+      "width": 96,
+      "height": 56,
+      "source": "starter"
+    },
+    {
+      "id": "starter-rain-check",
+      "title": "Weather Watch",
+      "tags": "rain weather tarp mud check condition",
+      "url": "/gifs/rain-check.gif",
+      "width": 96,
+      "height": 56,
+      "source": "starter"
+    },
+    {
+      "id": "starter-postgame",
+      "title": "Post-Game Cheers!",
+      "tags": "cheers snacks drinks postgame celebration",
+      "url": "/gifs/cheers.gif",
+      "width": 96,
+      "height": 56,
+      "source": "starter"
+    }
+  ]
+}

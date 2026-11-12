@@ -15,7 +15,6 @@
     activeChannelId: null,
     activeChannel: null,
     activeThreadRoot: null,
-    sidebarMode: 'channels',
     searchQuery: '',
     pendingAttachmentIds: [],
     pendingAttachmentsMeta: [],
@@ -23,7 +22,13 @@
     collapsedCategories: {},
     remoteStreams: {},
     revealedMutedMsgIds: {},
-    reasonAction: null
+    reasonAction: null,
+    starterGifs: [],
+    starterGifsLoaded: false,
+    driveGifs: [],
+    driveGifsLoaded: false,
+    gifTab: 'all',
+    gifFilter: ''
   };
 
   function isModeratorUser(u) {
@@ -189,6 +194,32 @@
       .replace(/'/g, '&#39;');
   }
 
+  function renderMessageTextWithGifs(str) {
+    var text = String(str || '');
+    var tokenRe = /(\[\[gif:(\/(?:gifs\/[a-zA-Z0-9._-]+|api\/gifs\/[a-zA-Z0-9_-]+\/stream))(?:\|([^\]\r\n]{0,120}))?\]\])/g;
+    var out = '';
+    var lastIdx = 0;
+    var match;
+    while ((match = tokenRe.exec(text)) !== null) {
+      if (match.index > lastIdx) {
+        out += escapeHtml(text.slice(lastIdx, match.index));
+      }
+      var gifPath = match[2];
+      var gifTitle = (match[3] || 'GIF').trim() || 'GIF';
+      out += '<div class="ch-gif-embed">';
+      out += '<img src="' + escapeHtml(gifPath) + '" alt="' + escapeHtml(gifTitle) + '" loading="lazy" />';
+      if (gifTitle && gifTitle !== 'GIF') {
+        out += '<div class="ch-gif-embed-caption">' + escapeHtml(gifTitle) + '</div>';
+      }
+      out += '</div>';
+      lastIdx = tokenRe.lastIndex;
+    }
+    if (lastIdx < text.length) {
+      out += escapeHtml(text.slice(lastIdx));
+    }
+    return out;
+  }
+
   function formatTime(isoStr) {
     if (!isoStr) return '';
     try {
@@ -284,81 +315,11 @@
 
     var headerTitleEl = document.querySelector('.ch-server-header > span:first-child');
     if (headerTitleEl) {
-      headerTitleEl.textContent = uiState.sidebarMode === 'dms' ? '💬 Direct Messages' : 'Bushrod Clubhouse';
+      headerTitleEl.textContent = 'Bushrod Clubhouse';
     }
 
     var channels = Store.state.channels || [];
     var voiceParticipants = Store.state.voiceParticipants || [];
-
-    if (uiState.sidebarMode === 'dms') {
-      var dmChannels = [];
-      for (var dIdx = 0; dIdx < channels.length; dIdx++) {
-        if (channels[dIdx].channel_type === 'dm' || channels[dIdx].channel_type === 'group_dm' || channels[dIdx].category === 'Direct Messages') {
-          dmChannels.push(channels[dIdx]);
-        }
-      }
-
-      var dmHtml = '<div class="ch-category">';
-      dmHtml += '<div class="ch-category-header"><span>Active Conversations (' + dmChannels.length + ')</span></div>';
-      if (dmChannels.length === 0) {
-        dmHtml += '<div style="padding:8px 12px;font-size:12px;color:var(--ch-text-muted);">No direct messages yet. Pick a player below to start an E2EE conversation!</div>';
-      } else {
-        for (var mIdx = 0; mIdx < dmChannels.length; mIdx++) {
-          var dmCh = dmChannels[mIdx];
-          var isDmActive = Number(dmCh.id) === Number(uiState.activeChannelId);
-          dmHtml += '<div class="ch-channel-item' + (isDmActive ? ' active' : '') + '" data-channel-id="' + dmCh.id + '" data-channel-type="dm">';
-          dmHtml += '<div class="ch-channel-label"><span>💬 ' + escapeHtml(dmCh.name) + '</span><span class="ch-lock-icon" title="End-to-End Encrypted">🔒</span></div>';
-          dmHtml += '</div>';
-        }
-      }
-      dmHtml += '</div>';
-
-      var u = Store.state.user;
-      var members = Array.isArray(Store.state.members) && Store.state.members.length > 0
-        ? Store.state.members
-        : ((uiState.upcomingData && Array.isArray(uiState.upcomingData.attendees)) ? uiState.upcomingData.attendees : []);
-
-      dmHtml += '<div class="ch-category" style="margin-top:10px;">';
-      dmHtml += '<div class="ch-category-header"><span>Start New DM — Players</span></div>';
-      var countRendered = 0;
-      for (var pIdx = 0; pIdx < members.length; pIdx++) {
-        var mem = members[pIdx];
-        var memId = Number(mem.id || mem.user_id);
-        if (!memId || (u && memId === Number(u.id))) continue;
-        countRendered++;
-        var roleTag = (mem.role === 'admin' || mem.isAdmin) ? 'Admin' : (mem.role === 'organizer' ? 'Org' : '');
-        dmHtml += '<div class="ch-channel-item" data-start-dm-uid="' + memId + '" data-start-dm-name="' + escapeHtml(mem.name) + '">';
-        dmHtml += '<div class="ch-channel-label"><span>👤 ' + escapeHtml(mem.name) + '</span>' +
-          (roleTag ? '<span class="ch-badge" style="font-size:10px;">' + escapeHtml(roleTag) + '</span>' : '<span style="font-size:11px;color:var(--ch-accent);">Message →</span>') +
-          '</div>';
-        dmHtml += '</div>';
-      }
-      if (countRendered === 0) {
-        dmHtml += '<div style="padding:8px 12px;font-size:12px;color:var(--ch-text-muted);">Sign in with a second test account to message between accounts!</div>';
-      }
-      dmHtml += '</div>';
-
-      container.innerHTML = dmHtml;
-
-      var dmEls = container.querySelectorAll('[data-channel-id]');
-      for (var x = 0; x < dmEls.length; x++) {
-        dmEls[x].addEventListener('click', function () {
-          var chId = Number(this.getAttribute('data-channel-id'));
-          selectTextChannel(chId);
-        });
-      }
-
-      var startDmEls = container.querySelectorAll('[data-start-dm-uid]');
-      for (var y = 0; y < startDmEls.length; y++) {
-        startDmEls[y].addEventListener('click', function () {
-          var uid = Number(this.getAttribute('data-start-dm-uid'));
-          var uname = this.getAttribute('data-start-dm-name') || 'Player';
-          openOrCreateDmWithUser(uid, uname);
-        });
-      }
-      return;
-    }
-
     var categoriesOrder = ['Clubhouse Info', 'Text Channels', 'Voice Lounges', 'Staff & Operations', 'Direct Messages'];
     var grouped = {};
 
@@ -891,7 +852,7 @@
         }
         html += '</div>';
       } else {
-        html += '<div class="ch-msg-content">' + escapeHtml(displayContent) + '</div>';
+        html += '<div class="ch-msg-content">' + renderMessageTextWithGifs(displayContent) + '</div>';
       }
 
       if (attachments.length > 0) {
@@ -1130,7 +1091,7 @@
     var previewEl = el('ch-thread-root-preview');
     if (previewEl && uiState.activeThreadRoot) {
       previewEl.innerHTML = '<strong>' + escapeHtml(uiState.activeThreadRoot.author_name || 'Player') + ':</strong> ' +
-        escapeHtml(uiState.activeThreadRoot.decrypted_content || uiState.activeThreadRoot.content || '');
+        renderMessageTextWithGifs(uiState.activeThreadRoot.decrypted_content || uiState.activeThreadRoot.content || '');
     }
 
     loadThreadReplies(parentMessageId);
@@ -1163,7 +1124,7 @@
         if (r.is_hidden || r.hidden_at) {
           html += '<div class="ch-msg-hidden-notice" style="margin-top:4px;">⚠️ Hidden by ' + escapeHtml(r.hidden_by_name || 'Moderator') + (r.hidden_reason ? ': ' + escapeHtml(r.hidden_reason) : '') + '</div>';
         } else {
-          html += '<div style="font-size:13px;margin-top:3px;">' + escapeHtml(r.decrypted_content || r.content) + '</div>';
+          html += '<div style="font-size:13px;margin-top:3px;">' + renderMessageTextWithGifs(r.decrypted_content || r.content) + '</div>';
         }
         html += '</div>';
       }
@@ -1844,12 +1805,248 @@
     });
   }
 
+  function loadGifPickerData() {
+    var starterPromise;
+    if (uiState.starterGifsLoaded) {
+      starterPromise = Promise.resolve(uiState.starterGifs);
+    } else {
+      starterPromise = fetch('/gifs/catalog.json').then(function (r) {
+        return r.ok ? r.json() : { gifs: [] };
+      }).then(function (data) {
+        uiState.starterGifs = Array.isArray(data && data.gifs) ? data.gifs : [];
+        uiState.starterGifsLoaded = true;
+        return uiState.starterGifs;
+      }).catch(function () {
+        uiState.starterGifsLoaded = true;
+        return [];
+      });
+    }
+
+    var drivePromise;
+    if (!Store.state.user) {
+      drivePromise = Promise.resolve([]);
+    } else {
+      drivePromise = Store.apiRequest('GET', '/api/gifs').then(function (res) {
+        uiState.driveGifs = (res.ok && res.data && Array.isArray(res.data.gifs)) ? res.data.gifs : [];
+        uiState.driveGifsLoaded = true;
+        return uiState.driveGifs;
+      }).catch(function () {
+        return uiState.driveGifs || [];
+      });
+    }
+
+    return Promise.all([starterPromise, drivePromise]).then(function () {
+      renderGifGrid();
+    });
+  }
+
+  function renderGifGrid() {
+    var gridEl = el('ch-gif-grid');
+    if (!gridEl) return;
+
+    var tab = uiState.gifTab || 'all';
+    var q = String(uiState.gifFilter || '').trim().toLowerCase();
+    var combined = [];
+
+    if (tab === 'all' || tab === 'drive') {
+      for (var d = 0; d < uiState.driveGifs.length; d++) {
+        combined.push(uiState.driveGifs[d]);
+      }
+    }
+    if (tab === 'all' || tab === 'starter') {
+      for (var s = 0; s < uiState.starterGifs.length; s++) {
+        combined.push(uiState.starterGifs[s]);
+      }
+    }
+
+    var filtered = [];
+    for (var i = 0; i < combined.length; i++) {
+      var item = combined[i];
+      if (!q) {
+        filtered.push(item);
+      } else {
+        var hay = (String(item.title || '') + ' ' + String(item.tags || '') + ' ' + String(item.added_by_name || '')).toLowerCase();
+        if (hay.indexOf(q) !== -1) filtered.push(item);
+      }
+    }
+
+    if (filtered.length === 0) {
+      gridEl.innerHTML = '<div style="grid-column:1/-1;font-size:12px;color:var(--ch-text-muted);padding:10px 4px;">No matching GIFs. Paste an https:// GIF link above to save it to 5 TB Drive!</div>';
+      return;
+    }
+
+    var html = '';
+    for (var j = 0; j < filtered.length; j++) {
+      var g = filtered[j];
+      var isDrive = g.source === 'drive';
+      var gifIdAttr = isDrive ? (' data-gif-drive-id="' + escapeHtml(g.id) + '"') : '';
+      html += '<button type="button" class="ch-gif-card" data-gif-url="' + escapeHtml(g.url) + '" data-gif-title="' + escapeHtml(g.title || 'GIF') + '"' + gifIdAttr + '>';
+      html += '<img src="' + escapeHtml(g.url) + '" alt="' + escapeHtml(g.title || 'GIF') + '" loading="lazy" />';
+      html += '<span class="ch-gif-card-label">' + escapeHtml(g.title || 'GIF') + (isDrive ? ' ☁️' : '') + '</span>';
+      html += '</button>';
+    }
+    gridEl.innerHTML = html;
+  }
+
+  function openGifPicker() {
+    var picker = el('ch-gif-picker');
+    if (!picker) return;
+    picker.classList.remove('hidden');
+    loadGifPickerData();
+    var searchEl = el('ch-gif-search-input');
+    if (searchEl) searchEl.focus();
+  }
+
+  function closeGifPicker() {
+    var picker = el('ch-gif-picker');
+    if (picker) picker.classList.add('hidden');
+  }
+
+  function sendGifToActiveChannel(gifUrl, gifTitle, driveGifId) {
+    if (!uiState.activeChannelId || !gifUrl) return Promise.resolve();
+    var cleanTitle = String(gifTitle || 'GIF').replace(/[\[\]|]/g, ' ').trim().slice(0, 80) || 'GIF';
+    var composerInput = el('ch-composer-input');
+    var caption = composerInput ? composerInput.value.trim() : '';
+    var token = '[[gif:' + gifUrl + '|' + cleanTitle + ']]';
+    var content = caption ? (caption + '\n' + token) : token;
+    if (composerInput) composerInput.value = '';
+
+    return Store.sendMessage(uiState.activeChannelId, {
+      content: content,
+      message_type: 'gif'
+    }).then(function () {
+      closeGifPicker();
+      renderMessageStream();
+      refreshDmE2eeNotice();
+      if (driveGifId) {
+        Store.apiRequest('POST', '/api/gifs/' + encodeURIComponent(driveGifId) + '/use', {}).catch(function () {});
+      }
+    }).catch(function (err) {
+      if (composerInput && caption) composerInput.value = caption;
+      if (err && err.code === 'E2EE_IDENTITY_REQUIRED') {
+        var vm = el('ch-vault-modal');
+        if (vm) vm.classList.remove('hidden');
+      } else {
+        var statusEl = el('ch-gif-import-status');
+        if (statusEl) statusEl.textContent = '⚠️ ' + ((err && err.message) || 'Failed to send GIF.');
+      }
+    });
+  }
+
+  function handleImportGifUrl() {
+    var urlInput = el('ch-gif-url-input');
+    var titleInput = el('ch-gif-title-input');
+    var statusEl = el('ch-gif-import-status');
+    var submitBtn = el('btn-import-gif-url');
+    if (!urlInput) return;
+
+    var rawUrl = urlInput.value.trim();
+    var rawTitle = titleInput ? titleInput.value.trim() : '';
+    if (!rawUrl) return;
+
+    var ch = uiState.activeChannel;
+    var isPrivateChannel = Boolean(ch && (ch.channel_type === 'dm' || ch.channel_type === 'group_dm' || ch.is_private === 1));
+
+    if (submitBtn) submitBtn.disabled = true;
+    if (statusEl) statusEl.textContent = 'Fetching & saving to 5 TB Google Drive...';
+
+    Store.apiRequest('POST', '/api/gifs/import-url', {
+      url: rawUrl,
+      title: rawTitle,
+      is_public: !isPrivateChannel
+    }).then(function (res) {
+      if (!res.ok || !res.data || !res.data.gif) {
+        throw new Error((res.data && res.data.error) || 'Could not import GIF URL.');
+      }
+      var saved = res.data.gif;
+      var exists = false;
+      for (var i = 0; i < uiState.driveGifs.length; i++) {
+        if (uiState.driveGifs[i].id === saved.id) {
+          exists = true;
+          break;
+        }
+      }
+      if (!exists) {
+        uiState.driveGifs.unshift(saved);
+      }
+      urlInput.value = '';
+      if (titleInput) titleInput.value = '';
+      if (statusEl) {
+        statusEl.textContent = res.data.deduplicated
+          ? '✓ Already cached in 5 TB Drive — reused without duplicating!'
+          : '✓ Saved once to 5 TB Google Drive & posted!';
+      }
+      renderGifGrid();
+      return sendGifToActiveChannel(saved.url, saved.title, null);
+    }).catch(function (err) {
+      if (statusEl) statusEl.textContent = '⚠️ ' + ((err && err.message) || 'Import failed.');
+    }).then(function () {
+      if (submitBtn) submitBtn.disabled = false;
+    });
+  }
+
   function initDomEvents() {
     var composerForm = el('ch-composer-form');
     var composerInput = el('ch-composer-input');
     var fileBtn = el('btn-attach-file');
     var fileInput = el('ch-file-input');
     var searchInput = el('ch-message-search');
+    var gifOpenBtn = el('btn-open-gif-picker');
+    var gifCloseBtn = el('btn-close-gif-picker');
+    var gifPicker = el('ch-gif-picker');
+    var gifSearchInput = el('ch-gif-search-input');
+    var gifTabsWrap = el('ch-gif-tabs');
+    var gifImportForm = el('ch-gif-import-form');
+    var gifGrid = el('ch-gif-grid');
+
+    if (gifOpenBtn && gifPicker) {
+      gifOpenBtn.addEventListener('click', function () {
+        if (gifPicker.classList.contains('hidden')) {
+          openGifPicker();
+        } else {
+          closeGifPicker();
+        }
+      });
+    }
+    if (gifCloseBtn) {
+      gifCloseBtn.addEventListener('click', function () {
+        closeGifPicker();
+      });
+    }
+    if (gifSearchInput) {
+      gifSearchInput.addEventListener('input', function () {
+        uiState.gifFilter = gifSearchInput.value || '';
+        renderGifGrid();
+      });
+    }
+    if (gifTabsWrap) {
+      gifTabsWrap.addEventListener('click', function (ev) {
+        var btn = ev.target && ev.target.closest ? ev.target.closest('[data-gif-tab]') : null;
+        if (!btn) return;
+        uiState.gifTab = btn.getAttribute('data-gif-tab') || 'all';
+        var allTabs = gifTabsWrap.querySelectorAll('.ch-gif-tab');
+        for (var t = 0; t < allTabs.length; t++) {
+          allTabs[t].classList.toggle('active', allTabs[t] === btn);
+        }
+        renderGifGrid();
+      });
+    }
+    if (gifImportForm) {
+      gifImportForm.addEventListener('submit', function (ev) {
+        ev.preventDefault();
+        handleImportGifUrl();
+      });
+    }
+    if (gifGrid) {
+      gifGrid.addEventListener('click', function (ev) {
+        var card = ev.target && ev.target.closest ? ev.target.closest('.ch-gif-card') : null;
+        if (!card) return;
+        var gUrl = card.getAttribute('data-gif-url');
+        var gTitle = card.getAttribute('data-gif-title') || 'GIF';
+        var gDriveId = card.getAttribute('data-gif-drive-id') || null;
+        sendGifToActiveChannel(gUrl, gTitle, gDriveId);
+      });
+    }
 
     if (composerForm && composerInput) {
       composerInput.addEventListener('keydown', function (ev) {
@@ -2092,14 +2289,11 @@
       mobileBackdrop.addEventListener('click', closeMobileDrawers);
     }
 
-    // Left rail navigation (#rail-home-btn & #rail-dm-btn)
+    // Left rail navigation (#rail-home-btn)
     var railHomeBtn = el('rail-home-btn');
-    var railDmBtn = el('rail-dm-btn');
     if (railHomeBtn) {
       railHomeBtn.addEventListener('click', function () {
-        uiState.sidebarMode = 'channels';
         railHomeBtn.classList.add('active');
-        if (railDmBtn) railDmBtn.classList.remove('active');
         switchContextTab('sunday');
         renderChannelSidebar();
         var chs = Store.state.channels || [];
@@ -2111,32 +2305,6 @@
         }
         if (isNarrowViewport(720)) {
           openMobileSidebar();
-        }
-      });
-    }
-    if (railDmBtn) {
-      railDmBtn.addEventListener('click', function () {
-        uiState.sidebarMode = 'dms';
-        railDmBtn.classList.add('active');
-        if (railHomeBtn) railHomeBtn.classList.remove('active');
-        renderChannelSidebar();
-        switchContextTab('members');
-        renderMembersDirectory();
-        var hasDm = false;
-        var chs = Store.state.channels || [];
-        for (var i = 0; i < chs.length; i++) {
-          if (chs[i].channel_type === 'dm' || chs[i].channel_type === 'group_dm' || chs[i].category === 'Direct Messages') {
-            selectTextChannel(chs[i].id);
-            hasDm = true;
-            break;
-          }
-        }
-        if (isNarrowViewport(720)) {
-          if (hasDm) {
-            openMobileSidebar();
-          } else {
-            openMobileContext();
-          }
         }
       });
     }

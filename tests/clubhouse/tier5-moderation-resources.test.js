@@ -973,4 +973,195 @@ module.exports = async function runTier5(t, ctx) {
     assert.ok(!clubhouseJs.includes('?.') && !clubhouseJs.includes('??'), 'clubhouse.js must remain strict ES6');
     assert.ok(!/\son(click|change|submit|load|error|input|keydown)=/i.test(clubhouseHtml), 'clubhouse.html must have zero inline handlers');
   });
+
+  await t.test('T5.13: Clubhouse GIF Selector (Starter Catalog + 5 TB Drive Web Link Import, SSRF Guard, Dedup & Stream)', async () => {
+    const http = require('node:http');
+    const rootDir = path.join(__dirname, '..', '..');
+
+    // 1. Verify static starter catalog and GIF89a files on disk
+    const catalogRaw = fs.readFileSync(path.join(rootDir, 'public', 'gifs', 'catalog.json'), 'utf8');
+    const catalog = JSON.parse(catalogRaw);
+    assert.ok(Array.isArray(catalog.gifs) && catalog.gifs.length >= 6, 'Starter GIF catalog must include starter GIFs');
+    let totalStarterBytes = 0;
+    for (const entry of catalog.gifs) {
+      const diskPath = path.join(rootDir, 'public', entry.url.replace(/^\//, ''));
+      const buf = fs.readFileSync(diskPath);
+      assert.equal(buf.subarray(0, 6).toString('ascii'), 'GIF89a', `${entry.url} must be valid GIF89a`);
+      totalStarterBytes += buf.length;
+    }
+    assert.ok(totalStarterBytes < 50 * 1024, 'Entire starter GIF pack should stay tiny (< 50 KB)');
+
+    // 2. Verify SSRF & scheme protections on POST /api/gifs/import-url
+    const httpReject = await ctx.apiReq('POST', '/api/gifs/import-url', ctx.playerCookie, {
+      url: 'http://example.com/celebrate.gif'
+    });
+    assert.equal(httpReject.status, 400);
+
+    const ssrfMetadata = await ctx.apiReq('POST', '/api/gifs/import-url', ctx.playerCookie, {
+      url: 'https://169.254.169.254/latest/meta-data.gif'
+    });
+    assert.equal(ssrfMetadata.status, 403);
+
+    const ssrfPrivate = await ctx.apiReq('POST', '/api/gifs/import-url', ctx.playerCookie, {
+      url: 'https://10.0.0.5/internal.gif'
+    });
+    assert.equal(ssrfPrivate.status, 403);
+
+    // 3. Spin up ephemeral test GIF host to test magic-byte check, Drive upload, dedup & streaming
+    const sampleGif = fs.readFileSync(path.join(rootDir, 'public', 'gifs', 'home-run.gif'));
+    const privateGif = fs.readFileSync(path.join(rootDir, 'public', 'gifs', 'safe.gif'));
+    const rallyGif = fs.readFileSync(path.join(rootDir, 'public', 'gifs', 'rally-cap.gif'));
+    let remoteFetchCount = 0;
+
+    const mockGifServer = http.createServer((req, res) => {
+      remoteFetchCount += 1;
+      if (req.url === '/not-a-gif.gif') {
+        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.end('<html><body>not a gif</body></html>');
+        return;
+      }
+      if (req.url === '/private-dm.gif') {
+        res.writeHead(200, { 'Content-Type': 'image/gif', 'Content-Length': String(privateGif.length) });
+        res.end(privateGif);
+        return;
+      }
+      if (req.url === '/rally-gdrive.gif') {
+        res.writeHead(200, { 'Content-Type': 'image/gif', 'Content-Length': String(rallyGif.length) });
+        res.end(rallyGif);
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'image/gif', 'Content-Length': String(sampleGif.length) });
+      res.end(sampleGif);
+    });
+
+    await new Promise((resolve) => mockGifServer.listen(0, '127.0.0.1', resolve));
+    const port = mockGifServer.address().port;
+
+    try {
+      // Non-GIF payload must be rejected by magic-byte verification
+      const fakeRes = await ctx.apiReq('POST', '/api/gifs/import-url', ctx.playerCookie, {
+        url: `http://127.0.0.1:${port}/not-a-gif.gif`
+      });
+      assert.equal(fakeRes.status, 400);
+
+      // Import real GIF URL via test server (exercises local fallback & dedup when GDrive env not set on harness)
+      const importRes = await ctx.apiReq('POST', '/api/gifs/import-url', ctx.playerCookie, {
+        url: `http://127.0.0.1:${port}/batflip.gif`,
+        title: 'Bat Flip Celebration'
+      });
+      assert.equal(importRes.status, 201);
+      assert.equal(importRes.data.deduplicated, false);
+      assert.equal(importRes.data.gif.title, 'Bat Flip Celebration');
+
+      const gifId = importRes.data.gif.id;
+      const d1Row = await ctx.chatD1.prepare('SELECT storage_provider, drive_file_id, local_data_base64 FROM clubhouse_gifs WHERE id = ?').bind(gifId).first();
+      assert.ok(d1Row && (d1Row.storage_provider === 'local' || d1Row.storage_provider === 'gdrive'));
+
+      // Verify true 5 TB Google Drive upload + zero D1 binary payload using MockGoogleDriveService
+      const { createMockGDriveServer } = require('../helpers/mock-gdrive');
+      const { app: honoApp } = await import('../../src/app/index.js');
+      const mockDrive = await createMockGDriveServer();
+      try {
+        const gdriveEnv = {
+          NODE_ENV: 'test',
+          BASEBALL_DB: ctx.baseballD1,
+          CHAT_DB: ctx.chatD1,
+          DB: ctx.baseballD1,
+          GDRIVE_API_BASE: mockDrive.baseUrl,
+          GDRIVE_ACCESS_TOKEN: 'mock_token'
+        };
+        const gReqRally = new Request('http://127.0.0.1/api/gifs/import-url', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Cookie': ctx.playerCookie,
+            'Origin': 'http://127.0.0.1'
+          },
+          body: JSON.stringify({
+            url: `http://127.0.0.1:${port}/rally-gdrive.gif`,
+            title: 'GDrive Rally Cap',
+            tags: 'gdrive rally'
+          })
+        });
+        const gRes = await honoApp.fetch(gReqRally, gdriveEnv);
+        assert.equal(gRes.status, 201);
+        const gData = await gRes.json();
+        assert.equal(gData.gif.storage_provider, 'gdrive');
+        const gdRow = await ctx.chatD1.prepare('SELECT storage_provider, drive_file_id, local_data_base64 FROM clubhouse_gifs WHERE id = ?').bind(gData.gif.id).first();
+        assert.equal(gdRow.storage_provider, 'gdrive');
+        assert.ok(gdRow.drive_file_id, 'GIF must be stored in Google Drive');
+        assert.equal(gdRow.local_data_base64, null, 'Binary bytes must NOT bloat D1 when Drive is configured');
+
+        const gdStreamRes = await honoApp.fetch(
+          new Request(`http://127.0.0.1/api/gifs/${encodeURIComponent(gData.gif.id)}/stream`, { method: 'GET' }),
+          gdriveEnv
+        );
+        assert.equal(gdStreamRes.status, 200);
+        assert.equal(gdStreamRes.headers.get('content-type'), 'image/gif');
+      } finally {
+        await mockDrive.close();
+      }
+
+      // Re-importing the exact same URL deduplicates with zero external fetch
+      const fetchesBeforeUrlDedup = remoteFetchCount;
+      const dupUrlRes = await ctx.apiReq('POST', '/api/gifs/import-url', ctx.facilitatorCookie, {
+        url: `http://127.0.0.1:${port}/batflip.gif`
+      });
+      assert.equal(dupUrlRes.status, 200);
+      assert.equal(dupUrlRes.data.deduplicated, true);
+      assert.equal(dupUrlRes.data.gif.id, gifId);
+      assert.equal(remoteFetchCount, fetchesBeforeUrlDedup, 'URL dedup must skip fetching remote host');
+
+      // Different URL with identical bytes deduplicates by SHA-256 hash
+      const dupHashRes = await ctx.apiReq('POST', '/api/gifs/import-url', ctx.facilitatorCookie, {
+        url: `http://127.0.0.1:${port}/mirror-batflip.gif`
+      });
+      assert.equal(dupHashRes.status, 200);
+      assert.equal(dupHashRes.data.deduplicated, true);
+      assert.equal(dupHashRes.data.gif.id, gifId);
+
+      // Stream full GIF & Range request from Drive
+      const streamRes = await ctx.apiReq('GET', `/api/gifs/${encodeURIComponent(gifId)}/stream`);
+      assert.equal(streamRes.status, 200);
+      assert.equal(streamRes.headers.get('content-type'), 'image/gif');
+
+      // Private / DM GIF import must stay unlisted from other users' drawer and require auth to stream
+      const privRes = await ctx.apiReq('POST', '/api/gifs/import-url', ctx.playerCookie, {
+        url: `http://127.0.0.1:${port}/private-dm.gif`,
+        title: 'Secret Slide',
+        is_public: false
+      });
+      assert.equal(privRes.status, 201);
+      const privId = privRes.data.gif.id;
+
+      const listOther = await ctx.apiReq('GET', '/api/gifs', ctx.facilitatorCookie);
+      assert.equal(listOther.status, 200);
+      assert.ok(listOther.data.gifs.some((g) => g.id === gifId), 'Public GIF should appear in community list');
+      assert.ok(!listOther.data.gifs.some((g) => g.id === privId), 'Unlisted DM GIF must not appear in other users list');
+
+      const unauthPrivStream = await ctx.apiReq('GET', `/api/gifs/${encodeURIComponent(privId)}/stream`);
+      assert.equal(unauthPrivStream.status, 401);
+
+      const authPrivStream = await ctx.apiReq('GET', `/api/gifs/${encodeURIComponent(privId)}/stream`, ctx.facilitatorCookie);
+      assert.equal(authPrivStream.status, 200);
+      assert.ok(String(authPrivStream.headers.get('cache-control') || '').includes('private'));
+    } finally {
+      await new Promise((resolve) => mockGifServer.close(resolve));
+    }
+
+    // 4. Verify UI & strict ES6/CSP invariants
+    const clubhouseHtml = fs.readFileSync(path.join(rootDir, 'public', 'clubhouse.html'), 'utf8');
+    const clubhouseJs = fs.readFileSync(path.join(rootDir, 'public', 'js', 'clubhouse.js'), 'utf8');
+    assert.ok(clubhouseHtml.includes('id="btn-open-gif-picker"'));
+    assert.ok(clubhouseHtml.includes('id="ch-gif-picker"'));
+    assert.ok(clubhouseHtml.includes('id="ch-gif-import-form"'));
+    assert.ok(clubhouseJs.includes('renderMessageTextWithGifs'));
+    assert.ok(clubhouseJs.includes('handleImportGifUrl'));
+    assert.ok(!clubhouseHtml.includes('id="rail-dm-btn"'), 'Left-rail DM button/tab should be removed');
+    assert.ok(!clubhouseJs.includes('sidebarMode'), 'Left-sidebar DM mode toggle should be removed');
+    assert.ok(clubhouseJs.includes('data-dm-uid'), 'Members panel DM button must remain available');
+    assert.ok(clubhouseJs.includes("'Direct Messages'"), 'Direct Messages category in channel list must remain');
+    assert.ok(!clubhouseJs.includes('?.') && !clubhouseJs.includes('??'), 'clubhouse.js must remain strict ES6');
+    assert.ok(!/\son(click|change|submit|load|error|input|keydown)=/i.test(clubhouseHtml), 'clubhouse.html must have zero inline handlers');
+  });
 };

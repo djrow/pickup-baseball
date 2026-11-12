@@ -1147,3 +1147,174 @@ html, body.clubhouse-body {
 .ch-covenant-list li strong {
   color: var(--ch-accent);
 }
+
+/* GIF Picker & Inline GIF Embeds */
+.ch-gif-trigger-btn {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  padding: 4px 8px;
+  border: 1px solid var(--ch-border);
+  border-radius: 5px;
+  color: var(--ch-accent);
+}
+
+.ch-gif-picker {
+  margin-bottom: 10px;
+  background-color: var(--ch-bg-sidebar);
+  border: 1px solid var(--ch-border);
+  border-radius: 10px;
+  padding: 10px;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45);
+}
+
+.ch-gif-picker.hidden {
+  display: none;
+}
+
+.ch-gif-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.ch-gif-picker-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.ch-gif-tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.ch-gif-tab {
+  background: transparent;
+  border: 1px solid var(--ch-border);
+  color: var(--ch-text-secondary);
+  border-radius: 5px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ch-gif-tab.active {
+  background-color: var(--ch-accent);
+  border-color: var(--ch-accent);
+  color: #06281c;
+}
+
+.ch-gif-controls {
+  margin-bottom: 6px;
+}
+
+.ch-gif-import-form {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.ch-gif-input {
+  flex: 1 1 200px;
+  min-width: 0;
+  background-color: var(--ch-bg-stage);
+  border: 1px solid var(--ch-border);
+  border-radius: 6px;
+  padding: 6px 9px;
+  color: var(--ch-text-primary);
+  font-size: 12px;
+  font-family: var(--ch-font);
+  outline: none;
+}
+
+.ch-gif-input:focus {
+  border-color: var(--ch-accent);
+}
+
+.ch-gif-title-input {
+  flex: 0 1 140px;
+}
+
+.ch-gif-import-btn {
+  padding: 6px 10px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.ch-gif-import-status {
+  font-size: 11px;
+  color: var(--ch-text-muted);
+  margin-bottom: 8px;
+}
+
+.ch-gif-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.ch-gif-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background-color: var(--ch-bg-stage);
+  border: 1px solid var(--ch-border);
+  border-radius: 7px;
+  padding: 4px;
+  cursor: pointer;
+  color: var(--ch-text-primary);
+  text-align: left;
+}
+
+.ch-gif-card:hover {
+  border-color: var(--ch-accent);
+}
+
+.ch-gif-card img {
+  width: 100%;
+  height: 68px;
+  object-fit: cover;
+  border-radius: 4px;
+  background-color: #0b0e14;
+}
+
+.ch-gif-card-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ch-gif-embed {
+  margin-top: 6px;
+  display: inline-block;
+  background-color: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--ch-border);
+  border-radius: 8px;
+  padding: 4px;
+  max-width: 260px;
+}
+
+.ch-gif-embed img {
+  display: block;
+  max-width: 100%;
+  max-height: 200px;
+  border-radius: 6px;
+}
+
+.ch-gif-embed-caption {
+  font-size: 10.5px;
+  color: var(--ch-text-muted);
+  margin-top: 3px;
+  padding: 0 2px;
+}

@@ -1,11 +1,12 @@
 import { Hono } from 'hono';
-import { requireAuth, requireOrganizer, requireAdmin, getClientIp, checkRateLimit, isValidRasterImageBuffer, generateToken, rejectIfChatMuted } from '../security.js';
+import { requireAuth, requireOrganizer, requireAdmin, getClientIp, checkRateLimit, isValidRasterImageBuffer, generateToken, rejectIfChatMuted, isPrivateIpOrHost } from '../security.js';
 import { arrayBufferToBase64, base64ToUint8Array, stripJpegMetadata } from '../security.js';
 import {
   isGDriveConfigured,
   initGDriveResumableSession,
   getGDriveFileMetadata,
   streamGDriveFile,
+  serveByteRangeResponse,
   getGDriveStorageQuota
 } from '../gdrive.js';
 import { resolveChannel, canUserAccessChannel } from './chat.js';
@@ -23,43 +24,6 @@ function extractGoogleDriveFileId(url) {
   if (!url) return null;
   const match = String(url).match(/(?:drive\.google\.com\/(?:file\/d\/|open\?id=)|docs\.google\.com\/file\/d\/)([\w-]{25,})/i);
   return match ? match[1] : null;
-}
-
-function isPrivateIpOrHost(hostname, isTestEnv = false) {
-  if (!hostname) return true;
-  const h = hostname.toLowerCase().trim();
-  if (isTestEnv && (h === 'localhost' || h === '127.0.0.1' || h === '::1')) {
-    return false; // Allow local test harness to test image copying
-  }
-  if (h === 'localhost' || h === '::1' || h === '0.0.0.0' || h === '0' || h.endsWith('.local') || h.endsWith('.internal')) return true;
-
-  // IPv4 dotted decimal check
-  const ipv4Match = h.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
-  if (ipv4Match) {
-    const o1 = parseInt(ipv4Match[1], 10);
-    const o2 = parseInt(ipv4Match[2], 10);
-    const o3 = parseInt(ipv4Match[3], 10);
-    const o4 = parseInt(ipv4Match[4], 10);
-    if ([o1, o2, o3, o4].some(n => n < 0 || n > 255)) return true;
-    if (o1 === 127) return true; // 127.0.0.0/8 loopback
-    if (o1 === 10) return true;  // 10.0.0.0/8 private
-    if (o1 === 192 && o2 === 168) return true; // 192.168.0.0/16 private
-    if (o1 === 172 && (o2 >= 16 && o2 <= 31)) return true; // 172.16.0.0/12 private
-    if (o1 === 169 && o2 === 254) return true; // 169.254.0.0/16 link-local
-    if (o1 === 100 && (o2 >= 64 && o2 <= 127)) return true; // 100.64.0.0/10 carrier NAT
-    if (o1 === 0) return true; // 0.0.0.0/8 current network
-    if (o1 >= 224) return true; // 224.0.0.0/4 multicast & reserved
-  }
-
-  // Pure integer / hex IP representation check
-  if (/^\d+$/.test(h) || /^0x[0-9a-f]+$/i.test(h)) return true;
-
-  // IPv6 bracketed checks
-  if (h.startsWith('[') && h.endsWith(']')) {
-    const inner = h.slice(1, -1);
-    if (inner === '::1' || inner === '::' || inner.startsWith('fe80:') || inner.startsWith('fc00:') || inner.startsWith('fd00:') || inner.includes('::ffff:')) return true;
-  }
-  return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -1073,61 +1037,8 @@ attachmentsRouter.get('/:id/stream', async (c) => {
   }
 
   const bytes = base64ToUint8Array(attachment.local_data_base64);
-  const totalSize = bytes.byteLength;
   const mimeType = attachment.mime_type || 'application/octet-stream';
-
-  if (rangeHeader) {
-    const match = rangeHeader.match(/bytes=(\d+)-(\d*)/);
-    if (!match) {
-      return new Response('Range Not Satisfiable', {
-        status: 416,
-        headers: {
-          'Content-Range': `bytes */${totalSize}`,
-          'Accept-Ranges': 'bytes'
-        }
-      });
-    }
-
-    const start = parseInt(match[1], 10);
-    const end = match[2] ? parseInt(match[2], 10) : totalSize - 1;
-
-    if (isNaN(start) || start >= totalSize || start < 0 || (!isNaN(end) && end < start)) {
-      return new Response('Range Not Satisfiable', {
-        status: 416,
-        headers: {
-          'Content-Range': `bytes */${totalSize}`,
-          'Accept-Ranges': 'bytes'
-        }
-      });
-    }
-
-    const sliceEnd = Math.min(end + 1, totalSize);
-    const chunk = bytes.subarray(start, sliceEnd);
-    const chunkLen = chunk.byteLength;
-
-    return new Response(chunk, {
-      status: 206,
-      headers: {
-        'Content-Type': mimeType,
-        'Content-Range': `bytes ${start}-${start + chunkLen - 1}/${totalSize}`,
-        'Content-Length': String(chunkLen),
-        'Accept-Ranges': 'bytes',
-        'Cache-Control': 'public, max-age=31536000, immutable',
-        'X-Content-Type-Options': 'nosniff'
-      }
-    });
-  }
-
-  return new Response(bytes, {
-    status: 200,
-    headers: {
-      'Content-Type': mimeType,
-      'Content-Length': String(totalSize),
-      'Accept-Ranges': 'bytes',
-      'Cache-Control': 'public, max-age=31536000, immutable',
-      'X-Content-Type-Options': 'nosniff'
-    }
-  });
+  return serveByteRangeResponse(bytes, mimeType, rangeHeader);
 });
 
 // ---------------------------------------------------------------------------

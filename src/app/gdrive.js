@@ -125,15 +125,15 @@ export async function initGDriveResumableSession(env, { fileName, mimeType, file
 }
 
 /**
- * Upload a small text/HTML document (such as a Signed Waiver Certificate) directly to Google Drive v3
+ * Upload raw bytes (images, GIFs, waivers, documents) directly to Google Drive v3
  */
-export async function uploadGDriveTextFile(env, { fileName, mimeType = 'text/html; charset=utf-8', content }) {
+export async function uploadGDriveBytes(env, { fileName, mimeType = 'application/octet-stream', bytes }) {
   if (!isGDriveConfigured(env)) return null;
-  const bytes = new TextEncoder().encode(String(content || ''));
+  const payload = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || 0);
   const session = await initGDriveResumableSession(env, {
     fileName,
     mimeType,
-    fileSize: bytes.byteLength
+    fileSize: payload.byteLength
   });
   if (!session || !session.sessionUri) return session ? session.driveFileId : null;
 
@@ -141,9 +141,9 @@ export async function uploadGDriveTextFile(env, { fileName, mimeType = 'text/htm
     method: 'PUT',
     headers: {
       'Content-Type': mimeType,
-      'Content-Length': String(bytes.byteLength)
+      'Content-Length': String(payload.byteLength)
     },
-    body: bytes
+    body: payload
   });
 
   if (!putRes.ok) {
@@ -156,6 +156,14 @@ export async function uploadGDriveTextFile(env, { fileName, mimeType = 'text/htm
   } catch (e) {
     return session.driveFileId || null;
   }
+}
+
+/**
+ * Upload a small text/HTML document (such as a Signed Waiver Certificate) directly to Google Drive v3
+ */
+export async function uploadGDriveTextFile(env, { fileName, mimeType = 'text/html; charset=utf-8', content }) {
+  const bytes = new TextEncoder().encode(String(content || ''));
+  return await uploadGDriveBytes(env, { fileName, mimeType, bytes });
 }
 
 /**
@@ -190,10 +198,74 @@ export async function getGDriveFileMetadata(env, driveFileId) {
 }
 
 /**
+ * Serve an in-memory Uint8Array with HTTP 206 Partial Content Range support.
+ */
+export function serveByteRangeResponse(bytes, mimeType, rangeHeader, cacheControl = 'public, max-age=31536000, immutable') {
+  const payload = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || 0);
+  const totalSize = payload.byteLength;
+  const contentType = mimeType || 'application/octet-stream';
+
+  if (rangeHeader) {
+    const match = rangeHeader.match(/bytes=(\d+)-(\d*)/);
+    if (!match) {
+      return new Response('Range Not Satisfiable', {
+        status: 416,
+        headers: {
+          'Content-Range': `bytes */${totalSize}`,
+          'Accept-Ranges': 'bytes'
+        }
+      });
+    }
+
+    const start = parseInt(match[1], 10);
+    const end = match[2] ? parseInt(match[2], 10) : totalSize - 1;
+
+    if (isNaN(start) || start >= totalSize || start < 0 || (!isNaN(end) && end < start)) {
+      return new Response('Range Not Satisfiable', {
+        status: 416,
+        headers: {
+          'Content-Range': `bytes */${totalSize}`,
+          'Accept-Ranges': 'bytes'
+        }
+      });
+    }
+
+    const sliceEnd = Math.min(end + 1, totalSize);
+    const chunk = payload.subarray(start, sliceEnd);
+    const chunkLen = chunk.byteLength;
+
+    return new Response(chunk, {
+      status: 206,
+      headers: {
+        'Content-Type': contentType,
+        'Content-Range': `bytes ${start}-${start + chunkLen - 1}/${totalSize}`,
+        'Content-Length': String(chunkLen),
+        'Accept-Ranges': 'bytes',
+        'Cache-Control': cacheControl,
+        'X-Content-Type-Options': 'nosniff'
+      }
+    });
+  }
+
+  return new Response(payload, {
+    status: 200,
+    headers: {
+      'Content-Type': contentType,
+      'Content-Length': String(totalSize),
+      'Accept-Ranges': 'bytes',
+      'Cache-Control': cacheControl,
+      'X-Content-Type-Options': 'nosniff'
+    }
+  });
+}
+
+/**
  * Stream a file from Google Drive v3 with HTTP 206 Partial Content Range support and Edge Caching
  */
-export async function streamGDriveFile(env, driveFileId, rangeHeader, fallbackMimeType = 'application/octet-stream', cacheKeyUrl = null) {
-  const edgeCache = (typeof caches !== 'undefined' && caches && caches.default) ? caches.default : null;
+export async function streamGDriveFile(env, driveFileId, rangeHeader, fallbackMimeType = 'application/octet-stream', cacheKeyUrl = null, options = {}) {
+  const useEdgeCache = options && options.useEdgeCache !== false;
+  const cacheControl = (options && options.cacheControl) || 'public, max-age=31536000, immutable';
+  const edgeCache = (useEdgeCache && typeof caches !== 'undefined' && caches && caches.default) ? caches.default : null;
   let cacheReq = null;
 
   if (edgeCache && cacheKeyUrl) {
@@ -244,7 +316,7 @@ export async function streamGDriveFile(env, driveFileId, rangeHeader, fallbackMi
   const responseHeaders = {
     'Content-Type': upstreamRes.headers.get('content-type') || fallbackMimeType,
     'Accept-Ranges': 'bytes',
-    'Cache-Control': 'public, max-age=31536000, immutable',
+    'Cache-Control': cacheControl,
     'X-Content-Type-Options': 'nosniff'
   };
 
