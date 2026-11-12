@@ -253,17 +253,18 @@ html, body.clubhouse-body {
 .ch-user-bar {
   background-color: #06100d;
   border-top: 1px solid var(--ch-border);
-  padding: 8px 10px;
+  padding: 10px 12px;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: stretch;
   gap: 8px;
 }
 
 .ch-user-identity {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  width: 100%;
   min-width: 0;
 }
 
@@ -282,6 +283,7 @@ html, body.clubhouse-body {
 }
 
 .ch-user-meta {
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -295,13 +297,22 @@ html, body.clubhouse-body {
 
 .ch-user-role {
   font-size: 11px;
+  line-height: 1.35;
   color: var(--ch-text-muted);
 }
 
 .ch-voice-controls {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.ch-voice-controls .ch-icon-btn {
+  width: 100%;
+  height: 30px;
+  background-color: rgba(255, 255, 255, 0.04);
 }
 
 .ch-icon-btn {

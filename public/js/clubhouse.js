@@ -2474,7 +2474,6 @@
     }
 
     // Clubhouse Behavior Covenant modal
-    var railCovenantBtn = el('rail-covenant-btn');
     var openCovenantBtn = el('btn-open-covenant');
     var openCovenantGuestBtn = el('btn-open-covenant-guest');
     var covenantModal = el('ch-covenant-modal');
@@ -2486,7 +2485,6 @@
     function closeCovenantModal() {
       if (covenantModal) covenantModal.classList.add('hidden');
     }
-    if (railCovenantBtn) railCovenantBtn.addEventListener('click', openCovenantModal);
     if (openCovenantBtn) openCovenantBtn.addEventListener('click', openCovenantModal);
     if (openCovenantGuestBtn) openCovenantGuestBtn.addEventListener('click', openCovenantModal);
     if (closeCovenantBtn) closeCovenantBtn.addEventListener('click', closeCovenantModal);
