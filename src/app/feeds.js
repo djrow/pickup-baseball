@@ -126,13 +126,13 @@ export async function renderFeedXmlResponse(db, requestUrl) {
     if (db) {
       try {
         const { results } = await db.prepare(`
-          SELECT p.*, e.title as event_title, e.event_date
+          SELECT p.*, e.title as event_title, e.event_date, e.allowed_emails as event_allowed_emails
           FROM posts p
           LEFT JOIN events e ON p.event_id = e.id
           ORDER BY p.created_at DESC
           LIMIT 50
         `).all();
-        posts = results || [];
+        posts = (results || []).filter(p => parseAllowedEmails(p.event_allowed_emails).length === 0);
       } catch (e) {
         posts = [];
       }

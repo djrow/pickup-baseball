@@ -12,6 +12,7 @@ import {
 import { getDefaultDuties, getRequireLoginSetting } from '../schema.js';
 import {
   parseAllowedEmails,
+  canUserAccessEvent,
   formatUnlockDateTime,
   getTaskTier,
   getDutyType,
@@ -173,24 +174,28 @@ eventsRouter.get('/', async (c) => {
     const stmt = c.env.DB.prepare(query);
     const { results: events } = params.length > 0 ? await stmt.bind(...params).all() : await stmt.all();
 
-    if (user && events && events.length > 0) {
+    const isOrganizer = Boolean(user && (user.canManageEvents || user.isAdmin));
+    const visibleEvents = (events || []).filter(ev => canUserAccessEvent(user, ev));
+
+    if (user && visibleEvents.length > 0) {
       const { results: userRsvps } = await c.env.DB.prepare(
         'SELECT event_id, status, gear_bringing, players_count, spectators_count FROM attendees WHERE user_id = ?'
       ).bind(user.id).all();
       const rsvpMap = new Map((userRsvps || []).map(r => [r.event_id, r]));
-      events.forEach(ev => { ev.my_rsvp = rsvpMap.get(ev.id) || null; });
+      visibleEvents.forEach(ev => { ev.my_rsvp = rsvpMap.get(ev.id) || null; });
     }
 
-    if (events && events.length > 0) {
-      events.forEach(ev => {
-        const allowed = parseAllowedEmails(ev.allowed_emails);
-        ev.is_restricted = allowed.length > 0;
-        ev.allowed_emails_list = allowed;
-      });
-    }
+    visibleEvents.forEach(ev => {
+      const allowed = parseAllowedEmails(ev.allowed_emails);
+      ev.is_restricted = allowed.length > 0;
+      ev.allowed_emails_list = isOrganizer ? allowed : [];
+      if (!isOrganizer) {
+        delete ev.allowed_emails;
+      }
+    });
 
     c.header('Cache-Control', 'no-store');
-    return c.json({ events: events || [], user: user || null, synced_at: nowIso });
+    return c.json({ events: visibleEvents, user: user || null, synced_at: nowIso });
   } catch (err) {
     console.error('[Events] Error listing events:', err);
     return c.json({ error: 'Failed to fetch events.' }, 500);
@@ -424,6 +429,20 @@ eventsRouter.get('/:id', async (c) => {
       return c.json({ error: 'Event not found.' }, 404);
     }
 
+    const earlyAllowedList = parseAllowedEmails(event.allowed_emails);
+    if (earlyAllowedList.length > 0 && !canUserAccessEvent(user, earlyAllowedList)) {
+      if (!user) {
+        return c.json({
+          error: 'This pickup game is restricted to an invite list. Please log in with an invited account to view game details.',
+          restricted: true
+        }, 401);
+      }
+      return c.json({
+        error: 'Access denied: this pickup game is restricted to an invite list.',
+        restricted: true
+      }, 403);
+    }
+
     let duties = (batchRes[1].results || []).map(d => ({
       ...d,
       assigned_players: JSON.parse(d.assigned_players || '[]')
@@ -536,9 +555,16 @@ eventsRouter.get('/:id', async (c) => {
 
       return {
         ...d,
-        assigned_players: canViewRoster
-          ? d.assigned_players
-          : (d.assigned_players || []).map(p => ({ attendee_id: p.attendee_id, name: '' })),
+        assigned_players: (d.assigned_players || []).map(p => {
+          const canSeeVolunteerName = Boolean(
+            (user && canViewRoster) ||
+            (!user && myRsvp && p.attendee_id === myRsvp.id)
+          );
+          return {
+            attendee_id: p.attendee_id,
+            name: canSeeVolunteerName ? p.name : ''
+          };
+        }),
         duty_type: dType.type,
         is_paid: dType.isPaid,
         requires_badge: dType.requiredBadge,
@@ -576,20 +602,32 @@ eventsRouter.get('/:id', async (c) => {
       )
     }));
 
+    const safeEventObj = {
+      ...event,
+      allowed_emails_list: isOrganizer ? allowedList : [],
+      is_restricted: isRestricted,
+      is_allowed_to_rsvp: isAllowedToRsvp,
+      task_unlock_at: tierInfo.unlockAt,
+      task_tier: tierInfo.tier,
+      is_tasks_unlocked: tierInfo.isUnlocked,
+      hours_until_event: hoursUntilEvent
+    };
+    if (!isOrganizer) {
+      delete safeEventObj.allowed_emails;
+    }
+
+    const visibleAttendees = !canViewRoster
+      ? []
+      : (user ? attendees : attendees.filter(a => myRsvp && a.id === myRsvp.id));
+    const visibleWaitlist = !canViewRoster
+      ? []
+      : (user ? waitlist : waitlist.filter(w => myRsvp && w.id === myRsvp.id));
+
     return c.json({
-      event: {
-        ...event,
-        allowed_emails_list: allowedList,
-        is_restricted: isRestricted,
-        is_allowed_to_rsvp: isAllowedToRsvp,
-        task_unlock_at: tierInfo.unlockAt,
-        task_tier: tierInfo.tier,
-        is_tasks_unlocked: tierInfo.isUnlocked,
-        hours_until_event: hoursUntilEvent
-      },
+      event: safeEventObj,
       duties: sanitizedDuties,
-      attendees: canViewRoster ? attendees : [],
-      waitlist: canViewRoster ? waitlist : [],
+      attendees: visibleAttendees,
+      waitlist: visibleWaitlist,
       comments,
       bp_signups: decoratedBpSignups,
       myRsvp,
@@ -1203,7 +1241,11 @@ eventsRouter.get('/:id/bp-order', async (c) => {
     const token = c.req.query('token');
     const db = c.env.DB;
 
-    const event = await db.prepare('SELECT id, title, status FROM events WHERE id = ?').bind(eventId).first();
+    const event = await db.prepare('SELECT id, title, status, allowed_emails FROM events WHERE id = ?').bind(eventId).first();
+    if (!event) return c.json({ error: 'Event not found.' }, 404);
+    if (!canUserAccessEvent(user, event)) {
+      return c.json({ error: 'Access denied: this pickup game is restricted to an invite list.', restricted: true }, user ? 403 : 401);
+    }
     if (!event) return c.json({ error: 'Event not found.' }, 404);
 
     let myAttendee = null;
@@ -1246,8 +1288,11 @@ eventsRouter.post('/:id/bp-order', async (c) => {
     const user = c.get('user');
     const db = c.env.DB;
 
-    const event = await db.prepare('SELECT id, status FROM events WHERE id = ?').bind(eventId).first();
+    const event = await db.prepare('SELECT id, status, allowed_emails FROM events WHERE id = ?').bind(eventId).first();
     if (!event) return c.json({ error: 'Event not found.' }, 404);
+    if (!canUserAccessEvent(user, event)) {
+      return c.json({ error: 'Access denied: this pickup game is restricted to an invite list.', restricted: true }, user ? 403 : 401);
+    }
     if (event.status === 'rainout') {
       return c.json({ error: 'Batting practice is unavailable because this game was called for rain.' }, 400);
     }

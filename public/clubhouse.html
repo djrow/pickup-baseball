@@ -7,7 +7,7 @@
   <link rel="shortcut icon" href="/favicon.ico" />
   <link rel="icon" type="image/svg+xml" href="/logo.svg" />
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png" />
-  <link rel="stylesheet" href="/css/clubhouse.css?v=96" />
+  <link rel="stylesheet" href="/css/clubhouse.css?v=97" />
 </head>
 <body class="clubhouse-body">
   <div class="clubhouse-app" id="clubhouse-app">
@@ -144,17 +144,18 @@
       <div class="ch-context-body" id="tab-panel-sunday">
         <div class="ch-widget-card" id="ch-sunday-card">
           <div class="ch-widget-title">
-            <span>Next Sunday Game</span>
+            <span>Next Public Game</span>
             <span class="ch-badge badge-sunday" id="ch-sunday-status-pill">Active</span>
           </div>
           <div id="ch-sunday-details">Loading upcoming game...</div>
-          <div class="ch-rsvp-btn-group">
+          <div id="ch-sunday-guest-notice" class="hidden" style="margin-top:8px;font-size:12px;color:var(--ch-text-secondary);"></div>
+          <div class="ch-rsvp-btn-group" id="ch-quick-rsvp-group">
             <button type="button" class="ch-rsvp-btn attending" id="btn-quick-rsvp-yes">⚾ I'm Playing</button>
             <button type="button" class="ch-rsvp-btn declined" id="btn-quick-rsvp-no">Can't Make It</button>
           </div>
         </div>
 
-        <div class="ch-widget-card">
+        <div class="ch-widget-card" id="ch-bp-card">
           <div class="ch-widget-title">
             <span>Batting Practice (#1–#28)</span>
             <span id="ch-bp-count-label">0/28</span>
@@ -165,7 +166,7 @@
           <div class="ch-bp-grid" id="ch-bp-grid"></div>
         </div>
 
-        <div class="ch-widget-card">
+        <div class="ch-widget-card" id="ch-duties-card">
           <div class="ch-widget-title">
             <span>Volunteer Tasks &amp; Crew</span>
             <button type="button" class="ch-promote-btn" id="btn-sync-game-channel" title="Create or Sync Game-Day Channel">🔄 Sync Channel</button>
@@ -214,18 +215,8 @@
         </div>
       </div>
 
-      <!-- Tab 4: Moderation Queue, Blanket Mutes, Delegation & Boards -->
+      <!-- Tab 4: Moderation Queue, Blanket Mutes & Moderator Delegation -->
       <div class="ch-context-body" id="tab-panel-mod" style="display:none;">
-        <div class="ch-widget-card">
-          <div class="ch-widget-title">
-            <span>📋 Message Boards</span>
-            <button type="button" class="ch-promote-btn" id="btn-mod-new-board">+ New Board</button>
-          </div>
-          <div style="font-size:12px;color:var(--ch-text-secondary);">
-            Create boards above, or click ✏️ next to any board in the sidebar to edit or delete it.
-          </div>
-        </div>
-
         <div class="ch-widget-card">
           <div class="ch-widget-title">
             <span>🚩 Open &amp; Recent Reports</span>
@@ -360,9 +351,9 @@
     </div>
   </div>
 
-  <script src="/js/crypto.js?v=96"></script>
-  <script src="/js/store.js?v=96"></script>
-  <script src="/js/rtc.js?v=96"></script>
-  <script src="/js/clubhouse.js?v=96"></script>
+  <script src="/js/crypto.js?v=97"></script>
+  <script src="/js/store.js?v=97"></script>
+  <script src="/js/rtc.js?v=97"></script>
+  <script src="/js/clubhouse.js?v=97"></script>
 </body>
 </html>

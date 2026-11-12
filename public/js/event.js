@@ -103,7 +103,16 @@ async function loadEventData(preserveAlertHtml) {
       const cachedRaw = localStorage.getItem(cacheKey);
       if (cachedRaw) {
         const cachedRes = JSON.parse(cachedRaw);
-        if (cachedRes && cachedRes.event) {
+        if (cachedRes && cachedRes.event && !cachedRes.event.is_restricted) {
+          if (!API.currentUser && Array.isArray(cachedRes.duties)) {
+            cachedRes.duties = cachedRes.duties.map(function(d) {
+              return Object.assign({}, d, {
+                assigned_players: (d.assigned_players || []).map(function(p) {
+                  return { attendee_id: p.attendee_id, name: '' };
+                })
+              });
+            });
+          }
           applyLoadedEventToDom(cachedRes, false);
         }
       }
@@ -113,24 +122,35 @@ async function loadEventData(preserveAlertHtml) {
   try {
     const res = await API.getEvent(eventId, guestToken);
     if (res.error) {
+      try { localStorage.removeItem(cacheKey); } catch (e) {}
       showError(res.error);
       return;
     }
 
     try {
-      // Cache only public event fields (never store user session or personal RSVP in event cache)
-      const publicCacheCopy = {
-        event: res.event,
-        duties: res.duties,
-        attendees: res.attendees,
-        comments: res.comments,
-        bp_signups: res.bp_signups,
-        totalAttendees: res.totalAttendees,
-        totalSpectators: res.totalSpectators,
-        totalHeadcount: res.totalHeadcount,
-        require_login_to_rsvp: res.require_login_to_rsvp
-      };
-      localStorage.setItem(cacheKey, JSON.stringify(publicCacheCopy));
+      if (res.event && res.event.is_restricted) {
+        localStorage.removeItem(cacheKey);
+      } else {
+        // Cache only public non-restricted event fields without volunteer PII
+        const publicCacheCopy = {
+          event: res.event,
+          duties: (res.duties || []).map(function(d) {
+            return Object.assign({}, d, {
+              assigned_players: (d.assigned_players || []).map(function(p) {
+                return { attendee_id: p.attendee_id, name: '' };
+              })
+            });
+          }),
+          attendees: [],
+          comments: res.comments,
+          bp_signups: res.bp_signups,
+          totalAttendees: res.totalAttendees,
+          totalSpectators: res.totalSpectators,
+          totalHeadcount: res.totalHeadcount,
+          require_login_to_rsvp: res.require_login_to_rsvp
+        };
+        localStorage.setItem(cacheKey, JSON.stringify(publicCacheCopy));
+      }
     } catch (e) {}
 
     applyLoadedEventToDom(res, preserveAlertHtml);

@@ -21,6 +21,18 @@ export function parseAllowedEmails(raw) {
   return [];
 }
 
+export function canUserAccessEvent(user, eventOrAllowedEmails) {
+  const raw = eventOrAllowedEmails && typeof eventOrAllowedEmails === 'object' && !Array.isArray(eventOrAllowedEmails)
+    ? eventOrAllowedEmails.allowed_emails
+    : eventOrAllowedEmails;
+  const allowedList = parseAllowedEmails(raw);
+  if (allowedList.length === 0) return true;
+  if (!user) return false;
+  if (user.canManageEvents || user.isAdmin) return true;
+  const email = user.email ? String(user.email).trim().toLowerCase() : '';
+  return Boolean(email && allowedList.includes(email));
+}
+
 export function getTaskUnlockAt(eventDateStr) {
   const d = new Date(eventDateStr);
   const target = new Date(d.getTime() - (83 * 24 * 3600 * 1000));

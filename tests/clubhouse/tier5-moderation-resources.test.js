@@ -432,4 +432,119 @@ module.exports = async function runTier5(t, ctx) {
     const apiSrc = fs.readFileSync(path.resolve(__dirname, '../../public/js/api.js'), 'utf8');
     assert.ok(apiSrc.includes('pb_version_last_check'), 'api.js must throttle version checks via localStorage');
   });
+
+  await t.test('T5.8: Guest game privacy, invite-only event restriction, volunteer crew name hiding & Mod tab board card removal', async () => {
+    // 1. Mod tab must NOT contain Message Boards creation card
+    const clubhouseHtml = fs.readFileSync(path.resolve(__dirname, '../../public/clubhouse.html'), 'utf8');
+    assert.ok(!clubhouseHtml.includes('btn-mod-new-board'), 'Mod tab must not include Message Boards creation button');
+    assert.ok(!clubhouseHtml.includes('<span>📋 Message Boards</span>'), 'Mod tab must not include Message Boards creation card');
+
+    const clubhouseJs = fs.readFileSync(path.resolve(__dirname, '../../public/js/clubhouse.js'), 'utf8');
+    assert.ok(clubhouseJs.includes("el('ch-bp-card')") && clubhouseJs.includes("el('ch-duties-card')"), 'clubhouse.js must gate game detail cards by login');
+
+    // 2. Seed volunteer crew + BP slot on public event, plus an earlier invite-only restricted event
+    const publicDetailBefore = await ctx.apiReq('GET', `/api/events/${ctx.testEventId}`, ctx.adminCookie);
+    assert.equal(publicDetailBefore.status, 200);
+    const generalDuty = (publicDetailBefore.data.duties || []).find((d) => !d.is_paid);
+    assert.ok(generalDuty, 'Public event must have at least one volunteer duty');
+
+    const rsvpCrew = await ctx.apiReq('POST', `/api/events/${ctx.testEventId}/rsvp`, ctx.playerCookie, {
+      name: 'Volunteer Crew Player',
+      players_count: 1,
+      duty_ids: [generalDuty.id]
+    });
+    assert.equal(rsvpCrew.status, 200);
+
+    const bpClaim = await ctx.apiReq('POST', `/api/baseball/events/${ctx.testEventId}/quick-bp`, ctx.playerCookie, { slot_number: 5 });
+    assert.equal(bpClaim.status, 200);
+
+    // Create an earlier upcoming invite-only restricted Sunday event (invited: playerUser ONLY)
+    const soonIso = new Date(Date.now() + 2 * 3600 * 1000).toISOString();
+    const restRes = await ctx.apiReq('POST', '/api/events', ctx.adminCookie, {
+      title: 'Sunday Secret Invite-Only Scrimmage',
+      location: 'Private Diamond',
+      event_date: soonIso,
+      allowed_emails: [ctx.playerUser.email]
+    });
+    assert.equal(restRes.status, 200);
+    const restrictedEventId = restRes.data.eventId;
+
+    try {
+      // 3. Guest (logged out) calling GET /api/baseball/upcoming sees ONLY next public game & ZERO names
+      const guestUpcoming = await ctx.apiReq('GET', '/api/baseball/upcoming', null);
+      assert.equal(guestUpcoming.status, 200);
+      assert.equal(guestUpcoming.data.is_authenticated, false);
+      assert.ok(guestUpcoming.data.event, 'Guest must see next public game summary');
+      assert.notEqual(guestUpcoming.data.event.id, restrictedEventId, 'Guest must NOT see invite-only restricted event');
+      assert.equal(guestUpcoming.data.event.allowed_emails, undefined);
+      assert.deepEqual(guestUpcoming.data.attendees, [], 'Guest must NOT receive attendee names');
+      assert.equal(guestUpcoming.data.linked_channel, null, 'Guest must NOT receive linked clubhouse channel');
+      for (const d of (guestUpcoming.data.duties || [])) {
+        for (const p of (d.assigned_players || [])) {
+          assert.equal(p.name, '', 'Volunteer crew names must be blank when logged out in /api/baseball/upcoming');
+        }
+      }
+      for (const s of (guestUpcoming.data.bp_signups || [])) {
+        assert.equal(s.player_name, '', 'BP player names must be blank when logged out in /api/baseball/upcoming');
+      }
+
+      // 4. Guest calling GET /api/events/:publicId also sees blank volunteer crew names
+      const guestPublicEvent = await ctx.apiReq('GET', `/api/events/${ctx.testEventId}`, null);
+      assert.equal(guestPublicEvent.status, 200);
+      const guestDuty = guestPublicEvent.data.duties.find((d) => d.id === generalDuty.id);
+      for (const p of (guestDuty.assigned_players || [])) {
+        assert.equal(p.name, '', 'Volunteer crew names must be blank when logged out in /api/events/:id');
+      }
+
+      // 5. Guest & uninvited logged-in user CANNOT see restricted invite-only event anywhere
+      const guestEventsList = await ctx.apiReq('GET', '/api/events', null);
+      assert.ok(!(guestEventsList.data.events || []).some((e) => e.id === restrictedEventId), 'Guest GET /api/events excludes restricted events');
+
+      const guestRestrictedDetail = await ctx.apiReq('GET', `/api/events/${restrictedEventId}`, null);
+      assert.equal(guestRestrictedDetail.status, 401);
+
+      const uninvitedEventsList = await ctx.apiReq('GET', '/api/events', ctx.facilitatorCookie);
+      assert.ok(!(uninvitedEventsList.data.events || []).some((e) => e.id === restrictedEventId), 'Uninvited logged-in user GET /api/events excludes restricted events');
+
+      const uninvitedDetail = await ctx.apiReq('GET', `/api/events/${restrictedEventId}`, ctx.facilitatorCookie);
+      assert.equal(uninvitedDetail.status, 403);
+
+      const uninvitedBp = await ctx.apiReq('GET', `/api/events/${restrictedEventId}/bp-order`, ctx.facilitatorCookie);
+      assert.equal(uninvitedBp.status, 403);
+
+      const uninvitedUpcoming = await ctx.apiReq('GET', '/api/baseball/upcoming', ctx.facilitatorCookie);
+      assert.equal(uninvitedUpcoming.status, 200);
+      assert.notEqual(uninvitedUpcoming.data.event && uninvitedUpcoming.data.event.id, restrictedEventId, 'Uninvited user must not see restricted game in /api/baseball/upcoming');
+
+      const uninvitedQuickRsvp = await ctx.apiReq('POST', `/api/baseball/events/${restrictedEventId}/quick-rsvp`, ctx.facilitatorCookie, { status: 'attending' });
+      assert.equal(uninvitedQuickRsvp.status, 403);
+
+      // 6. Invited logged-in user (playerUser) CAN see the restricted event (and allowed_emails PII stays hidden for non-organizers)
+      const invitedEventsList = await ctx.apiReq('GET', '/api/events', ctx.playerCookie);
+      const foundRest = (invitedEventsList.data.events || []).find((e) => e.id === restrictedEventId);
+      assert.ok(foundRest, 'Invited logged-in user sees restricted event in GET /api/events');
+      assert.equal(foundRest.allowed_emails, undefined);
+
+      const invitedDetail = await ctx.apiReq('GET', `/api/events/${restrictedEventId}`, ctx.playerCookie);
+      assert.equal(invitedDetail.status, 200);
+      assert.equal(invitedDetail.data.event.is_restricted, true);
+      assert.deepEqual(invitedDetail.data.event.allowed_emails_list, [], 'Non-organizer must not receive full invite email list');
+
+      const invitedUpcoming = await ctx.apiReq('GET', '/api/baseball/upcoming', ctx.playerCookie);
+      assert.equal(invitedUpcoming.status, 200);
+      assert.equal(invitedUpcoming.data.event && invitedUpcoming.data.event.id, restrictedEventId, 'Invited logged-in user sees restricted upcoming game');
+
+      // 7. Logged-in Organizer CAN see volunteer crew names
+      const orgUpcoming = await ctx.apiReq('GET', '/api/baseball/upcoming', ctx.adminCookie);
+      assert.equal(orgUpcoming.status, 200);
+      assert.equal(orgUpcoming.data.is_authenticated, true);
+
+      const orgPublicDetail = await ctx.apiReq('GET', `/api/events/${ctx.testEventId}`, ctx.adminCookie);
+      assert.equal(orgPublicDetail.status, 200);
+      const orgDuty = orgPublicDetail.data.duties.find((d) => d.id === generalDuty.id);
+      assert.ok(orgDuty.assigned_players.some((p) => p.name === 'Volunteer Crew Player'), 'Logged-in organizer must see volunteer crew names');
+    } finally {
+      await ctx.apiReq('DELETE', `/api/events/${restrictedEventId}`, ctx.adminCookie);
+    }
+  });
 };

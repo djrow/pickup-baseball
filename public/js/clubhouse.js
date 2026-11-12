@@ -913,6 +913,12 @@
   function renderSundayCard(data) {
     var detailsEl = el('ch-sunday-details');
     var statusPill = el('ch-sunday-status-pill');
+    var guestNoticeEl = el('ch-sunday-guest-notice');
+    var rsvpGroupEl = el('ch-quick-rsvp-group');
+    var bpCardEl = el('ch-bp-card');
+    var dutiesCardEl = el('ch-duties-card');
+    var checklistCardEl = el('ch-facilitator-checklist-card');
+    var syncChanBtn = el('btn-sync-game-channel');
     var bpGrid = el('ch-bp-grid');
     var bpCountLabel = el('ch-bp-count-label');
     var dutiesEl = el('ch-duties-list');
@@ -920,9 +926,16 @@
     var noBtn = el('btn-quick-rsvp-no');
 
     if (!detailsEl) return;
-    var ev = data.event;
+    var isLoggedIn = Boolean(Store.state.user);
+    var ev = data ? data.event : null;
+
     if (!ev) {
-      detailsEl.textContent = 'No upcoming Sunday game scheduled yet.';
+      detailsEl.textContent = 'No upcoming public game scheduled yet.';
+      if (guestNoticeEl) guestNoticeEl.classList.add('hidden');
+      if (rsvpGroupEl) rsvpGroupEl.classList.toggle('hidden', !isLoggedIn);
+      if (bpCardEl) bpCardEl.classList.toggle('hidden', !isLoggedIn);
+      if (dutiesCardEl) dutiesCardEl.classList.toggle('hidden', !isLoggedIn);
+      if (checklistCardEl) checklistCardEl.classList.toggle('hidden', !isLoggedIn);
       if (bpGrid) bpGrid.innerHTML = '';
       return;
     }
@@ -932,21 +945,55 @@
     }
 
     var attendees = Array.isArray(data.attendees) ? data.attendees : [];
-    var totalPlayers = 0;
+    var totalPlayers = typeof data.total_players === 'number' ? data.total_players : 0;
     var myStatus = null;
     var currentUserId = Store.state.user ? Number(Store.state.user.id) : 0;
 
-    for (var i = 0; i < attendees.length; i++) {
-      totalPlayers += Number(attendees[i].players_count || 1);
-      if (currentUserId && Number(attendees[i].user_id) === currentUserId) {
-        myStatus = attendees[i].status;
+    if (attendees.length > 0) {
+      totalPlayers = 0;
+      for (var i = 0; i < attendees.length; i++) {
+        totalPlayers += Number(attendees[i].players_count || 1);
+        if (currentUserId && Number(attendees[i].user_id) === currentUserId) {
+          myStatus = attendees[i].status;
+        }
       }
+    }
+
+    var dateText = '';
+    if (ev.event_date) {
+      try {
+        var parsedDate = new Date(ev.event_date);
+        if (!isNaN(parsedDate.getTime())) {
+          dateText = parsedDate.toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+        }
+      } catch (e) {}
     }
 
     detailsEl.innerHTML =
       '<div style="font-weight:700;font-size:14px;color:#fff;margin-bottom:4px;">' + escapeHtml(ev.title) + '</div>' +
+      (dateText ? ('<div style="font-size:12px;color:var(--ch-text-secondary);margin-bottom:2px;">📅 ' + escapeHtml(dateText) + '</div>') : '') +
       '<div style="font-size:12px;color:var(--ch-text-secondary);">📍 ' + escapeHtml(ev.location || 'Bushrod Park Field 1') + '</div>' +
       '<div style="font-size:12px;color:var(--ch-text-secondary);margin-top:2px;">👥 <strong>' + totalPlayers + '</strong> / ' + (ev.max_players || 30) + ' Players Confirmed</div>';
+
+    if (!isLoggedIn) {
+      if (rsvpGroupEl) rsvpGroupEl.classList.add('hidden');
+      if (bpCardEl) bpCardEl.classList.add('hidden');
+      if (dutiesCardEl) dutiesCardEl.classList.add('hidden');
+      if (checklistCardEl) checklistCardEl.classList.add('hidden');
+      if (syncChanBtn) syncChanBtn.classList.add('hidden');
+      if (guestNoticeEl) {
+        guestNoticeEl.classList.remove('hidden');
+        guestNoticeEl.innerHTML = '🔒 <a href="/login" style="color:var(--ch-gold);text-decoration:underline;font-weight:700;">Sign in</a> to RSVP, claim Batting Practice slots, and view volunteer crew names.';
+      }
+      return;
+    }
+
+    if (guestNoticeEl) guestNoticeEl.classList.add('hidden');
+    if (rsvpGroupEl) rsvpGroupEl.classList.remove('hidden');
+    if (bpCardEl) bpCardEl.classList.remove('hidden');
+    if (dutiesCardEl) dutiesCardEl.classList.remove('hidden');
+    if (checklistCardEl) checklistCardEl.classList.remove('hidden');
+    if (syncChanBtn) syncChanBtn.classList.remove('hidden');
 
     if (yesBtn) yesBtn.className = 'ch-rsvp-btn attending' + (myStatus === 'attending' ? ' active' : '');
     if (noBtn) noBtn.className = 'ch-rsvp-btn declined' + (myStatus === 'declined' ? ' active' : '');
@@ -1115,6 +1162,10 @@
     var dirEl = el('ch-members-directory');
     if (!dirEl) return;
     var u = Store.state.user;
+    if (!u) {
+      dirEl.innerHTML = '<div style="color:var(--ch-text-muted);font-size:12.5px;">🔒 Sign in to view Clubhouse members.</div>';
+      return;
+    }
     var members = Array.isArray(Store.state.members) && Store.state.members.length > 0
       ? Store.state.members
       : ((uiState.upcomingData && Array.isArray(uiState.upcomingData.attendees)) ? uiState.upcomingData.attendees : []);
@@ -1524,17 +1575,10 @@
       });
     }
 
-    // Create / edit message boards (#btn-new-channel, #btn-mod-new-board, #ch-board-modal)
+    // Create / edit message boards (#btn-new-channel, #ch-board-modal)
     var newChanBtn = el('btn-new-channel');
     if (newChanBtn) {
       newChanBtn.addEventListener('click', function () {
-        if (!canCreateBoards()) return;
-        openBoardModal(null);
-      });
-    }
-    var modNewBoardBtn = el('btn-mod-new-board');
-    if (modNewBoardBtn) {
-      modNewBoardBtn.addEventListener('click', function () {
         if (!canCreateBoards()) return;
         openBoardModal(null);
       });
@@ -1926,6 +1970,9 @@
         renderUserBar();
         renderChannelSidebar();
         renderMembersDirectory();
+        if (uiState.upcomingData) {
+          renderSundayCard(uiState.upcomingData);
+        }
         if (!uiState.activeChannelId && Store.state.channels.length > 0) {
           var general = null;
           for (var i = 0; i < Store.state.channels.length; i++) {
@@ -1940,6 +1987,9 @@
         var authWarn = el('ch-auth-banner');
         if (authWarn) authWarn.classList.remove('hidden');
         renderUserBar();
+        if (uiState.upcomingData) {
+          renderSundayCard(uiState.upcomingData);
+        }
       } else if (eventType === 'messages_loaded' || eventType === 'delta_messages' || eventType === 'sync_tick') {
         renderChannelSidebar();
         renderMessageStream();

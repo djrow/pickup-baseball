@@ -6,6 +6,7 @@
 
 import { Hono } from 'hono';
 import { requireAuth, requireOrganizer, generateToken } from '../security.js';
+import { parseAllowedEmails, canUserAccessEvent } from '../policy.js';
 
 export const baseballRouter = new Hono();
 
@@ -15,12 +16,13 @@ export const baseballRouter = new Hono();
 baseballRouter.get('/upcoming', async (c) => {
   const baseballDb = c.env && (c.env.BASEBALL_DB || c.env.DB);
   const chatDb = c.env && c.env.CHAT_DB;
+  const user = c.get('user');
 
   if (!baseballDb) {
     return c.json({ error: 'Baseball database unavailable.' }, 500);
   }
 
-  const event = await baseballDb.prepare(`
+  const { results: candidateEvents } = await baseballDb.prepare(`
     SELECT * FROM events
     WHERE (status IS NULL OR status NOT IN ('cancelled'))
       AND datetime(event_date) >= datetime('now', '-1 day')
@@ -28,8 +30,10 @@ baseballRouter.get('/upcoming', async (c) => {
       CASE WHEN status = 'active' THEN 0 ELSE 1 END,
       CASE WHEN strftime('%w', event_date) = '0' OR title LIKE '%Sunday%' THEN 0 ELSE 1 END,
       event_date ASC
-    LIMIT 1
-  `).first();
+    LIMIT 20
+  `).all();
+
+  const event = (candidateEvents || []).find((ev) => canUserAccessEvent(user, ev)) || null;
 
   if (!event) {
     return c.json({
@@ -37,9 +41,13 @@ baseballRouter.get('/upcoming', async (c) => {
       attendees: [],
       duties: [],
       bp_signups: [],
-      linked_channel: null
+      linked_channel: null,
+      is_authenticated: Boolean(user)
     });
   }
+
+  const isRestricted = parseAllowedEmails(event.allowed_emails).length > 0;
+  const isOrganizer = Boolean(user && (user.canManageEvents || user.isAdmin));
 
   const { results: attendees } = await baseballDb.prepare(`
     SELECT id, user_id, name, status, players_count, spectators_count, gear_bringing, notes, created_at
@@ -66,8 +74,8 @@ baseballRouter.get('/upcoming', async (c) => {
     if (!assignmentsByDuty.has(a.duty_id)) assignmentsByDuty.set(a.duty_id, []);
     assignmentsByDuty.get(a.duty_id).push({
       attendee_id: a.attendee_id,
-      user_id: a.user_id,
-      name: a.name
+      user_id: user ? a.user_id : null,
+      name: user ? a.name : ''
     });
   }
 
@@ -83,7 +91,7 @@ baseballRouter.get('/upcoming', async (c) => {
   `).bind(event.id).all();
 
   let linkedChannel = null;
-  if (chatDb) {
+  if (chatDb && user) {
     try {
       linkedChannel = await chatDb.prepare(
         'SELECT * FROM channels WHERE linked_event_id = ? LIMIT 1'
@@ -94,14 +102,41 @@ baseballRouter.get('/upcoming', async (c) => {
   const totalPlayers = (attendees || []).reduce((sum, a) => sum + (a.players_count || 1), 0);
   const totalSpectators = (attendees || []).reduce((sum, a) => sum + (a.spectators_count || 0), 0);
 
+  const safeEvent = {
+    id: event.id,
+    title: event.title,
+    description: event.description,
+    location: event.location,
+    location_url: event.location_url,
+    event_date: event.event_date,
+    max_players: event.max_players,
+    actual_attendance: event.actual_attendance,
+    status: event.status,
+    rainout_note: event.rainout_note,
+    rainout_at: event.rainout_at,
+    is_restricted: isRestricted,
+    allowed_emails_list: isOrganizer ? parseAllowedEmails(event.allowed_emails) : []
+  };
+
+  const safeBpSignups = user
+    ? (bpSignups || [])
+    : (bpSignups || []).map((s) => ({
+      id: s.id,
+      event_id: s.event_id,
+      slot_number: s.slot_number,
+      player_name: '',
+      taken: true
+    }));
+
   return c.json({
-    event,
-    attendees: attendees || [],
+    event: safeEvent,
+    attendees: user ? (attendees || []) : [],
     duties,
-    bp_signups: bpSignups || [],
+    bp_signups: safeBpSignups,
     linked_channel: linkedChannel,
     total_players: totalPlayers,
-    total_spectators: totalSpectators
+    total_spectators: totalSpectators,
+    is_authenticated: Boolean(user)
   });
 });
 
@@ -121,6 +156,10 @@ baseballRouter.post('/events/:eventId/quick-rsvp', requireAuth, async (c) => {
   const event = await baseballDb.prepare('SELECT * FROM events WHERE id = ?').bind(eventId).first();
   if (!event) {
     return c.json({ error: 'Event not found.' }, 404);
+  }
+
+  if (!canUserAccessEvent(user, event)) {
+    return c.json({ error: 'RSVP for this game is restricted to invited player accounts.' }, 403);
   }
 
   if (event.status === 'rainout' || event.status === 'cancelled') {
@@ -206,6 +245,10 @@ baseballRouter.post('/events/:eventId/quick-bp', requireAuth, async (c) => {
   const event = await baseballDb.prepare('SELECT * FROM events WHERE id = ?').bind(eventId).first();
   if (!event) {
     return c.json({ error: 'Event not found.' }, 404);
+  }
+
+  if (!canUserAccessEvent(user, event)) {
+    return c.json({ error: 'RSVP for this game is restricted to invited player accounts.' }, 403);
   }
 
   if (event.status === 'rainout' || event.status === 'cancelled') {
