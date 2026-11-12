@@ -1468,6 +1468,14 @@ footer.site-footer strong {
   background: var(--giants-orange-light);
 }
 
+.footer-lang-select {
+  height: 35px !important;
+  padding: 0 14px !important;
+  font-size: 0.84rem !important;
+  max-width: none !important;
+  box-shadow: var(--shadow-sm);
+}
+
 [data-theme="dark"] .btn-secondary,
 [data-theme="dark"] .nav-avatar-placeholder {
   background-color: var(--as-green-light);

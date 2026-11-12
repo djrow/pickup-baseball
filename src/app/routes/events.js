@@ -235,7 +235,7 @@ eventsRouter.get('/admin/backup-db', requireAdmin, async (c) => {
     const tables = [
       'users', 'events', 'event_duties', 'attendees',
       'duty_assignments', 'comments', 'default_duties',
-      'posts', 'banned_emails', 'app_settings', 'batting_practice_signups'
+      'posts', 'banned_emails', 'app_settings', 'batting_practice_signups', 'waivers'
     ];
     const timestamp = new Date().toISOString();
     const dateStr = timestamp.slice(0, 10);
@@ -346,6 +346,7 @@ eventsRouter.get('/:id', async (c) => {
           COALESCE(a.spectators_count, 0) as spectators_count,
           a.additional_guests, a.guest_names, a.is_guest, a.created_at,
           u.bio,
+          COALESCE(u.waiver_status, 'none') as waiver_status,
           ${AVATAR_EXPR} as avatar_url,
           (
             SELECT group_concat(d.title, ', ')

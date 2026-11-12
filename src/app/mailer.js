@@ -309,3 +309,30 @@ export async function sendReopenEmail(env, origin, { email, name, event, note, m
 
   return dispatchEmail(env, { to: email, subject, text, html });
 }
+
+export async function sendWaiverConfirmationEmail(env, origin, { email, printedName, signedDate, certificateId, documentSha256 }) {
+  const appName = (env && env.APP_NAME) || 'Sunday Pickup Baseball';
+  const certUrl = `${origin}/api/waiver/certificate/${encodeURIComponent(certificateId)}?format=html`;
+
+  const subject = `🔏 Signed Waiver Receipt (${certificateId}) - ${appName}`;
+  const text = `Hi ${printedName},\n\nThank you for signing the Pickup Baseball Foundation Consent, Waiver and Indemnity (Form 41335\\14760738.1).\n\nCertificate ID: ${certificateId}\nPrinted Name: ${printedName}\nDate Signed: ${signedDate}\nDocument SHA-256 Hash: ${documentSha256}\n\nView or print your signed waiver certificate anytime:\n${certUrl}\n\nPlay ball!\n- ${appName}`;
+
+  const html = renderEmailLayout({
+    origin,
+    topColor: '#003831',
+    headingHtml: '🔏 Signed Waiver &amp; Provenance Receipt',
+    bodyHtml: `
+      <p style="color: #0c1f1a; font-size: 16px;">Hi <strong>${escapeHtml(printedName)}</strong>,</p>
+      <p style="color: #546e66; font-size: 15px;">Your digital signature for the <strong>Consent, Waiver and Indemnity</strong> (Form <code>41335\\14760738.1</code>) has been recorded and cryptographically sealed on file.</p>
+      <div style="background: #f5f8f7; border-left: 4px solid #003831; border: 1px solid #dbe4e0; padding: 16px; margin: 18px 0; border-radius: 6px;">
+        <p style="margin: 3px 0; color: #0c1f1a; font-size: 14px;"><strong>📄 Certificate ID:</strong> <code>${escapeHtml(certificateId)}</code></p>
+        <p style="margin: 3px 0; color: #0c1f1a; font-size: 14px;"><strong>✍️ Printed Name:</strong> ${escapeHtml(printedName)}</p>
+        <p style="margin: 3px 0; color: #0c1f1a; font-size: 14px;"><strong>📅 Dated:</strong> ${escapeHtml(signedDate)}</p>
+        <p style="margin: 6px 0 0; color: #546e66; font-size: 12px; word-break: break-all;"><strong>🔒 SHA-256 Digest:</strong> <code>${escapeHtml(documentSha256)}</code></p>
+      </div>`,
+    ctaUrl: certUrl,
+    ctaLabel: 'View / Print Signed Waiver Certificate →'
+  });
+
+  return dispatchEmail(env, { to: email, subject, text, html });
+}

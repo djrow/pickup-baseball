@@ -6,54 +6,64 @@
 import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { CURRENT_APP_VERSION } from './version.js';
-import { ensureD1Schema } from './schema.js';
+import { ensureD1Schema, ensureChatD1Schema } from './schema.js';
 import { SESSION_COOKIE_NAME, getUserFromSession, requireAdmin } from './security.js';
 import { renderFeedXmlResponse } from './feeds.js';
 import { authRouter, serveUserAvatar, getSettingsHandler, putSettingsHandler, testAppscriptHandler } from './routes/auth.js';
 import { eventsRouter } from './routes/events.js';
 import { postsRouter } from './routes/posts.js';
-import { mediaRouter } from './routes/media.js';
+import { mediaRouter, attachmentsRouter, getAdminStorageStatusHandler } from './routes/media.js';
+import { keysRouter } from './routes/keys.js';
+import { chatRouter } from './routes/chat.js';
+import { voiceRouter, rtcRouter } from './routes/rtc.js';
+import { baseballRouter } from './routes/baseball.js';
+import { waiverRouter } from './routes/waiver.js';
 
 export const app = new Hono().basePath('/api');
+
+function applyApiSecurityHeaders(c) {
+  c.header('X-App-Version', CURRENT_APP_VERSION);
+  c.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  c.header('X-Content-Type-Options', 'nosniff');
+  c.header('X-Frame-Options', 'DENY');
+  c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+  c.header('Permissions-Policy', 'camera=(self), microphone=(self), display-capture=(self), geolocation=(), payment=()');
+  const ct = (c.res && c.res.headers && c.res.headers.get('Content-Type')) || '';
+  if (ct.includes('text/html')) {
+    c.header('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; object-src 'none'; frame-ancestors 'none';");
+  } else {
+    c.header('Content-Security-Policy', "default-src 'none'; object-src 'none'; frame-ancestors 'none';");
+  }
+}
 
 // Global security headers middleware (runs first, ensures every response has security headers)
 app.use('*', async (c, next) => {
   await next();
-  c.header('X-App-Version', CURRENT_APP_VERSION);
-  c.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
-  c.header('X-Content-Type-Options', 'nosniff');
-  c.header('X-Frame-Options', 'DENY');
-  c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
-  c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
-  c.header('Content-Security-Policy', "default-src 'none'; object-src 'none'; frame-ancestors 'none';");
+  applyApiSecurityHeaders(c);
 });
 
 app.onError((err, c) => {
   console.error('[API Error]', err);
-  c.header('X-App-Version', CURRENT_APP_VERSION);
-  c.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
-  c.header('X-Content-Type-Options', 'nosniff');
-  c.header('X-Frame-Options', 'DENY');
-  c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
-  c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
-  c.header('Content-Security-Policy', "default-src 'none'; object-src 'none'; frame-ancestors 'none';");
+  applyApiSecurityHeaders(c);
   return c.json({ error: 'Internal server error.' }, 500);
 });
 
 app.notFound((c) => {
-  c.header('X-App-Version', CURRENT_APP_VERSION);
-  c.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
-  c.header('X-Content-Type-Options', 'nosniff');
-  c.header('X-Frame-Options', 'DENY');
-  c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
-  c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
-  c.header('Content-Security-Policy', "default-src 'none'; object-src 'none'; frame-ancestors 'none';");
+  applyApiSecurityHeaders(c);
   return c.json({ error: 'Endpoint not found.' }, 404);
 });
 
 app.use('*', async (c, next) => {
-  if (c.env && c.env.DB) {
-    await ensureD1Schema(c.env.DB);
+  if (c.env) {
+    if (!c.env.DB && c.env.BASEBALL_DB) c.env.DB = c.env.BASEBALL_DB;
+    if (!c.env.BASEBALL_DB && c.env.DB) c.env.BASEBALL_DB = c.env.DB;
+
+    if (c.env.DB) {
+      await ensureD1Schema(c.env.DB);
+    }
+    if (c.env.CHAT_DB) {
+      await ensureChatD1Schema(c.env.CHAT_DB);
+    }
   }
 
   const reqUrl = new URL(c.req.url);
@@ -97,7 +107,8 @@ app.use('*', async (c, next) => {
   const sessionId = getCookie(c, SESSION_COOKIE_NAME);
   if (sessionId && c.env && c.env.DB) {
     try {
-      c.set('user', await getUserFromSession(c.env.DB, sessionId));
+      const isLightweightSync = reqUrl.pathname === '/api/sync';
+      c.set('user', await getUserFromSession(c.env.DB, sessionId, c.env.CHAT_DB, { lightweight: isLightweightSync }));
     } catch (e) {
       console.error('[Auth Middleware] Session error:', e);
       c.set('user', null);
@@ -109,12 +120,25 @@ app.use('*', async (c, next) => {
   await next();
 });
 
-app.get('/version', (c) => c.json({ version: CURRENT_APP_VERSION }));
-app.get('/health', (c) => c.json({
-  status: 'ok',
-  environment: (c.env && c.env.NODE_ENV) || 'cloudflare-pages',
-  timestamp: new Date().toISOString()
-}));
+app.get('/version', (c) => {
+  const storageProvider = Boolean(c.env?.GDRIVE_CLIENT_ID || process.env.GDRIVE_CLIENT_ID) ? 'gdrive' : 'local';
+  return c.json({
+    version: CURRENT_APP_VERSION,
+    status: 'ok',
+    storageProvider
+  });
+});
+
+app.get('/health', (c) => {
+  const storageProvider = Boolean(c.env?.GDRIVE_CLIENT_ID || process.env.GDRIVE_CLIENT_ID) ? 'gdrive' : 'local';
+  return c.json({
+    version: CURRENT_APP_VERSION,
+    status: 'ok',
+    environment: (c.env && c.env.NODE_ENV) || 'cloudflare-pages',
+    storageProvider,
+    timestamp: new Date().toISOString()
+  });
+});
 
 app.get('/users/:id/avatar', serveUserAvatar);
 app.get('/settings', getSettingsHandler);
@@ -126,3 +150,11 @@ app.route('/auth', authRouter);
 app.route('/events', eventsRouter);
 app.route('/posts', postsRouter);
 app.route('/media', mediaRouter);
+app.route('/attachments', attachmentsRouter);
+app.get('/admin/storage-status', requireAdmin, getAdminStorageStatusHandler);
+app.route('/keys', keysRouter);
+app.route('/voice', voiceRouter);
+app.route('/rtc', rtcRouter);
+app.route('/baseball', baseballRouter);
+app.route('/waiver', waiverRouter);
+app.route('/', chatRouter);

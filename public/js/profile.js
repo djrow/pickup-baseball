@@ -77,6 +77,41 @@ function populateProfileData() {
     heroCreditsPill.textContent = '🛡️ ' + credits + ' Backup Hero Credit' + (credits === 1 ? '' : 's');
   }
 
+  const waiverPill = document.getElementById('badge-waiver-pill');
+  const waiverBtn = document.getElementById('profile-waiver-btn');
+  const waiverDesc = document.getElementById('profile-waiver-desc');
+  if (waiverPill) {
+    const wStatus = currentUser.waiverStatus || currentUser.waiver_status || 'none';
+    if (wStatus === 'digital') {
+      waiverPill.className = 'badge badge-green';
+      waiverPill.textContent = '✓ Signed Digitally';
+      if (waiverBtn) {
+        waiverBtn.className = 'btn btn-outline btn-sm';
+        waiverBtn.textContent = '📄 View / Print Waiver →';
+      }
+      if (waiverDesc) {
+        waiverDesc.textContent = 'Your signed digital Consent, Waiver and Indemnity is sealed on file.';
+      }
+    } else if (wStatus === 'paper') {
+      waiverPill.className = 'badge badge-green';
+      waiverPill.textContent = '✓ Paper Copy on File';
+      if (waiverBtn) {
+        waiverBtn.className = 'btn btn-outline btn-sm';
+        waiverBtn.textContent = '📄 View Waiver Form →';
+      }
+      if (waiverDesc) {
+        waiverDesc.textContent = 'An administrator has recorded your signed paper waiver on file.';
+      }
+    } else {
+      waiverPill.className = 'badge badge-orange';
+      waiverPill.textContent = '⏳ Unsigned';
+      if (waiverBtn) {
+        waiverBtn.className = 'btn btn-primary btn-sm';
+        waiverBtn.textContent = '✍️ Sign Waiver →';
+      }
+    }
+  }
+
   renderAvatarPreview();
 }
 

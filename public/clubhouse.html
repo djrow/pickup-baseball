@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pickup Baseball Clubhouse — Community Chat &amp; Voice Dugout</title>
+  <link rel="shortcut icon" href="/favicon.ico" />
+  <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png" />
+  <link rel="stylesheet" href="/css/clubhouse.css?v=96" />
+</head>
+<body class="clubhouse-body">
+  <div class="clubhouse-app" id="clubhouse-app">
+
+    <!-- ==================================================================
+         1. LEFT SERVER / NAV RAIL (64px)
+         ================================================================== -->
+    <nav class="ch-rail" aria-label="Clubhouse Navigation Rail">
+      <button type="button" class="ch-rail-btn active" id="rail-home-btn" title="Pickup Baseball Clubhouse">
+        ⚾
+      </button>
+      <button type="button" class="ch-rail-btn" id="rail-dm-btn" title="Direct Messages">
+        💬
+      </button>
+      <div class="ch-rail-divider"></div>
+      <a href="/index.html" class="ch-rail-btn" title="Sunday Game Schedule &amp; RSVPs">
+        📅
+      </a>
+      <a href="/gallery.html" class="ch-rail-btn" title="Foundation Photo &amp; Video Gallery">
+        🖼️
+      </a>
+      <a href="https://github.com/djrow/pickup-baseball/blob/trunk/HANDBOOK.md" target="_blank" rel="noopener noreferrer" class="ch-rail-btn" title="Player Handbook &amp; Field Rules">
+        📖
+      </a>
+      <div class="ch-rail-spacer"></div>
+      <button type="button" class="ch-rail-btn" id="rail-vault-btn" title="E2EE Security Vault, Privacy Relay &amp; 5 TB Drive Status">
+        🔐
+      </button>
+    </nav>
+
+    <!-- ==================================================================
+         2. CHANNEL & VOICE SIDEBAR (250px)
+         ================================================================== -->
+    <aside class="ch-sidebar" id="ch-sidebar" aria-label="Channels and Voice Lounges">
+      <header class="ch-server-header">
+        <span>Bushrod Clubhouse</span>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span class="ch-server-badge" id="ch-sync-pill">● Live</span>
+          <button type="button" class="ch-icon-btn ch-mobile-close-btn" id="btn-close-sidebar" aria-label="Close channels menu">✕</button>
+        </div>
+      </header>
+
+      <div class="ch-channel-scroller" id="ch-channel-list">
+        <!-- Populated dynamically by clubhouse.js -->
+      </div>
+
+      <!-- Bottom User Control Bar -->
+      <footer class="ch-user-bar">
+        <div class="ch-user-identity">
+          <div class="ch-user-avatar" id="ch-current-user-avatar">⚾</div>
+          <div class="ch-user-meta">
+            <div class="ch-user-name" id="ch-current-user-name">Signing in...</div>
+            <div class="ch-user-role" id="ch-current-user-role">Community Player</div>
+          </div>
+        </div>
+        <div class="ch-voice-controls">
+          <button type="button" class="ch-icon-btn" id="btn-voice-mute" title="Mute / Unmute Microphone">🎙️</button>
+          <button type="button" class="ch-icon-btn" id="btn-voice-deafen" title="Deafen / Undeafen Audio">🎧</button>
+          <button type="button" class="ch-icon-btn" id="btn-voice-screen" title="Share Screen (720p)">🖥️</button>
+          <button type="button" class="ch-icon-btn" id="btn-voice-leave" title="Disconnect from Voice Lounge">📴</button>
+        </div>
+      </footer>
+    </aside>
+
+    <!-- ==================================================================
+         3. CENTER MESSAGE & MEDIA STAGE
+         ================================================================== -->
+    <main class="ch-stage" aria-label="Active Channel Conversation">
+      <header class="ch-stage-header">
+        <div class="ch-stage-title-wrap">
+          <button type="button" class="ch-icon-btn ch-mobile-toggle-btn" id="btn-mobile-sidebar" aria-label="Open channels and DMs" title="Channels &amp; DMs">☰</button>
+          <span class="ch-stage-title" id="ch-active-channel-name">#general</span>
+          <span class="ch-e2ee-badge" id="ch-active-e2ee-badge">🔒 E2EE Verified</span>
+          <span class="ch-stage-topic" id="ch-active-channel-topic">Main community hangout for all players.</span>
+        </div>
+        <div class="ch-stage-actions">
+          <input type="search" class="ch-search-input" id="ch-message-search" placeholder="Search channel..." aria-label="Search channel messages" />
+          <button type="button" class="ch-icon-btn" id="btn-new-channel" title="Create Channel (Organizers/Admins)">➕</button>
+          <button type="button" class="ch-icon-btn ch-context-toggle-btn" id="btn-mobile-context" aria-label="Open Sunday Game, Thread, and Members panel" title="Sunday Game &amp; Threads">⚾</button>
+        </div>
+      </header>
+
+      <div class="ch-auth-banner hidden" id="ch-auth-banner" role="alert">
+        <span>Sign in with your Pickup Baseball account to read messages, chat, and join Voice Lounges.</span>
+        <a href="/login.html?redirect=%2Fclubhouse.html" class="ch-send-btn" style="text-decoration:none;white-space:nowrap;">Sign In →</a>
+      </div>
+
+      <div class="ch-muted-banner hidden" id="ch-muted-banner" role="status">
+        <span id="ch-muted-banner-text">You are currently muted in Clubhouse by a moderator.</span>
+        <a href="/index.html" class="ch-rsvp-btn" style="text-decoration:none;white-space:nowrap;">Sunday Games →</a>
+      </div>
+
+      <!-- Collapsible Voice / Video / Screen-Share Stage -->
+      <section class="ch-media-stage hidden" id="ch-media-stage" aria-label="Live Voice and Screen Share Stage">
+        <div class="ch-video-grid" id="ch-video-grid"></div>
+      </section>
+
+      <!-- Message Stream -->
+      <div class="ch-message-stream" id="ch-message-stream" role="log" aria-live="polite">
+        <!-- Populated dynamically by clubhouse.js -->
+      </div>
+
+      <!-- Composer Bar -->
+      <div class="ch-composer-wrap" id="ch-drop-zone">
+        <div class="ch-upload-progress hidden" id="ch-upload-progress">
+          <div id="ch-upload-status-text">Uploading to 5 TB Google Drive...</div>
+          <div class="ch-progress-track">
+            <div class="ch-progress-fill" id="ch-upload-progress-bar"></div>
+          </div>
+        </div>
+        <div class="ch-typing-indicator" id="ch-typing-indicator"></div>
+        <form class="ch-composer-box" id="ch-composer-form">
+          <button type="button" class="ch-icon-btn" id="btn-attach-file" title="Upload Photo or HD Video (EXIF GPS Auto-Stripped)">📎</button>
+          <input type="file" id="ch-file-input" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime,audio/mpeg,audio/ogg,audio/wav,application/pdf" style="display:none" />
+          <textarea class="ch-composer-input" id="ch-composer-input" placeholder="Message #general — Press Enter to send, Shift+Enter for newline" rows="1"></textarea>
+          <button type="submit" class="ch-send-btn" id="ch-send-btn">Send</button>
+        </form>
+      </div>
+    </main>
+
+    <!-- ==================================================================
+         4. RIGHT CONTEXT PANEL (320px): SUNDAY GAME CARD, THREADS & MEMBERS
+         ================================================================== -->
+    <aside class="ch-context-panel" id="ch-context-panel" aria-label="Game Day Card, Threads, and Directory">
+      <div class="ch-context-tabs" id="ch-context-tabs" role="tablist">
+        <button type="button" class="ch-context-tab active" data-tab="sunday" id="tab-btn-sunday">⚾ Game</button>
+        <button type="button" class="ch-context-tab" data-tab="thread" id="tab-btn-thread">🧵 Thread</button>
+        <button type="button" class="ch-context-tab" data-tab="members" id="tab-btn-members">👥 Members</button>
+        <button type="button" class="ch-context-tab" data-tab="mod" id="tab-btn-mod" style="display:none;">🛡️ Mod</button>
+        <button type="button" class="ch-icon-btn ch-context-close-btn" id="btn-close-context" aria-label="Close right panel">✕</button>
+      </div>
+
+      <!-- Tab 1: Live Sunday Game-Day Card & BP Slot Grid -->
+      <div class="ch-context-body" id="tab-panel-sunday">
+        <div class="ch-widget-card" id="ch-sunday-card">
+          <div class="ch-widget-title">
+            <span>Next Sunday Game</span>
+            <span class="ch-badge badge-sunday" id="ch-sunday-status-pill">Active</span>
+          </div>
+          <div id="ch-sunday-details">Loading upcoming game...</div>
+          <div class="ch-rsvp-btn-group">
+            <button type="button" class="ch-rsvp-btn attending" id="btn-quick-rsvp-yes">⚾ I'm Playing</button>
+            <button type="button" class="ch-rsvp-btn declined" id="btn-quick-rsvp-no">Can't Make It</button>
+          </div>
+        </div>
+
+        <div class="ch-widget-card">
+          <div class="ch-widget-title">
+            <span>Batting Practice (#1–#28)</span>
+            <span id="ch-bp-count-label">0/28</span>
+          </div>
+          <div style="font-size:11.5px;color:var(--ch-text-secondary);margin-bottom:6px;">
+            Click an open slot to claim your spot in Sunday's Batting Practice order:
+          </div>
+          <div class="ch-bp-grid" id="ch-bp-grid"></div>
+        </div>
+
+        <div class="ch-widget-card">
+          <div class="ch-widget-title">
+            <span>Volunteer Tasks &amp; Crew</span>
+            <button type="button" class="ch-promote-btn" id="btn-sync-game-channel" title="Create or Sync Game-Day Channel">🔄 Sync Channel</button>
+          </div>
+          <div id="ch-duties-list" style="font-size:12.5px;color:var(--ch-text-secondary);"></div>
+        </div>
+
+        <div class="ch-widget-card" id="ch-facilitator-checklist-card">
+          <div class="ch-widget-title">
+            <span>📋 Facilitator Field Checklist</span>
+          </div>
+          <div style="font-size:12px;color:var(--ch-text-secondary);display:flex;flex-direction:column;gap:6px;">
+            <label><input type="checkbox" data-check="drag-bases" /> 11:30 AM — Infield Drag &amp; Throw-Down Bases</label>
+            <label><input type="checkbox" data-check="machine-test" /> 11:45 AM — Pitching Machine &amp; Generator Test</label>
+            <label><input type="checkbox" data-check="bp-lineup" /> 12:00 PM — Batting Practice #1–#28 Lineup Call</label>
+            <label><input type="checkbox" data-check="team-split" /> 12:30 PM — Balanced Sandlot Team Split</label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 2: Active Thread Drawer -->
+      <div class="ch-context-body" id="tab-panel-thread" style="display:none;">
+        <div class="ch-widget-card" id="ch-thread-header">
+          <div class="ch-widget-title">
+            <span>Active Thread</span>
+            <button type="button" class="ch-icon-btn" id="btn-close-thread">✕</button>
+          </div>
+          <div id="ch-thread-root-preview" style="font-size:13px;color:var(--ch-text-secondary);">
+            Select "💬 Reply in Thread" on any message to open its discussion thread.
+          </div>
+        </div>
+        <div id="ch-thread-messages" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px;"></div>
+        <form class="ch-composer-box" id="ch-thread-form">
+          <input type="text" class="ch-composer-input" id="ch-thread-input" placeholder="Reply to thread..." />
+          <button type="submit" class="ch-send-btn">Reply</button>
+        </form>
+      </div>
+
+      <!-- Tab 3: Member Directory -->
+      <div class="ch-context-body" id="tab-panel-members" style="display:none;">
+        <div class="ch-widget-card">
+          <div class="ch-widget-title">
+            <span>Clubhouse Roster &amp; Badges</span>
+          </div>
+          <div id="ch-members-directory" style="display:flex;flex-direction:column;gap:8px;font-size:13px;"></div>
+        </div>
+      </div>
+
+      <!-- Tab 4: Moderation Queue, Blanket Mutes, Delegation & Boards -->
+      <div class="ch-context-body" id="tab-panel-mod" style="display:none;">
+        <div class="ch-widget-card">
+          <div class="ch-widget-title">
+            <span>📋 Message Boards</span>
+            <button type="button" class="ch-promote-btn" id="btn-mod-new-board">+ New Board</button>
+          </div>
+          <div style="font-size:12px;color:var(--ch-text-secondary);">
+            Create boards above, or click ✏️ next to any board in the sidebar to edit or delete it.
+          </div>
+        </div>
+
+        <div class="ch-widget-card">
+          <div class="ch-widget-title">
+            <span>🚩 Open &amp; Recent Reports</span>
+            <button type="button" class="ch-promote-btn" id="btn-mod-refresh-reports">↻ Refresh</button>
+          </div>
+          <div id="ch-mod-reports-list" class="ch-mod-list">Loading reports...</div>
+        </div>
+
+        <div class="ch-widget-card">
+          <div class="ch-widget-title">
+            <span>🔇 Blanket Mute &amp; Moderator Roles</span>
+            <button type="button" class="ch-promote-btn" id="btn-mod-refresh-users">↻ Refresh</button>
+          </div>
+          <div id="ch-mod-users-list" class="ch-mod-list">Loading users...</div>
+        </div>
+      </div>
+    </aside>
+    <div class="ch-mobile-backdrop" id="ch-mobile-backdrop" aria-hidden="true"></div>
+  </div>
+
+  <!-- ====================================================================
+       E2EE SECURITY VAULT, PRIVACY RELAY & 5 TB DRIVE QUOTA MODAL
+       ==================================================================== -->
+  <div class="ch-modal-backdrop hidden" id="ch-vault-modal">
+    <div class="ch-modal" role="dialog" aria-labelledby="ch-vault-modal-title">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <h3 id="ch-vault-modal-title" style="margin:0;font-size:17px;">🔐 E2EE Key Vault &amp; Privacy Settings</h3>
+        <button type="button" class="ch-icon-btn" id="btn-close-vault-modal">✕</button>
+      </div>
+      <p style="font-size:12.5px;color:var(--ch-text-secondary);margin-top:0;">
+        Your ECDH P-256 &amp; ECDSA P-256 private keys are generated in your browser with <code>extractable: false</code> and backed up with PBKDF2-SHA256 (600,000 iterations) + AES-GCM-256.
+      </p>
+
+      <label style="font-size:12.5px;font-weight:700;">Recovery Passphrase (for multi-device E2EE backup):</label>
+      <input type="password" class="ch-input" id="ch-vault-passphrase" placeholder="Enter a strong recovery passphrase..." />
+
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:14px;">
+        <input type="checkbox" id="ch-privacy-relay-toggle" />
+        <span><strong>Hide My IP (Privacy Relay Mode)</strong> — Force WebRTC voice/video to use TURN relay candidates only</span>
+      </label>
+
+      <div style="display:flex;gap:8px;margin-bottom:16px;">
+        <button type="button" class="ch-send-btn" id="btn-enroll-keys">Enroll &amp; Backup Keys</button>
+        <button type="button" class="ch-rsvp-btn" id="btn-restore-keys">Restore from Vault</button>
+      </div>
+
+      <div id="ch-vault-status-msg" style="font-size:12px;color:var(--ch-green);margin-bottom:12px;"></div>
+
+      <div class="ch-widget-card" id="ch-admin-storage-widget" style="margin-bottom:0;">
+        <div class="ch-widget-title">
+          <span>☁️ 5 TB Google Drive Media Engine</span>
+          <span id="ch-storage-provider-badge" class="ch-badge">Checking...</span>
+        </div>
+        <div id="ch-storage-quota-text" style="font-size:12px;color:var(--ch-text-secondary);">
+          Direct Resumable Uploads + HTTP 206 Edge Range Streaming active.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====================================================================
+       CREATE / EDIT MESSAGE BOARD MODAL
+       ==================================================================== -->
+  <div class="ch-modal-backdrop hidden" id="ch-board-modal">
+    <div class="ch-modal" role="dialog" aria-labelledby="ch-board-modal-title">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <h3 id="ch-board-modal-title" style="margin:0;font-size:17px;">📋 Create Message Board</h3>
+        <button type="button" class="ch-icon-btn" id="btn-close-board-modal">✕</button>
+      </div>
+      <form id="ch-board-form">
+        <input type="hidden" id="board-edit-id" value="" />
+        <label style="font-size:12px;font-weight:700;display:block;margin-bottom:4px;">Board Name *</label>
+        <input type="text" class="ch-input" id="board-name-input" placeholder="e.g. #batting-tips" required maxlength="60" />
+
+        <label style="font-size:12px;font-weight:700;display:block;margin-bottom:4px;">Category</label>
+        <input type="text" class="ch-input" id="board-category-input" placeholder="Text Channels" value="Text Channels" maxlength="40" />
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+          <div>
+            <label style="font-size:12px;font-weight:700;display:block;margin-bottom:4px;">Board Type</label>
+            <select class="ch-input" id="board-type-select" style="margin-bottom:0;">
+              <option value="text">Text Board</option>
+              <option value="announcement">Announcement Board</option>
+              <option value="voice">Voice Lounge</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:12px;font-weight:700;display:block;margin-bottom:4px;">Who Can Post</label>
+            <select class="ch-input" id="board-write-role-select" style="margin-bottom:0;">
+              <option value="player">All Players</option>
+              <option value="facilitator">Facilitators &amp; Staff</option>
+              <option value="organizer">Organizers &amp; Admin</option>
+            </select>
+          </div>
+        </div>
+
+        <label style="font-size:12px;font-weight:700;display:block;margin-bottom:4px;">Topic / Description</label>
+        <input type="text" class="ch-input" id="board-topic-input" placeholder="What should players post here?" maxlength="200" />
+
+        <div id="ch-board-status-msg" style="font-size:12px;color:#ff8a80;margin-bottom:10px;"></div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+          <button type="button" class="ch-rsvp-btn declined hidden" id="btn-delete-board" style="flex:0 0 auto;">🗑️ Delete Board</button>
+          <div style="display:flex;gap:8px;margin-left:auto;">
+            <button type="button" class="ch-rsvp-btn" id="btn-cancel-board-modal">Cancel</button>
+            <button type="submit" class="ch-send-btn" id="btn-save-board">Save Board</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ====================================================================
+       STATED-REASON MODERATION / REPORT MODAL
+       ==================================================================== -->
+  <div class="ch-modal-backdrop hidden" id="ch-reason-modal">
+    <div class="ch-modal" role="dialog" aria-labelledby="ch-reason-modal-title">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <h3 id="ch-reason-modal-title" style="margin:0;font-size:17px;">State Reason</h3>
+        <button type="button" class="ch-icon-btn" id="btn-close-reason-modal">✕</button>
+      </div>
+      <p id="ch-reason-modal-desc" style="font-size:12.5px;color:var(--ch-text-secondary);margin-top:0;"></p>
+      <form id="ch-reason-form">
+        <label style="font-size:12px;font-weight:700;display:block;margin-bottom:4px;">Stated Reason *</label>
+        <textarea class="ch-input" id="ch-reason-input" rows="3" placeholder="Explain the reason clearly (minimum 3 characters)..." required minlength="3" maxlength="400" style="resize:vertical;"></textarea>
+        <div id="ch-reason-error" style="font-size:12px;color:#ff8a80;margin-bottom:8px;"></div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;">
+          <button type="button" class="ch-rsvp-btn" id="btn-cancel-reason-modal">Cancel</button>
+          <button type="submit" class="ch-send-btn" id="btn-submit-reason">Confirm</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/js/crypto.js?v=96"></script>
+  <script src="/js/store.js?v=96"></script>
+  <script src="/js/rtc.js?v=96"></script>
+  <script src="/js/clubhouse.js?v=96"></script>
+</body>
+</html>

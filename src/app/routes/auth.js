@@ -56,7 +56,7 @@ async function upsertUserAndCreateSession(c, cleanEmail, fallbackName) {
   return user;
 }
 
-authRouter.post('/send-code', async (c) => {
+async function handleSendCode(c) {
   try {
     const body = await c.req.json();
     let { email, name, cf_turnstile_response } = body;
@@ -114,7 +114,10 @@ authRouter.post('/send-code', async (c) => {
     console.error('[Auth] Error sending code:', err);
     return c.json({ error: 'Failed to dispatch verification code.' }, 500);
   }
-});
+}
+
+authRouter.post('/send-code', handleSendCode);
+authRouter.post('/request-code', handleSendCode);
 
 authRouter.post('/verify-code', async (c) => {
   try {
@@ -296,9 +299,16 @@ authRouter.get('/users', requireAdmin, async (c) => {
         END as avatarUrl,
         COALESCE(u.role, CASE WHEN u.is_admin = 1 THEN 'admin' ELSE 'player' END) as role,
         u.is_admin as isAdmin,
+        COALESCE(u.is_moderator, 0) as is_moderator,
+        COALESCE(u.chat_muted, 0) as chat_muted,
+        u.chat_muted_reason as chat_muted_reason,
+        u.chat_muted_at as chat_muted_at,
         COALESCE(u.machine_badge, 0) as machine_badge,
         COALESCE(u.field_badge, 0) as field_badge,
         COALESCE(u.hero_credits, 0) as hero_credits,
+        COALESCE(u.waiver_status, 'none') as waiver_status,
+        u.waiver_signed_at as waiver_signed_at,
+        (SELECT w.certificate_id FROM waivers w WHERE w.user_id = u.id OR LOWER(w.email) = LOWER(u.email) ORDER BY w.id DESC LIMIT 1) as waiver_certificate_id,
         u.created_at as createdAt,
         (SELECT COUNT(*) FROM attendees WHERE user_id = u.id AND status = 'attending') as eventsAttended
       FROM users u
@@ -344,9 +354,40 @@ authRouter.put('/users/:id/role', requireAdmin, async (c) => {
   });
 });
 
+// PUT /api/auth/users/:id/moderator — Admin-only delegation of Clubhouse Moderator abilities
+authRouter.put('/users/:id/moderator', requireAdmin, async (c) => {
+  const targetId = parseInt(c.req.param('id'), 10);
+  const targetUser = await c.env.DB.prepare('SELECT id, name, email, role, is_admin, COALESCE(is_moderator, 0) as is_moderator FROM users WHERE id = ?').bind(targetId).first();
+  if (!targetUser) {
+    return c.json({ error: 'User not found.' }, 404);
+  }
+
+  const body = await c.req.json().catch(() => ({}));
+  const enableMod = Boolean(body.is_moderator);
+
+  if ((targetUser.is_admin === 1 || targetUser.role === 'admin') && !enableMod) {
+    return c.json({ error: 'Administrators always retain full moderation abilities.' }, 400);
+  }
+
+  const modVal = enableMod ? 1 : 0;
+  await c.env.DB.prepare('UPDATE users SET is_moderator = ? WHERE id = ?').bind(modVal, targetId).run();
+
+  return c.json({
+    success: true,
+    message: enableMod
+      ? `${targetUser.name} has been delegated Clubhouse Moderator permissions.`
+      : `Clubhouse Moderator permissions revoked for ${targetUser.name}.`,
+    user: {
+      id: targetId,
+      is_moderator: modVal,
+      isModerator: Boolean(modVal)
+    }
+  });
+});
+
 authRouter.put('/users/:id/badges', requireAdmin, async (c) => {
   const targetId = parseInt(c.req.param('id'), 10);
-  const targetUser = await c.env.DB.prepare('SELECT id, email, machine_badge, field_badge, hero_credits FROM users WHERE id = ?').bind(targetId).first();
+  const targetUser = await c.env.DB.prepare("SELECT id, email, machine_badge, field_badge, hero_credits, COALESCE(waiver_status, 'none') as waiver_status, waiver_signed_at FROM users WHERE id = ?").bind(targetId).first();
   if (!targetUser) {
     return c.json({ error: 'User not found.' }, 404);
   }
@@ -356,15 +397,32 @@ authRouter.put('/users/:id/badges', requireAdmin, async (c) => {
     const newMachineBadge = body.machine_badge !== undefined ? (body.machine_badge ? 1 : 0) : (targetUser.machine_badge || 0);
     const newFieldBadge = body.field_badge !== undefined ? (body.field_badge ? 1 : 0) : (targetUser.field_badge || 0);
     const newHeroCredits = body.hero_credits !== undefined ? Math.max(0, parseInt(body.hero_credits, 10) || 0) : (targetUser.hero_credits || 0);
+    let newWaiverStatus = targetUser.waiver_status || 'none';
+    let newWaiverSignedAt = targetUser.waiver_signed_at || null;
+    if (body.waiver_status !== undefined) {
+      const requestedStatus = String(body.waiver_status || '').trim().toLowerCase();
+      if (!['none', 'paper', 'digital'].includes(requestedStatus)) {
+        return c.json({ error: "Invalid waiver_status. Must be 'none', 'paper', or 'digital'." }, 400);
+      }
+      newWaiverStatus = requestedStatus;
+      newWaiverSignedAt = requestedStatus === 'none' ? null : (targetUser.waiver_signed_at || new Date().toISOString());
+    }
 
     await c.env.DB.prepare(
-      'UPDATE users SET machine_badge = ?, field_badge = ?, hero_credits = ? WHERE id = ?'
-    ).bind(newMachineBadge, newFieldBadge, newHeroCredits, targetId).run();
+      'UPDATE users SET machine_badge = ?, field_badge = ?, hero_credits = ?, waiver_status = ?, waiver_signed_at = ? WHERE id = ?'
+    ).bind(newMachineBadge, newFieldBadge, newHeroCredits, newWaiverStatus, newWaiverSignedAt, targetId).run();
 
     return c.json({
       success: true,
-      message: `Badges and credits updated for ${targetUser.email}.`,
-      user: { id: targetId, machine_badge: newMachineBadge, field_badge: newFieldBadge, hero_credits: newHeroCredits }
+      message: `Account settings updated for ${targetUser.email}.`,
+      user: {
+        id: targetId,
+        machine_badge: newMachineBadge,
+        field_badge: newFieldBadge,
+        hero_credits: newHeroCredits,
+        waiver_status: newWaiverStatus,
+        waiver_signed_at: newWaiverSignedAt
+      }
     });
   } catch (err) {
     console.error('[Auth] Error updating user badges/credits:', err);

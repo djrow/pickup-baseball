@@ -9,6 +9,8 @@ const EN_DICT = {
   "nav.archive": "Archive",
   "nav.gallery": "Gallery & Art",
   "nav.gallery_title": "Photo, Video & Art Gallery",
+  "nav.clubhouse": "Clubhouse",
+  "nav.clubhouse_title": "Clubhouse Chat & Voice Dugout",
   "nav.donate": "Donate",
   "nav.handbook": "Handbook",
   "nav.login": "Log In",
@@ -306,7 +308,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '88',
+  CLIENT_VERSION: '96',
 
   // Current user cache
   currentUser: null,
@@ -671,13 +673,20 @@ const API = {
     const footer = document.getElementById('site-footer') || document.querySelector('footer.site-footer');
     if (!footer) return;
 
+    const currentLang = this.getLang();
+    const langOptionsHtml = this.SUPPORTED_LANGUAGES.map(l =>
+      `<option value="${l.code}" ${l.code === currentLang ? 'selected' : ''} title="${this.escapeHtml(l.label)}">🌐 ${l.short} — ${this.escapeHtml(l.label)}</option>`
+    ).join('');
+    const langSelectHtml = `<select id="lang-select" class="lang-select footer-lang-select" aria-label="Language" title="Language / Idioma / 语言">${langOptionsHtml}</select>`;
+
     if (!footer.querySelector('.footer-controls')) {
       footer.innerHTML = `
         <div class="container">
           <p><img src="/logo.svg" alt="" class="footer-logo"> <strong>Pickup Baseball Foundation</strong> — <span data-i18n="footer.tagline">${this.escapeHtml(this.t('footer.tagline', "Building community through America's pastime."))}</span></p>
           <div class="footer-controls">
-            <div class="footer-theme-wrapper">
+            <div class="footer-theme-wrapper" style="display: flex; justify-content: center; align-items: center; gap: 10px; flex-wrap: wrap;">
               <button type="button" id="footer-theme-trigger" class="footer-theme-btn" aria-label="Change Appearance Theme">🎨 Theme &amp; Colors</button>
+              ${langSelectHtml}
             </div>
             <div id="footer-theme-panel-slot"></div>
             <div id="footer-update-wrapper" class="footer-update-wrapper">
@@ -688,14 +697,31 @@ const API = {
             <div id="footer-update-status" class="footer-update-status" style="display: none;" role="status" aria-live="polite"></div>
           </div>
           <p style="margin-top: 12px; font-size: 0.8rem; color: #94a3b8; line-height: 1.5;">
-            <span data-i18n="footer.about_site">${this.escapeHtml(this.t('footer.about_site', 'Built with Google Gemini in October 2026 for simplicity and durability. Free & open-source'))}</span> on <a href="https://github.com/djrow/pickup-baseball" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">GitHub</a> • <a href="https://github.com/djrow/pickup-baseball/blob/trunk/HANDBOOK.md" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;" data-i18n="footer.handbook">${this.escapeHtml(this.t('footer.handbook', 'Handbook & Field Rules'))}</a>.
+            <span data-i18n="footer.about_site">${this.escapeHtml(this.t('footer.about_site', 'Built with Google Gemini in October 2026 for simplicity and durability. Free & open-source'))}</span> on <a href="https://github.com/djrow/pickup-baseball" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">GitHub</a> • <a href="https://github.com/djrow/pickup-baseball/blob/trunk/HANDBOOK.md" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;" data-i18n="footer.handbook">${this.escapeHtml(this.t('footer.handbook', 'Handbook & Field Rules'))}</a> • <a href="/waiver.html" style="color: inherit; text-decoration: underline;">Player Waiver</a>.
           </p>
           <p style="margin-top: 6px; font-size: 0.75rem; color: #64748b; line-height: 1.4;">
             <span data-i18n="footer.copyright">© 2026 Pickup Baseball Foundation. Licensed under <a href="https://creativecommons.org/licenses/by-nc/4.0/" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">Creative Commons BY-NC 4.0</a>.</span>
           </p>
         </div>
       `;
+    } else if (!footer.querySelector('#lang-select')) {
+      const themeWrapper = footer.querySelector('.footer-theme-wrapper');
+      if (themeWrapper) {
+        themeWrapper.style.display = 'flex';
+        themeWrapper.style.justifyContent = 'center';
+        themeWrapper.style.alignItems = 'center';
+        themeWrapper.style.gap = '10px';
+        themeWrapper.style.flexWrap = 'wrap';
+        themeWrapper.insertAdjacentHTML('beforeend', langSelectHtml);
+      }
     }
+
+    const langSelect = document.getElementById('lang-select');
+    if (langSelect && !langSelect.dataset.bound) {
+      langSelect.dataset.bound = '1';
+      langSelect.addEventListener('change', (e) => API.setLang(e.target.value));
+    }
+
     this.initFooterThemePicker();
     this.initAppUpdater();
   },
@@ -892,8 +918,15 @@ const API = {
       });
     }
 
-    // 2. Non-blocking heartbeat version check (compares server X-App-Version against client version)
+    // 2. Non-blocking heartbeat version check (throttled to max once per hour per client via localStorage)
     setTimeout(() => {
+      try {
+        const lastCheck = parseInt(localStorage.getItem('pb_version_last_check') || '0', 10);
+        if (lastCheck && (Date.now() - lastCheck) < 3600000) {
+          return;
+        }
+        localStorage.setItem('pb_version_last_check', String(Date.now()));
+      } catch (e) {}
       this.checkForUpdates();
     }, 1500);
 
@@ -1312,6 +1345,29 @@ const API = {
     return this.request('PUT', '/api/auth/users/' + userId + '/badges', badges);
   },
 
+  async updateUserModerator(userId, isModerator) {
+    return this.request('PUT', '/api/auth/users/' + userId + '/moderator', { is_moderator: Boolean(isModerator) });
+  },
+
+  async muteUserModeration(userId, muted, reason) {
+    return this.request('PUT', '/api/moderation/users/' + userId + '/mute', {
+      muted: Boolean(muted),
+      reason: reason || ''
+    });
+  },
+
+  async getWaiverStatus() {
+    return this.request('GET', '/api/waiver/status', null, { noStore: true });
+  },
+
+  async signWaiver(payload) {
+    return this.request('POST', '/api/waiver/sign', payload || {});
+  },
+
+  async updateUserWaiverStatus(userId, waiverStatus) {
+    return this.request('PUT', '/api/waiver/admin/users/' + userId, { waiver_status: waiverStatus });
+  },
+
   async deleteUser(userId, ban = false, reason = '') {
     return this.request('DELETE', '/api/auth/users/' + userId + '?ban=' + (ban ? 'true' : 'false') + '&reason=' + encodeURIComponent(reason));
   },
@@ -1599,14 +1655,11 @@ const API = {
     const isDonatePage = typeof window !== 'undefined' && (window.location.pathname.endsWith('donate.html') || window.location.pathname === '/donate');
     const isArtPage = typeof window !== 'undefined' && (window.location.pathname.endsWith('art.html') || window.location.pathname === '/art');
     const isGalleryPage = typeof window !== 'undefined' && (window.location.pathname.endsWith('gallery.html') || window.location.pathname === '/gallery');
+    const isClubhousePage = typeof window !== 'undefined' && (window.location.pathname.endsWith('clubhouse.html') || window.location.pathname === '/clubhouse');
     // nav.art community art merged into nav.gallery (/art.html redirects to /gallery.html#community-art-section; nav-link-art alias)
+    const clubhouseLinkHtml = `<a href="/clubhouse.html" class="nav-link-clubhouse${isClubhousePage ? ' active' : ''}" title="${this.t('nav.clubhouse_title', 'Clubhouse Chat & Voice Dugout')}"><span>💬</span> <span>${this.t('nav.clubhouse', 'Clubhouse')}</span></a>`;
     const galleryLinkHtml = `<a href="/gallery.html" class="nav-link-gallery${isGalleryPage || isArtPage ? ' active' : ''}" title="${this.t('nav.gallery_title', 'Photo, Video & Art Gallery')}"><span class="nav-gallery-icon">📸</span> <span>${this.t('nav.gallery', 'Gallery & Art')}</span></a>`;
     const donateLinkHtml = `<a href="/donate.html" class="nav-link-donate${isDonatePage ? ' active' : ''}">${this.t('nav.donate')}</a>`;
-
-    const langOptionsHtml = this.SUPPORTED_LANGUAGES.map(l =>
-      `<option value="${l.code}" ${l.code === currentLang ? 'selected' : ''} title="${this.escapeHtml(l.label)}">${l.short}</option>`
-    ).join('');
-    const langSelectHtml = `<select id="lang-select" class="lang-select" aria-label="Language" title="Language / Idioma / 语言">${langOptionsHtml}</select>`;
 
     navContainer.innerHTML = `
       <div class="nav-wrap">
@@ -1616,17 +1669,18 @@ const API = {
           <span class="brand-short">PBF</span>
         </a>
         <div class="nav-links">
+          ${clubhouseLinkHtml}
           ${galleryLinkHtml}
           ${donateLinkHtml}
-          ${langSelectHtml}
           ${authHtml}
         </div>
       </div>
     `;
 
+    this.renderFooter();
     const langSelect = document.getElementById('lang-select');
-    if (langSelect) {
-      langSelect.addEventListener('change', (e) => API.setLang(e.target.value));
+    if (langSelect && langSelect.value !== currentLang) {
+      langSelect.value = currentLang;
     }
   },
 
@@ -1736,9 +1790,9 @@ const API = {
     banner.className = 'cookie-notice-banner';
     banner.setAttribute('role', 'region');
     banner.setAttribute('aria-label', 'Cookie and privacy notice');
-    banner.style.cssText = 'position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); width: calc(100% - 32px); max-width: 660px; background: #003831; color: #ffffff; padding: 14px 18px; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.35); z-index: 99999; display: flex; align-items: center; justify-content: space-between; gap: 14px; font-size: 0.88rem; line-height: 1.4; border: 1px solid rgba(255,255,255,0.18);';
+    banner.style.cssText = 'position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); width: calc(100% - 32px); max-width: 660px; background: #003831; color: #ffffff; padding: 14px 18px; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.35); z-index: 99999; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 14px; font-size: 0.88rem; line-height: 1.4; border: 1px solid rgba(255,255,255,0.18);';
 
-    banner.innerHTML = '<div style="display: flex; align-items: center; gap: 10px;">' +
+    banner.innerHTML = '<div style="display: flex; align-items: center; gap: 10px; flex: 1 1 220px; min-width: 0;">' +
       '<span style="font-size: 1.3rem;">🍪</span>' +
       '<span><strong>Cookie &amp; Privacy Notice:</strong> We only use essential session cookies and Cloudflare security cookies to prevent spam and keep your account safe. We do not use third-party tracking or advertising cookies.</span>' +
       '</div>' +

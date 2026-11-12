@@ -193,10 +193,19 @@ export async function verifyTurnstileIfConfigured(env, token, remoteip) {
   }
 }
 
-export async function getUserFromSession(db, sessionId) {
+export async function getUserFromSession(db, sessionId, chatDb, options = {}) {
   if (!sessionId || !db) return null;
 
-  const session = await db.prepare(`
+  let baseballDb = db;
+  let chatDbInstance = chatDb;
+  if (db && db.env) {
+    baseballDb = db.env.BASEBALL_DB || db.env.DB;
+    chatDbInstance = chatDb || db.env.CHAT_DB;
+  }
+
+  const lightweight = Boolean(options && options.lightweight);
+
+  const session = await baseballDb.prepare(`
     SELECT 
       s.id as session_id, 
       s.expires_at, 
@@ -209,15 +218,43 @@ export async function getUserFromSession(db, sessionId) {
         ELSE COALESCE(u.avatar_url, '')
       END as avatar_url, 
       u.is_admin,
+      COALESCE(u.is_moderator, 0) as is_moderator,
+      COALESCE(u.chat_muted, 0) as chat_muted,
+      u.chat_muted_reason,
+      u.chat_muted_at,
       COALESCE(u.role, CASE WHEN u.is_admin = 1 THEN 'admin' ELSE 'player' END) as role,
       COALESCE(u.machine_badge, 0) as machine_badge,
       COALESCE(u.field_badge, 0) as field_badge,
-      COALESCE(u.hero_credits, 0) as hero_credits
+      COALESCE(u.hero_credits, 0) as hero_credits,
+      COALESCE(u.waiver_status, 'none') as waiver_status,
+      u.waiver_signed_at as waiver_signed_at,
+      ${lightweight ? '0' : `EXISTS (
+        SELECT 1 FROM attendees a
+        JOIN events e ON a.event_id = e.id
+        WHERE (e.status IS NULL OR e.status NOT IN ('cancelled', 'rainout'))
+          AND datetime(e.event_date) >= datetime('now', '-1 day')
+          AND (a.user_id = u.id OR LOWER(a.email) = LOWER(u.email))
+          AND a.status = 'attending'
+      )`} as playing_sunday_flag,
+      CASE
+        WHEN u.role IN ('admin', 'organizer') OR u.is_admin = 1 THEN 0
+        ELSE EXISTS (
+          SELECT 1 FROM duty_assignments da
+          JOIN event_duties ed ON da.duty_id = ed.id
+          JOIN events e ON ed.event_id = e.id
+          JOIN attendees a ON da.attendee_id = a.id
+          WHERE (e.status IS NULL OR e.status NOT IN ('cancelled', 'rainout'))
+            AND datetime(e.event_date) >= datetime('now', '-1 day')
+            AND (ed.title = 'Game Facilitator' OR ed.title LIKE '%Facilitator%')
+            AND (a.user_id = u.id OR LOWER(a.email) = LOWER(u.email))
+            AND a.status = 'attending'
+        )
+      END as facilitator_flag
     FROM sessions s
     JOIN users u ON s.user_id = u.id
     WHERE s.id = ?
       AND datetime(s.expires_at) > datetime('now')
-      AND NOT EXISTS (SELECT 1 FROM banned_emails b WHERE b.email = u.email)
+      AND NOT EXISTS (SELECT 1 FROM banned_emails b WHERE LOWER(b.email) = LOWER(u.email))
   `).bind(sessionId).first();
 
   if (!session) return null;
@@ -225,6 +262,33 @@ export async function getUserFromSession(db, sessionId) {
   const role = session.role || (session.is_admin === 1 ? 'admin' : 'player');
   const isAdmin = role === 'admin' || Boolean(session.is_admin);
   const canManageEvents = role === 'admin' || role === 'organizer' || isAdmin;
+  const isModeratorFlag = Boolean(session.is_moderator);
+  const canModerateChat = isAdmin || isModeratorFlag;
+  const chatMuted = Boolean(session.chat_muted);
+
+  const playingSunday = Boolean(session.playing_sunday_flag);
+  const isGameFacilitator = Boolean(session.facilitator_flag);
+
+  // E2EE Crypto Key Status from CHAT_DB (skipped on lightweight high-frequency sync polls)
+  let hasKeys = false;
+  let privacyRelayMode = 0;
+
+  if (!lightweight && chatDbInstance) {
+    try {
+      const cryptoRow = await chatDbInstance.prepare(`
+        SELECT ecdh_public_key_jwk, privacy_relay_mode 
+        FROM user_crypto_keys 
+        WHERE user_id = ?
+      `).bind(session.id).first();
+
+      if (cryptoRow) {
+        hasKeys = true;
+        privacyRelayMode = cryptoRow.privacy_relay_mode ? 1 : 0;
+      }
+    } catch (err) {
+      console.warn('[getUserFromSession] Crypto key status lookup error:', err.message);
+    }
+  }
 
   return {
     id: session.id,
@@ -232,12 +296,109 @@ export async function getUserFromSession(db, sessionId) {
     email: session.email,
     bio: session.bio || '',
     avatarUrl: session.avatar_url || '',
+    avatar_url: session.avatar_url || '',
     role,
     isAdmin,
+    is_admin: isAdmin ? 1 : 0,
+    isModerator: canModerateChat,
+    is_moderator: isModeratorFlag ? 1 : 0,
+    canModerateChat,
+    canModerate: canModerateChat,
+    chatMuted,
+    chat_muted: chatMuted ? 1 : 0,
+    chatMutedReason: session.chat_muted_reason || null,
+    chat_muted_reason: session.chat_muted_reason || null,
+    chatMutedAt: session.chat_muted_at || null,
+    chat_muted_at: session.chat_muted_at || null,
     canManageEvents,
+    can_manage_events: canManageEvents,
     machineBadge: Boolean(session.machine_badge),
+    machine_badge: session.machine_badge ? 1 : 0,
     fieldBadge: Boolean(session.field_badge),
-    heroCredits: session.hero_credits || 0
+    field_badge: session.field_badge ? 1 : 0,
+    heroCredits: session.hero_credits || 0,
+    hero_credits: session.hero_credits || 0,
+    waiverStatus: session.waiver_status || 'none',
+    waiver_status: session.waiver_status || 'none',
+    waiverSigned: session.waiver_status === 'digital' || session.waiver_status === 'paper',
+    waiver_signed: session.waiver_status === 'digital' || session.waiver_status === 'paper',
+    waiverSignedAt: session.waiver_signed_at || null,
+    waiver_signed_at: session.waiver_signed_at || null,
+    playingSunday,
+    playing_sunday: playingSunday,
+    isGameFacilitator,
+    is_game_facilitator: isGameFacilitator,
+    hasKeys,
+    has_keys: hasKeys,
+    privacyRelayMode,
+    privacy_relay_mode: privacyRelayMode
+  };
+}
+
+// RBAC & Channel Access Helpers
+export function canAccessChannel(user, channel, mode = 'read') {
+  if (!user || !channel) return false;
+
+  // Super-admin has unrestricted access to all channels
+  if (user.role === 'admin' || user.isAdmin || user.is_admin === 1) {
+    return true;
+  }
+
+  const minRole = (mode === 'write' ? channel.min_role_write : channel.min_role_read) || 'player';
+
+  // Role Rank hierarchy: admin: 4, organizer: 3, facilitator: 2, player: 1
+  const ROLE_RANKS = {
+    admin: 4,
+    organizer: 3,
+    facilitator: 2,
+    player: 1
+  };
+
+  let userRank = 1;
+  if (user.role === 'admin' || user.isAdmin || user.is_admin === 1) {
+    userRank = 4;
+  } else if (user.role === 'organizer') {
+    userRank = 3;
+  } else if (user.isGameFacilitator || user.is_game_facilitator) {
+    userRank = 2;
+  } else {
+    userRank = 1;
+  }
+
+  const requiredRank = ROLE_RANKS[minRole] || 1;
+  return userRank >= requiredRank;
+}
+
+export function requireChannelAccess(mode = 'read') {
+  return async (c, next) => {
+    const user = c.get('user');
+    if (!user) {
+      return c.json({ error: 'Authentication required. Please sign in.' }, 401);
+    }
+
+    const channelParam = c.req.param('channelId') || c.req.param('id');
+    const chatDb = c.env && c.env.CHAT_DB;
+    if (!chatDb) {
+      return c.json({ error: 'Chat database unavailable.' }, 500);
+    }
+
+    let channel = null;
+    if (/^\d+$/.test(channelParam)) {
+      channel = await chatDb.prepare('SELECT * FROM channels WHERE id = ?').bind(parseInt(channelParam, 10)).first();
+    } else {
+      channel = await chatDb.prepare('SELECT * FROM channels WHERE slug = ?').bind(channelParam).first();
+    }
+
+    if (!channel) {
+      return c.json({ error: 'Channel not found.' }, 404);
+    }
+
+    if (!canAccessChannel(user, channel, mode)) {
+      return c.json({ error: 'Access denied: insufficient permissions for this channel.' }, 403);
+    }
+
+    c.set('channel', channel);
+    await next();
   };
 }
 
@@ -269,4 +430,27 @@ export async function requireAdmin(c, next) {
     return c.json({ error: 'Access denied: Admin privileges required.' }, 403);
   }
   await next();
+}
+
+export async function requireModerator(c, next) {
+  const user = c.get('user');
+  if (!user) {
+    return c.json({ error: 'Authentication required. Please sign in.' }, 401);
+  }
+  if (!user.isAdmin && !user.canModerateChat && !user.isModerator) {
+    return c.json({ error: 'Access denied: Clubhouse Moderator or Admin privileges required.' }, 403);
+  }
+  await next();
+}
+
+export function rejectIfChatMuted(c, user) {
+  if (user && (user.chatMuted || user.chat_muted === 1)) {
+    const reasonSuffix = user.chatMutedReason ? `: ${user.chatMutedReason}` : '.';
+    return c.json({
+      error: `You are currently muted in Clubhouse${reasonSuffix}`,
+      code: 'USER_MUTED',
+      muted_reason: user.chatMutedReason || null
+    }, 403);
+  }
+  return null;
 }

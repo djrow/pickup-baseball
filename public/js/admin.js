@@ -996,23 +996,31 @@ function setupAdminUserManagement(currentUser) {
     }
 
     if (cachedUsers.length === 0) {
-      tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 14px;">No users registered yet.</td></tr>';
+      tableBody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: var(--text-muted); padding: 14px;">No users registered yet.</td></tr>';
       return;
     }
 
     if (filtered.length === 0) {
-      tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 20px; font-size: 0.85rem;">No accounts found matching "<strong>' + API.escapeHtml(query) + '</strong>"</td></tr>';
+      tableBody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: var(--text-muted); padding: 20px; font-size: 0.85rem;">No accounts found matching "<strong>' + API.escapeHtml(query) + '</strong>"</td></tr>';
       return;
     }
 
     tableBody.innerHTML = filtered.map(function(u) {
       const isMe = u.id === currentUser.id;
+      const isAdminRole = u.role === 'admin';
+      const isClubhouseMod = Boolean(u.is_moderator) || isAdminRole;
+      const isChatMuted = Boolean(u.chat_muted);
       let roleBadge = '<span class="badge badge-gray">👤 Player</span>';
       if (u.role === 'admin') roleBadge = '<span class="badge badge-orange">👑 Admin</span>';
       else if (u.role === 'organizer') roleBadge = '<span class="badge badge-green">🛡️ Organizer</span>';
 
       const gamesCount = (typeof u.eventsAttended === 'number') ? u.eventsAttended : 0;
       const credits = (typeof u.hero_credits === 'number') ? u.hero_credits : 0;
+      const wStatus = u.waiver_status || (u.waiver_certificate_id ? 'digital' : 'none');
+      const certId = u.waiver_certificate_id || '';
+      const certLinkHtml = certId
+        ? '<a href="/api/waiver/certificate/' + encodeURIComponent(certId) + '?format=html" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm" style="padding: 1px 6px; font-size: 0.72rem; height: 24px; line-height: 1.2;" title="View Signed Digital Waiver Certificate (' + API.escapeHtml(certId) + ')">📄 View</a>'
+        : '';
 
       return `
         <tr>
@@ -1025,6 +1033,16 @@ function setupAdminUserManagement(currentUser) {
           </td>
           <td style="padding: 5px 10px; font-weight: 600; font-size: 0.82rem; white-space: nowrap;">${gamesCount} game${gamesCount === 1 ? '' : 's'}</td>
           <td style="padding: 5px 10px; white-space: nowrap;">${roleBadge}</td>
+          <td style="padding: 5px 10px; white-space: nowrap;">
+            <div style="display: inline-flex; align-items: center; gap: 5px;">
+              <select class="admin-waiver-selector" data-user-id="${u.id}" data-user-name="${API.escapeHtml(u.name)}" style="padding: 2px 6px; border-radius: var(--radius-sm); border: 1.5px solid ${wStatus === 'none' ? 'var(--border)' : 'var(--secondary)'}; font-size: 0.78rem; font-weight: 700; background: ${wStatus === 'none' ? 'var(--bg-input)' : 'rgba(0, 56, 49, 0.08)'}; color: ${wStatus === 'none' ? 'var(--text-muted)' : 'var(--secondary)'}; cursor: pointer; height: 26px;">
+                <option value="none" ${wStatus === 'none' ? 'selected' : ''}>⏳ Unsigned</option>
+                <option value="paper" ${wStatus === 'paper' ? 'selected' : ''}>📄 Paper Waiver</option>
+                <option value="digital" ${wStatus === 'digital' ? 'selected' : ''}>🔏 Digital Signed</option>
+              </select>
+              ${certLinkHtml}
+            </div>
+          </td>
           <td style="padding: 5px 10px; white-space: nowrap;">
             <label style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.76rem; font-weight: 600; cursor: pointer; margin-right: 8px;">
               <input type="checkbox" class="admin-machine-badge" data-user-id="${u.id}" ${u.machine_badge ? 'checked' : ''}> ⚡ Machine
@@ -1046,6 +1064,16 @@ function setupAdminUserManagement(currentUser) {
               <option value="organizer" ${u.role === 'organizer' ? 'selected' : ''}>🛡️ Organizer (Can Post Games &amp; Record Turnout)</option>
               <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>👑 Admin (Full Access)</option>
             </select>
+          </td>
+          <td style="padding: 5px 10px; white-space: nowrap;">
+            <div style="display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+              ${isAdminRole ? '<span class="badge badge-orange" style="font-size:0.72rem;">Full Mod</span>' : `
+                <label style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.76rem; font-weight: 600; cursor: pointer;" title="Delegate Clubhouse moderation without granting Admin ownership">
+                  <input type="checkbox" class="admin-mod-toggle" data-user-id="${u.id}" data-user-name="${API.escapeHtml(u.name)}" ${isClubhouseMod ? 'checked' : ''}> 🛡️ Mod
+                </label>
+                ${isMe ? '' : `<button type="button" class="btn btn-outline btn-sm btn-chat-mute" data-user-id="${u.id}" data-user-name="${API.escapeHtml(u.name)}" data-muted="${isChatMuted ? '1' : '0'}" style="font-size: 0.72rem; padding: 1px 6px; height: 24px; line-height: 1.2; ${isChatMuted ? 'border-color:var(--danger);color:var(--danger);' : ''}">${isChatMuted ? '🔊 Unmute' : '🔇 Mute'}</button>`}
+              `}
+            </div>
           </td>
           <td style="padding: 5px 10px; white-space: nowrap;">
             ${isMe ? '<span style="color: var(--text-muted); font-size: 0.78rem;">(Your account)</span>' : `
@@ -1149,6 +1177,25 @@ function setupAdminUserManagement(currentUser) {
       });
     });
 
+    tableBody.querySelectorAll('.admin-waiver-selector').forEach(function(sel) {
+      sel.addEventListener('change', function(e) {
+        const targetUserId = e.target.getAttribute('data-user-id');
+        const targetUserName = e.target.getAttribute('data-user-name') || 'Player';
+        const newStatus = e.target.value;
+        const found = cachedUsers.find(function(u) { return String(u.id) === String(targetUserId); });
+        const prevStatus = found ? (found.waiver_status || 'none') : 'none';
+        const statusLabel = newStatus === 'paper' ? 'Paper Waiver on File' : (newStatus === 'digital' ? 'Digital Signed' : 'Unsigned');
+        saveUserBadgePatch(
+          targetUserId,
+          { waiver_status: newStatus },
+          'Waiver status for ' + targetUserName + ' updated to ' + statusLabel + '!',
+          function() { e.target.value = prevStatus; }
+        ).then(function() {
+          renderUsersList();
+        });
+      });
+    });
+
     tableBody.querySelectorAll('.admin-machine-badge').forEach(function(chk) {
       chk.addEventListener('change', function(e) {
         const isChecked = e.target.checked;
@@ -1177,20 +1224,67 @@ function setupAdminUserManagement(currentUser) {
     tableBody.querySelectorAll('.btn-credit-plus').forEach(function(btn) {
       btn.addEventListener('click', function(e) { adjustCredits(e.currentTarget.getAttribute('data-user-id'), 1); });
     });
+
+    tableBody.querySelectorAll('.admin-mod-toggle').forEach(function(chk) {
+      chk.addEventListener('change', async function(e) {
+        const targetUserId = e.target.getAttribute('data-user-id');
+        const targetUserName = e.target.getAttribute('data-user-name') || 'Player';
+        const nextMod = Boolean(e.target.checked);
+        try {
+          const res = await API.updateUserModerator(targetUserId, nextMod);
+          if (res.error) {
+            e.target.checked = !nextMod;
+            setUserMgmtAlert('error', API.escapeHtml(res.error));
+          } else {
+            const found = cachedUsers.find(function(u) { return String(u.id) === String(targetUserId); });
+            if (found) found.is_moderator = nextMod ? 1 : 0;
+            setUserMgmtAlert('success', '✓ ' + API.escapeHtml(res.message || (targetUserName + ' moderator access updated.')));
+          }
+        } catch (err) {
+          e.target.checked = !nextMod;
+          setUserMgmtAlert('error', 'Failed to update Clubhouse moderator permission.');
+        }
+      });
+    });
+
+    tableBody.querySelectorAll('.btn-chat-mute').forEach(function(btn) {
+      btn.addEventListener('click', async function(e) {
+        const elBtn = e.currentTarget;
+        const targetUserId = elBtn.getAttribute('data-user-id');
+        const targetUserName = elBtn.getAttribute('data-user-name') || 'Player';
+        const currentlyMuted = elBtn.getAttribute('data-muted') === '1';
+        let reason = '';
+        if (!currentlyMuted) {
+          reason = window.prompt('State reason to blanket-mute ' + targetUserName + ' in Clubhouse (baseball RSVPs are unaffected):', 'Moderator action');
+          if (!reason || reason.trim().length < 3) return;
+        }
+        try {
+          const res = await API.muteUserModeration(targetUserId, !currentlyMuted, reason.trim());
+          if (res.error) {
+            setUserMgmtAlert('error', API.escapeHtml(res.error));
+          } else {
+            setUserMgmtAlert('success', '✓ ' + API.escapeHtml(res.message || 'Clubhouse mute status updated.'));
+            await loadUsers();
+          }
+        } catch (err) {
+          setUserMgmtAlert('error', 'Failed to update Clubhouse mute status.');
+        }
+      });
+    });
   }
 
   async function loadUsers() {
-    tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 14px;">Loading users...</td></tr>';
+    tableBody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: var(--text-muted); padding: 14px;">Loading users...</td></tr>';
     try {
       const res = await API.getUsers();
       if (res.error) {
-        tableBody.innerHTML = '<tr><td colspan="7" style="color: var(--danger); text-align: center; padding: 14px;">' + API.escapeHtml(res.error) + '</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="9" style="color: var(--danger); text-align: center; padding: 14px;">' + API.escapeHtml(res.error) + '</td></tr>';
         return;
       }
       cachedUsers = res.users || [];
       renderUsersList();
     } catch (err) {
-      tableBody.innerHTML = '<tr><td colspan="7" style="color: var(--danger); text-align: center; padding: 14px;">Error loading users.</td></tr>';
+      tableBody.innerHTML = '<tr><td colspan="9" style="color: var(--danger); text-align: center; padding: 14px;">Error loading users.</td></tr>';
     }
   }
 

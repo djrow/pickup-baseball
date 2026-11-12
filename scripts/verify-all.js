@@ -36,12 +36,17 @@ const testDbPath = process.env.TEST_DB_PATH || path.join(
   `pickup_verify_all_${Date.now()}_${Math.random().toString(36).slice(2)}.db`
 );
 process.env.DB_PATH = testDbPath;
+const testChatDbPath = process.env.TEST_CHAT_DB_PATH || path.join(
+  os.tmpdir(),
+  `pickup_verify_chat_${Date.now()}_${Math.random().toString(36).slice(2)}.db`
+);
+process.env.CHAT_DB_PATH = testChatDbPath;
 process.env.NODE_ENV = 'test';
 
 const testDataDir = path.join(os.tmpdir(), `pickup_verify_data_${Date.now()}`);
 process.env.DATA_DIR = testDataDir;
 
-const { db, d1, initDatabase, getDefaultDuties } = require('../src/db');
+const { db, chatDb, d1, baseballD1, chatD1, initDatabase, getDefaultDuties } = require('../src/db');
 initDatabase();
 
 const { createSession } = require('../src/auth');
@@ -57,8 +62,11 @@ app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+  res.setHeader('Permissions-Policy', 'camera=(self), microphone=(self), display-capture=(self), geolocation=(), payment=()');
   res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  if (!req.path.startsWith('/api')) {
+    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' https://www.googleapis.com https://api.open-meteo.com; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
+  }
   next();
 });
 app.get(['/handbook', '/rules'], (req, res) => {
@@ -79,7 +87,13 @@ app.get('/feed.xml', async (req, res) => {
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() });
 });
-app.use('/api', createNodeHttpBridge(honoApp, () => ({ ...process.env, NODE_ENV: 'test', DB: d1 })));
+app.use('/api', createNodeHttpBridge(honoApp, () => ({
+  ...process.env,
+  NODE_ENV: 'test',
+  BASEBALL_DB: baseballD1 || d1,
+  CHAT_DB: chatD1,
+  DB: baseballD1 || d1
+})));
 
 let server;
 let baseUrl;
@@ -199,12 +213,18 @@ test.after(async () => {
     await new Promise((resolve) => server.close(resolve));
   }
   db.close();
+  if (chatDb && typeof chatDb.close === 'function') {
+    chatDb.close();
+  }
 
   // Clean up SQLite files
   try {
     if (fs.existsSync(testDbPath)) fs.unlinkSync(testDbPath);
     if (fs.existsSync(testDbPath + '-wal')) fs.unlinkSync(testDbPath + '-wal');
     if (fs.existsSync(testDbPath + '-shm')) fs.unlinkSync(testDbPath + '-shm');
+    if (fs.existsSync(testChatDbPath)) fs.unlinkSync(testChatDbPath);
+    if (fs.existsSync(testChatDbPath + '-wal')) fs.unlinkSync(testChatDbPath + '-wal');
+    if (fs.existsSync(testChatDbPath + '-shm')) fs.unlinkSync(testChatDbPath + '-shm');
     if (fs.existsSync(testDataDir)) fs.rmSync(testDataDir, { recursive: true, force: true });
   } catch (e) {}
 });
@@ -2811,3 +2831,755 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Check 1: Dual-D1 Schema, Seed & System Foundation Verification
+// ---------------------------------------------------------------------------
+
+test('Check 1: Dual-D1 Schema, Seed & System Foundation Verification', async (t) => {
+  await t.test('Check 1.1: All CHAT_DB tables exist with no cross-database leakage', () => {
+    const chatTables = chatDb.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'").all().map(r => r.name);
+    const expectedChatTables = [
+      'channels',
+      'channel_members',
+      'messages',
+      'message_reactions',
+      'chat_attachments',
+      'user_crypto_keys',
+      'channel_key_shares',
+      'voice_participants',
+      'rtc_signals',
+      'sync_events',
+      'chat_rate_limits'
+    ];
+    for (const table of expectedChatTables) {
+      assert.ok(chatTables.includes(table), `CHAT_DB must contain table: ${table}`);
+    }
+
+    const baseballTables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'").all().map(r => r.name);
+    assert.ok(baseballTables.includes('users'), 'BASEBALL_DB must contain users table');
+    assert.ok(baseballTables.includes('events'), 'BASEBALL_DB must contain events table');
+    assert.ok(!chatTables.includes('users'), 'CHAT_DB must not contain users table (no cross-DB leakage)');
+    assert.ok(!baseballTables.includes('channels'), 'BASEBALL_DB must not contain channels table (no cross-DB leakage)');
+  });
+
+  await t.test('Check 1.2: All 6 CHAT_DB indexes exist', () => {
+    const indexes = chatDb.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name NOT LIKE 'sqlite_%'").all().map(r => r.name);
+    const expectedIndexes = [
+      'idx_messages_channel_id',
+      'idx_messages_parent_id',
+      'idx_reactions_msg',
+      'idx_attachments_msg',
+      'idx_rtc_signals_recipient',
+      'idx_sync_events_id'
+    ];
+    for (const idx of expectedIndexes) {
+      assert.ok(indexes.includes(idx), `CHAT_DB must contain index: ${idx}`);
+    }
+  });
+
+  await t.test('Check 1.3: All 7 default channels exist with correct categories and role permissions', () => {
+    const channels = chatDb.prepare('SELECT slug, name, category, channel_type, min_role_read, min_role_write, is_encrypted, sort_order FROM channels ORDER BY sort_order ASC').all();
+    assert.equal(channels.length, 7, 'CHAT_DB must seed exactly 7 default channels');
+
+    const bySlug = Object.fromEntries(channels.map(c => [c.slug, c]));
+
+    // 1. #announcements
+    assert.ok(bySlug['announcements'], '#announcements channel must exist');
+    assert.equal(bySlug['announcements'].category, 'Clubhouse Info');
+    assert.equal(bySlug['announcements'].min_role_write, 'organizer');
+    assert.equal(bySlug['announcements'].min_role_read, 'player');
+    assert.equal(bySlug['announcements'].sort_order, 1);
+
+    // 2. #general
+    assert.ok(bySlug['general'], '#general channel must exist');
+    assert.equal(bySlug['general'].category, 'Text Channels');
+    assert.equal(bySlug['general'].min_role_read, 'player');
+    assert.equal(bySlug['general'].min_role_write, 'player');
+    assert.equal(bySlug['general'].sort_order, 2);
+
+    // 3. #sunday-game-day
+    assert.ok(bySlug['sunday-game-day'], '#sunday-game-day channel must exist');
+    assert.equal(bySlug['sunday-game-day'].category, 'Text Channels');
+    assert.equal(bySlug['sunday-game-day'].sort_order, 3);
+
+    // 4. #highlights-and-media
+    assert.ok(bySlug['highlights-and-media'], '#highlights-and-media channel must exist');
+    assert.equal(bySlug['highlights-and-media'].category, 'Text Channels');
+    assert.equal(bySlug['highlights-and-media'].sort_order, 4);
+
+    // 5. #facilitators-lounge
+    assert.ok(bySlug['facilitators-lounge'], '#facilitators-lounge channel must exist');
+    assert.equal(bySlug['facilitators-lounge'].category, 'Staff & Operations');
+    assert.equal(bySlug['facilitators-lounge'].min_role_read, 'facilitator');
+    assert.equal(bySlug['facilitators-lounge'].min_role_write, 'facilitator');
+    assert.equal(bySlug['facilitators-lounge'].sort_order, 5);
+
+    // 6. 🔊 Dugout Voice Huddle
+    assert.ok(bySlug['dugout-voice-huddle'], '🔊 Dugout Voice Huddle must exist');
+    assert.equal(bySlug['dugout-voice-huddle'].category, 'Voice Lounges');
+    assert.equal(bySlug['dugout-voice-huddle'].channel_type, 'voice');
+    assert.equal(bySlug['dugout-voice-huddle'].sort_order, 6);
+
+    // 7. 🔊 Organizers War Room
+    assert.ok(bySlug['organizers-war-room'], '🔊 Organizers War Room must exist');
+    assert.equal(bySlug['organizers-war-room'].category, 'Voice Lounges');
+    assert.equal(bySlug['organizers-war-room'].channel_type, 'voice');
+    assert.equal(bySlug['organizers-war-room'].min_role_read, 'facilitator');
+    assert.equal(bySlug['organizers-war-room'].min_role_write, 'facilitator');
+    assert.equal(bySlug['organizers-war-room'].sort_order, 7);
+  });
+
+  await t.test('Check 1.4: Schema initialization idempotency', async () => {
+    const { ensureChatD1Schema } = require('../src/app/schema.js');
+    await ensureChatD1Schema(chatD1, true);
+
+    const countRow = chatDb.prepare('SELECT COUNT(*) as count FROM channels').get();
+    assert.equal(countRow.count, 7, 'Re-running ensureChatD1Schema must not duplicate channels');
+  });
+
+  await t.test('Check 1.5: System endpoints /api/version and /api/health return contract', async () => {
+    const verRes = await apiReq('GET', '/api/version');
+    assert.equal(verRes.status, 200);
+    assert.equal(verRes.data.version, CURRENT_APP_VERSION);
+    assert.equal(verRes.data.status, 'ok');
+    assert.equal(verRes.data.storageProvider, 'local');
+
+    const healthRes = await apiReq('GET', '/api/health');
+    assert.equal(healthRes.status, 200);
+    assert.equal(healthRes.data.version, CURRENT_APP_VERSION);
+    assert.equal(healthRes.data.status, 'ok');
+    assert.equal(healthRes.data.storageProvider, 'local');
+    assert.ok(healthRes.data.timestamp);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Check 2: SSO & RBAC Verification
+// ---------------------------------------------------------------------------
+
+test('Check 2: SSO & RBAC Verification', async (t) => {
+  await t.test('Check 2.1: Active session in BASEBALL_DB.sessions authenticates immediately on /api/auth/me', async () => {
+    const res = await apiReq('GET', '/api/auth/me', seedPlayerCookie);
+    assert.equal(res.status, 200);
+    assert.ok(res.data.user);
+    assert.equal(res.data.user.id, seedPlayerId);
+    assert.equal(res.data.user.role, 'player');
+    assert.equal(res.data.user.email, 'player@charity.org');
+  });
+
+  await t.test('Check 2.2: Three-tier role mapping (admin, organizer, player)', async () => {
+    const adminMe = await apiReq('GET', '/api/auth/me', seedAdminCookie);
+    assert.equal(adminMe.status, 200);
+    assert.equal(adminMe.data.user.role, 'admin');
+    assert.equal(adminMe.data.user.isAdmin, true);
+    assert.equal(adminMe.data.user.canManageEvents, true);
+
+    const orgMe = await apiReq('GET', '/api/auth/me', seedOrgCookie);
+    assert.equal(orgMe.status, 200);
+    assert.equal(orgMe.data.user.role, 'organizer');
+    assert.equal(orgMe.data.user.isAdmin, false);
+    assert.equal(orgMe.data.user.canManageEvents, true);
+
+    const playerMe = await apiReq('GET', '/api/auth/me', seedPlayerCookie);
+    assert.equal(playerMe.status, 200);
+    assert.equal(playerMe.data.user.role, 'player');
+    assert.equal(playerMe.data.user.isAdmin, false);
+    assert.equal(playerMe.data.user.canManageEvents, false);
+  });
+
+  await t.test('Check 2.3: Dynamic badges: attending next Sunday & Game Facilitator duty assignment', async () => {
+    // Create dedicated next active Sunday event (scheduled 30 minutes in the future to ensure it is the earliest active event)
+    const nextGameDate = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+
+    const evRes = db.prepare(`
+      INSERT INTO events (title, location, event_date, max_players, status, created_by)
+      VALUES ('Dynamic Badges Verification Game', 'Bushrod Park Field 2', ?, 30, 'active', ?)
+    `).run(nextGameDate, seedAdminId);
+    const evId = evRes.lastInsertRowid;
+
+    // Create a new test player
+    const uRes = db.prepare(`
+      INSERT INTO users (name, email, role, machine_badge, field_badge, hero_credits)
+      VALUES ('Dynamic Badge Player', 'dynamic_badge_test@charity.org', 'player', 1, 0, 10)
+    `).run();
+    const testUserId = uRes.lastInsertRowid;
+    const testCookie = `baseball_session=${createSession(testUserId).sessionId}`;
+
+    // 1. Initial state: not attending
+    const res1 = await apiReq('GET', '/api/auth/me', testCookie);
+    assert.equal(res1.status, 200);
+    assert.equal(res1.data.user.playingSunday, false);
+    assert.equal(res1.data.user.isGameFacilitator, false);
+    assert.equal(res1.data.user.machineBadge, true);
+    assert.equal(res1.data.user.machine_badge, 1);
+    assert.equal(res1.data.user.fieldBadge, false);
+    assert.equal(res1.data.user.field_badge, 0);
+    assert.equal(res1.data.user.heroCredits, 10);
+
+    // 2. RSVP attending
+    const attRes = db.prepare(`
+      INSERT INTO attendees (event_id, user_id, name, email, status)
+      VALUES (?, ?, 'Dynamic Badge Player', 'dynamic_badge_test@charity.org', 'attending')
+    `).run(evId, testUserId);
+    const attId = attRes.lastInsertRowid;
+
+    const res2 = await apiReq('GET', '/api/auth/me', testCookie);
+    assert.equal(res2.status, 200);
+    assert.equal(res2.data.user.playingSunday, true);
+    assert.equal(res2.data.user.isGameFacilitator, false);
+
+    // 3. Assign Game Facilitator duty
+    const dutyRes = db.prepare(`
+      INSERT INTO event_duties (event_id, title, description, slots_needed)
+      VALUES (?, 'Game Facilitator', 'Lead community game', 1)
+    `).run(evId);
+    const dutyId = dutyRes.lastInsertRowid;
+
+    db.prepare(`
+      INSERT INTO duty_assignments (duty_id, attendee_id)
+      VALUES (?, ?)
+    `).run(dutyId, attId);
+
+    const res3 = await apiReq('GET', '/api/auth/me', testCookie);
+    assert.equal(res3.status, 200);
+    assert.equal(res3.data.user.playingSunday, true);
+    assert.equal(res3.data.user.isGameFacilitator, true);
+
+    // 4. Revoke duty assignment
+    db.prepare('DELETE FROM duty_assignments WHERE duty_id = ? AND attendee_id = ?').run(dutyId, attId);
+
+    const res4 = await apiReq('GET', '/api/auth/me', testCookie);
+    assert.equal(res4.status, 200);
+    assert.equal(res4.data.user.isGameFacilitator, false);
+
+    // Cleanup event
+    db.prepare('DELETE FROM events WHERE id = ?').run(evId);
+  });
+
+  await t.test('Check 2.4: Immediate revocation of banned emails mid-session', async () => {
+    const tempEmail = `check2_banned_${Date.now()}@charity.org`;
+    const uRes = db.prepare("INSERT INTO users (name, email, role) VALUES ('Banned Check2', ?, 'player')").run(tempEmail);
+    const tempCookie = `baseball_session=${createSession(uRes.lastInsertRowid).sessionId}`;
+
+    const resBefore = await apiReq('GET', '/api/auth/me', tempCookie);
+    assert.equal(resBefore.status, 200);
+    assert.equal(resBefore.data.user.email, tempEmail);
+
+    // Insert into banned_emails
+    db.prepare('INSERT INTO banned_emails (email, reason) VALUES (?, ?)').run(tempEmail, 'Check 2 mid-session ban');
+
+    // Next request must be revoked immediately
+    const resAfter = await apiReq('GET', '/api/auth/me', tempCookie);
+    assert.ok(resAfter.status === 401 || resAfter.status === 403 || resAfter.data.user === null);
+  });
+
+  await t.test('Check 2.5: Channel access authorization rules enforcement', async () => {
+    const { canAccessChannel } = require('../src/app/security.js');
+
+    const adminUser = { role: 'admin', isAdmin: true };
+    const orgUser = { role: 'organizer', isAdmin: false };
+    const facilitatorPlayer = { role: 'player', isAdmin: false, isGameFacilitator: true };
+    const regularPlayer = { role: 'player', isAdmin: false, isGameFacilitator: false };
+
+    const facilitatorsLounge = { slug: 'facilitators-lounge', min_role_read: 'facilitator', min_role_write: 'facilitator' };
+    const announcements = { slug: 'announcements', min_role_read: 'player', min_role_write: 'organizer' };
+    const warRoom = { slug: 'organizers-war-room', min_role_read: 'facilitator', min_role_write: 'facilitator' };
+    const general = { slug: 'general', min_role_read: 'player', min_role_write: 'player' };
+
+    // #facilitators-lounge
+    assert.equal(canAccessChannel(adminUser, facilitatorsLounge, 'read'), true);
+    assert.equal(canAccessChannel(orgUser, facilitatorsLounge, 'read'), true);
+    assert.equal(canAccessChannel(facilitatorPlayer, facilitatorsLounge, 'read'), true);
+    assert.equal(canAccessChannel(regularPlayer, facilitatorsLounge, 'read'), false);
+
+    // #announcements
+    assert.equal(canAccessChannel(regularPlayer, announcements, 'read'), true);
+    assert.equal(canAccessChannel(regularPlayer, announcements, 'write'), false);
+    assert.equal(canAccessChannel(facilitatorPlayer, announcements, 'write'), false);
+    assert.equal(canAccessChannel(orgUser, announcements, 'write'), true);
+    assert.equal(canAccessChannel(adminUser, announcements, 'write'), true);
+
+    // 🔊 Organizers War Room
+    assert.equal(canAccessChannel(adminUser, warRoom, 'read'), true);
+    assert.equal(canAccessChannel(orgUser, warRoom, 'read'), true);
+    assert.equal(canAccessChannel(facilitatorPlayer, warRoom, 'read'), true);
+    assert.equal(canAccessChannel(regularPlayer, warRoom, 'read'), false);
+
+    // #general
+    assert.equal(canAccessChannel(regularPlayer, general, 'read'), true);
+    assert.equal(canAccessChannel(regularPlayer, general, 'write'), true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Check 3: Security Headers & CSRF Verification
+// ---------------------------------------------------------------------------
+
+test('Check 3: Security Headers & CSRF Verification', async (t) => {
+  await t.test('Check 3.1: Strict Content-Security-Policy on HTML pages', async () => {
+    const res = await apiReq('GET', '/index.html');
+    const csp = res.headers.get('content-security-policy') || '';
+    assert.ok(csp.length > 0, 'CSP header must be present on HTML responses');
+    assert.ok(csp.includes("frame-ancestors 'none'") || csp.includes("frame-ancestors 'self'"));
+    assert.ok(csp.includes("script-src 'self'"));
+  });
+
+  await t.test('Check 3.2: API Content-Security-Policy lockdown', async () => {
+    const res = await apiReq('GET', '/api/health');
+    const csp = res.headers.get('content-security-policy') || '';
+    assert.ok(csp.includes("default-src 'none'"));
+    assert.ok(csp.includes("frame-ancestors 'none'"));
+  });
+
+  await t.test('Check 3.3: Permissions-Policy WebRTC API scoping', async () => {
+    const res = await apiReq('GET', '/api/version');
+    const pp = res.headers.get('permissions-policy') || '';
+    assert.ok(pp.includes('camera=(self)'), 'camera=(self) must be enabled for WebRTC');
+    assert.ok(pp.includes('microphone=(self)'), 'microphone=(self) must be enabled for WebRTC');
+    assert.ok(pp.includes('display-capture=(self)'), 'display-capture=(self) must be enabled for screen share');
+    assert.ok(pp.includes('geolocation=()'), 'geolocation must be restricted to empty ()');
+    assert.ok(pp.includes('payment=()'), 'payment must be restricted to empty ()');
+  });
+
+  await t.test('Check 3.4: Standard defensive headers across API endpoints and 404', async () => {
+    const res200 = await apiReq('GET', '/api/version');
+    assert.equal(res200.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(res200.headers.get('x-frame-options'), 'DENY');
+    assert.ok(res200.headers.get('strict-transport-security'));
+    assert.equal(res200.headers.get('referrer-policy'), 'strict-origin-when-cross-origin');
+
+    const res404 = await apiReq('GET', '/api/non-existent-probe-check3');
+    assert.equal(res404.status, 404);
+    assert.equal(res404.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(res404.headers.get('x-frame-options'), 'DENY');
+  });
+
+  await t.test('Check 3.5: CSRF state-changing origin verification & safe bypass', async () => {
+    // 1. Cross-origin POST attempt -> 403 Forbidden
+    const crossOriginRes = await apiReq('POST', '/api/events', seedAdminCookie, {
+      title: 'Attacker Game',
+      location: 'Nowhere',
+      event_date: new Date().toISOString()
+    }, {
+      'Origin': 'https://evil-attacker.example.com'
+    });
+    assert.equal(crossOriginRes.status, 403);
+    assert.ok(crossOriginRes.data.error.includes('Cross-origin'));
+
+    // 2. Null origin rejection -> 403 Forbidden
+    const nullOriginRes = await apiReq('POST', '/api/events', seedAdminCookie, {
+      title: 'Null Origin Attack',
+      location: 'Nowhere',
+      event_date: new Date().toISOString()
+    }, {
+      'Origin': 'null'
+    });
+    assert.equal(nullOriginRes.status, 403);
+
+    // 3. Suffix spoofing rejection -> 403 Forbidden
+    const suffixRes = await apiReq('POST', '/api/events', seedAdminCookie, {
+      title: 'Suffix Attack',
+      location: 'Nowhere',
+      event_date: new Date().toISOString()
+    }, {
+      'Origin': `${baseUrl}.attacker-site.com`
+    });
+    assert.equal(suffixRes.status, 403);
+
+    // 4. Mismatched Referer rejection -> 403 Forbidden
+    const refererRes = await apiReq('POST', '/api/events', seedAdminCookie, {
+      title: 'Referer Attack',
+      location: 'Nowhere',
+      event_date: new Date().toISOString()
+    }, {
+      'Origin': '',
+      'Referer': 'https://malicious-phishing.org/exploit'
+    });
+    assert.equal(refererRes.status, 403);
+
+    // 5. Safe method (GET) with external origin -> 200 OK
+    const safeGetRes = await apiReq('GET', '/api/health', null, null, {
+      'Origin': 'https://external-crawler.com'
+    });
+    assert.equal(safeGetRes.status, 200);
+
+    // 6. Same-origin POST -> 200 OK
+    const sameOriginRes = await apiReq('POST', '/api/events', seedAdminCookie, {
+      title: 'Check 3 Authorized Event',
+      location: 'Bushrod Park',
+      event_date: new Date(Date.now() + 86400000).toISOString()
+    }, {
+      'Origin': baseUrl
+    });
+    assert.equal(sameOriginRes.status, 200);
+    // Cleanup event
+    if (sameOriginRes.data && sameOriginRes.data.event && sameOriginRes.data.event.id) {
+      db.prepare('DELETE FROM events WHERE id = ?').run(sameOriginRes.data.event.id);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Check 5: E2EE Key Vault & Channel Key Wrapping Verification
+// ---------------------------------------------------------------------------
+
+test('Check 5: E2EE Key Vault & Channel Key Wrapping Verification', async (t) => {
+  const {
+    generateIdentityKeyPair,
+    generateChannelKey,
+    encryptPayload,
+    decryptPayload,
+    deriveEcdhSharedKey,
+    wrapChannelKey,
+    unwrapChannelKey,
+    encryptVault,
+    decryptVault
+  } = require('../tests/helpers/crypto-test-utils.js');
+
+  await t.test('Check 5.1: PUT /api/keys/identity uploads public JWKs and encrypted private vault', async () => {
+    const keys = await generateIdentityKeyPair();
+    const vault = await encryptVault('secure-passphrase-check5', { ecdhPriv: keys.ecdhPrivateJwk });
+
+    const res = await apiReq('PUT', '/api/keys/identity', seedPlayerCookie, {
+      ecdh_public_key_jwk: JSON.stringify(keys.ecdhPublicJwk),
+      ecdsa_public_key_jwk: JSON.stringify(keys.ecdsaPublicJwk),
+      encrypted_private_vault: vault.encryptedVaultB64,
+      vault_salt: vault.saltB64,
+      vault_iv: vault.ivB64,
+      privacy_relay_mode: 0,
+      status_text: 'Active E2EE Player'
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.data.success, true);
+
+    const row = chatDb.prepare('SELECT * FROM user_crypto_keys WHERE user_id = ?').get(seedPlayerId);
+    assert.ok(row, 'User crypto key record must exist in CHAT_DB');
+    assert.ok(row.ecdh_public_key_jwk);
+    assert.ok(row.ecdsa_public_key_jwk);
+    assert.equal(row.encrypted_private_vault, vault.encryptedVaultB64);
+  });
+
+  await t.test('Check 5.2: PUT /api/keys/identity payload validation (malformed JWK, missing salt/IV)', async () => {
+    // Malformed JWK
+    const malformedRes = await apiReq('PUT', '/api/keys/identity', seedPlayerCookie, {
+      ecdh_public_key_jwk: 'not-a-valid-json-string',
+      ecdsa_public_key_jwk: '{}'
+    });
+    assert.equal(malformedRes.status, 400);
+
+    // Missing salt/IV when vault provided
+    const missingSaltRes = await apiReq('PUT', '/api/keys/identity', seedPlayerCookie, {
+      ecdh_public_key_jwk: '{"kty":"EC"}',
+      ecdsa_public_key_jwk: '{"kty":"EC"}',
+      encrypted_private_vault: 'vaultPayloadWithoutSalt=='
+    });
+    assert.equal(missingSaltRes.status, 400);
+  });
+
+  await t.test('Check 5.3: GET /api/keys/identity/:id and /api/keys/users sanitize private vault', async () => {
+    // Query other user's identity
+    const otherRes = await apiReq('GET', `/api/keys/identity/${seedPlayerId}`, seedAdminCookie);
+    assert.equal(otherRes.status, 200);
+    assert.ok(otherRes.data.ecdh_public_key_jwk);
+    assert.ok(otherRes.data.ecdsa_public_key_jwk);
+    assert.equal(otherRes.data.encrypted_private_vault, undefined, 'Private vault must be strictly omitted for peer queries');
+    assert.equal(otherRes.data.vault_salt, undefined);
+    assert.equal(otherRes.data.vault_iv, undefined);
+
+    // Query directory /api/keys/users
+    const usersRes = await apiReq('GET', `/api/keys/users?ids=${seedPlayerId}`, seedAdminCookie);
+    assert.equal(usersRes.status, 200);
+    assert.ok(Array.isArray(usersRes.data.users));
+    assert.ok(usersRes.data.users.length >= 1);
+    const targetUser = usersRes.data.users.find((u) => u.user_id === seedPlayerId);
+    assert.ok(targetUser);
+    assert.equal(targetUser.encrypted_private_vault, undefined);
+
+    // Query own identity /api/keys/identity/me returns full vault
+    const selfRes = await apiReq('GET', '/api/keys/identity/me', seedPlayerCookie);
+    assert.equal(selfRes.status, 200);
+    assert.ok(selfRes.data.encrypted_private_vault, 'Self identity query must include private vault');
+    assert.ok(selfRes.data.vault_salt);
+    assert.ok(selfRes.data.vault_iv);
+  });
+
+  await t.test('Check 5.4: POST /api/keys/channel/:id/share and GET /api/keys/channel/:id distribution', async () => {
+    // Admin distributes wrapped channel key share to seedPlayer
+    const shareRes = await apiReq('POST', '/api/keys/channel/2/share', seedAdminCookie, {
+      key_epoch: 1,
+      shares: [
+        {
+          recipient_user_id: seedPlayerId,
+          key_epoch: 1,
+          wrapped_key_base64: 'Check5WrappedChannelKeyPayload==',
+          wrap_iv: 'Check5WrapIV12Bytes=='
+        }
+      ]
+    });
+    assert.equal(shareRes.status, 200);
+    assert.equal(shareRes.data.success, true);
+    assert.equal(shareRes.data.count, 1);
+
+    // Player retrieves wrapped key share
+    const getShareRes = await apiReq('GET', '/api/keys/channel/2', seedPlayerCookie);
+    assert.equal(getShareRes.status, 200);
+    assert.equal(getShareRes.data.keyEpoch, 1);
+    assert.equal(getShareRes.data.wrappedKeyBase64, 'Check5WrappedChannelKeyPayload==');
+    assert.equal(getShareRes.data.wrapIv, 'Check5WrapIV12Bytes==');
+
+    // Share to non-existent channel -> 404 or 403
+    const invalidChanRes = await apiReq('POST', '/api/keys/channel/99999/share', seedAdminCookie, {
+      shares: [{ recipient_user_id: seedPlayerId, wrapped_key_base64: 'abc', wrap_iv: 'def' }]
+    });
+    assert.ok(invalidChanRes.status === 404 || invalidChanRes.status === 403);
+  });
+
+  await t.test('Check 5.5: End-to-End WebCrypto ciphertext message round-trip', async () => {
+    const aliceKeys = await generateIdentityKeyPair();
+    const bobKeys = await generateIdentityKeyPair();
+
+    const aliceSharedKey = await deriveEcdhSharedKey(aliceKeys.ecdhPair.privateKey, bobKeys.ecdhPair.publicKey);
+    const bobSharedKey = await deriveEcdhSharedKey(bobKeys.ecdhPair.privateKey, aliceKeys.ecdhPair.publicKey);
+
+    const channelKey = await generateChannelKey();
+    const { wrappedKeyBase64, wrapIv } = await wrapChannelKey(channelKey, aliceSharedKey);
+    const unwrappedChannelKey = await unwrapChannelKey(wrappedKeyBase64, bobSharedKey, wrapIv);
+
+    const plaintext = 'Check 5 E2EE Verification: Full Count with 2 Outs!';
+    const { ciphertextB64, ivB64 } = await encryptPayload(channelKey, plaintext);
+
+    const decrypted = await decryptPayload(unwrappedChannelKey, ciphertextB64, ivB64);
+    assert.equal(decrypted, plaintext, 'Decrypted plaintext must match original exactly');
+  });
+
+  await t.test('Check 5.6: PBKDF2 Multi-device vault backup and recovery with tamper rejection', async () => {
+    const originalKeys = await generateIdentityKeyPair();
+    const passphrase = 'Pickup-Baseball-Vault-Passphrase-2026!';
+
+    const vault = await encryptVault(passphrase, { ecdhPriv: originalKeys.ecdhPrivateJwk });
+
+    // Correct recovery
+    const recovered = await decryptVault(passphrase, vault.encryptedVaultB64, vault.saltB64, vault.ivB64);
+    assert.deepEqual(recovered.ecdhPriv, originalKeys.ecdhPrivateJwk);
+
+    // Corrupted passphrase rejection
+    await assert.rejects(
+      async () => {
+        await decryptVault('wrong-passphrase', vault.encryptedVaultB64, vault.saltB64, vault.ivB64);
+      },
+      /OperationError/
+    );
+
+    // Tampered ciphertext rejection
+    const tamperedBytes = Buffer.from(vault.encryptedVaultB64, 'base64');
+    tamperedBytes[0] ^= 0xFF;
+    await assert.rejects(
+      async () => {
+        await decryptVault(passphrase, tamperedBytes.toString('base64'), vault.saltB64, vault.ivB64);
+      },
+      /OperationError/
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Check 4: Delta Sync Efficiency Verification
+// ---------------------------------------------------------------------------
+test('Check 4: Delta Sync Efficiency Verification', async (t) => {
+  await t.test('Check 4.1: Incremental delta sync returns only newer messages & tombstones', async () => {
+    const m1 = await apiReq('POST', '/api/channels/general/messages', seedPlayerCookie, { content: 'Check 4 Msg 1' });
+    assert.equal(m1.status, 201);
+    const m2 = await apiReq('POST', '/api/channels/general/messages', seedPlayerCookie, { content: 'Check 4 Msg 2' });
+    assert.equal(m2.status, 201);
+
+    const deltaRes = await apiReq('GET', `/api/sync?since_msg_id=${m1.data.id}&since_event_id=0`, seedPlayerCookie);
+    assert.equal(deltaRes.status, 200);
+    const ids = deltaRes.data.messages.map(m => m.id);
+    assert.ok(!ids.includes(m1.data.id), 'm1 must not be re-fetched');
+    assert.ok(ids.includes(m2.data.id), 'm2 must be included in delta sync');
+
+    const zeroRes = await apiReq('GET', `/api/sync?since_msg_id=${m2.data.id}&since_event_id=999999`, seedPlayerCookie);
+    assert.equal(zeroRes.status, 200);
+    assert.equal(zeroRes.data.messages.length, 0, 'Zero new rows when up-to-date');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Check 6: 5 TB Google Drive Resumable Flow, Range Streaming & Gallery Promotion
+// ---------------------------------------------------------------------------
+test('Check 6: 5 TB Google Drive Resumable Flow, Range Streaming & Gallery Promotion', async (t) => {
+  await t.test('Check 6.1: Attachment init, upload, HTTP 206 Range stream, and 1-Click Gallery promotion', async () => {
+    const initRes = await apiReq('POST', '/api/attachments/init', seedPlayerCookie, {
+      channel_id: 4,
+      file_name: 'check6_highlight.mp4',
+      mime_type: 'video/mp4',
+      file_size: 256
+    });
+    assert.equal(initRes.status, 200);
+    const attId = initRes.data.attachmentId;
+    assert.ok(attId);
+
+    const buf = Buffer.alloc(256, 0x33);
+    const upRes = await fetch(`${baseUrl}/api/attachments/${attId}/upload`, {
+      method: 'PUT',
+      headers: { Cookie: seedPlayerCookie, Origin: baseUrl },
+      body: buf
+    });
+    assert.equal(upRes.status, 200);
+
+    const compRes = await apiReq('POST', `/api/attachments/${attId}/complete`, seedPlayerCookie, {});
+    assert.equal(compRes.status, 200);
+
+    const rangeRes = await fetch(`${baseUrl}/api/attachments/${attId}/stream`, {
+      headers: { Cookie: seedPlayerCookie, Range: 'bytes=0-63' }
+    });
+    assert.equal(rangeRes.status, 206);
+    assert.equal(rangeRes.headers.get('content-length'), '64');
+
+    const promoRes = await apiReq('POST', `/api/attachments/${attId}/promote-to-gallery`, seedAdminCookie, {
+      title: 'Check 6 Promoted Clip',
+      caption: 'Sandlot double play'
+    });
+    assert.equal(promoRes.status, 200);
+    assert.ok(promoRes.data.media_id);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Check 7: Scoped WebRTC Signaling Verification
+// ---------------------------------------------------------------------------
+test('Check 7: Scoped WebRTC Signaling Verification', async (t) => {
+  await t.test('Check 7.1: Voice join, scoped SDP offer delivery, and recipient isolation', async () => {
+    const joinRes = await apiReq('POST', '/api/voice/dugout-voice/join', seedPlayerCookie, {});
+    assert.equal(joinRes.status, 200);
+
+    const sigRes = await apiReq('POST', '/api/rtc/signal', seedPlayerCookie, {
+      channel_id: 6,
+      recipient_user_id: seedOrgId,
+      signal_type: 'offer',
+      payload_json: JSON.stringify({ type: 'offer', sdp: 'v=0...' })
+    });
+    assert.equal(sigRes.status, 200);
+
+    const orgSync = await apiReq('GET', '/api/sync?since_msg_id=0&since_event_id=0', seedOrgCookie);
+    assert.ok(orgSync.data.rtc_signals.some(s => s.recipient_user_id === seedOrgId), 'Recipient must receive WebRTC signal');
+
+    const adminSync = await apiReq('GET', '/api/sync?since_msg_id=0&since_event_id=0', seedAdminCookie);
+    assert.ok(!adminSync.data.rtc_signals.some(s => s.recipient_user_id === seedOrgId), 'Third party must not receive signal');
+
+    const leaveRes = await apiReq('POST', '/api/voice/dugout-voice/leave', seedPlayerCookie, {});
+    assert.equal(leaveRes.status, 200);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Check 8: Live Baseball Bridge & Discord Clubhouse Frontend Verification
+// ---------------------------------------------------------------------------
+test('Check 8: Live Baseball Bridge & Discord Clubhouse Frontend Verification', async (t) => {
+  await t.test('Check 8.1: Live Baseball Bridge upcoming, quick-rsvp, quick-bp & sync-channel', async () => {
+    const upRes = await apiReq('GET', '/api/baseball/upcoming');
+    assert.equal(upRes.status, 200);
+    assert.ok(upRes.data.event);
+    const evId = upRes.data.event.id;
+
+    const rsvpRes = await apiReq('POST', `/api/baseball/events/${evId}/quick-rsvp`, seedPlayerCookie, { status: 'attending' });
+    assert.equal(rsvpRes.status, 200);
+    assert.equal(rsvpRes.data.status, 'attending');
+
+    const bpRes = await apiReq('POST', `/api/baseball/events/${evId}/quick-bp`, seedPlayerCookie, { slot_number: 12 });
+    assert.equal(bpRes.status, 200);
+    assert.equal(bpRes.data.slot_number, 12);
+
+    const syncChanRes = await apiReq('POST', `/api/baseball/events/${evId}/sync-channel`, seedOrgCookie, {});
+    assert.equal(syncChanRes.status, 200);
+    assert.ok(syncChanRes.data.channel_id);
+  });
+
+  await t.test('Check 8.2: Discord Clubhouse 4-Column UI & WP-5/WP-6 Frontend Modules', () => {
+    const publicDir = path.join(__dirname, '..', 'public');
+    const requiredFiles = [
+      'clubhouse.html',
+      'css/clubhouse.css',
+      'js/crypto.js',
+      'js/store.js',
+      'js/rtc.js',
+      'js/clubhouse.js'
+    ];
+    for (const rel of requiredFiles) {
+      const fullPath = path.join(publicDir, rel);
+      assert.ok(fs.existsSync(fullPath), `Clubhouse frontend asset ${rel} must exist`);
+    }
+
+    const clubhouseHtml = fs.readFileSync(path.join(publicDir, 'clubhouse.html'), 'utf8');
+    assert.ok(clubhouseHtml.includes('id="clubhouse-app"'), 'clubhouse.html must render 4-column #clubhouse-app');
+    assert.ok(clubhouseHtml.includes('id="ch-channel-list"'), 'clubhouse.html must include channel sidebar');
+    assert.ok(clubhouseHtml.includes('id="ch-message-stream"'), 'clubhouse.html must include message stream');
+    assert.ok(clubhouseHtml.includes('id="ch-bp-grid"'), 'clubhouse.html must include 28-slot BP grid');
+    assert.ok(clubhouseHtml.includes('id="ch-privacy-relay-toggle"'), 'clubhouse.html must include Privacy Relay toggle');
+
+    for (const jsRel of ['js/crypto.js', 'js/store.js', 'js/rtc.js', 'js/clubhouse.js', 'js/waiver.js']) {
+      const code = fs.readFileSync(path.join(publicDir, jsRel), 'utf8');
+      assert.ok(!code.includes('?.'), `${jsRel} must not use optional chaining (?.)`);
+      assert.ok(!code.includes('??'), `${jsRel} must not use nullish coalescing (??)`);
+    }
+  });
+
+  await t.test('Check 8.3: Native Digital & Paper Waiver Provenance & Admin Status Control', async () => {
+    // 1. Check anonymous waiver status returns official Form 41335\14760738.1 text and SHA-256
+    const anonStatus = await apiReq('GET', '/api/waiver/status');
+    assert.equal(anonStatus.status, 200);
+    assert.equal(anonStatus.data.document_version, '41335\\14760738.1');
+    assert.equal(anonStatus.data.waiver_text_sha256.length, 64);
+    assert.equal(anonStatus.data.paragraphs.length, 4);
+
+    // 2. Admin marks player account as 'paper' waiver on file
+    const paperRes = await apiReq('PUT', `/api/auth/users/${seedPlayerId}/badges`, seedAdminCookie, {
+      waiver_status: 'paper'
+    });
+    assert.equal(paperRes.status, 200);
+    assert.equal(paperRes.data.user.waiver_status, 'paper');
+
+    const playerStatusPaper = await apiReq('GET', '/api/waiver/status', seedPlayerCookie);
+    assert.equal(playerStatusPaper.status, 200);
+    assert.equal(playerStatusPaper.data.waiver_status, 'paper');
+    assert.equal(playerStatusPaper.data.waiver_signed, true);
+
+    // 3. Player executes digital signature on Form 41335\14760738.1
+    const samplePngSig = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    const signRes = await apiReq('POST', '/api/waiver/sign', seedPlayerCookie, {
+      printed_name: 'Alex Johnson',
+      signed_date: '2026-11-11',
+      signature_type: 'drawn',
+      signature_data: samplePngSig,
+      electronic_consent: true
+    });
+    assert.equal(signRes.status, 201);
+    assert.equal(signRes.data.waiver_status, 'digital');
+    assert.ok(signRes.data.waiver.certificate_id.startsWith('PBF-WVR-20261111-'));
+    assert.equal(signRes.data.waiver.document_sha256.length, 64);
+    assert.equal(signRes.data.waiver.provenance_seal.length, 64);
+
+    // 4. Verify certificate JSON & HTML integrity check
+    const certId = signRes.data.waiver.certificate_id;
+    const certJson = await apiReq('GET', `/api/waiver/certificate/${certId}`, seedPlayerCookie);
+    assert.equal(certJson.status, 200);
+    assert.equal(certJson.data.waiver.integrity_verified, true);
+    assert.equal(certJson.data.waiver.printed_name, 'Alex Johnson');
+
+    const certHtmlRes = await fetch(`${baseUrl}/api/waiver/certificate/${certId}?format=html`);
+    assert.equal(certHtmlRes.status, 200);
+    const certHtml = await certHtmlRes.text();
+    assert.ok(certHtml.includes('CONSENT, WAIVER AND INDEMNITY'));
+    assert.ok(certHtml.includes('Cryptographic Seal Verified'));
+    assert.ok(certHtml.includes('41335\\14760738.1'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Section 8: Clubhouse Automated Verification Suite (Checks 1–8, Tiers 1–4)
+// ---------------------------------------------------------------------------
+const registerClubhouseTests = require('../tests/clubhouse/index.js');
+registerClubhouseTests();
+

@@ -11,6 +11,16 @@ ADMIN_EMAIL = "pickupbaseballfoundation@gmail.com"
 ADMIN_NAME = "David Rowland"
 
 [[d1_databases]]
+binding = "BASEBALL_DB"
+database_name = "pickup-baseball-db"
+database_id = "7a738a45-ffc0-4232-b5e0-93ed1846bf93"
+
+[[d1_databases]]
+binding = "CHAT_DB"
+database_name = "pickup-chat-db"
+database_id = "542da6bd-d0b6-45dd-b0c1-5884713272d7"
+
+[[d1_databases]]
 binding = "DB"
 database_name = "pickup-baseball-db"
 database_id = "7a738a45-ffc0-4232-b5e0-93ed1846bf93"

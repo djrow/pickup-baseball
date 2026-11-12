@@ -4,8 +4,10 @@
  */
 
 function normalizeParam(val) {
-  if (val === undefined) return null;
+  if (val === undefined || val === null) return null;
   if (typeof val === 'boolean') return val ? 1 : 0;
+  if (val instanceof Date) return val.toISOString();
+  if (typeof val === 'bigint') return Number(val);
   return val;
 }
 
@@ -51,6 +53,14 @@ class SqliteD1Statement {
   async run() {
     return this._runSync();
   }
+
+  raw() {
+    const stmt = this._db.prepare(this._sql);
+    const rows = stmt.raw(true).all(...this._params);
+    const p = Promise.resolve(rows);
+    p.all = async () => rows;
+    return p;
+  }
 }
 
 function createD1Adapter(sqliteDb) {
@@ -61,6 +71,10 @@ function createD1Adapter(sqliteDb) {
     async batch(statements) {
       const runTxn = sqliteDb.transaction((stmts) => stmts.map((s) => s._runSync()));
       return runTxn(statements);
+    },
+    async exec(sql) {
+      sqliteDb.exec(sql);
+      return { count: 0, duration: 0 };
     }
   };
 }

@@ -32,7 +32,11 @@ if (!/^\d+$/.test(nextVersion)) {
   process.exit(1);
 }
 
-fs.writeFileSync(versionFile, `export const CURRENT_APP_VERSION = '${nextVersion}';\n`, 'utf8');
+const versionUpdated = currentSrc.replace(
+  /CURRENT_APP_VERSION\s*=\s*'\d+'/,
+  `CURRENT_APP_VERSION = '${nextVersion}'`
+);
+fs.writeFileSync(versionFile, versionUpdated, 'utf8');
 
 const swUpdated = fs.readFileSync(swFile, 'utf8').replace(
   /const CACHE_NAME = 'pbf-cache-v\d+';/,

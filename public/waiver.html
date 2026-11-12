@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Player Consent, Waiver &amp; Indemnity - Sunday Pickup Baseball</title>
+  <link rel="stylesheet" href="/css/style.css?v=96">
+  <link rel="alternate" type="application/rss+xml" title="Sunday Pickup Baseball Highlights &amp; Updates" href="/feed.xml">
+  <link rel="shortcut icon" href="/favicon.ico">
+  <link rel="icon" type="image/svg+xml" href="/logo.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16x16.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#ffffff">
+  <style>
+    .waiver-paper {
+      background: var(--bg-card);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 36px 40px;
+      box-shadow: var(--shadow-md);
+      font-family: Georgia, "Times New Roman", Times, serif;
+      line-height: 1.65;
+      color: var(--text-main);
+    }
+    .waiver-paper h1 {
+      font-family: Georgia, "Times New Roman", Times, serif;
+      text-align: center;
+      font-size: 1.3rem;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      color: var(--secondary);
+      margin: 0 0 24px 0;
+    }
+    .waiver-paper p {
+      margin: 0 0 18px 0;
+      font-size: 0.98rem;
+      text-align: justify;
+    }
+    .waiver-paper p.waiver-bold {
+      font-weight: 700;
+      color: var(--secondary);
+    }
+    .waiver-sig-canvas-wrap {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius-sm);
+      background: #ffffff;
+      position: relative;
+      touch-action: none;
+      overflow: hidden;
+    }
+    .waiver-sig-canvas {
+      display: block;
+      width: 100%;
+      height: 150px;
+      cursor: crosshair;
+      touch-action: none;
+    }
+    .waiver-sig-baseline {
+      position: absolute;
+      left: 20px;
+      right: 20px;
+      bottom: 32px;
+      border-bottom: 1.5px solid #94a3b8;
+      pointer-events: none;
+    }
+    .waiver-sig-hint {
+      position: absolute;
+      left: 24px;
+      bottom: 10px;
+      font-size: 0.75rem;
+      color: #64748b;
+      font-family: var(--font-sans);
+      pointer-events: none;
+    }
+    @media (max-width: 640px) {
+      .waiver-paper {
+        padding: 22px 18px;
+      }
+      .waiver-paper p {
+        text-align: left;
+      }
+    }
+    .print-only-sig {
+      display: none;
+    }
+    @media print {
+      .site-header, .site-footer, .no-print {
+        display: none !important;
+      }
+      .print-only-sig {
+        display: block;
+      }
+      .waiver-paper {
+        box-shadow: none;
+        border: none;
+        padding: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Site Header -->
+  <header class="site-header">
+    <div class="container" id="main-nav">
+      <div class="nav-wrap">
+        <a href="/index.html" class="brand">
+          <img src="/logo.svg" alt="Pickup Baseball Foundation Logo" class="brand-logo">
+          <span class="brand-text"><span class="brand-line">Pickup Baseball</span> <span class="brand-line">Foundation</span></span>
+          <span class="brand-short">PBF</span>
+        </a>
+        <div class="nav-links">
+          <a href="/clubhouse.html" class="nav-link-clubhouse"><span>💬</span> <span>Clubhouse</span></a>
+          <a href="/gallery.html" class="nav-link-gallery"><span class="nav-gallery-icon">📸</span> <span>Gallery &amp; Art</span></a>
+          <a href="/donate.html" class="nav-link-donate">Donate</a>
+          <a href="/login.html" class="btn-login"><span class="btn-login-icon">⚾ </span><span>Log In</span></a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="container" style="max-width: 780px; margin-top: 28px; margin-bottom: 60px;">
+    <div class="no-print" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+      <a href="/index.html" style="color: var(--secondary); text-decoration: none; font-weight: 600; font-size: 0.9rem;">
+        ← Back to Game Schedule
+      </a>
+      <button type="button" id="btn-print-blank-waiver" class="btn btn-outline btn-sm" style="font-size: 0.8rem;">
+        🖨️ Print Paper Copy
+      </button>
+    </div>
+
+    <!-- Current Waiver Status Banner -->
+    <div id="waiver-status-banner" class="no-print" style="margin-bottom: 20px;"></div>
+
+    <div id="waiver-alert" class="no-print"></div>
+
+    <!-- Legal Document Card -->
+    <article class="waiver-paper" id="waiver-document-card">
+      <h1>CONSENT, WAIVER AND INDEMNITY</h1>
+
+      <p>
+        I wish to participate in the baseball and other outdoor activities (the “Activities”) with Pickup
+        Baseball Foundation volunteers and other participants (collectively, the “Participants”). I
+        understand that the Released Parties will not permit me to participate in the Activities if I do not
+        sign this Consent, Waiver and Indemnity, because the possibility of liability for them is too great
+        to accept.
+      </p>
+
+      <p>
+        I understand that the Activities carry some risk of harm to myself and others. I voluntarily
+        assume full responsibility for all risks of personal injury, death and property damage while
+        participating in the Activities, including the risk of passive or active negligence on the part of the
+        Participants, or hidden, latent or obvious defects at the location of any of the Activities, whether
+        such location is under the control of any of the Participants or any other party.
+      </p>
+
+      <p>
+        Accordingly, I agree that I release, and will not bring any legal action of any nature whatsoever
+        against the Participants, or any of their trustees, directors, agents, employees or representatives,
+        including volunteer managers, chaperones and the other participants (the "Released Parties”) in
+        connection with the Activities, including, without limitation, any and all claims which may be
+        based upon negligence of any of the Released Parties. Furthermore, I agree to indemnify, defend
+        and hold the Released Parties and their respective agents and representatives harmless from any
+        loss, claim, expense (including attorneys' fees), demand or cause of action of any kind or
+        character arising from the assertion by me, my family members, or any other person, firm, or
+        corporation that may have, or claim to have, a claim or claims connected with my participation in
+        the Activities. This agreement is intended to be construed to be as comprehensive as is allowed
+        by law, as severable, and the invalidity of any portion of which will not affect the validity of any
+        other provision.
+      </p>
+
+      <p class="waiver-bold">
+        I am signing this Waiver and Indemnity to induce the Participants to allow me to
+        participate in the Activities described above for my convenience. I understand this Waiver
+        and Indemnity and would not sign it if I did not.
+      </p>
+
+      <!-- Sign-In Required Prompt (shown when not logged in) -->
+      <div id="waiver-auth-prompt" class="no-print" style="display: none; margin-top: 28px; padding: 20px; background: var(--bg-subtle); border: 1.5px solid var(--border); border-radius: var(--radius-sm); font-family: var(--font-sans);">
+        <h3 style="color: var(--secondary); font-size: 1.05rem; margin: 0 0 6px 0;">🔏 Sign Online with Verified Email Provenance</h3>
+        <p style="font-size: 0.88rem; color: var(--text-muted); margin: 0 0 14px 0; text-align: left;">
+          To sign this waiver digitally with a verifiable cryptographic audit trail, please sign in with your email address first. If you already signed a paper waiver at the field, an administrator can also mark your account as waived.
+        </p>
+        <a href="/login.html?redirect=/waiver.html" class="btn btn-primary" style="font-weight: 700;">
+          ⚾ Sign In with Email to Sign Waiver →
+        </a>
+      </div>
+
+      <!-- Interactive Digital Signature Form (shown when logged in) -->
+      <form id="waiver-sign-form" class="no-print" style="display: none; margin-top: 28px; padding-top: 24px; border-top: 2px solid var(--border); font-family: var(--font-sans);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
+          <h3 style="color: var(--secondary); font-size: 1.08rem; margin: 0;">✍️ Execute Digital Signature</h3>
+          <span id="waiver-verified-email-pill" class="badge badge-green" style="font-size: 0.78rem;"></span>
+        </div>
+
+        <div class="grid-2" style="gap: 16px; margin-bottom: 16px;">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="waiver-printed-name">Printed Name (Full Legal Name) *</label>
+            <input type="text" id="waiver-printed-name" required maxlength="120" placeholder="Enter your full legal name">
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="waiver-signed-date">Dated *</label>
+            <input type="date" id="waiver-signed-date" required>
+          </div>
+        </div>
+
+        <!-- Signature Mode Tabs -->
+        <div class="form-group" style="margin-bottom: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 8px;">
+            <label style="margin: 0;">Signature *</label>
+            <div style="display: flex; gap: 6px; align-items: center;">
+              <button type="button" id="btn-sig-mode-draw" class="btn btn-outline btn-sm active" style="font-size: 0.76rem; padding: 3px 10px;">✍️ Draw Signature</button>
+              <button type="button" id="btn-sig-mode-type" class="btn btn-outline btn-sm" style="font-size: 0.76rem; padding: 3px 10px;">⌨️ Type Signature</button>
+              <button type="button" id="btn-clear-signature" class="btn btn-outline btn-sm" style="font-size: 0.76rem; padding: 3px 10px; color: var(--danger);">🗑️ Clear</button>
+            </div>
+          </div>
+
+          <div id="waiver-type-sig-wrap" style="display: none; margin-bottom: 10px;">
+            <input type="text" id="waiver-typed-sig-input" maxlength="120" placeholder="Type your full name to generate signature on the line below..." style="font-style: italic; font-size: 1rem;">
+          </div>
+
+          <div class="waiver-sig-canvas-wrap">
+            <canvas id="waiver-sig-canvas" class="waiver-sig-canvas" width="680" height="150"></canvas>
+            <div class="waiver-sig-baseline"></div>
+            <div class="waiver-sig-hint">Sign above the line using your mouse, finger, or stylus</div>
+          </div>
+        </div>
+
+        <!-- Electronic Signature Consent -->
+        <div style="background: var(--bg-subtle); border: 1px solid var(--border); padding: 12px 14px; border-radius: var(--radius-sm); margin-bottom: 18px;">
+          <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; font-size: 0.86rem; color: var(--text-main); margin: 0; line-height: 1.45;">
+            <input type="checkbox" id="waiver-consent-checkbox" required style="width: 18px; height: 18px; margin-top: 2px; accent-color: var(--primary); flex-shrink: 0;">
+            <span>
+              <strong>Electronic Signature Consent (ESIGN / UETA):</strong> I have read and understand this Consent, Waiver and Indemnity, and I voluntarily agree to sign it electronically. I understand that my electronic signature, verified email identity, timestamp, and cryptographic SHA-256 digest carry the same legal validity and enforceability as a handwritten ink signature.
+            </span>
+          </label>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+          <button type="submit" id="btn-submit-waiver" class="btn btn-primary btn-lg" style="font-weight: 700;">
+            🔏 Sign &amp; Seal Waiver
+          </button>
+          <span style="font-size: 0.76rem; color: var(--text-muted); font-family: monospace;">
+            Form ID: 41335\14760738.1 • SHA-256 Provenance Sealed
+          </span>
+        </div>
+      </form>
+
+      <!-- Print-only Signature Lines (for physical paper copies) -->
+      <div class="print-only-sig" style="margin-top: 38px;">
+        <div style="display: grid; grid-template-columns: 1fr 1.3fr; gap: 36px; align-items: end;">
+          <div>
+            <div style="border-bottom: 1.5px solid #111827; padding-bottom: 6px; font-size: 0.95rem;">Dated: <span id="print-dated-val"></span></div>
+          </div>
+          <div>
+            <div style="border-bottom: 1.5px solid #111827; min-height: 44px;"></div>
+            <div style="font-size: 0.88rem; margin-top: 4px;">Signature</div>
+            <div style="border-bottom: 1.5px solid #111827; min-height: 34px; margin-top: 18px;"></div>
+            <div style="font-size: 0.88rem; margin-top: 4px;">Printed Name</div>
+          </div>
+        </div>
+        <div style="margin-top: 28px; font-size: 0.75rem; color: var(--text-muted); font-family: monospace;">
+          41335\14760738.1
+        </div>
+      </div>
+    </article>
+  </main>
+
+  <footer id="site-footer" class="site-footer"></footer>
+
+  <script src="/js/api.js?v=96"></script>
+  <script src="/js/waiver.js?v=96"></script>
+</body>
+</html>

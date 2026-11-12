@@ -21,9 +21,16 @@ export const CREATE_TABLES_SQL = [
     avatar_url TEXT,
     role TEXT DEFAULT 'player',
     is_admin INTEGER DEFAULT 0,
+    is_moderator INTEGER DEFAULT 0,
+    chat_muted INTEGER DEFAULT 0,
+    chat_muted_reason TEXT DEFAULT NULL,
+    chat_muted_by INTEGER DEFAULT NULL,
+    chat_muted_at DATETIME DEFAULT NULL,
     machine_badge INTEGER DEFAULT 0,
     field_badge INTEGER DEFAULT 0,
     hero_credits INTEGER DEFAULT 0,
+    waiver_status TEXT DEFAULT 'none',
+    waiver_signed_at DATETIME DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`,
   `CREATE TABLE IF NOT EXISTS sessions (
@@ -169,6 +176,25 @@ export const CREATE_TABLES_SQL = [
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(event_id, slot_number)
   )`,
+  `CREATE TABLE IF NOT EXISTS waivers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    certificate_id TEXT NOT NULL UNIQUE,
+    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    email TEXT NOT NULL COLLATE NOCASE,
+    printed_name TEXT NOT NULL,
+    signed_date TEXT NOT NULL,
+    signature_type TEXT DEFAULT 'drawn',
+    signature_data TEXT NOT NULL,
+    document_version TEXT NOT NULL DEFAULT '41335\\14760738.1',
+    waiver_text_sha256 TEXT NOT NULL,
+    document_sha256 TEXT NOT NULL,
+    provenance_seal TEXT NOT NULL,
+    signer_ip TEXT,
+    user_agent TEXT,
+    electronic_consent INTEGER DEFAULT 1,
+    gdrive_file_id TEXT DEFAULT NULL,
+    signed_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`,
   'CREATE INDEX IF NOT EXISTS idx_events_date ON events(event_date)',
   'CREATE INDEX IF NOT EXISTS idx_attendees_event ON attendees(event_id)',
   'CREATE INDEX IF NOT EXISTS idx_comments_event ON comments(event_id)',
@@ -177,7 +203,9 @@ export const CREATE_TABLES_SQL = [
   'CREATE INDEX IF NOT EXISTS idx_media_album ON media_items(album)',
   'CREATE INDEX IF NOT EXISTS idx_media_type ON media_items(media_type)',
   'CREATE INDEX IF NOT EXISTS idx_media_approved ON media_items(is_approved)',
-  'CREATE INDEX IF NOT EXISTS idx_bp_signups_event ON batting_practice_signups(event_id, slot_number)'
+  'CREATE INDEX IF NOT EXISTS idx_bp_signups_event ON batting_practice_signups(event_id, slot_number)',
+  'CREATE INDEX IF NOT EXISTS idx_waivers_user ON waivers(user_id)',
+  'CREATE INDEX IF NOT EXISTS idx_waivers_email ON waivers(email)'
 ];
 
 export const ALTER_STATEMENTS = [
@@ -200,7 +228,14 @@ export const ALTER_STATEMENTS = [
   "ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'player'",
   'ALTER TABLE users ADD COLUMN machine_badge INTEGER DEFAULT 0',
   'ALTER TABLE users ADD COLUMN field_badge INTEGER DEFAULT 0',
-  'ALTER TABLE users ADD COLUMN hero_credits INTEGER DEFAULT 0'
+  'ALTER TABLE users ADD COLUMN hero_credits INTEGER DEFAULT 0',
+  "ALTER TABLE users ADD COLUMN waiver_status TEXT DEFAULT 'none'",
+  'ALTER TABLE users ADD COLUMN waiver_signed_at DATETIME DEFAULT NULL',
+  'ALTER TABLE users ADD COLUMN is_moderator INTEGER DEFAULT 0',
+  'ALTER TABLE users ADD COLUMN chat_muted INTEGER DEFAULT 0',
+  'ALTER TABLE users ADD COLUMN chat_muted_reason TEXT DEFAULT NULL',
+  'ALTER TABLE users ADD COLUMN chat_muted_by INTEGER DEFAULT NULL',
+  'ALTER TABLE users ADD COLUMN chat_muted_at DATETIME DEFAULT NULL'
 ];
 
 const migratedDbs = new WeakSet();
@@ -326,6 +361,370 @@ export async function ensureD1Schema(db, force = false) {
   }
 
   migratedDbs.add(db);
+}
+
+export const DEFAULT_CHAT_CHANNELS = [
+  {
+    slug: 'announcements',
+    name: '#announcements',
+    category: 'Clubhouse Info',
+    channel_type: 'announcement',
+    topic: 'Official game schedules, rainout alerts, and foundation updates.',
+    min_role_read: 'player',
+    min_role_write: 'organizer',
+    is_encrypted: 0,
+    sort_order: 1
+  },
+  {
+    slug: 'general',
+    name: '#general',
+    category: 'Text Channels',
+    channel_type: 'text',
+    topic: 'Main community hangout for all players.',
+    min_role_read: 'player',
+    min_role_write: 'player',
+    is_encrypted: 1,
+    sort_order: 2
+  },
+  {
+    slug: 'sunday-game-day',
+    name: '#sunday-game-day',
+    category: 'Text Channels',
+    channel_type: 'text',
+    topic: 'Carpools, gear requests, batting practice chat, and post-game highlights.',
+    min_role_read: 'player',
+    min_role_write: 'player',
+    is_encrypted: 1,
+    sort_order: 3
+  },
+  {
+    slug: 'highlights-and-media',
+    name: '#highlights-and-media',
+    category: 'Text Channels',
+    channel_type: 'text',
+    topic: 'Drop HD game photos & slow-mo videos (stored in 5 TB Google Drive); Admins can 1-click promote to the public Gallery.',
+    min_role_read: 'player',
+    min_role_write: 'player',
+    is_encrypted: 1,
+    sort_order: 4
+  },
+  {
+    slug: 'facilitators-lounge',
+    name: '#facilitators-lounge',
+    category: 'Staff & Operations',
+    channel_type: 'text',
+    topic: 'Private coordination channel for Admins, Organizers, and whoever is signed up for the Game Facilitator volunteer task.',
+    min_role_read: 'facilitator',
+    min_role_write: 'facilitator',
+    is_encrypted: 1,
+    sort_order: 5
+  },
+  {
+    slug: 'dugout-voice-huddle',
+    name: '🔊 Dugout Voice Huddle',
+    category: 'Voice Lounges',
+    channel_type: 'voice',
+    topic: 'Drop-in P2P voice, video, and screen sharing (up to 8 peers per room).',
+    min_role_read: 'player',
+    min_role_write: 'player',
+    is_encrypted: 0,
+    sort_order: 6
+  },
+  {
+    slug: 'organizers-war-room',
+    name: '🔊 Organizers War Room',
+    category: 'Voice Lounges',
+    channel_type: 'voice',
+    topic: 'Quick game-day weather and logistics call room.',
+    min_role_read: 'facilitator',
+    min_role_write: 'facilitator',
+    is_encrypted: 0,
+    sort_order: 7
+  }
+];
+
+export const CREATE_CHAT_TABLES_SQL = [
+  // 1. Channel Categories & Channels
+  `CREATE TABLE IF NOT EXISTS channels (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    slug TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT 'Text Channels',
+    channel_type TEXT NOT NULL DEFAULT 'text',
+    topic TEXT DEFAULT '',
+    min_role_read TEXT NOT NULL DEFAULT 'player',
+    min_role_write TEXT NOT NULL DEFAULT 'player',
+    is_encrypted INTEGER NOT NULL DEFAULT 1,
+    linked_event_id INTEGER DEFAULT NULL,
+    retention_days INTEGER DEFAULT 365,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_by INTEGER DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`,
+
+  // 2. DM & Private Channel Membership
+  `CREATE TABLE IF NOT EXISTS channel_members (
+    channel_id INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL,
+    role TEXT DEFAULT 'member',
+    last_read_message_id INTEGER DEFAULT 0,
+    muted INTEGER DEFAULT 0,
+    joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (channel_id, user_id)
+  )`,
+
+  // 3. Messages & Threads
+  `CREATE TABLE IF NOT EXISTS messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    channel_id INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+    parent_message_id INTEGER DEFAULT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    author_id INTEGER NOT NULL,
+    author_name TEXT NOT NULL,
+    author_role TEXT DEFAULT 'player',
+    author_badges TEXT DEFAULT '{}',
+    content TEXT NOT NULL,
+    iv TEXT DEFAULT NULL,
+    key_epoch INTEGER DEFAULT 1,
+    message_type TEXT NOT NULL DEFAULT 'text',
+    metadata_json TEXT DEFAULT NULL,
+    reply_count INTEGER NOT NULL DEFAULT 0,
+    edited_at DATETIME DEFAULT NULL,
+    deleted_at DATETIME DEFAULT NULL,
+    hidden_at DATETIME DEFAULT NULL,
+    hidden_by INTEGER DEFAULT NULL,
+    hidden_by_name TEXT DEFAULT NULL,
+    hidden_reason TEXT DEFAULT NULL,
+    original_content TEXT DEFAULT NULL,
+    original_iv TEXT DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`,
+
+  // 4. Emoji Reactions
+  `CREATE TABLE IF NOT EXISTS message_reactions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    channel_id INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL,
+    user_name TEXT NOT NULL,
+    emoji TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(message_id, user_id, emoji)
+  )`,
+
+  // 5. Media & Large File Attachments
+  `CREATE TABLE IF NOT EXISTS chat_attachments (
+    id TEXT PRIMARY KEY,
+    channel_id INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+    message_id INTEGER DEFAULT NULL REFERENCES messages(id) ON DELETE SET NULL,
+    uploader_id INTEGER NOT NULL,
+    file_name TEXT NOT NULL,
+    mime_type TEXT NOT NULL,
+    file_size INTEGER NOT NULL,
+    storage_provider TEXT NOT NULL DEFAULT 'gdrive',
+    drive_file_id TEXT DEFAULT NULL,
+    resumable_session_uri TEXT DEFAULT NULL,
+    upload_status TEXT NOT NULL DEFAULT 'pending',
+    is_encrypted INTEGER NOT NULL DEFAULT 0,
+    iv TEXT DEFAULT NULL,
+    thumbnail_base64 TEXT DEFAULT NULL,
+    local_data_base64 TEXT DEFAULT NULL,
+    promoted_media_id INTEGER DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`,
+
+  // 6. User Crypto Identities & Zero-Knowledge Backup Vault
+  `CREATE TABLE IF NOT EXISTS user_crypto_keys (
+    user_id INTEGER PRIMARY KEY,
+    ecdh_public_key_jwk TEXT NOT NULL,
+    ecdsa_public_key_jwk TEXT NOT NULL,
+    encrypted_private_vault TEXT DEFAULT NULL,
+    vault_salt TEXT DEFAULT NULL,
+    vault_iv TEXT DEFAULT NULL,
+    privacy_relay_mode INTEGER NOT NULL DEFAULT 0,
+    status_text TEXT DEFAULT '',
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`,
+
+  // 7. Channel Epoch Key Shares
+  `CREATE TABLE IF NOT EXISTS channel_key_shares (
+    channel_id INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+    key_epoch INTEGER NOT NULL DEFAULT 1,
+    recipient_user_id INTEGER NOT NULL,
+    sender_user_id INTEGER NOT NULL,
+    wrapped_key_base64 TEXT NOT NULL,
+    wrap_iv TEXT NOT NULL,
+    sender_ephemeral_pub_jwk TEXT DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (channel_id, key_epoch, recipient_user_id)
+  )`,
+
+  // 8. Voice Room Presence
+  `CREATE TABLE IF NOT EXISTS voice_participants (
+    channel_id INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL,
+    user_name TEXT NOT NULL,
+    muted INTEGER NOT NULL DEFAULT 0,
+    deafened INTEGER NOT NULL DEFAULT 0,
+    screen_sharing INTEGER NOT NULL DEFAULT 0,
+    heartbeat_at INTEGER NOT NULL,
+    PRIMARY KEY (channel_id, user_id)
+  )`,
+
+  // 9. Scoped WebRTC Signaling Queue
+  `CREATE TABLE IF NOT EXISTS rtc_signals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    channel_id INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+    sender_user_id INTEGER NOT NULL,
+    recipient_user_id INTEGER NOT NULL,
+    signal_type TEXT NOT NULL,
+    payload_json TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  )`,
+
+  // 10. Delta Sync Deletion Tombstones
+  `CREATE TABLE IF NOT EXISTS sync_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    channel_id INTEGER NOT NULL,
+    event_type TEXT NOT NULL,
+    target_id INTEGER NOT NULL,
+    payload_json TEXT DEFAULT NULL,
+    created_at INTEGER NOT NULL
+  )`,
+
+  // 11. Rate Limits
+  `CREATE TABLE IF NOT EXISTS chat_rate_limits (
+    key TEXT PRIMARY KEY,
+    count INTEGER DEFAULT 0,
+    window_start INTEGER NOT NULL
+  )`,
+
+  // 12. Moderation Reports (Messages & Users)
+  `CREATE TABLE IF NOT EXISTS chat_reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    reporter_id INTEGER NOT NULL,
+    reporter_name TEXT NOT NULL,
+    target_type TEXT NOT NULL,
+    target_user_id INTEGER DEFAULT NULL,
+    target_user_name TEXT DEFAULT '',
+    target_message_id INTEGER DEFAULT NULL,
+    channel_id INTEGER DEFAULT NULL,
+    reason TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'open',
+    reviewed_by INTEGER DEFAULT NULL,
+    reviewed_by_name TEXT DEFAULT NULL,
+    resolution_note TEXT DEFAULT NULL,
+    reviewed_at DATETIME DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`,
+
+  // 13. Personal User Mutes (Hides chat/audio only; never affects baseball RSVPs)
+  `CREATE TABLE IF NOT EXISTS user_mutes (
+    muter_user_id INTEGER NOT NULL,
+    muted_user_id INTEGER NOT NULL,
+    reason TEXT DEFAULT '',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (muter_user_id, muted_user_id)
+  )`,
+
+  // Indexes
+  'CREATE INDEX IF NOT EXISTS idx_messages_channel_id ON messages(channel_id, id ASC)',
+  'CREATE INDEX IF NOT EXISTS idx_messages_parent_id ON messages(parent_message_id, id ASC)',
+  'CREATE INDEX IF NOT EXISTS idx_reactions_msg ON message_reactions(message_id)',
+  'CREATE INDEX IF NOT EXISTS idx_attachments_msg ON chat_attachments(message_id)',
+  'CREATE INDEX IF NOT EXISTS idx_rtc_signals_recipient ON rtc_signals(recipient_user_id, id ASC)',
+  'CREATE INDEX IF NOT EXISTS idx_sync_events_id ON sync_events(id ASC)',
+  'CREATE INDEX IF NOT EXISTS idx_chat_reports_status ON chat_reports(status, id DESC)',
+  'CREATE INDEX IF NOT EXISTS idx_user_mutes_muter ON user_mutes(muter_user_id)'
+];
+
+export const CHAT_ALTER_STATEMENTS = [
+  'ALTER TABLE messages ADD COLUMN hidden_at DATETIME DEFAULT NULL',
+  'ALTER TABLE messages ADD COLUMN hidden_by INTEGER DEFAULT NULL',
+  'ALTER TABLE messages ADD COLUMN hidden_by_name TEXT DEFAULT NULL',
+  'ALTER TABLE messages ADD COLUMN hidden_reason TEXT DEFAULT NULL',
+  'ALTER TABLE messages ADD COLUMN original_content TEXT DEFAULT NULL',
+  'ALTER TABLE messages ADD COLUMN original_iv TEXT DEFAULT NULL'
+];
+
+const migratedChatDbs = new WeakSet();
+
+export async function ensureChatD1Schema(chatDb, force = false) {
+  if (!chatDb || (!force && migratedChatDbs.has(chatDb))) return;
+
+  for (const sql of CREATE_CHAT_TABLES_SQL) {
+    try {
+      if (typeof chatDb.prepare === 'function') {
+        await chatDb.prepare(sql).run();
+      } else if (typeof chatDb.exec === 'function') {
+        chatDb.exec(sql);
+      }
+    } catch (e) {
+      // Ignore if table/index exists
+    }
+  }
+
+  for (const sql of CHAT_ALTER_STATEMENTS) {
+    try {
+      if (typeof chatDb.prepare === 'function') {
+        await chatDb.prepare(sql).run();
+      } else if (typeof chatDb.exec === 'function') {
+        chatDb.exec(sql);
+      }
+    } catch (e) {
+      // Ignore if column exists
+    }
+  }
+
+  for (const ch of DEFAULT_CHAT_CHANNELS) {
+    try {
+      const sql = `
+        INSERT INTO channels (slug, name, category, channel_type, topic, min_role_read, min_role_write, is_encrypted, sort_order)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(slug) DO NOTHING
+      `;
+      if (typeof chatDb.prepare === 'function') {
+        const stmt = chatDb.prepare(sql);
+        if (typeof stmt.bind === 'function') {
+          await stmt.bind(
+            ch.slug,
+            ch.name,
+            ch.category,
+            ch.channel_type,
+            ch.topic,
+            ch.min_role_read,
+            ch.min_role_write,
+            ch.is_encrypted,
+            ch.sort_order
+          ).run();
+        } else if (typeof stmt.run === 'function') {
+          stmt.run(
+            ch.slug,
+            ch.name,
+            ch.category,
+            ch.channel_type,
+            ch.topic,
+            ch.min_role_read,
+            ch.min_role_write,
+            ch.is_encrypted,
+            ch.sort_order
+          );
+        }
+      }
+    } catch (e) {
+      console.warn(`[ensureChatD1Schema] Error seeding channel ${ch.slug}:`, e);
+    }
+  }
+
+  migratedChatDbs.add(chatDb);
+}
+
+export const ensureBaseballD1Schema = ensureD1Schema;
+
+export async function ensureDualD1Schema(dbs, force = false) {
+  const baseball = dbs?.BASEBALL_DB || dbs?.DB || dbs?.baseballDb || dbs?.db;
+  const chat = dbs?.CHAT_DB || dbs?.chatDb;
+  if (baseball) await ensureBaseballD1Schema(baseball, force);
+  if (chat) await ensureChatD1Schema(chat, force);
 }
 
 export async function getDefaultDuties(db) {

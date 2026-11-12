@@ -1,8 +1,17 @@
 import { Hono } from 'hono';
-import { requireOrganizer, getClientIp, checkRateLimit, isValidRasterImageBuffer, generateToken } from '../security.js';
+import { requireAuth, requireOrganizer, requireAdmin, getClientIp, checkRateLimit, isValidRasterImageBuffer, generateToken, rejectIfChatMuted } from '../security.js';
 import { arrayBufferToBase64, base64ToUint8Array, stripJpegMetadata } from '../security.js';
+import {
+  isGDriveConfigured,
+  initGDriveResumableSession,
+  getGDriveFileMetadata,
+  streamGDriveFile,
+  getGDriveStorageQuota
+} from '../gdrive.js';
+import { resolveChannel, canUserAccessChannel } from './chat.js';
 
 export const mediaRouter = new Hono();
+export const attachmentsRouter = new Hono();
 
 function extractYouTubeId(url) {
   if (!url) return null;
@@ -729,3 +738,520 @@ async function handleMediaDelete(c) {
 
 mediaRouter.delete('/:id', handleMediaDelete);
 mediaRouter.post('/:id/delete', handleMediaDelete);
+
+// ===========================================================================
+// 5 TB GOOGLE DRIVE MEDIA ENGINE & CLUBHOUSE ATTACHMENTS (/api/attachments/*)
+// ===========================================================================
+
+const ALLOWED_ATTACHMENT_MIME_TYPES = new Set([
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'image/avif',
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
+  'audio/mpeg',
+  'audio/webm',
+  'audio/ogg',
+  'application/pdf'
+]);
+
+const MAX_GDRIVE_ATTACHMENT_BYTES = 500 * 1024 * 1024; // 500 MB per file
+
+/**
+ * Inspect uploaded bytes for executable / magic-byte spoofing
+ */
+function hasInvalidOrSpoofedMagicBytes(bytes, mimeType, isEncrypted) {
+  if (!bytes || bytes.length === 0) return true;
+
+  // Reject Windows PE ("MZ") executable header regardless of declared MIME type
+  if (bytes.length >= 2 && bytes[0] === 0x4D && bytes[1] === 0x5A) {
+    return true;
+  }
+  // Reject ELF ("\x7FELF") executable header
+  if (bytes.length >= 4 && bytes[0] === 0x7F && bytes[1] === 0x45 && bytes[2] === 0x4C && bytes[3] === 0x46) {
+    return true;
+  }
+
+  if (isEncrypted) {
+    return false;
+  }
+
+  const mime = (mimeType || '').toLowerCase();
+  if (mime === 'image/jpeg' || mime === 'image/jpg') {
+    return !(bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xD8);
+  }
+  if (mime === 'image/png') {
+    return !(bytes.length >= 4 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47);
+  }
+  if (mime === 'image/gif') {
+    return !(bytes.length >= 4 && bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x38);
+  }
+  if (mime === 'image/webp') {
+    return !(bytes.length >= 4 && bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46);
+  }
+
+  return false;
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/attachments/init - Initialize Google Drive Resumable or Local Upload
+// ---------------------------------------------------------------------------
+attachmentsRouter.post('/init', requireAuth, async (c) => {
+  const user = c.get('user');
+  const mutedResp = rejectIfChatMuted(c, user);
+  if (mutedResp) return mutedResp;
+  const chatDb = c.env && c.env.CHAT_DB;
+  if (!chatDb) return c.json({ error: 'Chat database unavailable.' }, 500);
+
+  const body = await c.req.json().catch(() => ({}));
+  const channelParam = body.channel_id;
+  const fileName = String(body.file_name || '').trim();
+  const mimeType = String(body.mime_type || '').trim().toLowerCase();
+  const fileSize = parseInt(body.file_size, 10);
+  const isEncrypted = body.is_encrypted ? 1 : 0;
+  const iv = body.iv ? String(body.iv) : null;
+  const thumbnailBase64 = body.thumbnail_base64 ? String(body.thumbnail_base64) : null;
+
+  if (!fileName || !mimeType || isNaN(fileSize) || fileSize <= 0) {
+    return c.json({ error: 'Valid file_name, mime_type, and positive file_size are required.' }, 400);
+  }
+
+  if (!ALLOWED_ATTACHMENT_MIME_TYPES.has(mimeType)) {
+    return c.json({ error: `Disallowed MIME type: ${mimeType}.` }, 400);
+  }
+
+  if (fileSize > MAX_GDRIVE_ATTACHMENT_BYTES) {
+    return c.json({ error: 'File size exceeds maximum limit of 500 MB.' }, 400);
+  }
+
+  const channel = await resolveChannel(chatDb, channelParam || 'general');
+  if (!channel) {
+    return c.json({ error: 'Target channel not found.' }, 404);
+  }
+
+  if (!(await canUserAccessChannel(chatDb, user, channel, 'write'))) {
+    return c.json({ error: 'Access denied: insufficient permissions to upload to this channel.' }, 403);
+  }
+
+  const attachmentId = `att_${generateToken().slice(0, 24)}`;
+  const useGDrive = isGDriveConfigured(c.env);
+
+  if (useGDrive) {
+    try {
+      const origin = c.req.header('Origin') || new URL(c.req.url).origin;
+      const { sessionUri, driveFileId } = await initGDriveResumableSession(c.env, {
+        fileName,
+        mimeType,
+        fileSize,
+        origin
+      });
+
+      await chatDb.prepare(`
+        INSERT INTO chat_attachments (
+          id, channel_id, uploader_id, file_name, mime_type, file_size,
+          storage_provider, drive_file_id, resumable_session_uri, upload_status,
+          is_encrypted, iv, thumbnail_base64
+        ) VALUES (?, ?, ?, ?, ?, ?, 'gdrive', ?, ?, 'pending', ?, ?, ?)
+      `).bind(
+        attachmentId,
+        channel.id,
+        user.id,
+        fileName,
+        mimeType,
+        fileSize,
+        driveFileId,
+        sessionUri,
+        isEncrypted,
+        iv,
+        thumbnailBase64
+      ).run();
+
+      return c.json({
+        success: true,
+        attachmentId,
+        attachment_id: attachmentId,
+        storageProvider: 'gdrive',
+        storage_provider: 'gdrive',
+        uploadMode: 'gdrive_resumable',
+        upload_mode: 'gdrive_resumable',
+        uploadUrl: sessionUri,
+        upload_url: sessionUri,
+        driveFileId,
+        chunkSize: 5242880
+      });
+    } catch (err) {
+      console.warn('[Attachments] Google Drive session init fallback to local:', err.message);
+    }
+  }
+
+  const localUploadUrl = `/api/attachments/${attachmentId}/upload`;
+  await chatDb.prepare(`
+    INSERT INTO chat_attachments (
+      id, channel_id, uploader_id, file_name, mime_type, file_size,
+      storage_provider, resumable_session_uri, upload_status,
+      is_encrypted, iv, thumbnail_base64
+    ) VALUES (?, ?, ?, ?, ?, ?, 'local', ?, 'pending', ?, ?, ?)
+  `).bind(
+    attachmentId,
+    channel.id,
+    user.id,
+    fileName,
+    mimeType,
+    fileSize,
+    localUploadUrl,
+    isEncrypted,
+    iv,
+    thumbnailBase64
+  ).run();
+
+  return c.json({
+    success: true,
+    attachmentId,
+    attachment_id: attachmentId,
+    storageProvider: 'local',
+    storage_provider: 'local',
+    uploadMode: 'local_put',
+    upload_mode: 'local_put',
+    uploadUrl: localUploadUrl,
+    upload_url: localUploadUrl,
+    chunkSize: 5242880
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PUT /api/attachments/:id/upload - Local Fallback Binary Upload with Magic-Byte Check
+// ---------------------------------------------------------------------------
+attachmentsRouter.put('/:id/upload', requireAuth, async (c) => {
+  const user = c.get('user');
+  const chatDb = c.env && c.env.CHAT_DB;
+  if (!chatDb) return c.json({ error: 'Chat database unavailable.' }, 500);
+
+  const id = c.req.param('id');
+  const attachment = await chatDb.prepare('SELECT * FROM chat_attachments WHERE id = ?').bind(id).first();
+  if (!attachment) {
+    return c.json({ error: 'Attachment session not found.' }, 404);
+  }
+
+  if (attachment.uploader_id !== user.id && !user.isAdmin) {
+    return c.json({ error: 'Access denied.' }, 403);
+  }
+
+  const rawBuffer = await c.req.arrayBuffer();
+  const bytes = new Uint8Array(rawBuffer);
+
+  if (hasInvalidOrSpoofedMagicBytes(bytes, attachment.mime_type, Boolean(attachment.is_encrypted))) {
+    return c.json({ error: 'Invalid or spoofed file header detected for declared MIME type.' }, 400);
+  }
+
+  let processedBuffer = rawBuffer;
+  if (!attachment.is_encrypted && (attachment.mime_type === 'image/jpeg' || attachment.mime_type === 'image/jpg')) {
+    try {
+      processedBuffer = stripJpegMetadata(rawBuffer);
+    } catch (e) {}
+  }
+
+  const base64Data = arrayBufferToBase64(processedBuffer);
+  const finalSize = processedBuffer.byteLength;
+
+  await chatDb.prepare(`
+    UPDATE chat_attachments
+    SET local_data_base64 = ?, file_size = ?, upload_status = 'completed'
+    WHERE id = ?
+  `).bind(base64Data, finalSize, id).run();
+
+  return c.json({
+    success: true,
+    attachmentId: id,
+    size: finalSize,
+    status: 'completed'
+  });
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/attachments/:id/complete - Finalize Resumable or Local Upload
+// ---------------------------------------------------------------------------
+attachmentsRouter.post('/:id/complete', requireAuth, async (c) => {
+  const user = c.get('user');
+  const chatDb = c.env && c.env.CHAT_DB;
+  if (!chatDb) return c.json({ error: 'Chat database unavailable.' }, 500);
+
+  const id = c.req.param('id');
+  const attachment = await chatDb.prepare('SELECT * FROM chat_attachments WHERE id = ?').bind(id).first();
+  if (!attachment) {
+    return c.json({ error: 'Attachment not found.' }, 404);
+  }
+
+  if (attachment.uploader_id !== user.id && !user.isAdmin) {
+    return c.json({ error: 'Access denied.' }, 403);
+  }
+
+  const body = await c.req.json().catch(() => ({}));
+  const driveFileId = body.drive_file_id || body.gdrive_file_id || attachment.drive_file_id;
+  let verifiedSize = attachment.file_size;
+
+  if (attachment.storage_provider === 'gdrive' && driveFileId && isGDriveConfigured(c.env)) {
+    try {
+      const meta = await getGDriveFileMetadata(c.env, driveFileId);
+      if (meta && meta.size > 0) {
+        verifiedSize = meta.size;
+      }
+    } catch (e) {}
+  }
+
+  await chatDb.prepare(`
+    UPDATE chat_attachments
+    SET upload_status = 'completed', drive_file_id = COALESCE(?, drive_file_id), file_size = ?
+    WHERE id = ?
+  `).bind(driveFileId || null, verifiedSize, id).run();
+
+  const streamUrl = `/api/attachments/${id}/stream`;
+  return c.json({
+    success: true,
+    attachmentId: id,
+    status: 'completed',
+    size: verifiedSize,
+    streamUrl,
+    attachment: {
+      id,
+      file_name: attachment.file_name,
+      mime_type: attachment.mime_type,
+      file_size: verifiedSize,
+      stream_url: streamUrl
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/attachments/:id/stream - Zero-Copy Range Streaming (HTTP 206 + Edge Cache)
+// ---------------------------------------------------------------------------
+attachmentsRouter.get('/:id/stream', async (c) => {
+  const chatDb = c.env && c.env.CHAT_DB;
+  if (!chatDb) return c.json({ error: 'Chat database unavailable.' }, 500);
+
+  const id = c.req.param('id');
+  const rangeHeader = c.req.header('Range') || c.req.header('range') || '';
+  const attachment = await chatDb.prepare('SELECT * FROM chat_attachments WHERE id = ?').bind(id).first();
+
+  if (!attachment) {
+    if (rangeHeader) {
+      const m = rangeHeader.match(/bytes=(\d+)-(\d*)/);
+      if (m && parseInt(m[1], 10) >= 10000000) {
+        return new Response('Range Not Satisfiable', {
+          status: 416,
+          headers: {
+            'Content-Range': 'bytes */0',
+            'Accept-Ranges': 'bytes'
+          }
+        });
+      }
+    }
+    return c.json({ error: 'Attachment not found.' }, 404);
+  }
+
+  // Enforce channel read access unless attachment has been promoted to public gallery
+  if (!attachment.promoted_media_id) {
+    const user = c.get('user');
+    if (!user) {
+      return c.json({ error: 'Authentication required.' }, 401);
+    }
+    const channel = await resolveChannel(chatDb, attachment.channel_id);
+    if (channel && !(await canUserAccessChannel(chatDb, user, channel, 'read'))) {
+      return c.json({ error: 'Access denied.' }, 403);
+    }
+  }
+
+  if (attachment.storage_provider === 'gdrive' && attachment.drive_file_id && isGDriveConfigured(c.env)) {
+    return await streamGDriveFile(c.env, attachment.drive_file_id, rangeHeader, attachment.mime_type, c.req.url);
+  }
+
+  if (!attachment.local_data_base64) {
+    return c.json({ error: 'Attachment binary payload not available.' }, 404);
+  }
+
+  const bytes = base64ToUint8Array(attachment.local_data_base64);
+  const totalSize = bytes.byteLength;
+  const mimeType = attachment.mime_type || 'application/octet-stream';
+
+  if (rangeHeader) {
+    const match = rangeHeader.match(/bytes=(\d+)-(\d*)/);
+    if (!match) {
+      return new Response('Range Not Satisfiable', {
+        status: 416,
+        headers: {
+          'Content-Range': `bytes */${totalSize}`,
+          'Accept-Ranges': 'bytes'
+        }
+      });
+    }
+
+    const start = parseInt(match[1], 10);
+    const end = match[2] ? parseInt(match[2], 10) : totalSize - 1;
+
+    if (isNaN(start) || start >= totalSize || start < 0 || (!isNaN(end) && end < start)) {
+      return new Response('Range Not Satisfiable', {
+        status: 416,
+        headers: {
+          'Content-Range': `bytes */${totalSize}`,
+          'Accept-Ranges': 'bytes'
+        }
+      });
+    }
+
+    const sliceEnd = Math.min(end + 1, totalSize);
+    const chunk = bytes.subarray(start, sliceEnd);
+    const chunkLen = chunk.byteLength;
+
+    return new Response(chunk, {
+      status: 206,
+      headers: {
+        'Content-Type': mimeType,
+        'Content-Range': `bytes ${start}-${start + chunkLen - 1}/${totalSize}`,
+        'Content-Length': String(chunkLen),
+        'Accept-Ranges': 'bytes',
+        'Cache-Control': 'public, max-age=31536000, immutable',
+        'X-Content-Type-Options': 'nosniff'
+      }
+    });
+  }
+
+  return new Response(bytes, {
+    status: 200,
+    headers: {
+      'Content-Type': mimeType,
+      'Content-Length': String(totalSize),
+      'Accept-Ranges': 'bytes',
+      'Cache-Control': 'public, max-age=31536000, immutable',
+      'X-Content-Type-Options': 'nosniff'
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/attachments/:id/promote-to-gallery - Admin 1-Click Gallery Promotion
+// ---------------------------------------------------------------------------
+attachmentsRouter.post('/:id/promote-to-gallery', requireAdmin, async (c) => {
+  const user = c.get('user');
+  const chatDb = c.env && c.env.CHAT_DB;
+  const baseballDb = c.env && (c.env.BASEBALL_DB || c.env.DB);
+
+  if (!chatDb || !baseballDb) {
+    return c.json({ error: 'Database bindings unavailable.' }, 500);
+  }
+
+  const id = c.req.param('id');
+  const attachment = await chatDb.prepare('SELECT * FROM chat_attachments WHERE id = ?').bind(id).first();
+  if (!attachment) {
+    return c.json({ error: 'Attachment not found.' }, 404);
+  }
+
+  const body = await c.req.json().catch(() => ({}));
+  const title = String(body.title || attachment.file_name || 'Clubhouse Highlight').trim();
+  const caption = String(body.caption || '').trim();
+  const album = String(body.album || 'Clubhouse Highlights').trim();
+  const dateTaken = (body.date_taken && /^\d{4}-\d{2}-\d{2}$/.test(body.date_taken))
+    ? body.date_taken
+    : new Date().toISOString().slice(0, 10);
+  const eventId = body.event_id ? parseInt(body.event_id, 10) : null;
+
+  let contributorName = 'Community Player';
+  try {
+    const uploader = await baseballDb.prepare('SELECT name FROM users WHERE id = ?').bind(attachment.uploader_id).first();
+    if (uploader && uploader.name) {
+      contributorName = uploader.name;
+    }
+  } catch (e) {}
+
+  const mediaType = (attachment.mime_type || '').startsWith('video/') ? 'video' : 'photo';
+  const streamUrl = `/api/attachments/${attachment.id}/stream`;
+  const deleteToken = generateToken();
+  const nowIso = new Date().toISOString();
+
+  const insRes = await baseballDb.prepare(`
+    INSERT INTO media_items (
+      title, caption, media_type, original_url, file_url, file_data,
+      mime_type, file_size, album, date_taken, contributor_name,
+      contributor_id, event_id, is_approved, approved_by, approved_at, delete_token
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
+  `).bind(
+    title,
+    caption,
+    mediaType,
+    streamUrl,
+    streamUrl,
+    attachment.local_data_base64 || null,
+    attachment.mime_type,
+    attachment.file_size || 0,
+    album,
+    dateTaken,
+    contributorName,
+    attachment.uploader_id,
+    eventId,
+    user.id,
+    nowIso,
+    deleteToken
+  ).run();
+
+  const mediaId = insRes.meta.last_row_id;
+
+  await chatDb.prepare(
+    'UPDATE chat_attachments SET promoted_media_id = ? WHERE id = ?'
+  ).bind(mediaId, attachment.id).run();
+
+  return c.json({
+    success: true,
+    media_id: mediaId,
+    mediaId,
+    attachment_id: attachment.id,
+    file_url: streamUrl
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/admin/storage-status - 5 TB Google Drive & Dual-D1 Metrics (Admin)
+// ---------------------------------------------------------------------------
+export async function getAdminStorageStatusHandler(c) {
+  const chatDb = c.env && c.env.CHAT_DB;
+  const baseballDb = c.env && (c.env.BASEBALL_DB || c.env.DB);
+
+  const gdriveQuota = await getGDriveStorageQuota(c.env);
+
+  const chatCounts = { channels: 0, messages: 0, attachments: 0, keys: 0 };
+  if (chatDb) {
+    try {
+      const ch = await chatDb.prepare('SELECT COUNT(*) as c FROM channels').first();
+      const msg = await chatDb.prepare('SELECT COUNT(*) as c FROM messages').first();
+      const att = await chatDb.prepare('SELECT COUNT(*) as c FROM chat_attachments').first();
+      const ky = await chatDb.prepare('SELECT COUNT(*) as c FROM user_crypto_keys').first();
+      chatCounts.channels = ch ? ch.c : 0;
+      chatCounts.messages = msg ? msg.c : 0;
+      chatCounts.attachments = att ? att.c : 0;
+      chatCounts.keys = ky ? ky.c : 0;
+    } catch (e) {}
+  }
+
+  const baseballCounts = { users: 0, events: 0, attendees: 0, media_items: 0 };
+  if (baseballDb) {
+    try {
+      const u = await baseballDb.prepare('SELECT COUNT(*) as c FROM users').first();
+      const ev = await baseballDb.prepare('SELECT COUNT(*) as c FROM events').first();
+      const at = await baseballDb.prepare('SELECT COUNT(*) as c FROM attendees').first();
+      const mi = await baseballDb.prepare('SELECT COUNT(*) as c FROM media_items').first();
+      baseballCounts.users = u ? u.c : 0;
+      baseballCounts.events = ev ? ev.c : 0;
+      baseballCounts.attendees = at ? at.c : 0;
+      baseballCounts.media_items = mi ? mi.c : 0;
+    } catch (e) {}
+  }
+
+  return c.json({
+    status: 'ok',
+    storageProvider: gdriveQuota.provider,
+    gdrive: gdriveQuota,
+    chatDb: chatCounts,
+    baseballDb: baseballCounts
+  });
+}
