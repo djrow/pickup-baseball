@@ -14,6 +14,25 @@ import { resolveChannel, canUserAccessChannel } from './chat.js';
 export const mediaRouter = new Hono();
 export const attachmentsRouter = new Hono();
 
+const MAX_MEDIA_BYTES = 50 * 1024 * 1024;
+const MAX_LOCAL_D1_MEDIA_BYTES = 10 * 1024 * 1024;
+
+function validateExternalHttpUrl(rawUrl, isTestEnv = false) {
+  let parsed;
+  try {
+    parsed = new URL(String(rawUrl || '').trim());
+  } catch (e) {
+    return { ok: false, status: 400, error: 'Invalid URL provided.' };
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return { ok: false, status: 400, error: 'Only HTTP and HTTPS links are supported.' };
+  }
+  if (isPrivateIpOrHost(parsed.hostname, isTestEnv)) {
+    return { ok: false, status: 403, error: 'Private or local addresses cannot be fetched.' };
+  }
+  return { ok: true, url: parsed.href };
+}
+
 function extractYouTubeId(url) {
   if (!url) return null;
   const match = String(url).match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([\w-]{11})/i);
@@ -158,6 +177,12 @@ mediaRouter.get('/:id/file', async (c) => {
 
       if (!remoteUrl) return c.text('Not found', 404);
 
+      const isTestEnv = Boolean(c.env && (c.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'test'));
+      const check = validateExternalHttpUrl(remoteUrl, isTestEnv);
+      if (!check.ok) {
+        return c.text(check.error, check.status);
+      }
+
       const etag = `W/"remote-media-${id}"`;
       if (c.req.header('If-None-Match') === etag) {
         return new Response(null, {
@@ -169,13 +194,22 @@ mediaRouter.get('/:id/file', async (c) => {
         });
       }
 
-      const upstreamRes = await fetch(remoteUrl, {
+      const upstreamRes = await fetch(check.url, {
+        redirect: 'manual',
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) PickupBaseball/1.0'
         }
       });
+      if (upstreamRes.status >= 300 && upstreamRes.status < 400) {
+        return c.text('Upstream redirects are disallowed', 400);
+      }
       if (!upstreamRes.ok) {
         return c.text('Upstream file unavailable', upstreamRes.status);
+      }
+
+      const contentLen = parseInt(upstreamRes.headers.get('content-length') || '0', 10);
+      if (!isNaN(contentLen) && contentLen > MAX_MEDIA_BYTES) {
+        return c.text('Upstream file exceeds maximum size limit', 413);
       }
 
       const contentType = upstreamRes.headers.get('content-type') || row.mime_type || 'image/jpeg';
@@ -276,7 +310,6 @@ mediaRouter.post('/', async (c) => {
     let storedFileSize = 0;
 
     const ALLOWED_MIME = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif', 'image/avif', 'video/mp4', 'video/webm'];
-    const MAX_MEDIA_BYTES = 50 * 1024 * 1024; // 50MB max photo & video submission limit
 
     // Case 1: External URL submitted (YouTube, Google Drive, Direct Video, or Facebook/external image link)
     if (url && String(url).trim()) {
@@ -300,32 +333,27 @@ mediaRouter.post('/', async (c) => {
         storedMimeType = 'video/mp4';
         storedFileSize = 0;
       } else if (/\.(mp4|webm)(\?.*)?$/i.test(cleanUrl)) {
+        const videoUrlCheck = validateExternalHttpUrl(cleanUrl, isTestEnv);
+        if (!videoUrlCheck.ok) {
+          return c.json({ error: videoUrlCheck.error }, videoUrlCheck.status);
+        }
         // Direct streaming video links
         finalMediaType = 'video';
-        fileUrl = cleanUrl;
+        fileUrl = videoUrlCheck.url;
+        originalUrl = videoUrlCheck.url;
         storedFileData = null;
         storedMimeType = cleanUrl.toLowerCase().includes('.webm') ? 'video/webm' : 'video/mp4';
         storedFileSize = 0;
       } else {
         // "copy over the facebook hosted images. images hosted on other sites are fine, too. copy it all."
-        let parsedUrl;
-        try {
-          parsedUrl = new URL(cleanUrl);
-        } catch (e) {
-          return c.json({ error: 'Invalid URL provided.' }, 400);
-        }
-
-        if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
-          return c.json({ error: 'Only HTTP and HTTPS links are supported.' }, 400);
-        }
-
-        if (isPrivateIpOrHost(parsedUrl.hostname, isTestEnv)) {
-          return c.json({ error: 'Private or local addresses cannot be fetched.' }, 403);
+        const imgUrlCheck = validateExternalHttpUrl(cleanUrl, isTestEnv);
+        if (!imgUrlCheck.ok) {
+          return c.json({ error: imgUrlCheck.error }, imgUrlCheck.status);
         }
 
         let fetchRes;
         try {
-          fetchRes = await fetch(cleanUrl, {
+          fetchRes = await fetch(imgUrlCheck.url, {
             redirect: 'manual',
             headers: {
               'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -345,11 +373,16 @@ mediaRouter.post('/', async (c) => {
           return c.json({ error: 'External image server returned status ' + fetchRes.status }, 400);
         }
 
+        const headerLen = parseInt(fetchRes.headers.get('content-length') || '0', 10);
+        if (!isNaN(headerLen) && headerLen > MAX_LOCAL_D1_MEDIA_BYTES) {
+          return c.json({ error: 'Remote image exceeds 10MB local database storage limit.' }, 400);
+        }
+
         const rawContentType = (fetchRes.headers.get('content-type') || '').toLowerCase();
         const arrayBuf = await fetchRes.arrayBuffer();
 
-        if (arrayBuf.byteLength > MAX_MEDIA_BYTES) {
-          return c.json({ error: 'Image exceeds maximum size limit of 50MB.' }, 400);
+        if (arrayBuf.byteLength > MAX_LOCAL_D1_MEDIA_BYTES) {
+          return c.json({ error: 'Remote image exceeds 10MB local database storage limit.' }, 400);
         }
 
         const candidateMime = rawContentType.includes('image/') ? rawContentType.split(';')[0].trim() : 'image/jpeg';
@@ -723,7 +756,8 @@ const ALLOWED_ATTACHMENT_MIME_TYPES = new Set([
   'application/pdf'
 ]);
 
-const MAX_GDRIVE_ATTACHMENT_BYTES = 500 * 1024 * 1024; // 500 MB per file
+const MAX_GDRIVE_ATTACHMENT_BYTES = 500 * 1024 * 1024; // 500 MB per file on Google Drive
+const MAX_LOCAL_D1_ATTACHMENT_BYTES = 10 * 1024 * 1024; // 10 MB per file when falling back to D1
 
 /**
  * Inspect uploaded bytes for executable / magic-byte spoofing
@@ -852,6 +886,10 @@ attachmentsRouter.post('/init', requireAuth, async (c) => {
     }
   }
 
+  if (fileSize > MAX_LOCAL_D1_ATTACHMENT_BYTES) {
+    return c.json({ error: 'Files over 10 MB require Google Drive storage, which is currently unavailable.' }, 400);
+  }
+
   const localUploadUrl = `/api/attachments/${attachmentId}/upload`;
   await chatDb.prepare(`
     INSERT INTO chat_attachments (
@@ -904,7 +942,15 @@ attachmentsRouter.put('/:id/upload', requireAuth, async (c) => {
     return c.json({ error: 'Access denied.' }, 403);
   }
 
+  const contentLength = parseInt(c.req.header('Content-Length') || '0', 10);
+  if (!isNaN(contentLength) && contentLength > MAX_LOCAL_D1_ATTACHMENT_BYTES) {
+    return c.json({ error: 'Uploaded file exceeds the 10 MB local database attachment limit.' }, 413);
+  }
+
   const rawBuffer = await c.req.arrayBuffer();
+  if (rawBuffer.byteLength > MAX_LOCAL_D1_ATTACHMENT_BYTES) {
+    return c.json({ error: 'Uploaded file exceeds the 10 MB local database attachment limit.' }, 413);
+  }
   const bytes = new Uint8Array(rawBuffer);
 
   if (hasInvalidOrSpoofedMagicBytes(bytes, attachment.mime_type, Boolean(attachment.is_encrypted))) {

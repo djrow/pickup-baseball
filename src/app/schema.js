@@ -196,7 +196,12 @@ export const CREATE_TABLES_SQL = [
     signed_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`,
   'CREATE INDEX IF NOT EXISTS idx_events_date ON events(event_date)',
+  'CREATE INDEX IF NOT EXISTS idx_events_status_date ON events(status, event_date)',
   'CREATE INDEX IF NOT EXISTS idx_attendees_event ON attendees(event_id)',
+  'CREATE INDEX IF NOT EXISTS idx_attendees_user ON attendees(user_id, event_id)',
+  'CREATE INDEX IF NOT EXISTS idx_attendees_email ON attendees(email, event_id)',
+  'CREATE INDEX IF NOT EXISTS idx_duty_assignments_attendee ON duty_assignments(attendee_id)',
+  'CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at)',
   'CREATE INDEX IF NOT EXISTS idx_comments_event ON comments(event_id)',
   'CREATE INDEX IF NOT EXISTS idx_posts_created_at ON posts(created_at DESC)',
   'CREATE INDEX IF NOT EXISTS idx_media_date_taken ON media_items(date_taken DESC)',
@@ -239,35 +244,62 @@ export const ALTER_STATEMENTS = [
 ];
 
 const migratedDbs = new WeakSet();
+const BASEBALL_SCHEMA_VERSION = '2026-11-12.1';
+
+async function runSchemaBatch(db, sqlList) {
+  if (typeof db.batch === 'function' && sqlList.length > 1) {
+    try {
+      await db.batch(sqlList.map((sql) => db.prepare(sql)));
+      return;
+    } catch (e) {}
+  }
+  for (const sql of sqlList) {
+    try { await db.prepare(sql).run(); } catch (e) {}
+  }
+}
 
 export async function ensureD1Schema(db, force = false) {
   if (!db || (!force && migratedDbs.has(db))) return;
 
-  for (const sql of CREATE_TABLES_SQL) {
-    try { await db.prepare(sql).run(); } catch (e) {}
+  let alreadyAtVersion = false;
+  if (!force) {
+    try {
+      const verRow = await db.prepare("SELECT value FROM app_settings WHERE key = 'schema_version'").first();
+      if (verRow && verRow.value === BASEBALL_SCHEMA_VERSION) {
+        alreadyAtVersion = true;
+      }
+    } catch (e) {}
   }
-  for (const sql of ALTER_STATEMENTS) {
-    try { await db.prepare(sql).run(); } catch (e) {}
+
+  if (!alreadyAtVersion) {
+    await runSchemaBatch(db, CREATE_TABLES_SQL);
+
+    for (const sql of ALTER_STATEMENTS) {
+      try { await db.prepare(sql).run(); } catch (e) {}
+    }
+    try {
+      await db.prepare(`
+        UPDATE attendees
+        SET players_count = CASE WHEN status = 'declined' THEN 0 ELSE 1 + COALESCE(additional_guests, 0) END
+        WHERE players_count IS NULL
+      `).run();
+    } catch (e) {}
+
+    try {
+      await runSchemaBatch(db, [
+        "UPDATE users SET role = 'admin' WHERE is_admin = 1 AND (role IS NULL OR role = 'player')",
+        "UPDATE users SET is_admin = 1 WHERE role = 'admin'",
+        "UPDATE users SET role = 'player' WHERE role IS NULL",
+        "UPDATE users SET role = 'organizer' WHERE role = 'facilitator'",
+        "UPDATE events SET location = 'Bushrod Park Field 1' WHERE location = 'Bushrod Part Field 1'",
+        "UPDATE media_items SET is_approved = 1 WHERE is_approved IS NULL OR (is_approved = 0 AND id <= 10)"
+      ]);
+    } catch (e) {}
+
+    try {
+      await db.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('schema_version', ?)").bind(BASEBALL_SCHEMA_VERSION).run();
+    } catch (e) {}
   }
-  try {
-    await db.prepare(`
-      UPDATE attendees
-      SET players_count = CASE WHEN status = 'declined' THEN 0 ELSE 1 + COALESCE(additional_guests, 0) END
-      WHERE players_count IS NULL
-    `).run();
-  } catch (e) {}
-
-  try {
-    await db.prepare("UPDATE users SET role = 'admin' WHERE is_admin = 1 AND (role IS NULL OR role = 'player')").run();
-    await db.prepare("UPDATE users SET is_admin = 1 WHERE role = 'admin'").run();
-    await db.prepare("UPDATE users SET role = 'player' WHERE role IS NULL").run();
-    await db.prepare("UPDATE users SET role = 'organizer' WHERE role = 'facilitator'").run();
-    await db.prepare("UPDATE events SET location = 'Bushrod Park Field 1' WHERE location = 'Bushrod Part Field 1'").run();
-  } catch (e) {}
-
-  try {
-    await db.prepare("UPDATE media_items SET is_approved = 1 WHERE is_approved IS NULL OR (is_approved = 0 AND id <= 10)").run();
-  } catch (e) {}
 
   try {
     const mediaCountRow = await db.prepare("SELECT COUNT(*) as c FROM media_items").first();
@@ -675,62 +707,73 @@ const migratedChatDbs = new WeakSet();
 export async function ensureChatD1Schema(chatDb, force = false) {
   if (!chatDb || (!force && migratedChatDbs.has(chatDb))) return;
 
-  for (const sql of CREATE_CHAT_TABLES_SQL) {
-    try {
-      if (typeof chatDb.prepare === 'function') {
-        await chatDb.prepare(sql).run();
-      } else if (typeof chatDb.exec === 'function') {
-        chatDb.exec(sql);
-      }
-    } catch (e) {
-      // Ignore if table/index exists
+  if (typeof chatDb.prepare === 'function') {
+    await runSchemaBatch(chatDb, CREATE_CHAT_TABLES_SQL);
+  } else if (typeof chatDb.exec === 'function') {
+    for (const sql of CREATE_CHAT_TABLES_SQL) {
+      try { chatDb.exec(sql); } catch (e) {}
     }
   }
 
-  for (const sql of CHAT_ALTER_STATEMENTS) {
+  let needsColumnAlter = true;
+  if (!force && typeof chatDb.prepare === 'function') {
     try {
-      if (typeof chatDb.prepare === 'function') {
-        await chatDb.prepare(sql).run();
-      } else if (typeof chatDb.exec === 'function') {
-        chatDb.exec(sql);
+      const [msgColsRes, chColsRes] = typeof chatDb.batch === 'function'
+        ? await chatDb.batch([chatDb.prepare('PRAGMA table_info(messages)'), chatDb.prepare('PRAGMA table_info(channels)')])
+        : [await chatDb.prepare('PRAGMA table_info(messages)').all(), await chatDb.prepare('PRAGMA table_info(channels)').all()];
+      const msgCols = new Set(((msgColsRes && msgColsRes.results) || []).map((c) => c.name));
+      const chCols = new Set(((chColsRes && chColsRes.results) || []).map((c) => c.name));
+      if (msgCols.has('hidden_at') && msgCols.has('original_iv') && chCols.has('is_private')) {
+        needsColumnAlter = false;
       }
-    } catch (e) {
-      // Ignore if column exists
+    } catch (e) {}
+  }
+
+  if (needsColumnAlter) {
+    for (const sql of CHAT_ALTER_STATEMENTS) {
+      try {
+        if (typeof chatDb.prepare === 'function') {
+          await chatDb.prepare(sql).run();
+        } else if (typeof chatDb.exec === 'function') {
+          chatDb.exec(sql);
+        }
+      } catch (e) {
+        // Ignore if column exists
+      }
     }
+  }
+
+  const channelSeedSql = `
+    INSERT INTO channels (slug, name, category, channel_type, topic, min_role_read, min_role_write, is_encrypted, sort_order)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(slug) DO NOTHING
+  `;
+  if (typeof chatDb.prepare === 'function' && typeof chatDb.batch === 'function') {
+    try {
+      await chatDb.batch(DEFAULT_CHAT_CHANNELS.map((ch) =>
+        chatDb.prepare(channelSeedSql).bind(
+          ch.slug, ch.name, ch.category, ch.channel_type, ch.topic,
+          ch.min_role_read, ch.min_role_write, ch.is_encrypted, ch.sort_order
+        )
+      ));
+      migratedChatDbs.add(chatDb);
+      return;
+    } catch (e) {}
   }
 
   for (const ch of DEFAULT_CHAT_CHANNELS) {
     try {
-      const sql = `
-        INSERT INTO channels (slug, name, category, channel_type, topic, min_role_read, min_role_write, is_encrypted, sort_order)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(slug) DO NOTHING
-      `;
       if (typeof chatDb.prepare === 'function') {
-        const stmt = chatDb.prepare(sql);
+        const stmt = chatDb.prepare(channelSeedSql);
         if (typeof stmt.bind === 'function') {
           await stmt.bind(
-            ch.slug,
-            ch.name,
-            ch.category,
-            ch.channel_type,
-            ch.topic,
-            ch.min_role_read,
-            ch.min_role_write,
-            ch.is_encrypted,
-            ch.sort_order
+            ch.slug, ch.name, ch.category, ch.channel_type, ch.topic,
+            ch.min_role_read, ch.min_role_write, ch.is_encrypted, ch.sort_order
           ).run();
         } else if (typeof stmt.run === 'function') {
           stmt.run(
-            ch.slug,
-            ch.name,
-            ch.category,
-            ch.channel_type,
-            ch.topic,
-            ch.min_role_read,
-            ch.min_role_write,
-            ch.is_encrypted,
-            ch.sort_order
+            ch.slug, ch.name, ch.category, ch.channel_type, ch.topic,
+            ch.min_role_read, ch.min_role_write, ch.is_encrypted, ch.sort_order
           );
         }
       }

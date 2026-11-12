@@ -783,9 +783,201 @@
     }
   }
 
-  function renderMessageStream() {
+  function bindMessageStreamDelegation(streamEl) {
+    if (!streamEl || streamEl._delegatedClickBound) return;
+    streamEl._delegatedClickBound = true;
+    streamEl.addEventListener('click', function (e) {
+      var target = e.target && typeof e.target.closest === 'function' ? e.target.closest('button') : null;
+      if (!target || !streamEl.contains(target)) return;
+
+      if (target.hasAttribute('data-rx-msg')) {
+        var mId = Number(target.getAttribute('data-rx-msg'));
+        var emoji = target.getAttribute('data-rx-emoji');
+        Store.toggleReaction(mId, emoji).then(function () {
+          renderMessageStream();
+        });
+      } else if (target.hasAttribute('data-thread-msg')) {
+        openThreadDrawer(Number(target.getAttribute('data-thread-msg')));
+      } else if (target.hasAttribute('data-edit-msg')) {
+        var editId = Number(target.getAttribute('data-edit-msg'));
+        var allMsgs = Store.state.messagesByChannel[Number(uiState.activeChannelId)] || [];
+        var targetMsg = null;
+        for (var k = 0; k < allMsgs.length; k++) {
+          if (Number(allMsgs[k].id) === editId) {
+            targetMsg = allMsgs[k];
+            break;
+          }
+        }
+        var currentText = targetMsg ? (targetMsg.decrypted_content || targetMsg.content || '') : '';
+        var nextText = typeof window.prompt === 'function' ? window.prompt('Edit message:', currentText) : null;
+        if (nextText !== null && nextText.trim() && nextText.trim() !== currentText) {
+          Store.editMessage(editId, nextText.trim()).then(function () {
+            renderMessageStream();
+          });
+        }
+      } else if (target.hasAttribute('data-delete-msg')) {
+        Store.deleteMessage(Number(target.getAttribute('data-delete-msg'))).then(function () {
+          renderMessageStream();
+        });
+      } else if (target.hasAttribute('data-promote-id')) {
+        promoteAttachmentToGallery(
+          target.getAttribute('data-promote-id'),
+          target.getAttribute('data-promote-name') || 'Clubhouse Highlight'
+        );
+      } else if (target.hasAttribute('data-hide-msg')) {
+        var hideId = Number(target.getAttribute('data-hide-msg'));
+        openReasonModal({
+          title: '🙈 Hide Message',
+          desc: 'The message content will be replaced with a moderator notice showing your stated reason.',
+          submitLabel: 'Hide Message',
+          onConfirm: function (reason) {
+            return Store.hideMessage(hideId, reason).then(function () {
+              renderMessageStream();
+            });
+          }
+        });
+      } else if (target.hasAttribute('data-unhide-msg')) {
+        Store.unhideMessage(Number(target.getAttribute('data-unhide-msg'))).then(function () {
+          renderMessageStream();
+        });
+      } else if (target.hasAttribute('data-report-msg')) {
+        var repId = Number(target.getAttribute('data-report-msg'));
+        var authorName = target.getAttribute('data-report-author') || 'player';
+        openReasonModal({
+          title: '🚩 Report Message',
+          desc: 'Report this message by ' + authorName + ' to Clubhouse Moderators. Please state a clear reason.',
+          submitLabel: 'Submit Report',
+          onConfirm: function (reason) {
+            return Store.submitReport({
+              target_type: 'message',
+              target_message_id: repId,
+              reason: reason
+            });
+          }
+        });
+      } else if (target.hasAttribute('data-mod-mute-uid')) {
+        var muteUid = Number(target.getAttribute('data-mod-mute-uid'));
+        var uname = target.getAttribute('data-mod-mute-name') || 'Player';
+        openReasonModal({
+          title: '🔇 Blanket-Mute ' + uname,
+          desc: 'Mutes ' + uname + ' across all Clubhouse chat and voice rooms. They can still RSVP and attend Sunday games.',
+          submitLabel: 'Mute User',
+          onConfirm: function (reason) {
+            return Store.setUserGlobalMute(muteUid, true, reason).then(function () {
+              if (uiState.activeThreadRoot) loadThreadReplies(uiState.activeThreadRoot.id);
+              loadModerationPanel();
+            });
+          }
+        });
+      } else if (target.hasAttribute('data-reveal-muted-msg')) {
+        uiState.revealedMutedMsgIds[Number(target.getAttribute('data-reveal-muted-msg'))] = true;
+        renderMessageStream();
+      } else if (target.hasAttribute('data-unmute-user')) {
+        Store.unmuteUserPersonal(Number(target.getAttribute('data-unmute-user'))).then(function () {
+          renderMessageStream();
+          renderMembersDirectory();
+        });
+      }
+    });
+  }
+
+  function buildMessageCardHtml(msg, currentUser, isMod) {
+    var html = '';
+    var isHiddenByMod = Boolean(msg.is_hidden || msg.hidden_at);
+    var isMutedAuthor = Boolean(msg.author_id && Store.isUserMutedByMe(msg.author_id) && !uiState.revealedMutedMsgIds[msg.id]);
+    var displayContent = msg.decrypted_content || msg.content || '';
+    var initial = (msg.author_name || 'P').charAt(0).toUpperCase();
+    var attachments = (!isHiddenByMod && Array.isArray(msg.attachments)) ? msg.attachments : [];
+    var reactions = (!isHiddenByMod) ? groupReactions(msg.reactions) : [];
+    var isAuthor = Boolean(currentUser && Number(msg.author_id) === Number(currentUser.id));
+    var canDeleteMsg = Boolean(isAuthor || isMod || (currentUser && currentUser.role === 'organizer'));
+
+    if (isMutedAuthor) {
+      html += '<article class="ch-msg-card" data-msg-id="' + msg.id + '">';
+      html += '<div class="ch-msg-body"><div class="ch-msg-muted-stub">';
+      html += '<span>🔇 Message from muted user <strong>' + escapeHtml(msg.author_name) + '</strong> hidden from your view.</span>';
+      html += '<span style="display:flex;gap:6px;">';
+      html += '<button type="button" class="ch-thread-btn" data-reveal-muted-msg="' + msg.id + '">Show once</button>';
+      html += '<button type="button" class="ch-thread-btn" data-unmute-user="' + msg.author_id + '">Unmute</button>';
+      html += '</span></div></div></article>';
+      return html;
+    }
+
+    html += '<article class="ch-msg-card" data-msg-id="' + msg.id + '">';
+    html += '<div class="ch-msg-avatar">' + escapeHtml(initial) + '</div>';
+    html += '<div class="ch-msg-body">';
+    html += '<div class="ch-msg-header">';
+    html += '<span class="ch-msg-author">' + escapeHtml(msg.author_name) + '</span>';
+    html += renderAuthorBadges(msg);
+    html += '<span class="ch-msg-time">' + escapeHtml(formatTime(msg.created_at)) + '</span>';
+    if (msg.edited_at && !isHiddenByMod) {
+      html += '<span class="ch-msg-time">(edited)</span>';
+    }
+    html += '</div>';
+
+    if (isHiddenByMod) {
+      html += '<div class="ch-msg-hidden-notice">';
+      html += '⚠️ <strong>Message hidden by ' + escapeHtml(msg.hidden_by_name || 'Moderator') + '</strong>';
+      if (msg.hidden_reason) {
+        html += ' — Reason: ' + escapeHtml(msg.hidden_reason);
+      }
+      html += '</div>';
+    } else {
+      html += '<div class="ch-msg-content">' + renderMessageTextWithGifs(displayContent) + '</div>';
+    }
+
+    if (attachments.length > 0) {
+      html += '<div class="ch-attachments-list">';
+      for (var a = 0; a < attachments.length; a++) {
+        html += renderAttachmentItem(attachments[a]);
+      }
+      html += '</div>';
+    }
+
+    html += '<div class="ch-msg-Reactions-row">';
+    if (!isHiddenByMod) {
+      for (var r = 0; r < reactions.length; r++) {
+        var rx = reactions[r];
+        var tooltip = rx.users && rx.users.length ? rx.users.join(', ') : rx.emoji;
+        html += '<button type="button" class="ch-reaction-pill" title="' + escapeHtml(tooltip) + '" data-rx-msg="' + msg.id + '" data-rx-emoji="' + escapeHtml(rx.emoji) + '">';
+        html += '<span>' + escapeHtml(rx.emoji) + '</span><span>' + Number(rx.count || 1) + '</span>';
+        html += '</button>';
+      }
+      for (var d = 0; d < DEFAULT_EMOJIS.length; d++) {
+        var em = DEFAULT_EMOJIS[d];
+        html += '<button type="button" class="ch-reaction-pill" style="opacity:0.55;" title="React ' + em + '" data-rx-msg="' + msg.id + '" data-rx-emoji="' + em + '">' + em + '</button>';
+      }
+    }
+    html += '<button type="button" class="ch-thread-btn" data-thread-msg="' + msg.id + '">💬 ' + (msg.reply_count ? msg.reply_count + ' Replies' : 'Reply in Thread') + '</button>';
+    if (isAuthor && !isHiddenByMod) {
+      html += '<button type="button" class="ch-thread-btn" data-edit-msg="' + msg.id + '" title="Edit message">✏️ Edit</button>';
+    }
+    if (isMod) {
+      if (isHiddenByMod) {
+        html += '<button type="button" class="ch-thread-btn" data-unhide-msg="' + msg.id + '" title="Restore hidden message">👁️ Unhide</button>';
+      } else {
+        html += '<button type="button" class="ch-thread-btn" data-hide-msg="' + msg.id + '" title="Hide message for a stated reason">🙈 Hide</button>';
+      }
+    }
+    if (!isAuthor && currentUser) {
+      html += '<button type="button" class="ch-thread-btn" data-report-msg="' + msg.id + '" data-report-author="' + escapeHtml(msg.author_name) + '" title="Report message for a stated reason">🚩 Report</button>';
+      if (isMod && msg.author_id) {
+        html += '<button type="button" class="ch-thread-btn" data-mod-mute-uid="' + msg.author_id + '" data-mod-mute-name="' + escapeHtml(msg.author_name) + '" title="Blanket-mute this user in Clubhouse">🔇 Mod Mute</button>';
+      }
+    }
+    if (canDeleteMsg) {
+      html += '<button type="button" class="ch-thread-btn" data-delete-msg="' + msg.id + '" title="Delete message">🗑️ Delete</button>';
+    }
+    html += '</div>';
+
+    html += '</div></article>';
+    return html;
+  }
+
+  function renderMessageStream(options) {
     var streamEl = el('ch-message-stream');
     if (!streamEl) return;
+    bindMessageStreamDelegation(streamEl);
 
     var chId = Number(uiState.activeChannelId);
     var allMsgs = Store.state.messagesByChannel[chId] || [];
@@ -803,262 +995,50 @@
     }
 
     if (filtered.length === 0) {
+      streamEl._renderedChId = chId;
+      streamEl._renderedQuery = query;
+      streamEl._renderedCount = 0;
       streamEl.innerHTML = '<div style="text-align:center;color:var(--ch-text-muted);padding:40px 20px;">No messages yet in this channel. Say hello to the sandlot crew! ⚾</div>';
       return;
     }
 
     var currentUser = Store.state.user;
     var isMod = isModeratorUser(currentUser);
-    var html = '';
-    for (var j = 0; j < filtered.length; j++) {
-      var msg = filtered[j];
-      var isHiddenByMod = Boolean(msg.is_hidden || msg.hidden_at);
-      var isMutedAuthor = Boolean(msg.author_id && Store.isUserMutedByMe(msg.author_id) && !uiState.revealedMutedMsgIds[msg.id]);
-      var displayContent = msg.decrypted_content || msg.content || '';
-      var initial = (msg.author_name || 'P').charAt(0).toUpperCase();
-      var attachments = (!isHiddenByMod && Array.isArray(msg.attachments)) ? msg.attachments : [];
-      var reactions = (!isHiddenByMod) ? groupReactions(msg.reactions) : [];
-      var isAuthor = Boolean(currentUser && Number(msg.author_id) === Number(currentUser.id));
-      var canDeleteMsg = Boolean(isAuthor || isMod || (currentUser && currentUser.role === 'organizer'));
+    var appendOnly = Boolean(options && options.appendOnly);
+    var existingNodes = streamEl.querySelectorAll('article[data-msg-id]');
 
-      if (isMutedAuthor) {
-        html += '<article class="ch-msg-card" data-msg-id="' + msg.id + '">';
-        html += '<div class="ch-msg-body"><div class="ch-msg-muted-stub">';
-        html += '<span>🔇 Message from muted user <strong>' + escapeHtml(msg.author_name) + '</strong> hidden from your view.</span>';
-        html += '<span style="display:flex;gap:6px;">';
-        html += '<button type="button" class="ch-thread-btn" data-reveal-muted-msg="' + msg.id + '">Show once</button>';
-        html += '<button type="button" class="ch-thread-btn" data-unmute-user="' + msg.author_id + '">Unmute</button>';
-        html += '</span></div></div></article>';
-        continue;
+    if (
+      appendOnly &&
+      !query &&
+      streamEl._renderedChId === chId &&
+      streamEl._renderedQuery === '' &&
+      existingNodes.length > 0 &&
+      existingNodes.length < filtered.length &&
+      Number(existingNodes[existingNodes.length - 1].getAttribute('data-msg-id')) === Number(filtered[existingNodes.length - 1].id)
+    ) {
+      var appendedMsgs = filtered.slice(existingNodes.length);
+      var appendHtml = '';
+      for (var k = 0; k < appendedMsgs.length; k++) {
+        appendHtml += buildMessageCardHtml(appendedMsgs[k], currentUser, isMod);
       }
-
-      html += '<article class="ch-msg-card" data-msg-id="' + msg.id + '">';
-      html += '<div class="ch-msg-avatar">' + escapeHtml(initial) + '</div>';
-      html += '<div class="ch-msg-body">';
-      html += '<div class="ch-msg-header">';
-      html += '<span class="ch-msg-author">' + escapeHtml(msg.author_name) + '</span>';
-      html += renderAuthorBadges(msg);
-      html += '<span class="ch-msg-time">' + escapeHtml(formatTime(msg.created_at)) + '</span>';
-      if (msg.edited_at && !isHiddenByMod) {
-        html += '<span class="ch-msg-time">(edited)</span>';
-      }
-      html += '</div>';
-
-      if (isHiddenByMod) {
-        html += '<div class="ch-msg-hidden-notice">';
-        html += '⚠️ <strong>Message hidden by ' + escapeHtml(msg.hidden_by_name || 'Moderator') + '</strong>';
-        if (msg.hidden_reason) {
-          html += ' — Reason: ' + escapeHtml(msg.hidden_reason);
-        }
-        html += '</div>';
-      } else {
-        html += '<div class="ch-msg-content">' + renderMessageTextWithGifs(displayContent) + '</div>';
-      }
-
-      if (attachments.length > 0) {
-        html += '<div class="ch-attachments-list">';
-        for (var a = 0; a < attachments.length; a++) {
-          html += renderAttachmentItem(attachments[a]);
-        }
-        html += '</div>';
-      }
-
-      html += '<div class="ch-msg-Reactions-row">';
-      if (!isHiddenByMod) {
-        for (var r = 0; r < reactions.length; r++) {
-          var rx = reactions[r];
-          var tooltip = rx.users && rx.users.length ? rx.users.join(', ') : rx.emoji;
-          html += '<button type="button" class="ch-reaction-pill" title="' + escapeHtml(tooltip) + '" data-rx-msg="' + msg.id + '" data-rx-emoji="' + escapeHtml(rx.emoji) + '">';
-          html += '<span>' + escapeHtml(rx.emoji) + '</span><span>' + Number(rx.count || 1) + '</span>';
-          html += '</button>';
-        }
-        for (var d = 0; d < DEFAULT_EMOJIS.length; d++) {
-          var em = DEFAULT_EMOJIS[d];
-          html += '<button type="button" class="ch-reaction-pill" style="opacity:0.55;" title="React ' + em + '" data-rx-msg="' + msg.id + '" data-rx-emoji="' + em + '">' + em + '</button>';
-        }
-      }
-      html += '<button type="button" class="ch-thread-btn" data-thread-msg="' + msg.id + '">💬 ' + (msg.reply_count ? msg.reply_count + ' Replies' : 'Reply in Thread') + '</button>';
-      if (isAuthor && !isHiddenByMod) {
-        html += '<button type="button" class="ch-thread-btn" data-edit-msg="' + msg.id + '" title="Edit message">✏️ Edit</button>';
-      }
-      if (isMod) {
-        if (isHiddenByMod) {
-          html += '<button type="button" class="ch-thread-btn" data-unhide-msg="' + msg.id + '" title="Restore hidden message">👁️ Unhide</button>';
-        } else {
-          html += '<button type="button" class="ch-thread-btn" data-hide-msg="' + msg.id + '" title="Hide message for a stated reason">🙈 Hide</button>';
-        }
-      }
-      if (!isAuthor && currentUser) {
-        html += '<button type="button" class="ch-thread-btn" data-report-msg="' + msg.id + '" data-report-author="' + escapeHtml(msg.author_name) + '" title="Report message for a stated reason">🚩 Report</button>';
-        if (isMod && msg.author_id) {
-          html += '<button type="button" class="ch-thread-btn" data-mod-mute-uid="' + msg.author_id + '" data-mod-mute-name="' + escapeHtml(msg.author_name) + '" title="Blanket-mute this user in Clubhouse">🔇 Mod Mute</button>';
-        }
-      }
-      if (canDeleteMsg) {
-        html += '<button type="button" class="ch-thread-btn" data-delete-msg="' + msg.id + '" title="Delete message">🗑️ Delete</button>';
-      }
-      html += '</div>';
-
-      html += '</div></article>';
+      streamEl.insertAdjacentHTML('beforeend', appendHtml);
+      streamEl._renderedCount = filtered.length;
+      streamEl.scrollTop = streamEl.scrollHeight;
+      hydrateEncryptedAttachments(streamEl, appendedMsgs, chId);
+      return;
     }
 
+    var html = '';
+    for (var j = 0; j < filtered.length; j++) {
+      html += buildMessageCardHtml(filtered[j], currentUser, isMod);
+    }
+
+    streamEl._renderedChId = chId;
+    streamEl._renderedQuery = query;
+    streamEl._renderedCount = filtered.length;
     streamEl.innerHTML = html;
     streamEl.scrollTop = streamEl.scrollHeight;
     hydrateEncryptedAttachments(streamEl, filtered, chId);
-
-    // Bind reaction buttons
-    var rxBtns = streamEl.querySelectorAll('[data-rx-msg]');
-    for (var x = 0; x < rxBtns.length; x++) {
-      rxBtns[x].addEventListener('click', function () {
-        var mId = Number(this.getAttribute('data-rx-msg'));
-        var emoji = this.getAttribute('data-rx-emoji');
-        Store.toggleReaction(mId, emoji).then(function () {
-          renderMessageStream();
-        });
-      });
-    }
-
-    // Bind thread buttons
-    var threadBtns = streamEl.querySelectorAll('[data-thread-msg]');
-    for (var t = 0; t < threadBtns.length; t++) {
-      threadBtns[t].addEventListener('click', function () {
-        var mId = Number(this.getAttribute('data-thread-msg'));
-        openThreadDrawer(mId);
-      });
-    }
-
-    // Bind Edit message buttons
-    var editBtns = streamEl.querySelectorAll('[data-edit-msg]');
-    for (var eIdx = 0; eIdx < editBtns.length; eIdx++) {
-      editBtns[eIdx].addEventListener('click', function () {
-        var mId = Number(this.getAttribute('data-edit-msg'));
-        var targetMsg = null;
-        for (var k = 0; k < allMsgs.length; k++) {
-          if (Number(allMsgs[k].id) === mId) {
-            targetMsg = allMsgs[k];
-            break;
-          }
-        }
-        var currentText = targetMsg ? (targetMsg.decrypted_content || targetMsg.content || '') : '';
-        var nextText = typeof window.prompt === 'function' ? window.prompt('Edit message:', currentText) : null;
-        if (nextText !== null && nextText.trim() && nextText.trim() !== currentText) {
-          Store.editMessage(mId, nextText.trim()).then(function () {
-            renderMessageStream();
-          });
-        }
-      });
-    }
-
-    // Bind Delete message buttons
-    var delBtns = streamEl.querySelectorAll('[data-delete-msg]');
-    for (var dIdx = 0; dIdx < delBtns.length; dIdx++) {
-      delBtns[dIdx].addEventListener('click', function () {
-        var mId = Number(this.getAttribute('data-delete-msg'));
-        Store.deleteMessage(mId).then(function () {
-          renderMessageStream();
-        });
-      });
-    }
-
-    // Bind Admin Promote to Gallery buttons
-    var promoBtns = streamEl.querySelectorAll('[data-promote-id]');
-    for (var p = 0; p < promoBtns.length; p++) {
-      promoBtns[p].addEventListener('click', function () {
-        var attId = this.getAttribute('data-promote-id');
-        var attName = this.getAttribute('data-promote-name') || 'Clubhouse Highlight';
-        promoteAttachmentToGallery(attId, attName);
-      });
-    }
-
-    // Bind Hide message buttons (Moderator/Admin)
-    var hideBtns = streamEl.querySelectorAll('[data-hide-msg]');
-    for (var hb = 0; hb < hideBtns.length; hb++) {
-      hideBtns[hb].addEventListener('click', function () {
-        var mId = Number(this.getAttribute('data-hide-msg'));
-        openReasonModal({
-          title: '🙈 Hide Message',
-          desc: 'The message content will be replaced with a moderator notice showing your stated reason.',
-          submitLabel: 'Hide Message',
-          onConfirm: function (reason) {
-            return Store.hideMessage(mId, reason).then(function () {
-              renderMessageStream();
-            });
-          }
-        });
-      });
-    }
-
-    // Bind Unhide message buttons (Moderator/Admin)
-    var unhideBtns = streamEl.querySelectorAll('[data-unhide-msg]');
-    for (var ub = 0; ub < unhideBtns.length; ub++) {
-      unhideBtns[ub].addEventListener('click', function () {
-        var mId = Number(this.getAttribute('data-unhide-msg'));
-        Store.unhideMessage(mId).then(function () {
-          renderMessageStream();
-        });
-      });
-    }
-
-    // Bind Report message buttons
-    var repMsgBtns = streamEl.querySelectorAll('[data-report-msg]');
-    for (var rmb = 0; rmb < repMsgBtns.length; rmb++) {
-      repMsgBtns[rmb].addEventListener('click', function () {
-        var mId = Number(this.getAttribute('data-report-msg'));
-        var authorName = this.getAttribute('data-report-author') || 'player';
-        openReasonModal({
-          title: '🚩 Report Message',
-          desc: 'Report this message by ' + authorName + ' to Clubhouse Moderators. Please state a clear reason.',
-          submitLabel: 'Submit Report',
-          onConfirm: function (reason) {
-            return Store.submitReport({
-              target_type: 'message',
-              target_message_id: mId,
-              reason: reason
-            });
-          }
-        });
-      });
-    }
-
-    // Bind Mod Blanket-Mute buttons on messages
-    var modMuteBtns = streamEl.querySelectorAll('[data-mod-mute-uid]');
-    for (var mmb = 0; mmb < modMuteBtns.length; mmb++) {
-      modMuteBtns[mmb].addEventListener('click', function () {
-        var uid = Number(this.getAttribute('data-mod-mute-uid'));
-        var uname = this.getAttribute('data-mod-mute-name') || 'Player';
-        openReasonModal({
-          title: '🔇 Blanket-Mute ' + uname,
-          desc: 'Mutes ' + uname + ' across all Clubhouse chat and voice rooms. They can still RSVP and attend Sunday games.',
-          submitLabel: 'Mute User',
-          onConfirm: function (reason) {
-            return Store.setUserGlobalMute(uid, true, reason).then(function () {
-              if (uiState.activeThreadRoot) loadThreadReplies(uiState.activeThreadRoot.id);
-              loadModerationPanel();
-            });
-          }
-        });
-      });
-    }
-
-    // Bind Personal Mute reveal & unmute stubs
-    var revealBtns = streamEl.querySelectorAll('[data-reveal-muted-msg]');
-    for (var rvb = 0; rvb < revealBtns.length; rvb++) {
-      revealBtns[rvb].addEventListener('click', function () {
-        var mId = Number(this.getAttribute('data-reveal-muted-msg'));
-        uiState.revealedMutedMsgIds[mId] = true;
-        renderMessageStream();
-      });
-    }
-    var unmuteMsgBtns = streamEl.querySelectorAll('[data-unmute-user]');
-    for (var umb = 0; umb < unmuteMsgBtns.length; umb++) {
-      unmuteMsgBtns[umb].addEventListener('click', function () {
-        var uid = Number(this.getAttribute('data-unmute-user'));
-        Store.unmuteUserPersonal(uid).then(function () {
-          renderMessageStream();
-          renderMembersDirectory();
-        });
-      });
-    }
   }
 
   function promoteAttachmentToGallery(attachmentId, defaultTitle) {
@@ -2612,9 +2592,17 @@
         if (uiState.upcomingData) {
           renderSundayCard(uiState.upcomingData);
         }
-      } else if (eventType === 'messages_loaded' || eventType === 'delta_messages' || eventType === 'sync_tick') {
+      } else if (eventType === 'messages_loaded') {
         renderChannelSidebar();
         renderMessageStream();
+      } else if (eventType === 'delta_messages') {
+        renderChannelSidebar();
+        renderMessageStream({ appendOnly: true });
+      } else if (eventType === 'sync_tick') {
+        if (detail && Array.isArray(detail.events) && detail.events.length > 0) {
+          renderChannelSidebar();
+          renderMessageStream();
+        }
       } else if (eventType === 'channel_created' || eventType === 'channel_updated') {
         renderChannelSidebar();
         if (detail && Number(detail.id) === Number(uiState.activeChannelId)) {

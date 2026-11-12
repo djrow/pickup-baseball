@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { requireOrganizer } from '../security.js';
+import { requireOrganizer, sanitizeHttpUrl } from '../security.js';
 import { parseMediaType } from '../feeds.js';
 
 export const postsRouter = new Hono();
@@ -47,7 +47,18 @@ postsRouter.post('/', requireOrganizer, async (c) => {
 
     const cleanTitle = String(title).trim();
     const cleanContent = String(content).trim();
-    const cleanMediaUrl = media_url ? String(media_url).trim() : null;
+    let cleanMediaUrl = media_url ? String(media_url).trim() : null;
+    if (cleanMediaUrl) {
+      if (cleanMediaUrl.startsWith('/') && !cleanMediaUrl.startsWith('//') && !cleanMediaUrl.startsWith('/\\')) {
+        // Allow same-origin relative media URLs
+      } else {
+        const sanitized = sanitizeHttpUrl(cleanMediaUrl);
+        if (!sanitized) {
+          return c.json({ error: 'Media URL must be an http://, https://, or relative / path.' }, 400);
+        }
+        cleanMediaUrl = sanitized;
+      }
+    }
     const finalMediaType = parseMediaType(cleanMediaUrl, media_type);
     const cleanSummary = summary ? String(summary).trim() : (cleanContent.slice(0, 160) + (cleanContent.length > 160 ? '…' : ''));
     const eventId = event_id ? parseInt(event_id, 10) : null;

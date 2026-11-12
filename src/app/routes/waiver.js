@@ -39,13 +39,30 @@ function getSubtleCrypto() {
   return null;
 }
 
-export async function computeProvenanceSeal(env, payloadStr) {
+let ephemeralProvenanceSecret = null;
+
+function getProvenanceSecretMaterial(env) {
   const e = env || process.env || {};
-  const secretMaterial =
+  const configured =
     e.WAIVER_SIGNING_SECRET ||
+    e.SESSION_SECRET ||
     e.GDRIVE_CLIENT_SECRET ||
-    e.TURNSTILE_SECRET_KEY ||
-    'pbf-waiver-provenance-key-41335-14760738-1';
+    e.TURNSTILE_SECRET_KEY;
+  if (configured) return configured;
+
+  if (!ephemeralProvenanceSecret) {
+    const bytes = new Uint8Array(32);
+    globalThis.crypto.getRandomValues(bytes);
+    ephemeralProvenanceSecret = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    if (!e.NODE_ENV || e.NODE_ENV !== 'test') {
+      console.warn('[Waiver] WAIVER_SIGNING_SECRET is not set; using ephemeral per-isolate key for HMAC provenance seals.');
+    }
+  }
+  return ephemeralProvenanceSecret;
+}
+
+export async function computeProvenanceSeal(env, payloadStr) {
+  const secretMaterial = getProvenanceSecretMaterial(env);
   const subtle = getSubtleCrypto();
   const keyBytes = new TextEncoder().encode(secretMaterial);
   const cryptoKey = await subtle.importKey(
@@ -92,7 +109,7 @@ export function buildCanonicalWaiverPayload({
 }
 
 export function renderSignedWaiverCertificateHtml(waiverRow, integrityVerified = true, includePii = false) {
-  const safeName = escapeHtml(waiverRow.printed_name || '');
+  const safeName = includePii ? escapeHtml(waiverRow.printed_name || '') : 'Redacted (sign in as owner or organizer to view)';
   const safeEmail = includePii ? escapeHtml(waiverRow.email || '') : 'Redacted (sign in as owner or organizer to view)';
   const safeDate = escapeHtml(waiverRow.signed_date || '');
   const safeSignedAt = escapeHtml(waiverRow.signed_at || '');
@@ -103,8 +120,8 @@ export function renderSignedWaiverCertificateHtml(waiverRow, integrityVerified =
   const safeSeal = escapeHtml(waiverRow.provenance_seal || '');
   const safeIp = includePii ? escapeHtml(waiverRow.signer_ip || 'recorded') : 'Redacted';
   const safeUa = includePii ? escapeHtml(waiverRow.user_agent || 'browser') : 'Verification View';
-  const sigData = String(waiverRow.signature_data || '');
-  const isImgSig = /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(sigData);
+  const sigData = includePii ? String(waiverRow.signature_data || '') : '';
+  const isImgSig = includePii && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(sigData);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -271,7 +288,7 @@ export function renderSignedWaiverCertificateHtml(waiverRow, integrityVerified =
     </div>
     <div>
       <a href="/waiver.html" class="secondary">← Back to Waiver Page</a>
-      <button type="button" onclick="window.print()">🖨️ Print / Save as PDF</button>
+      <span style="font-size: 0.8rem; opacity: 0.9;">Use Ctrl/Cmd+P to print or save as PDF</span>
     </div>
   </div>
 
@@ -601,7 +618,7 @@ waiverRouter.get('/certificate/:id', async (c) => {
         'Cache-Control': 'no-store',
         'X-Content-Type-Options': 'nosniff',
         'X-Frame-Options': 'DENY',
-        'Content-Security-Policy': "default-src 'self'; img-src 'self' data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; object-src 'none'; frame-ancestors 'none';"
+        'Content-Security-Policy': "default-src 'self'; img-src 'self' data:; style-src 'unsafe-inline'; script-src 'none'; object-src 'none'; frame-ancestors 'none';"
       }
     });
   }
@@ -611,10 +628,10 @@ waiverRouter.get('/certificate/:id', async (c) => {
       certificate_id: row.certificate_id,
       user_id: row.user_id,
       email: canViewPii ? row.email : null,
-      printed_name: row.printed_name,
+      printed_name: canViewPii ? row.printed_name : null,
       signed_date: row.signed_date,
       signature_type: row.signature_type,
-      signature_data: row.signature_data,
+      signature_data: canViewPii ? row.signature_data : null,
       document_version: row.document_version,
       waiver_text_sha256: row.waiver_text_sha256,
       document_sha256: row.document_sha256,

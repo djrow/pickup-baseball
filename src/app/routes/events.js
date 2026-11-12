@@ -83,6 +83,19 @@ async function promoteNextWaitlistedPlayer(c, origin, eventId) {
   return firstPromoted;
 }
 
+async function runBoundedConcurrency(items, concurrency, worker) {
+  const list = Array.isArray(items) ? items : [];
+  if (list.length === 0) return;
+  let index = 0;
+  const workerCount = Math.min(concurrency, list.length);
+  await Promise.all(Array.from({ length: workerCount }, async () => {
+    while (index < list.length) {
+      const current = list[index++];
+      await worker(current);
+    }
+  }));
+}
+
 export async function sendRemindersForEventD1(db, env, origin, event) {
   const { results: attendees } = await db.prepare(`
     SELECT a.*, d.title as duty_name
@@ -93,7 +106,7 @@ export async function sendRemindersForEventD1(db, env, origin, event) {
   `).bind(event.id).all();
 
   const list = attendees || [];
-  for (const att of list) {
+  await runBoundedConcurrency(list, 5, async (att) => {
     try {
       await sendEventReminder(env, origin, {
         email: att.email,
@@ -107,7 +120,7 @@ export async function sendRemindersForEventD1(db, env, origin, event) {
     } catch (e) {
       console.error('[Reminders] Error sending reminder to ' + att.email + ':', e);
     }
-  }
+  });
   await db.prepare('UPDATE events SET reminder_sent = 1 WHERE id = ?').bind(event.id).run();
 }
 
@@ -133,7 +146,7 @@ async function notifyConfirmedAttendees(c, event, note, emailFn) {
     "SELECT * FROM attendees WHERE event_id = ? AND status = 'attending'"
   ).bind(event.id).all();
   const origin = new URL(c.req.url).origin;
-  for (const att of (attendees || [])) {
+  await runBoundedConcurrency(attendees || [], 5, async (att) => {
     try {
       await emailFn(c.env, origin, {
         email: att.email,
@@ -145,7 +158,7 @@ async function notifyConfirmedAttendees(c, event, note, emailFn) {
     } catch (e) {
       console.error('[EventNotice] Error sending email to ' + att.email + ':', e);
     }
-  }
+  });
 }
 
 eventsRouter.get('/', async (c) => {
@@ -156,10 +169,23 @@ eventsRouter.get('/', async (c) => {
 
     let query = `
       SELECT e.*,
-        (SELECT COALESCE(SUM(COALESCE(a.players_count, 1 + COALESCE(a.additional_guests, 0))), 0) FROM attendees a WHERE a.event_id = e.id AND a.status = 'attending') as attendee_count,
-        (SELECT COALESCE(SUM(COALESCE(a.spectators_count, 0)), 0) FROM attendees a WHERE a.event_id = e.id AND a.status = 'attending') as spectator_count,
-        (SELECT COUNT(*) FROM event_duties d WHERE d.event_id = e.id) as duty_count
+        COALESCE(att_agg.attendee_count, 0) as attendee_count,
+        COALESCE(att_agg.spectator_count, 0) as spectator_count,
+        COALESCE(duty_agg.duty_count, 0) as duty_count
       FROM events e
+      LEFT JOIN (
+        SELECT event_id,
+          COALESCE(SUM(COALESCE(players_count, 1 + COALESCE(additional_guests, 0))), 0) as attendee_count,
+          COALESCE(SUM(COALESCE(spectators_count, 0)), 0) as spectator_count
+        FROM attendees
+        WHERE status = 'attending'
+        GROUP BY event_id
+      ) att_agg ON att_agg.event_id = e.id
+      LEFT JOIN (
+        SELECT event_id, COUNT(*) as duty_count
+        FROM event_duties
+        GROUP BY event_id
+      ) duty_agg ON duty_agg.event_id = e.id
       WHERE e.status IN ('active', 'rainout')
     `;
     const params = [];
@@ -169,7 +195,7 @@ eventsRouter.get('/', async (c) => {
     } else if (filter !== 'all') {
       query += " AND e.event_date >= date('now', '-1 day')";
     }
-    query += filter === 'past' ? ' ORDER BY e.event_date DESC' : ' ORDER BY e.event_date ASC';
+    query += filter === 'past' ? ' ORDER BY e.event_date DESC LIMIT 200' : ' ORDER BY e.event_date ASC LIMIT 200';
 
     const stmt = c.env.DB.prepare(query);
     const { results: events } = params.length > 0 ? await stmt.bind(...params).all() : await stmt.all();
@@ -237,37 +263,94 @@ eventsRouter.put('/default-duties', requireAdmin, async (c) => {
 
 eventsRouter.get('/admin/backup-db', requireAdmin, async (c) => {
   try {
-    const tables = [
-      'users', 'events', 'event_duties', 'attendees',
-      'duty_assignments', 'comments', 'default_duties',
-      'posts', 'banned_emails', 'app_settings', 'batting_practice_signups', 'waivers'
-    ];
+    const dbParam = (c.req.query('db') || 'baseball').toLowerCase();
     const timestamp = new Date().toISOString();
     const dateStr = timestamp.slice(0, 10);
-    let sqlDump = `-- Sunday Pickup Baseball Database Backup\n-- Exported: ${timestamp}\n\n`;
 
-    for (const table of tables) {
-      const { results: rows } = await c.env.DB.prepare(`SELECT * FROM "${table}"`).all();
-      if (rows && rows.length > 0) {
-        sqlDump += `-- Table: ${table} (${rows.length} rows)\n`;
-        for (const row of rows) {
-          const cols = Object.keys(row).map(k => `"${k}"`).join(', ');
-          const vals = Object.values(row).map(v => {
-            if (v === null || v === undefined) return 'NULL';
-            if (typeof v === 'number') return v;
-            return `'${String(v).replace(/'/g, "''")}'`;
-          }).join(', ');
-          sqlDump += `INSERT OR IGNORE INTO "${table}" (${cols}) VALUES (${vals});\n`;
-        }
-        sqlDump += '\n';
+    const backupConfigs = {
+      baseball: {
+        db: c.env && (c.env.BASEBALL_DB || c.env.DB),
+        header: '-- Sunday Pickup Baseball Database Backup',
+        filename: `baseball_backup_${dateStr}.sql`,
+        tables: [
+          'users', 'events', 'event_duties', 'attendees',
+          'duty_assignments', 'comments', 'default_duties',
+          'posts', 'banned_emails', 'app_settings', 'batting_practice_signups', 'waivers'
+        ]
+      },
+      chat: {
+        db: c.env && c.env.CHAT_DB,
+        header: '-- Sunday Pickup Baseball Clubhouse (CHAT_DB) Database Backup',
+        filename: `clubhouse_chat_backup_${dateStr}.sql`,
+        tables: [
+          'channels', 'channel_members', 'messages', 'message_reactions',
+          'chat_attachments', 'user_crypto_keys', 'channel_key_shares',
+          'voice_participants', 'rtc_signals', 'sync_events',
+          'chat_reports', 'user_mutes', 'clubhouse_gifs'
+        ]
       }
+    };
+
+    const config = backupConfigs[dbParam];
+    if (!config) {
+      return c.json({ error: 'Invalid database target. Use "baseball" or "chat".' }, 400);
+    }
+    if (!config.db) {
+      return c.json({ error: `Database binding for "${dbParam}" is unavailable.` }, 503);
     }
 
-    return new Response(sqlDump, {
+    const db = config.db;
+    const tables = config.tables;
+    const encoder = new TextEncoder();
+    const PAGE_SIZE = 100;
+
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          controller.enqueue(encoder.encode(`${config.header}\n-- Exported: ${timestamp}\n\n`));
+          for (const table of tables) {
+            let offset = 0;
+            let headerWritten = false;
+            while (true) {
+              const { results: rows } = await db.prepare(
+                `SELECT * FROM "${table}" LIMIT ? OFFSET ?`
+              ).bind(PAGE_SIZE, offset).all();
+              if (!rows || rows.length === 0) break;
+              if (!headerWritten) {
+                controller.enqueue(encoder.encode(`-- Table: ${table}\n`));
+                headerWritten = true;
+              }
+              let chunk = '';
+              for (const row of rows) {
+                const cols = Object.keys(row).map(k => `"${k}"`).join(', ');
+                const vals = Object.values(row).map(v => {
+                  if (v === null || v === undefined) return 'NULL';
+                  if (typeof v === 'number') return v;
+                  return `'${String(v).replace(/'/g, "''")}'`;
+                }).join(', ');
+                chunk += `INSERT OR IGNORE INTO "${table}" (${cols}) VALUES (${vals});\n`;
+              }
+              controller.enqueue(encoder.encode(chunk));
+              if (rows.length < PAGE_SIZE) break;
+              offset += rows.length;
+            }
+            if (headerWritten) {
+              controller.enqueue(encoder.encode('\n'));
+            }
+          }
+          controller.close();
+        } catch (streamErr) {
+          console.error('[Backup] Stream error:', streamErr);
+          controller.error(streamErr);
+        }
+      }
+    });
+
+    return new Response(stream, {
       status: 200,
       headers: {
         'Content-Type': 'application/sql; charset=utf-8',
-        'Content-Disposition': `attachment; filename="baseball_backup_${dateStr}.sql"`,
+        'Content-Disposition': `attachment; filename="${config.filename}"`,
         'Cache-Control': 'no-store',
         'X-Content-Type-Options': 'nosniff',
         'X-Frame-Options': 'DENY'
@@ -314,6 +397,18 @@ eventsRouter.get('/calendar.ics', async (c) => {
 });
 
 eventsRouter.all('/reminders/check', async (c) => {
+  const user = c.get('user');
+  const cronSecret = (c.env && (c.env.CRON_SECRET || c.env.REMINDERS_SECRET)) || '';
+  const authHeader = c.req.header('Authorization') || '';
+  const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  const headerSecret = c.req.header('X-Cron-Secret') || '';
+  const hasValidSecret = Boolean(cronSecret && (bearerToken === cronSecret || headerSecret === cronSecret));
+  const isAuthorizedManager = Boolean(user && (user.canManageEvents || user.isAdmin));
+
+  if (!hasValidSecret && !isAuthorizedManager) {
+    return c.json({ error: user ? 'Organizer or administrator privileges required.' : 'Authentication required.' }, user ? 403 : 401);
+  }
+
   try {
     const origin = new URL(c.req.url).origin || 'https://www.pickupbaseballfoundation.org';
     const processed = await processUpcomingEventRemindersD1(c.env.DB, c.env, origin);
@@ -977,8 +1072,8 @@ eventsRouter.post('/:id/rsvp', async (c) => {
 
     let attendeeId;
     if (existingAttendee) {
-      if (!user && existingAttendee.management_token && management_token && management_token !== existingAttendee.management_token) {
-        return c.json({ error: 'Invalid management token provided for this RSVP.' }, 403);
+      if (!user && existingAttendee.management_token && management_token !== existingAttendee.management_token) {
+        return c.json({ error: 'Invalid or missing management token for this RSVP. Please use your confirmation link or sign in.' }, 403);
       }
       attendeeId = existingAttendee.id;
       await db.prepare(`
@@ -1004,19 +1099,27 @@ eventsRouter.post('/:id/rsvp', async (c) => {
     const prevDuties = (pRows || []).map(r => r.duty_id);
 
     if (finalStatus === 'attending' && Array.isArray(duty_ids)) {
-      await db.prepare('DELETE FROM duty_assignments WHERE attendee_id = ?').bind(attendeeId).run();
-      for (const dId of duty_ids) {
-        const duty = await db.prepare('SELECT * FROM event_duties WHERE id = ? AND event_id = ?').bind(dId, eventId).first();
+      const uniqueDutyIds = [...new Set(duty_ids.map((d) => parseInt(d, 10)).filter((n) => !isNaN(n) && n > 0))];
+      const { results: eventDuties } = await db.prepare(`
+        SELECT d.*,
+          (
+            SELECT COUNT(*) FROM duty_assignments da
+            JOIN attendees a ON da.attendee_id = a.id
+            WHERE da.duty_id = d.id AND a.status = 'attending' AND a.id != ?
+          ) as taken_count
+        FROM event_duties d
+        WHERE d.event_id = ?
+      `).bind(attendeeId, eventId).all();
+
+      const dutyById = new Map((eventDuties || []).map((d) => [Number(d.id), d]));
+      const batchOps = [db.prepare('DELETE FROM duty_assignments WHERE attendee_id = ?').bind(attendeeId)];
+
+      for (const dId of uniqueDutyIds) {
+        const duty = dutyById.get(dId);
         if (!duty) continue;
 
-        const countRow = await db.prepare(`
-          SELECT COUNT(*) as count FROM duty_assignments da
-          JOIN attendees a ON da.attendee_id = a.id
-          WHERE da.duty_id = ? AND a.status = 'attending' AND a.id != ?
-        `).bind(dId, attendeeId).first();
-
-        if ((countRow ? countRow.count : 0) < duty.slots_needed) {
-          await db.prepare('INSERT OR IGNORE INTO duty_assignments (duty_id, attendee_id) VALUES (?, ?)').bind(dId, attendeeId).run();
+        if ((duty.taken_count || 0) < duty.slots_needed) {
+          batchOps.push(db.prepare('INSERT OR IGNORE INTO duty_assignments (duty_id, attendee_id) VALUES (?, ?)').bind(dId, attendeeId));
           assignedDutyNames.push(duty.title);
 
           const dType = getDutyType(duty.title);
@@ -1025,17 +1128,18 @@ eventsRouter.post('/:id/rsvp', async (c) => {
               const cap = await getDutyTier1Cap(db, dType.type);
               const shifts = await getUserRollingShifts(db, userId, dType.type, event.event_date, eventId);
               if (shifts >= cap) {
-                await db.prepare('UPDATE users SET hero_credits = MAX(0, hero_credits - 1) WHERE id = ?').bind(userId).run();
+                batchOps.push(db.prepare('UPDATE users SET hero_credits = MAX(0, hero_credits - 1) WHERE id = ?').bind(userId));
                 heroCreditRedeemed = true;
               }
             }
             if (isUrgentWindow && !prevDuties.includes(dId) && !heroCreditEarned) {
-              await db.prepare('UPDATE users SET hero_credits = hero_credits + 1 WHERE id = ?').bind(userId).run();
+              batchOps.push(db.prepare('UPDATE users SET hero_credits = hero_credits + 1 WHERE id = ?').bind(userId));
               heroCreditEarned = true;
             }
           }
         }
       }
+      await db.batch(batchOps);
     } else if (finalStatus !== 'attending') {
       await db.prepare('DELETE FROM duty_assignments WHERE attendee_id = ?').bind(attendeeId).run();
       await db.prepare('DELETE FROM batting_practice_signups WHERE event_id = ? AND (attendee_id = ? OR (user_id IS NOT NULL AND user_id = ?))').bind(eventId, attendeeId, userId).run();

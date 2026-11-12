@@ -1054,6 +1054,7 @@ test('T7: Error Boundaries', async (t) => {
   // T8: Waitlist Capacity Enforcement & Automatic Promotion
   // ---------------------------------------------------------------------------
   await t.test('T8: Waitlist Capacity Enforcement & Automatic Promotion', async (t8) => {
+    let p1Token = null;
     await t8.test('T8.1: RSVP 2 players up to capacity -> attending', async () => {
       const createRes = await apiReq('POST', '/api/events', seedOrgCookie, {
         title: 'T8 Capacity Capped Game',
@@ -1067,6 +1068,7 @@ test('T7: Error Boundaries', async (t) => {
 
       const r1 = await apiReq('POST', `/api/events/${eventId}/rsvp`, null, { name: 'P1', email: 't8_p1@test.org', status: 'attending' });
       assert.equal(r1.data.status, 'attending');
+      p1Token = r1.data.managementToken;
       const r2 = await apiReq('POST', `/api/events/${eventId}/rsvp`, null, { name: 'P2', email: 't8_p2@test.org', status: 'attending' });
       assert.equal(r2.data.status, 'attending');
 
@@ -1086,8 +1088,12 @@ test('T7: Error Boundaries', async (t) => {
       const event = db.prepare("SELECT id FROM events WHERE title = 'T8 Capacity Capped Game'").get();
       assert.ok(event);
 
-      // Player 1 cancels
-      const cancelRes = await apiReq('POST', `/api/events/${event.id}/rsvp`, null, { name: 'P1', email: 't8_p1@test.org', status: 'declined' });
+      // Anonymous overwrite attempt without management_token must be blocked (403)
+      const hijackedCancelRes = await apiReq('POST', `/api/events/${event.id}/rsvp`, null, { name: 'Hijacker', email: 't8_p1@test.org', status: 'declined' });
+      assert.equal(hijackedCancelRes.status, 403, 'Guest RSVP overwrite without management_token must be rejected');
+
+      // Player 1 cancels with valid management_token
+      const cancelRes = await apiReq('POST', `/api/events/${event.id}/rsvp`, null, { name: 'P1', email: 't8_p1@test.org', management_token: p1Token, status: 'declined' });
       assert.equal(cancelRes.data.status, 'declined');
 
       // Unauthenticated visitor: roster names are private
@@ -1393,9 +1399,11 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
 
     // 8. Garcia Family Group switches from 2 players + 3 spectators to 0 players + 3 spectators (still keeping tasks!)
     //    -> frees 2 on-field spots -> Waitlisted Duo auto-promotes to attending!
+    const garciaToken = mixedRsvp.data.managementToken;
     const switchToSpectators = await apiReq('POST', `/api/events/${groupEventId}/rsvp`, null, {
       name: 'Garcia Family Group',
       email: 'garcia_family@sundaypickup.org',
+      management_token: garciaToken,
       players_count: 0,
       spectators_count: 3,
       duty_ids: [task1Id, task3Id]
@@ -1421,6 +1429,7 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     const cancelRes = await apiReq('POST', `/api/events/${groupEventId}/rsvp`, null, {
       name: 'Garcia Family Group',
       email: 'garcia_family@sundaypickup.org',
+      management_token: garciaToken,
       status: 'declined'
     });
     assert.equal(cancelRes.status, 200);
@@ -2097,13 +2106,23 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     const delCmt = await apiReq('DELETE', `/api/events/${sharedEventId}/comments/${cmtRes.data.comment.id}`, seedAdminCookie);
     assert.equal(delCmt.status, 200);
 
-    // 4. SQL database backup export
+    // 4. SQL database backup export (both BASEBALL_DB and CHAT_DB)
     const backupRes = await fetch(`${baseUrl}/api/events/admin/backup-db`, {
       headers: { Cookie: seedAdminCookie }
     });
     assert.equal(backupRes.status, 200);
     const sqlDump = await backupRes.text();
     assert.ok(sqlDump.includes('-- Sunday Pickup Baseball Database Backup') && sqlDump.includes('INSERT OR IGNORE INTO "users"'), 'Backup dump must contain backup header and user rows');
+
+    const chatBackupRes = await fetch(`${baseUrl}/api/events/admin/backup-db?db=chat`, {
+      headers: { Cookie: seedAdminCookie }
+    });
+    assert.equal(chatBackupRes.status, 200);
+    const chatSqlDump = await chatBackupRes.text();
+    assert.ok(chatSqlDump.includes('-- Sunday Pickup Baseball Clubhouse (CHAT_DB) Database Backup') && chatSqlDump.includes('INSERT OR IGNORE INTO "channels"'), 'Chat backup dump must contain CHAT_DB header and channels rows');
+
+    const badBackupRes = await apiReq('GET', '/api/events/admin/backup-db?db=invalid', seedAdminCookie);
+    assert.equal(badBackupRes.status, 400, 'Unknown backup db target must return 400');
 
     // 5. Atomic version stamp synchronization across backend, SW, API client, and HTML assets
     const swSrc = fs.readFileSync(path.join(publicDir, 'sw.js'), 'utf8');
@@ -2809,10 +2828,34 @@ test('Clubhouse Frontend & Native Waiver Verification', async (t) => {
 
     const certHtmlRes = await fetch(`${baseUrl}/api/waiver/certificate/${certId}?format=html`);
     assert.equal(certHtmlRes.status, 200);
+    const certCsp = certHtmlRes.headers.get('content-security-policy') || '';
+    assert.ok(!/script-src[^;]*'unsafe-inline'/i.test(certCsp), 'Waiver certificate CSP script-src must not allow unsafe-inline');
     const certHtml = await certHtmlRes.text();
     assert.ok(certHtml.includes('CONSENT, WAIVER AND INDEMNITY'));
     assert.ok(certHtml.includes('Cryptographic Seal Verified'));
     assert.ok(certHtml.includes('41335\\14760738.1'));
+    assert.ok(!certHtml.includes(samplePngSig), 'Anonymous HTML certificate must redact raw signature image data');
+
+    const anonCertJson = await apiReq('GET', `/api/waiver/certificate/${certId}`, null);
+    assert.equal(anonCertJson.status, 200);
+    assert.equal(anonCertJson.data.waiver.signature_data, null, 'Anonymous JSON certificate must redact signature_data');
+    assert.equal(anonCertJson.data.waiver.printed_name, null, 'Anonymous JSON certificate must redact printed_name');
+
+    // 5. Security hardening checks: reminders auth & oversized local attachment rejection
+    const anonRem = await apiReq('GET', '/api/events/reminders/check', null);
+    assert.equal(anonRem.status, 401, 'Anonymous reminders check must be rejected with 401');
+    const playerRem = await apiReq('GET', '/api/events/reminders/check', seedPlayerCookie);
+    assert.equal(playerRem.status, 403, 'Non-organizer reminders check must be rejected with 403');
+    const orgRem = await apiReq('POST', '/api/events/reminders/check', seedOrgCookie);
+    assert.equal(orgRem.status, 200, 'Organizer reminders check must succeed');
+
+    const oversizedAtt = await apiReq('POST', '/api/attachments/init', seedPlayerCookie, {
+      channel_id: 'general',
+      file_name: 'huge.mp4',
+      mime_type: 'video/mp4',
+      file_size: 25 * 1024 * 1024
+    });
+    assert.equal(oversizedAtt.status, 400, 'Local D1 attachment fallback must reject files over 10 MB');
   });
 });
 

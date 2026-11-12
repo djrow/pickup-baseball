@@ -4,6 +4,16 @@
 
 import { CURRENT_APP_VERSION } from './version.js';
 import { parseAllowedEmails } from './policy.js';
+import { sanitizeHttpUrl } from './security.js';
+
+function getSafeFeedMediaUrl(rawUrl, origin) {
+  if (!rawUrl) return '';
+  const trimmed = String(rawUrl).trim();
+  if (trimmed.startsWith('/') && !trimmed.startsWith('//') && !trimmed.startsWith('/\\')) {
+    return `${origin}${trimmed}`;
+  }
+  return sanitizeHttpUrl(trimmed) || '';
+}
 
 export function parseMediaType(url, explicitType) {
   if (explicitType && explicitType !== 'auto') return explicitType;
@@ -46,7 +56,7 @@ export function buildRssFeedXml(posts, origin = 'https://www.pickupbaseballfound
     const guid = `pickup-baseball-post-${post.id}@pickupbaseballfoundation.org`;
     const pubDate = formatRfc822Date(post.created_at);
     const mType = post.media_type || parseMediaType(post.media_url);
-    const mUrl = post.media_url ? String(post.media_url).trim() : '';
+    const mUrl = getSafeFeedMediaUrl(post.media_url, origin);
 
     let mediaTags = '';
     let richHtmlDesc = `<p>${escapeXml(post.content).replace(/\n/g, '<br/>')}</p>`;

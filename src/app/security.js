@@ -156,16 +156,30 @@ export async function checkRateLimit(db, key, maxRequests, windowSeconds, env) {
   const windowStartCutoff = nowSec - windowSeconds;
 
   try {
-    const existing = await db.prepare('SELECT count, window_start FROM rate_limits WHERE key = ?').bind(key).first();
-    if (!existing || existing.window_start < windowStartCutoff) {
-      await db.prepare('INSERT OR REPLACE INTO rate_limits (key, count, window_start) VALUES (?, 1, ?)').bind(key, nowSec).run();
-      return { allowed: true, remaining: maxRequests - 1 };
+    const upsertStmt = db.prepare(`
+      INSERT INTO rate_limits (key, count, window_start)
+      VALUES (?, 1, ?)
+      ON CONFLICT(key) DO UPDATE SET
+        count = CASE WHEN rate_limits.window_start < ? THEN 1 ELSE rate_limits.count + 1 END,
+        window_start = CASE WHEN rate_limits.window_start < ? THEN ? ELSE rate_limits.window_start END
+    `).bind(key, nowSec, windowStartCutoff, windowStartCutoff, nowSec);
+    const selectStmt = db.prepare('SELECT count FROM rate_limits WHERE key = ?').bind(key);
+
+    let newCount = 1;
+    if (typeof db.batch === 'function') {
+      const batchRes = await db.batch([upsertStmt, selectStmt]);
+      const row = batchRes[1] && batchRes[1].results && batchRes[1].results[0];
+      newCount = row ? Number(row.count) : 1;
+    } else {
+      await upsertStmt.run();
+      const row = await selectStmt.first();
+      newCount = row ? Number(row.count) : 1;
     }
-    if (existing.count >= maxRequests) {
+
+    if (newCount > maxRequests) {
       return { allowed: false, remaining: 0 };
     }
-    await db.prepare('UPDATE rate_limits SET count = count + 1 WHERE key = ?').bind(key).run();
-    return { allowed: true, remaining: maxRequests - (existing.count + 1) };
+    return { allowed: true, remaining: Math.max(0, maxRequests - newCount) };
   } catch (err) {
     console.warn('[RateLimit] Fallback allow due to error:', err.message);
     return { allowed: true };
@@ -233,7 +247,7 @@ export async function getUserFromSession(db, sessionId, chatDb, options = {}) {
         JOIN events e ON a.event_id = e.id
         WHERE (e.status IS NULL OR e.status NOT IN ('cancelled', 'rainout'))
           AND datetime(e.event_date) >= datetime('now', '-1 day')
-          AND (a.user_id = u.id OR LOWER(a.email) = LOWER(u.email))
+          AND (a.user_id = u.id OR a.email = u.email)
           AND a.status = 'attending'
       )`} as playing_sunday_flag,
       CASE
@@ -246,7 +260,7 @@ export async function getUserFromSession(db, sessionId, chatDb, options = {}) {
           WHERE (e.status IS NULL OR e.status NOT IN ('cancelled', 'rainout'))
             AND datetime(e.event_date) >= datetime('now', '-1 day')
             AND (ed.title = 'Game Facilitator' OR ed.title LIKE '%Facilitator%')
-            AND (a.user_id = u.id OR LOWER(a.email) = LOWER(u.email))
+            AND (a.user_id = u.id OR a.email = u.email)
             AND a.status = 'attending'
         )
       END as facilitator_flag
@@ -254,7 +268,7 @@ export async function getUserFromSession(db, sessionId, chatDb, options = {}) {
     JOIN users u ON s.user_id = u.id
     WHERE s.id = ?
       AND datetime(s.expires_at) > datetime('now')
-      AND NOT EXISTS (SELECT 1 FROM banned_emails b WHERE LOWER(b.email) = LOWER(u.email))
+      AND NOT EXISTS (SELECT 1 FROM banned_emails b WHERE b.email = u.email)
   `).bind(sessionId).first();
 
   if (!session) return null;

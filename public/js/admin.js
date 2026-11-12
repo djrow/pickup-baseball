@@ -62,9 +62,128 @@ async function initAdmin() {
   await loadAdminGames();
 
   if (user.isAdmin) {
+    setupAdminBackupButton();
     setupAdminUserManagement(user);
     setupAdminSecurity(user);
   }
+}
+
+function buildStoreZipBlob(entries) {
+  const crcTable = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    crcTable[i] = c >>> 0;
+  }
+  function crc32(bytes) {
+    let c = 0xFFFFFFFF;
+    for (let i = 0; i < bytes.length; i++) c = crcTable[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+    return (c ^ 0xFFFFFFFF) >>> 0;
+  }
+
+  const encoder = new TextEncoder();
+  const localParts = [];
+  const centralParts = [];
+  let offset = 0;
+
+  for (const entry of entries) {
+    const nameBytes = encoder.encode(entry.name);
+    const dataBytes = entry.bytes;
+    const crc = crc32(dataBytes);
+    const len = dataBytes.length;
+
+    const localHdr = new ArrayBuffer(30 + nameBytes.length);
+    const lv = new DataView(localHdr);
+    lv.setUint32(0, 0x04034B50, true);
+    lv.setUint16(4, 20, true);
+    lv.setUint16(8, 0, true);
+    lv.setUint32(14, crc, true);
+    lv.setUint32(18, len, true);
+    lv.setUint32(22, len, true);
+    lv.setUint16(26, nameBytes.length, true);
+    new Uint8Array(localHdr, 30).set(nameBytes);
+    localParts.push(new Uint8Array(localHdr), dataBytes);
+
+    const centralHdr = new ArrayBuffer(46 + nameBytes.length);
+    const cv = new DataView(centralHdr);
+    cv.setUint32(0, 0x02014B50, true);
+    cv.setUint16(4, 20, true);
+    cv.setUint16(6, 20, true);
+    cv.setUint32(16, crc, true);
+    cv.setUint32(20, len, true);
+    cv.setUint32(24, len, true);
+    cv.setUint16(28, nameBytes.length, true);
+    cv.setUint32(42, offset, true);
+    new Uint8Array(centralHdr, 46).set(nameBytes);
+    centralParts.push(new Uint8Array(centralHdr));
+
+    offset += 30 + nameBytes.length + len;
+  }
+
+  const centralSize = centralParts.reduce((s, p) => s + p.length, 0);
+  const eocd = new ArrayBuffer(22);
+  const ev = new DataView(eocd);
+  ev.setUint32(0, 0x06054B50, true);
+  ev.setUint16(8, entries.length, true);
+  ev.setUint16(10, entries.length, true);
+  ev.setUint32(12, centralSize, true);
+  ev.setUint32(16, offset, true);
+
+  return new Blob([...localParts, ...centralParts, new Uint8Array(eocd)], { type: 'application/zip' });
+}
+
+function setupAdminBackupButton() {
+  const btn = document.getElementById('btn-backup-db');
+  if (!btn || btn.dataset.boundDualBackup) return;
+  btn.dataset.boundDualBackup = '1';
+
+  btn.addEventListener('click', async function (e) {
+    e.preventDefault();
+    const origText = btn.textContent;
+    btn.style.pointerEvents = 'none';
+    btn.textContent = '⏳ Backing up both DBs...';
+    const dateStr = new Date().toISOString().slice(0, 10);
+
+    try {
+      const [baseballRes, chatRes] = await Promise.all([
+        fetch('/api/events/admin/backup-db?db=baseball', { credentials: 'include' }),
+        fetch('/api/events/admin/backup-db?db=chat', { credentials: 'include' })
+      ]);
+
+      if (!baseballRes.ok) {
+        throw new Error('Failed to export BASEBALL_DB (HTTP ' + baseballRes.status + ')');
+      }
+
+      const entries = [{
+        name: `baseball_backup_${dateStr}.sql`,
+        bytes: new Uint8Array(await baseballRes.arrayBuffer())
+      }];
+
+      if (chatRes.ok) {
+        entries.push({
+          name: `clubhouse_chat_backup_${dateStr}.sql`,
+          bytes: new Uint8Array(await chatRes.arrayBuffer())
+        });
+      } else if (chatRes.status !== 503) {
+        throw new Error('Failed to export CHAT_DB (HTTP ' + chatRes.status + ')');
+      }
+
+      const zipBlob = buildStoreZipBlob(entries);
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `pickup_baseball_backup_${dateStr}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch (err) {
+      alert('Database backup failed: ' + (err.message || 'Unknown error'));
+    } finally {
+      btn.style.pointerEvents = '';
+      btn.textContent = origText;
+    }
+  });
 }
 
 async function loadDefaultDuties() {

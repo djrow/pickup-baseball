@@ -574,6 +574,9 @@ export async function putSettingsHandler(c) {
   }
   if (body.appscript_upload_url !== undefined) {
     const cleanUrl = String(body.appscript_upload_url).trim();
+    if (cleanUrl && !/^https:\/\/script\.google\.com\/macros\/s\/[a-zA-Z0-9_\-]+\/exec/i.test(cleanUrl)) {
+      return c.json({ error: 'Invalid Google Apps Script URL. Expected format: https://script.google.com/macros/s/.../exec' }, 400);
+    }
     await c.env.DB.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('appscript_upload_url', ?)").bind(cleanUrl).run();
   }
   return c.json({
