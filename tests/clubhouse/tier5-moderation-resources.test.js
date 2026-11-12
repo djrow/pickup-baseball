@@ -960,6 +960,11 @@ module.exports = async function runTier5(t, ctx) {
     const clubhouseJs = fs.readFileSync(path.join(rootDir, 'public', 'js', 'clubhouse.js'), 'utf8');
 
     assert.ok(clubhouseHtml.includes('id="ch-covenant-strip"'), 'clubhouse.html must show implicit covenant strip');
+    assert.ok(
+      clubhouseHtml.indexOf('id="ch-covenant-strip"') > clubhouseHtml.indexOf('id="ch-channel-list"') &&
+      clubhouseHtml.indexOf('id="ch-covenant-strip"') < clubhouseHtml.indexOf('id="ch-composer-form"'),
+      'Covenant strip must sit in the channel sidebar below the channel list, not below the message composer'
+    );
     assert.ok(clubhouseHtml.includes('id="ch-covenant-modal"'), 'clubhouse.html must include full Behavior Covenant modal');
     assert.ok(/implicitly agree/i.test(clubhouseHtml), 'clubhouse.html must state implicit agreement by using Clubhouse');
     assert.ok(/no dehumanization/i.test(clubhouseHtml), 'clubhouse.html must explicitly prohibit dehumanization');
