@@ -1176,4 +1176,218 @@ module.exports = async function runTier5(t, ctx) {
     assert.ok(!clubhouseJs.includes('?.') && !clubhouseJs.includes('??'), 'clubhouse.js must remain strict ES6');
     assert.ok(!/\son(click|change|submit|load|error|input|keydown)=/i.test(clubhouseHtml), 'clubhouse.html must have zero inline handlers');
   });
+
+  await t.test('T5.14: Per-User DM History Hiding in Channel List & Logged-Out Cached DM Clearance', async () => {
+    // 1. Verify player & facilitator have an active DM (re-uses or creates existing 1:1 DM)
+    const dmOpenRes = await ctx.apiReq('POST', '/api/channels', ctx.playerCookie, {
+      name: 'DM: Secret Practice Plan',
+      channel_type: 'dm',
+      dm_user_id: ctx.facilitatorUser.id,
+      is_encrypted: true
+    });
+    assert.ok(dmOpenRes.status === 200 || dmOpenRes.status === 201);
+    const dmId = dmOpenRes.data.channel.id;
+
+    // 2. Reject hiding non-DM boards and reject non-participant DM hide attempts
+    const hideGeneralRes = await ctx.apiReq('POST', '/api/channels/general/hide', ctx.adminCookie, {});
+    assert.equal(hideGeneralRes.status, 400, 'Non-DM channels must reject /hide');
+
+    const outsiderHideRes = await ctx.apiReq('POST', `/api/channels/${dmId}/hide`, ctx.adminCookie, {});
+    assert.equal(outsiderHideRes.status, 403, 'Non-participant Admin must receive 403 trying to hide someone else\'s DM');
+
+    // 3. Player hides the DM from their own channel list
+    const hideRes = await ctx.apiReq('POST', `/api/channels/${dmId}/hide`, ctx.playerCookie, {});
+    assert.equal(hideRes.status, 200);
+    assert.equal(hideRes.data.hidden, true);
+
+    const playerBootstrapAfterHide = await ctx.apiReq('GET', '/api/bootstrap', ctx.playerCookie);
+    assert.equal(playerBootstrapAfterHide.status, 200);
+    assert.ok(
+      !(playerBootstrapAfterHide.data.channels || []).some((ch) => Number(ch.id) === Number(dmId)),
+      'Hidden DM must NOT appear in hiding user\'s /api/bootstrap channel list'
+    );
+
+    const playerChannelsAfterHide = await ctx.apiReq('GET', '/api/channels', ctx.playerCookie);
+    assert.equal(playerChannelsAfterHide.status, 200);
+    assert.ok(
+      !(playerChannelsAfterHide.data.channels || []).some((ch) => Number(ch.id) === Number(dmId)),
+      'Hidden DM must NOT appear in hiding user\'s GET /api/channels'
+    );
+
+    // Other participant (facilitator) MUST still see the DM in their channel list, and encrypted history remains readable
+    const bobBootstrap = await ctx.apiReq('GET', '/api/bootstrap', ctx.facilitatorCookie);
+    assert.equal(bobBootstrap.status, 200);
+    assert.ok(
+      (bobBootstrap.data.channels || []).some((ch) => Number(ch.id) === Number(dmId)),
+      'Hiding DM must be strictly per-user and NOT hide it for the other participant'
+    );
+    const playerHistory = await ctx.apiReq('GET', `/api/channels/${dmId}/messages`, ctx.playerCookie);
+    assert.equal(playerHistory.status, 200, 'Hiding a DM from sidebar must preserve access to its encrypted history');
+
+    // 4. Re-opening DM via POST /api/channels (clicking DM in Members) restores it to player's channel list
+    const reopenRes = await ctx.apiReq('POST', '/api/channels', ctx.playerCookie, {
+      channel_type: 'dm',
+      dm_user_id: ctx.facilitatorUser.id
+    });
+    assert.equal(reopenRes.status, 200);
+    const playerBootstrapReopened = await ctx.apiReq('GET', '/api/bootstrap', ctx.playerCookie);
+    assert.ok(
+      (playerBootstrapReopened.data.channels || []).some((ch) => Number(ch.id) === Number(dmId)),
+      'Re-opening a hidden DM must restore it to the user\'s channel list'
+    );
+
+    // 5. Hiding again then receiving a new encrypted message auto-unhides DM and emits scoped channel_create sync event
+    const hideAgain = await ctx.apiReq('POST', `/api/channels/${dmId}/hide`, ctx.playerCookie, {});
+    assert.equal(hideAgain.status, 200);
+    const syncBeforeRow = ctx.chatDb.prepare('SELECT COALESCE(MAX(id), 0) as m FROM sync_events').get();
+    const msgBeforeRow = ctx.chatDb.prepare('SELECT COALESCE(MAX(id), 0) as m FROM messages').get();
+
+    ctx.chatDb.prepare('DELETE FROM chat_rate_limits WHERE key = ?').run(`user_${ctx.facilitatorUser.id}_msgs`);
+    const newMsgRes = await ctx.apiReq('POST', `/api/channels/${dmId}/messages`, ctx.facilitatorCookie, {
+      content: 'dGVzdF9jaXBoZXJ0ZXh0',
+      iv: 'AAAAAAAAAAAAAAAA'
+    });
+    assert.equal(newMsgRes.status, 201);
+
+    const playerSync = await ctx.apiReq(
+      'GET',
+      `/api/sync?since_msg_id=${msgBeforeRow.m}&since_event_id=${syncBeforeRow.m}`,
+      ctx.playerCookie
+    );
+    assert.equal(playerSync.status, 200);
+    assert.ok(
+      (playerSync.data.events || []).some((ev) => ev.event_type === 'channel_create' && Number(ev.target_id) === Number(dmId)),
+      'Incoming DM message must emit scoped channel_create sync event to unhide DM live'
+    );
+
+    const adminSync = await ctx.apiReq(
+      'GET',
+      `/api/sync?since_msg_id=${msgBeforeRow.m}&since_event_id=${syncBeforeRow.m}`,
+      ctx.adminCookie
+    );
+    assert.equal(adminSync.status, 200);
+    assert.ok(
+      !(adminSync.data.events || []).some((ev) => Number(ev.target_id) === Number(dmId)),
+      'Non-participant Admin sync must NOT receive DM unhide sync_event'
+    );
+
+    // Explicitly test POST /api/channels/:id/unhide as well
+    await ctx.apiReq('POST', `/api/channels/${dmId}/hide`, ctx.playerCookie, {});
+    const unhideRes = await ctx.apiReq('POST', `/api/channels/${dmId}/unhide`, ctx.playerCookie, {});
+    assert.equal(unhideRes.status, 200);
+    assert.equal(unhideRes.data.hidden, false);
+
+    // 6. Client Store logged-out / 401 cache isolation (simulating cached DM in IndexedDB after logout or expired session)
+    const rootDir = path.join(__dirname, '..', '..');
+    const storeJs = fs.readFileSync(path.join(rootDir, 'public', 'js', 'store.js'), 'utf8');
+    const clubhouseJs = fs.readFileSync(path.join(rootDir, 'public', 'js', 'clubhouse.js'), 'utf8');
+    const apiJs = fs.readFileSync(path.join(rootDir, 'public', 'js', 'api.js'), 'utf8');
+
+    assert.ok(!storeJs.includes('?.') && !storeJs.includes('??'), 'store.js must remain strict ES6');
+    assert.ok(clubhouseJs.includes('data-hide-dm-id'), 'clubhouse.js must render DM hide button in channel list');
+    assert.ok(clubhouseJs.includes('clearSignedOutUi'), 'clubhouse.js must clear UI on auth_required');
+    assert.ok(apiJs.includes('clearClubhouseIndexedDb'), 'api.js must clear pickup_clubhouse_db on logout/cache clear');
+
+    const prevFetch = globalThis.fetch;
+    const prevIndexedDB = globalThis.indexedDB;
+    const prevLocalStorage = globalThis.localStorage;
+    try {
+      const storeModulePath = require.resolve('../../public/js/store.js');
+      delete require.cache[storeModulePath];
+
+      const idbStores = {
+        channels: new Map([
+          [1, { id: 1, slug: 'general', name: '#general', channel_type: 'text', is_private: 0 }],
+          [99, { id: 99, slug: 'dm-1-2', name: 'DM: Secret Teammate', channel_type: 'dm', category: 'Direct Messages', is_private: 0 }]
+        ]),
+        messages: new Map([
+          [501, { id: 501, channel_id: 99, content: 'cipher', author_name: 'Secret' }]
+        ]),
+        meta: new Map([['cached_user_id', 1]])
+      };
+
+      const makeTx = () => ({
+        objectStore(storeName) {
+          const backing = idbStores[storeName] || new Map();
+          return {
+            indexNames: { contains: () => false },
+            getAll() {
+              const req = { result: Array.from(backing.values()) };
+              queueMicrotask(() => { if (req.onsuccess) req.onsuccess(); });
+              return req;
+            },
+            get(k) {
+              const req = { result: backing.get(k) };
+              queueMicrotask(() => { if (req.onsuccess) req.onsuccess(); });
+              return req;
+            },
+            put(val, k) {
+              const key = k !== undefined ? k : val.id;
+              backing.set(key, val);
+              return {};
+            },
+            delete(k) {
+              backing.delete(k);
+              return {};
+            },
+            clear() {
+              backing.clear();
+              return {};
+            }
+          };
+        }
+      });
+
+      const fakeDb = {
+        objectStoreNames: { contains: (n) => Object.prototype.hasOwnProperty.call(idbStores, n) },
+        transaction: () => makeTx()
+      };
+
+      globalThis.indexedDB = {
+        open() {
+          const req = {};
+          queueMicrotask(() => {
+            if (req.onsuccess) req.onsuccess({ target: { result: fakeDb } });
+          });
+          return req;
+        }
+      };
+      globalThis.localStorage = {
+        _map: new Map([['pickup_cached_user', JSON.stringify({ id: 1, name: 'Stale User' })]]),
+        getItem(k) { return this._map.has(k) ? this._map.get(k) : null; },
+        setItem(k, v) { this._map.set(k, String(v)); },
+        removeItem(k) { this._map.delete(k); }
+      };
+      globalThis.fetch = async () => ({
+        ok: false,
+        status: 401,
+        headers: new Headers(),
+        async json() { return { error: 'Authentication required' }; }
+      });
+
+      const FreshStore = require('../../public/js/store.js');
+      const seenEvents = [];
+      let cachedEmittedHasDm = false;
+      FreshStore.subscribe((ev, detail) => {
+        seenEvents.push(ev);
+        if (ev === 'bootstrap_cached' && detail && Array.isArray(detail.channels)) {
+          cachedEmittedHasDm = detail.channels.some((c) => c.channel_type === 'dm' || c.channel_type === 'group_dm');
+        }
+      });
+
+      await assert.rejects(() => FreshStore.bootstrap(), /Authentication required/);
+      assert.equal(cachedEmittedHasDm, false, 'bootstrap_cached must NEVER expose cached DM channels before auth verification');
+      assert.ok(seenEvents.includes('auth_required'), '401 bootstrap must emit auth_required');
+      assert.equal(FreshStore.state.user, null, '401 bootstrap must clear Store.state.user');
+      assert.equal(FreshStore.state.channels.length, 0, '401 bootstrap must clear Store.state.channels');
+      assert.equal(idbStores.channels.size, 0, '401 bootstrap must clear cached IndexedDB channels');
+      assert.equal(idbStores.messages.size, 0, '401 bootstrap must clear cached IndexedDB messages');
+      assert.equal(globalThis.localStorage.getItem('pickup_cached_user'), null, '401 bootstrap must clear stale pickup_cached_user');
+    } finally {
+      globalThis.fetch = prevFetch;
+      globalThis.indexedDB = prevIndexedDB;
+      globalThis.localStorage = prevLocalStorage;
+      delete require.cache[require.resolve('../../public/js/store.js')];
+    }
+  });
 };

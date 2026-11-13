@@ -308,7 +308,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '111',
+  CLIENT_VERSION: '112',
 
   // Current user cache
   currentUser: null,
@@ -1053,9 +1053,32 @@ const API = {
     } catch (e) {}
   },
 
+  clearClubhouseIndexedDb() {
+    if (typeof indexedDB === 'undefined') return Promise.resolve();
+    return new Promise((resolve) => {
+      let settled = false;
+      const done = () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+      const timer = setTimeout(done, 400);
+      try {
+        const req = indexedDB.deleteDatabase('pickup_clubhouse_db');
+        req.onsuccess = () => { clearTimeout(timer); done(); };
+        req.onerror = () => { clearTimeout(timer); done(); };
+        req.onblocked = () => { clearTimeout(timer); done(); };
+      } catch (e) {
+        clearTimeout(timer);
+        done();
+      }
+    });
+  },
+
   clearDataCaches() {
     try {
       localStorage.removeItem('pickup_cached_user');
+      localStorage.removeItem('pickup_ch_collapsed_cats');
       const keysToRemove = [];
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
@@ -1065,6 +1088,7 @@ const API = {
       }
       keysToRemove.forEach(k => localStorage.removeItem(k));
     } catch (e) {}
+    this.clearClubhouseIndexedDb();
   },
 
   async request(method, url, body, opts) {
@@ -1108,7 +1132,10 @@ const API = {
   async logout() {
     try {
       API.clearDataCaches();
-      await fetch('/api/auth/logout', { method: 'POST' });
+      await Promise.all([
+        API.clearClubhouseIndexedDb(),
+        fetch('/api/auth/logout', { method: 'POST' })
+      ]);
     } finally {
       window.location.href = '/index.html';
     }

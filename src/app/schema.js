@@ -502,6 +502,7 @@ export const CREATE_CHAT_TABLES_SQL = [
     role TEXT DEFAULT 'member',
     last_read_message_id INTEGER DEFAULT 0,
     muted INTEGER DEFAULT 0,
+    hidden INTEGER NOT NULL DEFAULT 0,
     joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (channel_id, user_id)
   )`,
@@ -699,7 +700,8 @@ export const CHAT_ALTER_STATEMENTS = [
   'ALTER TABLE messages ADD COLUMN hidden_reason TEXT DEFAULT NULL',
   'ALTER TABLE messages ADD COLUMN original_content TEXT DEFAULT NULL',
   'ALTER TABLE messages ADD COLUMN original_iv TEXT DEFAULT NULL',
-  'ALTER TABLE channels ADD COLUMN is_private INTEGER NOT NULL DEFAULT 0'
+  'ALTER TABLE channels ADD COLUMN is_private INTEGER NOT NULL DEFAULT 0',
+  'ALTER TABLE channel_members ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0'
 ];
 
 const migratedChatDbs = new WeakSet();
@@ -718,12 +720,21 @@ export async function ensureChatD1Schema(chatDb, force = false) {
   let needsColumnAlter = true;
   if (!force && typeof chatDb.prepare === 'function') {
     try {
-      const [msgColsRes, chColsRes] = typeof chatDb.batch === 'function'
-        ? await chatDb.batch([chatDb.prepare('PRAGMA table_info(messages)'), chatDb.prepare('PRAGMA table_info(channels)')])
-        : [await chatDb.prepare('PRAGMA table_info(messages)').all(), await chatDb.prepare('PRAGMA table_info(channels)').all()];
+      const [msgColsRes, chColsRes, cmColsRes] = typeof chatDb.batch === 'function'
+        ? await chatDb.batch([
+            chatDb.prepare('PRAGMA table_info(messages)'),
+            chatDb.prepare('PRAGMA table_info(channels)'),
+            chatDb.prepare('PRAGMA table_info(channel_members)')
+          ])
+        : [
+            await chatDb.prepare('PRAGMA table_info(messages)').all(),
+            await chatDb.prepare('PRAGMA table_info(channels)').all(),
+            await chatDb.prepare('PRAGMA table_info(channel_members)').all()
+          ];
       const msgCols = new Set(((msgColsRes && msgColsRes.results) || []).map((c) => c.name));
       const chCols = new Set(((chColsRes && chColsRes.results) || []).map((c) => c.name));
-      if (msgCols.has('hidden_at') && msgCols.has('original_iv') && chCols.has('is_private')) {
+      const cmCols = new Set(((cmColsRes && cmColsRes.results) || []).map((c) => c.name));
+      if (msgCols.has('hidden_at') && msgCols.has('original_iv') && chCols.has('is_private') && cmCols.has('hidden')) {
         needsColumnAlter = false;
       }
     } catch (e) {}

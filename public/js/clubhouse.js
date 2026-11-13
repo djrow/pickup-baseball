@@ -11,6 +11,27 @@
 
   var DEFAULT_EMOJIS = ['👍', '⚾', '🔥', '😂', '❤️', '🙌'];
 
+  function loadCollapsedCategories() {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        var raw = localStorage.getItem('pickup_ch_collapsed_cats');
+        if (raw) {
+          var parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === 'object') return parsed;
+        }
+      }
+    } catch (e) {}
+    return {};
+  }
+
+  function saveCollapsedCategories(map) {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('pickup_ch_collapsed_cats', JSON.stringify(map || {}));
+      }
+    } catch (e) {}
+  }
+
   var uiState = {
     activeChannelId: null,
     activeChannel: null,
@@ -19,7 +40,7 @@
     pendingAttachmentIds: [],
     pendingAttachmentsMeta: [],
     upcomingData: null,
-    collapsedCategories: {},
+    collapsedCategories: loadCollapsedCategories(),
     remoteStreams: {},
     revealedMutedMsgIds: {},
     reasonAction: null,
@@ -238,10 +259,31 @@
     var avatarEl = el('ch-current-user-avatar');
     if (!nameEl || !roleEl || !avatarEl) return;
 
+    var modTabBtn = el('tab-btn-mod');
+    var contextTabsEl = el('ch-context-tabs');
+    var newChanBtn = el('btn-new-channel');
+    var mutedBanner = el('ch-muted-banner');
+    var mutedText = el('ch-muted-banner-text');
+    var composerInput = el('ch-composer-input');
+    var composerSend = el('ch-send-btn');
+    var attachBtn = el('btn-attach-file');
+    var facCard = el('ch-facilitator-checklist-card');
+
     if (!u) {
       nameEl.textContent = 'Guest Player';
       roleEl.innerHTML = '<a href="/login.html?redirect=/clubhouse.html" style="color:var(--ch-accent);text-decoration:none;font-weight:600;">Sign In →</a>';
       avatarEl.textContent = '⚾';
+      if (modTabBtn) modTabBtn.style.display = 'none';
+      if (contextTabsEl) contextTabsEl.classList.remove('has-mod');
+      if (newChanBtn) newChanBtn.style.display = 'none';
+      if (mutedBanner) mutedBanner.classList.add('hidden');
+      if (facCard) facCard.style.display = 'none';
+      if (composerInput) {
+        composerInput.disabled = true;
+        composerInput.placeholder = 'Sign in to chat in Clubhouse...';
+      }
+      if (composerSend) composerSend.disabled = true;
+      if (attachBtn) attachBtn.disabled = true;
       return;
     }
 
@@ -259,22 +301,14 @@
       ' • <a href="/login.html?redirect=/clubhouse.html" style="color:var(--ch-text-secondary);text-decoration:underline;" title="Switch or manage account">Switch</a>';
     avatarEl.textContent = (u.name || 'P').charAt(0).toUpperCase();
 
-    var modTabBtn = el('tab-btn-mod');
-    var contextTabsEl = el('ch-context-tabs');
     var isMod = isModeratorUser(u);
     if (modTabBtn) modTabBtn.style.display = isMod ? '' : 'none';
     if (contextTabsEl) contextTabsEl.classList.toggle('has-mod', isMod);
 
-    var newChanBtn = el('btn-new-channel');
     if (newChanBtn) {
       newChanBtn.style.display = canCreateBoards(u) ? '' : 'none';
     }
 
-    var mutedBanner = el('ch-muted-banner');
-    var mutedText = el('ch-muted-banner-text');
-    var composerInput = el('ch-composer-input');
-    var composerSend = el('ch-send-btn');
-    var attachBtn = el('btn-attach-file');
     if (mutedBanner) {
       if (u.chatMuted) {
         if (mutedText) {
@@ -294,7 +328,6 @@
     if (composerSend) composerSend.disabled = Boolean(u.chatMuted);
     if (attachBtn) attachBtn.disabled = Boolean(u.chatMuted);
 
-    var facCard = el('ch-facilitator-checklist-card');
     if (facCard) {
       var showFac = Boolean(u.isGameFacilitator || u.is_game_facilitator || u.role === 'admin' || u.role === 'organizer' || u.isAdmin);
       facCard.style.display = showFac ? 'block' : 'none';
@@ -323,8 +356,14 @@
     var categoriesOrder = ['Clubhouse Info', 'Text Channels', 'Voice Lounges', 'Staff & Operations', 'Direct Messages'];
     var grouped = {};
 
+    var isSignedIn = Boolean(Store.state.user);
     for (var i = 0; i < channels.length; i++) {
       var ch = channels[i];
+      var isDmItem = ch.channel_type === 'dm' || ch.channel_type === 'group_dm';
+      var isPrivItem = ch.is_private === 1 || ch.is_private === true || ch.min_role_read === 'invite';
+      if (!isSignedIn && (isDmItem || isPrivItem)) {
+        continue;
+      }
       var cat = ch.category || 'Text Channels';
       if (!grouped[cat]) grouped[cat] = [];
       grouped[cat].push(ch);
@@ -356,9 +395,12 @@
           var editBtnHtml = (canEditBoard && !isDmCh)
             ? '<button type="button" class="ch-channel-edit-btn" data-edit-board-id="' + item.id + '" title="Edit or Delete Board">✏️</button>'
             : '';
+          var dmHideBtnHtml = (isDmCh && isSignedIn)
+            ? '<button type="button" class="ch-channel-edit-btn ch-dm-hide-btn" data-hide-dm-id="' + item.id + '" title="Hide DM from channel list" aria-label="Hide ' + escapeHtml(item.name) + ' from channel list">✕</button>'
+            : '';
 
           html += '<div class="ch-channel-item' + (isActive ? ' active' : '') + '" data-channel-id="' + item.id + '" data-channel-type="' + escapeHtml(item.channel_type) + '">';
-          html += '<div class="ch-channel-label"><span>' + escapeHtml(item.name) + '</span>' + lockBadge + roleIcon + '</div>' + editBtnHtml;
+          html += '<div class="ch-channel-label"><span>' + escapeHtml(item.name) + '</span>' + lockBadge + roleIcon + '</div>' + editBtnHtml + dmHideBtnHtml;
           html += '</div>';
 
           if (isVoice) {
@@ -399,6 +441,7 @@
         var cName = this.getAttribute('data-cat-name');
         if (cName) {
           uiState.collapsedCategories[cName] = !uiState.collapsedCategories[cName];
+          saveCollapsedCategories(uiState.collapsedCategories);
           renderChannelSidebar();
         }
       });
@@ -428,6 +471,17 @@
             openBoardModal(chs[c]);
             break;
           }
+        }
+      });
+    }
+
+    var hideDmBtns = container.querySelectorAll('[data-hide-dm-id]');
+    for (var hd = 0; hd < hideDmBtns.length; hd++) {
+      hideDmBtns[hd].addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        var dmId = Number(this.getAttribute('data-hide-dm-id'));
+        if (dmId && Store.hideDmChannel) {
+          Store.hideDmChannel(dmId).catch(function () {});
         }
       });
     }
@@ -998,7 +1052,10 @@
       streamEl._renderedChId = chId;
       streamEl._renderedQuery = query;
       streamEl._renderedCount = 0;
-      streamEl.innerHTML = '<div style="text-align:center;color:var(--ch-text-muted);padding:40px 20px;">No messages yet in this channel. Say hello to the sandlot crew! ⚾</div>';
+      var emptyText = !Store.state.user
+        ? '🔒 Sign in to view Clubhouse channels and direct messages.'
+        : 'No messages yet in this channel. Say hello to the sandlot crew! ⚾';
+      streamEl.innerHTML = '<div style="text-align:center;color:var(--ch-text-muted);padding:40px 20px;">' + emptyText + '</div>';
       return;
     }
 
@@ -2557,6 +2614,29 @@
     }
   }
 
+  function clearSignedOutUi() {
+    uiState.activeChannelId = null;
+    uiState.activeChannel = null;
+    uiState.activeThreadRoot = null;
+    uiState.revealedMutedMsgIds = {};
+    var titleEl = el('ch-active-channel-name');
+    var topicEl = el('ch-active-channel-topic');
+    var e2eeBadge = el('ch-active-e2ee-badge');
+    var dmBanner = el('ch-dm-e2ee-banner');
+    var verifyBtn = el('btn-dm-verify-key');
+    var threadPane = el('ch-thread-pane');
+    if (titleEl) titleEl.textContent = '#clubhouse';
+    if (topicEl) topicEl.textContent = 'Sign in to view channels and direct messages.';
+    if (e2eeBadge) e2eeBadge.style.display = 'none';
+    if (dmBanner) dmBanner.classList.add('hidden');
+    if (verifyBtn) verifyBtn.classList.add('hidden');
+    if (threadPane) threadPane.style.display = 'none';
+    renderUserBar();
+    renderChannelSidebar();
+    renderMessageStream();
+    renderMembersDirectory();
+  }
+
   function initClubhouseApp() {
     if (typeof document === 'undefined' || !el('clubhouse-app')) return;
 
@@ -2591,7 +2671,7 @@
       } else if (eventType === 'auth_required') {
         var authWarn = el('ch-auth-banner');
         if (authWarn) authWarn.classList.remove('hidden');
-        renderUserBar();
+        clearSignedOutUi();
         if (uiState.upcomingData) {
           renderSundayCard(uiState.upcomingData);
         }
@@ -2615,8 +2695,22 @@
         }
       } else if (eventType === 'channel_deleted') {
         renderChannelSidebar();
-        if (detail && Number(detail.channelId) === Number(uiState.activeChannelId) && Store.state.channels.length > 0) {
-          selectTextChannel(Store.state.channels[0].id);
+        var deletedChId = Number((detail && (detail.channelId || detail.id)) || 0);
+        if (deletedChId && deletedChId === Number(uiState.activeChannelId)) {
+          if (Store.state.channels.length > 0) {
+            var nextCh = null;
+            for (var nc = 0; nc < Store.state.channels.length; nc++) {
+              if (Store.state.channels[nc].slug === 'general') {
+                nextCh = Store.state.channels[nc];
+                break;
+              }
+            }
+            selectTextChannel((nextCh || Store.state.channels[0]).id);
+          } else {
+            uiState.activeChannelId = null;
+            uiState.activeChannel = null;
+            renderMessageStream();
+          }
         }
       } else if (eventType === 'sync_message_hide' || eventType === 'sync_message_unhide') {
         renderMessageStream();
@@ -2669,7 +2763,11 @@
     }).catch(function () {
       var authFallback = el('ch-auth-banner');
       if (authFallback && !Store.state.user) authFallback.classList.remove('hidden');
-      renderUserBar();
+      if (!Store.state.user) {
+        clearSignedOutUi();
+      } else {
+        renderUserBar();
+      }
       loadUpcomingBaseballCard();
     });
   }

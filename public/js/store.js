@@ -91,9 +91,80 @@
       try {
         var tx = db.transaction(['channels'], 'readwrite');
         var store = tx.objectStore('channels');
+        store.clear();
         for (var i = 0; i < channels.length; i++) {
           store.put(channels[i]);
         }
+      } catch (e) {}
+    });
+  }
+
+  function clearStoreIdb(storeNames) {
+    var names = Array.isArray(storeNames) && storeNames.length > 0
+      ? storeNames
+      : ['channels', 'messages', 'meta'];
+    return openStoreDb().then(function (db) {
+      if (!db) return;
+      try {
+        var existing = [];
+        for (var i = 0; i < names.length; i++) {
+          if (db.objectStoreNames.contains(names[i])) {
+            existing.push(names[i]);
+          }
+        }
+        if (existing.length === 0) return;
+        var tx = db.transaction(existing, 'readwrite');
+        for (var j = 0; j < existing.length; j++) {
+          tx.objectStore(existing[j]).clear();
+        }
+      } catch (e) {}
+    });
+  }
+
+  function deleteChannelFromIdb(channelId) {
+    var chNum = Number(channelId);
+    return openStoreDb().then(function (db) {
+      if (!db || !chNum) return;
+      try {
+        var tx = db.transaction(['channels', 'messages'], 'readwrite');
+        tx.objectStore('channels').delete(chNum);
+        var msgStore = tx.objectStore('messages');
+        if (msgStore.indexNames && msgStore.indexNames.contains('by_channel')) {
+          var req = msgStore.index('by_channel').openCursor(IDBKeyRange.only(chNum));
+          req.onsuccess = function (ev) {
+            var cursor = ev.target.result;
+            if (cursor) {
+              cursor.delete();
+              cursor.continue();
+            }
+          };
+        }
+      } catch (e) {}
+    });
+  }
+
+  function getMetaFromIdb(key) {
+    return openStoreDb().then(function (db) {
+      if (!db || !db.objectStoreNames.contains('meta')) return null;
+      return new Promise(function (resolve) {
+        try {
+          var tx = db.transaction(['meta'], 'readonly');
+          var req = tx.objectStore('meta').get(key);
+          req.onsuccess = function () { resolve(req.result !== undefined ? req.result : null); };
+          req.onerror = function () { resolve(null); };
+        } catch (e) {
+          resolve(null);
+        }
+      });
+    });
+  }
+
+  function setMetaInIdb(key, value) {
+    return openStoreDb().then(function (db) {
+      if (!db || !db.objectStoreNames.contains('meta')) return;
+      try {
+        var tx = db.transaction(['meta'], 'readwrite');
+        tx.objectStore('meta').put(value, key);
       } catch (e) {}
     });
   }
@@ -674,19 +745,56 @@
     }
   }
 
+  function clearLocalSessionData() {
+    stopAdaptiveSyncLoop();
+    state.user = null;
+    state.channels = [];
+    state.messagesByChannel = {};
+    state.voiceParticipants = [];
+    state.members = [];
+    state.mutedUserIds = [];
+    state.unreadCounts = {};
+    state.unreadByChannel = {};
+    state.lastMessageId = 0;
+    state.lastEventId = 0;
+    state.lastChatActivityAt = 0;
+    clearCachedDmKeys();
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem('pickup_cached_user');
+        localStorage.removeItem('pickup_ch_collapsed_cats');
+      }
+    } catch (e) {}
+    return clearStoreIdb();
+  }
+
   /**
    * Bootstrap initial Clubhouse state from /api/bootstrap and IndexedDB cache.
    */
   function bootstrap() {
     return loadCachedChannelsFromIdb().then(function (cachedChannels) {
-      if (cachedChannels && cachedChannels.length > 0 && state.channels.length === 0) {
-        state.channels = cachedChannels;
-        emit('bootstrap_cached', { channels: cachedChannels });
+      // Never render cached DMs or private boards before server session verification confirms identity
+      var publicCached = [];
+      for (var i = 0; i < (cachedChannels || []).length; i++) {
+        if (cachedChannels[i] && !requiresE2eeChannel(cachedChannels[i])) {
+          publicCached.push(cachedChannels[i]);
+        }
+      }
+      var hasSessionHint = true;
+      try {
+        if (typeof localStorage !== 'undefined' && !localStorage.getItem('pickup_cached_user')) {
+          hasSessionHint = false;
+        }
+      } catch (e) {}
+      if (hasSessionHint && publicCached.length > 0 && state.channels.length === 0) {
+        state.channels = publicCached;
+        emit('bootstrap_cached', { channels: publicCached });
       }
       return apiRequest('GET', '/api/bootstrap');
     }).then(function (res) {
       if (!res.ok) {
         if (res.status === 401) {
+          clearLocalSessionData();
           emit('auth_required', {});
         }
         throw new Error((res.data && res.data.error) || 'Bootstrap failed');
@@ -702,6 +810,15 @@
       if (typeof d.last_message_id === 'number') state.lastMessageId = d.last_message_id;
       if (typeof d.last_event_id === 'number') state.lastEventId = d.last_event_id;
 
+      var activeUid = (d.user && d.user.id) ? Number(d.user.id) : 0;
+      getMetaFromIdb('cached_user_id').then(function (prevUid) {
+        if (prevUid && activeUid && Number(prevUid) !== activeUid) {
+          return clearStoreIdb(['messages']).then(function () {
+            setMetaInIdb('cached_user_id', activeUid);
+          });
+        }
+        if (activeUid) setMetaInIdb('cached_user_id', activeUid);
+      });
       saveChannelsToIdb(state.channels);
       emit('bootstrapped', d);
       startAdaptiveSyncLoop();
@@ -1087,7 +1204,7 @@
       state.syncInFlight = false;
       if (!res.ok) {
         if (res.status === 401) {
-          stopAdaptiveSyncLoop();
+          clearLocalSessionData();
           emit('auth_required', {});
         }
         return null;
@@ -1191,6 +1308,7 @@
       }
       if (!exists) {
         state.channels.push(payload);
+        saveChannelsToIdb(state.channels);
         emit('channel_created', payload);
       }
     } else if (ev.event_type === 'channel_update' && payload && payload.id) {
@@ -1334,8 +1452,51 @@
         }
       }
       delete state.messagesByChannel[Number(channelId)];
-      emit('channel_deleted', { id: Number(channelId) });
+      saveChannelsToIdb(state.channels);
+      deleteChannelFromIdb(channelId);
+      emit('channel_deleted', { id: Number(channelId), channelId: Number(channelId) });
       return res.data;
+    });
+  }
+
+  function hideDmChannel(channelId) {
+    return apiRequest('POST', '/api/channels/' + encodeURIComponent(channelId) + '/hide', {}).then(function (res) {
+      if (!res.ok) throw new Error((res.data && res.data.error) || 'Failed to hide direct message');
+      var chNum = Number(channelId);
+      for (var i = 0; i < state.channels.length; i++) {
+        if (Number(state.channels[i].id) === chNum) {
+          state.channels.splice(i, 1);
+          break;
+        }
+      }
+      delete state.messagesByChannel[chNum];
+      saveChannelsToIdb(state.channels);
+      deleteChannelFromIdb(chNum);
+      emit('channel_deleted', { id: chNum, channelId: chNum, hidden: true });
+      return res.data;
+    });
+  }
+
+  function unhideDmChannel(channelId) {
+    return apiRequest('POST', '/api/channels/' + encodeURIComponent(channelId) + '/unhide', {}).then(function (res) {
+      if (!res.ok) throw new Error((res.data && res.data.error) || 'Failed to restore direct message');
+      var ch = res.data && res.data.channel;
+      if (ch && ch.id) {
+        var exists = false;
+        for (var i = 0; i < state.channels.length; i++) {
+          if (Number(state.channels[i].id) === Number(ch.id)) {
+            state.channels[i] = ch;
+            exists = true;
+            break;
+          }
+        }
+        if (!exists) {
+          state.channels.push(ch);
+        }
+        saveChannelsToIdb(state.channels);
+        emit('channel_created', ch);
+      }
+      return ch;
     });
   }
 
@@ -1511,6 +1672,9 @@
     createChannel: createChannel,
     updateChannel: updateChannel,
     deleteChannel: deleteChannel,
+    hideDmChannel: hideDmChannel,
+    unhideDmChannel: unhideDmChannel,
+    clearLocalSessionData: clearLocalSessionData,
     editMessage: editMessage,
     deleteMessage: deleteMessage,
     hideMessage: hideMessage,

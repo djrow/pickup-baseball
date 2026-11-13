@@ -105,7 +105,7 @@ let lastSyncPruneSec = 0;
 /**
  * Get all channels accessible to the user (batched DM & private board membership lookup to avoid N+1 D1 queries)
  */
-async function getAccessibleChannels(chatDb, user) {
+async function getAccessibleChannels(chatDb, user, options = {}) {
   const { results: allChannels } = await chatDb.prepare(
     'SELECT * FROM channels ORDER BY sort_order ASC, id ASC'
   ).all();
@@ -114,17 +114,27 @@ async function getAccessibleChannels(chatDb, user) {
   const isAdminUser = Boolean(user.isAdmin || user.role === 'admin' || user.is_admin === 1);
 
   let memberChannelIds = new Set();
+  const hiddenChannelIds = new Set();
   try {
     const { results: memberRows } = await chatDb.prepare(
-      'SELECT channel_id FROM channel_members WHERE user_id = ?'
+      'SELECT channel_id, COALESCE(hidden, 0) as hidden FROM channel_members WHERE user_id = ?'
     ).bind(user.id).all();
-    memberChannelIds = new Set((memberRows || []).map((r) => r.channel_id));
+    for (const r of (memberRows || [])) {
+      memberChannelIds.add(r.channel_id);
+      if (Number(r.hidden) === 1) {
+        hiddenChannelIds.add(r.channel_id);
+      }
+    }
   } catch (e) {}
 
   const accessible = [];
   const keySharedChannelIds = [];
   for (const ch of (allChannels || [])) {
-    if (ch.channel_type === 'dm' || ch.channel_type === 'group_dm' || isPrivateEncryptedBoard(ch)) {
+    const isDmType = ch.channel_type === 'dm' || ch.channel_type === 'group_dm';
+    if (isDmType || isPrivateEncryptedBoard(ch)) {
+      if (isDmType && !options.includeHidden && hiddenChannelIds.has(ch.id)) {
+        continue;
+      }
       if (ch.created_by === user.id || memberChannelIds.has(ch.id)) {
         accessible.push({ ...ch, member_ids: [] });
         keySharedChannelIds.push(ch.id);
@@ -589,6 +599,12 @@ chatRouter.post('/channels', requireAuth, async (c) => {
       if (!allowed) {
         return c.json({ error: 'Access denied to existing conversation.' }, 403);
       }
+      // Re-opening a previously hidden DM restores it to the caller's channel list
+      try {
+        await chatDb.prepare(
+          'INSERT INTO channel_members (channel_id, user_id, role, hidden) VALUES (?, ?, ?, 0) ON CONFLICT(channel_id, user_id) DO UPDATE SET hidden = 0'
+        ).bind(existing.id, user.id, existing.created_by === user.id ? 'owner' : 'member').run();
+      } catch (e) {}
       const { results: dmMemRows } = await chatDb.prepare(
         'SELECT user_id FROM channel_members WHERE channel_id = ?'
       ).bind(existing.id).all();
@@ -769,6 +785,46 @@ chatRouter.delete('/channels/:id', requireModerator, async (c) => {
 
   return c.json({ success: true, id: channel.id, slug: channel.slug });
 });
+
+/**
+ * Toggle per-user channel list visibility for a DM conversation without deleting encrypted history.
+ */
+async function setDmChannelHiddenState(c, hidden) {
+  const user = c.get('user');
+  const chatDb = c.env && c.env.CHAT_DB;
+  if (!chatDb) return c.json({ error: 'Chat database unavailable.' }, 500);
+
+  const channel = await resolveChannel(chatDb, c.req.param('id'));
+  if (!channel) {
+    return c.json({ error: 'Conversation not found.' }, 404);
+  }
+  if (channel.channel_type !== 'dm' && channel.channel_type !== 'group_dm') {
+    return c.json({ error: 'Only direct message conversations can be hidden from your channel list.' }, 400);
+  }
+  if (!(await canUserAccessChannel(chatDb, user, channel, 'read'))) {
+    return c.json({ error: 'Access denied: you are not a participant in this conversation.' }, 403);
+  }
+
+  const hiddenFlag = hidden ? 1 : 0;
+  await chatDb.prepare(
+    'INSERT INTO channel_members (channel_id, user_id, role, hidden) VALUES (?, ?, ?, ?) ON CONFLICT(channel_id, user_id) DO UPDATE SET hidden = ?'
+  ).bind(channel.id, user.id, channel.created_by === user.id ? 'owner' : 'member', hiddenFlag, hiddenFlag).run();
+
+  if (hidden) {
+    return c.json({ success: true, id: channel.id, hidden: true });
+  }
+  const { results: dmMemRows } = await chatDb.prepare(
+    'SELECT user_id FROM channel_members WHERE channel_id = ?'
+  ).bind(channel.id).all();
+  const memberIds = Array.from(new Set([...(dmMemRows || []).map((r) => r.user_id), ...(channel.created_by ? [channel.created_by] : [])]));
+  return c.json({ success: true, channel: { ...channel, member_ids: memberIds }, hidden: false });
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/channels/:id/hide & /unhide - Per-User DM Channel List Visibility
+// ---------------------------------------------------------------------------
+chatRouter.post('/channels/:id/hide', requireAuth, (c) => setDmChannelHiddenState(c, true));
+chatRouter.post('/channels/:id/unhide', requireAuth, (c) => setDmChannelHiddenState(c, false));
 
 // ---------------------------------------------------------------------------
 // GET /api/channels/:id/messages - Paginated Channel / Thread History
@@ -970,6 +1026,36 @@ chatRouter.post('/channels/:id/messages', requireAuth, async (c) => {
       ON CONFLICT(channel_id, user_id) DO UPDATE SET last_read_message_id = MAX(last_read_message_id, ?)
     `).bind(channel.id, user.id, newMsgId, newMsgId).run();
   } catch (e) {}
+
+  // Restore any hidden DM entry for participants when a new message is sent
+  if (channel.channel_type === 'dm' || channel.channel_type === 'group_dm') {
+    try {
+      const hiddenRow = await chatDb.prepare(
+        'SELECT 1 FROM channel_members WHERE channel_id = ? AND COALESCE(hidden, 0) = 1 LIMIT 1'
+      ).bind(channel.id).first();
+      if (hiddenRow) {
+        await chatDb.prepare(
+          'UPDATE channel_members SET hidden = 0 WHERE channel_id = ? AND COALESCE(hidden, 0) = 1'
+        ).bind(channel.id).run();
+        const { results: dmMemRows } = await chatDb.prepare(
+          'SELECT user_id FROM channel_members WHERE channel_id = ?'
+        ).bind(channel.id).all();
+        const memberIds = Array.from(new Set([
+          ...(dmMemRows || []).map((r) => r.user_id),
+          ...(channel.created_by ? [channel.created_by] : [])
+        ]));
+        await chatDb.prepare(`
+          INSERT INTO sync_events (channel_id, event_type, target_id, payload_json, created_at)
+          VALUES (?, 'channel_create', ?, ?, ?)
+        `).bind(
+          channel.id,
+          channel.id,
+          JSON.stringify({ ...channel, member_ids: memberIds }),
+          Math.floor(Date.now() / 1000)
+        ).run();
+      }
+    } catch (e) {}
+  }
 
   const createdRow = await chatDb.prepare('SELECT * FROM messages WHERE id = ?').bind(newMsgId).first();
   const [hydrated] = await hydrateMessages(chatDb, [createdRow]);
