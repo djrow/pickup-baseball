@@ -1,7 +1,7 @@
 /**
  * Pickup Baseball Clubhouse — IndexedDB Local Cache, Adaptive Delta Sync & Resumable Media Uploader (WP-5)
  * - IndexedDB persistence (pickup_clubhouse_db) for instant zero-latency channel rendering
- * - Adaptive Delta Sync polling (4s visible, 60s background, instant wake-up on visibilitychange)
+ * - Adaptive Delta Sync polling (4s active, 8s idle visible, 60s background voice, instant wake-up on visibilitychange)
  * - Direct-to-Google-Drive Resumable Chunked Uploader with local dev fallback & EXIF stripping
  */
 (function (root) {
@@ -9,7 +9,9 @@
 
   var DB_NAME = 'pickup_clubhouse_db';
   var DB_VERSION = 1;
-  var VISIBLE_SYNC_MS = 4000;
+  var VISIBLE_ACTIVE_SYNC_MS = 4000;
+  var VISIBLE_IDLE_SYNC_MS = 8000;
+  var ACTIVE_CHAT_WINDOW_MS = 60000;
   var HIDDEN_SYNC_MS = 60000;
   var CHUNK_SIZE_BYTES = 8 * 1024 * 1024; // 8 MB Google Drive resumable chunk multiple
 
@@ -24,6 +26,7 @@
     unreadByChannel: {},
     lastMessageId: 0,
     lastEventId: 0,
+    lastChatActivityAt: 0,
     syncTimer: null,
     syncInFlight: false,
     listeners: []
@@ -808,6 +811,7 @@
         }
         upsertMessageInState(msg);
         saveMessagesToIdb([msg]);
+        markChatActivity();
         emit('message_created', msg);
         return msg;
       });
@@ -1118,6 +1122,7 @@
           emit('delta_messages', decrypted);
         }
         if (events.length > 0 || decrypted.length > 0 || rtcSignals.length > 0) {
+          state.lastChatActivityAt = Date.now();
           emit('sync_tick', d);
         }
         return d;
@@ -1246,6 +1251,18 @@
     }
   }
 
+  function isChatRecentlyActive() {
+    return state.lastChatActivityAt > 0 && (Date.now() - state.lastChatActivityAt) < ACTIVE_CHAT_WINDOW_MS;
+  }
+
+  function markChatActivity() {
+    var wasActive = isChatRecentlyActive();
+    state.lastChatActivityAt = Date.now();
+    if (!wasActive && state.syncTimer && !state.syncInFlight) {
+      scheduleNextSyncTick();
+    }
+  }
+
   function scheduleNextSyncTick() {
     if (state.syncTimer) {
       clearTimeout(state.syncTimer);
@@ -1257,7 +1274,9 @@
       // Zero idle background polling when tab is hidden and not in a voice huddle
       return;
     }
-    var delay = isHidden ? HIDDEN_SYNC_MS : VISIBLE_SYNC_MS;
+    var delay = isHidden
+      ? HIDDEN_SYNC_MS
+      : ((inVoice || isChatRecentlyActive()) ? VISIBLE_ACTIVE_SYNC_MS : VISIBLE_IDLE_SYNC_MS);
     state.syncTimer = setTimeout(function () {
       pollDeltaSync().then(function () {
         scheduleNextSyncTick();
@@ -1519,6 +1538,8 @@
     isPrivateBoardChannel: isPrivateBoardChannel,
     requiresE2eeChannel: requiresE2eeChannel,
     pollDeltaSync: pollDeltaSync,
+    markChatActivity: markChatActivity,
+    isChatRecentlyActive: isChatRecentlyActive,
     startAdaptiveSyncLoop: startAdaptiveSyncLoop,
     stopAdaptiveSyncLoop: stopAdaptiveSyncLoop,
     apiRequest: apiRequest

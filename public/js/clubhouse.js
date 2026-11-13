@@ -2030,6 +2030,9 @@
 
     if (composerForm && composerInput) {
       composerInput.addEventListener('keydown', function (ev) {
+        if (typeof Store.markChatActivity === 'function') {
+          Store.markChatActivity();
+        }
         if (ev.key === 'Enter' && !ev.shiftKey) {
           ev.preventDefault();
           composerForm.dispatchEvent(new Event('submit', { cancelable: true }));

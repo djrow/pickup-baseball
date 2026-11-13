@@ -427,6 +427,18 @@ module.exports = async function runTier5(t, ctx) {
     // 4. Verify client-side resource frugality mechanisms exist
     const storeSrc = fs.readFileSync(path.resolve(__dirname, '../../public/js/store.js'), 'utf8');
     assert.ok(storeSrc.includes("visibilityState === 'hidden'"), 'store.js must pause idle polling when background tab is hidden');
+    assert.ok(
+      storeSrc.includes('VISIBLE_ACTIVE_SYNC_MS = 4000') && storeSrc.includes('VISIBLE_IDLE_SYNC_MS = 8000'),
+      'store.js must enforce 4s active / 8s idle adaptive visible sync intervals'
+    );
+    const StoreMod = require('../../public/js/store.js');
+    StoreMod.state.lastChatActivityAt = 0;
+    assert.equal(StoreMod.isChatRecentlyActive(), false, 'Idle chat must start outside active window');
+    StoreMod.markChatActivity();
+    assert.equal(StoreMod.isChatRecentlyActive(), true, 'Typing or message activity must enter 4s active window');
+    StoreMod.state.lastChatActivityAt = Date.now() - 65000;
+    assert.equal(StoreMod.isChatRecentlyActive(), false, 'Chat must relax back to 8s idle interval after 60s of inactivity');
+    StoreMod.state.lastChatActivityAt = 0;
     const rtcSrc = fs.readFileSync(path.resolve(__dirname, '../../public/js/rtc.js'), 'utf8');
     assert.ok(rtcSrc.includes('broadcastTypingIndicator'), 'rtc.js must route typing indicators over WebRTC DataChannel');
     const apiSrc = fs.readFileSync(path.resolve(__dirname, '../../public/js/api.js'), 'utf8');
