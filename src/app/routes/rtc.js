@@ -4,7 +4,7 @@
  */
 
 import { Hono } from 'hono';
-import { requireAuth, rejectIfChatMuted } from '../security.js';
+import { requireAuth, rejectIfChatMuted, rejectIfClubhouseOptedOut } from '../security.js';
 import { resolveChannel, canUserAccessChannel } from './chat.js';
 
 export const voiceRouter = new Hono();
@@ -15,6 +15,8 @@ export const rtcRouter = new Hono();
 // ---------------------------------------------------------------------------
 voiceRouter.post('/:channelId/join', requireAuth, async (c) => {
   const user = c.get('user');
+  const optResp = rejectIfClubhouseOptedOut(c, user);
+  if (optResp) return optResp;
   const mutedResp = rejectIfChatMuted(c, user);
   if (mutedResp) return mutedResp;
   const chatDb = c.env && c.env.CHAT_DB;
@@ -80,6 +82,8 @@ voiceRouter.post('/:channelId/join', requireAuth, async (c) => {
 // ---------------------------------------------------------------------------
 voiceRouter.post('/:channelId/state', requireAuth, async (c) => {
   const user = c.get('user');
+  const optResp = rejectIfClubhouseOptedOut(c, user);
+  if (optResp) return optResp;
   const mutedResp = rejectIfChatMuted(c, user);
   if (mutedResp) return mutedResp;
   const chatDb = c.env && c.env.CHAT_DB;
@@ -178,6 +182,8 @@ const MAX_SIGNAL_PAYLOAD_CHARS = 65536;
 // ---------------------------------------------------------------------------
 rtcRouter.post('/signal', requireAuth, async (c) => {
   const user = c.get('user');
+  const optResp = rejectIfClubhouseOptedOut(c, user);
+  if (optResp) return optResp;
   const mutedResp = rejectIfChatMuted(c, user);
   if (mutedResp) return mutedResp;
   const chatDb = c.env && c.env.CHAT_DB;

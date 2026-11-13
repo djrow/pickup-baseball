@@ -31,6 +31,7 @@ export const CREATE_TABLES_SQL = [
     hero_credits INTEGER DEFAULT 0,
     waiver_status TEXT DEFAULT 'none',
     waiver_signed_at DATETIME DEFAULT NULL,
+    clubhouse_opted_in INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`,
   `CREATE TABLE IF NOT EXISTS sessions (
@@ -240,11 +241,12 @@ export const ALTER_STATEMENTS = [
   'ALTER TABLE users ADD COLUMN chat_muted INTEGER DEFAULT 0',
   'ALTER TABLE users ADD COLUMN chat_muted_reason TEXT DEFAULT NULL',
   'ALTER TABLE users ADD COLUMN chat_muted_by INTEGER DEFAULT NULL',
-  'ALTER TABLE users ADD COLUMN chat_muted_at DATETIME DEFAULT NULL'
+  'ALTER TABLE users ADD COLUMN chat_muted_at DATETIME DEFAULT NULL',
+  'ALTER TABLE users ADD COLUMN clubhouse_opted_in INTEGER DEFAULT 0'
 ];
 
 const migratedDbs = new WeakSet();
-const BASEBALL_SCHEMA_VERSION = '2026-11-12.1';
+const BASEBALL_SCHEMA_VERSION = '2026-11-12.2';
 
 async function runSchemaBatch(db, sqlList) {
   if (typeof db.batch === 'function' && sqlList.length > 1) {
@@ -679,6 +681,12 @@ export const CREATE_CHAT_TABLES_SQL = [
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`,
 
+  // 15. Clubhouse Opt-Out Registry (non-destructive hiding of opted-out users' messages/reactions)
+  `CREATE TABLE IF NOT EXISTS clubhouse_opted_out (
+    user_id INTEGER PRIMARY KEY,
+    opted_out_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`,
+
   // Indexes
   'CREATE INDEX IF NOT EXISTS idx_messages_channel_id ON messages(channel_id, id ASC)',
   'CREATE INDEX IF NOT EXISTS idx_messages_parent_id ON messages(parent_message_id, id ASC)',
@@ -798,11 +806,56 @@ export async function ensureChatD1Schema(chatDb, force = false) {
 
 export const ensureBaseballD1Schema = ensureD1Schema;
 
+const backfilledOptInDbs = new WeakSet();
+
+export async function ensureClubhouseOptInBackfill(baseballDb, chatDb, force = false) {
+  if (!baseballDb || !chatDb || (!force && backfilledOptInDbs.has(baseballDb))) return;
+  try {
+    if (!force) {
+      const flag = await baseballDb.prepare("SELECT value FROM app_settings WHERE key = 'clubhouse_optin_backfilled'").first();
+      if (flag && flag.value === '1') {
+        backfilledOptInDbs.add(baseballDb);
+        return;
+      }
+    }
+
+    const activeIds = new Set();
+    try {
+      const { results: msgAuthors } = await chatDb.prepare('SELECT DISTINCT author_id as uid FROM messages WHERE author_id IS NOT NULL').all();
+      for (const r of (msgAuthors || [])) {
+        if (r && r.uid) activeIds.add(Number(r.uid));
+      }
+    } catch (e) {}
+    try {
+      const { results: keyUsers } = await chatDb.prepare('SELECT DISTINCT user_id as uid FROM user_crypto_keys WHERE user_id IS NOT NULL').all();
+      for (const r of (keyUsers || [])) {
+        if (r && r.uid) activeIds.add(Number(r.uid));
+      }
+    } catch (e) {}
+
+    if (activeIds.size > 0) {
+      const idsArr = Array.from(activeIds);
+      const CHUNK = 80;
+      for (let i = 0; i < idsArr.length; i += CHUNK) {
+        const slice = idsArr.slice(i, i + CHUNK);
+        const ph = slice.map(() => '?').join(',');
+        await baseballDb.prepare(`UPDATE users SET clubhouse_opted_in = 1 WHERE id IN (${ph})`).bind(...slice).run();
+      }
+    }
+
+    await baseballDb.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('clubhouse_optin_backfilled', '1')").run();
+    backfilledOptInDbs.add(baseballDb);
+  } catch (e) {
+    console.warn('[ensureClubhouseOptInBackfill] Warning:', e.message);
+  }
+}
+
 export async function ensureDualD1Schema(dbs, force = false) {
   const baseball = dbs?.BASEBALL_DB || dbs?.DB || dbs?.baseballDb || dbs?.db;
   const chat = dbs?.CHAT_DB || dbs?.chatDb;
   if (baseball) await ensureBaseballD1Schema(baseball, force);
   if (chat) await ensureChatD1Schema(chat, force);
+  if (baseball && chat) await ensureClubhouseOptInBackfill(baseball, chat, force);
 }
 
 export async function getDefaultDuties(db) {

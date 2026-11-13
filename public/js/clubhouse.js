@@ -262,6 +262,7 @@
     var modTabBtn = el('tab-btn-mod');
     var contextTabsEl = el('ch-context-tabs');
     var newChanBtn = el('btn-new-channel');
+    var optInBanner = el('ch-optin-banner');
     var mutedBanner = el('ch-muted-banner');
     var mutedText = el('ch-muted-banner-text');
     var composerInput = el('ch-composer-input');
@@ -277,6 +278,7 @@
       if (modTabBtn) modTabBtn.style.display = 'none';
       if (contextTabsEl) contextTabsEl.classList.remove('has-mod');
       if (newChanBtn) newChanBtn.style.display = 'none';
+      if (optInBanner) optInBanner.classList.add('hidden');
       if (mutedBanner) mutedBanner.classList.add('hidden');
       if (facCard) facCard.style.display = 'none';
       if (composerInput) {
@@ -296,19 +298,38 @@
     else if (u.role === 'organizer') badges.push('Organizer');
     else badges.push('Player');
 
+    var isOptedIn = Boolean(u.clubhouseOptedIn || u.clubhouse_opted_in === 1);
     if (u.isGameFacilitator || u.is_game_facilitator) badges.push('📋 Facilitator');
     if (u.playingSunday || u.playing_sunday) badges.push('⚾ Playing');
     if (u.chatMuted) badges.push('🔇 Muted');
+    if (!isOptedIn) badges.push('Opted Out');
+    var optToggleLabel = isOptedIn ? 'Leave Clubhouse' : 'Join Clubhouse';
     roleEl.innerHTML = escapeHtml(badges.join(' • ')) +
+      ' • <button type="button" class="ch-covenant-link" id="btn-clubhouse-opt-toggle" style="font-size:inherit;padding:0;">' + optToggleLabel + '</button>' +
       ' • <a href="/login.html?redirect=/clubhouse.html" style="color:var(--ch-text-secondary);text-decoration:underline;" title="Switch or manage account">Switch</a>';
     avatarEl.textContent = (u.name || 'P').charAt(0).toUpperCase();
+
+    var optToggleBtn = el('btn-clubhouse-opt-toggle');
+    if (optToggleBtn) {
+      optToggleBtn.addEventListener('click', function () {
+        handleClubhouseOptToggle(!isOptedIn, optToggleBtn);
+      });
+    }
 
     var isMod = isModeratorUser(u);
     if (modTabBtn) modTabBtn.style.display = isMod ? '' : 'none';
     if (contextTabsEl) contextTabsEl.classList.toggle('has-mod', isMod);
 
     if (newChanBtn) {
-      newChanBtn.style.display = canCreateBoards(u) ? '' : 'none';
+      newChanBtn.style.display = (isOptedIn && canCreateBoards(u)) ? '' : 'none';
+    }
+
+    if (optInBanner) {
+      if (isOptedIn) {
+        optInBanner.classList.add('hidden');
+      } else {
+        optInBanner.classList.remove('hidden');
+      }
     }
 
     if (mutedBanner) {
@@ -321,15 +342,18 @@
         mutedBanner.classList.add('hidden');
       }
     }
+    var composerDisabled = Boolean(!isOptedIn || u.chatMuted);
     if (composerInput) {
-      composerInput.disabled = Boolean(u.chatMuted);
-      if (u.chatMuted) {
+      composerInput.disabled = composerDisabled;
+      if (!isOptedIn) {
+        composerInput.placeholder = 'Join Clubhouse above to post messages...';
+      } else if (u.chatMuted) {
         composerInput.placeholder = 'Clubhouse posting is muted for your account.';
       }
     }
-    if (composerSend) composerSend.disabled = Boolean(u.chatMuted);
-    if (attachBtn) attachBtn.disabled = Boolean(u.chatMuted);
-    if (gifBtn) gifBtn.disabled = Boolean(u.chatMuted);
+    if (composerSend) composerSend.disabled = composerDisabled;
+    if (attachBtn) attachBtn.disabled = composerDisabled;
+    if (gifBtn) gifBtn.disabled = composerDisabled;
 
     if (facCard) {
       var showFac = Boolean(u.isGameFacilitator || u.is_game_facilitator || u.role === 'admin' || u.role === 'organizer' || u.isAdmin);
@@ -343,6 +367,26 @@
         RtcEngine.state.privacyRelayMode = relayCheckbox.checked;
       }
     }
+  }
+
+  function handleClubhouseOptToggle(nextOptIn, btnEl) {
+    if (btnEl) btnEl.disabled = true;
+    Store.setClubhouseOptIn(nextOptIn).then(function () {
+      renderUserBar();
+      renderChannelSidebar();
+      renderMembersDirectory();
+      if (uiState.activeChannelId) {
+        Store.fetchChannelMessages(uiState.activeChannelId).then(function () {
+          renderMessageStream();
+        }).catch(function () {});
+      }
+    }).catch(function (err) {
+      if (typeof alert === 'function') {
+        alert((err && err.message) || 'Failed to update Clubhouse membership.');
+      }
+    }).finally(function () {
+      if (btnEl) btnEl.disabled = false;
+    });
   }
 
   function renderChannelSidebar() {
@@ -2531,6 +2575,13 @@
     }
 
     // Clubhouse Behavior Covenant modal
+    var joinClubhouseBtn = el('btn-join-clubhouse');
+    if (joinClubhouseBtn) {
+      joinClubhouseBtn.addEventListener('click', function () {
+        handleClubhouseOptToggle(true, joinClubhouseBtn);
+      });
+    }
+
     var openCovenantBtn = el('btn-open-covenant');
     var covenantModal = el('ch-covenant-modal');
     var closeCovenantBtn = el('btn-close-covenant-modal');
@@ -2749,6 +2800,15 @@
         renderMessageStream();
         renderMembersDirectory();
         renderVoiceVideoTiles();
+      } else if (eventType === 'member_opt_changed') {
+        renderUserBar();
+        renderChannelSidebar();
+        renderMembersDirectory();
+        if (uiState.activeChannelId) {
+          Store.fetchChannelMessages(uiState.activeChannelId).then(function () {
+            renderMessageStream();
+          }).catch(function () {});
+        }
       } else if (eventType === 'rtc_signals' && RtcEngine) {
         RtcEngine.handleIncomingSignals(detail);
       }

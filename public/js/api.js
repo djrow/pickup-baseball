@@ -308,7 +308,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '114',
+  CLIENT_VERSION: '115',
 
   // Current user cache
   currentUser: null,
@@ -1305,6 +1305,10 @@ const API = {
 
   async updateProfile(name, bio) {
     return this.request('PUT', '/api/auth/profile', { name: name, bio: bio });
+  },
+
+  async setClubhouseOptIn(optedIn) {
+    return this.request('PUT', '/api/auth/clubhouse-opt-in', { opted_in: Boolean(optedIn) });
   },
 
   async uploadAvatar(file) {

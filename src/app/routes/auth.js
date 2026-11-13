@@ -236,6 +236,56 @@ authRouter.put('/profile', requireAuth, async (c) => {
   }
 });
 
+async function handleClubhouseOptInToggle(c) {
+  const user = c.get('user');
+  const db = c.env && (c.env.BASEBALL_DB || c.env.DB);
+  const chatDb = c.env && c.env.CHAT_DB;
+  if (!db) return c.json({ error: 'Database unavailable.' }, 500);
+
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    const rawFlag = body.opted_in !== undefined ? body.opted_in : body.clubhouse_opted_in;
+    if (rawFlag === undefined) {
+      return c.json({ error: 'opted_in boolean is required.' }, 400);
+    }
+    const optedIn = Boolean(rawFlag);
+    const val = optedIn ? 1 : 0;
+
+    await db.prepare('UPDATE users SET clubhouse_opted_in = ? WHERE id = ?').bind(val, user.id).run();
+
+    if (chatDb) {
+      if (optedIn) {
+        await chatDb.prepare('DELETE FROM clubhouse_opted_out WHERE user_id = ?').bind(user.id).run();
+      } else {
+        await chatDb.prepare('INSERT OR IGNORE INTO clubhouse_opted_out (user_id) VALUES (?)').bind(user.id).run();
+        await chatDb.prepare('DELETE FROM voice_participants WHERE user_id = ?').bind(user.id).run();
+      }
+      try {
+        await chatDb.prepare(`
+          INSERT INTO sync_events (channel_id, event_type, target_id, payload_json, created_at)
+          VALUES (0, 'member_opt_change', ?, ?, ?)
+        `).bind(user.id, JSON.stringify({ user_id: user.id, clubhouse_opted_in: val }), Math.floor(Date.now() / 1000)).run();
+      } catch (e) {}
+    }
+
+    user.clubhouseOptedIn = optedIn;
+    user.clubhouse_opted_in = val;
+
+    return c.json({
+      success: true,
+      clubhouseOptedIn: optedIn,
+      clubhouse_opted_in: val,
+      user
+    });
+  } catch (err) {
+    console.error('[Auth] Error updating Clubhouse opt-in status:', err);
+    return c.json({ error: 'Failed to update Clubhouse membership setting.' }, 500);
+  }
+}
+
+authRouter.put('/clubhouse-opt-in', requireAuth, handleClubhouseOptInToggle);
+authRouter.post('/clubhouse-opt-in', requireAuth, handleClubhouseOptInToggle);
+
 authRouter.post('/avatar', requireAuth, async (c) => {
   const user = c.get('user');
   try {

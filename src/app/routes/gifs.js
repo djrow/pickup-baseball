@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import {
   requireAuth,
   rejectIfChatMuted,
+  rejectIfClubhouseOptedOut,
   checkRateLimit,
   validateExternalGifUrl,
   isValidRasterImageBuffer,
@@ -160,6 +161,8 @@ gifsRouter.get('/', requireAuth, async (c) => {
 // ---------------------------------------------------------------------------
 gifsRouter.post('/import-url', requireAuth, async (c) => {
   const user = c.get('user');
+  const optResp = rejectIfClubhouseOptedOut(c, user);
+  if (optResp) return optResp;
   const mutedResp = rejectIfChatMuted(c, user);
   if (mutedResp) return mutedResp;
 

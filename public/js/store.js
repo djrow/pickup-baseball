@@ -1396,7 +1396,29 @@
       emit('user_mute_updated', payload);
     } else if (ev.event_type === 'voice_update') {
       emit('voice_updated', payload);
+    } else if (ev.event_type === 'member_opt_change') {
+      state.messagesByChannel = Object.create(null);
+      bootstrap().then(function () {
+        emit('member_opt_changed', payload);
+      }).catch(function () {});
     }
+  }
+
+  function setClubhouseOptIn(optedIn) {
+    return apiRequest('PUT', '/api/auth/clubhouse-opt-in', { opted_in: Boolean(optedIn) }).then(function (res) {
+      if (!res.ok) {
+        throw new Error((res.data && res.data.error) || 'Failed to update Clubhouse membership');
+      }
+      if (state.user) {
+        state.user.clubhouseOptedIn = Boolean(res.data && res.data.clubhouseOptedIn);
+        state.user.clubhouse_opted_in = (res.data && res.data.clubhouse_opted_in) ? 1 : 0;
+      }
+      state.messagesByChannel = Object.create(null);
+      return bootstrap().then(function (b) {
+        emit('member_opt_changed', res.data);
+        return b;
+      });
+    });
   }
 
   function isChatRecentlyActive() {
@@ -1705,6 +1727,7 @@
     hideDmChannel: hideDmChannel,
     unhideDmChannel: unhideDmChannel,
     clearLocalSessionData: clearLocalSessionData,
+    setClubhouseOptIn: setClubhouseOptIn,
     editMessage: editMessage,
     deleteMessage: deleteMessage,
     hideMessage: hideMessage,

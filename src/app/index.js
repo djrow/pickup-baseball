@@ -6,7 +6,7 @@
 import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { CURRENT_APP_VERSION } from './version.js';
-import { ensureD1Schema, ensureChatD1Schema } from './schema.js';
+import { ensureD1Schema, ensureChatD1Schema, ensureClubhouseOptInBackfill } from './schema.js';
 import { SESSION_COOKIE_NAME, getUserFromSession, requireAdmin } from './security.js';
 import { renderFeedXmlResponse } from './feeds.js';
 import { authRouter, serveUserAvatar, getSettingsHandler, putSettingsHandler, testAppscriptHandler } from './routes/auth.js';
@@ -64,6 +64,9 @@ app.use('*', async (c, next) => {
     }
     if (c.env.CHAT_DB) {
       await ensureChatD1Schema(c.env.CHAT_DB);
+    }
+    if (c.env.DB && c.env.CHAT_DB) {
+      await ensureClubhouseOptInBackfill(c.env.DB, c.env.CHAT_DB);
     }
   }
 

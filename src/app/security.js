@@ -242,6 +242,7 @@ export async function getUserFromSession(db, sessionId, chatDb, options = {}) {
       COALESCE(u.hero_credits, 0) as hero_credits,
       COALESCE(u.waiver_status, 'none') as waiver_status,
       u.waiver_signed_at as waiver_signed_at,
+      COALESCE(u.clubhouse_opted_in, 0) as clubhouse_opted_in,
       ${lightweight ? '0' : `EXISTS (
         SELECT 1 FROM attendees a
         JOIN events e ON a.event_id = e.id
@@ -345,7 +346,9 @@ export async function getUserFromSession(db, sessionId, chatDb, options = {}) {
     hasKeys,
     has_keys: hasKeys,
     privacyRelayMode,
-    privacy_relay_mode: privacyRelayMode
+    privacy_relay_mode: privacyRelayMode,
+    clubhouseOptedIn: Boolean(session.clubhouse_opted_in),
+    clubhouse_opted_in: session.clubhouse_opted_in ? 1 : 0
   };
 }
 
@@ -431,6 +434,16 @@ export function rejectIfChatMuted(c, user) {
       error: `You are currently muted in Clubhouse${reasonSuffix}`,
       code: 'USER_MUTED',
       muted_reason: user.chatMutedReason || null
+    }, 403);
+  }
+  return null;
+}
+
+export function rejectIfClubhouseOptedOut(c, user) {
+  if (user && !user.clubhouseOptedIn && user.clubhouse_opted_in !== 1) {
+    return c.json({
+      error: 'Please opt in to the Clubhouse to participate in chat, reactions, DMs, or voice.',
+      code: 'CLUBHOUSE_OPT_OUT'
     }, 403);
   }
   return null;

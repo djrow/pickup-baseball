@@ -4,7 +4,7 @@
  */
 
 import { Hono } from 'hono';
-import { requireAuth, requireModerator, canAccessChannel, rejectIfChatMuted } from '../security.js';
+import { requireAuth, requireModerator, canAccessChannel, rejectIfChatMuted, rejectIfClubhouseOptedOut } from '../security.js';
 
 export const chatRouter = new Hono();
 
@@ -248,7 +248,7 @@ async function hydrateMessages(chatDb, messages) {
 
   try {
     const { results: reactions } = await chatDb.prepare(
-      `SELECT * FROM message_reactions WHERE message_id IN (${placeholders}) ORDER BY id ASC`
+      `SELECT * FROM message_reactions WHERE message_id IN (${placeholders}) AND user_id NOT IN (SELECT user_id FROM clubhouse_opted_out) ORDER BY id ASC`
     ).bind(...msgIds).all();
     for (const r of (reactions || [])) {
       if (!reactionsByMsg.has(r.message_id)) reactionsByMsg.set(r.message_id, []);
@@ -302,7 +302,7 @@ chatRouter.get('/bootstrap', requireAuth, async (c) => {
 
   // Active voice participants (<25s heartbeat)
   const { results: rawVoice } = await chatDb.prepare(
-    'SELECT * FROM voice_participants WHERE heartbeat_at > ? ORDER BY heartbeat_at DESC'
+    'SELECT * FROM voice_participants WHERE heartbeat_at > ? AND user_id NOT IN (SELECT user_id FROM clubhouse_opted_out) ORDER BY heartbeat_at DESC'
   ).bind(nowSec - 25).all();
   const voice_participants = (rawVoice || []).filter((vp) => accessibleIds.has(vp.channel_id));
 
@@ -313,7 +313,9 @@ chatRouter.get('/bootstrap', requireAuth, async (c) => {
       SELECT m.channel_id, COUNT(*) as c
       FROM messages m
       LEFT JOIN channel_members cm ON cm.channel_id = m.channel_id AND cm.user_id = ?
-      WHERE m.deleted_at IS NULL AND m.id > COALESCE(cm.last_read_message_id, 0)
+      WHERE m.deleted_at IS NULL
+        AND m.author_id NOT IN (SELECT user_id FROM clubhouse_opted_out)
+        AND m.id > COALESCE(cm.last_read_message_id, 0)
       GROUP BY m.channel_id
     `).bind(user.id).all();
     const countMap = new Map((unreadRows || []).map((r) => [r.channel_id, r.c || 0]));
@@ -338,7 +340,8 @@ chatRouter.get('/bootstrap', requireAuth, async (c) => {
                  ELSE COALESCE(avatar_url, '')
                END as avatar_url
         FROM users
-        WHERE NOT EXISTS (SELECT 1 FROM banned_emails b WHERE LOWER(b.email) = LOWER(users.email))
+        WHERE COALESCE(clubhouse_opted_in, 0) = 1
+          AND NOT EXISTS (SELECT 1 FROM banned_emails b WHERE LOWER(b.email) = LOWER(users.email))
         ORDER BY CASE WHEN role = 'admin' OR is_admin = 1 THEN 1 WHEN is_moderator = 1 THEN 2 WHEN role = 'organizer' THEN 3 ELSE 4 END, name ASC
         LIMIT 200
       `).all();
@@ -487,6 +490,7 @@ chatRouter.get('/sync', requireAuth, async (c) => {
     const { results: rawMsgs } = await chatDb.prepare(
       `SELECT * FROM messages
        WHERE id > ? AND channel_id IN (${placeholders}) AND deleted_at IS NULL
+         AND author_id NOT IN (SELECT user_id FROM clubhouse_opted_out)
        ORDER BY id ASC
        LIMIT 200`
     ).bind(sinceMsgId, ...targetChannelIds).all();
@@ -530,7 +534,7 @@ chatRouter.get('/sync', requireAuth, async (c) => {
 
   // 4. Active voice participants (<25s heartbeat)
   const { results: rawVoice } = await chatDb.prepare(
-    'SELECT * FROM voice_participants WHERE heartbeat_at > ? ORDER BY heartbeat_at DESC'
+    'SELECT * FROM voice_participants WHERE heartbeat_at > ? AND user_id NOT IN (SELECT user_id FROM clubhouse_opted_out) ORDER BY heartbeat_at DESC'
   ).bind(nowSec - 25).all();
 
   const accessibleSet = new Set(accessibleChannels.map((ch) => ch.id));
@@ -580,6 +584,8 @@ chatRouter.get('/channels', requireAuth, async (c) => {
 // ---------------------------------------------------------------------------
 chatRouter.post('/channels', requireAuth, async (c) => {
   const user = c.get('user');
+  const optResp = rejectIfClubhouseOptedOut(c, user);
+  if (optResp) return optResp;
   const chatDb = c.env && c.env.CHAT_DB;
   if (!chatDb) return c.json({ error: 'Chat database unavailable.' }, 500);
 
@@ -904,6 +910,7 @@ chatRouter.get('/channels/:id/messages', async (c) => {
         SELECT * FROM (
           SELECT * FROM messages
           WHERE channel_id = ? AND id < ? AND deleted_at IS NULL
+            AND author_id NOT IN (SELECT user_id FROM clubhouse_opted_out)
           ORDER BY id DESC
           LIMIT ?
         ) ORDER BY id ASC
@@ -918,6 +925,7 @@ chatRouter.get('/channels/:id/messages', async (c) => {
     const { results: rows } = await chatDb.prepare(`
       SELECT * FROM messages
       WHERE channel_id = ? AND (id = ? OR parent_message_id = ?) AND deleted_at IS NULL
+        AND author_id NOT IN (SELECT user_id FROM clubhouse_opted_out)
       ORDER BY id ASC
       LIMIT ?
     `).bind(channel.id, parentId, parentId, limit).all();
@@ -929,6 +937,7 @@ chatRouter.get('/channels/:id/messages', async (c) => {
     SELECT * FROM (
       SELECT * FROM messages
       WHERE channel_id = ? AND deleted_at IS NULL
+        AND author_id NOT IN (SELECT user_id FROM clubhouse_opted_out)
       ORDER BY id DESC
       LIMIT ?
     ) ORDER BY id ASC
@@ -942,6 +951,8 @@ chatRouter.get('/channels/:id/messages', async (c) => {
 // ---------------------------------------------------------------------------
 chatRouter.post('/channels/:id/messages', requireAuth, async (c) => {
   const user = c.get('user');
+  const optResp = rejectIfClubhouseOptedOut(c, user);
+  if (optResp) return optResp;
   const mutedResp = rejectIfChatMuted(c, user);
   if (mutedResp) return mutedResp;
   const chatDb = c.env && c.env.CHAT_DB;
@@ -1250,6 +1261,8 @@ chatRouter.delete('/messages/:id', requireAuth, async (c) => {
 // ---------------------------------------------------------------------------
 chatRouter.post('/messages/:id/reactions', requireAuth, async (c) => {
   const user = c.get('user');
+  const optResp = rejectIfClubhouseOptedOut(c, user);
+  if (optResp) return optResp;
   const mutedResp = rejectIfChatMuted(c, user);
   if (mutedResp) return mutedResp;
   const chatDb = c.env && c.env.CHAT_DB;
@@ -1294,7 +1307,7 @@ chatRouter.post('/messages/:id/reactions', requireAuth, async (c) => {
     ).run();
 
     const { results: updatedReactions } = await chatDb.prepare(
-      'SELECT * FROM message_reactions WHERE message_id = ? ORDER BY id ASC'
+      'SELECT * FROM message_reactions WHERE message_id = ? AND user_id NOT IN (SELECT user_id FROM clubhouse_opted_out) ORDER BY id ASC'
     ).bind(msgId).all();
 
     return c.json({
@@ -1321,7 +1334,7 @@ chatRouter.post('/messages/:id/reactions', requireAuth, async (c) => {
     ).run();
 
     const { results: updatedReactions } = await chatDb.prepare(
-      'SELECT * FROM message_reactions WHERE message_id = ? ORDER BY id ASC'
+      'SELECT * FROM message_reactions WHERE message_id = ? AND user_id NOT IN (SELECT user_id FROM clubhouse_opted_out) ORDER BY id ASC'
     ).bind(msgId).all();
 
     return c.json({
@@ -1481,6 +1494,8 @@ chatRouter.post('/messages/:id/unhide', requireModerator, async (c) => {
 // ---------------------------------------------------------------------------
 chatRouter.post('/reports', requireAuth, async (c) => {
   const user = c.get('user');
+  const optResp = rejectIfClubhouseOptedOut(c, user);
+  if (optResp) return optResp;
   const chatDb = c.env && c.env.CHAT_DB;
   const baseballDb = c.env && (c.env.BASEBALL_DB || c.env.DB);
   if (!chatDb) return c.json({ error: 'Chat database unavailable.' }, 500);

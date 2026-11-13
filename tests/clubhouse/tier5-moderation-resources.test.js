@@ -572,7 +572,7 @@ module.exports = async function runTier5(t, ctx) {
 
     for (const tu of testUsers) {
       const ins = ctx.baseballDb.prepare(
-        "INSERT INTO users (name, email, role) VALUES (?, ?, 'player')"
+        "INSERT INTO users (name, email, role, clubhouse_opted_in) VALUES (?, ?, 'player', 1)"
       ).run(tu.name, tu.email);
       insertedIds.push(ins.lastInsertRowid);
     }
@@ -1514,5 +1514,119 @@ module.exports = async function runTier5(t, ctx) {
       globalThis.localStorage = prevLocalStorage;
       delete require.cache[require.resolve('../../public/js/store.js')];
     }
+  });
+
+  await t.test('T5.16: Clubhouse Opt-In / Opt-Out Lifecycle (Members Directory, Hidden/Restored Messages, Reactions & DM Isolation)', async () => {
+    const fs = require('fs');
+    const path = require('path');
+    const rootDir = path.resolve(__dirname, '..', '..');
+
+    // 1. Insert a brand-new Pickup Baseball user (default clubhouse_opted_in = 0)
+    const futureExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    const uRes = ctx.baseballDb.prepare(
+      "INSERT INTO users (name, email, role, is_admin) VALUES ('Eve Newcomer', 'eve-optin@pickupbaseball.org', 'player', 0)"
+    ).run();
+    const eveId = Number(uRes.lastInsertRowid);
+    const eveSess = 'sess_eve_' + Date.now();
+    ctx.baseballDb.prepare('INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)').run(eveSess, eveId, futureExpiry);
+    const eveCookie = `baseball_session=${eveSess}`;
+
+    // Verify Eve is NOT in Clubhouse members list and cannot post/react/join voice while opted out
+    const bootBefore = await ctx.apiReq('GET', '/api/bootstrap', ctx.adminCookie);
+    assert.equal(bootBefore.status, 200);
+    assert.ok(!(bootBefore.data.members || []).some((m) => Number(m.id) === eveId), 'Opted-out user must not appear in members directory');
+
+    const eveMeBefore = await ctx.apiReq('GET', '/api/auth/me', eveCookie);
+    assert.equal(eveMeBefore.status, 200);
+    assert.equal(eveMeBefore.data.user.clubhouseOptedIn, false);
+
+    const blockedPost = await ctx.apiReq('POST', '/api/channels/general/messages', eveCookie, { content: 'Should be blocked' });
+    assert.equal(blockedPost.status, 403);
+    assert.equal(blockedPost.data.code, 'CLUBHOUSE_OPT_OUT');
+
+    // 2. Eve opts in -> appears in members list, posts in #general, reacts, and exchanges DMs with Charlie Player
+    const optInRes = await ctx.apiReq('PUT', '/api/auth/clubhouse-opt-in', eveCookie, { opted_in: true });
+    assert.equal(optInRes.status, 200);
+    assert.equal(optInRes.data.clubhouseOptedIn, true);
+
+    const bootAfterIn = await ctx.apiReq('GET', '/api/bootstrap', ctx.adminCookie);
+    assert.ok((bootAfterIn.data.members || []).some((m) => Number(m.id) === eveId), 'Opted-in user must appear in members directory');
+
+    const eveMsgRes = await ctx.apiReq('POST', '/api/channels/general/messages', eveCookie, { content: 'Hello from Eve!' });
+    assert.equal(eveMsgRes.status, 201);
+    const eveMsgId = eveMsgRes.data.message.id;
+
+    const adminMsgRes = await ctx.apiReq('POST', '/api/channels/general/messages', ctx.adminCookie, { content: 'Welcome Eve!' });
+    assert.equal(adminMsgRes.status, 201);
+    const adminMsgId = adminMsgRes.data.message.id;
+
+    const rxRes = await ctx.apiReq('POST', `/api/messages/${adminMsgId}/reactions`, eveCookie, { emoji: '⚾' });
+    assert.equal(rxRes.status, 200);
+    assert.ok((rxRes.data.reactions || []).some((r) => Number(r.user_id) === eveId && r.emoji === '⚾'));
+
+    const dmOpen = await ctx.apiReq('POST', '/api/channels', ctx.playerCookie, {
+      channel_type: 'dm',
+      dm_user_id: eveId,
+      is_encrypted: true
+    });
+    assert.ok(dmOpen.status === 200 || dmOpen.status === 201);
+    const dmId = dmOpen.data.channel.id;
+
+    const playerDmMsg = await ctx.apiReq('POST', `/api/channels/${dmId}/messages`, ctx.playerCookie, {
+      content: 'CIPHER_FROM_PLAYER',
+      encryption_iv: 'iv_player_1'
+    });
+    assert.equal(playerDmMsg.status, 201);
+    const eveDmMsg = await ctx.apiReq('POST', `/api/channels/${dmId}/messages`, eveCookie, {
+      content: 'CIPHER_FROM_EVE',
+      encryption_iv: 'iv_eve_1'
+    });
+    assert.equal(eveDmMsg.status, 201);
+
+    // 3. Eve opts out -> disappears from members, her #general messages & reactions hide, DM thread stays open for Player with only Player's messages
+    const optOutRes = await ctx.apiReq('PUT', '/api/auth/clubhouse-opt-in', eveCookie, { opted_in: false });
+    assert.equal(optOutRes.status, 200);
+    assert.equal(optOutRes.data.clubhouseOptedIn, false);
+
+    const bootAfterOut = await ctx.apiReq('GET', '/api/bootstrap', ctx.playerCookie);
+    assert.ok(!(bootAfterOut.data.members || []).some((m) => Number(m.id) === eveId), 'Opted-out user must disappear from members directory');
+    assert.ok((bootAfterOut.data.channels || []).some((ch) => Number(ch.id) === Number(dmId)), 'DM thread must remain visible in Player channel list');
+
+    const generalAfterOut = await ctx.apiReq('GET', '/api/channels/general/messages', ctx.playerCookie);
+    assert.equal(generalAfterOut.status, 200);
+    assert.ok(!(generalAfterOut.data.messages || []).some((m) => Number(m.id) === Number(eveMsgId)), 'Opted-out user message must be hidden in #general');
+    const adminMsgAfterOut = (generalAfterOut.data.messages || []).find((m) => Number(m.id) === Number(adminMsgId));
+    assert.ok(adminMsgAfterOut, 'Other users messages remain visible');
+    assert.ok(!(adminMsgAfterOut.reactions || []).some((r) => Number(r.user_id) === eveId), 'Opted-out user reactions must be hidden');
+
+    const dmMsgsAfterOut = await ctx.apiReq('GET', `/api/channels/${dmId}/messages`, ctx.playerCookie);
+    assert.equal(dmMsgsAfterOut.status, 200);
+    assert.ok((dmMsgsAfterOut.data.messages || []).some((m) => Number(m.id) === Number(playerDmMsg.data.message.id)), 'Player DM message remains visible');
+    assert.ok(!(dmMsgsAfterOut.data.messages || []).some((m) => Number(m.id) === Number(eveDmMsg.data.message.id)), 'Opted-out Eve DM message must be hidden');
+
+    // 4. Eve opts back in -> member listing, #general message, reaction, and DM message all restore
+    const rejoinRes = await ctx.apiReq('PUT', '/api/auth/clubhouse-opt-in', eveCookie, { opted_in: true });
+    assert.equal(rejoinRes.status, 200);
+
+    const bootRejoin = await ctx.apiReq('GET', '/api/bootstrap', ctx.playerCookie);
+    assert.ok((bootRejoin.data.members || []).some((m) => Number(m.id) === eveId), 'Rejoined user must reappear in members directory');
+
+    const generalRejoin = await ctx.apiReq('GET', '/api/channels/general/messages', ctx.playerCookie);
+    assert.ok((generalRejoin.data.messages || []).some((m) => Number(m.id) === Number(eveMsgId)), 'Rejoined user #general message must be restored');
+    const adminMsgRejoin = (generalRejoin.data.messages || []).find((m) => Number(m.id) === Number(adminMsgId));
+    assert.ok((adminMsgRejoin.reactions || []).some((r) => Number(r.user_id) === eveId), 'Rejoined user reaction must be restored');
+
+    const dmMsgsRejoin = await ctx.apiReq('GET', `/api/channels/${dmId}/messages`, ctx.playerCookie);
+    assert.ok((dmMsgsRejoin.data.messages || []).some((m) => Number(m.id) === Number(eveDmMsg.data.message.id)), 'Rejoined user DM message must be restored');
+
+    // 5. Verify UI controls & strict ES6 preserved
+    const clubhouseHtml = fs.readFileSync(path.join(rootDir, 'public', 'clubhouse.html'), 'utf8');
+    const clubhouseJs = fs.readFileSync(path.join(rootDir, 'public', 'js', 'clubhouse.js'), 'utf8');
+    const profileHtml = fs.readFileSync(path.join(rootDir, 'public', 'profile.html'), 'utf8');
+    assert.ok(clubhouseHtml.includes('id="ch-optin-banner"'));
+    assert.ok(clubhouseHtml.includes('id="btn-join-clubhouse"'));
+    assert.ok(clubhouseJs.includes('btn-clubhouse-opt-toggle'));
+    assert.ok(profileHtml.includes('id="btn-profile-clubhouse-optin"'));
+    assert.ok(!clubhouseJs.includes('?.') && !clubhouseJs.includes('??'), 'clubhouse.js must remain strict ES6');
   });
 };

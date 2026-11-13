@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 
   API.renderNav(currentUser);
   populateProfileData();
+  setupClubhouseOptIn();
   setupAvatarUpload();
   setupProfileForm();
   setupLogoutButtons();
@@ -112,7 +113,73 @@ function populateProfileData() {
     }
   }
 
+  renderClubhouseOptInState();
   renderAvatarPreview();
+}
+
+function renderClubhouseOptInState() {
+  const pill = document.getElementById('badge-clubhouse-pill');
+  const btn = document.getElementById('btn-profile-clubhouse-optin');
+  const openLink = document.getElementById('profile-clubhouse-link');
+  const desc = document.getElementById('profile-clubhouse-desc');
+  if (!pill || !btn) return;
+
+  const optedIn = Boolean(currentUser && (currentUser.clubhouseOptedIn || currentUser.clubhouse_opted_in === 1));
+  if (optedIn) {
+    pill.className = 'badge badge-green';
+    pill.textContent = '✓ Opted In';
+    btn.className = 'btn btn-outline btn-sm';
+    btn.style.color = 'var(--danger)';
+    btn.style.borderColor = 'var(--danger)';
+    btn.textContent = 'Leave Clubhouse';
+    if (openLink) openLink.style.display = 'inline-block';
+    if (desc) {
+      desc.textContent = 'You are an active Clubhouse member. Leaving hides your messages, reactions, and directory listing until you rejoin.';
+    }
+  } else {
+    pill.className = 'badge badge-gray';
+    pill.textContent = 'Not Opted In';
+    btn.className = 'btn btn-primary btn-sm';
+    btn.style.color = '';
+    btn.style.borderColor = '';
+    btn.textContent = 'Join Clubhouse';
+    if (openLink) openLink.style.display = 'none';
+    if (desc) {
+      desc.textContent = 'Opt in to appear in the Clubhouse members list, chat, react, and join DMs or voice lounges. Leaving hides your messages and reactions until you rejoin.';
+    }
+  }
+}
+
+function setupClubhouseOptIn() {
+  const btn = document.getElementById('btn-profile-clubhouse-optin');
+  if (!btn) return;
+  btn.addEventListener('click', async function() {
+    const currentlyIn = Boolean(currentUser && (currentUser.clubhouseOptedIn || currentUser.clubhouse_opted_in === 1));
+    const nextState = !currentlyIn;
+    btn.disabled = true;
+    btn.textContent = nextState ? 'Joining...' : 'Leaving...';
+    try {
+      const res = await API.setClubhouseOptIn(nextState);
+      if (res.error) {
+        showAlert(res.error, true);
+      } else {
+        currentUser.clubhouseOptedIn = Boolean(res.clubhouseOptedIn);
+        currentUser.clubhouse_opted_in = res.clubhouse_opted_in ? 1 : 0;
+        renderClubhouseOptInState();
+        showAlert(
+          nextState
+            ? 'You opted in to the Clubhouse! Your profile and any prior messages are now visible.'
+            : 'You left the Clubhouse. Your profile, messages, and reactions are hidden until you opt back in.',
+          false
+        );
+      }
+    } catch (err) {
+      showAlert('Failed to update Clubhouse membership.', true);
+    } finally {
+      btn.disabled = false;
+      renderClubhouseOptInState();
+    }
+  });
 }
 
 function renderAvatarPreview() {

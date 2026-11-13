@@ -129,8 +129,8 @@ async function createClubhouseTestContext(options = {}) {
 
   // 1. Admin
   const adminRes = baseballDb.prepare(`
-    INSERT INTO users (name, email, role, is_admin, machine_badge, field_badge, hero_credits)
-    VALUES ('Alice Admin', 'admin@pickupbaseball.org', 'admin', 1, 1, 0, 10)
+    INSERT INTO users (name, email, role, is_admin, machine_badge, field_badge, hero_credits, clubhouse_opted_in)
+    VALUES ('Alice Admin', 'admin@pickupbaseball.org', 'admin', 1, 1, 0, 10, 1)
   `).run();
   const adminId = adminRes.lastInsertRowid;
   const adminSessionId = generateSessionId();
@@ -139,8 +139,8 @@ async function createClubhouseTestContext(options = {}) {
 
   // 2. Organizer
   const orgRes = baseballDb.prepare(`
-    INSERT INTO users (name, email, role, is_admin, machine_badge, field_badge, hero_credits)
-    VALUES ('Bob Organizer', 'organizer@pickupbaseball.org', 'organizer', 0, 0, 1, 5)
+    INSERT INTO users (name, email, role, is_admin, machine_badge, field_badge, hero_credits, clubhouse_opted_in)
+    VALUES ('Bob Organizer', 'organizer@pickupbaseball.org', 'organizer', 0, 0, 1, 5, 1)
   `).run();
   const orgId = orgRes.lastInsertRowid;
   const orgSessionId = generateSessionId();
@@ -149,8 +149,8 @@ async function createClubhouseTestContext(options = {}) {
 
   // 3. Regular Player
   const playerRes = baseballDb.prepare(`
-    INSERT INTO users (name, email, role, is_admin, machine_badge, field_badge, hero_credits)
-    VALUES ('Charlie Player', 'player@pickupbaseball.org', 'player', 0, 0, 0, 0)
+    INSERT INTO users (name, email, role, is_admin, machine_badge, field_badge, hero_credits, clubhouse_opted_in)
+    VALUES ('Charlie Player', 'player@pickupbaseball.org', 'player', 0, 0, 0, 0, 1)
   `).run();
   const playerId = playerRes.lastInsertRowid;
   const playerSessionId = generateSessionId();
@@ -159,8 +159,8 @@ async function createClubhouseTestContext(options = {}) {
 
   // 4. Facilitator Player (Assigned 'Game Facilitator' volunteer task)
   const facRes = baseballDb.prepare(`
-    INSERT INTO users (name, email, role, is_admin, machine_badge, field_badge, hero_credits)
-    VALUES ('Dana Facilitator', 'facilitator@pickupbaseball.org', 'player', 0, 0, 0, 2)
+    INSERT INTO users (name, email, role, is_admin, machine_badge, field_badge, hero_credits, clubhouse_opted_in)
+    VALUES ('Dana Facilitator', 'facilitator@pickupbaseball.org', 'player', 0, 0, 0, 2, 1)
   `).run();
   const facilitatorId = facRes.lastInsertRowid;
   const facilitatorSessionId = generateSessionId();
