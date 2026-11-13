@@ -1042,6 +1042,18 @@ module.exports = async function runTier5(t, ctx) {
         res.end(rallyGif);
         return;
       }
+      if (req.url === '/large-gdrive-fail.gif') {
+        const bigGif = Buffer.concat([rallyGif, Buffer.alloc(2 * 1024 * 1024 + 4096, 0x20)]);
+        res.writeHead(200, { 'Content-Type': 'image/gif', 'Content-Length': String(bigGif.length) });
+        res.end(bigGif);
+        return;
+      }
+      if (req.url === '/small-gdrive-fallback.gif') {
+        const smallGif = Buffer.concat([sampleGif, Buffer.from('small-fallback-salt')]);
+        res.writeHead(200, { 'Content-Type': 'image/gif', 'Content-Length': String(smallGif.length) });
+        res.end(smallGif);
+        return;
+      }
       res.writeHead(200, { 'Content-Type': 'image/gif', 'Content-Length': String(sampleGif.length) });
       res.end(sampleGif);
     });
@@ -1050,113 +1062,180 @@ module.exports = async function runTier5(t, ctx) {
     const port = mockGifServer.address().port;
 
     try {
-      // Non-GIF payload must be rejected by magic-byte verification
-      const fakeRes = await ctx.apiReq('POST', '/api/gifs/import-url', ctx.playerCookie, {
-        url: `http://127.0.0.1:${port}/not-a-gif.gif`
-      });
-      assert.equal(fakeRes.status, 400);
-
-      // Import real GIF URL via test server (exercises local fallback & dedup when GDrive env not set on harness)
-      const importRes = await ctx.apiReq('POST', '/api/gifs/import-url', ctx.playerCookie, {
+      // Unconfigured Google Drive must reject imports cleanly (503) and never save GIFs into D1
+      const unconfiguredRes = await ctx.apiReq('POST', '/api/gifs/import-url', ctx.playerCookie, {
         url: `http://127.0.0.1:${port}/batflip.gif`,
         title: 'Bat Flip Celebration'
       });
-      assert.equal(importRes.status, 201);
-      assert.equal(importRes.data.deduplicated, false);
-      assert.equal(importRes.data.gif.title, 'Bat Flip Celebration');
-
-      const gifId = importRes.data.gif.id;
-      const d1Row = await ctx.chatD1.prepare('SELECT storage_provider, drive_file_id, local_data_base64 FROM clubhouse_gifs WHERE id = ?').bind(gifId).first();
-      assert.ok(d1Row && (d1Row.storage_provider === 'local' || d1Row.storage_provider === 'gdrive'));
+      assert.equal(unconfiguredRes.status, 503);
 
       // Verify true 5 TB Google Drive upload + zero D1 binary payload using MockGoogleDriveService
       const { createMockGDriveServer } = require('../helpers/mock-gdrive');
       const { app: honoApp } = await import('../../src/app/index.js');
       const mockDrive = await createMockGDriveServer();
+      const gdriveEnv = {
+        NODE_ENV: 'test',
+        BASEBALL_DB: ctx.baseballD1,
+        CHAT_DB: ctx.chatD1,
+        DB: ctx.baseballD1,
+        GDRIVE_API_BASE: mockDrive.baseUrl,
+        GDRIVE_ACCESS_TOKEN: 'mock_token'
+      };
+      const honoApiReq = async (method, urlPath, cookie, jsonBody) => {
+        const headers = { 'Origin': 'http://127.0.0.1' };
+        if (cookie) headers['Cookie'] = cookie;
+        if (jsonBody !== undefined) headers['Content-Type'] = 'application/json';
+        const res = await honoApp.fetch(new Request(`http://127.0.0.1${urlPath}`, {
+          method,
+          headers,
+          body: jsonBody !== undefined ? JSON.stringify(jsonBody) : undefined
+        }), gdriveEnv);
+        const text = await res.text();
+        let data = null;
+        try { data = JSON.parse(text); } catch (e) {}
+        return { status: res.status, headers: res.headers, data, text };
+      };
+
       try {
-        const gdriveEnv = {
+        // Non-GIF payload must be rejected by magic-byte verification
+        const fakeRes = await honoApiReq('POST', '/api/gifs/import-url', ctx.playerCookie, {
+          url: `http://127.0.0.1:${port}/not-a-gif.gif`
+        });
+        assert.equal(fakeRes.status, 400);
+
+        // Import real GIF URL via Google Drive
+        const importRes = await honoApiReq('POST', '/api/gifs/import-url', ctx.playerCookie, {
+          url: `http://127.0.0.1:${port}/batflip.gif`,
+          title: 'Bat Flip Celebration'
+        });
+        assert.equal(importRes.status, 201);
+        assert.equal(importRes.data.deduplicated, false);
+        assert.equal(importRes.data.gif.title, 'Bat Flip Celebration');
+        assert.equal(importRes.data.gif.storage_provider, 'gdrive');
+
+        const gifId = importRes.data.gif.id;
+        const d1Row = await ctx.chatD1.prepare('SELECT storage_provider, drive_file_id, local_data_base64 FROM clubhouse_gifs WHERE id = ?').bind(gifId).first();
+        assert.equal(d1Row.storage_provider, 'gdrive');
+        assert.ok(d1Row.drive_file_id, 'GIF must be stored in Google Drive');
+        assert.equal(d1Row.local_data_base64, null, 'Binary bytes must NEVER be saved in D1');
+
+        const rallyRes = await honoApiReq('POST', '/api/gifs/import-url', ctx.playerCookie, {
+          url: `http://127.0.0.1:${port}/rally-gdrive.gif`,
+          title: 'GDrive Rally Cap',
+          tags: 'gdrive rally'
+        });
+        assert.equal(rallyRes.status, 201);
+        assert.equal(rallyRes.data.gif.storage_provider, 'gdrive');
+        const gdRow = await ctx.chatD1.prepare('SELECT storage_provider, drive_file_id, local_data_base64 FROM clubhouse_gifs WHERE id = ?').bind(rallyRes.data.gif.id).first();
+        assert.equal(gdRow.storage_provider, 'gdrive');
+        assert.ok(gdRow.drive_file_id);
+        assert.equal(gdRow.local_data_base64, null);
+
+        const gdStreamRes = await honoApp.fetch(
+          new Request(`http://127.0.0.1/api/gifs/${encodeURIComponent(rallyRes.data.gif.id)}/stream`, { method: 'GET' }),
+          gdriveEnv
+        );
+        assert.equal(gdStreamRes.status, 200);
+        assert.equal(gdStreamRes.headers.get('content-type'), 'image/gif');
+
+        // Re-importing the exact same URL deduplicates with zero external fetch
+        const fetchesBeforeUrlDedup = remoteFetchCount;
+        const dupUrlRes = await honoApiReq('POST', '/api/gifs/import-url', ctx.facilitatorCookie, {
+          url: `http://127.0.0.1:${port}/batflip.gif`
+        });
+        assert.equal(dupUrlRes.status, 200);
+        assert.equal(dupUrlRes.data.deduplicated, true);
+        assert.equal(dupUrlRes.data.gif.id, gifId);
+        assert.equal(remoteFetchCount, fetchesBeforeUrlDedup, 'URL dedup must skip fetching remote host');
+
+        // Different URL with identical bytes deduplicates by SHA-256 hash
+        const dupHashRes = await honoApiReq('POST', '/api/gifs/import-url', ctx.facilitatorCookie, {
+          url: `http://127.0.0.1:${port}/mirror-batflip.gif`
+        });
+        assert.equal(dupHashRes.status, 200);
+        assert.equal(dupHashRes.data.deduplicated, true);
+        assert.equal(dupHashRes.data.gif.id, gifId);
+
+        // Stream full GIF & Range request from Drive
+        const streamRes = await honoApiReq('GET', `/api/gifs/${encodeURIComponent(gifId)}/stream`);
+        assert.equal(streamRes.status, 200);
+        assert.equal(streamRes.headers.get('content-type'), 'image/gif');
+
+        // Private / DM GIF import must stay unlisted from other users' drawer and require auth to stream
+        const privRes = await honoApiReq('POST', '/api/gifs/import-url', ctx.playerCookie, {
+          url: `http://127.0.0.1:${port}/private-dm.gif`,
+          title: 'Secret Slide',
+          is_public: false
+        });
+        assert.equal(privRes.status, 201);
+        const privId = privRes.data.gif.id;
+
+        const listOther = await honoApiReq('GET', '/api/gifs', ctx.facilitatorCookie);
+        assert.equal(listOther.status, 200);
+        assert.ok(listOther.data.gifs.some((g) => g.id === gifId), 'Public GIF should appear in community list');
+        assert.ok(!listOther.data.gifs.some((g) => g.id === privId), 'Unlisted DM GIF must not appear in other users list');
+
+        const unauthPrivStream = await honoApiReq('GET', `/api/gifs/${encodeURIComponent(privId)}/stream`);
+        assert.equal(unauthPrivStream.status, 401);
+
+        const authPrivStream = await honoApiReq('GET', `/api/gifs/${encodeURIComponent(privId)}/stream`, ctx.facilitatorCookie);
+        assert.equal(authPrivStream.status, 200);
+        assert.ok(String(authPrivStream.headers.get('cache-control') || '').includes('private'));
+
+        // Google Drive failure must never fall back to D1 (regardless of GIF size) and must return structured 502
+        const closedPort = await (async () => {
+          const srv = http.createServer();
+          await new Promise((resolve) => srv.listen(0, '127.0.0.1', resolve));
+          const p = srv.address().port;
+          await new Promise((resolve) => srv.close(resolve));
+          return p;
+        })();
+
+        const brokenDriveEnv = {
           NODE_ENV: 'test',
           BASEBALL_DB: ctx.baseballD1,
           CHAT_DB: ctx.chatD1,
           DB: ctx.baseballD1,
-          GDRIVE_API_BASE: mockDrive.baseUrl,
+          GDRIVE_API_BASE: `http://127.0.0.1:${closedPort}`,
           GDRIVE_ACCESS_TOKEN: 'mock_token'
         };
-        const gReqRally = new Request('http://127.0.0.1/api/gifs/import-url', {
+
+        const smallFailRes = await honoApp.fetch(new Request('http://127.0.0.1/api/gifs/import-url', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Cookie': ctx.playerCookie,
             'Origin': 'http://127.0.0.1'
           },
-          body: JSON.stringify({
-            url: `http://127.0.0.1:${port}/rally-gdrive.gif`,
-            title: 'GDrive Rally Cap',
-            tags: 'gdrive rally'
-          })
-        });
-        const gRes = await honoApp.fetch(gReqRally, gdriveEnv);
-        assert.equal(gRes.status, 201);
-        const gData = await gRes.json();
-        assert.equal(gData.gif.storage_provider, 'gdrive');
-        const gdRow = await ctx.chatD1.prepare('SELECT storage_provider, drive_file_id, local_data_base64 FROM clubhouse_gifs WHERE id = ?').bind(gData.gif.id).first();
-        assert.equal(gdRow.storage_provider, 'gdrive');
-        assert.ok(gdRow.drive_file_id, 'GIF must be stored in Google Drive');
-        assert.equal(gdRow.local_data_base64, null, 'Binary bytes must NOT bloat D1 when Drive is configured');
+          body: JSON.stringify({ url: `http://127.0.0.1:${port}/small-gdrive-fallback.gif` })
+        }), brokenDriveEnv);
+        assert.equal(smallFailRes.status, 502, 'Small GIF must NOT fall back to D1 when Drive fails');
+        const smallFailData = await smallFailRes.json();
+        assert.match(String(smallFailData.error || ''), /Google Drive upload failed/i);
 
-        const gdStreamRes = await honoApp.fetch(
-          new Request(`http://127.0.0.1/api/gifs/${encodeURIComponent(gData.gif.id)}/stream`, { method: 'GET' }),
-          gdriveEnv
-        );
-        assert.equal(gdStreamRes.status, 200);
-        assert.equal(gdStreamRes.headers.get('content-type'), 'image/gif');
+        const largeFailRes = await honoApp.fetch(new Request('http://127.0.0.1/api/gifs/import-url', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Cookie': ctx.playerCookie,
+            'Origin': 'http://127.0.0.1'
+          },
+          body: JSON.stringify({ url: `http://127.0.0.1:${port}/large-gdrive-fail.gif` })
+        }), brokenDriveEnv);
+        assert.equal(largeFailRes.status, 502, 'Over 2 MB GIF when Drive fails must return structured 502, never 500');
+        const largeFailData = await largeFailRes.json();
+        assert.match(String(largeFailData.error || ''), /Google Drive upload failed/i);
+
+        const localRows = await ctx.chatD1.prepare('SELECT COUNT(*) AS cnt FROM clubhouse_gifs WHERE local_data_base64 IS NOT NULL').first();
+        assert.equal(Number(localRows.cnt || 0), 0, 'No GIF binary data may ever be stored in D1');
+
+        const unreachableHostRes = await honoApiReq('POST', '/api/gifs/import-url', ctx.playerCookie, {
+          url: `http://127.0.0.1:${closedPort}/unreachable.gif`
+        });
+        assert.equal(unreachableHostRes.status, 502, 'Unreachable remote GIF host must return 502, never 500');
       } finally {
         await mockDrive.close();
       }
-
-      // Re-importing the exact same URL deduplicates with zero external fetch
-      const fetchesBeforeUrlDedup = remoteFetchCount;
-      const dupUrlRes = await ctx.apiReq('POST', '/api/gifs/import-url', ctx.facilitatorCookie, {
-        url: `http://127.0.0.1:${port}/batflip.gif`
-      });
-      assert.equal(dupUrlRes.status, 200);
-      assert.equal(dupUrlRes.data.deduplicated, true);
-      assert.equal(dupUrlRes.data.gif.id, gifId);
-      assert.equal(remoteFetchCount, fetchesBeforeUrlDedup, 'URL dedup must skip fetching remote host');
-
-      // Different URL with identical bytes deduplicates by SHA-256 hash
-      const dupHashRes = await ctx.apiReq('POST', '/api/gifs/import-url', ctx.facilitatorCookie, {
-        url: `http://127.0.0.1:${port}/mirror-batflip.gif`
-      });
-      assert.equal(dupHashRes.status, 200);
-      assert.equal(dupHashRes.data.deduplicated, true);
-      assert.equal(dupHashRes.data.gif.id, gifId);
-
-      // Stream full GIF & Range request from Drive
-      const streamRes = await ctx.apiReq('GET', `/api/gifs/${encodeURIComponent(gifId)}/stream`);
-      assert.equal(streamRes.status, 200);
-      assert.equal(streamRes.headers.get('content-type'), 'image/gif');
-
-      // Private / DM GIF import must stay unlisted from other users' drawer and require auth to stream
-      const privRes = await ctx.apiReq('POST', '/api/gifs/import-url', ctx.playerCookie, {
-        url: `http://127.0.0.1:${port}/private-dm.gif`,
-        title: 'Secret Slide',
-        is_public: false
-      });
-      assert.equal(privRes.status, 201);
-      const privId = privRes.data.gif.id;
-
-      const listOther = await ctx.apiReq('GET', '/api/gifs', ctx.facilitatorCookie);
-      assert.equal(listOther.status, 200);
-      assert.ok(listOther.data.gifs.some((g) => g.id === gifId), 'Public GIF should appear in community list');
-      assert.ok(!listOther.data.gifs.some((g) => g.id === privId), 'Unlisted DM GIF must not appear in other users list');
-
-      const unauthPrivStream = await ctx.apiReq('GET', `/api/gifs/${encodeURIComponent(privId)}/stream`);
-      assert.equal(unauthPrivStream.status, 401);
-
-      const authPrivStream = await ctx.apiReq('GET', `/api/gifs/${encodeURIComponent(privId)}/stream`, ctx.facilitatorCookie);
-      assert.equal(authPrivStream.status, 200);
-      assert.ok(String(authPrivStream.headers.get('cache-control') || '').includes('private'));
     } finally {
       await new Promise((resolve) => mockGifServer.close(resolve));
     }

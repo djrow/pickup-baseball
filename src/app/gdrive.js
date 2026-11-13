@@ -147,7 +147,8 @@ export async function uploadGDriveBytes(env, { fileName, mimeType = 'application
   });
 
   if (!putRes.ok) {
-    return session.driveFileId || null;
+    const errText = await putRes.text().catch(() => '');
+    throw new Error(`Google Drive file upload failed (${putRes.status}): ${errText}`);
   }
 
   try {

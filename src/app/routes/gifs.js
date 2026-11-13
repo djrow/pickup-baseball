@@ -6,7 +6,6 @@ import {
   checkRateLimit,
   validateExternalGifUrl,
   isValidRasterImageBuffer,
-  arrayBufferToBase64,
   base64ToUint8Array,
   generateToken
 } from '../security.js';
@@ -20,7 +19,22 @@ import {
 export const gifsRouter = new Hono();
 
 const MAX_GIF_BYTES = 8 * 1024 * 1024;       // 8 MB cap for remote GIF/WebP downloads
-const MAX_LOCAL_D1_BYTES = 2 * 1024 * 1024;  // Safety cap when GDrive is unconfigured (offline/test)
+
+function formatDriveErrorReason(err) {
+  const msg = String((err && err.message) || '');
+  const statusMatch = msg.match(/\((\d{3})\)/);
+  const statusTag = statusMatch ? ` (${statusMatch[1]})` : '';
+  if (msg.includes('OAuth2 token refresh failed')) {
+    return `OAuth token refresh failed${statusTag} — check Google Drive credentials`;
+  }
+  if (msg.includes('resumable session init failed')) {
+    return `Drive session init failed${statusTag} — check Drive folder/permissions`;
+  }
+  if (msg.includes('file upload failed')) {
+    return `Drive file upload failed${statusTag}`;
+  }
+  return 'Google Drive request failed';
+}
 
 async function digestSha256Hex(bytes) {
   const buf = await crypto.subtle.digest('SHA-256', bytes);
@@ -71,13 +85,19 @@ function detectAnimatedMime(bytes, contentTypeHeader) {
 async function fetchExternalGifSafely(initialUrl, isTestEnv) {
   let currentUrl = initialUrl;
   for (let hop = 0; hop < 4; hop++) {
-    const res = await fetch(currentUrl, {
-      method: 'GET',
-      redirect: 'manual',
-      headers: {
-        'Accept': 'image/gif,image/webp;q=0.9,*/*;q=0.1'
-      }
-    });
+    let res;
+    try {
+      res = await fetch(currentUrl, {
+        method: 'GET',
+        redirect: 'manual',
+        headers: {
+          'Accept': 'image/gif,image/webp;q=0.9,*/*;q=0.1',
+          'User-Agent': 'SundayPickupBaseball/1.0 (+https://pickupbaseballfoundation.org)'
+        }
+      });
+    } catch (err) {
+      return { ok: false, status: 502, error: 'Could not connect to the remote GIF host.' };
+    }
 
     if (res.status >= 300 && res.status < 400) {
       const loc = res.headers.get('location');
@@ -107,7 +127,12 @@ async function fetchExternalGifSafely(initialUrl, isTestEnv) {
       return { ok: false, status: 413, error: 'Remote GIF exceeds the 8 MB size limit.' };
     }
 
-    const buf = await res.arrayBuffer();
+    let buf;
+    try {
+      buf = await res.arrayBuffer();
+    } catch (err) {
+      return { ok: false, status: 502, error: 'Failed while downloading GIF data from the remote host.' };
+    }
     if (!buf || buf.byteLength === 0) {
       return { ok: false, status: 400, error: 'Remote GIF response was empty.' };
     }
@@ -182,6 +207,10 @@ gifsRouter.post('/import-url', requireAuth, async (c) => {
     return c.json({ error: urlCheck.error }, urlCheck.status || 400);
   }
 
+  if (!isGDriveConfigured(c.env)) {
+    return c.json({ error: 'Google Drive storage is not configured for Clubhouse GIFs.' }, 503);
+  }
+
   const normalizedUrl = urlCheck.url;
   const isPublic = body.is_public === false || body.is_public === 0 ? 0 : 1;
   const title = deriveGifTitle(body.title, normalizedUrl);
@@ -228,63 +257,64 @@ gifsRouter.post('/import-url', requireAuth, async (c) => {
 
   const gifId = 'gif_' + generateToken().slice(0, 24);
   const ext = mimeType === 'image/webp' ? 'webp' : 'gif';
-  let storageProvider = 'local';
   let driveFileId = null;
-  let localDataBase64 = null;
 
-  if (isGDriveConfigured(c.env)) {
+  try {
     driveFileId = await uploadGDriveBytes(c.env, {
       fileName: `${gifId}.${ext}`,
       mimeType,
       bytes
     });
-    if (driveFileId) {
-      storageProvider = 'gdrive';
-    }
+  } catch (err) {
+    console.warn('[GIFs] Google Drive upload failed:', err && err.message ? err.message : err);
+    return c.json({
+      error: `Google Drive upload failed (${formatDriveErrorReason(err)}).`
+    }, 502);
   }
 
   if (!driveFileId) {
-    if (bytes.byteLength > MAX_LOCAL_D1_BYTES) {
-      return c.json({ error: 'GIF exceeds 2 MB local fallback limit while Google Drive is not configured.' }, 413);
-    }
-    storageProvider = 'local';
-    localDataBase64 = arrayBufferToBase64(bytes.buffer);
+    return c.json({
+      error: 'Google Drive upload did not return a file ID.'
+    }, 502);
   }
 
-  await chatDb.prepare(`
-    INSERT INTO clubhouse_gifs (
-      id, title, tags, mime_type, file_size, source_url, sha256,
-      storage_provider, drive_file_id, local_data_base64,
-      added_by, added_by_name, is_public, use_count
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-  `).bind(
-    gifId,
-    title,
-    tags,
-    mimeType,
-    bytes.byteLength,
-    normalizedUrl,
-    sha256,
-    storageProvider,
-    driveFileId,
-    localDataBase64,
-    user.id,
-    user.name || 'Player',
-    isPublic
-  ).run();
+  try {
+    await chatDb.prepare(`
+      INSERT INTO clubhouse_gifs (
+        id, title, tags, mime_type, file_size, source_url, sha256,
+        storage_provider, drive_file_id, local_data_base64,
+        added_by, added_by_name, is_public, use_count
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'gdrive', ?, NULL, ?, ?, ?, 1)
+    `).bind(
+      gifId,
+      title,
+      tags,
+      mimeType,
+      bytes.byteLength,
+      normalizedUrl,
+      sha256,
+      driveFileId,
+      user.id,
+      user.name || 'Player',
+      isPublic
+    ).run();
 
-  const created = await chatDb.prepare(`
-    SELECT id, title, tags, mime_type, file_size, storage_provider, is_public,
-           use_count, added_by, added_by_name, created_at
-    FROM clubhouse_gifs
-    WHERE id = ?
-  `).bind(gifId).first();
+    const created = await chatDb.prepare(`
+      SELECT id, title, tags, mime_type, file_size, storage_provider, is_public,
+             use_count, added_by, added_by_name, created_at
+      FROM clubhouse_gifs
+      WHERE id = ?
+    `).bind(gifId).first();
 
-  return c.json({
-    success: true,
-    deduplicated: false,
-    gif: serializeGifMeta(created)
-  }, 201);
+    return c.json({
+      success: true,
+      deduplicated: false,
+      gif: serializeGifMeta(created)
+    }, 201);
+  } catch (err) {
+    console.error('[GIFs] Failed to persist imported GIF metadata:', err && err.message ? err.message : err);
+    return c.json({ error: 'Could not save imported GIF metadata.' }, 500);
+  }
 });
 
 // ---------------------------------------------------------------------------
