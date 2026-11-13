@@ -1454,8 +1454,9 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     const appJs = fs.readFileSync(path.join(publicDir, 'js/app.js'), 'utf8');
     assert.ok(appJs.includes('setupCloudSyncLifecycle'), 'app.js must bind cloud sync lifecycle listeners');
     assert.ok(appJs.includes('visibilitychange'), 'app.js must auto-refresh when tab/PWA regains visibility');
-    assert.ok(appJs.includes('webcal://'), 'app.js must generate webcal:// subscription URL');
-    assert.ok(appJs.includes('/api/events/calendar.ics'), 'app.js must point to live /api/events/calendar.ics feed');
+    assert.ok(apiJsNav.includes('webcal://'), 'api.js must generate webcal:// subscription URL');
+    assert.ok(apiJsNav.includes('/api/events/calendar.ics'), 'api.js must point to live /api/events/calendar.ics feed');
+    assert.ok(appJs.includes('API.renderSubscribePanel('), 'app.js must delegate calendar subscription rendering to API.renderSubscribePanel');
     assert.ok(!appJs.includes('?.'), 'app.js must not use optional chaining for broad ES6 compatibility');
     assert.ok(!appJs.includes('??'), 'app.js must not use nullish coalescing for broad ES6 compatibility');
     assert.ok(!appJs.includes('.\\d\\d\\d'), 'app.js must not use buggy unescaped regex in formatGCal');
@@ -1535,6 +1536,70 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     const privSingleText = await privSingleRes.text();
     assert.ok(!privSingleText.includes('Private Whitelist Secret Scrimmage'), 'Restricted private event must not leak in anonymous single-game .ics feed');
 
+    // Verify personalized tokenized .ics subscriptions (public + invited private events only, plus token rotation)
+    const invitedCreate = await apiReq('POST', '/api/events', seedOrgCookie, {
+      title: 'Invited Personal Feed Game',
+      location: 'Bushrod Secret Field',
+      event_date: '2026-12-27T20:00:00.000Z',
+      allowed_emails: ['invited_ics@sundaypickup.org']
+    });
+    assert.equal(invitedCreate.status, 200);
+    const invitedPrivId = invitedCreate.data.eventId;
+
+    const invitedUserInsert = db.prepare(`
+      INSERT INTO users (name, email, role, is_admin)
+      VALUES ('Invited ICS Player', 'invited_ics@sundaypickup.org', 'player', 0)
+    `).run();
+    const invitedSessionCookie = `baseball_session=${createSession(invitedUserInsert.lastInsertRowid).sessionId}`;
+
+    const uninvitedMe = await apiReq('GET', '/api/auth/me', seedPlayerCookie);
+    assert.equal(uninvitedMe.status, 200);
+    const uninvitedCalToken = uninvitedMe.data.user && uninvitedMe.data.user.calendarToken;
+    assert.ok(uninvitedCalToken && uninvitedCalToken.length >= 32, 'Signed-in user must receive personal calendarToken');
+
+    const uninvitedFeedRes = await fetch(`${baseUrl}/api/events/calendar.ics?cal_token=${encodeURIComponent(uninvitedCalToken)}`);
+    assert.equal(uninvitedFeedRes.status, 200);
+    const uninvitedFeedText = await uninvitedFeedRes.text();
+    assert.ok(uninvitedFeedText.includes(`UID:pickup-baseball-event-${pubRainId}@pickupbaseballfoundation.org`), 'Tokenized feed must include public events');
+    assert.ok(!uninvitedFeedText.includes('Invited Personal Feed Game'), 'Uninvited user tokenized feed must exclude uninvited private events');
+    assert.ok(!uninvitedFeedText.includes('Private Whitelist Secret Scrimmage'), 'Uninvited user tokenized feed must exclude VIP-only events');
+
+    const uninvitedSinglePrivRes = await fetch(`${baseUrl}/api/events/${invitedPrivId}/calendar.ics?cal_token=${encodeURIComponent(uninvitedCalToken)}`);
+    assert.equal(uninvitedSinglePrivRes.status, 404, 'Uninvited user tokenized single-game feed must return 404');
+
+    const invitedMe = await apiReq('GET', '/api/auth/me', invitedSessionCookie);
+    assert.equal(invitedMe.status, 200);
+    const invitedCalToken = invitedMe.data.user && invitedMe.data.user.calendarToken;
+    assert.ok(invitedCalToken && invitedCalToken.length >= 32, 'Invited user must receive personal calendarToken');
+
+    const invitedFeedRes = await fetch(`${baseUrl}/api/events/calendar.ics?cal_token=${encodeURIComponent(invitedCalToken)}`);
+    assert.equal(invitedFeedRes.status, 200);
+    const invitedFeedText = await invitedFeedRes.text();
+    assert.ok(invitedFeedText.includes(`UID:pickup-baseball-event-${pubRainId}@pickupbaseballfoundation.org`), 'Invited user tokenized feed must include public games');
+    assert.ok(invitedFeedText.includes(`UID:pickup-baseball-event-${invitedPrivId}@pickupbaseballfoundation.org`), 'Invited user tokenized feed must include invited private games');
+    assert.ok(!invitedFeedText.includes('Private Whitelist Secret Scrimmage'), 'Invited user tokenized feed must still exclude private games they are not invited to');
+
+    const invitedSingleRes = await fetch(`${baseUrl}/api/events/${invitedPrivId}/calendar.ics?cal_token=${encodeURIComponent(invitedCalToken)}`);
+    assert.equal(invitedSingleRes.status, 200, 'Invited user tokenized single-game feed must return 200');
+    const invitedSingleText = await invitedSingleRes.text();
+    assert.ok(invitedSingleText.includes(`UID:pickup-baseball-event-${invitedPrivId}@pickupbaseballfoundation.org`), 'Invited single-game feed must contain the private game VEVENT');
+
+    const bogusTokenRes = await fetch(`${baseUrl}/api/events/calendar.ics?cal_token=invalid_token_should_fail_0123456789abcdef`);
+    assert.equal(bogusTokenRes.status, 401, 'Invalid cal_token must return 401');
+
+    const regenRes = await apiReq('POST', '/api/auth/calendar-token/regenerate', invitedSessionCookie, {});
+    assert.equal(regenRes.status, 200);
+    const rotatedToken = regenRes.data.calendarToken;
+    assert.ok(rotatedToken && rotatedToken.length >= 32 && rotatedToken !== invitedCalToken, 'Regenerated calendar token must differ from old token');
+
+    const revokedFeedRes = await fetch(`${baseUrl}/api/events/calendar.ics?cal_token=${encodeURIComponent(invitedCalToken)}`);
+    assert.equal(revokedFeedRes.status, 401, 'Old revoked cal_token must return 401 after rotation');
+
+    const rotatedFeedRes = await fetch(`${baseUrl}/api/events/calendar.ics?cal_token=${encodeURIComponent(rotatedToken)}`);
+    assert.equal(rotatedFeedRes.status, 200);
+    const rotatedFeedText = await rotatedFeedRes.text();
+    assert.ok(rotatedFeedText.includes(`UID:pickup-baseball-event-${invitedPrivId}@pickupbaseballfoundation.org`), 'New rotated cal_token must serve invited private games');
+
     // Verify UI labels and single-game subscription controls on Home drawer & Event Details card grid
     assert.ok(indexHtml.includes('Subscribe All (.ics)'), 'Home calendar header must clarify all-games subscription');
     assert.ok(appJs.includes('id="drawer-game-subscribe-btn"') && appJs.includes('id="drawer-game-subscribe-panel"'), 'Game preview drawer must expose matching single-game subscription controls');
@@ -1544,8 +1609,10 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(eventJsCal.includes('API.renderSubscribePanel('), 'event.js must bind single-game subscription panel');
     assert.ok(!eventJsCal.includes('?.') && !eventJsCal.includes('??'), 'event.js must avoid optional chaining / nullish coalescing');
     assert.doesNotThrow(() => new Function(apiJsNav), 'api.js must parse as valid JS without syntax errors');
+    assert.doesNotThrow(() => new Function(appJs), 'app.js must parse as valid JS without syntax errors');
 
     const apiJs = fs.readFileSync(path.join(publicDir, 'js/api.js'), 'utf8');
+    assert.ok(apiJs.includes('?cal_token=') && apiJs.includes('/api/auth/calendar-token/regenerate'), 'api.js subscribe panel must support personalized cal_token and token rotation');
     const readmeMd = fs.readFileSync(path.join(__dirname, '..', 'README.md'), 'utf8');
     assert.ok(!indexHtml.includes('data-i18n="hero.notice"'), 'October 2026 notice must be moved out of the hero section');
     assert.ok(!apiJs.includes('This site is new and few people know about it.'), 'Removed sentence must not appear in api.js');

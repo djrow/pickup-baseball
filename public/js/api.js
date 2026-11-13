@@ -310,7 +310,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '123',
+  CLIENT_VERSION: '124',
 
   // Current user cache
   currentUser: null,
@@ -1131,6 +1131,19 @@ const API = {
     }
   },
 
+  async regenerateCalendarToken() {
+    const data = await this.request('POST', '/api/auth/calendar-token/regenerate', {}, {
+      throwOnError: true,
+      errorMsg: 'Failed to reset personal calendar link.'
+    });
+    if (data && data.calendarToken && API.currentUser) {
+      API.currentUser.calendarToken = data.calendarToken;
+      API.currentUser.calendar_token = data.calendarToken;
+      API.setCachedUser(API.currentUser);
+    }
+    return data;
+  },
+
   async logout() {
     try {
       API.clearDataCaches();
@@ -1743,7 +1756,9 @@ const API = {
     const isSingleGame = Boolean(singleEvent && singleEvent.id);
     const host = window.location.host || 'www.pickupbaseballfoundation.org';
     const origin = window.location.origin || ('https://' + host);
-    const feedPath = isSingleGame ? ('/api/events/' + singleEvent.id + '/calendar.ics') : '/api/events/calendar.ics';
+    const calToken = opts.calendarToken || (this.currentUser && (this.currentUser.calendarToken || this.currentUser.calendar_token)) || '';
+    const baseFeedPath = isSingleGame ? ('/api/events/' + singleEvent.id + '/calendar.ics') : '/api/events/calendar.ics';
+    const feedPath = calToken ? (baseFeedPath + '?cal_token=' + encodeURIComponent(calToken)) : baseFeedPath;
     const feedHttpUrl = opts.feedHttpUrl || (origin + feedPath);
     const webcalUrl = opts.webcalUrl || ('webcal://' + host + feedPath);
     const googleSubscribeUrl = 'https://calendar.google.com/calendar/r?cid=' + encodeURIComponent(webcalUrl);
@@ -1763,6 +1778,16 @@ const API = {
     const copyBtnLabel = this.t('calendar.subscribe_copy_btn', '📋 Copy Feed URL');
     const copiedBtnLabel = this.t('calendar.subscribe_copied', '✓ Copied!');
     const idPrefix = opts.idPrefix || 'calendar';
+    const tokenFooterHtml = calToken
+      ? '<div style="margin-top:0.5rem;display:flex;align-items:center;justify-content:space-between;gap:0.75rem;flex-wrap:wrap;font-size:0.78rem;color:var(--text-muted);">' +
+          '<span>🔒 Personal feed link includes public games + invite-only games you are invited to. Keep this link private.</span>' +
+          '<button type="button" id="' + idPrefix + '-rotate-token-btn" class="btn btn-outline btn-xs" style="font-size:0.74rem;padding:0.2rem 0.55rem;">' +
+            (opts._justReset ? '✓ Secret Link Reset!' : '🔄 Reset Secret Link') +
+          '</button>' +
+        '</div>'
+      : '<div style="margin-top:0.5rem;font-size:0.78rem;color:var(--text-muted);">' +
+          '🌐 Public games only. <a href="/login.html" style="font-weight:600;">Sign in</a> for a personal link that includes invite-only games you\'re invited to.' +
+        '</div>';
 
     panelEl.innerHTML =
       '<div class="subscribe-panel-header">' +
@@ -1791,7 +1816,8 @@ const API = {
         '<button type="button" id="' + idPrefix + '-copy-feed-btn" class="btn btn-outline btn-sm" style="white-space: nowrap; font-weight: 600;">' +
           this.escapeHtml(copyBtnLabel) +
         '</button>' +
-      '</div>';
+      '</div>' +
+      tokenFooterHtml;
 
     const closeBtn = panelEl.querySelector('#' + idPrefix + '-subscribe-close-btn');
     if (closeBtn && typeof opts.onClose === 'function') {
@@ -1799,6 +1825,26 @@ const API = {
     }
 
     const self = this;
+    const rotateBtn = panelEl.querySelector('#' + idPrefix + '-rotate-token-btn');
+    if (rotateBtn) {
+      rotateBtn.addEventListener('click', function() {
+        rotateBtn.disabled = true;
+        rotateBtn.textContent = 'Resetting...';
+        self.regenerateCalendarToken().then(function(res) {
+          const nextOpts = Object.assign({}, opts, {
+            calendarToken: (res && res.calendarToken) ? res.calendarToken : (self.currentUser && self.currentUser.calendarToken),
+            feedHttpUrl: undefined,
+            webcalUrl: undefined,
+            _justReset: true
+          });
+          self.renderSubscribePanel(panelEl, nextOpts);
+        }).catch(function(err) {
+          rotateBtn.disabled = false;
+          rotateBtn.textContent = '🔄 Reset Secret Link';
+          console.error('[Calendar] Token reset failed:', err);
+        });
+      });
+    }
     const snapshotBtn = panelEl.querySelector('#' + idPrefix + '-download-snapshot-btn');
     if (snapshotBtn) {
       snapshotBtn.addEventListener('click', function() {

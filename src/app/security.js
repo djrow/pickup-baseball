@@ -243,6 +243,7 @@ export async function getUserFromSession(db, sessionId, chatDb, options = {}) {
       COALESCE(u.waiver_status, 'none') as waiver_status,
       u.waiver_signed_at as waiver_signed_at,
       COALESCE(u.clubhouse_opted_in, 0) as clubhouse_opted_in,
+      u.calendar_token as calendar_token,
       ${lightweight ? '0' : `EXISTS (
         SELECT 1 FROM attendees a
         JOIN events e ON a.event_id = e.id
@@ -283,6 +284,11 @@ export async function getUserFromSession(db, sessionId, chatDb, options = {}) {
 
   const playingSunday = Boolean(session.playing_sunday_flag);
   const isGameFacilitator = Boolean(session.facilitator_flag);
+
+  let calendarToken = session.calendar_token || null;
+  if (!lightweight && !calendarToken) {
+    calendarToken = await ensureUserCalendarToken(baseballDb, session.id, null);
+  }
 
   // E2EE Crypto Key Status from CHAT_DB (skipped on lightweight high-frequency sync polls)
   let hasKeys = false;
@@ -348,8 +354,68 @@ export async function getUserFromSession(db, sessionId, chatDb, options = {}) {
     privacyRelayMode,
     privacy_relay_mode: privacyRelayMode,
     clubhouseOptedIn: Boolean(session.clubhouse_opted_in),
-    clubhouse_opted_in: session.clubhouse_opted_in ? 1 : 0
+    clubhouse_opted_in: session.clubhouse_opted_in ? 1 : 0,
+    calendarToken,
+    calendar_token: calendarToken
   };
+}
+
+export async function ensureUserCalendarToken(db, userId, existingToken = null) {
+  if (!db || !userId) return null;
+  if (existingToken && typeof existingToken === 'string' && existingToken.trim().length >= 32) {
+    return existingToken.trim();
+  }
+  const freshToken = generateToken();
+  try {
+    await db.prepare(
+      'UPDATE users SET calendar_token = ? WHERE id = ? AND (calendar_token IS NULL OR calendar_token = \'\')'
+    ).bind(freshToken, userId).run();
+    const row = await db.prepare('SELECT calendar_token FROM users WHERE id = ?').bind(userId).first();
+    return (row && row.calendar_token) ? row.calendar_token : freshToken;
+  } catch (err) {
+    console.warn('[CalendarToken] Failed to ensure user calendar token:', err.message);
+    return null;
+  }
+}
+
+export async function regenerateUserCalendarToken(db, userId) {
+  if (!db || !userId) return null;
+  const freshToken = generateToken();
+  await db.prepare('UPDATE users SET calendar_token = ? WHERE id = ?').bind(freshToken, userId).run();
+  return freshToken;
+}
+
+export async function resolveUserByCalendarToken(db, rawToken) {
+  if (!db || !rawToken || typeof rawToken !== 'string') return null;
+  const token = rawToken.trim();
+  if (token.length < 32 || token.length > 128) return null;
+
+  try {
+    const row = await db.prepare(`
+      SELECT u.id, u.name, u.email, u.is_admin,
+        COALESCE(u.role, CASE WHEN u.is_admin = 1 THEN 'admin' ELSE 'player' END) as role
+      FROM users u
+      WHERE u.calendar_token = ?
+        AND NOT EXISTS (SELECT 1 FROM banned_emails b WHERE b.email = u.email)
+    `).bind(token).first();
+    if (!row) return null;
+
+    const role = row.role || (row.is_admin === 1 ? 'admin' : 'player');
+    const isAdmin = role === 'admin' || Boolean(row.is_admin);
+    const canManageEvents = role === 'admin' || role === 'organizer' || isAdmin;
+
+    return {
+      id: row.id,
+      name: row.name,
+      email: row.email,
+      role,
+      isAdmin,
+      canManageEvents
+    };
+  } catch (err) {
+    console.warn('[CalendarToken] Lookup failed:', err.message);
+    return null;
+  }
 }
 
 // RBAC & Channel Access Helpers

@@ -7,7 +7,8 @@ import {
   checkRateLimit,
   verifyTurnstileIfConfigured,
   requireOrganizer,
-  requireAdmin
+  requireAdmin,
+  resolveUserByCalendarToken
 } from '../security.js';
 import { getDefaultDuties, getRequireLoginSetting } from '../schema.js';
 import {
@@ -386,13 +387,31 @@ function createIcsResponse(icsContent, filename, forceDownload = false) {
   });
 }
 
+async function resolveIcsViewer(c) {
+  const rawToken = c.req.query('cal_token');
+  if (rawToken !== undefined && String(rawToken).trim() !== '') {
+    const tokenUser = await resolveUserByCalendarToken(c.env.DB, String(rawToken).trim());
+    if (!tokenUser) {
+      return {
+        errorResponse: c.text('Invalid or revoked calendar subscription token.', 401),
+        viewerUser: null
+      };
+    }
+    return { errorResponse: null, viewerUser: tokenUser };
+  }
+  return { errorResponse: null, viewerUser: c.get('user') || null };
+}
+
 eventsRouter.get('/calendar.ics', async (c) => {
   try {
+    const { errorResponse, viewerUser } = await resolveIcsViewer(c);
+    if (errorResponse) return errorResponse;
+
     const { results: allEvents } = await c.env.DB.prepare(
       "SELECT * FROM events WHERE status IN ('active', 'rainout') ORDER BY event_date ASC"
     ).all();
     const origin = new URL(c.req.url).origin || 'https://www.pickupbaseballfoundation.org';
-    const ics = buildCalendarIcs(allEvents || [], origin);
+    const ics = buildCalendarIcs(allEvents || [], origin, { viewerUser });
     const forceDownload = c.req.query('download') === '1';
 
     return createIcsResponse(ics, 'pickup-baseball-schedule.ics', forceDownload);
@@ -409,16 +428,20 @@ eventsRouter.get('/:id/calendar.ics', async (c) => {
   }
 
   try {
+    const { errorResponse, viewerUser } = await resolveIcsViewer(c);
+    if (errorResponse) return errorResponse;
+
     const ev = await c.env.DB.prepare(
       "SELECT * FROM events WHERE id = ? AND status IN ('active', 'rainout')"
     ).bind(eventId).first();
-    if (!ev || parseAllowedEmails(ev.allowed_emails).length > 0) {
+    if (!ev || !canUserAccessEvent(viewerUser, ev)) {
       return c.text('Event not found.', 404);
     }
 
     const origin = new URL(c.req.url).origin || 'https://www.pickupbaseballfoundation.org';
     const baseTitle = ev.title || 'Sunday Pickup Baseball - Noon Game';
     const ics = buildCalendarIcs([ev], origin, {
+      viewerUser,
       calendarName: baseTitle,
       calendarDesc: `Live game updates for ${baseTitle} (${origin}/event.html?id=${ev.id})`
     });

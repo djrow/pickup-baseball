@@ -17,7 +17,9 @@ import {
   checkRateLimit,
   verifyTurnstileIfConfigured,
   requireAuth,
-  requireAdmin
+  requireAdmin,
+  ensureUserCalendarToken,
+  regenerateUserCalendarToken
 } from '../security.js';
 import { getRequireLoginSetting } from '../schema.js';
 import { sendAuthCode } from '../mailer.js';
@@ -33,11 +35,14 @@ async function upsertUserAndCreateSession(c, cleanEmail, fallbackName) {
     const shouldBeAdmin = cleanEmail === configuredAdminEmail;
     const role = shouldBeAdmin ? 'admin' : 'player';
     const isAdminFlag = shouldBeAdmin ? 1 : 0;
+    const calendarToken = generateToken();
 
     const insertRes = await db.prepare(
-      'INSERT INTO users (name, email, role, is_admin) VALUES (?, ?, ?, ?)'
-    ).bind(displayName, cleanEmail, role, isAdminFlag).run();
+      'INSERT INTO users (name, email, role, is_admin, calendar_token) VALUES (?, ?, ?, ?, ?)'
+    ).bind(displayName, cleanEmail, role, isAdminFlag, calendarToken).run();
     user = await db.prepare('SELECT * FROM users WHERE id = ?').bind(insertRes.meta.last_row_id).first();
+  } else if (!user.calendar_token) {
+    await ensureUserCalendarToken(db, user.id, user.calendar_token);
   }
 
   const sessionId = generateToken();
@@ -214,6 +219,30 @@ authRouter.get('/verify-magic', async (c) => {
 });
 
 authRouter.get('/me', (c) => c.json({ user: c.get('user') }));
+
+authRouter.post('/calendar-token/regenerate', requireAuth, async (c) => {
+  const user = c.get('user');
+  const db = c.env && (c.env.BASEBALL_DB || c.env.DB);
+  if (!db) return c.json({ error: 'Database unavailable.' }, 500);
+
+  try {
+    const newToken = await regenerateUserCalendarToken(db, user.id);
+    if (!newToken) {
+      return c.json({ error: 'Failed to generate new calendar token.' }, 500);
+    }
+    user.calendarToken = newToken;
+    user.calendar_token = newToken;
+    return c.json({
+      success: true,
+      calendarToken: newToken,
+      calendar_token: newToken,
+      message: 'Personal calendar link rotated! Update any subscribed calendar apps with your new link.'
+    });
+  } catch (err) {
+    console.error('[Auth] Error rotating calendar token:', err);
+    return c.json({ error: 'Failed to reset personal calendar link.' }, 500);
+  }
+});
 
 authRouter.put('/profile', requireAuth, async (c) => {
   const user = c.get('user');

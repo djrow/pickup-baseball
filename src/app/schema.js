@@ -32,6 +32,7 @@ export const CREATE_TABLES_SQL = [
     waiver_status TEXT DEFAULT 'none',
     waiver_signed_at DATETIME DEFAULT NULL,
     clubhouse_opted_in INTEGER DEFAULT 0,
+    calendar_token TEXT DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`,
   `CREATE TABLE IF NOT EXISTS sessions (
@@ -211,7 +212,8 @@ export const CREATE_TABLES_SQL = [
   'CREATE INDEX IF NOT EXISTS idx_media_approved ON media_items(is_approved)',
   'CREATE INDEX IF NOT EXISTS idx_bp_signups_event ON batting_practice_signups(event_id, slot_number)',
   'CREATE INDEX IF NOT EXISTS idx_waivers_user ON waivers(user_id)',
-  'CREATE INDEX IF NOT EXISTS idx_waivers_email ON waivers(email)'
+  'CREATE INDEX IF NOT EXISTS idx_waivers_email ON waivers(email)',
+  'CREATE UNIQUE INDEX IF NOT EXISTS idx_users_calendar_token ON users(calendar_token) WHERE calendar_token IS NOT NULL'
 ];
 
 export const ALTER_STATEMENTS = [
@@ -242,11 +244,13 @@ export const ALTER_STATEMENTS = [
   'ALTER TABLE users ADD COLUMN chat_muted_reason TEXT DEFAULT NULL',
   'ALTER TABLE users ADD COLUMN chat_muted_by INTEGER DEFAULT NULL',
   'ALTER TABLE users ADD COLUMN chat_muted_at DATETIME DEFAULT NULL',
-  'ALTER TABLE users ADD COLUMN clubhouse_opted_in INTEGER DEFAULT 0'
+  'ALTER TABLE users ADD COLUMN clubhouse_opted_in INTEGER DEFAULT 0',
+  'ALTER TABLE users ADD COLUMN calendar_token TEXT DEFAULT NULL',
+  'CREATE UNIQUE INDEX IF NOT EXISTS idx_users_calendar_token ON users(calendar_token) WHERE calendar_token IS NOT NULL'
 ];
 
 const migratedDbs = new WeakSet();
-const BASEBALL_SCHEMA_VERSION = '2026-11-12.2';
+const BASEBALL_SCHEMA_VERSION = '2026-11-13.1';
 
 async function runSchemaBatch(db, sqlList) {
   if (typeof db.batch === 'function' && sqlList.length > 1) {

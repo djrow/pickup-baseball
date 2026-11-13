@@ -207,6 +207,10 @@ async function loadGames(justLoggedIn = false, isBackgroundRefresh = false) {
 
     if (data.user !== undefined) {
       applyUserToHomeUi(data.user);
+      const openSubPanel = document.getElementById('calendar-subscribe-panel');
+      if (openSubPanel && openSubPanel.style.display !== 'none') {
+        renderSubscribePanel();
+      }
       if (justLoggedIn) {
         const banner = document.getElementById('login-success-banner');
         if (banner) {
@@ -311,16 +315,9 @@ function renderSubscribePanel() {
   const panel = document.getElementById('calendar-subscribe-panel');
   if (!panel) return;
 
-  const host = window.location.host || 'www.pickupbaseballfoundation.org';
-  const origin = window.location.origin || ('https://' + host);
-  const feedHttpUrl = origin + '/api/events/calendar.ics';
-  const webcalUrl = 'webcal://' + host + '/api/events/calendar.ics';
-
   API.renderSubscribePanel(panel, {
     mode: 'all',
     events: calendarEventsCache,
-    feedHttpUrl: feedHttpUrl,
-    webcalUrl: webcalUrl,
     idPrefix: 'calendar',
     onClose: function() {
       toggleSubscribePanel(true);

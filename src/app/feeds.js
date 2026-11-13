@@ -3,7 +3,7 @@
  */
 
 import { CURRENT_APP_VERSION } from './version.js';
-import { parseAllowedEmails } from './policy.js';
+import { parseAllowedEmails, canUserAccessEvent } from './policy.js';
 import { sanitizeHttpUrl } from './security.js';
 
 function getSafeFeedMediaUrl(rawUrl, origin) {
@@ -186,9 +186,11 @@ function formatIcsUtcDate(d) {
 }
 
 export function buildCalendarIcs(allEvents, origin = 'https://www.pickupbaseballfoundation.org', options = {}) {
-  const publicEvents = (allEvents || []).filter(ev => parseAllowedEmails(ev.allowed_emails).length === 0);
+  const viewerUser = (options && options.viewerUser) ? options.viewerUser : null;
+  const visibleEvents = (allEvents || []).filter(ev => canUserAccessEvent(viewerUser, ev));
   const nowStamp = formatIcsUtcDate(new Date());
-  const calendarName = (options && options.calendarName) ? String(options.calendarName) : 'Sunday Pickup Baseball';
+  const defaultCalName = viewerUser ? 'Sunday Pickup Baseball (Personal Feed)' : 'Sunday Pickup Baseball';
+  const calendarName = (options && options.calendarName) ? String(options.calendarName) : defaultCalName;
   const calendarDesc = (options && options.calendarDesc)
     ? String(options.calendarDesc)
     : 'Live game schedule from Pickup Baseball Foundation (www.pickupbaseballfoundation.org)';
@@ -206,7 +208,7 @@ export function buildCalendarIcs(allEvents, origin = 'https://www.pickupbaseball
     'X-PUBLISHED-TTL:PT1H'
   ];
 
-  for (const ev of publicEvents) {
+  for (const ev of visibleEvents) {
     const startDate = new Date(ev.event_date);
     if (isNaN(startDate.getTime())) continue;
     const endDate = new Date(startDate.getTime() + 3 * 60 * 60 * 1000);
