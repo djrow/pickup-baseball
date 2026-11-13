@@ -2560,6 +2560,10 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(securityTxt.includes('Contact: mailto:'), 'security.txt must specify a Contact address');
     assert.ok(securityTxt.includes('Expires:'), 'security.txt must specify an Expires timestamp');
     assert.ok(fs.existsSync(path.resolve(__dirname, '..', 'SECURITY.md')), 'SECURITY.md must exist');
+    const apiSrc = fs.readFileSync(path.join(publicDir, 'js', 'api.js'), 'utf8');
+    assert.ok(apiSrc.includes('footer-security-badges'), 'api.js footer must render security verification badges');
+    assert.ok(apiSrc.includes('ssllabs.com/ssltest/analyze.html'), 'api.js footer must link to SSL Labs report');
+    assert.ok(apiSrc.includes('developer.mozilla.org/en-US/observatory/analyze'), 'api.js footer must link to Mozilla HTTP Observatory');
     assert.ok(headersFile.includes('upgrade-insecure-requests;'), '_headers CSP must contain upgrade-insecure-requests');
 
     const apiJs = fs.readFileSync(path.join(publicDir, 'js', 'api.js'), 'utf8');

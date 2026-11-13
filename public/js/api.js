@@ -308,7 +308,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '110',
+  CLIENT_VERSION: '111',
 
   // Current user cache
   currentUser: null,
@@ -695,6 +695,23 @@ const API = {
               </button>
             </div>
             <div id="footer-update-status" class="footer-update-status" style="display: none;" role="status" aria-live="polite"></div>
+          </div>
+          <div class="footer-security-badges" aria-label="Independent Security Verifications">
+            <a href="https://www.ssllabs.com/ssltest/analyze.html?d=pickupbaseballfoundation.org" target="_blank" rel="noopener noreferrer" class="footer-security-badge" title="View live Qualys SSL Labs TLS report">
+              <span>🔒 SSL Labs</span><span class="footer-security-grade">A+</span>
+            </a>
+            <a href="https://developer.mozilla.org/en-US/observatory/analyze?host=pickupbaseballfoundation.org" target="_blank" rel="noopener noreferrer" class="footer-security-badge" title="View live Mozilla HTTP Observatory security header scorecard">
+              <span>🛡️ HTTP Observatory</span><span class="footer-security-grade">A+</span>
+            </a>
+            <a href="https://securityheaders.com/?q=https%3A%2F%2Fpickupbaseballfoundation.org&followRedirects=on" target="_blank" rel="noopener noreferrer" class="footer-security-badge" title="Verify live HTTP security headers">
+              <span>📋 Security Headers</span>
+            </a>
+            <a href="https://github.com/djrow/pickup-baseball/security" target="_blank" rel="noopener noreferrer" class="footer-security-badge" title="View GitHub CodeQL scans, Dependabot &amp; Security Policy">
+              <span>✅ CodeQL &amp; Policy</span>
+            </a>
+            <a href="/.well-known/security.txt" target="_blank" rel="noopener noreferrer" class="footer-security-badge" title="RFC 9116 vulnerability disclosure policy">
+              <span>security.txt</span>
+            </a>
           </div>
           <p style="margin-top: 12px; font-size: 0.8rem; color: #94a3b8; line-height: 1.5;">
             <span data-i18n="footer.about_site">${this.escapeHtml(this.t('footer.about_site', 'Built with Google Gemini in October 2026 for simplicity and durability. Free & open-source'))}</span> on <a href="https://github.com/djrow/pickup-baseball" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">GitHub</a> • <a href="https://github.com/djrow/pickup-baseball/blob/trunk/HANDBOOK.md" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;" data-i18n="footer.handbook">${this.escapeHtml(this.t('footer.handbook', 'Handbook & Field Rules'))}</a> • <a href="/waiver.html" style="color: inherit; text-decoration: underline;">Player Waiver</a>.
