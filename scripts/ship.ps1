@@ -83,9 +83,10 @@ try {
     Invoke-Step -Label 'Bumping app & asset version (npm run bump)' -Command { npm run bump }
   }
 
-  # 3. Run full verification suite
+  # 3. Run full verification suite & security scan
   if (-not $SkipTest) {
     Invoke-Step -Label 'Running test suite (npm test)' -Command { npm test }
+    Invoke-Step -Label 'Running security scan (npm run security:scan)' -Command { npm run security:scan }
   }
 
   $VersionSrc = Get-Content (Join-Path $RepoRoot 'src\app\version.js') -Raw

@@ -34,6 +34,9 @@ jobs:
       - name: Run full verification suite
         run: npm test
 
+      - name: Run security scan (static, secret, route-guard & policy checks)
+        run: npm run security:scan
+
   codeql:
     name: CodeQL Static Security Analysis
     runs-on: ubuntu-latest

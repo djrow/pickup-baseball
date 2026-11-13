@@ -13,7 +13,9 @@
     "seed": "node src/seed.js",
     "setup:gdrive": "node scripts/setup-gdrive-secrets.js",
     "bump": "node scripts/bump-version.js",
-    "test": "node scripts/verify-all.js"
+    "test": "node scripts/verify-all.js",
+    "security:scan": "node scripts/security-scan.js",
+    "security:scan:live": "node scripts/security-scan.js --live"
   },
   "keywords": [],
   "author": "",
