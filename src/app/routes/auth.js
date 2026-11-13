@@ -559,10 +559,15 @@ export async function getSettingsHandler(c) {
       if (row && row.value) appscriptUrl = row.value;
     } catch (e) {}
   }
-  return c.json({
+  const user = c.get('user');
+  const payload = {
     require_login_to_rsvp: requireLogin,
-    appscript_upload_url: appscriptUrl
-  });
+    appscript_configured: Boolean(appscriptUrl && appscriptUrl.trim())
+  };
+  if (user && user.isAdmin) {
+    payload.appscript_upload_url = appscriptUrl;
+  }
+  return c.json(payload);
 }
 
 export async function putSettingsHandler(c) {

@@ -2069,8 +2069,12 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.equal(appscriptSet.status, 200, 'Setting appscript_upload_url must return 200');
     assert.equal(appscriptSet.data.appscript_upload_url, 'https://script.google.com/macros/s/test_fake_appscript_id/exec');
 
-    const appscriptGet = await apiReq('GET', '/api/settings');
-    assert.equal(appscriptGet.data.appscript_upload_url, 'https://script.google.com/macros/s/test_fake_appscript_id/exec');
+    const appscriptGetAnon = await apiReq('GET', '/api/settings');
+    assert.equal(appscriptGetAnon.data.appscript_upload_url, undefined, 'Unauthenticated GET /api/settings must not leak appscript_upload_url');
+    assert.equal(appscriptGetAnon.data.appscript_configured, true);
+
+    const appscriptGetAdmin = await apiReq('GET', '/api/settings', seedAdminCookie);
+    assert.equal(appscriptGetAdmin.data.appscript_upload_url, 'https://script.google.com/macros/s/test_fake_appscript_id/exec');
 
     // Test POST /api/settings/test-appscript endpoint validation
     const testAppscriptNoAuth = await apiReq('POST', '/api/settings/test-appscript', null, { url: 'https://invalid.com' });

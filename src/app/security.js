@@ -383,39 +383,6 @@ export function canAccessChannel(user, channel, mode = 'read') {
   return userRank >= requiredRank;
 }
 
-export function requireChannelAccess(mode = 'read') {
-  return async (c, next) => {
-    const user = c.get('user');
-    if (!user) {
-      return c.json({ error: 'Authentication required. Please sign in.' }, 401);
-    }
-
-    const channelParam = c.req.param('channelId') || c.req.param('id');
-    const chatDb = c.env && c.env.CHAT_DB;
-    if (!chatDb) {
-      return c.json({ error: 'Chat database unavailable.' }, 500);
-    }
-
-    let channel = null;
-    if (/^\d+$/.test(channelParam)) {
-      channel = await chatDb.prepare('SELECT * FROM channels WHERE id = ?').bind(parseInt(channelParam, 10)).first();
-    } else {
-      channel = await chatDb.prepare('SELECT * FROM channels WHERE slug = ?').bind(channelParam).first();
-    }
-
-    if (!channel) {
-      return c.json({ error: 'Channel not found.' }, 404);
-    }
-
-    if (!canAccessChannel(user, channel, mode)) {
-      return c.json({ error: 'Access denied: insufficient permissions for this channel.' }, 403);
-    }
-
-    c.set('channel', channel);
-    await next();
-  };
-}
-
 // Hono RBAC Middleware Guards
 export async function requireAuth(c, next) {
   if (!c.get('user')) {

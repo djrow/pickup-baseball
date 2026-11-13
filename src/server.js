@@ -5,7 +5,6 @@ const { createNodeHttpBridge, getFullRequestUrl, sendWebResponse } = require('./
 const { app: honoApp } = require('./app/index.js');
 const { CURRENT_APP_VERSION } = require('./app/version.js');
 const { renderFeedXmlResponse } = require('./app/feeds.js');
-const { startReminderScheduler, stopReminderScheduler } = require('./reminders');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -76,11 +75,9 @@ app.use((req, res, next) => {
 
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`⚾ Sunday Pickup Baseball running on http://localhost:${PORT} (v${CURRENT_APP_VERSION})`);
-  startReminderScheduler();
 });
 
 function shutdown() {
-  stopReminderScheduler();
   server.close(() => process.exit(0));
 }
 
