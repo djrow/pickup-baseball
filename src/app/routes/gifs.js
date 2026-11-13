@@ -96,7 +96,7 @@ async function fetchExternalGifSafely(initialUrl, isTestEnv) {
         }
       });
     } catch (err) {
-      return { ok: false, status: 502, error: 'Could not connect to the remote GIF host.' };
+      return { ok: false, status: 422, error: 'Could not connect to the remote GIF host.' };
     }
 
     if (res.status >= 300 && res.status < 400) {
@@ -131,7 +131,7 @@ async function fetchExternalGifSafely(initialUrl, isTestEnv) {
     try {
       buf = await res.arrayBuffer();
     } catch (err) {
-      return { ok: false, status: 502, error: 'Failed while downloading GIF data from the remote host.' };
+      return { ok: false, status: 422, error: 'Failed while downloading GIF data from the remote host.' };
     }
     if (!buf || buf.byteLength === 0) {
       return { ok: false, status: 400, error: 'Remote GIF response was empty.' };
@@ -208,7 +208,7 @@ gifsRouter.post('/import-url', requireAuth, async (c) => {
   }
 
   if (!isGDriveConfigured(c.env)) {
-    return c.json({ error: 'Google Drive storage is not configured for Clubhouse GIFs.' }, 503);
+    return c.json({ error: 'Google Drive storage is not configured for Clubhouse GIFs.' }, 500);
   }
 
   const normalizedUrl = urlCheck.url;
@@ -269,13 +269,13 @@ gifsRouter.post('/import-url', requireAuth, async (c) => {
     console.warn('[GIFs] Google Drive upload failed:', err && err.message ? err.message : err);
     return c.json({
       error: `Google Drive upload failed (${formatDriveErrorReason(err)}).`
-    }, 502);
+    }, 500);
   }
 
   if (!driveFileId) {
     return c.json({
       error: 'Google Drive upload did not return a file ID.'
-    }, 502);
+    }, 500);
   }
 
   try {

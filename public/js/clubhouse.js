@@ -2057,9 +2057,12 @@
         var errMsg = (res.data && res.data.error) || '';
         if (!errMsg) {
           var statusPart = res.status ? ('HTTP ' + res.status) : 'network error';
-          var rawPart = res.rawText
-            ? (' — ' + String(res.rawText).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 140))
-            : '';
+          var rawStr = String(res.rawText || '');
+          var titleMatch = rawStr.match(/<title[^>]*>([^<]+)<\/title>/i);
+          var cleanedRaw = titleMatch
+            ? titleMatch[1]
+            : rawStr.replace(/<[^>]*>?/g, ' ').replace(/\s+/g, ' ').trim();
+          var rawPart = cleanedRaw ? (' — ' + cleanedRaw.slice(0, 140)) : '';
           errMsg = 'Could not import GIF URL (' + statusPart + rawPart + ').';
         }
         throw new Error(errMsg);

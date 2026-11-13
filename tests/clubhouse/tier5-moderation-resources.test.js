@@ -1062,12 +1062,13 @@ module.exports = async function runTier5(t, ctx) {
     const port = mockGifServer.address().port;
 
     try {
-      // Unconfigured Google Drive must reject imports cleanly (503) and never save GIFs into D1
+      // Unconfigured Google Drive must reject imports cleanly (500) and never save GIFs into D1
       const unconfiguredRes = await ctx.apiReq('POST', '/api/gifs/import-url', ctx.playerCookie, {
         url: `http://127.0.0.1:${port}/batflip.gif`,
         title: 'Bat Flip Celebration'
       });
-      assert.equal(unconfiguredRes.status, 503);
+      assert.equal(unconfiguredRes.status, 500);
+      assert.match(String(unconfiguredRes.data.error || ''), /Google Drive storage is not configured/i);
 
       // Verify true 5 TB Google Drive upload + zero D1 binary payload using MockGoogleDriveService
       const { createMockGDriveServer } = require('../helpers/mock-gdrive');
@@ -1209,7 +1210,7 @@ module.exports = async function runTier5(t, ctx) {
           },
           body: JSON.stringify({ url: `http://127.0.0.1:${port}/small-gdrive-fallback.gif` })
         }), brokenDriveEnv);
-        assert.equal(smallFailRes.status, 502, 'Small GIF must NOT fall back to D1 when Drive fails');
+        assert.equal(smallFailRes.status, 500, 'Small GIF must NOT fall back to D1 when Drive fails');
         const smallFailData = await smallFailRes.json();
         assert.match(String(smallFailData.error || ''), /Google Drive upload failed/i);
 
@@ -1222,7 +1223,7 @@ module.exports = async function runTier5(t, ctx) {
           },
           body: JSON.stringify({ url: `http://127.0.0.1:${port}/large-gdrive-fail.gif` })
         }), brokenDriveEnv);
-        assert.equal(largeFailRes.status, 502, 'Over 2 MB GIF when Drive fails must return structured 502, never 500');
+        assert.equal(largeFailRes.status, 500, 'Over 2 MB GIF when Drive fails must return structured JSON error');
         const largeFailData = await largeFailRes.json();
         assert.match(String(largeFailData.error || ''), /Google Drive upload failed/i);
 
@@ -1232,7 +1233,7 @@ module.exports = async function runTier5(t, ctx) {
         const unreachableHostRes = await honoApiReq('POST', '/api/gifs/import-url', ctx.playerCookie, {
           url: `http://127.0.0.1:${closedPort}/unreachable.gif`
         });
-        assert.equal(unreachableHostRes.status, 502, 'Unreachable remote GIF host must return 502, never 500');
+        assert.equal(unreachableHostRes.status, 422, 'Unreachable remote GIF host must return 422 JSON error');
       } finally {
         await mockDrive.close();
       }
