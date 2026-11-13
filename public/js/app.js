@@ -432,7 +432,7 @@ function renderCalendarDrawer(dateKey, game, isPast) {
         <span class="drawer-meta-item"><span>🛡️</span> ${API.escapeHtml(API.t('home.duties_configured', { count: game.duty_count }))}</span>
       </div>
       ${game.rainout_note ? `<div style="font-size: 0.82rem; color: var(--text-muted);"><em>Rainout note: "${API.escapeHtml(game.rainout_note)}"</em></div>` : ''}
-      <div class="drawer-10day-weather-section" id="drawer-10day-weather-${dateKey}" style="display: none;"></div>
+      <div class="drawer-5day-weather-section" id="drawer-5day-weather-${dateKey}" style="display: none;"></div>
     `;
   } else {
     const [y, m, d] = dateKey.split('-').map(Number);
@@ -471,7 +471,7 @@ function renderCalendarDrawer(dateKey, game, isPast) {
       <p style="margin: 0; font-size: 0.81rem; color: var(--text-muted); line-height: 1.4;">
         This Sunday date is prospective and not yet officially scheduled. Only near-future games with confirmed rosters are guaranteed. Organizers confirm field availability and publish official games as dates approach.
       </p>
-      <div class="drawer-10day-weather-section" id="drawer-10day-weather-${dateKey}" style="display: none;"></div>
+      <div class="drawer-5day-weather-section" id="drawer-5day-weather-${dateKey}" style="display: none;"></div>
     `;
   }
 
@@ -517,7 +517,7 @@ function renderCalendarDrawer(dateKey, game, isPast) {
     var loc = game ? game.location : 'Bushrod Park Field 1';
     window.WeatherService.getForecastForGame(targetIso, loc).then(function(fc) {
       var wEl = document.getElementById('drawer-weather-' + dateKey);
-      var stripEl = document.getElementById('drawer-10day-weather-' + dateKey);
+      var stripEl = document.getElementById('drawer-5day-weather-' + dateKey);
       if (fc && fc.available) {
         if (wEl) {
           wEl.innerHTML = '<span>' + API.escapeHtml(fc.emoji) + '</span> <strong>' + API.escapeHtml(fc.temperature) + '°F ' + API.escapeHtml(fc.condition) + '</strong> ' +
@@ -535,11 +535,11 @@ function renderCalendarDrawer(dateKey, game, isPast) {
           stripEl.innerHTML =
             '<div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; margin-bottom: 4px;">' +
               '<span style="font-size: 0.78rem; font-weight: 700; color: var(--secondary); display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap;">' +
-                '<span>🌧️ <strong>10-Day Rainfall Prediction: ' + API.escapeHtml(fc.rainfall10DayFormatted) + '</strong></span>' +
+                '<span>🌧️ <strong>5-Day Rainfall Prediction: ' + API.escapeHtml(fc.rainfall5DayFormatted) + '</strong></span>' +
                 todaySnippet +
               '</span>' +
               '<span style="font-size: 0.71rem; color: var(--text-muted); font-weight: 600;">' +
-                'Event day &amp; 9 previous days' +
+                'Event day &amp; 4 previous days' +
               '</span>' +
             '</div>' +
             window.WeatherService.renderDailyRainTrackHtml(fc.dailyForecast);

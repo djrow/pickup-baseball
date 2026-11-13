@@ -623,7 +623,7 @@ where $r_h$ is the rainfall in inches that fell $h$ hours before 12:00 PM warmup
 
 #### 4. Zero-Cost, Zero-Host Client-Side Architecture
 - The assistant runs 100% in the user's browser via `public/js/weather.js` using Open-Meteo's open-access API.
-- Provides a **10-day weather forecast** (temperature & condition emoji on calendar cards), **10-day rainfall prediction & daily breakdown** (displayed across the event details card for the day of the event and the nine previous days), and a **24-hour prior rainfall drainage simulation** for upcoming games.
+- Provides a **10-day weather forecast** (temperature & condition emoji on calendar cards), **5-day rainfall prediction & daily breakdown** (displayed across the event details card for the day of the event and the four previous days), and a **24-hour prior rainfall drainage simulation** for upcoming games.
 - **Zero API keys**, **zero subscription fees**, and **zero Cloudflare Worker bandwidth or execution limits used**.
 - Results are cached in browser `sessionStorage` (30-minute TTL) so page refreshes and navigation never make duplicate requests.
 

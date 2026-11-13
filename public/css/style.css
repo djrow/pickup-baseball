@@ -3228,16 +3228,16 @@ footer.site-footer strong {
   gap: 4px;
 }
 
-.drawer-10day-weather-section {
+.drawer-5day-weather-section {
   width: 100%;
   margin-top: 2px;
   padding-top: 7px;
   border-top: 1px solid var(--border);
 }
 
-.ten-day-rain-track {
+.five-day-rain-track {
   display: grid;
-  grid-template-columns: repeat(10, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 4px;
   width: 100%;
   margin-top: 4px;
@@ -3245,19 +3245,19 @@ footer.site-footer strong {
 }
 
 @media (max-width: 720px) {
-  .ten-day-rain-track {
+  .five-day-rain-track {
     display: flex;
     overflow-x: auto;
     padding-bottom: 4px;
     -webkit-overflow-scrolling: touch;
   }
-  .ten-day-rain-col {
-    flex: 0 0 74px;
-    min-width: 74px;
+  .five-day-rain-col {
+    flex: 1 0 64px;
+    min-width: 64px;
   }
 }
 
-.ten-day-rain-col {
+.five-day-rain-col {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -3272,7 +3272,7 @@ footer.site-footer strong {
   box-sizing: border-box;
 }
 
-.ten-day-rain-col .day-head {
+.five-day-rain-col .day-head {
   display: inline-flex;
   align-items: baseline;
   justify-content: center;
@@ -3280,7 +3280,7 @@ footer.site-footer strong {
   white-space: nowrap;
 }
 
-.ten-day-rain-col .day-precip-row {
+.five-day-rain-col .day-precip-row {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3288,7 +3288,7 @@ footer.site-footer strong {
   white-space: nowrap;
 }
 
-.ten-day-rain-col .day-tags-row {
+.five-day-rain-col .day-tags-row {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3297,31 +3297,31 @@ footer.site-footer strong {
   margin-top: 1px;
 }
 
-.ten-day-rain-col.is-game-day {
+.five-day-rain-col.is-game-day {
   border-color: var(--primary);
   background: rgba(253, 90, 30, 0.08);
   box-shadow: 0 0 0 1px var(--primary);
 }
 
-.ten-day-rain-col.is-today {
+.five-day-rain-col.is-today {
   border-color: var(--secondary);
   background: rgba(0, 56, 49, 0.08);
   box-shadow: 0 0 0 1.5px var(--secondary);
   position: relative;
 }
 
-.ten-day-rain-col.is-today.is-game-day {
+.five-day-rain-col.is-today.is-game-day {
   border-color: var(--primary);
   background: rgba(253, 90, 30, 0.12);
   box-shadow: 0 0 0 1.5px var(--primary);
 }
 
-.ten-day-rain-col.is-today .day-title {
+.five-day-rain-col.is-today .day-title {
   color: var(--secondary);
   font-weight: 800;
 }
 
-.ten-day-rain-col .today-pill {
+.five-day-rain-col .today-pill {
   font-size: 0.55rem;
   font-weight: 800;
   background: var(--secondary);
@@ -3333,40 +3333,40 @@ footer.site-footer strong {
   letter-spacing: 0.4px;
 }
 
-.ten-day-rain-col .day-title {
+.five-day-rain-col .day-title {
   font-weight: 700;
   color: var(--secondary);
   font-size: 0.7rem;
   line-height: 1.1;
 }
 
-.ten-day-rain-col .day-date {
+.five-day-rain-col .day-date {
   font-size: 0.64rem;
   color: var(--text-muted);
   line-height: 1.1;
 }
 
-.ten-day-rain-col .day-emoji {
+.five-day-rain-col .day-emoji {
   font-size: 0.88rem;
   line-height: 1;
 }
 
-.ten-day-rain-col .day-rain {
+.five-day-rain-col .day-rain {
   font-weight: 700;
   font-size: 0.71rem;
   color: var(--text-muted);
 }
 
-.ten-day-rain-col .day-rain.has-rain {
+.five-day-rain-col .day-rain.has-rain {
   color: #0284c7;
   font-weight: 800;
 }
 
-.ten-day-rain-col.is-game-day .day-rain.has-rain {
+.five-day-rain-col.is-game-day .day-rain.has-rain {
   color: #dc2626;
 }
 
-.ten-day-rain-col .game-day-pill {
+.five-day-rain-col .game-day-pill {
   font-size: 0.55rem;
   font-weight: 800;
   background: var(--primary);
@@ -3377,7 +3377,7 @@ footer.site-footer strong {
   line-height: 1.1;
 }
 
-.card-10day-rain-row {
+.card-5day-rain-row {
   display: flex;
   gap: 2px;
   align-items: flex-end;

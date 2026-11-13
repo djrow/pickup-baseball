@@ -450,7 +450,7 @@
   }
 
   /**
-   * Helper: Build 10-day daily forecast breakdown for the event day and 9 previous days
+   * Helper: Build 5-day daily forecast breakdown for the event day and 4 previous days
    */
   function buildDailyForecast(dailyData, hourlyData, targetDateKey, todayDateKey) {
     var days = [];
@@ -463,7 +463,7 @@
         targetIdx = dailyData.time.indexOf(targetDateKey);
       }
       var endIdx = targetIdx !== -1 ? targetIdx + 1 : dailyData.time.length;
-      var startIdx = Math.max(0, endIdx - 10);
+      var startIdx = Math.max(0, endIdx - 5);
 
       var sliceTimes = dailyData.time.slice(startIdx, endIdx);
       var slicePrecip = dailyData.precipitation_sum ? dailyData.precipitation_sum.slice(startIdx, endIdx) : [];
@@ -505,7 +505,7 @@
         });
       }
     } else if (dailyData && Array.isArray(dailyData.precipitation_sum) && dailyData.precipitation_sum.length > 0) {
-      var pSlice = dailyData.precipitation_sum.slice(-10);
+      var pSlice = dailyData.precipitation_sum.slice(-5);
       for (var pi = 0; pi < pSlice.length; pi++) {
         var pVal = Math.round((Number(pSlice[pi]) || 0) * 100) / 100;
         var isLast = (pi === pSlice.length - 1);
@@ -546,7 +546,7 @@
         hTargetIdx = dateOrder.indexOf(targetDateKey);
       }
       var hEndIdx = hTargetIdx !== -1 ? hTargetIdx + 1 : dateOrder.length;
-      var hStartIdx = Math.max(0, hEndIdx - 10);
+      var hStartIdx = Math.max(0, hEndIdx - 5);
       var sliceDateKeys = dateOrder.slice(hStartIdx, hEndIdx);
 
       for (var j = 0; j < sliceDateKeys.length; j++) {
@@ -616,19 +616,19 @@
       };
     }
 
-    // Build 10-day daily breakdown
+    // Build 5-day daily breakdown (event day & 4 previous days)
     var targetDateKey = targetHourKey ? targetHourKey.split('T')[0] : null;
     var dailyForecast = buildDailyForecast(dailyData, hourlyData, targetDateKey);
 
-    var total10DayRain = 0;
+    var total5DayRain = 0;
     var todayForecast = null;
     for (var di = 0; di < dailyForecast.length; di++) {
-      total10DayRain += dailyForecast[di].rain;
+      total5DayRain += dailyForecast[di].rain;
       if (dailyForecast[di].isToday) {
         todayForecast = dailyForecast[di];
       }
     }
-    total10DayRain = Math.round(total10DayRain * 100) / 100;
+    total5DayRain = Math.round(total5DayRain * 100) / 100;
 
     var gameTemp = Math.round(hourlyData.temperature_2m[targetIdx]);
     var gameCode = hourlyData.weathercode[targetIdx];
@@ -866,10 +866,10 @@
       rainStartLabel: rainStartLabel || null,
       gameHoursRain: Math.round(gameHoursRain * 100) / 100,
       gameHoursRainFormatted: (Math.round(gameHoursRain * 100) / 100).toFixed(2) + '"',
-      rainfall10Day: total10DayRain,
-      rainfall10DayFormatted: total10DayRain.toFixed(2) + '"',
-      total10DayRain: total10DayRain,
-      total10DayRainFormatted: total10DayRain.toFixed(2) + '"',
+      rainfall5Day: total5DayRain,
+      rainfall5DayFormatted: total5DayRain.toFixed(2) + '"',
+      total5DayRain: total5DayRain,
+      total5DayRainFormatted: total5DayRain.toFixed(2) + '"',
       todayForecast: todayForecast,
       todayRain: todayForecast ? todayForecast.rain : 0,
       todayRainFormatted: todayForecast ? todayForecast.rainFormatted : '0.00"',
@@ -920,7 +920,7 @@
   }
 
   /**
-   * Render horizontal 10-day rainfall track across the card
+   * Render horizontal 5-day rainfall track across the card
    */
   function renderDailyRainTrackHtml(dailyList) {
     if (!dailyList || !Array.isArray(dailyList) || dailyList.length === 0) return '';
@@ -952,7 +952,7 @@
       if (probHtml) metaItems.push(probHtml);
       for (var p = 0; p < pills.length; p++) metaItems.push(pills[p]);
 
-      return '<div class="ten-day-rain-col ' + gameClass + (todayClass ? ' ' + todayClass : '') + '" title="' + (window.API ? window.API.escapeHtml(title) : title) + '">' +
+      return '<div class="five-day-rain-col ' + gameClass + (todayClass ? ' ' + todayClass : '') + '" title="' + (window.API ? window.API.escapeHtml(title) : title) + '">' +
         '<div class="day-head">' +
           '<span class="day-title">' + (d.dayName || '') + '</span>' +
           (d.dayMonth ? '<span class="day-date">' + d.dayMonth + '</span>' : '') +
@@ -964,11 +964,11 @@
         (metaItems.length > 0 ? '<div class="day-tags-row">' + metaItems.join('') + '</div>' : '') +
       '</div>';
     });
-    return '<div class="ten-day-rain-track">' + cols.join('') + '</div>';
+    return '<div class="five-day-rain-track">' + cols.join('') + '</div>';
   }
 
   /**
-   * Render mini horizontal 10-day rainfall bar row for calendar cards
+   * Render mini horizontal 5-day rainfall bar row for calendar cards
    */
   function renderMiniDailyRainRowHtml(dailyList) {
     if (!dailyList || !Array.isArray(dailyList) || dailyList.length === 0) return '';
@@ -1000,7 +1000,7 @@
         '<span class="mini-rain-label" style="font-size: 0.6rem; line-height: 1; color: ' + (isGame ? 'var(--primary)' : (isToday ? 'var(--secondary)' : 'var(--text-muted)')) + '; font-weight: ' + (isGame || isToday ? '800' : '600') + ';">' + letter + '</span>' +
       '</div>';
     });
-    return '<div class="card-10day-rain-row" style="display: flex; gap: 2px; align-items: flex-end; width: 100%; padding-top: 3px; border-top: 1px dashed var(--border); margin-top: 3px;">' + bars.join('') + '</div>';
+    return '<div class="card-5day-rain-row" style="display: flex; gap: 2px; align-items: flex-end; width: 100%; padding-top: 3px; border-top: 1px dashed var(--border); margin-top: 3px;">' + bars.join('') + '</div>';
   }
 
   /**
@@ -1194,9 +1194,9 @@
         <!-- Compact Metrics Grid -->
         <div class="weather-kpi-grid">
           <div class="weather-kpi-tile">
-            <div class="weather-kpi-label">10-Day Rain</div>
-            <div class="weather-kpi-val">🌧️ ${r.rainfall10DayFormatted}</div>
-            <div class="weather-kpi-sub">Game &amp; prior 9 days</div>
+            <div class="weather-kpi-label">5-Day Rain</div>
+            <div class="weather-kpi-val">🌧️ ${r.rainfall5DayFormatted}</div>
+            <div class="weather-kpi-sub">Game &amp; prior 4 days</div>
           </div>
 
           <div class="weather-kpi-tile">
@@ -1223,12 +1223,12 @@
           </div>
         </div>
 
-        <!-- 10-Day Rainfall Prediction Across the Card (Daily Breakdown) -->
+        <!-- 5-Day Rainfall Prediction Across the Card (Daily Breakdown) -->
         ${(r.dailyForecast && r.dailyForecast.length > 0) ? `
           <div style="margin-top: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 7px 10px;">
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; margin-bottom: 4px;">
               <div style="font-size: 0.76rem; font-weight: 700; color: var(--secondary); display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                <span>🌧️ <strong>10-Day Rainfall Prediction: ${r.rainfall10DayFormatted}</strong></span>
+                <span>🌧️ <strong>5-Day Rainfall Prediction: ${r.rainfall5DayFormatted}</strong></span>
                 ${r.todayForecast ? `
                   <span class="badge" style="font-size: 0.68rem; padding: 1px 7px; font-weight: 700; background: rgba(0, 56, 49, 0.09); color: var(--secondary); border: 1px solid var(--secondary); border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
                     📍 Today's Rain: <strong>${r.todayForecast.rainFormatted}</strong> (${r.todayForecast.dayName || 'Today'})
@@ -1236,7 +1236,7 @@
                 ` : ''}
               </div>
               <div style="font-size: 0.7rem; color: var(--text-muted); font-weight: 600;">
-                Event day &amp; 9 previous days
+                Event day &amp; 4 previous days
               </div>
             </div>
             ${renderDailyRainTrackHtml(r.dailyForecast)}
