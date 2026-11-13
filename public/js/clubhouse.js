@@ -598,8 +598,15 @@
       closeMobileDrawers();
     }
 
-    Store.fetchChannelMessages(target.id).then(function () {
+    Store.fetchChannelMessages(target.id).then(function (msgs) {
       renderMessageStream();
+      if (Store.state.user && (Store.state.unreadByChannel[target.id] > 0 || (msgs && msgs.length > 0))) {
+        var lastId = (msgs && msgs.length > 0) ? Number(msgs[msgs.length - 1].id || 0) : 0;
+        if (typeof Store.markChannelRead === 'function') {
+          Store.markChannelRead(target.id, lastId);
+          renderChannelSidebar();
+        }
+      }
     }).catch(function () {});
   }
 
@@ -1311,7 +1318,7 @@
       if (syncChanBtn) syncChanBtn.classList.add('hidden');
       if (guestNoticeEl) {
         guestNoticeEl.classList.remove('hidden');
-        guestNoticeEl.innerHTML = '🔒 <a href="/login" style="color:var(--ch-gold);text-decoration:underline;font-weight:700;">Sign in</a> to RSVP, claim Batting Practice slots, and view volunteer crew names.';
+        guestNoticeEl.innerHTML = '🔒 <a href="/login.html" style="color:var(--ch-gold);text-decoration:underline;font-weight:700;">Sign in</a> to RSVP, claim Batting Practice slots, and view volunteer crew names.';
       }
       return;
     }
@@ -1696,7 +1703,7 @@
           rHtml += '<span>' + escapeHtml(r.target_type === 'message' ? '💬 Message' : '👤 User') + ': ' + escapeHtml(repUserName) + '</span>';
           rHtml += '<span class="ch-badge ' + (isOpen ? 'badge-muted' : 'badge-sunday') + '">' + escapeHtml(r.status || 'open') + '</span>';
           rHtml += '</div>';
-          rHtml += '<div class="ch-mod-meta">By ' + escapeHtml(r.reporter_name || 'Player') + (r.created_at ? (' • ' + escapeHtml(String(r.created_at).slice(0, 16))) : '') + '</div>';
+          rHtml += '<div class="ch-mod-meta">By ' + escapeHtml(r.reporter_name || 'Player') + (r.created_at ? (' • ' + escapeHtml(formatTime(r.created_at))) : '') + '</div>';
           rHtml += '<div class="ch-mod-reason">Reason: ' + escapeHtml(r.reason || '') + '</div>';
           if (repMsgId) {
             rHtml += '<div class="ch-mod-meta">Message #' + repMsgId + (repMsgHidden ? ' (already hidden)' : '') + (r.message_preview ? (' — "' + escapeHtml(r.message_preview) + '"') : '') + '</div>';
@@ -1899,6 +1906,7 @@
       if (fileInput) fileInput.value = '';
       renderMessageStream();
     }).catch(function (err) {
+      if (fileInput) fileInput.value = '';
       if (progText) progText.textContent = 'Upload failed: ' + err.message;
     });
   }
@@ -2814,17 +2822,25 @@
           var typingMap = (rtcState && rtcState.typingUsersByChannel) ? rtcState.typingUsersByChannel : (RtcEngine.state && RtcEngine.state.typingUsersByChannel);
           var chMap = (typingMap && uiState.activeChannelId) ? typingMap[uiState.activeChannelId] : null;
           var names = [];
+          var now = Date.now();
           if (chMap) {
             var uids = Object.keys(chMap);
             for (var i = 0; i < uids.length; i++) {
-              if (chMap[uids[i]] && chMap[uids[i]].userName) {
-                names.push(chMap[uids[i]].userName);
+              var entry = chMap[uids[i]];
+              if (entry && (!entry.expiresAt || entry.expiresAt > now) && entry.userName) {
+                names.push(entry.userName);
               }
             }
           }
           typingEl.textContent = names.length > 0 ? (names.join(', ') + ' is typing...') : '';
         } else if (evType === 'remote_stream' && detail && detail.userId && detail.stream) {
           uiState.remoteStreams[detail.userId] = detail.stream;
+          renderVoiceVideoTiles();
+        } else if (evType === 'remote_stream_removed' && detail && detail.userId) {
+          delete uiState.remoteStreams[detail.userId];
+          renderVoiceVideoTiles();
+        } else if (evType === 'voice_left') {
+          uiState.remoteStreams = {};
           renderVoiceVideoTiles();
         } else if (evType === 'speaking_update') {
           renderChannelSidebar();

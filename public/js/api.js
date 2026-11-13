@@ -204,6 +204,7 @@ const EN_DICT = {
   "event.update_waitlist_btn": "Update Waitlist Info",
   "event.no_players_yet": "No attendees on the roster yet. Be the first to mark yourself attending!",
   "event.playing_badge": "Playing",
+  "event.rained_out_badge": "Rained Out",
   "event.guest_tag": "(Guest)",
   "event.discussion_title": "💬 Game Discussion Board",
   "event.discussion_desc": "Coordinate carpools, ask about gear, discuss weather, or post post-game highlights!",
@@ -310,7 +311,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '126',
+  CLIENT_VERSION: '127',
 
   // Current user cache
   currentUser: null,
@@ -719,7 +720,7 @@ const API = {
             <span data-i18n="footer.about_site">${this.escapeHtml(this.t('footer.about_site', 'Built with Google Gemini in October 2026 for simplicity and durability. Free & open-source'))}</span> on <a href="https://github.com/djrow/pickup-baseball" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">GitHub</a> • <a href="https://github.com/djrow/pickup-baseball/blob/trunk/HANDBOOK.md" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;" data-i18n="footer.handbook">${this.escapeHtml(this.t('footer.handbook', 'Handbook & Field Rules'))}</a> • <a href="/waiver.html" style="color: inherit; text-decoration: underline;">Player Waiver</a>.
           </p>
           <p style="margin-top: 6px; font-size: 0.75rem; color: #64748b; line-height: 1.4;">
-            <span data-i18n="footer.copyright">© 2026 Pickup Baseball Foundation. Licensed under <a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">Apache License 2.0</a>.</span>
+            <span data-i18n="footer.copyright">© 2026 Pickup Baseball Foundation. Licensed under Apache License 2.0.</span> • <a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">Apache License 2.0</a>
           </p>
         </div>
       `;
@@ -847,23 +848,30 @@ const API = {
       }
     });
 
-    document.addEventListener('click', (e) => {
-      if (panel && panel.classList.contains('open')) {
-        if (!panel.contains(e.target) && e.target !== trigger && !trigger.contains(e.target)) {
-          panel.classList.remove('open');
-          panel.setAttribute('aria-hidden', 'true');
-          trigger.setAttribute('aria-expanded', 'false');
+    if (!this._footerThemeGlobalBound) {
+      this._footerThemeGlobalBound = true;
+      document.addEventListener('click', (e) => {
+        const activePanel = document.getElementById('footer-theme-panel');
+        const activeTrigger = document.getElementById('footer-theme-trigger');
+        if (activePanel && activePanel.classList.contains('open')) {
+          if (!activePanel.contains(e.target) && e.target !== activeTrigger && (!activeTrigger || !activeTrigger.contains(e.target))) {
+            activePanel.classList.remove('open');
+            activePanel.setAttribute('aria-hidden', 'true');
+            if (activeTrigger) activeTrigger.setAttribute('aria-expanded', 'false');
+          }
         }
-      }
-    });
+      });
 
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && panel && panel.classList.contains('open')) {
-        panel.classList.remove('open');
-        panel.setAttribute('aria-hidden', 'true');
-        trigger.setAttribute('aria-expanded', 'false');
-      }
-    });
+      document.addEventListener('keydown', (e) => {
+        const activePanel = document.getElementById('footer-theme-panel');
+        const activeTrigger = document.getElementById('footer-theme-trigger');
+        if (e.key === 'Escape' && activePanel && activePanel.classList.contains('open')) {
+          activePanel.classList.remove('open');
+          activePanel.setAttribute('aria-hidden', 'true');
+          if (activeTrigger) activeTrigger.setAttribute('aria-expanded', 'false');
+        }
+      });
+    }
 
     this.updateFooterThemeUi();
   },
@@ -1013,11 +1021,7 @@ const API = {
         await Promise.all(cacheNames.map(k => caches.delete(k)));
       }
 
-      this.clearDataCaches();
-      try {
-        localStorage.removeItem('pbf_events_cache');
-        localStorage.removeItem('pbf_cached_user');
-      } catch (err) {}
+      this.clearDataCaches(true);
 
       if (statusEl) {
         statusEl.className = 'footer-update-status status-ready';
@@ -1057,7 +1061,7 @@ const API = {
 
   clearClubhouseIndexedDb() {
     if (typeof indexedDB === 'undefined') return Promise.resolve();
-    return new Promise((resolve) => {
+    const deleteDb = (dbName) => new Promise((resolve) => {
       let settled = false;
       const done = () => {
         if (settled) return;
@@ -1066,7 +1070,7 @@ const API = {
       };
       const timer = setTimeout(done, 400);
       try {
-        const req = indexedDB.deleteDatabase('pickup_clubhouse_db');
+        const req = indexedDB.deleteDatabase(dbName);
         req.onsuccess = () => { clearTimeout(timer); done(); };
         req.onerror = () => { clearTimeout(timer); done(); };
         req.onblocked = () => { clearTimeout(timer); done(); };
@@ -1075,39 +1079,67 @@ const API = {
         done();
       }
     });
+    return Promise.all([
+      deleteDb('pickup_clubhouse_db'),
+      deleteDb('pickup_clubhouse_crypto')
+    ]);
   },
 
-  clearDataCaches() {
+  clearDataCaches(skipIndexedDb) {
     try {
       localStorage.removeItem('pickup_cached_user');
       localStorage.removeItem('pickup_ch_collapsed_cats');
       const keysToRemove = [];
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
-        if (k && k.startsWith('pickup_cached_event')) {
+        if (
+          k &&
+          (k.startsWith('pickup_cached_event') ||
+            k.startsWith('pbf_weather_v') ||
+            (k.startsWith('pickup_i18n_v') && !k.startsWith('pickup_i18n_v' + this.APP_VERSION + '_')))
+        ) {
           keysToRemove.push(k);
         }
       }
       keysToRemove.forEach(k => localStorage.removeItem(k));
     } catch (e) {}
-    this.clearClubhouseIndexedDb();
+    if (!skipIndexedDb) {
+      this.clearClubhouseIndexedDb();
+    }
   },
 
   async request(method, url, body, opts) {
     const options = opts || {};
     const init = { method: method };
+    const headers = Object.assign({}, options.headers || {});
     if (options.noStore) init.cache = 'no-store';
     if (body !== undefined && body !== null) {
       if (typeof FormData !== 'undefined' && body instanceof FormData) {
         init.body = body;
       } else {
-        init.headers = { 'Content-Type': 'application/json' };
+        if (!headers['Content-Type'] && !headers['content-type']) {
+          headers['Content-Type'] = 'application/json';
+        }
         init.body = JSON.stringify(body);
       }
     }
+    if (Object.keys(headers).length > 0) {
+      init.headers = headers;
+    }
     const res = await fetch(url, init);
     this.checkResponseVersion(res);
-    const data = await res.json();
+    let data = {};
+    const contentType = (res.headers && res.headers.get && res.headers.get('content-type')) || '';
+    if (contentType.includes('application/json')) {
+      data = await res.json().catch(() => ({}));
+    } else {
+      const txt = await res.text().catch(() => '');
+      try {
+        data = txt ? JSON.parse(txt) : {};
+      } catch (e) {
+        data = { error: txt || (res.ok ? '' : 'Request failed.') };
+      }
+    }
     if (options.throwOnError && !res.ok) {
       throw new Error((data && data.error) ? data.error : (options.errorMsg || 'Request failed.'));
     }
@@ -1146,7 +1178,7 @@ const API = {
 
   async logout() {
     try {
-      API.clearDataCaches();
+      API.clearDataCaches(true);
       await Promise.all([
         API.clearClubhouseIndexedDb(),
         fetch('/api/auth/logout', { method: 'POST' })

@@ -1,6 +1,13 @@
 node_modules
-data/*.db
-data/*.db-wal
-data/*.db-shm
+data/*.db*
 .git
 .env
+.dev.vars*
+.wrangler
+_worker.bundle
+tests
+scripts
+docs
+*.md
+*.sql
+*.txt

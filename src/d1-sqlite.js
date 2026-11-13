@@ -12,18 +12,33 @@ function normalizeParam(val) {
 }
 
 class SqliteD1Statement {
-  constructor(sqliteDb, sql, params = []) {
+  constructor(sqliteDb, sql, params = [], stmtCache = null) {
     this._db = sqliteDb;
     this._sql = sql;
     this._params = params;
+    this._stmtCache = stmtCache;
+  }
+
+  _prepare() {
+    if (!this._stmtCache) return this._db.prepare(this._sql);
+    let stmt = this._stmtCache.get(this._sql);
+    if (!stmt) {
+      if (this._stmtCache.size >= 256) {
+        const firstKey = this._stmtCache.keys().next().value;
+        this._stmtCache.delete(firstKey);
+      }
+      stmt = this._db.prepare(this._sql);
+      this._stmtCache.set(this._sql, stmt);
+    }
+    return stmt;
   }
 
   bind(...params) {
-    return new SqliteD1Statement(this._db, this._sql, params.map(normalizeParam));
+    return new SqliteD1Statement(this._db, this._sql, params.map(normalizeParam), this._stmtCache);
   }
 
   _runSync() {
-    const stmt = this._db.prepare(this._sql);
+    const stmt = this._prepare();
     if (stmt.reader) {
       const results = stmt.all(...this._params);
       return { results, success: true, meta: { changes: 0, last_row_id: 0 } };
@@ -40,7 +55,7 @@ class SqliteD1Statement {
   }
 
   async first(colName) {
-    const stmt = this._db.prepare(this._sql);
+    const stmt = this._prepare();
     const row = stmt.reader ? stmt.get(...this._params) : (stmt.run(...this._params), null);
     if (!row) return null;
     return colName ? (row[colName] !== undefined ? row[colName] : null) : row;
@@ -55,7 +70,7 @@ class SqliteD1Statement {
   }
 
   raw() {
-    const stmt = this._db.prepare(this._sql);
+    const stmt = this._prepare();
     const rows = stmt.raw(true).all(...this._params);
     const p = Promise.resolve(rows);
     p.all = async () => rows;
@@ -64,9 +79,10 @@ class SqliteD1Statement {
 }
 
 function createD1Adapter(sqliteDb) {
+  const stmtCache = new Map();
   return {
     prepare(sql) {
-      return new SqliteD1Statement(sqliteDb, sql);
+      return new SqliteD1Statement(sqliteDb, sql, [], stmtCache);
     },
     async batch(statements) {
       const runTxn = sqliteDb.transaction((stmts) => stmts.map((s) => s._runSync()));

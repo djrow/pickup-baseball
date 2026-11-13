@@ -184,7 +184,7 @@ keysRouter.get('/users', requireAuth, async (c) => {
     let results = [];
 
     if (idsParam) {
-      const ids = idsParam.split(',').map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n));
+      const ids = idsParam.split(',').map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n) && n > 0).slice(0, 200);
       if (ids.length === 0) {
         return c.json({ users: [] });
       }
@@ -199,6 +199,8 @@ keysRouter.get('/users', requireAuth, async (c) => {
       const queryRes = await chatDb.prepare(`
         SELECT user_id, ecdh_public_key_jwk, ecdsa_public_key_jwk, privacy_relay_mode, status_text
         FROM user_crypto_keys
+        ORDER BY user_id ASC
+        LIMIT 500
       `).all();
       results = queryRes.results || [];
     }
@@ -300,8 +302,14 @@ keysRouter.post('/channel/:channelId/share', requireAuth, async (c) => {
     if (!body || !Array.isArray(body.shares) || body.shares.length === 0) {
       return c.json({ error: 'Missing or empty shares array.' }, 400);
     }
+    if (body.shares.length > 200) {
+      return c.json({ error: 'Too many key shares in a single request (max 200).' }, 400);
+    }
 
-    const defaultEpoch = body.key_epoch || body.keyEpoch || 1;
+    const defaultEpoch = parseInt(body.key_epoch !== undefined ? body.key_epoch : (body.keyEpoch !== undefined ? body.keyEpoch : 1), 10);
+    if (!defaultEpoch || isNaN(defaultEpoch) || defaultEpoch < 1) {
+      return c.json({ error: 'Invalid key_epoch.' }, 400);
+    }
     let validMembers = null;
     if (isKeyShared) {
       const { results: memberRows } = await chatDb.prepare(
@@ -310,11 +318,15 @@ keysRouter.post('/channel/:channelId/share', requireAuth, async (c) => {
       validMembers = new Set((memberRows || []).map((r) => Number(r.user_id)));
       if (channel.created_by) validMembers.add(Number(channel.created_by));
 
-      if (!body.force_rotate) {
+      const canForceRotate = Boolean(user.isAdmin || user.isModerator || channel.created_by === user.id);
+      if (!body.force_rotate || !canForceRotate) {
         const existingEpochShare = await chatDb.prepare(
           'SELECT 1 FROM channel_key_shares WHERE channel_id = ? AND key_epoch = ? LIMIT 1'
         ).bind(channel.id, defaultEpoch).first();
         if (existingEpochShare) {
+          if (body.force_rotate && !canForceRotate) {
+            return c.json({ error: 'Only channel owners, moderators, or admins can force key rotation.' }, 403);
+          }
           return c.json({ success: true, alreadyInitialized: true, count: 0 });
         }
       }
@@ -323,16 +335,19 @@ keysRouter.post('/channel/:channelId/share', requireAuth, async (c) => {
     const batchStatements = [];
 
     for (const share of body.shares) {
-      const recipientUserId = share.recipient_user_id || share.recipientUserId;
-      const keyEpoch = share.key_epoch || share.keyEpoch || defaultEpoch;
+      const recipientUserId = parseInt(share.recipient_user_id !== undefined ? share.recipient_user_id : share.recipientUserId, 10);
+      const keyEpoch = parseInt(share.key_epoch !== undefined ? share.key_epoch : (share.keyEpoch !== undefined ? share.keyEpoch : defaultEpoch), 10);
       const wrappedKey = share.wrapped_key_base64 || share.wrappedKeyBase64;
       const wrapIv = share.wrap_iv || share.wrapIv;
       let ephemeralPub = share.sender_ephemeral_pub_jwk || share.senderEphemeralPubJwk || null;
 
-      if (!recipientUserId || !wrappedKey || !wrapIv) {
+      if (!recipientUserId || isNaN(recipientUserId) || recipientUserId <= 0 || !keyEpoch || isNaN(keyEpoch) || keyEpoch < 1 || !wrappedKey || !wrapIv) {
         return c.json({
-          error: 'Invalid share payload: recipient_user_id, wrapped_key_base64, and wrap_iv are required.'
+          error: 'Invalid share payload: valid recipient_user_id, key_epoch, wrapped_key_base64, and wrap_iv are required.'
         }, 400);
+      }
+      if (String(wrapIv).length > 512) {
+        return c.json({ error: 'wrap_iv exceeds maximum allowed size.' }, 400);
       }
 
       if (isKeyShared && validMembers && !validMembers.has(Number(recipientUserId))) {

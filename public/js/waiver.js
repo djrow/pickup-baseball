@@ -249,12 +249,12 @@
     var printDateSpan = document.getElementById('print-dated-val');
     if (printDateSpan) printDateSpan.textContent = todayStr;
 
-    var statusData = null;
-    try {
-      statusData = await API.getWaiverStatus();
-    } catch (e) {}
+    const [statusData, meUser] = await Promise.all([
+      API.getWaiverStatus().catch(() => null),
+      API.getMe()
+    ]);
 
-    currentUser = await API.getMe();
+    currentUser = meUser;
     API.renderNav(currentUser);
 
     if (statusData) {

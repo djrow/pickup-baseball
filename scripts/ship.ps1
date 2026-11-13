@@ -12,6 +12,7 @@
     5. Create git tag `v<version>`
     6. Deploy to Cloudflare Pages (`npm run deploy`)
     7. Push branch and tag to GitHub (`origin/trunk`)
+    8. Run live production security verification (`npm run security:scan:live`, unless -SkipDeploy)
 
   You do NOT need to edit this file for commit messages: pass `-Message "..."` when
   running it, or just run `.\scripts\ship.ps1` and type the message when prompted.
@@ -175,6 +176,11 @@ try {
     if ($TagCreated) {
       Invoke-Step -Label "Pushing tag $TagName to $RemoteName" -Command { git push $RemoteName $TagName }
     }
+  }
+
+  # 8. Post-deploy live security check (after push so network hiccups never block git push)
+  if (-not $SkipDeploy) {
+    Invoke-Step -Label 'Verifying live production security (npm run security:scan:live)' -Command { npm run security:scan:live }
   }
 
   Write-Host "`nDone! Released v$AppVersion." -ForegroundColor Green

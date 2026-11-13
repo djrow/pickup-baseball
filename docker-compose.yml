@@ -7,7 +7,6 @@ services:
     environment:
       - PORT=3000
       - NODE_ENV=production
-      - APP_URL=https://your-domain.com
       - ADMIN_EMAIL=pickupbaseballfoundation@gmail.com
       - ADMIN_NAME=League Organizer
     volumes:

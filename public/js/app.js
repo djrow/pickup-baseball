@@ -101,8 +101,9 @@ function setupCloudSyncLifecycle() {
   });
 
   setInterval(function() {
+    if (document.visibilityState !== 'visible') return;
     updateSyncPillUi();
-    if (document.visibilityState === 'visible' && navigator.onLine !== false && (Date.now() - lastCloudSyncedAt > 900000)) {
+    if (navigator.onLine !== false && (Date.now() - lastCloudSyncedAt > 900000)) {
       loadGames(false, true);
     }
   }, 30000);
@@ -519,8 +520,8 @@ function renderCalendarDrawer(dateKey, game, isPast) {
       var stripEl = document.getElementById('drawer-10day-weather-' + dateKey);
       if (fc && fc.available) {
         if (wEl) {
-          wEl.innerHTML = '<span>' + fc.emoji + '</span> <strong>' + fc.temperature + '°F ' + API.escapeHtml(fc.condition) + '</strong> ' +
-            '<span style="font-size: 0.8rem; color: var(--text-muted);">(' + fc.totalRain24hFormatted + ' rain in 24h prior &bull; ' + API.escapeHtml(fc.statusLabel) + ')</span>';
+          wEl.innerHTML = '<span>' + API.escapeHtml(fc.emoji) + '</span> <strong>' + API.escapeHtml(fc.temperature) + '°F ' + API.escapeHtml(fc.condition) + '</strong> ' +
+            '<span style="font-size: 0.8rem; color: var(--text-muted);">(' + API.escapeHtml(fc.totalRain24hFormatted) + ' rain in 24h prior &bull; ' + API.escapeHtml(fc.statusLabel) + ')</span>';
           wEl.style.display = 'inline-flex';
         }
         if (stripEl && fc.dailyForecast && fc.dailyForecast.length > 0 && typeof window.WeatherService.renderDailyRainTrackHtml === 'function') {
@@ -528,13 +529,13 @@ function renderCalendarDrawer(dateKey, game, isPast) {
           if (fc.todayForecast) {
             todaySnippet =
               '<span class="badge" style="font-size: 0.72rem; padding: 2px 8px; font-weight: 700; background: rgba(0, 56, 49, 0.09); color: var(--secondary); border: 1.5px solid var(--secondary); border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">' +
-                '📍 Today\'s Rain: <strong>' + fc.todayForecast.rainFormatted + '</strong> (' + (fc.todayForecast.dayName || 'Today') + ')' +
+                '📍 Today\'s Rain: <strong>' + API.escapeHtml(fc.todayForecast.rainFormatted) + '</strong> (' + API.escapeHtml(fc.todayForecast.dayName || 'Today') + ')' +
               '</span>';
           }
           stripEl.innerHTML =
             '<div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; margin-bottom: 4px;">' +
               '<span style="font-size: 0.78rem; font-weight: 700; color: var(--secondary); display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap;">' +
-                '<span>🌧️ <strong>10-Day Rainfall Prediction: ' + fc.rainfall10DayFormatted + '</strong></span>' +
+                '<span>🌧️ <strong>10-Day Rainfall Prediction: ' + API.escapeHtml(fc.rainfall10DayFormatted) + '</strong></span>' +
                 todaySnippet +
               '</span>' +
               '<span style="font-size: 0.71rem; color: var(--text-muted); font-weight: 600;">' +

@@ -29,11 +29,14 @@ function applyApiSecurityHeaders(c) {
   c.header('X-Frame-Options', 'DENY');
   c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
   c.header('Permissions-Policy', 'camera=(self), microphone=(self), display-capture=(self), geolocation=(), payment=()');
-  const ct = (c.res && c.res.headers && c.res.headers.get('Content-Type')) || '';
-  if (ct.includes('text/html')) {
-    c.header('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; object-src 'none'; frame-ancestors 'none';");
-  } else {
-    c.header('Content-Security-Policy', "default-src 'none'; object-src 'none'; frame-ancestors 'none';");
+  const existingCsp = (c.res && c.res.headers && c.res.headers.get('Content-Security-Policy')) || '';
+  if (!existingCsp) {
+    const ct = (c.res && c.res.headers && c.res.headers.get('Content-Type')) || '';
+    if (ct.includes('text/html')) {
+      c.header('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; object-src 'none'; frame-ancestors 'none';");
+    } else {
+      c.header('Content-Security-Policy', "default-src 'none'; object-src 'none'; frame-ancestors 'none';");
+    }
   }
 }
 
@@ -55,22 +58,26 @@ app.notFound((c) => {
 });
 
 app.use('*', async (c, next) => {
+  const reqUrl = new URL(c.req.url);
+  const pathName = reqUrl.pathname;
+  const isHealthEndpoint = pathName === '/api/version' || pathName === '/api/health';
+
   if (c.env) {
     if (!c.env.DB && c.env.BASEBALL_DB) c.env.DB = c.env.BASEBALL_DB;
     if (!c.env.BASEBALL_DB && c.env.DB) c.env.BASEBALL_DB = c.env.DB;
 
-    if (c.env.DB) {
-      await ensureD1Schema(c.env.DB);
-    }
-    if (c.env.CHAT_DB) {
-      await ensureChatD1Schema(c.env.CHAT_DB);
-    }
-    if (c.env.DB && c.env.CHAT_DB) {
-      await ensureClubhouseOptInBackfill(c.env.DB, c.env.CHAT_DB);
+    if (!isHealthEndpoint) {
+      if (c.env.DB) {
+        await ensureD1Schema(c.env.DB);
+      }
+      if (c.env.CHAT_DB) {
+        await ensureChatD1Schema(c.env.CHAT_DB);
+      }
+      if (c.env.DB && c.env.CHAT_DB) {
+        await ensureClubhouseOptInBackfill(c.env.DB, c.env.CHAT_DB);
+      }
     }
   }
-
-  const reqUrl = new URL(c.req.url);
 
   // Enforce custom domain WAF on Cloudflare Pages preview domains
   if (reqUrl.hostname.endsWith('.pages.dev')) {
@@ -108,10 +115,15 @@ app.use('*', async (c, next) => {
     }
   }
 
-  const sessionId = getCookie(c, SESSION_COOKIE_NAME);
+  const skipSessionLookup =
+    isHealthEndpoint ||
+    pathName === '/api/auth/logout' ||
+    /^\/api\/users\/\d+\/avatar$/.test(pathName);
+
+  const sessionId = !skipSessionLookup ? getCookie(c, SESSION_COOKIE_NAME) : null;
   if (sessionId && c.env && c.env.DB) {
     try {
-      const isLightweightSync = reqUrl.pathname === '/api/sync';
+      const isLightweightSync = pathName === '/api/sync';
       c.set('user', await getUserFromSession(c.env.DB, sessionId, c.env.CHAT_DB, { lightweight: isLightweightSync }));
     } catch (e) {
       console.error('[Auth Middleware] Session error:', e);
@@ -124,22 +136,25 @@ app.use('*', async (c, next) => {
   await next();
 });
 
+function resolveStorageProvider(env) {
+  const hasGDrive = Boolean((env && env.GDRIVE_CLIENT_ID) || (typeof process !== 'undefined' && process.env && process.env.GDRIVE_CLIENT_ID));
+  return hasGDrive ? 'gdrive' : 'local';
+}
+
 app.get('/version', (c) => {
-  const storageProvider = Boolean(c.env?.GDRIVE_CLIENT_ID || process.env.GDRIVE_CLIENT_ID) ? 'gdrive' : 'local';
   return c.json({
     version: CURRENT_APP_VERSION,
     status: 'ok',
-    storageProvider
+    storageProvider: resolveStorageProvider(c.env)
   });
 });
 
 app.get('/health', (c) => {
-  const storageProvider = Boolean(c.env?.GDRIVE_CLIENT_ID || process.env.GDRIVE_CLIENT_ID) ? 'gdrive' : 'local';
   return c.json({
     version: CURRENT_APP_VERSION,
     status: 'ok',
     environment: (c.env && c.env.NODE_ENV) || 'cloudflare-pages',
-    storageProvider,
+    storageProvider: resolveStorageProvider(c.env),
     timestamp: new Date().toISOString()
   });
 });

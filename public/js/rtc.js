@@ -77,9 +77,14 @@
         payload_json: JSON.stringify(payloadObj)
       })
     }).then(function (res) {
+      if (!res.ok) return {};
       return res.json().catch(function () { return {}; });
+    }).catch(function () {
+      return {};
     });
   }
+
+  var typingCleanupTimers = {};
 
   function attachDataChannelHandlers(peerUserId, dc) {
     rtcState.dataChannels[peerUserId] = dc;
@@ -96,6 +101,19 @@
             userName: msg.userName || 'Player',
             expiresAt: Date.now() + 4000
           };
+          var timerKey = chId + ':' + String(peerUserId);
+          if (typingCleanupTimers[timerKey]) {
+            clearTimeout(typingCleanupTimers[timerKey]);
+          }
+          typingCleanupTimers[timerKey] = setTimeout(function () {
+            delete typingCleanupTimers[timerKey];
+            if (rtcState.typingUsersByChannel[chId] && rtcState.typingUsersByChannel[chId][peerUserId]) {
+              if (rtcState.typingUsersByChannel[chId][peerUserId].expiresAt <= Date.now()) {
+                delete rtcState.typingUsersByChannel[chId][peerUserId];
+                emitRtc('typing_update', { channelId: chId });
+              }
+            }
+          }, 4100);
           emitRtc('typing_update', { channelId: chId });
         } else if (msg && msg.type === 'speaking') {
           rtcState.speakingUsers[peerUserId] = Boolean(msg.speaking);
@@ -141,6 +159,26 @@
       var stream = (ev.streams && ev.streams[0]) ? ev.streams[0] : new MediaStream([ev.track]);
       rtcState.remoteStreams[peerUserId] = stream;
       emitRtc('remote_stream', { userId: peerUserId, stream: stream, track: ev.track });
+    };
+
+    var handlePeerDisconnected = function () {
+      if (rtcState.remoteStreams[peerUserId]) {
+        delete rtcState.remoteStreams[peerUserId];
+        emitRtc('remote_stream_removed', { userId: peerUserId });
+      }
+      if (rtcState.peerConnections[peerUserId] === pc) {
+        delete rtcState.peerConnections[peerUserId];
+      }
+    };
+    pc.onconnectionstatechange = function () {
+      if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+        handlePeerDisconnected();
+      }
+    };
+    pc.oniceconnectionstatechange = function () {
+      if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'closed') {
+        handlePeerDisconnected();
+      }
     };
 
     pc.ondatachannel = function (ev) {
@@ -309,10 +347,13 @@
         screen_sharing: rtcState.screenSharing ? 1 : 0
       })
     }).then(function (res) {
+      if (!res.ok) return {};
       return res.json().catch(function () { return {}; });
     }).then(function (data) {
       emitRtc('voice_state_updated', data);
       return data;
+    }).catch(function () {
+      return {};
     });
   }
 
@@ -401,10 +442,14 @@
       headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin'
     }).then(function (res) {
+      if (!res.ok) return {};
       return res.json().catch(function () { return {}; });
     }).then(function (data) {
       emitRtc('voice_left', data);
       return data;
+    }).catch(function () {
+      emitRtc('voice_left', {});
+      return {};
     });
   }
 

@@ -3212,6 +3212,68 @@ test('Clubhouse Frontend & Native Waiver Verification', async (t) => {
       assert.ok(!src.includes('?.') && !src.includes('??'), `${fname} must stay ES6 compatible without ?. or ??`);
     }
   });
+
+  await t.test('Check 8.5: Archive Header Structure, i18n Key Parity, Post Edit & Comment Author Self-Delete', async () => {
+    const publicDir = path.join(__dirname, '..', 'public');
+
+    // 1. archive.html must close <header> before <main> so API.renderNav() never wipes body content
+    const archiveHtml = fs.readFileSync(path.join(publicDir, 'archive.html'), 'utf8');
+    const hdrCloseIdx = archiveHtml.indexOf('</header>');
+    const mainOpenIdx = archiveHtml.indexOf('<main');
+    assert.ok(hdrCloseIdx !== -1 && mainOpenIdx !== -1 && hdrCloseIdx < mainOpenIdx, 'archive.html must close </header> before <main>');
+
+    // 2. All 14 i18n JSON files must have 100% key parity with EN_DICT
+    const apiJsSrc = fs.readFileSync(path.join(publicDir, 'js', 'api.js'), 'utf8');
+    const m = apiJsSrc.match(/const EN_DICT = \{([\s\S]*?)\n\};/);
+    assert.ok(m, 'api.js must define EN_DICT');
+    const enObj = Function('return {' + m[1] + '}')();
+    const enKeys = Object.keys(enObj);
+    const i18nDir = path.join(publicDir, 'i18n');
+    for (const lang of ['ar', 'es', 'fa', 'fr', 'hi', 'hy', 'ja', 'ko', 'pa', 'pt', 'ru', 'tl', 'vi', 'zh']) {
+      const dict = JSON.parse(fs.readFileSync(path.join(i18nDir, `${lang}.json`), 'utf8'));
+      const missing = enKeys.filter((k) => !(k in dict));
+      assert.deepEqual(missing, [], `${lang}.json must contain all EN_DICT keys`);
+    }
+
+    // 3. PUT /api/posts/:id updates existing post cleanly
+    const postCreate = await apiReq('POST', '/api/posts', seedOrgCookie, {
+      title: 'Editable Recap Post',
+      content: 'Original recap content'
+    });
+    assert.equal(postCreate.status, 200);
+    const createdPostId = postCreate.data.post.id;
+
+    const postUpdate = await apiReq('PUT', `/api/posts/${createdPostId}`, seedOrgCookie, {
+      title: 'Updated Recap Post Title',
+      content: 'Updated recap story content'
+    });
+    assert.equal(postUpdate.status, 200);
+    assert.equal(postUpdate.data.post.title, 'Updated Recap Post Title');
+
+    const postDelete = await apiReq('DELETE', `/api/posts/${createdPostId}`, seedOrgCookie);
+    assert.equal(postDelete.status, 200);
+
+    // 4. Comment author can self-delete their own comment, while another player gets 403
+    const evCreate = await apiReq('POST', '/api/events', seedOrgCookie, {
+      title: 'Comment Self-Delete Check',
+      location: 'Bushrod Park Field 1',
+      event_date: '2026-12-28T20:00:00.000Z',
+      max_players: 20
+    });
+    assert.equal(evCreate.status, 200);
+    const evId = evCreate.data.eventId;
+
+    const cmtRes = await apiReq('POST', `/api/events/${evId}/comments`, seedPlayerCookie, {
+      content: 'Bringing extra batting helmets!'
+    });
+    assert.equal(cmtRes.status, 200);
+    const evDetail = await apiReq('GET', `/api/events/${evId}`, seedPlayerCookie);
+    const playerComment = (evDetail.data.comments || []).find((c) => c.content === 'Bringing extra batting helmets!');
+    assert.ok(playerComment, 'Created comment should be returned on event detail');
+
+    const delOwn = await apiReq('DELETE', `/api/events/${evId}/comments/${playerComment.id}`, seedPlayerCookie);
+    assert.equal(delOwn.status, 200, 'Comment author must be able to delete their own comment');
+  });
 });
 
 // ---------------------------------------------------------------------------

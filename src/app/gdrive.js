@@ -345,6 +345,26 @@ export async function streamGDriveFile(env, driveFileId, rangeHeader, fallbackMi
 }
 
 /**
+ * Delete a file from Google Drive best-effort (used for rollback & resource cleanup).
+ */
+export async function deleteGDriveFile(env, driveFileId) {
+  if (!driveFileId || !isGDriveConfigured(env)) return false;
+  try {
+    const token = await getGDriveAccessToken(env);
+    const apiBase = getGDriveApiBase(env);
+    const res = await fetch(`${apiBase}/drive/v3/files/${encodeURIComponent(driveFileId)}?supportsAllDrives=true`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return res.ok || res.status === 404;
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
  * Query Google Drive 5 TB Storage Pool Quota
  */
 export async function getGDriveStorageQuota(env) {

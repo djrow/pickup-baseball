@@ -25,6 +25,19 @@ export function generateCode() {
   return (100000 + (val % 900000)).toString();
 }
 
+export function constantTimeEqual(a, b) {
+  const s1 = String(a || '');
+  const s2 = String(b || '');
+  const len = Math.max(s1.length, s2.length);
+  let diff = s1.length ^ s2.length;
+  for (let i = 0; i < len; i++) {
+    const c1 = i < s1.length ? s1.charCodeAt(i) : 0;
+    const c2 = i < s2.length ? s2.charCodeAt(i) : 0;
+    diff |= c1 ^ c2;
+  }
+  return diff === 0;
+}
+
 export async function sha256Hex(input) {
   const data = new TextEncoder().encode(String(input));
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
@@ -128,10 +141,11 @@ export function stripJpegMetadata(buffer) {
 export function isValidRasterImageBuffer(buffer, mime) {
   const bytes = new Uint8Array(buffer);
   if (bytes.length < 12) return false;
-  if (mime === 'image/jpeg') return bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF;
-  if (mime === 'image/png') return bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47;
-  if (mime === 'image/gif') return bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x38;
-  if (mime === 'image/webp') {
+  const normalizedMime = String(mime || '').toLowerCase() === 'image/jpg' ? 'image/jpeg' : String(mime || '').toLowerCase();
+  if (normalizedMime === 'image/jpeg') return bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF;
+  if (normalizedMime === 'image/png') return bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47;
+  if (normalizedMime === 'image/gif') return bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x38;
+  if (normalizedMime === 'image/webp') {
     return (
       bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
       bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50

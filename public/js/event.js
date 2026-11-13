@@ -339,9 +339,9 @@ function renderEventDetails() {
       if (weatherDisplay) {
         weatherDisplay.innerHTML = `
           <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-            <span style="font-weight: 800; color: var(--secondary); font-size: 1.05rem;">${fc.temperature}°F</span>
+            <span style="font-weight: 800; color: var(--secondary); font-size: 1.05rem;">${API.escapeHtml(fc.temperature)}°F</span>
             <span style="font-size: 0.82rem; color: var(--text-muted); font-weight: 600;">${API.escapeHtml(fc.condition)}</span>
-            <span class="badge ${fc.badgeClass}" style="font-size: 0.72rem; padding: 1px 6px;">${fc.statusLabel}</span>
+            <span class="badge ${API.escapeHtml(fc.badgeClass)}" style="font-size: 0.72rem; padding: 1px 6px;">${API.escapeHtml(fc.statusLabel)}</span>
           </div>
         `;
       }
@@ -2025,7 +2025,8 @@ function setupBpOrderUi() {
         submitBtn.textContent = 'Confirm BP Slot';
 
         if (res.error) {
-          alert('Error: ' + res.error);
+          closeBpModal();
+          if (alertEl) alertEl.innerHTML = `<div class="alert alert-error">${API.escapeHtml(res.error)}</div>`;
         } else {
           closeBpModal();
           if (alertEl) alertEl.innerHTML = `<div class="alert alert-success">${API.escapeHtml(res.message)}</div>`;
@@ -2035,7 +2036,8 @@ function setupBpOrderUi() {
         submitBtn.disabled = false;
         submitBtn.textContent = 'Confirm BP Slot';
         console.error('Error saving BP signup:', err);
-        alert('Failed to save batting practice slot. Please try again.');
+        closeBpModal();
+        if (alertEl) alertEl.innerHTML = '<div class="alert alert-error">Failed to save batting practice slot. Please try again.</div>';
       }
     };
   }

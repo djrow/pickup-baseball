@@ -211,8 +211,15 @@ export const CREATE_TABLES_SQL = [
   'CREATE INDEX IF NOT EXISTS idx_media_type ON media_items(media_type)',
   'CREATE INDEX IF NOT EXISTS idx_media_approved ON media_items(is_approved)',
   'CREATE INDEX IF NOT EXISTS idx_bp_signups_event ON batting_practice_signups(event_id, slot_number)',
+  'CREATE INDEX IF NOT EXISTS idx_bp_signups_event_user ON batting_practice_signups(event_id, user_id)',
+  'CREATE INDEX IF NOT EXISTS idx_bp_signups_event_attendee ON batting_practice_signups(event_id, attendee_id)',
   'CREATE INDEX IF NOT EXISTS idx_waivers_user ON waivers(user_id)',
   'CREATE INDEX IF NOT EXISTS idx_waivers_email ON waivers(email)',
+  'CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id)',
+  'CREATE INDEX IF NOT EXISTS idx_auth_codes_email ON auth_codes(email, used_at, expires_at)',
+  'CREATE INDEX IF NOT EXISTS idx_event_duties_event ON event_duties(event_id, sort_order)',
+  'CREATE INDEX IF NOT EXISTS idx_attendees_event_status ON attendees(event_id, status)',
+  'CREATE INDEX IF NOT EXISTS idx_users_clubhouse_opt ON users(clubhouse_opted_in)',
   'CREATE UNIQUE INDEX IF NOT EXISTS idx_users_calendar_token ON users(calendar_token) WHERE calendar_token IS NOT NULL'
 ];
 
@@ -250,7 +257,7 @@ export const ALTER_STATEMENTS = [
 ];
 
 const migratedDbs = new WeakSet();
-const BASEBALL_SCHEMA_VERSION = '2026-11-13.1';
+const BASEBALL_SCHEMA_VERSION = '2026-11-13.2';
 
 async function runSchemaBatch(db, sqlList) {
   if (typeof db.batch === 'function' && sqlList.length > 1) {
@@ -305,97 +312,64 @@ export async function ensureD1Schema(db, force = false) {
     try {
       await db.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('schema_version', ?)").bind(BASEBALL_SCHEMA_VERSION).run();
     } catch (e) {}
-  }
 
-  try {
-    const mediaCountRow = await db.prepare("SELECT COUNT(*) as c FROM media_items").first();
-    if (mediaCountRow && mediaCountRow.c === 0) {
-      const sampleSvg1 = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="800" height="500"><rect width="800" height="500" fill="#003831"/><circle cx="400" cy="250" r="140" fill="#FD5A1E"/><text x="400" y="260" font-family="sans-serif" font-size="32" font-weight="bold" fill="#ffffff" text-anchor="middle">Bushrod Field Opening Day</text><text x="400" y="300" font-family="sans-serif" font-size="18" fill="#ffffff" text-anchor="middle">Morning Field Drag &amp; Line Marking</text></svg>';
-      const sampleB64_1 = btoa(sampleSvg1);
+    try {
+      const mediaCountRow = await db.prepare("SELECT COUNT(*) as c FROM media_items").first();
+      if (mediaCountRow && mediaCountRow.c === 0) {
+        const sampleSvg1 = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="800" height="500"><rect width="800" height="500" fill="#003831"/><circle cx="400" cy="250" r="140" fill="#FD5A1E"/><text x="400" y="260" font-family="sans-serif" font-size="32" font-weight="bold" fill="#ffffff" text-anchor="middle">Bushrod Field Opening Day</text><text x="400" y="300" font-family="sans-serif" font-size="18" fill="#ffffff" text-anchor="middle">Morning Field Drag &amp; Line Marking</text></svg>';
+        const sampleB64_1 = btoa(sampleSvg1);
 
-      const sampleSvg2 = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="800" height="500"><rect width="800" height="500" fill="#1c2b27"/><rect x="100" y="80" width="600" height="340" rx="12" fill="#0c1f1a" stroke="#FD5A1E" stroke-width="4"/><text x="400" y="240" font-family="sans-serif" font-size="30" font-weight="bold" fill="#FD5A1E" text-anchor="middle">9th Inning Walk-Off Rally</text><text x="400" y="280" font-family="sans-serif" font-size="18" fill="#ffffff" text-anchor="middle">Dugout High-Fives &amp; Game Ball Presentation</text></svg>';
-      const sampleB64_2 = btoa(sampleSvg2);
+        const sampleSvg2 = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="800" height="500"><rect width="800" height="500" fill="#1c2b27"/><rect x="100" y="80" width="600" height="340" rx="12" fill="#0c1f1a" stroke="#FD5A1E" stroke-width="4"/><text x="400" y="240" font-family="sans-serif" font-size="30" font-weight="bold" fill="#FD5A1E" text-anchor="middle">9th Inning Walk-Off Rally</text><text x="400" y="280" font-family="sans-serif" font-size="18" fill="#ffffff" text-anchor="middle">Dugout High-Fives &amp; Game Ball Presentation</text></svg>';
+        const sampleB64_2 = btoa(sampleSvg2);
 
-      const sampleSvg3 = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="800" height="500"><rect width="800" height="500" fill="#002823"/><polygon points="400,80 700,420 100,420" fill="#FD5A1E" opacity="0.85"/><text x="400" y="320" font-family="sans-serif" font-size="28" font-weight="bold" fill="#ffffff" text-anchor="middle">Summer Classic Showcase</text><text x="400" y="360" font-family="sans-serif" font-size="16" fill="#ffffff" text-anchor="middle">Mosswood Park Diamond 1</text></svg>';
-      const sampleB64_3 = btoa(sampleSvg3);
+        const sampleSvg3 = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="800" height="500"><rect width="800" height="500" fill="#002823"/><polygon points="400,80 700,420 100,420" fill="#FD5A1E" opacity="0.85"/><text x="400" y="320" font-family="sans-serif" font-size="28" font-weight="bold" fill="#ffffff" text-anchor="middle">Summer Classic Showcase</text><text x="400" y="360" font-family="sans-serif" font-size="16" fill="#ffffff" text-anchor="middle">Mosswood Park Diamond 1</text></svg>';
+        const sampleB64_3 = btoa(sampleSvg3);
 
-      const insertMedia = db.prepare(`
-        INSERT INTO media_items (title, caption, media_type, original_url, file_url, file_data, mime_type, file_size, album, date_taken, contributor_name, is_approved)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-      `);
-
-      await insertMedia.bind(
-        'Bushrod Opening Infield Drag',
-        'Field prep crew dragging the diamond and setting out bases at 11 AM.',
-        'photo',
-        null,
-        '/api/media/1/file',
-        sampleB64_1,
-        'image/svg+xml',
-        sampleSvg1.length,
-        'Bushrod Field Opening',
-        '2026-10-12',
-        'Sarah Chen'
-      ).run();
-
-      await insertMedia.bind(
-        '2026 Fall Season Walk-Off Thriller',
-        'Full 9th-inning game recap and highlights from the Sunday Championship.',
-        'youtube',
-        'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-        'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-        null,
-        null,
-        0,
-        'Fall 2026 Season',
-        '2026-10-26',
-        'Marcus Rivera'
-      ).run();
-
-      await insertMedia.bind(
-        'Dugout Rally Celebration',
-        'Team celebrating the walk-off double at home plate.',
-        'photo',
-        null,
-        '/api/media/3/file',
-        sampleB64_2,
-        'image/svg+xml',
-        sampleSvg2.length,
-        'Fall 2026 Season',
-        '2026-10-26',
-        'Alex Johnson'
-      ).run();
-
-      await insertMedia.bind(
-        'Pitching Machine Setup & Batting Practice',
-        'Morning batting practice warmup session with the pitching machine.',
-        'youtube',
-        'https://www.youtube.com/watch?v=L_LUpnjgPso',
-        'https://www.youtube.com/watch?v=L_LUpnjgPso',
-        null,
-        null,
-        0,
-        'Bushrod Field Opening',
-        '2026-10-12',
-        'Coach Dave'
-      ).run();
-
-      await insertMedia.bind(
-        'Summer Classic Outfield Catch',
-        'Diving catch on the warning track during the August tournament.',
-        'photo',
-        null,
-        '/api/media/5/file',
-        sampleB64_3,
-        'image/svg+xml',
-        sampleSvg3.length,
-        'Summer Classic 2026',
-        '2026-08-16',
-        'Marcus Rivera'
-      ).run();
+        const insertMediaSql = `
+          INSERT INTO media_items (title, caption, media_type, original_url, file_url, file_data, mime_type, file_size, album, date_taken, contributor_name, is_approved)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+        `;
+        const seedStatements = [
+          db.prepare(insertMediaSql).bind(
+            'Bushrod Opening Infield Drag',
+            'Field prep crew dragging the diamond and setting out bases at 11 AM.',
+            'photo', null, '/api/media/1/file', sampleB64_1, 'image/svg+xml', sampleSvg1.length,
+            'Bushrod Field Opening', '2026-10-12', 'Sarah Chen'
+          ),
+          db.prepare(insertMediaSql).bind(
+            '2026 Fall Season Walk-Off Thriller',
+            'Full 9th-inning game recap and highlights from the Sunday Championship.',
+            'youtube', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+            null, null, 0, 'Fall 2026 Season', '2026-10-26', 'Marcus Rivera'
+          ),
+          db.prepare(insertMediaSql).bind(
+            'Dugout Rally Celebration',
+            'Team celebrating the walk-off double at home plate.',
+            'photo', null, '/api/media/3/file', sampleB64_2, 'image/svg+xml', sampleSvg2.length,
+            'Fall 2026 Season', '2026-10-26', 'Alex Johnson'
+          ),
+          db.prepare(insertMediaSql).bind(
+            'Pitching Machine Setup & Batting Practice',
+            'Morning batting practice warmup session with the pitching machine.',
+            'youtube', 'https://www.youtube.com/watch?v=L_LUpnjgPso', 'https://www.youtube.com/watch?v=L_LUpnjgPso',
+            null, null, 0, 'Bushrod Field Opening', '2026-10-12', 'Coach Dave'
+          ),
+          db.prepare(insertMediaSql).bind(
+            'Summer Classic Outfield Catch',
+            'Diving catch on the warning track during the August tournament.',
+            'photo', null, '/api/media/5/file', sampleB64_3, 'image/svg+xml', sampleSvg3.length,
+            'Summer Classic 2026', '2026-08-16', 'Marcus Rivera'
+          )
+        ];
+        if (typeof db.batch === 'function') {
+          await db.batch(seedStatements);
+        } else {
+          for (const st of seedStatements) await st.run();
+        }
+      }
+    } catch (e) {
+      // Media seeding optional
     }
-  } catch (e) {
-    // Media seeding optional
   }
 
   migratedDbs.add(db);
@@ -693,12 +667,20 @@ export const CREATE_CHAT_TABLES_SQL = [
 
   // Indexes
   'CREATE INDEX IF NOT EXISTS idx_messages_channel_id ON messages(channel_id, id ASC)',
+  'CREATE INDEX IF NOT EXISTS idx_messages_ch_del_id ON messages(channel_id, deleted_at, id ASC)',
   'CREATE INDEX IF NOT EXISTS idx_messages_parent_id ON messages(parent_message_id, id ASC)',
+  'CREATE INDEX IF NOT EXISTS idx_messages_author ON messages(author_id)',
+  'CREATE INDEX IF NOT EXISTS idx_channel_members_user ON channel_members(user_id)',
+  'CREATE INDEX IF NOT EXISTS idx_channels_linked_event ON channels(linked_event_id)',
+  'CREATE INDEX IF NOT EXISTS idx_voice_participants_hb ON voice_participants(heartbeat_at)',
   'CREATE INDEX IF NOT EXISTS idx_reactions_msg ON message_reactions(message_id)',
   'CREATE INDEX IF NOT EXISTS idx_attachments_msg ON chat_attachments(message_id)',
   'CREATE INDEX IF NOT EXISTS idx_rtc_signals_recipient ON rtc_signals(recipient_user_id, id ASC)',
+  'CREATE INDEX IF NOT EXISTS idx_rtc_signals_created ON rtc_signals(created_at)',
+  'CREATE INDEX IF NOT EXISTS idx_rtc_signals_recipient_created ON rtc_signals(recipient_user_id, created_at)',
   'CREATE INDEX IF NOT EXISTS idx_sync_events_id ON sync_events(id ASC)',
   'CREATE INDEX IF NOT EXISTS idx_chat_reports_status ON chat_reports(status, id DESC)',
+  'CREATE INDEX IF NOT EXISTS idx_chat_reports_lookup ON chat_reports(reporter_id, target_type, status)',
   'CREATE INDEX IF NOT EXISTS idx_user_mutes_muter ON user_mutes(muter_user_id)',
   'CREATE INDEX IF NOT EXISTS idx_clubhouse_gifs_public ON clubhouse_gifs(is_public, use_count DESC, created_at DESC)',
   'CREATE INDEX IF NOT EXISTS idx_clubhouse_gifs_source ON clubhouse_gifs(source_url)',

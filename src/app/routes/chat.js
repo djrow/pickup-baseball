@@ -306,26 +306,30 @@ chatRouter.get('/bootstrap', requireAuth, async (c) => {
   ).bind(nowSec - 25).all();
   const voice_participants = (rawVoice || []).filter((vp) => accessibleIds.has(vp.channel_id));
 
-  // Unread counts per channel (single aggregated query instead of N+1 loop)
+  // Unread counts per accessible channel (single aggregated query instead of scanning all channels)
   const unread_counts = {};
-  try {
-    const { results: unreadRows } = await chatDb.prepare(`
-      SELECT m.channel_id, COUNT(*) as c
-      FROM messages m
-      LEFT JOIN channel_members cm ON cm.channel_id = m.channel_id AND cm.user_id = ?
-      WHERE m.deleted_at IS NULL
-        AND m.author_id NOT IN (SELECT user_id FROM clubhouse_opted_out)
-        AND m.id > COALESCE(cm.last_read_message_id, 0)
-      GROUP BY m.channel_id
-    `).bind(user.id).all();
-    const countMap = new Map((unreadRows || []).map((r) => [r.channel_id, r.c || 0]));
+  if (channels.length > 0) {
+    try {
+      const ph = channels.map(() => '?').join(',');
+      const { results: unreadRows } = await chatDb.prepare(`
+        SELECT m.channel_id, COUNT(*) as c
+        FROM messages m
+        LEFT JOIN channel_members cm ON cm.channel_id = m.channel_id AND cm.user_id = ?
+        WHERE m.channel_id IN (${ph})
+          AND m.deleted_at IS NULL
+          AND m.author_id NOT IN (SELECT user_id FROM clubhouse_opted_out)
+          AND m.id > COALESCE(cm.last_read_message_id, 0)
+        GROUP BY m.channel_id
+      `).bind(user.id, ...channels.map((ch) => ch.id)).all();
+      const countMap = new Map((unreadRows || []).map((r) => [r.channel_id, r.c || 0]));
 
-    for (const ch of channels) {
-      const cnt = countMap.get(ch.id) || 0;
-      unread_counts[ch.id] = cnt;
-      unread_counts[ch.slug] = cnt;
-    }
-  } catch (e) {}
+      for (const ch of channels) {
+        const cnt = countMap.get(ch.id) || 0;
+        unread_counts[ch.id] = cnt;
+        unread_counts[ch.slug] = cnt;
+      }
+    } catch (e) {}
+  }
 
   // Community member directory from BASEBALL_DB
   let members = [];
@@ -346,10 +350,16 @@ chatRouter.get('/bootstrap', requireAuth, async (c) => {
         LIMIT 200
       `).all();
 
-      const { results: cryptoRows } = await chatDb.prepare(
-        'SELECT user_id, ecdh_public_key_jwk, ecdsa_public_key_jwk, status_text FROM user_crypto_keys'
-      ).all();
-      const cryptoMap = new Map((cryptoRows || []).map((r) => [r.user_id, r]));
+      const memberIds = (usersList || []).map((u) => u.id);
+      let cryptoRows = [];
+      if (memberIds.length > 0) {
+        const ph = memberIds.map(() => '?').join(',');
+        const cryptoRes = await chatDb.prepare(
+          `SELECT user_id, status_text, (ecdh_public_key_jwk IS NOT NULL) as has_key FROM user_crypto_keys WHERE user_id IN (${ph})`
+        ).bind(...memberIds).all();
+        cryptoRows = cryptoRes.results || [];
+      }
+      const cryptoMap = new Map(cryptoRows.map((r) => [r.user_id, r]));
 
       const abbreviatedNames = abbreviateMemberNames(usersList || []);
       members = (usersList || []).map((u, idx) => {
@@ -676,13 +686,15 @@ chatRouter.post('/channels', requireAuth, async (c) => {
 
   const newChannelId = insRes.meta.last_row_id;
 
-  // Register members if DM or member_ids supplied
+  // Register members in a single batch if DM or member_ids supplied
   const membersToInsert = Array.from(new Set([user.id, ...dmMemberIds]));
-  for (const uid of membersToInsert) {
+  if (membersToInsert.length > 0) {
     try {
-      await chatDb.prepare(
-        'INSERT INTO channel_members (channel_id, user_id, role) VALUES (?, ?, ?) ON CONFLICT(channel_id, user_id) DO NOTHING'
-      ).bind(newChannelId, uid, uid === user.id ? 'owner' : 'member').run();
+      await chatDb.batch(membersToInsert.map((uid) =>
+        chatDb.prepare(
+          'INSERT INTO channel_members (channel_id, user_id, role) VALUES (?, ?, ?) ON CONFLICT(channel_id, user_id) DO NOTHING'
+        ).bind(newChannelId, uid, uid === user.id ? 'owner' : 'member')
+      ));
     } catch (e) {}
   }
 
@@ -739,10 +751,11 @@ chatRouter.patch('/channels/:id', requireAuth, async (c) => {
   const isPrivateBoard = body.is_private !== undefined
     ? (channelType !== 'voice' && Boolean(body.is_private))
     : isPrivateEncryptedBoard(channel);
+  const allowedRoles = ['guest', 'player', 'organizer', 'admin', 'invite'];
   const minRoleRead = isPrivateBoard
     ? 'invite'
-    : (body.min_role_read || (channel.min_role_read === 'invite' ? 'player' : channel.min_role_read) || 'player');
-  const minRoleWrite = body.min_role_write || channel.min_role_write || 'player';
+    : (allowedRoles.includes(body.min_role_read) ? body.min_role_read : ((channel.min_role_read === 'invite' ? 'player' : channel.min_role_read) || 'player'));
+  const minRoleWrite = allowedRoles.includes(body.min_role_write) ? body.min_role_write : (channel.min_role_write || 'player');
   const isEncrypted = isPrivateBoard ? 1 : (channel.is_encrypted !== undefined ? channel.is_encrypted : 1);
   const sortOrder = body.sort_order !== undefined && !isNaN(parseInt(body.sort_order, 10))
     ? parseInt(body.sort_order, 10)
@@ -756,15 +769,21 @@ chatRouter.patch('/channels/:id', requireAuth, async (c) => {
 
   let updatedMembers = null;
   if (isPrivateBoard && Array.isArray(body.member_ids)) {
-    const cleanIds = body.member_ids.map((id) => parseInt(id, 10)).filter(Boolean);
+    const cleanIds = body.member_ids.map((id) => parseInt(id, 10)).filter((n) => !isNaN(n) && n > 0);
     const ownerId = channel.created_by || user.id;
     updatedMembers = Array.from(new Set([ownerId, user.id, ...cleanIds]));
-    await chatDb.prepare('DELETE FROM channel_members WHERE channel_id = ?').bind(channel.id).run();
+    const ph = updatedMembers.map(() => '?').join(',');
+    const batchMemberOps = [
+      chatDb.prepare(`DELETE FROM channel_members WHERE channel_id = ? AND user_id NOT IN (${ph})`).bind(channel.id, ...updatedMembers)
+    ];
     for (const uid of updatedMembers) {
-      await chatDb.prepare(
-        'INSERT INTO channel_members (channel_id, user_id, role) VALUES (?, ?, ?) ON CONFLICT(channel_id, user_id) DO NOTHING'
-      ).bind(channel.id, uid, uid === ownerId ? 'owner' : 'member').run();
+      batchMemberOps.push(
+        chatDb.prepare(
+          'INSERT INTO channel_members (channel_id, user_id, role) VALUES (?, ?, ?) ON CONFLICT(channel_id, user_id) DO NOTHING'
+        ).bind(channel.id, uid, uid === ownerId ? 'owner' : 'member')
+      );
     }
+    await chatDb.batch(batchMemberOps);
   } else if (isPrivateBoard) {
     const { results: mRows } = await chatDb.prepare(
       'SELECT user_id FROM channel_members WHERE channel_id = ?'
@@ -947,6 +966,46 @@ chatRouter.get('/channels/:id/messages', async (c) => {
 });
 
 // ---------------------------------------------------------------------------
+// POST /api/channels/:id/read - Persist Per-User Channel Read Watermark
+// ---------------------------------------------------------------------------
+chatRouter.post('/channels/:id/read', requireAuth, async (c) => {
+  const user = c.get('user');
+  const chatDb = c.env && c.env.CHAT_DB;
+  if (!chatDb) return c.json({ error: 'Chat database unavailable.' }, 500);
+
+  const channel = await resolveChannel(chatDb, c.req.param('id'));
+  if (!channel) {
+    return c.json({ error: 'Channel not found.' }, 404);
+  }
+  if (!(await canUserAccessChannel(chatDb, user, channel, 'read'))) {
+    return c.json({ error: 'Access denied: insufficient permissions to read this channel.' }, 403);
+  }
+
+  const body = await c.req.json().catch(() => ({}));
+  let targetMsgId = parseInt(body.last_read_message_id || '0', 10);
+  if (isNaN(targetMsgId) || targetMsgId <= 0) {
+    const latestRow = await chatDb.prepare(
+      'SELECT COALESCE(MAX(id), 0) as max_id FROM messages WHERE channel_id = ? AND deleted_at IS NULL'
+    ).bind(channel.id).first();
+    targetMsgId = Number((latestRow && latestRow.max_id) || 0);
+  }
+
+  if (targetMsgId > 0) {
+    await chatDb.prepare(`
+      INSERT INTO channel_members (channel_id, user_id, last_read_message_id)
+      VALUES (?, ?, ?)
+      ON CONFLICT(channel_id, user_id) DO UPDATE SET last_read_message_id = MAX(last_read_message_id, ?)
+    `).bind(channel.id, user.id, targetMsgId, targetMsgId).run();
+  }
+
+  return c.json({
+    success: true,
+    channel_id: channel.id,
+    last_read_message_id: targetMsgId
+  });
+});
+
+// ---------------------------------------------------------------------------
 // POST /api/channels/:id/messages - Post Message or Thread Reply (Rate Limited)
 // ---------------------------------------------------------------------------
 chatRouter.post('/channels/:id/messages', requireAuth, async (c) => {
@@ -967,31 +1026,29 @@ chatRouter.post('/channels/:id/messages', requireAuth, async (c) => {
     return c.json({ error: 'Access denied: insufficient permissions to post in this channel.' }, 403);
   }
 
-  // Enforce 30 messages / 60s sliding-window burst rate limit via CHAT_DB.chat_rate_limits
+  // Enforce 30 messages / 60s sliding-window burst rate limit atomically via CHAT_DB.chat_rate_limits
   const nowSec = Math.floor(Date.now() / 1000);
   const rateKey = `user_${user.id}_msgs`;
   const windowCutoff = nowSec - 60;
 
-  const existingRate = await chatDb.prepare(
+  await chatDb.prepare(`
+    INSERT INTO chat_rate_limits (key, count, window_start)
+    VALUES (?, 1, ?)
+    ON CONFLICT(key) DO UPDATE SET
+      count = CASE WHEN chat_rate_limits.window_start <= ? THEN 1 ELSE chat_rate_limits.count + 1 END,
+      window_start = CASE WHEN chat_rate_limits.window_start <= ? THEN ? ELSE chat_rate_limits.window_start END
+  `).bind(rateKey, nowSec, windowCutoff, windowCutoff, nowSec).run();
+
+  const updatedRate = await chatDb.prepare(
     'SELECT count, window_start FROM chat_rate_limits WHERE key = ?'
   ).bind(rateKey).first();
 
-  if (!existingRate || existingRate.window_start <= windowCutoff) {
-    await chatDb.prepare(`
-      INSERT INTO chat_rate_limits (key, count, window_start)
-      VALUES (?, 1, ?)
-      ON CONFLICT(key) DO UPDATE SET count = 1, window_start = ?
-    `).bind(rateKey, nowSec, nowSec).run();
-  } else if (existingRate.count >= 30) {
-    const retryAfter = Math.max(1, 60 - (nowSec - existingRate.window_start));
+  if (updatedRate && updatedRate.count > 30) {
+    const retryAfter = Math.max(1, 60 - (nowSec - updatedRate.window_start));
     c.header('Retry-After', String(retryAfter));
     return c.json({
       error: 'Too many messages (rate limit exceeded: max 30 messages per 60 seconds). Please slow down.'
     }, 429);
-  } else {
-    await chatDb.prepare(
-      'UPDATE chat_rate_limits SET count = count + 1 WHERE key = ?'
-    ).bind(rateKey).run();
   }
 
   const body = await c.req.json().catch(() => ({}));
@@ -1063,13 +1120,14 @@ chatRouter.post('/channels/:id/messages', requireAuth, async (c) => {
     ).bind(parentMessageId).run();
   }
 
-  // Link any uploaded attachments to this message
+  // Link any uploaded attachments to this message in a single batch
   if (Array.isArray(body.attachment_ids) && body.attachment_ids.length > 0) {
-    for (const attId of body.attachment_ids) {
-      await chatDb.prepare(
+    const attIds = body.attachment_ids.slice(0, 20).map((attId) => String(attId));
+    await chatDb.batch(attIds.map((attId) =>
+      chatDb.prepare(
         'UPDATE chat_attachments SET message_id = ? WHERE id = ? AND uploader_id = ?'
-      ).bind(newMsgId, String(attId), user.id).run();
-    }
+      ).bind(newMsgId, attId, user.id)
+    ));
   }
 
   // Update sender's last_read_message_id
@@ -1431,6 +1489,7 @@ chatRouter.patch('/messages/:id/hide', requireModerator, hideMessageHandler);
 // POST /api/messages/:id/unhide - Restore Previously Hidden Message (Mod/Admin)
 // ---------------------------------------------------------------------------
 chatRouter.post('/messages/:id/unhide', requireModerator, async (c) => {
+  const user = c.get('user');
   const chatDb = c.env && c.env.CHAT_DB;
   if (!chatDb) return c.json({ error: 'Chat database unavailable.' }, 500);
 
@@ -1511,21 +1570,21 @@ chatRouter.post('/reports', requireAuth, async (c) => {
     return c.json({ error: 'A stated reason (3–500 characters) is required.' }, 400);
   }
 
-  // Burst rate limit for reports (max 10 reports per 10 mins per user)
+  // Burst rate limit for reports atomically (max 10 reports per 10 mins per user)
   const nowSec = Math.floor(Date.now() / 1000);
   const reportRateKey = `user_${user.id}_reports`;
+  const reportCutoff = nowSec - 600;
   try {
-    const existingRate = await chatDb.prepare('SELECT count, window_start FROM chat_rate_limits WHERE key = ?').bind(reportRateKey).first();
-    if (!existingRate || existingRate.window_start <= nowSec - 600) {
-      await chatDb.prepare(`
-        INSERT INTO chat_rate_limits (key, count, window_start)
-        VALUES (?, 1, ?)
-        ON CONFLICT(key) DO UPDATE SET count = 1, window_start = ?
-      `).bind(reportRateKey, nowSec, nowSec).run();
-    } else if (existingRate.count >= 10) {
+    await chatDb.prepare(`
+      INSERT INTO chat_rate_limits (key, count, window_start)
+      VALUES (?, 1, ?)
+      ON CONFLICT(key) DO UPDATE SET
+        count = CASE WHEN chat_rate_limits.window_start <= ? THEN 1 ELSE chat_rate_limits.count + 1 END,
+        window_start = CASE WHEN chat_rate_limits.window_start <= ? THEN ? ELSE chat_rate_limits.window_start END
+    `).bind(reportRateKey, nowSec, reportCutoff, reportCutoff, nowSec).run();
+    const updatedRate = await chatDb.prepare('SELECT count FROM chat_rate_limits WHERE key = ?').bind(reportRateKey).first();
+    if (updatedRate && updatedRate.count > 10) {
       return c.json({ error: 'Too many reports submitted recently. Please wait before submitting more.' }, 429);
-    } else {
-      await chatDb.prepare('UPDATE chat_rate_limits SET count = count + 1 WHERE key = ?').bind(reportRateKey).run();
     }
   } catch (e) {}
 
@@ -1541,6 +1600,10 @@ chatRouter.post('/reports', requireAuth, async (c) => {
     }
     const msg = await chatDb.prepare('SELECT * FROM messages WHERE id = ? AND deleted_at IS NULL').bind(targetMessageId).first();
     if (!msg) {
+      return c.json({ error: 'Target message not found.' }, 404);
+    }
+    const msgChannel = await resolveChannel(chatDb, msg.channel_id);
+    if (msgChannel && !(await canUserAccessChannel(chatDb, user, msgChannel, 'read'))) {
       return c.json({ error: 'Target message not found.' }, 404);
     }
     if (Number(msg.author_id) === Number(user.id)) {
@@ -1589,6 +1652,7 @@ chatRouter.post('/reports', requireAuth, async (c) => {
 // GET /api/moderation/reports - List Submitted Reports (Mod/Admin)
 // ---------------------------------------------------------------------------
 chatRouter.get('/moderation/reports', requireModerator, async (c) => {
+  const user = c.get('user');
   const chatDb = c.env && c.env.CHAT_DB;
   const baseballDb = c.env && (c.env.BASEBALL_DB || c.env.DB);
   if (!chatDb) return c.json({ error: 'Chat database unavailable.' }, 500);
@@ -1614,6 +1678,23 @@ chatRouter.get('/moderation/reports', requireModerator, async (c) => {
     for (const m of (msgRows || [])) msgMap.set(m.id, m);
   }
 
+  const channelAccessMap = new Map();
+  const channelIds = Array.from(new Set(list.map((r) => {
+    const m = r.target_message_id ? msgMap.get(r.target_message_id) : null;
+    return (m && m.channel_id) || r.channel_id || null;
+  }).filter(Boolean)));
+  if (channelIds.length > 0) {
+    const ph = channelIds.map(() => '?').join(',');
+    const { results: chRows } = await chatDb.prepare(
+      `SELECT * FROM channels WHERE id IN (${ph})`
+    ).bind(...channelIds).all();
+    for (const ch of (chRows || [])) {
+      const isPrivateOrDm = ch.channel_type === 'dm' || ch.channel_type === 'group_dm' || isPrivateEncryptedBoard(ch);
+      const allowed = isPrivateOrDm ? await canUserAccessChannel(chatDb, user, ch, 'read') : true;
+      channelAccessMap.set(ch.id, allowed);
+    }
+  }
+
   const userMuteMap = new Map();
   if (baseballDb && userIds.length > 0) {
     const ph = userIds.map(() => '?').join(',');
@@ -1626,11 +1707,14 @@ chatRouter.get('/moderation/reports', requireModerator, async (c) => {
   const enriched = list.map((r) => {
     const m = r.target_message_id ? msgMap.get(r.target_message_id) : null;
     const u = r.target_user_id ? userMuteMap.get(r.target_user_id) : null;
+    const chId = (m && m.channel_id) || r.channel_id || null;
+    const canViewChannel = chId && channelAccessMap.has(chId) ? channelAccessMap.get(chId) : true;
     return {
       ...r,
-      message_preview: m ? (m.deleted_at ? '[deleted]' : m.content) : null,
+      channel_id: canViewChannel ? r.channel_id : null,
+      message_preview: m ? (!canViewChannel ? '[Private channel message]' : (m.deleted_at ? '[deleted]' : m.content)) : null,
       message_hidden: Boolean(m && m.hidden_at),
-      message_hidden_reason: m ? m.hidden_reason : null,
+      message_hidden_reason: canViewChannel && m ? m.hidden_reason : null,
       target_chat_muted: Boolean(u && u.chat_muted),
       target_chat_muted_reason: u ? u.chat_muted_reason : null
     };

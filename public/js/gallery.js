@@ -190,10 +190,6 @@
       renderVideos();
       populateAlbumSelectOptions();
       renderUserSubmissionsTray();
-
-      if (typeof window !== 'undefined' && window.ArtStudio && typeof window.ArtStudio.setUser === 'function') {
-        window.ArtStudio.setUser(currentUser);
-      }
     } catch (err) {
       console.error('[Gallery] Failed to load media:', err);
       if (photosContainer) {
@@ -240,7 +236,7 @@
         var thumbUrl = ytId ? 'https://img.youtube.com/vi/' + ytId + '/hqdefault.jpg' : '/logo.svg';
         thumbHtml = '<img src="' + API.escapeHtml(thumbUrl) + '" alt="' + title + '" class="pending-media-thumb">';
       } else {
-        var safeImgUrl = API.safeUrl ? API.safeUrl(item.file_url) : item.file_url;
+        var safeImgUrl = (API.safeUrl ? API.safeUrl(item.file_url) : item.file_url) || '/logo.svg';
         thumbHtml = '<img src="' + API.escapeHtml(safeImgUrl) + '" alt="' + title + '" class="pending-media-thumb">';
       }
 
@@ -479,7 +475,7 @@
       var ptTitle = pt.title ? API.escapeHtml(pt.title) : '';
       var ptAlbum = pt.album || 'General';
       var ptAlbumSlug = slugify(ptAlbum);
-      var safeImgUrl = API.safeUrl ? API.safeUrl(pt.file_url) : pt.file_url;
+      var safeImgUrl = (API.safeUrl ? API.safeUrl(pt.file_url) : pt.file_url) || '/logo.svg';
 
       var canDelete = canUserDeleteMedia(pt);
       var deleteBtn = canDelete ? `
@@ -527,10 +523,13 @@
 
     // Setup scroll listeners for photo carousel hints
     updateCarouselEdgeHints(container, 'photos-paddle-prev', 'photos-paddle-next', 'photos-edge-left', 'photos-edge-right');
-    container.addEventListener('scroll', function() {
-      updateCarouselEdgeHints(container, 'photos-paddle-prev', 'photos-paddle-next', 'photos-edge-left', 'photos-edge-right');
-      syncPhotoScrollWithBookmarks();
-    }, { passive: true });
+    if (!container.dataset.scrollBound) {
+      container.dataset.scrollBound = '1';
+      container.addEventListener('scroll', function() {
+        updateCarouselEdgeHints(container, 'photos-paddle-prev', 'photos-paddle-next', 'photos-edge-left', 'photos-edge-right');
+        syncPhotoScrollWithBookmarks();
+      }, { passive: true });
+    }
   }
 
   /**
@@ -691,9 +690,12 @@
 
     // Setup scroll listeners for video carousel hints
     updateCarouselEdgeHints(container, 'videos-paddle-prev', 'videos-paddle-next', 'videos-edge-left', 'videos-edge-right');
-    container.addEventListener('scroll', function() {
-      updateCarouselEdgeHints(container, 'videos-paddle-prev', 'videos-paddle-next', 'videos-edge-left', 'videos-edge-right');
-    }, { passive: true });
+    if (!container.dataset.scrollBound) {
+      container.dataset.scrollBound = '1';
+      container.addEventListener('scroll', function() {
+        updateCarouselEdgeHints(container, 'videos-paddle-prev', 'videos-paddle-next', 'videos-edge-left', 'videos-edge-right');
+      }, { passive: true });
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -1097,20 +1099,22 @@
           </div>
         `;
       } else if (isDirectVideo) {
+        var safeVidPreviewUrl = API.safeUrl ? (API.safeUrl(url) || '') : url;
         previewBox.style.display = 'block';
         previewTarget.innerHTML = `
           <div style="max-width: 400px; border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--border);">
-            <video src="${API.escapeHtml(url)}" controls style="width: 100%; max-height: 220px; display: block;"></video>
+            <video src="${API.escapeHtml(safeVidPreviewUrl)}" controls style="width: 100%; max-height: 220px; display: block;"></video>
             <div style="padding: 8px 12px; background: var(--bg-subtle); font-size: 0.85rem; color: var(--secondary); font-weight: 600;">
               ✓ Direct Video Stream Link (.mp4 / .webm) — will stream directly in video carousel!
             </div>
           </div>
         `;
       } else {
+        var safeImgPreviewUrl = API.safeUrl ? (API.safeUrl(url) || '') : url;
         previewBox.style.display = 'block';
         previewTarget.innerHTML = `
           <div style="max-width: 400px; border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--border);">
-            <img src="${API.escapeHtml(url)}" alt="Remote Image" style="max-width: 100%; max-height: 250px; display: block;" data-fallback="/logo.svg">
+            <img src="${API.escapeHtml(safeImgPreviewUrl)}" alt="Remote Image" style="max-width: 100%; max-height: 250px; display: block;" data-fallback="/logo.svg">
             <div style="padding: 8px 12px; background: var(--bg-subtle); font-size: 0.85rem; color: var(--secondary); font-weight: 600;">
               ✓ External Image / Facebook CDN — will be copied and permanently saved in PBF vault!
             </div>
@@ -1252,6 +1256,7 @@
       selectedFileBase64 = null;
       selectedFileMime = null;
       selectedFileName = null;
+      if (fileInput) fileInput.value = '';
       var fileLabel = document.getElementById('dropzone-file-name');
       if (fileLabel) fileLabel.textContent = '';
       if (urlInput) urlInput.value = '';

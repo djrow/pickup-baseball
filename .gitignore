@@ -14,5 +14,5 @@ npm-debug.log*
 .agents/
 
 baseball_backup*
-d1_backup*.sql
+d1*_backup*.sql
 pickupbaseballfoundation.org.txt

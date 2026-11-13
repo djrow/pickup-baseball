@@ -53,13 +53,15 @@ async function initAdmin() {
   setDefaultDateTime();
   setupQuickSundayButton();
 
-  await loadDefaultDuties();
   setupTaskBuilder();
   setupDefaultTemplateEditor();
   setupCreateForm();
   setupCommunityHighlightsAdmin();
-  await setupMediaCarouselsAdmin();
-  await loadAdminGames();
+  await Promise.all([
+    loadDefaultDuties(),
+    setupMediaCarouselsAdmin(),
+    loadAdminGames()
+  ]);
 
   if (user.isAdmin) {
     setupAdminBackupButton();
@@ -617,8 +619,12 @@ function setupAdminGameSearch() {
   const searchInput = document.getElementById('admin-game-search-input');
   if (!searchInput || adminGameSearchBound) return;
   adminGameSearchBound = true;
+  let searchTimer = null;
   searchInput.addEventListener('input', function() {
-    renderAdminGamesList(searchInput.value);
+    if (searchTimer) clearTimeout(searchTimer);
+    searchTimer = setTimeout(function() {
+      renderAdminGamesList(searchInput.value);
+    }, 150);
   });
 }
 
@@ -1447,7 +1453,13 @@ function setupAdminUserManagement(currentUser) {
     }
   }
 
-  if (searchInput) searchInput.addEventListener('input', renderUsersList);
+  if (searchInput) {
+    let userSearchTimer = null;
+    searchInput.addEventListener('input', function() {
+      clearTimeout(userSearchTimer);
+      userSearchTimer = setTimeout(renderUsersList, 150);
+    });
+  }
   loadUsers();
   if (refreshBtn) refreshBtn.addEventListener('click', loadUsers);
 }

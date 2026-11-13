@@ -1,5 +1,5 @@
 // Service Worker for Pickup Baseball Foundation PWA
-const CACHE_NAME = 'pbf-cache-v126';
+const CACHE_NAME = 'pbf-cache-v127';
 
 // Core app shell & pages precached on install; i18n bundles (~312 KB) are cached on demand
 const STATIC_ASSETS = [
@@ -38,6 +38,14 @@ const STATIC_ASSETS = [
   '/favicon.ico',
   '/manifest.webmanifest',
   '/gifs/catalog.json',
+  '/gifs/cheers.gif',
+  '/gifs/goodwill.gif',
+  '/gifs/home-run.gif',
+  '/gifs/play-ball.gif',
+  '/gifs/rain-check.gif',
+  '/gifs/rally-cap.gif',
+  '/gifs/safe.gif',
+  '/gifs/strikeout.gif',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
   '/icons/icon-maskable-192.png',
@@ -123,7 +131,7 @@ self.addEventListener('fetch', (event) => {
           }
           return networkRes;
         })
-        .catch(() => cachedRes);
+        .catch(() => cachedRes || Response.error());
 
       return cachedRes || fetchPromise;
     })

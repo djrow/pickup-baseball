@@ -1746,4 +1746,42 @@ module.exports = async function runTier5(t, ctx) {
     assert.ok(profileHtml.includes('id="btn-profile-clubhouse-optin"'));
     assert.ok(!clubhouseJs.includes('?.') && !clubhouseJs.includes('??'), 'clubhouse.js must remain strict ES6');
   });
+
+  await t.test('T5.17: Channel Read Watermark (POST /api/channels/:id/read) & Attachment Cleanup Delete (DELETE /api/attachments/:id)', async () => {
+    // 1. Admin posts a message in #general so Player has unread count, then Player marks channel read
+    const postRes = await ctx.apiReq('POST', '/api/channels/general/messages', ctx.adminCookie, {
+      content: 'Unread watermark verification message'
+    });
+    assert.equal(postRes.status, 201);
+    const postedId = Number(postRes.data.message.id);
+    const generalId = Number(postRes.data.message.channel_id);
+
+    const readRes = await ctx.apiReq('POST', '/api/channels/general/read', ctx.playerCookie, {
+      last_read_message_id: postedId
+    });
+    assert.equal(readRes.status, 200);
+    assert.equal(readRes.data.success, true);
+    assert.ok(Number(readRes.data.last_read_message_id) >= postedId);
+
+    // 2. Player initializes an attachment session in #general -> Facilitator gets 403 -> Player (uploader) deletes it 200 -> 404 thereafter
+    const initAtt = await ctx.apiReq('POST', '/api/attachments/init', ctx.playerCookie, {
+      channel_id: generalId,
+      file_name: 'temp-check.png',
+      mime_type: 'image/png',
+      file_size: 128
+    });
+    assert.equal(initAtt.status, 200);
+    const attId = initAtt.data.attachment_id;
+    assert.ok(attId, 'Attachment session should return attachment_id');
+
+    const otherDel = await ctx.apiReq('DELETE', `/api/attachments/${attId}`, ctx.facilitatorCookie);
+    assert.equal(otherDel.status, 403, 'Unrelated user must get 403 deleting another user attachment');
+
+    const ownerDel = await ctx.apiReq('DELETE', `/api/attachments/${attId}`, ctx.playerCookie);
+    assert.equal(ownerDel.status, 200);
+    assert.equal(ownerDel.data.success, true);
+
+    const afterDel = await ctx.apiReq('DELETE', `/api/attachments/${attId}`, ctx.playerCookie);
+    assert.equal(afterDel.status, 404, 'Deleted attachment must return 404');
+  });
 };

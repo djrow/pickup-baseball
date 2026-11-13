@@ -396,6 +396,7 @@ authRouter.get('/users', requireAdmin, async (c) => {
              WHEN u.role = 'organizer' THEN 2 
              ELSE 3 END,
         u.name COLLATE NOCASE ASC
+      LIMIT 1000
     `).all();
     return c.json({ users: results || [] });
   } catch (err) {
@@ -540,6 +541,21 @@ authRouter.delete('/users/:id', requireAdmin, async (c) => {
     c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(targetId)
   ]);
 
+  if (c.env.CHAT_DB) {
+    try {
+      await c.env.CHAT_DB.batch([
+        c.env.CHAT_DB.prepare('DELETE FROM user_crypto_keys WHERE user_id = ?').bind(targetId),
+        c.env.CHAT_DB.prepare('DELETE FROM channel_members WHERE user_id = ?').bind(targetId),
+        c.env.CHAT_DB.prepare('DELETE FROM channel_keys WHERE recipient_user_id = ? OR sender_user_id = ?').bind(targetId, targetId),
+        c.env.CHAT_DB.prepare('DELETE FROM voice_participants WHERE user_id = ?').bind(targetId),
+        c.env.CHAT_DB.prepare('DELETE FROM rtc_signals WHERE sender_user_id = ? OR recipient_user_id = ?').bind(targetId, targetId),
+        c.env.CHAT_DB.prepare('DELETE FROM user_mutes WHERE muter_user_id = ? OR muted_user_id = ?').bind(targetId, targetId)
+      ]);
+    } catch (chatErr) {
+      console.warn('[Auth] Best-effort CHAT_DB cleanup failed on user delete:', chatErr);
+    }
+  }
+
   return c.json({
     success: true,
     message: ban
@@ -549,7 +565,7 @@ authRouter.delete('/users/:id', requireAdmin, async (c) => {
 });
 
 authRouter.get('/banned-emails', requireAdmin, async (c) => {
-  const { results } = await c.env.DB.prepare('SELECT * FROM banned_emails ORDER BY id DESC').all();
+  const { results } = await c.env.DB.prepare('SELECT * FROM banned_emails ORDER BY id DESC LIMIT 500').all();
   return c.json({ bannedEmails: results || [] });
 });
 

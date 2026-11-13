@@ -7,6 +7,7 @@
 import { Hono } from 'hono';
 import { requireAuth, requireOrganizer, generateToken } from '../security.js';
 import { parseAllowedEmails, canUserAccessEvent } from '../policy.js';
+import { canUserAccessChannel } from './chat.js';
 
 export const baseballRouter = new Hono();
 
@@ -93,9 +94,12 @@ baseballRouter.get('/upcoming', async (c) => {
   let linkedChannel = null;
   if (chatDb && user) {
     try {
-      linkedChannel = await chatDb.prepare(
+      const candidateCh = await chatDb.prepare(
         'SELECT * FROM channels WHERE linked_event_id = ? LIMIT 1'
       ).bind(event.id).first();
+      if (candidateCh && (await canUserAccessChannel(chatDb, user, candidateCh, 'read'))) {
+        linkedChannel = candidateCh;
+      }
     } catch (e) {}
   }
 
@@ -168,10 +172,12 @@ baseballRouter.post('/events/:eventId/quick-rsvp', requireAuth, async (c) => {
 
   const body = await c.req.json().catch(() => ({}));
   const targetStatus = body.status === 'declined' ? 'declined' : 'attending';
-  const playersCount = targetStatus === 'declined' ? 0 : (parseInt(body.players_count, 10) || 1);
-  const spectatorsCount = targetStatus === 'declined' ? 0 : (parseInt(body.spectators_count, 10) || 0);
-  const gearBringing = body.gear_bringing ? String(body.gear_bringing).trim() : null;
-  const notes = body.notes ? String(body.notes).trim() : null;
+  const rawPlayers = parseInt(body.players_count, 10);
+  const rawSpectators = parseInt(body.spectators_count, 10);
+  const playersCount = targetStatus === 'declined' ? 0 : Math.max(1, Math.min(25, isNaN(rawPlayers) ? 1 : rawPlayers));
+  const spectatorsCount = targetStatus === 'declined' ? 0 : Math.max(0, Math.min(25, isNaN(rawSpectators) ? 0 : rawSpectators));
+  const gearBringing = body.gear_bringing ? String(body.gear_bringing).trim().slice(0, 300) : null;
+  const notes = body.notes ? String(body.notes).trim().slice(0, 500) : null;
 
   const existing = await baseballDb.prepare(`
     SELECT * FROM attendees
@@ -261,6 +267,15 @@ baseballRouter.post('/events/:eventId/quick-bp', requireAuth, async (c) => {
   if (action === 'release' || action === 'withdraw' || action === 'delete') {
     if (body.slot_number !== undefined && body.slot_number !== null) {
       const slotNum = parseInt(body.slot_number, 10);
+      if (isNaN(slotNum) || slotNum < 1 || slotNum > 28) {
+        return c.json({ error: 'Batting practice slot_number must be an integer between 1 and 28.' }, 400);
+      }
+      const occupant = await baseballDb.prepare(
+        'SELECT id, user_id FROM batting_practice_signups WHERE event_id = ? AND slot_number = ?'
+      ).bind(eventId, slotNum).first();
+      if (occupant && occupant.user_id !== user.id && !user.isAdmin) {
+        return c.json({ error: 'Cannot release another player\'s batting practice slot.' }, 403);
+      }
       await baseballDb.prepare(
         'DELETE FROM batting_practice_signups WHERE event_id = ? AND slot_number = ? AND (user_id = ? OR ? = 1)'
       ).bind(eventId, slotNum, user.id, user.isAdmin ? 1 : 0).run();

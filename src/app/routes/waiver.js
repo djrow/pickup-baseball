@@ -377,10 +377,7 @@ async function getWaiverStatusHandler(c) {
     ORDER BY id DESC LIMIT 1
   `).bind(user.id, user.email).first();
 
-  let effectiveStatus = (dbUser && dbUser.waiver_status) ? dbUser.waiver_status : 'none';
-  if (effectiveStatus === 'none' && latestWaiver) {
-    effectiveStatus = 'digital';
-  }
+  const effectiveStatus = (dbUser && dbUser.waiver_status) ? dbUser.waiver_status : 'none';
 
   return c.json({
     authenticated: true,
@@ -511,7 +508,7 @@ waiverRouter.post('/sign', requireAuth, async (c) => {
   const backgroundWork = (async () => {
     try {
       if (isGDriveConfigured(c.env)) {
-        const htmlCert = renderSignedWaiverCertificateHtml(waiverRow, true);
+        const htmlCert = renderSignedWaiverCertificateHtml(waiverRow, true, true);
         const safeFileNamePart = printedName.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40) || 'Player';
         const fileName = `Waiver_${safeFileNamePart}_${signedDate}_${certificateId}.html`;
         const driveFileId = await uploadGDriveTextFile(c.env, {
@@ -646,6 +643,9 @@ waiverRouter.get('/certificate/:id', async (c) => {
 // PUT /api/waiver/admin/users/:id — Admin endpoint to set waiver_status ('none' | 'paper' | 'digital')
 waiverRouter.put('/admin/users/:id', requireAdmin, async (c) => {
   const targetId = parseInt(c.req.param('id'), 10);
+  if (!targetId || isNaN(targetId) || targetId <= 0) {
+    return c.json({ error: 'Invalid user ID.' }, 400);
+  }
   const targetUser = await c.env.DB.prepare('SELECT id, name, email, waiver_status, waiver_signed_at FROM users WHERE id = ?').bind(targetId).first();
   if (!targetUser) {
     return c.json({ error: 'User not found.' }, 404);

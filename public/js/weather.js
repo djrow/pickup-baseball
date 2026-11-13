@@ -336,11 +336,12 @@
     }
   }
 
-  // Fetch forecast from Open-Meteo with client-side cache
+  // Fetch forecast from Open-Meteo with client-side cache and in-flight deduplication
   var inMemoryCache = {};
+  var inFlightForecasts = {};
 
   async function fetchForecast(lat, lon) {
-    var ver = (window.API && window.API.CLIENT_VERSION) ? window.API.CLIENT_VERSION : '49';
+    var ver = (window.API && (window.API.APP_VERSION || window.API.CLIENT_VERSION)) ? (window.API.APP_VERSION || window.API.CLIENT_VERSION) : '126';
     var key = 'pbf_weather_v' + ver + '_' + Number(lat).toFixed(4) + '_' + Number(lon).toFixed(4);
 
     // 1. Check in-memory cache
@@ -358,6 +359,7 @@
           inMemoryCache[key] = parsedLocal;
           return parsedLocal.data;
         }
+        localStorage.removeItem(key);
       }
     } catch (e) {}
 
@@ -369,11 +371,14 @@
           inMemoryCache[key] = parsed;
           return parsed.data;
         }
+        sessionStorage.removeItem(key);
       }
     } catch (e) {}
 
-    // Open-Meteo counts today as day 1, so literal forecast_days=10 only yields 9 days in advance.
-    // To guarantee the full 10-day forecast horizon activates when events are 10 days away, we query forecast_days=16.
+    if (inFlightForecasts[key]) {
+      return inFlightForecasts[key];
+    }
+
     var url = 'https://api.open-meteo.com/v1/forecast?' +
       'latitude=' + encodeURIComponent(lat) +
       '&longitude=' + encodeURIComponent(lon) +
@@ -382,32 +387,40 @@
       '&temperature_unit=fahrenheit' +
       '&precipitation_unit=inch' +
       '&timezone=America%2FLos_Angeles' +
-      '&forecast_days=16' +
+      '&forecast_days=10' +
       '&past_days=10';
 
-    var res = await fetch(url);
-    if (!res.ok) {
-      throw new Error('Open-Meteo request failed with HTTP ' + res.status);
-    }
-    var data = await res.json();
-
-    // Cache the response in memory, localStorage (persists across tabs), and sessionStorage
-    var cacheEntry = { timestamp: Date.now(), data: data };
-    inMemoryCache[key] = cacheEntry;
-    var serializedEntry = null;
-    try {
-      serializedEntry = JSON.stringify(cacheEntry);
-    } catch (e) {}
-    if (serializedEntry) {
+    var reqPromise = (async function() {
       try {
-        if (typeof localStorage !== 'undefined') localStorage.setItem(key, serializedEntry);
-      } catch (e) {}
-      try {
-        if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(key, serializedEntry);
-      } catch (e) {}
-    }
+        var res = await fetch(url);
+        if (!res.ok) {
+          throw new Error('Open-Meteo request failed with HTTP ' + res.status);
+        }
+        var data = await res.json();
 
-    return data;
+        var cacheEntry = { timestamp: Date.now(), data: data };
+        inMemoryCache[key] = cacheEntry;
+        var serializedEntry = null;
+        try {
+          serializedEntry = JSON.stringify(cacheEntry);
+        } catch (e) {}
+        if (serializedEntry) {
+          try {
+            if (typeof localStorage !== 'undefined') localStorage.setItem(key, serializedEntry);
+          } catch (e) {}
+          try {
+            if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(key, serializedEntry);
+          } catch (e) {}
+        }
+
+        return data;
+      } finally {
+        delete inFlightForecasts[key];
+      }
+    })();
+
+    inFlightForecasts[key] = reqPromise;
+    return reqPromise;
   }
 
   /**
@@ -1144,8 +1157,12 @@
       `;
     }
 
+    var escW = (window.API && window.API.escapeHtml) ? window.API.escapeHtml : function(s) {
+      return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    };
+
     container.innerHTML = `
-      <div class="card smart-rainout-card" style="border-top: 4px solid ${r.statusColor}; margin-bottom: 14px; box-shadow: var(--shadow-sm);">
+      <div class="card smart-rainout-card" style="border-top: 4px solid ${escW(r.statusColor)}; margin-bottom: 14px; box-shadow: var(--shadow-sm);">
         <!-- Top Status Bar (Badge + Title + Prognosis + Temp chip aligned cleanly) -->
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;">
           <div style="flex: 1 1 360px; min-width: 0;">
@@ -1153,23 +1170,23 @@
               <h3 style="color: var(--secondary); font-size: 1.05rem; margin: 0;">
                 🌧️ Smart Rainout &amp; Surface Drainage
               </h3>
-              <span class="badge ${r.badgeClass}" style="font-size: 0.74rem; padding: 2px 8px; font-weight: 700;">
-                ${r.statusIcon} ${r.statusLabel}
+              <span class="badge ${escW(r.badgeClass)}" style="font-size: 0.74rem; padding: 2px 8px; font-weight: 700;">
+                ${escW(r.statusIcon)} ${escW(r.statusLabel)}
               </span>
               <span style="font-size: 0.76rem; color: var(--text-muted); font-weight: 600;">
-                📍 ${fieldName}
+                📍 ${escW(fieldName)}
               </span>
             </div>
             <p style="font-size: 0.82rem; color: var(--text-main); margin: 4px 0 0 0; line-height: 1.35;">
-              ${r.prognosis}
+              ${escW(r.prognosis)}
             </p>
           </div>
-          <div style="display: flex; align-items: center; gap: 8px; background: ${r.statusBg}; border: 1px solid ${r.statusBorder}; padding: 5px 10px; border-radius: var(--radius-sm); flex-shrink: 0;">
-            <span style="font-size: 1.15rem; font-weight: 800; color: ${r.statusColor}; display: inline-flex; align-items: center; gap: 4px;">
-              <span>${r.emoji}</span> <span>${r.temperature}°F</span>
+          <div style="display: flex; align-items: center; gap: 8px; background: ${escW(r.statusBg)}; border: 1px solid ${escW(r.statusBorder)}; padding: 5px 10px; border-radius: var(--radius-sm); flex-shrink: 0;">
+            <span style="font-size: 1.15rem; font-weight: 800; color: ${escW(r.statusColor)}; display: inline-flex; align-items: center; gap: 4px;">
+              <span>${escW(r.emoji)}</span> <span>${escW(r.temperature)}°F</span>
             </span>
             <span style="font-size: 0.74rem; color: var(--text-muted); font-weight: 600;">
-              ${r.condition} at Noon
+              ${escW(r.condition)} at Noon
             </span>
           </div>
         </div>
@@ -1262,15 +1279,20 @@
       var iso = grp.dateKey + 'T20:00:00.000Z'; // 12:00 PM Pacific
       try {
         var forecast = await getForecastForGame(iso, grp.location);
-        if (forecast && forecast.available) {
-          grp.elements.forEach(function(el) {
-            el.innerHTML =
-              '<span class="weather-card-pill ' + forecast.badgeClass + '" title="' + (forecast.locationName ? forecast.locationName + ' · ' : '') + forecast.condition + ' · Prev 24h Rain: ' + forecast.totalRain24hFormatted + ' (' + forecast.statusLabel + ')">' +
-                '<span>' + forecast.emoji + '</span> <span>' + forecast.temperature + '°F</span>' +
-              '</span>';
-            el.style.display = 'inline-flex';
-          });
-        }
+      if (forecast && forecast.available) {
+        var escBadge = (window.API && window.API.escapeHtml) ? window.API.escapeHtml : function(s) {
+          return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        };
+        var locPrefix = forecast.locationName ? (escBadge(forecast.locationName) + ' · ') : '';
+        var badgeTitle = locPrefix + escBadge(forecast.condition) + ' · Prev 24h Rain: ' + escBadge(forecast.totalRain24hFormatted) + ' (' + escBadge(forecast.statusLabel) + ')';
+        grp.elements.forEach(function(el) {
+          el.innerHTML =
+            '<span class="weather-card-pill ' + escBadge(forecast.badgeClass) + '" title="' + badgeTitle + '">' +
+              '<span>' + escBadge(forecast.emoji) + '</span> <span>' + escBadge(forecast.temperature) + '°F</span>' +
+            '</span>';
+          el.style.display = 'inline-flex';
+        });
+      }
       } catch (e) {}
     });
   }

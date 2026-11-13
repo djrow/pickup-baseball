@@ -52,8 +52,11 @@
     }
   }
 
+  var cachedStoreDbPromise = null;
+
   function openStoreDb() {
-    return new Promise(function (resolve) {
+    if (cachedStoreDbPromise) return cachedStoreDbPromise;
+    cachedStoreDbPromise = new Promise(function (resolve) {
       if (!root.indexedDB) {
         resolve(null);
         return;
@@ -74,15 +77,30 @@
           }
         };
         req.onsuccess = function (ev) {
-          resolve(ev.target.result);
+          var db = ev.target.result;
+          db.onversionchange = function () {
+            try { db.close(); } catch (e) {}
+            cachedStoreDbPromise = null;
+          };
+          db.onclose = function () {
+            cachedStoreDbPromise = null;
+          };
+          resolve(db);
         };
         req.onerror = function () {
+          cachedStoreDbPromise = null;
+          resolve(null);
+        };
+        req.onblocked = function () {
+          cachedStoreDbPromise = null;
           resolve(null);
         };
       } catch (e) {
+        cachedStoreDbPromise = null;
         resolve(null);
       }
     });
+    return cachedStoreDbPromise;
   }
 
   function saveChannelsToIdb(channels) {
@@ -1317,12 +1335,14 @@
       return fetch(uploadUrl, {
         method: 'PUT',
         headers: {
-          'Content-Length': String(chunk.byteLength),
           'Content-Range': contentRange,
           'Content-Type': mimeType || 'application/octet-stream'
         },
         body: chunk
       }).then(function (res) {
+        if (!res.ok && res.status !== 308) {
+          throw new Error('Chunk upload failed with HTTP ' + res.status);
+        }
         offset = end;
         var pct = Math.min(92, Math.round(15 + (offset / total) * 77));
         progressCb(pct, 'Uploading to 5 TB Google Drive (' + Math.round((offset / total) * 100) + '%)...');
@@ -1555,6 +1575,9 @@
       clearTimeout(state.syncTimer);
       state.syncTimer = null;
     }
+    if (!state.user) {
+      return;
+    }
     var isHidden = (typeof document !== 'undefined' && document.visibilityState === 'hidden');
     var inVoice = Boolean(root.ClubhouseRTC && root.ClubhouseRTC.state && root.ClubhouseRTC.state.activeChannelId);
     if (isHidden && !inVoice) {
@@ -1566,7 +1589,9 @@
       : ((inVoice || isChatRecentlyActive()) ? VISIBLE_ACTIVE_SYNC_MS : VISIBLE_IDLE_SYNC_MS);
     state.syncTimer = setTimeout(function () {
       pollDeltaSync().then(function () {
-        scheduleNextSyncTick();
+        if (state.user) {
+          scheduleNextSyncTick();
+        }
       });
     }, delay);
   }
@@ -1832,11 +1857,45 @@
     }));
   }
 
+  /**
+   * Persist per-user channel read watermark when viewing a channel with unread messages.
+   */
+  function markChannelRead(channelId, lastMessageId) {
+    var chNum = Number(channelId);
+    if (!chNum || !state.user) return Promise.resolve(null);
+
+    var targetMsgId = Number(lastMessageId || 0);
+    if (!targetMsgId) {
+      var list = state.messagesByChannel[chNum] || [];
+      for (var i = list.length - 1; i >= 0; i--) {
+        if (list[i] && Number(list[i].id) > 0) {
+          targetMsgId = Number(list[i].id);
+          break;
+        }
+      }
+    }
+
+    var hadUnread = Number(state.unreadByChannel[chNum] || 0) > 0;
+    state.unreadByChannel[chNum] = 0;
+    emit('unread_updated', { channelId: chNum, unread: 0 });
+
+    if (!hadUnread && targetMsgId <= 0) {
+      return Promise.resolve(null);
+    }
+
+    return apiRequest('POST', '/api/channels/' + encodeURIComponent(chNum) + '/read', {
+      last_read_message_id: targetMsgId > 0 ? targetMsgId : 0
+    }).catch(function () {
+      return null;
+    });
+  }
+
   var ClubhouseStore = {
     state: state,
     subscribe: subscribe,
     bootstrap: bootstrap,
     fetchChannelMessages: fetchChannelMessages,
+    markChannelRead: markChannelRead,
     sendMessage: sendMessage,
     createChannel: createChannel,
     updateChannel: updateChannel,

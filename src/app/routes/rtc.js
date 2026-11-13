@@ -9,6 +9,7 @@ import { resolveChannel, canUserAccessChannel } from './chat.js';
 
 export const voiceRouter = new Hono();
 export const rtcRouter = new Hono();
+let lastSignalPruneSec = 0;
 
 // ---------------------------------------------------------------------------
 // POST /api/voice/:channelId/join - Join Voice Huddle Room
@@ -230,23 +231,45 @@ rtcRouter.post('/signal', requireAuth, async (c) => {
     return c.json({ error: 'Access denied: insufficient permissions for this voice/signaling room.' }, 403);
   }
 
-  // Verify recipient user exists in BASEBALL_DB
+  // Verify recipient user exists in BASEBALL_DB and can access this channel
   if (baseballDb) {
-    const recipientUser = await baseballDb.prepare('SELECT id, email FROM users WHERE id = ?').bind(recipientUserId).first();
+    const recipientUser = await baseballDb.prepare(`
+      SELECT id, email, role, is_moderator, COALESCE(clubhouse_opted_in, 1) as clubhouse_opted_in,
+             EXISTS(SELECT 1 FROM banned_emails b WHERE LOWER(b.email) = LOWER(users.email)) as is_banned
+      FROM users WHERE id = ?
+    `).bind(recipientUserId).first();
     if (!recipientUser) {
       return c.json({ error: 'Recipient user not found.' }, 404);
+    }
+    if (recipientUser.is_banned || Number(recipientUser.clubhouse_opted_in) === 0) {
+      return c.json({ error: 'Recipient cannot receive Clubhouse signals.' }, 403);
+    }
+    const rRole = (recipientUser.role || 'player').toLowerCase();
+    const recipientNorm = {
+      id: recipientUser.id,
+      email: recipientUser.email,
+      role: rRole,
+      isAdmin: rRole === 'admin',
+      isModerator: Boolean(recipientUser.is_moderator) || rRole === 'admin',
+      canManageEvents: rRole === 'organizer' || rRole === 'admin'
+    };
+    if (!(await canUserAccessChannel(chatDb, recipientNorm, channel, 'read'))) {
+      return c.json({ error: 'Recipient does not have permission to access this channel.' }, 403);
     }
   }
 
   const nowSec = Math.floor(Date.now() / 1000);
 
-  // Prune expired signals (>60s) only if expired rows exist
-  try {
-    const staleSig = await chatDb.prepare('SELECT 1 FROM rtc_signals WHERE created_at <= ? LIMIT 1').bind(nowSec - 60).first();
-    if (staleSig) {
-      await chatDb.prepare('DELETE FROM rtc_signals WHERE created_at <= ?').bind(nowSec - 60).run();
-    }
-  } catch (e) {}
+  // Prune expired signals (>60s) at most once every 60 seconds per isolate
+  if (nowSec - lastSignalPruneSec >= 60) {
+    lastSignalPruneSec = nowSec;
+    try {
+      const staleSig = await chatDb.prepare('SELECT 1 FROM rtc_signals WHERE created_at <= ? LIMIT 1').bind(nowSec - 60).first();
+      if (staleSig) {
+        await chatDb.prepare('DELETE FROM rtc_signals WHERE created_at <= ?').bind(nowSec - 60).run();
+      }
+    } catch (e) {}
+  }
 
   const insRes = await chatDb.prepare(`
     INSERT INTO rtc_signals (channel_id, sender_user_id, recipient_user_id, signal_type, payload_json, created_at)

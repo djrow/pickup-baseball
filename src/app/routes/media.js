@@ -6,6 +6,7 @@ import {
   initGDriveResumableSession,
   getGDriveFileMetadata,
   streamGDriveFile,
+  deleteGDriveFile,
   serveByteRangeResponse,
   getGDriveStorageQuota
 } from '../gdrive.js';
@@ -119,6 +120,7 @@ mediaRouter.get('/', async (c) => {
         FROM media_items m
         WHERE m.is_approved = 0
         ORDER BY m.created_at DESC
+        LIMIT 100
       `).all();
       pendingMedia = pending || [];
     }
@@ -194,17 +196,32 @@ mediaRouter.get('/:id/file', async (c) => {
         });
       }
 
-      const upstreamRes = await fetch(check.url, {
-        redirect: 'manual',
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) PickupBaseball/1.0'
+      let currentUrl = check.url;
+      let upstreamRes = null;
+      for (let hop = 0; hop < 3; hop++) {
+        upstreamRes = await fetch(currentUrl, {
+          redirect: 'manual',
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) PickupBaseball/1.0'
+          }
+        });
+        if (upstreamRes.status >= 300 && upstreamRes.status < 400) {
+          const loc = upstreamRes.headers.get('location');
+          if (!loc || hop === 2) {
+            return c.text('Upstream redirects are disallowed', 400);
+          }
+          const resolvedUrl = new URL(loc, currentUrl).href;
+          const hopCheck = validateExternalHttpUrl(resolvedUrl, isTestEnv);
+          if (!hopCheck.ok) {
+            return c.text(hopCheck.error, hopCheck.status);
+          }
+          currentUrl = hopCheck.url;
+          continue;
         }
-      });
-      if (upstreamRes.status >= 300 && upstreamRes.status < 400) {
-        return c.text('Upstream redirects are disallowed', 400);
+        break;
       }
-      if (!upstreamRes.ok) {
-        return c.text('Upstream file unavailable', upstreamRes.status);
+      if (!upstreamRes || !upstreamRes.ok) {
+        return c.text('Upstream file unavailable', upstreamRes ? upstreamRes.status : 502);
       }
 
       const contentLen = parseInt(upstreamRes.headers.get('content-length') || '0', 10);
@@ -220,7 +237,8 @@ mediaRouter.get('/:id/file', async (c) => {
           'Content-Type': contentType,
           'Cache-Control': 'public, max-age=604800, stale-while-revalidate=2592000',
           'ETag': etag,
-          'X-Content-Type-Options': 'nosniff'
+          'X-Content-Type-Options': 'nosniff',
+          'Content-Security-Policy': "default-src 'none'; sandbox"
         }
       });
     }
@@ -248,7 +266,12 @@ mediaRouter.get('/:id/file', async (c) => {
       base64Payload = dataUrlMatch[2];
     }
 
-    const bytes = base64ToUint8Array(base64Payload);
+    let bytes;
+    try {
+      bytes = base64ToUint8Array(base64Payload);
+    } catch (b64Err) {
+      return c.text('Invalid media data.', 400);
+    }
     const headers = {
       'Content-Type': mimeType,
       'Cache-Control': 'public, max-age=604800, stale-while-revalidate=2592000',
@@ -389,6 +412,11 @@ mediaRouter.post('/', async (c) => {
         if (!ALLOWED_MIME.includes(candidateMime)) {
           return c.json({ error: 'Unsupported media format (' + candidateMime + '). Only JPEG, PNG, WebP, GIF, and AVIF are supported.' }, 400);
         }
+        if (['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'].includes(candidateMime)) {
+          if (!isValidRasterImageBuffer(arrayBuf, candidateMime)) {
+            return c.json({ error: 'Fetched remote file is not a valid image.' }, 400);
+          }
+        }
 
         storedMimeType = candidateMime;
         let processedBuffer = arrayBuf;
@@ -416,7 +444,12 @@ mediaRouter.post('/', async (c) => {
         }
       }
 
-      const bytes = base64ToUint8Array(cleanB64);
+      let bytes;
+      try {
+        bytes = base64ToUint8Array(cleanB64);
+      } catch (b64Err) {
+        return c.json({ error: 'Invalid base64 media payload.' }, 400);
+      }
       if (bytes.byteLength > MAX_MEDIA_BYTES) {
         return c.json({ error: 'Uploaded file exceeds 50MB limit.' }, 400);
       }
@@ -426,7 +459,7 @@ mediaRouter.post('/', async (c) => {
       }
 
       // Verify raster image magic bytes if image
-      if (storedMimeType.startsWith('image/') && ['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(storedMimeType)) {
+      if (storedMimeType.startsWith('image/') && ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'].includes(storedMimeType)) {
         if (!isValidRasterImageBuffer(bytes.buffer, storedMimeType)) {
           return c.json({ error: 'Invalid or corrupted image file.' }, 400);
         }
@@ -1000,7 +1033,14 @@ attachmentsRouter.post('/:id/complete', requireAuth, async (c) => {
   }
 
   const body = await c.req.json().catch(() => ({}));
-  const driveFileId = body.drive_file_id || body.gdrive_file_id || attachment.drive_file_id;
+  const requestedDriveId = body.drive_file_id || body.gdrive_file_id || null;
+  if (requestedDriveId && attachment.storage_provider !== 'gdrive') {
+    return c.json({ error: 'Cannot bind external Google Drive file ID to a local attachment.' }, 403);
+  }
+  if (requestedDriveId && attachment.drive_file_id && requestedDriveId !== attachment.drive_file_id) {
+    return c.json({ error: 'Mismatched Google Drive file ID.' }, 403);
+  }
+  const driveFileId = attachment.drive_file_id || (attachment.storage_provider === 'gdrive' ? requestedDriveId : null);
   let verifiedSize = attachment.file_size;
 
   if (attachment.storage_provider === 'gdrive' && driveFileId && isGDriveConfigured(c.env)) {
@@ -1075,14 +1115,22 @@ attachmentsRouter.get('/:id/stream', async (c) => {
   }
 
   if (attachment.storage_provider === 'gdrive' && attachment.drive_file_id && isGDriveConfigured(c.env)) {
-    return await streamGDriveFile(c.env, attachment.drive_file_id, rangeHeader, attachment.mime_type, c.req.url);
+    const streamOpts = attachment.promoted_media_id
+      ? { useEdgeCache: true, cacheControl: 'public, max-age=31536000, immutable' }
+      : { useEdgeCache: false, cacheControl: 'private, max-age=3600' };
+    return await streamGDriveFile(c.env, attachment.drive_file_id, rangeHeader, attachment.mime_type, c.req.url, streamOpts);
   }
 
   if (!attachment.local_data_base64) {
     return c.json({ error: 'Attachment binary payload not available.' }, 404);
   }
 
-  const bytes = base64ToUint8Array(attachment.local_data_base64);
+  let bytes;
+  try {
+    bytes = base64ToUint8Array(attachment.local_data_base64);
+  } catch (b64Err) {
+    return c.json({ error: 'Invalid attachment binary payload.' }, 400);
+  }
   const mimeType = attachment.mime_type || 'application/octet-stream';
   return serveByteRangeResponse(bytes, mimeType, rangeHeader);
 });
@@ -1176,6 +1224,35 @@ attachmentsRouter.post('/:id/promote-to-gallery', requireAdmin, async (c) => {
 });
 
 // ---------------------------------------------------------------------------
+// DELETE /api/attachments/:id - Delete Attachment & Drive Payload (Uploader/Admin/Mod)
+// ---------------------------------------------------------------------------
+attachmentsRouter.delete('/:id', requireAuth, async (c) => {
+  const user = c.get('user');
+  const chatDb = c.env && c.env.CHAT_DB;
+  if (!chatDb) return c.json({ error: 'Chat database unavailable.' }, 500);
+
+  const id = String(c.req.param('id') || '').trim();
+  if (!id) return c.json({ error: 'Invalid attachment ID.' }, 400);
+
+  const att = await chatDb.prepare('SELECT id, uploader_id, drive_file_id, promoted_media_id FROM chat_attachments WHERE id = ?').bind(id).first();
+  if (!att) {
+    return c.json({ error: 'Attachment not found.' }, 404);
+  }
+
+  const isStaff = Boolean(user.isAdmin || user.isModerator || user.role === 'admin');
+  if (!isStaff && Number(att.uploader_id) !== Number(user.id)) {
+    return c.json({ error: 'Access denied.' }, 403);
+  }
+
+  await chatDb.prepare('DELETE FROM chat_attachments WHERE id = ?').bind(id).run();
+  if (att.drive_file_id && !att.promoted_media_id) {
+    await deleteGDriveFile(c.env, att.drive_file_id).catch(() => {});
+  }
+
+  return c.json({ success: true, message: 'Attachment deleted.' });
+});
+
+// ---------------------------------------------------------------------------
 // GET /api/admin/storage-status - 5 TB Google Drive & Dual-D1 Metrics (Admin)
 // ---------------------------------------------------------------------------
 export async function getAdminStorageStatusHandler(c) {
@@ -1187,28 +1264,32 @@ export async function getAdminStorageStatusHandler(c) {
   const chatCounts = { channels: 0, messages: 0, attachments: 0, keys: 0 };
   if (chatDb) {
     try {
-      const ch = await chatDb.prepare('SELECT COUNT(*) as c FROM channels').first();
-      const msg = await chatDb.prepare('SELECT COUNT(*) as c FROM messages').first();
-      const att = await chatDb.prepare('SELECT COUNT(*) as c FROM chat_attachments').first();
-      const ky = await chatDb.prepare('SELECT COUNT(*) as c FROM user_crypto_keys').first();
-      chatCounts.channels = ch ? ch.c : 0;
-      chatCounts.messages = msg ? msg.c : 0;
-      chatCounts.attachments = att ? att.c : 0;
-      chatCounts.keys = ky ? ky.c : 0;
+      const [chRes, msgRes, attRes, kyRes] = await chatDb.batch([
+        chatDb.prepare('SELECT COUNT(*) as c FROM channels'),
+        chatDb.prepare('SELECT COUNT(*) as c FROM messages'),
+        chatDb.prepare('SELECT COUNT(*) as c FROM chat_attachments'),
+        chatDb.prepare('SELECT COUNT(*) as c FROM user_crypto_keys')
+      ]);
+      chatCounts.channels = (chRes && chRes.results && chRes.results[0]) ? chRes.results[0].c : 0;
+      chatCounts.messages = (msgRes && msgRes.results && msgRes.results[0]) ? msgRes.results[0].c : 0;
+      chatCounts.attachments = (attRes && attRes.results && attRes.results[0]) ? attRes.results[0].c : 0;
+      chatCounts.keys = (kyRes && kyRes.results && kyRes.results[0]) ? kyRes.results[0].c : 0;
     } catch (e) {}
   }
 
   const baseballCounts = { users: 0, events: 0, attendees: 0, media_items: 0 };
   if (baseballDb) {
     try {
-      const u = await baseballDb.prepare('SELECT COUNT(*) as c FROM users').first();
-      const ev = await baseballDb.prepare('SELECT COUNT(*) as c FROM events').first();
-      const at = await baseballDb.prepare('SELECT COUNT(*) as c FROM attendees').first();
-      const mi = await baseballDb.prepare('SELECT COUNT(*) as c FROM media_items').first();
-      baseballCounts.users = u ? u.c : 0;
-      baseballCounts.events = ev ? ev.c : 0;
-      baseballCounts.attendees = at ? at.c : 0;
-      baseballCounts.media_items = mi ? mi.c : 0;
+      const [uRes, evRes, atRes, miRes] = await baseballDb.batch([
+        baseballDb.prepare('SELECT COUNT(*) as c FROM users'),
+        baseballDb.prepare('SELECT COUNT(*) as c FROM events'),
+        baseballDb.prepare('SELECT COUNT(*) as c FROM attendees'),
+        baseballDb.prepare('SELECT COUNT(*) as c FROM media_items')
+      ]);
+      baseballCounts.users = (uRes && uRes.results && uRes.results[0]) ? uRes.results[0].c : 0;
+      baseballCounts.events = (evRes && evRes.results && evRes.results[0]) ? evRes.results[0].c : 0;
+      baseballCounts.attendees = (atRes && atRes.results && atRes.results[0]) ? atRes.results[0].c : 0;
+      baseballCounts.media_items = (miRes && miRes.results && miRes.results[0]) ? miRes.results[0].c : 0;
     } catch (e) {}
   }
 

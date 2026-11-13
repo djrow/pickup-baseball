@@ -6,9 +6,11 @@ import {
   getClientIp,
   checkRateLimit,
   verifyTurnstileIfConfigured,
+  requireAuth,
   requireOrganizer,
   requireAdmin,
-  resolveUserByCalendarToken
+  resolveUserByCalendarToken,
+  constantTimeEqual
 } from '../security.js';
 import { getDefaultDuties, getRequireLoginSetting } from '../schema.js';
 import {
@@ -376,7 +378,7 @@ eventsRouter.get('/admin/backup-db', requireAdmin, async (c) => {
 
 eventsRouter.get('/attendee-candidates', requireOrganizer, async (c) => {
   try {
-    const { results: users } = await c.env.DB.prepare('SELECT id, name, email FROM users ORDER BY name ASC').all();
+    const { results: users } = await c.env.DB.prepare('SELECT id, name, email FROM users ORDER BY name ASC LIMIT 500').all();
     return c.json({ users: users || [] });
   } catch (err) {
     console.error('[Events] Error fetching candidate attendees:', err);
@@ -419,7 +421,7 @@ eventsRouter.get('/calendar.ics', async (c) => {
     if (errorResponse) return errorResponse;
 
     const { results: allEvents } = await c.env.DB.prepare(
-      "SELECT * FROM events WHERE status IN ('active', 'rainout') ORDER BY event_date ASC"
+      "SELECT * FROM events WHERE status IN ('active', 'rainout') ORDER BY event_date ASC LIMIT 500"
     ).all();
     const origin = new URL(c.req.url).origin || 'https://www.pickupbaseballfoundation.org';
     const ics = buildCalendarIcs(allEvents || [], origin, { viewerUser });
@@ -471,7 +473,12 @@ eventsRouter.all('/reminders/check', async (c) => {
   const authHeader = c.req.header('Authorization') || '';
   const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
   const headerSecret = c.req.header('X-Cron-Secret') || '';
-  const hasValidSecret = Boolean(cronSecret && (bearerToken === cronSecret || headerSecret === cronSecret));
+  const hasValidSecret = Boolean(
+    cronSecret && (
+      (bearerToken && constantTimeEqual(bearerToken, cronSecret)) ||
+      (headerSecret && constantTimeEqual(headerSecret, cronSecret))
+    )
+  );
   const isAuthorizedManager = Boolean(user && (user.canManageEvents || user.isAdmin));
 
   if (!hasValidSecret && !isAuthorizedManager) {
@@ -648,25 +655,31 @@ eventsRouter.get('/:id', async (c) => {
     const waitlist = batchRes[3].results || [];
     const comments = batchRes[4].results || [];
     const bpSignups = batchRes[5].results || [];
-    const requireLogin = await getRequireLoginSetting(db, c.env);
-
-    const myRsvp = (batchRes[6] && batchRes[6].results && batchRes[6].results[0]) || null;
+    let myRsvp = (batchRes.length > 6 && batchRes[6] && batchRes[6].results && batchRes[6].results[0]) || null;
     if (myRsvp) {
-      myRsvp.duty_ids = JSON.parse(myRsvp.duty_ids || '[]');
-      if (!isDeliverableEmail(myRsvp.email)) {
+      if (myRsvp.email && !isDeliverableEmail(myRsvp.email)) {
         myRsvp.email = '';
+      }
+      try {
+        const parsedDutyIds = JSON.parse(myRsvp.duty_ids || '[]');
+        myRsvp.duty_ids = Array.isArray(parsedDutyIds) ? parsedDutyIds.filter((n) => n != null) : [];
+      } catch (e) {
+        myRsvp.duty_ids = [];
       }
     }
 
-    const isOrganizer = Boolean(user && (user.canManageEvents || user.isAdmin));
-    const hasRsvpd = Boolean(myRsvp && ['attending', 'declined', 'waitlist'].includes(myRsvp.status));
-    const canViewRoster = Boolean(hasRsvpd || isOrganizer);
-
+    const isOrganizer = Boolean(user && user.canManageEvents);
+    const canViewRoster = Boolean(user || (myRsvp && myRsvp.id));
     const tierInfo = getTaskTier(event.event_date);
     const viewerId = user ? user.id : (myRsvp && myRsvp.user_id ? myRsvp.user_id : null);
-    const viewerUser = viewerId
-      ? await db.prepare('SELECT id, machine_badge, field_badge, hero_credits FROM users WHERE id = ?').bind(viewerId).first()
-      : null;
+    const [requireLogin, viewerUser, machineCap, fieldCap] = await Promise.all([
+      getRequireLoginSetting(db, c.env),
+      viewerId
+        ? db.prepare('SELECT id, machine_badge, field_badge, hero_credits FROM users WHERE id = ?').bind(viewerId).first()
+        : Promise.resolve(null),
+      getDutyTier1Cap(db, 'machine'),
+      getDutyTier1Cap(db, 'field')
+    ]);
 
     const hoursUntilEvent = (new Date(event.event_date).getTime() - Date.now()) / (3600 * 1000);
     const isUrgentCoverWindow = hoursUntilEvent > 0 && hoursUntilEvent < 48;
@@ -677,10 +690,12 @@ eventsRouter.get('/:id', async (c) => {
       myRsvp.field_badge = viewerUser.field_badge || 0;
     }
 
-    const machineCap = await getDutyTier1Cap(db, 'machine');
-    const fieldCap = await getDutyTier1Cap(db, 'field');
-    const viewerMachineShifts = viewerUser ? await getUserRollingShifts(db, viewerUser.id, 'machine', event.event_date, event.id) : 0;
-    const viewerFieldShifts = viewerUser ? await getUserRollingShifts(db, viewerUser.id, 'field', event.event_date, event.id) : 0;
+    const [viewerMachineShifts, viewerFieldShifts] = viewerUser
+      ? await Promise.all([
+          getUserRollingShifts(db, viewerUser.id, 'machine', event.event_date, event.id),
+          getUserRollingShifts(db, viewerUser.id, 'field', event.event_date, event.id)
+        ])
+      : [0, 0];
 
     const sanitizedDuties = duties.map(d => {
       const dType = getDutyType(d.title);
@@ -1137,11 +1152,13 @@ eventsRouter.post('/:id/rsvp', async (c) => {
         }, 400);
       }
 
-      const attendeeUser = userId
-        ? await db.prepare('SELECT id, machine_badge, field_badge, hero_credits FROM users WHERE id = ?').bind(userId).first()
+      const attendeeUser = user
+        ? await db.prepare('SELECT id, machine_badge, field_badge, hero_credits FROM users WHERE id = ?').bind(user.id).first()
         : null;
 
       let creditsNeeded = 0;
+      const dutyCapCache = {};
+      const rollingShiftsCache = {};
       for (const dId of duty_ids) {
         const duty = await db.prepare('SELECT * FROM event_duties WHERE id = ? AND event_id = ?').bind(dId, eventId).first();
         if (!duty) continue;
@@ -1155,8 +1172,14 @@ eventsRouter.post('/:id/rsvp', async (c) => {
             return c.json({ error: `Selecting '${duty.title}' requires the ${dType.badgeName}. Contact an administrator to be certified.` }, 400);
           }
           if (tierInfo.tier === 'tier1') {
-            const cap = await getDutyTier1Cap(db, dType.type);
-            const userShifts = await getUserRollingShifts(db, attendeeUser.id, dType.type, event.event_date, eventId);
+            if (dutyCapCache[dType.type] === undefined) {
+              dutyCapCache[dType.type] = await getDutyTier1Cap(db, dType.type);
+            }
+            if (rollingShiftsCache[dType.type] === undefined) {
+              rollingShiftsCache[dType.type] = await getUserRollingShifts(db, attendeeUser.id, dType.type, event.event_date, eventId);
+            }
+            const cap = dutyCapCache[dType.type];
+            const userShifts = rollingShiftsCache[dType.type];
             if (userShifts >= cap) {
               if (!redeem_hero_credit) {
                 return c.json({
@@ -1166,7 +1189,7 @@ eventsRouter.post('/:id/rsvp', async (c) => {
               if ((attendeeUser.hero_credits || 0) < 1) {
                 return c.json({ error: `Tier 1 fair-share cap reached (${cap} shifts) and you do not have any Backup Hero Credits available.` }, 400);
               }
-              creditsNeeded += 1;
+              creditsNeeded = 1;
             }
           }
         }
@@ -1240,17 +1263,17 @@ eventsRouter.post('/:id/rsvp', async (c) => {
           assignedDutyNames.push(duty.title);
 
           const dType = getDutyType(duty.title);
-          if (dType.isPaid && userId) {
-            if (tierInfo.tier === 'tier1' && redeem_hero_credit && !heroCreditRedeemed) {
+          if (dType.isPaid && user && user.id) {
+            if (tierInfo.tier === 'tier1' && redeem_hero_credit && !heroCreditRedeemed && !prevDuties.includes(dId)) {
               const cap = await getDutyTier1Cap(db, dType.type);
-              const shifts = await getUserRollingShifts(db, userId, dType.type, event.event_date, eventId);
+              const shifts = await getUserRollingShifts(db, user.id, dType.type, event.event_date, eventId);
               if (shifts >= cap) {
-                batchOps.push(db.prepare('UPDATE users SET hero_credits = MAX(0, hero_credits - 1) WHERE id = ?').bind(userId));
+                batchOps.push(db.prepare('UPDATE users SET hero_credits = hero_credits - 1 WHERE id = ? AND hero_credits >= 1').bind(user.id));
                 heroCreditRedeemed = true;
               }
             }
             if (isUrgentWindow && !prevDuties.includes(dId) && !heroCreditEarned) {
-              batchOps.push(db.prepare('UPDATE users SET hero_credits = hero_credits + 1 WHERE id = ?').bind(userId));
+              batchOps.push(db.prepare('UPDATE users SET hero_credits = hero_credits + 1 WHERE id = ?').bind(user.id));
               heroCreditEarned = true;
             }
           }
@@ -1429,12 +1452,20 @@ eventsRouter.post('/:id/comments', async (c) => {
   }
 });
 
-eventsRouter.delete('/:id/comments/:commentId', requireOrganizer, async (c) => {
+eventsRouter.delete('/:id/comments/:commentId', requireAuth, async (c) => {
+  const user = c.get('user');
   try {
     const eventId = parseInt(c.req.param('id'), 10);
     const commentId = parseInt(c.req.param('commentId'), 10);
-    const res = await c.env.DB.prepare('DELETE FROM comments WHERE id = ? AND event_id = ?').bind(commentId, eventId).run();
-    if (res.meta.changes === 0) return c.json({ error: 'Comment not found.' }, 404);
+    if (isNaN(eventId) || isNaN(commentId) || eventId <= 0 || commentId <= 0) {
+      return c.json({ error: 'Invalid event or comment ID.' }, 400);
+    }
+    const existing = await c.env.DB.prepare('SELECT id, user_id FROM comments WHERE id = ? AND event_id = ?').bind(commentId, eventId).first();
+    if (!existing) return c.json({ error: 'Comment not found.' }, 404);
+    if (!user.canManageEvents && Number(existing.user_id) !== Number(user.id)) {
+      return c.json({ error: 'Access denied.' }, 403);
+    }
+    await c.env.DB.prepare('DELETE FROM comments WHERE id = ? AND event_id = ?').bind(commentId, eventId).run();
     return c.json({ success: true, message: 'Comment deleted.' });
   } catch (err) {
     console.error('[Comments] Error deleting comment:', err);
@@ -1572,7 +1603,7 @@ eventsRouter.post('/:id/bp-order', async (c) => {
     const myCurrentSlot = existingList.find(s =>
       (user && s.user_id && s.user_id === user.id) ||
       (attendeeId && s.attendee_id && s.attendee_id === attendeeId) ||
-      (!isOrganizer && s.player_name && s.player_name.toLowerCase() === playerName.toLowerCase())
+      (!user && !isOrganizer && !s.user_id && (!s.attendee_id || (attendeeId && s.attendee_id === attendeeId)) && s.player_name && s.player_name.toLowerCase() === playerName.toLowerCase())
     );
 
     if (slotOccupant) {

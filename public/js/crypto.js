@@ -92,8 +92,11 @@
   /**
    * Open IndexedDB keystore (falls back to in-memory map in headless/private environments).
    */
+  var cachedKeyDbPromise = null;
+
   function openKeyDb() {
-    return new Promise(function (resolve) {
+    if (cachedKeyDbPromise) return cachedKeyDbPromise;
+    cachedKeyDbPromise = new Promise(function (resolve) {
       if (!root.indexedDB) {
         resolve(null);
         return;
@@ -107,15 +110,30 @@
           }
         };
         req.onsuccess = function (ev) {
-          resolve(ev.target.result);
+          var db = ev.target.result;
+          db.onversionchange = function () {
+            try { db.close(); } catch (e) {}
+            cachedKeyDbPromise = null;
+          };
+          db.onclose = function () {
+            cachedKeyDbPromise = null;
+          };
+          resolve(db);
         };
         req.onerror = function () {
+          cachedKeyDbPromise = null;
+          resolve(null);
+        };
+        req.onblocked = function () {
+          cachedKeyDbPromise = null;
           resolve(null);
         };
       } catch (e) {
+        cachedKeyDbPromise = null;
         resolve(null);
       }
     });
+    return cachedKeyDbPromise;
   }
 
   function idbGet(key) {

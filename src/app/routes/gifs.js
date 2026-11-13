@@ -13,6 +13,7 @@ import {
   isGDriveConfigured,
   uploadGDriveBytes,
   streamGDriveFile,
+  deleteGDriveFile,
   serveByteRangeResponse
 } from '../gdrive.js';
 
@@ -161,23 +162,26 @@ gifsRouter.get('/', requireAuth, async (c) => {
   if (!chatDb) return c.json({ gifs: [] });
 
   const query = String(c.req.query('q') || '').trim().toLowerCase();
-  const rowsRes = await chatDb.prepare(`
-    SELECT id, title, tags, mime_type, file_size, storage_provider, is_public,
-           use_count, added_by, added_by_name, created_at
-    FROM clubhouse_gifs
-    WHERE (is_public = 1 OR added_by = ?)
-    ORDER BY use_count DESC, created_at DESC
-    LIMIT 100
-  `).bind(user.id).all();
+  const rowsRes = query
+    ? await chatDb.prepare(`
+        SELECT id, title, tags, mime_type, file_size, storage_provider, is_public,
+               use_count, added_by, added_by_name, created_at
+        FROM clubhouse_gifs
+        WHERE (is_public = 1 OR added_by = ?)
+          AND (LOWER(title) LIKE ? OR LOWER(tags) LIKE ? OR LOWER(added_by_name) LIKE ?)
+        ORDER BY use_count DESC, created_at DESC
+        LIMIT 100
+      `).bind(user.id, `%${query}%`, `%${query}%`, `%${query}%`).all()
+    : await chatDb.prepare(`
+        SELECT id, title, tags, mime_type, file_size, storage_provider, is_public,
+               use_count, added_by, added_by_name, created_at
+        FROM clubhouse_gifs
+        WHERE (is_public = 1 OR added_by = ?)
+        ORDER BY use_count DESC, created_at DESC
+        LIMIT 100
+      `).bind(user.id).all();
 
-  let list = (rowsRes.results || []).map(serializeGifMeta);
-  if (query) {
-    list = list.filter((g) => {
-      const hay = `${g.title} ${g.tags} ${g.added_by_name}`.toLowerCase();
-      return hay.includes(query);
-    });
-  }
-
+  const list = (rowsRes.results || []).map(serializeGifMeta);
   return c.json({ gifs: list });
 });
 
@@ -327,6 +331,9 @@ gifsRouter.post('/import-url', requireAuth, async (c) => {
     }, 201);
   } catch (err) {
     console.error('[GIFs] Failed to persist imported GIF metadata:', err && err.message ? err.message : err);
+    if (driveFileId) {
+      await deleteGDriveFile(c.env, driveFileId).catch(() => {});
+    }
     return c.json({ error: 'Could not save imported GIF metadata.' }, 500);
   }
 });
@@ -391,4 +398,33 @@ gifsRouter.get('/:id/stream', async (c) => {
 
   const bytes = base64ToUint8Array(gif.local_data_base64);
   return serveByteRangeResponse(bytes, gif.mime_type || 'image/gif', rangeHeader, cacheControl);
+});
+
+// ---------------------------------------------------------------------------
+// DELETE /api/gifs/:id - Delete Imported GIF (Uploader or Admin/Moderator)
+// ---------------------------------------------------------------------------
+gifsRouter.delete('/:id', requireAuth, async (c) => {
+  const user = c.get('user');
+  const chatDb = c.env && c.env.CHAT_DB;
+  if (!chatDb) return c.json({ error: 'Chat database unavailable.' }, 500);
+
+  const id = String(c.req.param('id') || '').trim();
+  if (!id) return c.json({ error: 'Invalid GIF ID.' }, 400);
+
+  const gif = await chatDb.prepare('SELECT id, added_by, drive_file_id FROM clubhouse_gifs WHERE id = ?').bind(id).first();
+  if (!gif) {
+    return c.json({ error: 'GIF not found.' }, 404);
+  }
+
+  const isStaff = Boolean(user.isAdmin || user.isModerator || user.role === 'admin');
+  if (!isStaff && Number(gif.added_by) !== Number(user.id)) {
+    return c.json({ error: 'You do not have permission to delete this GIF.' }, 403);
+  }
+
+  await chatDb.prepare('DELETE FROM clubhouse_gifs WHERE id = ?').bind(id).run();
+  if (gif.drive_file_id) {
+    await deleteGDriveFile(c.env, gif.drive_file_id).catch(() => {});
+  }
+
+  return c.json({ success: true, message: 'GIF removed.' });
 });
