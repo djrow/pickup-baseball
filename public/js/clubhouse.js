@@ -267,6 +267,7 @@
     var composerInput = el('ch-composer-input');
     var composerSend = el('ch-send-btn');
     var attachBtn = el('btn-attach-file');
+    var gifBtn = el('btn-open-gif-picker');
     var facCard = el('ch-facilitator-checklist-card');
 
     if (!u) {
@@ -284,6 +285,7 @@
       }
       if (composerSend) composerSend.disabled = true;
       if (attachBtn) attachBtn.disabled = true;
+      if (gifBtn) gifBtn.disabled = true;
       return;
     }
 
@@ -327,6 +329,7 @@
     }
     if (composerSend) composerSend.disabled = Boolean(u.chatMuted);
     if (attachBtn) attachBtn.disabled = Boolean(u.chatMuted);
+    if (gifBtn) gifBtn.disabled = Boolean(u.chatMuted);
 
     if (facCard) {
       var showFac = Boolean(u.isGameFacilitator || u.is_game_facilitator || u.role === 'admin' || u.role === 'organizer' || u.isAdmin);
@@ -361,7 +364,8 @@
       var ch = channels[i];
       var isDmItem = ch.channel_type === 'dm' || ch.channel_type === 'group_dm';
       var isPrivItem = ch.is_private === 1 || ch.is_private === true || ch.min_role_read === 'invite';
-      if (!isSignedIn && (isDmItem || isPrivItem)) {
+      var isGuestPublic = ch.slug === 'announcements' || ch.min_role_read === 'public';
+      if (!isSignedIn && (isDmItem || isPrivItem || !isGuestPublic)) {
         continue;
       }
       var cat = ch.category || 'Text Channels';
@@ -521,15 +525,24 @@
       } else if (isPrivateBoardActive) {
         e2eeBadge.textContent = '🔒 Private Board (ECDH E2EE)';
         e2eeBadge.style.display = 'inline-block';
+      } else if (target.slug === 'announcements' || target.min_role_read === 'public') {
+        e2eeBadge.textContent = '📢 Public Announcements';
+        e2eeBadge.style.display = 'inline-block';
       } else {
         e2eeBadge.textContent = '🛡️ Moderated Board';
         e2eeBadge.style.display = 'inline-block';
       }
     }
     if (inputEl) {
-      inputEl.placeholder = isE2eeChannelActive
-        ? ('Encrypted message in ' + target.name + ' — Press Enter to send')
-        : ('Message ' + target.name + ' — Press Enter to send');
+      if (!Store.state.user) {
+        inputEl.placeholder = 'Sign in to chat in Clubhouse...';
+      } else if (Store.state.user.chatMuted) {
+        inputEl.placeholder = 'Clubhouse posting is muted for your account.';
+      } else {
+        inputEl.placeholder = isE2eeChannelActive
+          ? ('Encrypted message in ' + target.name + ' — Press Enter to send')
+          : ('Message ' + target.name + ' — Press Enter to send');
+      }
     }
 
     refreshDmE2eeNotice(target);
@@ -997,12 +1010,16 @@
         html += '<span>' + escapeHtml(rx.emoji) + '</span><span>' + Number(rx.count || 1) + '</span>';
         html += '</button>';
       }
-      for (var d = 0; d < DEFAULT_EMOJIS.length; d++) {
-        var em = DEFAULT_EMOJIS[d];
-        html += '<button type="button" class="ch-reaction-pill" style="opacity:0.55;" title="React ' + em + '" data-rx-msg="' + msg.id + '" data-rx-emoji="' + em + '">' + em + '</button>';
+      if (currentUser) {
+        for (var d = 0; d < DEFAULT_EMOJIS.length; d++) {
+          var em = DEFAULT_EMOJIS[d];
+          html += '<button type="button" class="ch-reaction-pill" style="opacity:0.55;" title="React ' + em + '" data-rx-msg="' + msg.id + '" data-rx-emoji="' + em + '">' + em + '</button>';
+        }
       }
     }
-    html += '<button type="button" class="ch-thread-btn" data-thread-msg="' + msg.id + '">💬 ' + (msg.reply_count ? msg.reply_count + ' Replies' : 'Reply in Thread') + '</button>';
+    if (currentUser || msg.reply_count) {
+      html += '<button type="button" class="ch-thread-btn" data-thread-msg="' + msg.id + '">💬 ' + (msg.reply_count ? msg.reply_count + ' Replies' : 'Reply in Thread') + '</button>';
+    }
     if (isAuthor && !isHiddenByMod) {
       html += '<button type="button" class="ch-thread-btn" data-edit-msg="' + msg.id + '" title="Edit message">✏️ Edit</button>';
     }
@@ -1053,7 +1070,7 @@
       streamEl._renderedQuery = query;
       streamEl._renderedCount = 0;
       var emptyText = !Store.state.user
-        ? '🔒 Sign in to view Clubhouse channels and direct messages.'
+        ? (chId ? '📢 No public announcements posted yet. Sign in to join community chat and Direct Messages!' : '🔒 Sign in to view Clubhouse channels and direct messages.')
         : 'No messages yet in this channel. Say hello to the sandlot crew! ⚾';
       streamEl.innerHTML = '<div style="text-align:center;color:var(--ch-text-muted);padding:40px 20px;">' + emptyText + '</div>';
       return;
@@ -2674,6 +2691,15 @@
         clearSignedOutUi();
         if (uiState.upcomingData) {
           renderSundayCard(uiState.upcomingData);
+        }
+      } else if (eventType === 'public_channels_loaded') {
+        var pubAuthWarn = el('ch-auth-banner');
+        if (pubAuthWarn && !Store.state.user) pubAuthWarn.classList.remove('hidden');
+        renderUserBar();
+        renderChannelSidebar();
+        renderMembersDirectory();
+        if (!uiState.activeChannelId && Store.state.channels.length > 0) {
+          selectTextChannel(Store.state.channels[0].id);
         }
       } else if (eventType === 'messages_loaded') {
         renderChannelSidebar();

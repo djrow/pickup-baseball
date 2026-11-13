@@ -1390,4 +1390,129 @@ module.exports = async function runTier5(t, ctx) {
       delete require.cache[require.resolve('../../public/js/store.js')];
     }
   });
+
+  await t.test('T5.15: Logged-Out Single Public Channel (#announcements) Access & Private Channel Isolation', async () => {
+    // 1. Seed a public announcement message and a private/player chat message in #general
+    const ancPost = await ctx.apiReq('POST', '/api/channels/announcements/messages', ctx.adminCookie, {
+      content: 'Sunday pickup at 10am at Bushrod Field!'
+    });
+    assert.equal(ancPost.status, 201);
+
+    // 2. Unauthenticated GET /api/public/channels returns strictly 1 public channel (#announcements)
+    const pubChRes = await ctx.apiReq('GET', '/api/public/channels', null);
+    assert.equal(pubChRes.status, 200);
+    assert.ok(Array.isArray(pubChRes.data.channels));
+    assert.equal(pubChRes.data.channels.length, 1, 'Logged-out public channels list must expose exactly 1 public channel');
+    assert.equal(pubChRes.data.channels[0].slug, 'announcements');
+
+    // 3. Unauthenticated GET /api/channels/announcements/messages succeeds (200)
+    const ancMsgsRes = await ctx.apiReq('GET', '/api/channels/announcements/messages', null);
+    assert.equal(ancMsgsRes.status, 200);
+    assert.ok(
+      (ancMsgsRes.data.messages || []).some((m) => m.content && m.content.includes('Bushrod Field')),
+      'Logged-out visitor must be able to read #announcements messages'
+    );
+
+    // 4. All other channels (#general, #facilitators-lounge, DMs, unknown slugs) still reject logged-out reads with 401
+    for (const restrictedSlug of ['general', 'facilitators-lounge', 'nonexistent-channel-999']) {
+      const denied = await ctx.apiReq('GET', `/api/channels/${restrictedSlug}/messages`, null);
+      assert.equal(denied.status, 401, `Logged-out read on ${restrictedSlug} must return 401`);
+    }
+
+    // 5. Client Store.bootstrap() on 401 + 200 /api/public/channels clears stale DMs and loads only #announcements
+    const prevFetch = globalThis.fetch;
+    const prevIndexedDB = globalThis.indexedDB;
+    const prevLocalStorage = globalThis.localStorage;
+    try {
+      const storeModulePath = require.resolve('../../public/js/store.js');
+      delete require.cache[storeModulePath];
+
+      const idbStores = {
+        channels: new Map([
+          [99, { id: 99, slug: 'dm-1-2', name: 'DM: Old Cached User', channel_type: 'dm', category: 'Direct Messages' }]
+        ]),
+        messages: new Map([
+          [501, { id: 501, channel_id: 99, content: 'stale secret' }]
+        ]),
+        meta: new Map([['cached_user_id', 1]])
+      };
+
+      const fakeDb = {
+        objectStoreNames: { contains: (n) => Object.prototype.hasOwnProperty.call(idbStores, n) },
+        transaction: () => ({
+          objectStore(storeName) {
+            const backing = idbStores[storeName] || new Map();
+            return {
+              indexNames: { contains: () => false },
+              getAll() {
+                const req = { result: Array.from(backing.values()) };
+                queueMicrotask(() => { if (req.onsuccess) req.onsuccess(); });
+                return req;
+              },
+              get(k) {
+                const req = { result: backing.get(k) };
+                queueMicrotask(() => { if (req.onsuccess) req.onsuccess(); });
+                return req;
+              },
+              put(val, k) { backing.set(k !== undefined ? k : val.id, val); return {}; },
+              delete(k) { backing.delete(k); return {}; },
+              clear() { backing.clear(); return {}; }
+            };
+          }
+        })
+      };
+
+      globalThis.indexedDB = {
+        open() {
+          const req = {};
+          queueMicrotask(() => { if (req.onsuccess) req.onsuccess({ target: { result: fakeDb } }); });
+          return req;
+        }
+      };
+      globalThis.localStorage = {
+        _map: new Map(),
+        getItem(k) { return this._map.has(k) ? this._map.get(k) : null; },
+        setItem(k, v) { this._map.set(k, String(v)); },
+        removeItem(k) { this._map.delete(k); }
+      };
+      globalThis.fetch = async (url) => {
+        if (String(url).includes('/api/public/channels')) {
+          return {
+            ok: true,
+            status: 200,
+            headers: new Headers(),
+            async json() {
+              return { channels: pubChRes.data.channels };
+            }
+          };
+        }
+        return {
+          ok: false,
+          status: 401,
+          headers: new Headers(),
+          async json() { return { error: 'Authentication required' }; }
+        };
+      };
+
+      const GuestStore = require('../../public/js/store.js');
+      let publicLoadedEvent = false;
+      GuestStore.subscribe((ev) => {
+        if (ev === 'public_channels_loaded') publicLoadedEvent = true;
+      });
+
+      const bootOut = await GuestStore.bootstrap();
+      assert.equal(bootOut.publicOnly, true);
+      assert.equal(publicLoadedEvent, true, 'public_channels_loaded event must fire for logged-out guest');
+      assert.equal(GuestStore.state.user, null);
+      assert.equal(GuestStore.state.channels.length, 1, 'Guest Store must hold only the 1 public channel');
+      assert.equal(GuestStore.state.channels[0].slug, 'announcements');
+      assert.equal(idbStores.channels.size, 0, 'Cached DM IndexedDB entries must be cleared even when showing public channel');
+      assert.equal(idbStores.messages.size, 0);
+    } finally {
+      globalThis.fetch = prevFetch;
+      globalThis.indexedDB = prevIndexedDB;
+      globalThis.localStorage = prevLocalStorage;
+      delete require.cache[require.resolve('../../public/js/store.js')];
+    }
+  });
 };

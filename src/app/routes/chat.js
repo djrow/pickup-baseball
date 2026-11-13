@@ -79,6 +79,19 @@ export function isPrivateEncryptedBoard(channel) {
 }
 
 /**
+ * Returns true only for the single public read-only announcements board visible to logged-out visitors.
+ */
+export function isPublicGuestChannel(channel) {
+  return Boolean(
+    channel &&
+    channel.channel_type !== 'dm' &&
+    channel.channel_type !== 'group_dm' &&
+    !isPrivateEncryptedBoard(channel) &&
+    (channel.slug === 'announcements' || channel.min_role_read === 'public')
+  );
+}
+
+/**
  * Check if a user can read or write a channel (including DM & private board membership checks)
  */
 export async function canUserAccessChannel(chatDb, user, channel, mode = 'read') {
@@ -537,6 +550,20 @@ chatRouter.get('/sync', requireAuth, async (c) => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /api/public/channels - Single Public Read-Only Channel for Logged-Out Visitors
+// ---------------------------------------------------------------------------
+chatRouter.get('/public/channels', async (c) => {
+  const chatDb = c.env && c.env.CHAT_DB;
+  if (!chatDb) return c.json({ error: 'Chat database unavailable.' }, 500);
+
+  const { results } = await chatDb.prepare(
+    "SELECT * FROM channels WHERE (slug = 'announcements' OR min_role_read = 'public') AND channel_type NOT IN ('dm', 'group_dm') AND COALESCE(is_private, 0) = 0 ORDER BY sort_order ASC, id ASC LIMIT 1"
+  ).all();
+
+  return c.json({ channels: results || [] });
+});
+
+// ---------------------------------------------------------------------------
 // GET /api/channels - List Accessible Channels
 // ---------------------------------------------------------------------------
 chatRouter.get('/channels', requireAuth, async (c) => {
@@ -826,21 +853,40 @@ async function setDmChannelHiddenState(c, hidden) {
 chatRouter.post('/channels/:id/hide', requireAuth, (c) => setDmChannelHiddenState(c, true));
 chatRouter.post('/channels/:id/unhide', requireAuth, (c) => setDmChannelHiddenState(c, false));
 
+async function formatMessagesResponse(c, user, chatDb, rows, channel) {
+  const hydrated = await hydrateMessages(chatDb, rows || []);
+  if (user) {
+    return c.json({ messages: hydrated, channel });
+  }
+  const abbr = abbreviateMemberNames(hydrated.map((m) => ({ user_id: m.author_id, name: m.author_name })));
+  const sanitized = hydrated.map((m, idx) => ({
+    ...m,
+    author_name: abbr[idx] || m.author_name,
+    reactions: (m.reactions || []).map((r) => ({ ...r, user_name: '' }))
+  }));
+  return c.json({ messages: sanitized, channel });
+}
+
 // ---------------------------------------------------------------------------
 // GET /api/channels/:id/messages - Paginated Channel / Thread History
 // ---------------------------------------------------------------------------
-chatRouter.get('/channels/:id/messages', requireAuth, async (c) => {
+chatRouter.get('/channels/:id/messages', async (c) => {
   const user = c.get('user');
   const chatDb = c.env && c.env.CHAT_DB;
   if (!chatDb) return c.json({ error: 'Chat database unavailable.' }, 500);
 
   const channel = await resolveChannel(chatDb, c.req.param('id'));
-  if (!channel) {
-    return c.json({ error: 'Channel not found.' }, 404);
-  }
-
-  if (!(await canUserAccessChannel(chatDb, user, channel, 'read'))) {
-    return c.json({ error: 'Access denied: insufficient permissions to read this channel.' }, 403);
+  if (!user) {
+    if (!channel || !isPublicGuestChannel(channel)) {
+      return c.json({ error: 'Authentication required. Please sign in.' }, 401);
+    }
+  } else {
+    if (!channel) {
+      return c.json({ error: 'Channel not found.' }, 404);
+    }
+    if (!(await canUserAccessChannel(chatDb, user, channel, 'read'))) {
+      return c.json({ error: 'Access denied: insufficient permissions to read this channel.' }, 403);
+    }
   }
 
   const beforeIdParam = c.req.query('before_id');
@@ -863,8 +909,7 @@ chatRouter.get('/channels/:id/messages', requireAuth, async (c) => {
         ) ORDER BY id ASC
       `).bind(channel.id, beforeId, limit).all();
 
-      const hydrated = await hydrateMessages(chatDb, rows || []);
-      return c.json({ messages: hydrated, channel });
+      return formatMessagesResponse(c, user, chatDb, rows, channel);
     }
   }
 
@@ -877,8 +922,7 @@ chatRouter.get('/channels/:id/messages', requireAuth, async (c) => {
       LIMIT ?
     `).bind(channel.id, parentId, parentId, limit).all();
 
-    const hydrated = await hydrateMessages(chatDb, rows || []);
-    return c.json({ messages: hydrated, channel });
+    return formatMessagesResponse(c, user, chatDb, rows, channel);
   }
 
   const { results: rows } = await chatDb.prepare(`
@@ -890,8 +934,7 @@ chatRouter.get('/channels/:id/messages', requireAuth, async (c) => {
     ) ORDER BY id ASC
   `).bind(channel.id, limit).all();
 
-  const hydrated = await hydrateMessages(chatDb, rows || []);
-  return c.json({ messages: hydrated, channel });
+  return formatMessagesResponse(c, user, chatDb, rows, channel);
 });
 
 // ---------------------------------------------------------------------------

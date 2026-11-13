@@ -768,6 +768,29 @@
     return clearStoreIdb();
   }
 
+  function loadPublicGuestChannels() {
+    return apiRequest('GET', '/api/public/channels').then(function (pubRes) {
+      if (!pubRes || !pubRes.ok || !pubRes.data || !Array.isArray(pubRes.data.channels)) {
+        return [];
+      }
+      var safePublic = [];
+      for (var i = 0; i < pubRes.data.channels.length; i++) {
+        var ch = pubRes.data.channels[i];
+        if (ch && !requiresE2eeChannel(ch)) {
+          safePublic.push(ch);
+          break;
+        }
+      }
+      if (safePublic.length > 0 && !state.user) {
+        state.channels = safePublic;
+        emit('public_channels_loaded', { channels: safePublic });
+      }
+      return safePublic;
+    }).catch(function () {
+      return [];
+    });
+  }
+
   /**
    * Bootstrap initial Clubhouse state from /api/bootstrap and IndexedDB cache.
    */
@@ -796,6 +819,12 @@
         if (res.status === 401) {
           clearLocalSessionData();
           emit('auth_required', {});
+          return loadPublicGuestChannels().then(function (pubChannels) {
+            if (pubChannels && pubChannels.length > 0) {
+              return { user: null, channels: pubChannels, publicOnly: true };
+            }
+            throw new Error((res.data && res.data.error) || 'Authentication required');
+          });
         }
         throw new Error((res.data && res.data.error) || 'Bootstrap failed');
       }
@@ -1206,6 +1235,7 @@
         if (res.status === 401) {
           clearLocalSessionData();
           emit('auth_required', {});
+          loadPublicGuestChannels();
         }
         return null;
       }
