@@ -1,5 +1,5 @@
 // Service Worker for Pickup Baseball Foundation PWA
-const CACHE_NAME = 'pbf-cache-v130';
+const CACHE_NAME = 'pbf-cache-v131';
 
 // Core app shell & pages precached on install; i18n bundles (~312 KB) are cached on demand
 const STATIC_ASSETS = [
@@ -17,6 +17,7 @@ const STATIC_ASSETS = [
   '/admin.html',
   '/404.html',
   '/css/style.css',
+  '/css/themes.css',
   '/css/clubhouse.css',
   '/js/api.js',
   '/js/crypto.js',

@@ -1,6 +1,16 @@
 /**
- * Security, Cryptography, Sanitization, Rate Limiting & RBAC Helpers
- * Isomorphic Web Crypto / Fetch implementation for Cloudflare Pages & Node.js 22+
+ * @fileoverview Security, Cryptography, Sanitization, Rate Limiting & RBAC Helpers.
+ * Isomorphic Web Crypto / Fetch implementation for Cloudflare Pages & Node.js 22+.
+ *
+ * TABLE OF CONTENTS:
+ * 1. Session Constants, Tokens & Cryptography (`generateToken`, `generateCode`, `constantTimeEqual`, `sha256Hex`)
+ * 2. HTML, Redirect & Image Sanitization     (`escapeHtml`, `sanitizeHttpUrl`, `getSafeRelativeRedirect`, `stripJpegMetadata`, `isValidRasterImageBuffer`)
+ * 3. Rate Limiting & Turnstile Verification   (`getClientIp`, `checkRateLimit`, `verifyTurnstileIfConfigured`)
+ * 4. Session & Calendar Token Resolution      (`getUserFromSession`, `ensureUserCalendarToken`, `resolveUserByCalendarToken`)
+ * 5. Channel ACLs & Route Guards              (`canAccessChannel`, `requireAuth`, `requireOrganizer`, `requireAdmin`, `requireModerator`, `rejectIfChatMuted`, `rejectIfClubhouseOptedOut`)
+ * 6. Outbound URL / SSRF Validation           (`isPrivateIpOrHost`, `validateExternalGifUrl`)
+ *
+ * @module app/security
  */
 
 export const SESSION_COOKIE_NAME = 'baseball_session';
@@ -221,6 +231,15 @@ export async function verifyTurnstileIfConfigured(env, token, remoteip) {
   }
 }
 
+/**
+ * Resolves the authenticated user profile, capabilities, and Clubhouse opt-in state for a session cookie.
+ * Automatically checks opt-in backfill when `CHAT_DB` is provided unless `options.lightweight` is set.
+ * @param {object} db - Baseball D1 binding or Hono context holding `.env`.
+ * @param {string} sessionId
+ * @param {object|null} chatDb - Clubhouse D1 binding (`CHAT_DB`).
+ * @param {{ lightweight?: boolean }} [options]
+ * @returns {Promise<object|null>} Normalized user object with boolean capability flags, or null.
+ */
 export async function getUserFromSession(db, sessionId, chatDb, options = {}) {
   if (!sessionId || !db) return null;
 

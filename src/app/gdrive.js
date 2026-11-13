@@ -1,8 +1,16 @@
 /**
- * Google Drive API v3 Client & Zero-Copy Range Streaming Engine
- * Supports 5 TB Foundation Google Drive storage pool with OAuth2 refresh token caching,
+ * @fileoverview Google Drive API v3 Client & Zero-Copy Range Streaming Engine.
+ * Supports the PBF Shared Drive storage pool with OAuth2 refresh token caching,
  * direct browser resumable upload sessions, HTTP 206 Partial Content range streaming,
- * Cloudflare Edge Cache integration, and local storage fallback for offline/test environments.
+ * Cloudflare Edge Cache integration, and local/mock fallbacks for tests.
+ *
+ * TABLE OF CONTENTS:
+ * 1. Configuration & OAuth2 Token Exchange  (`isGDriveConfigured`, `getGDriveAccessToken`)
+ * 2. Uploads & Resumable Sessions           (`initGDriveResumableSession`, `uploadGDriveBytes`, `uploadGDriveTextFile`)
+ * 3. Streaming, HTTP 206 Ranges & Edge Cache(`serveByteRangeResponse`, `streamGDriveFile`)
+ * 4. File Metadata, Deletion & Storage Quota(`getGDriveFileMetadata`, `deleteGDriveFile`, `getGDriveStorageQuota`)
+ *
+ * @module app/gdrive
  */
 
 let cachedAccessToken = null;
@@ -125,7 +133,13 @@ export async function initGDriveResumableSession(env, { fileName, mimeType, file
 }
 
 /**
- * Upload raw bytes (images, GIFs, waivers, documents) directly to Google Drive v3
+ * Uploads raw bytes (images, GIFs, waivers, documents) directly to Google Drive v3.
+ * @param {object} env - Cloudflare environment bindings.
+ * @param {object} file
+ * @param {string} file.fileName
+ * @param {string} [file.mimeType='application/octet-stream']
+ * @param {Uint8Array|ArrayBuffer} file.bytes
+ * @returns {Promise<string|null>} Drive file ID or null when unconfigured.
  */
 export async function uploadGDriveBytes(env, { fileName, mimeType = 'application/octet-stream', bytes }) {
   if (!isGDriveConfigured(env)) return null;
@@ -261,7 +275,16 @@ export function serveByteRangeResponse(bytes, mimeType, rangeHeader, cacheContro
 }
 
 /**
- * Stream a file from Google Drive v3 with HTTP 206 Partial Content Range support and Edge Caching
+ * Streams a file from Google Drive v3 with HTTP 206 Partial Content Range support and Edge Caching.
+ * @param {object} env - Cloudflare environment bindings.
+ * @param {string} driveFileId
+ * @param {string|null} rangeHeader - HTTP `Range` request header.
+ * @param {string} [fallbackMimeType='application/octet-stream']
+ * @param {string|null} [cacheKeyUrl=null] - Canonical cache key URL for Cloudflare edge caching.
+ * @param {object} [options]
+ * @param {boolean} [options.useEdgeCache=true]
+ * @param {string} [options.cacheControl='public, max-age=31536000, immutable']
+ * @returns {Promise<Response>}
  */
 export async function streamGDriveFile(env, driveFileId, rangeHeader, fallbackMimeType = 'application/octet-stream', cacheKeyUrl = null, options = {}) {
   const useEdgeCache = options && options.useEdgeCache !== false;
@@ -365,7 +388,7 @@ export async function deleteGDriveFile(env, driveFileId) {
 }
 
 /**
- * Query Google Drive 5 TB Storage Pool Quota
+ * Query PBF Shared Drive Storage Pool Quota
  */
 export async function getGDriveStorageQuota(env) {
   const FIVE_TB = 5 * 1024 * 1024 * 1024 * 1024;

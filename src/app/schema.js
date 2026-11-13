@@ -1,6 +1,13 @@
 /**
- * Unified Database Schema, Migrations & Default Volunteer Tasks
- * Compatible with Cloudflare D1 and local SQLite (via D1 adapter).
+ * @fileoverview Unified Database Schema, Idempotent Migrations & Default Volunteer Tasks.
+ * Compatible with Cloudflare D1 and local SQLite (via `src/d1-sqlite.js` adapter).
+ *
+ * TABLE OF CONTENTS:
+ * 1. BASEBALL_DB (`DEFAULT_BASEBALL_DUTIES`, `CREATE_TABLES_SQL`, `ALTER_STATEMENTS`, `ensureD1Schema`)
+ * 2. CHAT_DB     (`DEFAULT_CHAT_CHANNELS`, `CREATE_CHAT_TABLES_SQL`, `CHAT_ALTER_STATEMENTS`, `ensureChatD1Schema`)
+ * 3. Orchestration & Helpers (`ensureClubhouseOptInBackfill`, `ensureDualD1Schema`, `getDefaultDuties`, `getRequireLoginSetting`)
+ *
+ * @module app/schema
  */
 
 export const DEFAULT_BASEBALL_DUTIES = [
@@ -414,7 +421,7 @@ export const DEFAULT_CHAT_CHANNELS = [
     name: '#highlights-and-media',
     category: 'Text Channels',
     channel_type: 'text',
-    topic: 'Drop HD game photos & slow-mo videos (stored in 5 TB Google Drive); Admins can 1-click promote to the public Gallery.',
+    topic: 'Drop HD game photos & slow-mo videos (stored in PBF Shared Drive); Admins can 1-click promote to the public Gallery.',
     min_role_read: 'player',
     min_role_write: 'player',
     is_encrypted: 1,
@@ -640,7 +647,7 @@ export const CREATE_CHAT_TABLES_SQL = [
     PRIMARY KEY (muter_user_id, muted_user_id)
   )`,
 
-  // 14. Clubhouse Community GIF Library (Metadata only in D1; binary hosted in 5 TB Google Drive)
+  // 14. Clubhouse Community GIF Library (Metadata only in D1; binary hosted in PBF Shared Drive)
   `CREATE TABLE IF NOT EXISTS clubhouse_gifs (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL,
@@ -753,14 +760,23 @@ export async function ensureChatD1Schema(chatDb, force = false) {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(slug) DO NOTHING
   `;
+  const oldHighlightsTopic = 'Drop HD game photos & slow-mo videos (stored in 5 TB Google Drive); Admins can 1-click promote to the public Gallery.';
+  const newHighlightsTopic = 'Drop HD game photos & slow-mo videos (stored in PBF Shared Drive); Admins can 1-click promote to the public Gallery.';
+  const topicSyncSql = `
+    UPDATE channels SET topic = ?
+    WHERE slug = 'highlights-and-media' AND topic = ?
+  `;
   if (typeof chatDb.prepare === 'function' && typeof chatDb.batch === 'function') {
     try {
-      await chatDb.batch(DEFAULT_CHAT_CHANNELS.map((ch) =>
-        chatDb.prepare(channelSeedSql).bind(
-          ch.slug, ch.name, ch.category, ch.channel_type, ch.topic,
-          ch.min_role_read, ch.min_role_write, ch.is_encrypted, ch.sort_order
-        )
-      ));
+      await chatDb.batch([
+        ...DEFAULT_CHAT_CHANNELS.map((ch) =>
+          chatDb.prepare(channelSeedSql).bind(
+            ch.slug, ch.name, ch.category, ch.channel_type, ch.topic,
+            ch.min_role_read, ch.min_role_write, ch.is_encrypted, ch.sort_order
+          )
+        ),
+        chatDb.prepare(topicSyncSql).bind(newHighlightsTopic, oldHighlightsTopic)
+      ]);
       migratedChatDbs.add(chatDb);
       return;
     } catch (e) {}
@@ -786,6 +802,17 @@ export async function ensureChatD1Schema(chatDb, force = false) {
       console.warn(`[ensureChatD1Schema] Error seeding channel ${ch.slug}:`, e);
     }
   }
+
+  try {
+    if (typeof chatDb.prepare === 'function') {
+      const syncStmt = chatDb.prepare(topicSyncSql);
+      if (typeof syncStmt.bind === 'function') {
+        await syncStmt.bind(newHighlightsTopic, oldHighlightsTopic).run();
+      } else if (typeof syncStmt.run === 'function') {
+        syncStmt.run(newHighlightsTopic, oldHighlightsTopic);
+      }
+    }
+  } catch (e) {}
 
   migratedChatDbs.add(chatDb);
 }

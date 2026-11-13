@@ -1,9 +1,12 @@
 /**
- * public/js/gallery.js
- * Community Photo & Video Gallery with Full-Width Chronological Carousels
- * Sunday Pickup Baseball Charity Platform
+ * @fileoverview Community Photo & Video Gallery with Full-Width Chronological Carousels.
+ * Strict ES6 compatible (no optional chaining or nullish coalescing).
  *
- * Strict ES6 compatible (No optional chaining or nullish coalescing).
+ * TABLE OF CONTENTS:
+ * 1. Date Helpers, Ownership Tokens & Pending Moderation Queue (`getSundayOffsetDate`, `renderPendingQueue`)
+ * 2. Chronological Album Bookmarks, Photo & Video Carousels (`renderAlbumBookmarks`, `renderPhotos`, `renderVideos`)
+ * 3. Carousel Paddles, Lightbox Viewer & Upload/Remote Submission Form (`setupCarouselPaddles`, `setupLightbox`, `setupSubmissionForm`)
+ * 4. Toolbar Sorting & Submitter Controls (`setupToolbarListeners`, `renderUserSubmissionsTray`)
  */
 
 (function() {

@@ -186,7 +186,7 @@ gifsRouter.get('/', requireAuth, async (c) => {
 });
 
 // ---------------------------------------------------------------------------
-// POST /api/gifs/import-url - Deduplicated Fetch & Upload to 5 TB Google Drive
+// POST /api/gifs/import-url - Deduplicated Fetch & Upload to PBF Shared Drive
 // ---------------------------------------------------------------------------
 gifsRouter.post('/import-url', requireAuth, async (c) => {
   const user = c.get('user');
@@ -356,7 +356,7 @@ gifsRouter.post('/:id/use', requireAuth, async (c) => {
 });
 
 // ---------------------------------------------------------------------------
-// GET /api/gifs/:id/stream - Stream Saved GIF from 5 TB Drive + Cloudflare Edge Cache
+// GET /api/gifs/:id/stream - Stream Saved GIF from PBF Shared Drive + Cloudflare Edge Cache
 // ---------------------------------------------------------------------------
 gifsRouter.get('/:id/stream', async (c) => {
   const chatDb = c.env && c.env.CHAT_DB;

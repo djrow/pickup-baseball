@@ -1,16 +1,17 @@
 /**
- * weather.js - Client-Side Weather Engine & Smart Rainout Assistant
- * Sunday Pickup Baseball Charity Platform
- * 
+ * @fileoverview Client-Side Weather Engine & Smart Rainout Assistant.
  * Powered by Open-Meteo (100% free, zero API keys, client-side browser fetch).
- * Zero Cloudflare Worker bandwidth or function limits used.
- * 
- * Heuristic Model:
- * Evaluates 24-hour rainfall prior to 12:00 PM Sunday warmups and models
- * soil drainage and evaporation decay. Sunday afternoons stay dry; puddles
- * depend on whether fallen rain has had sufficient time to drain.
- * 
- * ES6 Compatible (Standard ECMAScript 2015)
+ * Evaluates pre-game rainfall drainage decay plus a 5-day pre-game precipitation outlook.
+ * Pure vanilla ES6 (no optional chaining/nullish coalescing).
+ *
+ * TABLE OF CONTENTS:
+ * 1. Bay Area Venue Coordinate Registry & Geocoding Cache (`extractCoordinates`, `resolveCoordsForLocation`)
+ * 2. WMO Weather Code Dictionary & Pacific Time Helpers (`getWeatherCodeInfo`, `getPacificDateParts`, `getPacificTodayDateKey`)
+ * 3. Open-Meteo Fetch & 5-Day Forecast Aggregator (`fetchForecast`, `buildDailyForecast`, `getForecastForGame`)
+ * 4. Smart Rainout Assistant Drainage Heuristic (`calculateFieldDrainage`)
+ * 5. Game Detail & Calendar Card UI Renderers (`renderDailyRainTrackHtml`, `renderAssistantWidget`, `populateCardWeatherBadges`)
+ *
+ * @global WeatherService
  */
 
 (function(window) {
@@ -920,10 +921,13 @@
   }
 
   /**
-   * Render horizontal 5-day rainfall track across the card
+   * Render horizontal 5-day rainfall & weather outlook cards across the panel
    */
   function renderDailyRainTrackHtml(dailyList) {
     if (!dailyList || !Array.isArray(dailyList) || dailyList.length === 0) return '';
+    var esc = (window.API && window.API.escapeHtml) ? window.API.escapeHtml : function(s) {
+      return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    };
     var cols = dailyList.map(function(d) {
       var isGame = Boolean(d.isGameDay);
       var isToday = Boolean(d.isToday);
@@ -936,31 +940,43 @@
       if (isToday) labels.push('Today');
       if (isGame) labels.push('Game Day');
       var tagStr = labels.length > 0 ? ' — ' + labels.join(' & ') : '';
+      var tempTitle = (d.tempMax != null && d.tempMin != null) ? ' — ' + d.tempMax + '°/' + d.tempMin + '°F' : (d.tempMax != null ? ' — High ' + d.tempMax + '°F' : '');
       var probStr = (d.prob != null && d.prob > 0) ? ' — ' + d.prob + '% rain chance' : '';
-      var title = (d.dayName || '') + ' ' + (d.dayMonth || '') + ': ' + d.rainFormatted + ' (' + (d.condition || '') + probStr + ')' + tagStr;
+      var title = (d.dayName || '') + ' ' + (d.dayMonth || '') + ': ' + d.rainFormatted + tempTitle + ' (' + (d.condition || '') + probStr + ')' + tagStr;
 
       var pills = [];
       if (isToday) pills.push('<span class="today-pill">Today</span>');
-      if (isGame) pills.push('<span class="game-day-pill">Game</span>');
+      if (isGame) pills.push('<span class="game-day-pill">Game Day</span>');
 
       var probHtml = '';
-      if (d.prob != null && d.prob >= 20) {
-        probHtml = '<span class="day-prob" style="font-size: 0.63rem; color: #0284c7; font-weight: 700;">💧' + d.prob + '%</span>';
+      if (d.prob != null) {
+        probHtml = '<span class="day-prob">💧 ' + esc(d.prob) + '%</span>';
       }
+
+      var tempHtml = '';
+      if (d.tempMax != null && d.tempMin != null) {
+        tempHtml = '<div class="day-temp">' + esc(d.tempMax) + '° / ' + esc(d.tempMin) + '°</div>';
+      } else if (d.tempMax != null) {
+        tempHtml = '<div class="day-temp">' + esc(d.tempMax) + '°F</div>';
+      }
+
+      var condHtml = d.condition ? '<div class="day-condition">' + esc(d.condition) + '</div>' : '';
 
       var metaItems = [];
       if (probHtml) metaItems.push(probHtml);
       for (var p = 0; p < pills.length; p++) metaItems.push(pills[p]);
 
-      return '<div class="five-day-rain-col ' + gameClass + (todayClass ? ' ' + todayClass : '') + '" title="' + (window.API ? window.API.escapeHtml(title) : title) + '">' +
+      return '<div class="five-day-rain-col ' + gameClass + (todayClass ? ' ' + todayClass : '') + '" title="' + esc(title) + '">' +
         '<div class="day-head">' +
-          '<span class="day-title">' + (d.dayName || '') + '</span>' +
-          (d.dayMonth ? '<span class="day-date">' + d.dayMonth + '</span>' : '') +
+          '<span class="day-title">' + esc(d.dayName || '') + '</span>' +
+          (d.dayMonth ? '<span class="day-date">' + esc(d.dayMonth) + '</span>' : '') +
         '</div>' +
         '<div class="day-precip-row">' +
-          '<span class="day-emoji">' + (d.emoji || '☀️') + '</span>' +
-          '<span class="day-rain ' + rainClass + '">' + d.rainFormatted + '</span>' +
+          '<span class="day-emoji">' + esc(d.emoji || '☀️') + '</span>' +
+          '<span class="day-rain ' + rainClass + '">' + esc(d.rainFormatted) + '</span>' +
         '</div>' +
+        tempHtml +
+        condHtml +
         (metaItems.length > 0 ? '<div class="day-tags-row">' + metaItems.join('') + '</div>' : '') +
       '</div>';
     });

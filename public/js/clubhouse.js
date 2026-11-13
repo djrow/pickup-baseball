@@ -1,6 +1,14 @@
 /**
- * Pickup Baseball Clubhouse — 4-Column Discord UI Controller (WP-6)
- * Connects ClubhouseStore, ClubhouseCrypto, and ClubhouseRTC to the DOM.
+ * @fileoverview Pickup Baseball Clubhouse — 4-Column Discord UI Controller (WP-6).
+ * Connects `ClubhouseStore`, `ClubhouseCrypto`, and `ClubhouseRTC` to the DOM.
+ *
+ * TABLE OF CONTENTS:
+ * 1. Sidebar Collapse State, Role Checks & Modals (`openReasonModal`, `openBoardModal`)
+ * 2. Channel Sidebar, Opt-In Toggle & E2EE Key Verification (`renderChannelSidebar`, `openVerifyKeysModal`)
+ * 3. Message Stream, Delegated Actions & Thread Drawer (`renderMessageStream`, `openThreadDrawer`)
+ * 4. Right Context Rail: Next Game Card, Voice Video, Members Directory & Moderation Tab
+ * 5. Upload Pipeline & GIF Selector Modal (`handleFileUpload`, `openGifPicker`, `handleImportGifUrl`)
+ * 6. DOM Event Wiring & Application Bootstrap (`initDomEvents`, `initClubhouseApp`)
  */
 (function (root) {
   'use strict';
@@ -1872,13 +1880,13 @@
       if (!res.ok || !res.data) return;
       var d = res.data;
       if (badgeEl) {
-        badgeEl.textContent = d.storageProvider === 'gdrive' ? '5 TB Google Drive' : 'Local Dev Fallback';
+        badgeEl.textContent = d.storageProvider === 'gdrive' ? 'PBF Shared Drive' : 'Local Dev Fallback';
       }
       if (textEl) {
         var attCount = (d.chatDb && d.chatDb.attachments !== undefined)
           ? d.chatDb.attachments
           : (d.attachments ? d.attachments.completed_count : 0);
-        textEl.textContent = 'Completed Attachments: ' + attCount + ' • Pool Capacity: 5 TB Google Drive';
+        textEl.textContent = 'Completed Attachments: ' + attCount + ' • Storage: PBF Shared Drive';
       }
     });
   }
@@ -1977,7 +1985,7 @@
     }
 
     if (filtered.length === 0) {
-      gridEl.innerHTML = '<div style="grid-column:1/-1;font-size:12px;color:var(--ch-text-muted);padding:10px 4px;">No matching GIFs. Paste an https:// GIF link above to save it to 5 TB Drive!</div>';
+      gridEl.innerHTML = '<div style="grid-column:1/-1;font-size:12px;color:var(--ch-text-muted);padding:10px 4px;">No matching GIFs. Paste an https:// GIF link above to save it to PBF Shared Drive!</div>';
       return;
     }
 
@@ -2054,7 +2062,7 @@
     var isPrivateChannel = Boolean(ch && (ch.channel_type === 'dm' || ch.channel_type === 'group_dm' || ch.is_private === 1));
 
     if (submitBtn) submitBtn.disabled = true;
-    if (statusEl) statusEl.textContent = 'Fetching & saving to 5 TB Google Drive...';
+    if (statusEl) statusEl.textContent = 'Fetching & saving to PBF Shared Drive...';
 
     Store.apiRequest('POST', '/api/gifs/import-url', {
       url: rawUrl,
@@ -2090,8 +2098,8 @@
       if (titleInput) titleInput.value = '';
       if (statusEl) {
         statusEl.textContent = res.data.deduplicated
-          ? '✓ Already cached in 5 TB Drive — reused without duplicating!'
-          : '✓ Saved once to 5 TB Google Drive & posted!';
+          ? '✓ Already cached in PBF Shared Drive — reused without duplicating!'
+          : '✓ Saved once to PBF Shared Drive & posted!';
       }
       renderGifGrid();
       return sendGifToActiveChannel(saved.url, saved.title, null);

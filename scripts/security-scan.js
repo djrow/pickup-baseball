@@ -235,11 +235,11 @@ function checkRouteAuthGuards() {
     'auth.js:POST:/request-code',       // Alias of /send-code (Turnstile + rate limited)
     'auth.js:POST:/verify-code',        // Public OTP verification (rate limited + SHA-256 code)
     'auth.js:POST:/logout',             // Clears own session cookie
-    'events.js:POST:/:id/rsvp',         // Conditional require_login + Turnstile + management_token
-    'events.js:POST:/:id/comments',     // Conditional require_login + Turnstile + attendee validation
-    'events.js:POST:/:id/bp-order',     // Verified by signed-in user or valid RSVP token
-    'events.js:PUT:/:id/bp-order/:signupId',
-    'events.js:DELETE:/:id/bp-order/:signupId',
+    'rsvps.js:POST:/:id/rsvp',          // Conditional require_login + Turnstile + management_token
+    'rsvps.js:POST:/:id/comments',      // Conditional require_login + Turnstile + attendee validation
+    'bp-duties.js:POST:/:id/bp-order',  // Verified by signed-in user or valid RSVP token
+    'bp-duties.js:PUT:/:id/bp-order/:signupId',
+    'bp-duties.js:DELETE:/:id/bp-order/:signupId',
     'media.js:POST:/',                  // Intentional zero-login photo drop (Turnstile + magic/file checks)
     'media.js:DELETE:/:id',             // Protected inside handleMediaDelete via organizer OR delete_token
     'media.js:POST:/:id/delete'         // Protected inside handleMediaDelete via organizer OR delete_token
@@ -510,6 +510,82 @@ async function checkLiveProduction(origin) {
   }
 }
 
+/**
+ * 8. Audit PWA asset cache & version parity: every public HTML/JS/CSS asset must
+ *    appear in public/sw.js STATIC_ASSETS and every HTML script/css tag must carry ?v=<CURRENT_APP_VERSION>.
+ */
+function checkPwaAssetSync() {
+  const swPath = path.join(ROOT, 'public', 'sw.js');
+  const swSrc = fs.readFileSync(swPath, 'utf8');
+  const verSrc = fs.readFileSync(path.join(ROOT, 'src', 'app', 'version.js'), 'utf8');
+  const verMatch = verSrc.match(/CURRENT_APP_VERSION\s*=\s*'(\d+)'/);
+  const appVer = verMatch ? verMatch[1] : null;
+
+  const htmlFiles = fs.readdirSync(path.join(ROOT, 'public')).filter((f) => f.endsWith('.html'));
+  const jsFiles = fs.readdirSync(path.join(ROOT, 'public', 'js')).filter((f) => f.endsWith('.js')).map((f) => `/js/${f}`);
+  const cssFiles = fs.readdirSync(path.join(ROOT, 'public', 'css')).filter((f) => f.endsWith('.css')).map((f) => `/css/${f}`);
+  const expectedAssets = [...htmlFiles.map((f) => `/${f}`), ...jsFiles, ...cssFiles];
+
+  const missingFromSw = expectedAssets.filter((p) => !swSrc.includes(`'${p}'`) && !swSrc.includes(`"${p}"`));
+  const versionIssues = [];
+  if (appVer) {
+    if (!swSrc.includes(`pbf-cache-v${appVer}`)) {
+      versionIssues.push(`sw.js CACHE_NAME missing pbf-cache-v${appVer}`);
+    }
+    for (const htmlFile of htmlFiles) {
+      const html = fs.readFileSync(path.join(ROOT, 'public', htmlFile), 'utf8');
+      for (const m of html.matchAll(/(?:src|href)="(\/(?:js|css)\/[^"]+)"/g)) {
+        if (!m[1].endsWith(`?v=${appVer}`)) {
+          versionIssues.push(`${htmlFile} -> ${m[1]} (expected ?v=${appVer})`);
+        }
+      }
+    }
+  }
+
+  if (missingFromSw.length || versionIssues.length) {
+    const details = [...missingFromSw.map((p) => `missing from sw.js: ${p}`), ...versionIssues];
+    record('FAIL', 'PWA Asset & Version Parity', details.join('; '));
+  } else {
+    record('PASS', 'PWA Asset & Version Parity', `${expectedAssets.length} static assets synced at v${appVer}`);
+  }
+}
+
+/**
+ * 9. Audit i18n dictionary completeness against canonical EN_DICT in public/js/api.js.
+ */
+function checkI18nKeyParity() {
+  const apiSrc = fs.readFileSync(path.join(ROOT, 'public', 'js', 'api.js'), 'utf8');
+  const enMatch = apiSrc.match(/const EN_DICT = \{([\s\S]*?)\n\};/);
+  if (!enMatch) {
+    record('FAIL', 'i18n Translation Key Parity', 'Could not locate EN_DICT in public/js/api.js');
+    return;
+  }
+
+  const enObj = Function(`return {${enMatch[1]}}`)();
+  const enKeys = Object.keys(enObj);
+  const i18nDir = path.join(ROOT, 'public', 'i18n');
+  const jsonFiles = fs.readdirSync(i18nDir).filter((f) => f.endsWith('.json')).sort();
+  const issues = [];
+
+  for (const file of jsonFiles) {
+    try {
+      const dict = JSON.parse(fs.readFileSync(path.join(i18nDir, file), 'utf8'));
+      const missing = enKeys.filter((k) => !(k in dict));
+      if (missing.length) {
+        issues.push(`${file} missing ${missing.length} key(s): ${missing.slice(0, 3).join(', ')}`);
+      }
+    } catch (err) {
+      issues.push(`${file} invalid JSON (${err.message})`);
+    }
+  }
+
+  if (issues.length) {
+    record('FAIL', 'i18n Translation Key Parity', issues.join('; '));
+  } else {
+    record('PASS', 'i18n Translation Key Parity', `${jsonFiles.length} language bundles match all ${enKeys.length} EN_DICT keys`);
+  }
+}
+
 async function main() {
   console.log('🛡️  Pickup Baseball Foundation — Security Scan\n');
 
@@ -520,6 +596,8 @@ async function main() {
   checkSecurityPolicyFiles();
   checkSecretAndFileHygiene();
   checkNpmAudit();
+  checkPwaAssetSync();
+  checkI18nKeyParity();
 
   if (liveOrigin) {
     console.log(`\n🌐 Running live production probes against ${liveOrigin}...\n`);

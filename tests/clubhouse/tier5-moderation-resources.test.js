@@ -1023,7 +1023,7 @@ module.exports = async function runTier5(t, ctx) {
     assert.ok(!/\son(click|change|submit|load|error|input|keydown)=/i.test(clubhouseHtml), 'clubhouse.html must have zero inline handlers');
   });
 
-  await t.test('T5.13: Clubhouse GIF Selector (Starter Catalog + 5 TB Drive Web Link Import, SSRF Guard, Dedup & Stream)', async () => {
+  await t.test('T5.13: Clubhouse GIF Selector (Starter Catalog + PBF Shared Drive Web Link Import, SSRF Guard, Dedup & Stream)', async () => {
     const http = require('node:http');
     const rootDir = path.join(__dirname, '..', '..');
 
@@ -1107,7 +1107,7 @@ module.exports = async function runTier5(t, ctx) {
       assert.equal(unconfiguredRes.status, 500);
       assert.match(String(unconfiguredRes.data.error || ''), /Google Drive storage is not configured/i);
 
-      // Verify true 5 TB Google Drive upload + zero D1 binary payload using MockGoogleDriveService
+      // Verify true PBF Shared Drive upload + zero D1 binary payload using MockGoogleDriveService
       const { createMockGDriveServer } = require('../helpers/mock-gdrive');
       const { app: honoApp } = await import('../../src/app/index.js');
       const mockDrive = await createMockGDriveServer();

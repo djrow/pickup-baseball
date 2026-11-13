@@ -8,7 +8,7 @@
  * - Check 3: Security Headers & CSRF Verification (5 tests)
  * - Check 4: Delta Sync Efficiency Verification (6 tests)
  * - Check 5: E2EE Key Vault & Channel Key Wrapping (5 tests)
- * - Check 6: 5 TB Google Drive Resumable Flow & Streaming (6 tests)
+ * - Check 6: PBF Shared Drive Resumable Flow & Streaming (6 tests)
  * - Check 7: Scoped WebRTC Signaling Verification (5 tests)
  * - Check 8: Live Baseball Bridge Verification (6 tests)
  * Total: 45 feature tests
@@ -530,9 +530,9 @@ async function runTier1(t, ctx) {
   });
 
   // =========================================================================
-  // CHECK 6: 5 TB Google Drive Resumable Flow, Range Streaming & Gallery Promotion
+  // CHECK 6: PBF Shared Drive Resumable Flow, Range Streaming & Gallery Promotion
   // =========================================================================
-  await t.test('Tier 1 Check 6: 5 TB Google Drive Resumable Flow, Range Streaming & Gallery Promotion', async (c6) => {
+  await t.test('Tier 1 Check 6: PBF Shared Drive Resumable Flow, Range Streaming & Gallery Promotion', async (c6) => {
     let attachmentId = null;
 
     await c6.test('T1.6.1: Resumable Upload Initialization', async (tSub) => {

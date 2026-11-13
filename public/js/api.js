@@ -1,6 +1,16 @@
 /**
- * Standard API Helpers and Navigation for Pickup Baseball Charity
- * Vanilla JS, no external dependencies, durable for 10+ years.
+ * @fileoverview Standard API Helpers, i18n Loader, Theming & Shared Navigation for Pickup Baseball Charity.
+ * Vanilla ES6 (no bundler, no optional chaining/nullish coalescing).
+ *
+ * TABLE OF CONTENTS:
+ * 1. EN_DICT Canonical English i18n Dictionary
+ * 2. Language, Theme & Color Palette Controls (`getLang`, `t`, `initI18n`, `initTheme`, `renderFooter`)
+ * 3. Service Worker & Version Update Lifecycle (`initAppUpdater`, `triggerAppUpdate`)
+ * 4. Auth/User Cache & Core Fetch Wrapper (`request`, `getMe`, `logout`, `clearDataCaches`)
+ * 5. Domain API Wrappers (Events, RSVPs, BP Order, Auth, Users, Waivers, Admin Settings)
+ * 6. Shared Modals, Date/Pacific Timezone Helpers, ICS Subscribe Panel & Media Embeds
+ *
+ * @global API
  */
 
 const EN_DICT = {
@@ -311,7 +321,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '130',
+  CLIENT_VERSION: '131',
 
   // Current user cache
   currentUser: null,
@@ -1108,6 +1118,15 @@ const API = {
     }
   },
 
+  /**
+   * Executes an HTTP request against `/api/...` with automatic credentials, JSON handling,
+   * cache busting (`noStore`), and `X-App-Version` mismatch detection.
+   * @param {string} method - HTTP method (`GET`, `POST`, `PUT`, `PATCH`, `DELETE`).
+   * @param {string} url - Request path.
+   * @param {object|FormData|string|null} [body] - JSON payload or FormData.
+   * @param {{ headers?: object, noStore?: boolean }} [opts]
+   * @returns {Promise<any>}
+   */
   async request(method, url, body, opts) {
     const options = opts || {};
     const init = { method: method };

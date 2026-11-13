@@ -1,5 +1,11 @@
 /**
- * Event Details, Simplified Group RSVP (Players, Spectators & Group Tasks), and Discussion logic
+ * @fileoverview Event Details, Simplified Group RSVP (Players, Spectators & Group Tasks), Rainout/Attendance & BP Order UI.
+ *
+ * TABLE OF CONTENTS:
+ * 1. Event Initialization, Fetching & Main Details Banner (`initEvent`, `loadEventData`, `renderEventDetails`)
+ * 2. Attendee Roster, Discussion Comments & Volunteer Task Checklist (`renderAttendeesRoster`, `renderComments`, `renderTasksChecklist`)
+ * 3. Group RSVP Form, Hero Credit Flow & Organizer Rainout/Turnout Panels (`setupRsvpState`, `renderOrganizerRainoutPanel`, `setupRsvpForm`)
+ * 4. Batting Practice (BP) Order Signup Grid & Modal (`renderBpOrder`, `openBpModal`, `setupBpOrderUi`)
  */
 
 let eventId = null;

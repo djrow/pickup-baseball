@@ -1,5 +1,13 @@
 /**
- * Admin & Organizer Dashboard: Game Scheduling, Task Templates, User Roles, Moderation & Highlights
+ * @fileoverview Admin & Organizer Dashboard: Game Scheduling, Task Templates, User Roles, Moderation & Highlights.
+ *
+ * TABLE OF CONTENTS:
+ * 1. Role Checks, Initialization & Dual-DB Backup Archive (`initAdmin`, `setupAdminBackupButton`)
+ * 2. Task Builder & Default Duties Template Editor (`setupTaskBuilder`, `setupDefaultTemplateEditor`)
+ * 3. Create Game, Invite Whitelist & Game Management Cards (`setupCreateForm`, `loadAdminGames`, `renderTaskManagerContent`)
+ * 4. User Role, Waiver, Moderator & Mute Controls (`setupAdminUserManagement`)
+ * 5. Site Policy Settings, Banned Emails & Security Controls (`setupAdminSecurity`)
+ * 6. Community Highlights Posts & Media Moderation (`setupCommunityHighlightsAdmin`, `setupMediaCarouselsAdmin`)
  */
 
 let orgDefaultDuties = [];

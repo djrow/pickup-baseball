@@ -1,10 +1,19 @@
 /**
- * Pickup Baseball Clubhouse — Zero-Knowledge Client-Side Cryptography Engine (WP-5)
- * Uses native Web Crypto API (window.crypto.subtle):
+ * @fileoverview Pickup Baseball Clubhouse — Zero-Knowledge Client-Side Cryptography Engine (WP-5).
+ * Uses native Web Crypto API (`window.crypto.subtle`):
  * - Identity & Key Agreement: ECDH (P-256) + ECDSA (P-256)
  * - Message & Media Payload Encryption: AES-GCM-256 (96-bit random IV, 128-bit auth tag)
  * - Multi-Device Key Backup Vault: PBKDF2-SHA256 (600,000 iterations) -> AES-GCM-256
  * - Client-Side Privacy Guard: Binary JPEG EXIF/GPS Metadata Stripper (APP1..APP15, COM)
+ *
+ * TABLE OF CONTENTS:
+ * 1. Base64 / UTF-8 / Indexing Utilities
+ * 2. ECDH P-256 Identity Generation, Wrap/Unwrap & Safety Number Fingerprints
+ * 3. Channel AES-GCM-256 Encryption / Decryption (Text & Binary Attachments)
+ * 4. PBKDF2-SHA256 Multi-Device Recovery Vault & Peer Verification Store
+ * 5. Client-Side JPEG EXIF/GPS Metadata Stripper
+ *
+ * @global ClubhouseCrypto
  */
 (function (root) {
   'use strict';

@@ -770,7 +770,7 @@ mediaRouter.delete('/:id', handleMediaDelete);
 mediaRouter.post('/:id/delete', handleMediaDelete);
 
 // ===========================================================================
-// 5 TB GOOGLE DRIVE MEDIA ENGINE & CLUBHOUSE ATTACHMENTS (/api/attachments/*)
+// PBF SHARED DRIVE MEDIA ENGINE & CLUBHOUSE ATTACHMENTS (/api/attachments/*)
 // ===========================================================================
 
 const ALLOWED_ATTACHMENT_MIME_TYPES = new Set([
@@ -1253,7 +1253,7 @@ attachmentsRouter.delete('/:id', requireAuth, async (c) => {
 });
 
 // ---------------------------------------------------------------------------
-// GET /api/admin/storage-status - 5 TB Google Drive & Dual-D1 Metrics (Admin)
+// GET /api/admin/storage-status - PBF Shared Drive & Dual-D1 Metrics (Admin)
 // ---------------------------------------------------------------------------
 export async function getAdminStorageStatusHandler(c) {
   const chatDb = c.env && c.env.CHAT_DB;

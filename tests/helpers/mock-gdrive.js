@@ -7,7 +7,7 @@
  * - Chunked Byte-Range Uploads (PUT /upload/drive/v3/files?upload_id=...)
  * - Zero-Copy Range Streaming with HTTP 206 Partial Content (GET /drive/v3/files/:id?alt=media)
  * - Full Media Download with HTTP 200 (GET /drive/v3/files/:id?alt=media)
- * - 5 TB Storage Quota & Metric Reporting (GET /drive/v3/about?fields=storageQuota)
+ * - PBF Shared Drive Storage Quota & Metric Reporting (GET /drive/v3/about?fields=storageQuota)
  * - File Metadata Retrieval (GET /drive/v3/files/:id)
  */
 

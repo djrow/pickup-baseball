@@ -7,7 +7,7 @@
   <link rel="shortcut icon" href="/favicon.ico" />
   <link rel="icon" type="image/svg+xml" href="/logo.svg" />
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png" />
-  <link rel="stylesheet" href="/css/clubhouse.css?v=130" />
+  <link rel="stylesheet" href="/css/clubhouse.css?v=131" />
 </head>
 <body class="clubhouse-body">
   <div class="clubhouse-app" id="clubhouse-app">
@@ -50,7 +50,7 @@
         </div>
         <div class="ch-user-quick-actions">
           <a href="/index.html" class="ch-user-quick-btn" id="btn-user-calendar" title="Sunday Game Schedule &amp; RSVPs">📅 Game Calendar</a>
-          <button type="button" class="ch-user-quick-btn" id="btn-user-vault" title="E2EE Security Vault, Privacy Relay &amp; 5 TB Drive Status">🔐 Security Vault</button>
+          <button type="button" class="ch-user-quick-btn" id="btn-user-vault" title="E2EE Security Vault, Privacy Relay &amp; PBF Shared Drive Status">🔐 Security Vault</button>
         </div>
       </footer>
     </aside>
@@ -107,7 +107,7 @@
       <!-- Composer Bar -->
       <div class="ch-composer-wrap" id="ch-drop-zone">
         <div class="ch-upload-progress hidden" id="ch-upload-progress">
-          <div id="ch-upload-status-text">Uploading to 5 TB Google Drive...</div>
+          <div id="ch-upload-status-text">Uploading to PBF Shared Drive...</div>
           <div class="ch-progress-track">
             <div class="ch-progress-fill" id="ch-upload-progress-bar"></div>
           </div>
@@ -119,7 +119,7 @@
             <div class="ch-gif-tabs" id="ch-gif-tabs">
               <button type="button" class="ch-gif-tab active" data-gif-tab="all">All</button>
               <button type="button" class="ch-gif-tab" data-gif-tab="starter">Starter Pack</button>
-              <button type="button" class="ch-gif-tab" data-gif-tab="drive">5 TB Drive</button>
+              <button type="button" class="ch-gif-tab" data-gif-tab="drive">PBF Shared Drive</button>
             </div>
             <button type="button" class="ch-icon-btn" id="btn-close-gif-picker" aria-label="Close GIF selector">✕</button>
           </div>
@@ -131,7 +131,7 @@
             <input type="text" class="ch-gif-input ch-gif-title-input" id="ch-gif-title-input" placeholder="Short label (optional)" maxlength="80" />
             <button type="submit" class="ch-send-btn ch-gif-import-btn" id="btn-import-gif-url">Save &amp; Post</button>
           </form>
-          <div class="ch-gif-import-status" id="ch-gif-import-status">Saved once to 5 TB Google Drive &amp; edge-cached (0 D1 binary storage; encrypted inside E2EE DMs).</div>
+          <div class="ch-gif-import-status" id="ch-gif-import-status">Saved once to PBF Shared Drive &amp; edge-cached (0 D1 binary storage; encrypted inside E2EE DMs).</div>
           <div class="ch-gif-grid" id="ch-gif-grid">
             <!-- Populated dynamically by clubhouse.js -->
           </div>
@@ -256,7 +256,7 @@
   </div>
 
   <!-- ====================================================================
-       E2EE SECURITY VAULT, PRIVACY RELAY & 5 TB DRIVE QUOTA MODAL
+       E2EE SECURITY VAULT, PRIVACY RELAY & PBF SHARED DRIVE QUOTA MODAL
        ==================================================================== -->
   <div class="ch-modal-backdrop hidden" id="ch-vault-modal">
     <div class="ch-modal" role="dialog" aria-labelledby="ch-vault-modal-title">
@@ -286,7 +286,7 @@
 
       <div class="ch-widget-card" id="ch-admin-storage-widget" style="margin-bottom:0;">
         <div class="ch-widget-title">
-          <span>☁️ 5 TB Google Drive Media Engine</span>
+          <span>☁️ PBF Shared Drive Media Engine</span>
           <span id="ch-storage-provider-badge" class="ch-badge">Checking...</span>
         </div>
         <div id="ch-storage-quota-text" style="font-size:12px;color:var(--ch-text-secondary);">
@@ -440,9 +440,9 @@
     </div>
   </div>
 
-  <script src="/js/crypto.js?v=130"></script>
-  <script src="/js/store.js?v=130"></script>
-  <script src="/js/rtc.js?v=130"></script>
-  <script src="/js/clubhouse.js?v=130"></script>
+  <script src="/js/crypto.js?v=131"></script>
+  <script src="/js/store.js?v=131"></script>
+  <script src="/js/rtc.js?v=131"></script>
+  <script src="/js/clubhouse.js?v=131"></script>
 </body>
 </html>

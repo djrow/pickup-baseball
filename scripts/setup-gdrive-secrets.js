@@ -37,7 +37,7 @@ function ask(rl, question) {
 
 async function main() {
   console.log('\n============================================================');
-  console.log('⚾ Pickup Baseball Clubhouse — 5 TB Google Drive Secret Setup');
+  console.log('⚾ Pickup Baseball Clubhouse — PBF Shared Drive Secret Setup');
   console.log(`   Target Cloudflare Pages Project: ${PROJECT_NAME}`);
   console.log('============================================================\n');
 

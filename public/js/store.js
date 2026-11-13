@@ -1,8 +1,15 @@
 /**
- * Pickup Baseball Clubhouse — IndexedDB Local Cache, Adaptive Delta Sync & Resumable Media Uploader (WP-5)
- * - IndexedDB persistence (pickup_clubhouse_db) for instant zero-latency channel rendering
- * - Adaptive Delta Sync polling (4s active, 8s idle visible, 60s background voice, instant wake-up on visibilitychange)
- * - Direct-to-Google-Drive Resumable Chunked Uploader with local dev fallback & EXIF stripping
+ * @fileoverview Pickup Baseball Clubhouse — IndexedDB Cache, ECDH Key Manager, Adaptive Delta Sync & Resumable Uploader (WP-5).
+ *
+ * TABLE OF CONTENTS:
+ * 1. Pub/Sub Event Bus & IndexedDB Persistence (`subscribe`, `openStoreDb`, `saveChannelsToIdb`, `saveMessagesToIdb`)
+ * 2. REST Request Helper & Channel E2EE Key Manager (`apiRequest`, `ensureChannelE2eeKey`, `getChannelVerificationInfo`)
+ * 3. Message Decryption, Bootstrap & CRUD (`maybeDecryptMessage`, `bootstrap`, `fetchChannelMessages`, `sendMessage`, `editMessage`)
+ * 4. Media Optimizer & Google Drive Resumable Upload (`maybeOptimizeChatImage`, `uploadAttachment`, `uploadChunksToGDrive`)
+ * 5. Adaptive Delta Sync Loop (4s active / 8s idle / 60s background voice) (`pollDeltaSync`, `applySyncEventToState`)
+ * 6. Channel/Moderation/Report Actions & Public Exports
+ *
+ * @global ClubhouseStore
  */
 (function (root) {
   'use strict';
@@ -1233,7 +1240,7 @@
   }
 
   /**
-   * Direct Resumable Media Uploader (5 TB Google Drive or Local Fallback) with JPEG EXIF stripping.
+   * Direct Resumable Media Uploader (PBF Shared Drive or Local Fallback) with JPEG EXIF stripping.
    */
   function uploadAttachment(channelId, file, onProgress) {
     var progressCb = typeof onProgress === 'function' ? onProgress : function () {};
@@ -1345,7 +1352,7 @@
         }
         offset = end;
         var pct = Math.min(92, Math.round(15 + (offset / total) * 77));
-        progressCb(pct, 'Uploading to 5 TB Google Drive (' + Math.round((offset / total) * 100) + '%)...');
+        progressCb(pct, 'Uploading to PBF Shared Drive (' + Math.round((offset / total) * 100) + '%)...');
         if (offset < total && (res.status === 308 || res.ok)) {
           return nextChunk();
         }
