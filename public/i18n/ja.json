@@ -213,7 +213,7 @@
   "calendar.prospective_badge": "📅 予定",
   "calendar.pickup_reminder": "ブッシュロード・パークで毎週日曜正午に無料コミュニティ草野球を開催中！",
   "calendar.view_details": "出欠登録＆試合詳細を見る →",
-  "calendar.add_to_calendar": "カレンダー登録 (.ics)",
+  "calendar.add_to_calendar": "全試合に登録 (.ics)",
   "calendar.export_btn": "📥 スケジュールを書き出す (.ics)",
   "calendar.sync_checking": "クラウドと同期中…",
   "calendar.sync_just_now": "クラウド同期済み • たった今",
@@ -222,7 +222,7 @@
   "calendar.sync_offline_cached": "オフライン — 保存済みスケジュール ({time})",
   "calendar.sync_offline": "オフライン — 保存済みスケジュールを表示中",
   "calendar.sync_offline_empty": "オフライン — クラウドに接続できません",
-  "calendar.subscribe_title": "🔄 クラウドカレンダー自動同期 (.ics)",
+  "calendar.subscribe_title": "🔄 全試合カレンダー自動同期 (.ics)",
   "calendar.subscribe_desc": "一度登録すれば、新規日程、球場変更、雨天中止の通知がお使いのスマホやパソコンに自動で反映されます。",
   "calendar.subscribe_apple_btn": "🍎 Apple / Outlook (自動同期)",
   "calendar.subscribe_google_btn": "📅 Googleカレンダー (自動同期)",
@@ -259,5 +259,7 @@
   "rules.full_link": "📖 ウェブアプリのハンドブックで日曜ルールの詳細を読む ↗",
   "footer.copyright": "© 2026 Pickup Baseball Foundation. Apache License 2.0（Apache-2.0）に基づき提供されています。",
   "nav.gallery": "ギャラリー＆アート",
-  "nav.gallery_title": "写真・動画・コミュニティアート"
+  "nav.gallery_title": "写真・動画・コミュニティアート",
+  "calendar.subscribe_game_btn": "🔄 この試合に登録 (.ics)",
+  "event.calendar_label": "試合カレンダー"
 }

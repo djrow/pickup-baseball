@@ -2401,26 +2401,6 @@
       mobileBackdrop.addEventListener('click', closeMobileDrawers);
     }
 
-    // Left rail navigation (#rail-home-btn)
-    var railHomeBtn = el('rail-home-btn');
-    if (railHomeBtn) {
-      railHomeBtn.addEventListener('click', function () {
-        railHomeBtn.classList.add('active');
-        switchContextTab('sunday');
-        renderChannelSidebar();
-        var chs = Store.state.channels || [];
-        for (var i = 0; i < chs.length; i++) {
-          if (chs[i].slug === 'general') {
-            selectTextChannel(chs[i].id);
-            break;
-          }
-        }
-        if (isNarrowViewport(720)) {
-          openMobileSidebar();
-        }
-      });
-    }
-
     // Close thread button (#btn-close-thread)
     var closeThreadBtn = el('btn-close-thread');
     if (closeThreadBtn) {
@@ -2558,7 +2538,7 @@
     }
 
     // Vault modal
-    var vaultBtn = el('rail-vault-btn');
+    var vaultBtn = el('btn-user-vault');
     var dmOpenVaultBtn = el('btn-dm-open-vault');
     var vaultModal = el('ch-vault-modal');
     var closeVaultBtn = el('btn-close-vault-modal');

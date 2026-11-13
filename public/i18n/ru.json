@@ -213,7 +213,7 @@
   "calendar.prospective_badge": "📅 Предварительно",
   "calendar.pickup_reminder": "Бесплатный любительский бейсбол каждое воскресенье в 12:00 в парке Бушрод!",
   "calendar.view_details": "Записаться и посмотреть детали игры →",
-  "calendar.add_to_calendar": "Подписаться (.ics)",
+  "calendar.add_to_calendar": "Подписка на все игры (.ics)",
   "calendar.export_btn": "📥 Экспорт расписания (.ics)",
   "calendar.sync_checking": "Синхронизация с облаком…",
   "calendar.sync_just_now": "Синхронизировано • Только что",
@@ -222,7 +222,7 @@
   "calendar.sync_offline_cached": "Офлайн — сохраненное расписание ({time})",
   "calendar.sync_offline": "Офлайн — показ сохраненного расписания",
   "calendar.sync_offline_empty": "Офлайн — нет связи с облаком",
-  "calendar.subscribe_title": "🔄 Прямая синхронизация календаря (.ics)",
+  "calendar.subscribe_title": "🔄 Синхронизация всех игр (.ics)",
   "calendar.subscribe_desc": "Подпишитесь один раз, чтобы новые игры, смена полей и отмены из-за дождя обновлялись автоматически в вашем телефоне или компьютере.",
   "calendar.subscribe_apple_btn": "🍎 Apple / Outlook (Прямая синхронизация)",
   "calendar.subscribe_google_btn": "📅 Google Календарь (Прямая синхронизация)",
@@ -259,5 +259,7 @@
   "rules.full_link": "📖 Читать полные правила воскресной игры в Руководстве ↗",
   "footer.copyright": "© 2026 Pickup Baseball Foundation. Лицензия Apache 2.0 (Apache-2.0).",
   "nav.gallery": "Галерея и творчество",
-  "nav.gallery_title": "Галерея фото, видео и творчества"
+  "nav.gallery_title": "Галерея фото, видео и творчества",
+  "calendar.subscribe_game_btn": "🔄 Подписка на игру (.ics)",
+  "event.calendar_label": "Календарь игры"
 }

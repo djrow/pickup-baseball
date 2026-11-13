@@ -213,7 +213,7 @@
   "calendar.prospective_badge": "📅 Envisagé",
   "calendar.pickup_reminder": "Baseball amical communautaire et gratuit tous les dimanches à midi à Bushrod Park !",
   "calendar.view_details": "S'inscrire & Voir les Détails du Match →",
-  "calendar.add_to_calendar": "S'abonner (.ics)",
+  "calendar.add_to_calendar": "S'abonner à Tout (.ics)",
   "calendar.export_btn": "📥 Exporter le Calendrier (.ics)",
   "calendar.sync_checking": "Synchronisation avec le cloud…",
   "calendar.sync_just_now": "Synchronisé • À l'instant",
@@ -222,7 +222,7 @@
   "calendar.sync_offline_cached": "Hors ligne — calendrier enregistré ({time})",
   "calendar.sync_offline": "Hors ligne — affichage du calendrier enregistré",
   "calendar.sync_offline_empty": "Hors ligne — impossible de joindre le cloud",
-  "calendar.subscribe_title": "🔄 Synchronisation en Direct du Calendrier (.ics)",
+  "calendar.subscribe_title": "🔄 Synchronisation en Direct — Tous les Matchs (.ics)",
   "calendar.subscribe_desc": "Abonnez-vous une fois pour que les nouveaux matchs, changements de terrain et alertes météo se mettent à jour automatiquement sur votre téléphone ou ordinateur.",
   "calendar.subscribe_apple_btn": "🍎 Apple / Outlook (Synchro en Direct)",
   "calendar.subscribe_google_btn": "📅 Google Agenda (Synchro en Direct)",
@@ -259,5 +259,7 @@
   "rules.full_link": "📖 Lire les règles complètes du dimanche dans le manuel du site ↗",
   "footer.copyright": "© 2026 Pickup Baseball Foundation. Sous licence Apache 2.0 (Apache-2.0).",
   "nav.gallery": "Galerie & Art",
-  "nav.gallery_title": "Galerie photos, vidéos et art"
+  "nav.gallery_title": "Galerie photos, vidéos et art",
+  "calendar.subscribe_game_btn": "🔄 S'abonner au Match (.ics)",
+  "event.calendar_label": "Calendrier du Match"
 }

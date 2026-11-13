@@ -618,6 +618,9 @@
 
     var totalRain24h = 0;
     var gameHoursRain = 0;
+    var eventHoursRain = 0;
+    var firstEventRainOffset = -1;
+    var firstEventRainTime = null;
     var effectiveMoisture = 0;
     var lastPreGameRainIdx = -1;
     var lastGameRainIdx = -1;
@@ -669,8 +672,16 @@
           isGameTime: false
         });
       } else {
-        // Game-time hours (12:00 PM through 6:00 PM)
+        // Game-time hours (12:00 PM through 6:00 PM); scheduled pickup routine is 12:00 PM - 4:00 PM (offsets 0..3)
+        var eventOffset = actualIdx - targetIdx;
         gameHoursRain += r;
+        if (eventOffset >= 0 && eventOffset <= 3) {
+          eventHoursRain += r;
+          if (firstEventRainOffset === -1 && (r >= 0.02 || eventHoursRain >= 0.03)) {
+            firstEventRainOffset = eventOffset;
+            firstEventRainTime = hourlyTimes[i];
+          }
+        }
         if (r > maxHourlyRain) maxHourlyRain = r;
 
         if (r >= 0.008) {
@@ -746,27 +757,65 @@
       recommendation = 'Playable! Molded rubber cleats recommended for traction; keep gear off the damp grass.';
     }
 
-    // Active rain during game hours (12:00 PM - 6:00 PM)
-    if (gameHoursRain >= 0.10) {
-      status = 'rainout_risk';
-      statusLabel = 'Rainout Expected (Game-Time Rain)';
-      badgeClass = 'badge-rainout';
-      statusColor = '#dc2626';
-      statusBg = '#fee2e2';
-      statusBorder = '#fca5a5';
-      statusIcon = '🌧️';
-      prognosis = 'Rain forecast during the game window (' + gameHoursRain.toFixed(2) + '" between 12 PM - 6 PM). High likelihood of rainout.';
-      recommendation = 'Organizers should monitor radar and broadcast an emergency update if showers persist.';
-    } else if (gameHoursRain >= 0.03 && status === 'good') {
+    // Active rain during event hours (12:00 PM - 4:00 PM) and late afternoon (4:00 PM - 6:00 PM)
+    var preGameStatus = status;
+    var lateAfternoonRain = Math.max(0, gameHoursRain - eventHoursRain);
+    var formatRainStartLabel = function(timeStr, fallbackOffset) {
+      if (timeStr && timeStr.indexOf('T') !== -1) {
+        var hNum = parseInt(timeStr.split('T')[1].split(':')[0], 10);
+        if (!isNaN(hNum)) {
+          var h12 = hNum % 12;
+          if (h12 === 0) h12 = 12;
+          return h12 + ' ' + (hNum >= 12 ? 'PM' : 'AM');
+        }
+      }
+      var estHour = 12 + (fallbackOffset || 0);
+      var est12 = estHour % 12;
+      if (est12 === 0) est12 = 12;
+      return est12 + ' ' + (estHour >= 12 ? 'PM' : 'AM');
+    };
+
+    var rainStartLabel = (firstEventRainOffset !== -1) ? formatRainStartLabel(firstEventRainTime, firstEventRainOffset) : '';
+    var hasHeavyEventRain = (eventHoursRain >= 0.10 || (eventHoursRain >= 0.04 && gameHoursRain >= 0.10));
+
+    if (hasHeavyEventRain) {
+      if (preGameStatus !== 'rainout_risk' && firstEventRainOffset >= 2) {
+        status = 'alert';
+        statusLabel = 'Cut Short by ' + rainStartLabel + ' Rain';
+        badgeClass = 'badge-orange';
+        statusColor = '#FD5A1E';
+        statusBg = '#fff2ed';
+        statusBorder = '#fed3c4';
+        statusIcon = '🌦️';
+        prognosis = 'Dry early (12 PM – ' + rainStartLabel + '), then ' + eventHoursRain.toFixed(2) + '" of rain forecast during afternoon play. Event likely cut short after ' + rainStartLabel + '.';
+        recommendation = 'Start on time at 12:00 PM to play before rain arrives around ' + rainStartLabel + '.';
+      } else {
+        status = 'rainout_risk';
+        statusLabel = 'Rainout Expected (Game-Time Rain)';
+        badgeClass = 'badge-rainout';
+        statusColor = '#dc2626';
+        statusBg = '#fee2e2';
+        statusBorder = '#fca5a5';
+        statusIcon = '🌧️';
+        prognosis = 'Rain forecast during the game window (' + eventHoursRain.toFixed(2) + '" between 12 PM – 4 PM). High likelihood of rainout.';
+        recommendation = 'Organizers should monitor radar and broadcast an emergency update if showers persist.';
+      }
+    } else if (eventHoursRain >= 0.03 && status === 'good') {
       status = 'alert';
-      statusLabel = 'Scattered Showers During Game';
+      statusLabel = (firstEventRainOffset >= 2 && rainStartLabel)
+        ? ('Showers After ' + rainStartLabel)
+        : 'Scattered Showers During Game';
       badgeClass = 'badge-orange';
       statusColor = '#FD5A1E';
       statusBg = '#fff2ed';
       statusBorder = '#fed3c4';
       statusIcon = '🌦️';
-      prognosis += ' Scattered showers forecast during afternoon play (' + gameHoursRain.toFixed(2) + '" between 12 PM - 6 PM).';
+      prognosis += (firstEventRainOffset >= 2 && rainStartLabel)
+        ? (' Light showers forecast starting around ' + rainStartLabel + ' (' + eventHoursRain.toFixed(2) + '" between 12 PM – 4 PM).')
+        : (' Scattered showers forecast during afternoon play (' + eventHoursRain.toFixed(2) + '" between 12 PM – 4 PM).');
       recommendation = 'Bring light rain gear or jackets for the bench. Game may experience brief delays.';
+    } else if (lateAfternoonRain >= 0.10) {
+      prognosis += ' Rain (' + lateAfternoonRain.toFixed(2) + '") arrives after 4:00 PM wrap-up.';
     }
 
     return {
@@ -779,6 +828,9 @@
       isRain: gameWeather.isRain,
       totalRain24h: totalRain24h,
       totalRain24hFormatted: totalRain24h.toFixed(2) + '"',
+      eventHoursRain: Math.round(eventHoursRain * 100) / 100,
+      eventHoursRainFormatted: (Math.round(eventHoursRain * 100) / 100).toFixed(2) + '"',
+      rainStartLabel: rainStartLabel || null,
       gameHoursRain: Math.round(gameHoursRain * 100) / 100,
       gameHoursRainFormatted: (Math.round(gameHoursRain * 100) / 100).toFixed(2) + '"',
       rainfall10Day: total10DayRain,

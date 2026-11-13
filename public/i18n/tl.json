@@ -213,7 +213,7 @@
   "calendar.prospective_badge": "📅 Inaasahan",
   "calendar.pickup_reminder": "Libreng community pickup baseball tuwing Linggo nang 12:00 PM sa Bushrod Park!",
   "calendar.view_details": "Mag-RSVP at Tingnan ang Detalye ng Laro →",
-  "calendar.add_to_calendar": "Mag-subscribe (.ics)",
+  "calendar.add_to_calendar": "Mag-subscribe sa Lahat (.ics)",
   "calendar.export_btn": "📥 I-export ang Iskedyul (.ics)",
   "calendar.sync_checking": "Sini-sync sa cloud…",
   "calendar.sync_just_now": "Naka-sync sa cloud • Kasalukuyan lang",
@@ -222,7 +222,7 @@
   "calendar.sync_offline_cached": "Offline — naka-cache na iskedyul ({time})",
   "calendar.sync_offline": "Offline — ipinapakita ang naka-cache na iskedyul",
   "calendar.sync_offline_empty": "Offline — hindi maabot ang cloud",
-  "calendar.subscribe_title": "🔄 Live Cloud Calendar Sync (.ics)",
+  "calendar.subscribe_title": "🔄 Live Sync para sa Lahat ng Laro (.ics)",
   "calendar.subscribe_desc": "Mag-subscribe nang minsan upang ang mga bagong laro, pagbabago ng field, at abiso sa ulan ay awtomatikong mag-update sa iyong telepono o computer.",
   "calendar.subscribe_apple_btn": "🍎 Apple / Outlook (Live Sync)",
   "calendar.subscribe_google_btn": "📅 Google Calendar (Live Sync)",
@@ -259,5 +259,7 @@
   "rules.full_link": "📖 Basahin ang Kumpletong Patakaran sa Manwal ng Webapp ↗",
   "footer.copyright": "© 2026 Pickup Baseball Foundation. Lisensyado sa ilalim ng Apache License 2.0 (Apache-2.0).",
   "nav.gallery": "Galeriya at Sining",
-  "nav.gallery_title": "Galeriya ng Litrato, Video at Sining"
+  "nav.gallery_title": "Galeriya ng Litrato, Video at Sining",
+  "calendar.subscribe_game_btn": "🔄 Mag-subscribe sa Laro (.ics)",
+  "event.calendar_label": "Kalendaryo ng Laro"
 }

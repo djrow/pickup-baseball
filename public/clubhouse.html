@@ -7,36 +7,13 @@
   <link rel="shortcut icon" href="/favicon.ico" />
   <link rel="icon" type="image/svg+xml" href="/logo.svg" />
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png" />
-  <link rel="stylesheet" href="/css/clubhouse.css?v=121" />
+  <link rel="stylesheet" href="/css/clubhouse.css?v=122" />
 </head>
 <body class="clubhouse-body">
   <div class="clubhouse-app" id="clubhouse-app">
 
     <!-- ==================================================================
-         1. LEFT SERVER / NAV RAIL (64px)
-         ================================================================== -->
-    <nav class="ch-rail" aria-label="Clubhouse Navigation Rail">
-      <button type="button" class="ch-rail-btn active" id="rail-home-btn" title="Pickup Baseball Clubhouse">
-        ⚾
-      </button>
-      <div class="ch-rail-divider"></div>
-      <a href="/index.html" class="ch-rail-btn" title="Sunday Game Schedule &amp; RSVPs">
-        📅
-      </a>
-      <a href="/gallery.html" class="ch-rail-btn" title="Foundation Photo &amp; Video Gallery">
-        🖼️
-      </a>
-      <a href="https://github.com/djrow/pickup-baseball/blob/trunk/HANDBOOK.md" target="_blank" rel="noopener noreferrer" class="ch-rail-btn" title="Player Handbook &amp; Field Rules">
-        📖
-      </a>
-      <div class="ch-rail-spacer"></div>
-      <button type="button" class="ch-rail-btn" id="rail-vault-btn" title="E2EE Security Vault, Privacy Relay &amp; 5 TB Drive Status">
-        🔐
-      </button>
-    </nav>
-
-    <!-- ==================================================================
-         2. CHANNEL & VOICE SIDEBAR (250px)
+         1. CHANNEL & VOICE SIDEBAR (260px)
          ================================================================== -->
     <aside class="ch-sidebar" id="ch-sidebar" aria-label="Channels and Voice Lounges">
       <header class="ch-server-header">
@@ -70,6 +47,10 @@
           <button type="button" class="ch-icon-btn" id="btn-voice-deafen" title="Deafen / Undeafen Audio">🎧</button>
           <button type="button" class="ch-icon-btn" id="btn-voice-screen" title="Share Screen (720p)">🖥️</button>
           <button type="button" class="ch-icon-btn" id="btn-voice-leave" title="Disconnect from Voice Lounge">📴</button>
+        </div>
+        <div class="ch-user-quick-actions">
+          <a href="/index.html" class="ch-user-quick-btn" id="btn-user-calendar" title="Sunday Game Schedule &amp; RSVPs">📅 Game Calendar</a>
+          <button type="button" class="ch-user-quick-btn" id="btn-user-vault" title="E2EE Security Vault, Privacy Relay &amp; 5 TB Drive Status">🔐 Security Vault</button>
         </div>
       </footer>
     </aside>
@@ -459,9 +440,9 @@
     </div>
   </div>
 
-  <script src="/js/crypto.js?v=121"></script>
-  <script src="/js/store.js?v=121"></script>
-  <script src="/js/rtc.js?v=121"></script>
-  <script src="/js/clubhouse.js?v=121"></script>
+  <script src="/js/crypto.js?v=122"></script>
+  <script src="/js/store.js?v=122"></script>
+  <script src="/js/rtc.js?v=122"></script>
+  <script src="/js/clubhouse.js?v=122"></script>
 </body>
 </html>

@@ -185,9 +185,13 @@ function formatIcsUtcDate(d) {
     pad(d.getUTCSeconds()) + 'Z';
 }
 
-export function buildCalendarIcs(allEvents, origin = 'https://www.pickupbaseballfoundation.org') {
+export function buildCalendarIcs(allEvents, origin = 'https://www.pickupbaseballfoundation.org', options = {}) {
   const publicEvents = (allEvents || []).filter(ev => parseAllowedEmails(ev.allowed_emails).length === 0);
   const nowStamp = formatIcsUtcDate(new Date());
+  const calendarName = (options && options.calendarName) ? String(options.calendarName) : 'Sunday Pickup Baseball';
+  const calendarDesc = (options && options.calendarDesc)
+    ? String(options.calendarDesc)
+    : 'Live game schedule from Pickup Baseball Foundation (www.pickupbaseballfoundation.org)';
 
   const icsLines = [
     'BEGIN:VCALENDAR',
@@ -195,8 +199,8 @@ export function buildCalendarIcs(allEvents, origin = 'https://www.pickupbaseball
     'PRODID:-//Pickup Baseball Foundation//NONSGML Pickup Baseball Calendar//EN',
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
-    'X-WR-CALNAME:Sunday Pickup Baseball',
-    'X-WR-CALDESC:Live game schedule from Pickup Baseball Foundation (www.pickupbaseballfoundation.org)',
+    `X-WR-CALNAME:${escapeIcsText(calendarName)}`,
+    `X-WR-CALDESC:${escapeIcsText(calendarDesc)}`,
     'X-WR-TIMEZONE:America/Los_Angeles',
     'REFRESH-INTERVAL;VALUE=DURATION:PT1H',
     'X-PUBLISHED-TTL:PT1H'

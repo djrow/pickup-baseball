@@ -213,7 +213,7 @@
   "calendar.prospective_badge": "📅 拟定待定",
   "calendar.pickup_reminder": "每周日中午在 Bushrod Park 举行免费社区自发棒球比赛！",
   "calendar.view_details": "报名并查看比赛详情 →",
-  "calendar.add_to_calendar": "订阅 (.ics)",
+  "calendar.add_to_calendar": "订阅全部比赛 (.ics)",
   "calendar.export_btn": "📥 导出赛程 (.ics)",
   "calendar.sync_checking": "正在与云端同步…",
   "calendar.sync_just_now": "云端已同步 • 刚刚",
@@ -222,7 +222,7 @@
   "calendar.sync_offline_cached": "离线 — 显示缓存赛程 ({time})",
   "calendar.sync_offline": "离线 — 显示缓存赛程",
   "calendar.sync_offline_empty": "离线 — 无法连接云端",
-  "calendar.subscribe_title": "🔄 云端日历实时同步 (.ics)",
+  "calendar.subscribe_title": "🔄 全部比赛日历实时同步 (.ics)",
   "calendar.subscribe_desc": "一次订阅，新安排的比赛、场地变动以及下雨取消提醒将自动更新至您的手机或电脑。",
   "calendar.subscribe_apple_btn": "🍎 Apple / Outlook (实时同步)",
   "calendar.subscribe_google_btn": "📅 Google 日历 (实时同步)",
@@ -259,5 +259,7 @@
   "rules.full_link": "📖 在网站手册中阅读完整的周日比赛规则 ↗",
   "footer.copyright": "© 2026 Pickup Baseball Foundation。根据 Apache 2.0 许可协议（Apache-2.0）授权。",
   "nav.gallery": "图库与艺术",
-  "nav.gallery_title": "照片、视频与社区艺术展厅"
+  "nav.gallery_title": "照片、视频与社区艺术展厅",
+  "calendar.subscribe_game_btn": "🔄 订阅本场比赛 (.ics)",
+  "event.calendar_label": "比赛日历"
 }

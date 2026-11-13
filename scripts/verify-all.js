@@ -1519,6 +1519,32 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(icsText.includes('Infield standing water after overnight storm'), 'Rainout note must appear in VEVENT description');
     assert.ok(!icsText.includes('Private Whitelist Secret Scrimmage'), 'Restricted private whitelist events must be excluded from anonymous public .ics feed');
 
+    // Verify single-game live calendar.ics endpoint scopes strictly to requested event and honors privacy filter
+    const singleIcsRes = await fetch(`${baseUrl}/api/events/${pubRainId}/calendar.ics`);
+    assert.equal(singleIcsRes.status, 200, 'Single-game calendar.ics endpoint must respond 200 OK');
+    assert.ok((singleIcsRes.headers.get('content-type') || '').includes('text/calendar'), 'Single-game calendar.ics must return text/calendar');
+    assert.ok((singleIcsRes.headers.get('cache-control') || '').includes('no-store'), 'Single-game calendar.ics must disable edge caching');
+    const singleIcsText = await singleIcsRes.text();
+    assert.ok(singleIcsText.includes(`UID:pickup-baseball-event-${pubRainId}@pickupbaseballfoundation.org`), 'Single-game feed must include requested event UID');
+    assert.ok(singleIcsText.includes('REFRESH-INTERVAL;VALUE=DURATION:PT1H'), 'Single-game feed must advertise 1-hour refresh interval');
+    const singleVeventCount = (singleIcsText.match(/BEGIN:VEVENT/g) || []).length;
+    assert.equal(singleVeventCount, 1, 'Single-game feed must contain exactly 1 VEVENT');
+
+    const privSingleRes = await fetch(`${baseUrl}/api/events/${privCreate.data.eventId}/calendar.ics`);
+    assert.ok(privSingleRes.status === 404 || privSingleRes.status === 200);
+    const privSingleText = await privSingleRes.text();
+    assert.ok(!privSingleText.includes('Private Whitelist Secret Scrimmage'), 'Restricted private event must not leak in anonymous single-game .ics feed');
+
+    // Verify UI labels and single-game subscription controls on Home drawer & Event Details card grid
+    assert.ok(indexHtml.includes('Subscribe All (.ics)'), 'Home calendar header must clarify all-games subscription');
+    assert.ok(appJs.includes('id="drawer-game-subscribe-btn"') && appJs.includes('id="drawer-game-subscribe-panel"'), 'Game preview drawer must expose matching single-game subscription controls');
+    const eventHtmlCal = fs.readFileSync(path.join(publicDir, 'event.html'), 'utf8');
+    const eventJsCal = fs.readFileSync(path.join(publicDir, 'js/event.js'), 'utf8');
+    assert.ok(eventHtmlCal.includes('id="event-calendar-meta-item"') && eventHtmlCal.includes('id="event-subscribe-ics-btn"') && eventHtmlCal.includes('id="event-subscribe-panel"'), 'Event page must include single-game calendar subscription in detail cards');
+    assert.ok(eventJsCal.includes('API.renderSubscribePanel('), 'event.js must bind single-game subscription panel');
+    assert.ok(!eventJsCal.includes('?.') && !eventJsCal.includes('??'), 'event.js must avoid optional chaining / nullish coalescing');
+    assert.doesNotThrow(() => new Function(apiJsNav), 'api.js must parse as valid JS without syntax errors');
+
     const apiJs = fs.readFileSync(path.join(publicDir, 'js/api.js'), 'utf8');
     const readmeMd = fs.readFileSync(path.join(__dirname, '..', 'README.md'), 'utf8');
     assert.ok(!indexHtml.includes('data-i18n="hero.notice"'), 'October 2026 notice must be moved out of the hero section');
@@ -1861,6 +1887,41 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     }, '2026-11-08T12:00');
     assert.equal(rSun.status, 'rainout_risk', 'Rain 1-3h before warmups must trigger rainout risk due to standing puddles');
     assert.ok(rSun.effectiveMoisture >= 0.40, 'Surface moisture must remain high without drying time');
+
+    // Test Drainage Heuristic: Scenario 5 - Dry noon-2 PM, rain starting at 2 PM (Cut short rather than full rainout)
+    const precipLateStart = precipDry.map((_, idx) => (idx === 38 ? 0.15 : (idx === 39 ? 0.23 : 0)));
+    const rCutShort = ws.calculateFieldDrainage({
+      time: times,
+      precipitation: precipLateStart,
+      temperature_2m: temps,
+      weathercode: codes
+    }, '2026-11-08T12:00');
+    assert.equal(rCutShort.status, 'alert', 'Rain starting 2+ hours into a dry event must warn as alert instead of full rainout');
+    assert.equal(rCutShort.badgeClass, 'badge-orange');
+    assert.equal(rCutShort.statusLabel, 'Cut Short by 2 PM Rain');
+    assert.ok(rCutShort.prognosis.includes('12 PM – 2 PM') && rCutShort.prognosis.includes('cut short'), 'Prognosis must note dry early window before 2 PM rain');
+
+    // Test Drainage Heuristic: Scenario 6 - Rain starting right at noon (Full rainout)
+    const precipEarlyGameRain = precipDry.map((_, idx) => (idx === 36 || idx === 37 ? 0.15 : 0));
+    const rEarlyRain = ws.calculateFieldDrainage({
+      time: times,
+      precipitation: precipEarlyGameRain,
+      temperature_2m: temps,
+      weathercode: codes
+    }, '2026-11-08T12:00');
+    assert.equal(rEarlyRain.status, 'rainout_risk', 'Rain starting at 12 PM must trigger rainout_risk');
+    assert.equal(rEarlyRain.statusLabel, 'Rainout Expected (Game-Time Rain)');
+
+    // Test Drainage Heuristic: Scenario 7 - Rain only after 4 PM wrap-up (Playable 12-4 PM)
+    const precipPostEventRain = precipDry.map((_, idx) => (idx === 41 || idx === 42 ? 0.20 : 0));
+    const rPostEvent = ws.calculateFieldDrainage({
+      time: times,
+      precipitation: precipPostEventRain,
+      temperature_2m: temps,
+      weathercode: codes
+    }, '2026-11-08T12:00');
+    assert.equal(rPostEvent.status, 'good', 'Rain starting only at 5-6 PM must not trigger a rainout for the 12-4 PM event');
+    assert.ok(rPostEvent.prognosis.includes('after 4:00 PM wrap-up'), 'Prognosis should mention late rain after 4:00 PM');
 
     // Verify rendered widget clearly distinguishes Hourly Rainfall vs Expected Surface Water
     ws.renderAssistantWidget('smart-rainout-widget', rSat, { locationName: 'Bushrod Park Field 1' });
@@ -2808,7 +2869,13 @@ test('Clubhouse Frontend & Native Waiver Verification', async (t) => {
     }
 
     const clubhouseHtml = fs.readFileSync(path.join(publicDir, 'clubhouse.html'), 'utf8');
-    assert.ok(clubhouseHtml.includes('id="clubhouse-app"'), 'clubhouse.html must render 4-column #clubhouse-app');
+    assert.ok(clubhouseHtml.includes('id="clubhouse-app"'), 'clubhouse.html must render #clubhouse-app');
+    assert.ok(!clubhouseHtml.includes('class="ch-rail"'), 'clubhouse.html must not render left-edge .ch-rail strip');
+    assert.ok(!clubhouseHtml.includes('id="rail-home-btn"'), 'clubhouse.html must remove left rail Clubhouse button');
+    assert.ok(!clubhouseHtml.includes('href="/gallery.html"'), 'clubhouse.html must remove left rail gallery button');
+    assert.ok(!clubhouseHtml.includes('HANDBOOK.md'), 'clubhouse.html must remove left rail handbook button');
+    assert.ok(clubhouseHtml.includes('id="btn-user-calendar"') && clubhouseHtml.includes('href="/index.html"'), 'clubhouse.html must place calendar button in user card');
+    assert.ok(clubhouseHtml.includes('id="btn-user-vault"'), 'clubhouse.html must place Security Vault button in user card');
     assert.ok(clubhouseHtml.includes('id="ch-channel-list"'), 'clubhouse.html must include channel sidebar');
     assert.ok(clubhouseHtml.includes('id="ch-message-stream"'), 'clubhouse.html must include message stream');
     assert.ok(clubhouseHtml.includes('id="ch-bp-grid"'), 'clubhouse.html must include 28-slot BP grid');

@@ -20,7 +20,8 @@ const EN_DICT = {
   "calendar.title": "Game Calendar",
   "calendar.subtitle": "Sunday Pickup Games • 12:00 PM • Bushrod Park",
   "calendar.today": "Today",
-  "calendar.add_to_calendar": "Subscribe (.ics)",
+  "calendar.add_to_calendar": "Subscribe All (.ics)",
+  "calendar.subscribe_game_btn": "🔄 Subscribe Game (.ics)",
   "calendar.export_btn": "📥 Export Schedule (.ics)",
   "calendar.sync_checking": "Syncing with cloud…",
   "calendar.sync_just_now": "Cloud synced • Just now",
@@ -29,13 +30,14 @@ const EN_DICT = {
   "calendar.sync_offline_cached": "Offline — cached schedule ({time})",
   "calendar.sync_offline": "Offline — showing cached schedule",
   "calendar.sync_offline_empty": "Offline — unable to reach cloud",
-  "calendar.subscribe_title": "🔄 Live Cloud Calendar Sync (.ics)",
+  "calendar.subscribe_title": "🔄 All-Games Live Calendar Sync (.ics)",
   "calendar.subscribe_desc": "Subscribe once so newly scheduled games, field changes, and rainout alerts update automatically on your phone or computer.",
   "calendar.subscribe_apple_btn": "🍎 Apple / Outlook (Live Sync)",
   "calendar.subscribe_google_btn": "📅 Google Calendar (Live Sync)",
   "calendar.subscribe_copy_btn": "📋 Copy Feed URL",
   "calendar.subscribe_copied": "✓ Copied!",
   "calendar.subscribe_snapshot_btn": "📥 Download One-Time .ics File",
+  "event.calendar_label": "Game Calendar",
   "calendar.noon_game": "12:00 PM Game",
   "calendar.legend_game": "Confirmed Game (12:00 PM)",
   "calendar.legend_prospective": "Prospective (TBA)",
@@ -308,7 +310,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '121',
+  CLIENT_VERSION: '122',
 
   // Current user cache
   currentUser: null,
@@ -1671,6 +1673,166 @@ const API = {
     const details = encodeURIComponent('Free community pickup baseball. Check headcount, coordinate gear & volunteer for tasks at https://www.pickupbaseballfoundation.org/event.html?id=' + ev.id);
     const location = encodeURIComponent(ev.location || 'Bushrod Park Field 1, Oakland, CA');
     return 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + title + '&dates=' + formatGCal(startDate) + '/' + formatGCal(endDate) + '&details=' + details + '&location=' + location;
+  },
+
+  downloadEventsIcs(events, filename) {
+    const upcoming = (events || []).filter(function(e) { return e && e.status !== 'cancelled'; });
+    if (upcoming.length === 0) {
+      alert('No upcoming games scheduled to export.');
+      return;
+    }
+
+    const pad = function(n) { return String(n).padStart(2, '0'); };
+    const formatIcsDate = function(d) {
+      return d.getUTCFullYear() +
+        pad(d.getUTCMonth() + 1) +
+        pad(d.getUTCDate()) + 'T' +
+        pad(d.getUTCHours()) +
+        pad(d.getUTCMinutes()) +
+        pad(d.getUTCSeconds()) + 'Z';
+    };
+
+    const icsLines = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Pickup Baseball Foundation//NONSGML Pickup Baseball Calendar//EN',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      'X-WR-CALNAME:Sunday Pickup Baseball',
+      'X-WR-TIMEZONE:America/Los_Angeles'
+    ];
+
+    for (let i = 0; i < upcoming.length; i++) {
+      const ev = upcoming[i];
+      const startDate = new Date(ev.event_date);
+      if (isNaN(startDate.getTime())) continue;
+      const endDate = new Date(startDate.getTime() + 3 * 60 * 60 * 1000);
+      const isRainout = ev.status === 'rainout';
+      const baseTitle = ev.title || 'Sunday Pickup Baseball - Noon Game';
+      const summary = isRainout ? ('🌧️ RAINED OUT: ' + baseTitle) : baseTitle;
+
+      icsLines.push('BEGIN:VEVENT');
+      icsLines.push('UID:pickup-baseball-event-' + ev.id + '@pickupbaseballfoundation.org');
+      icsLines.push('DTSTAMP:' + formatIcsDate(new Date()));
+      icsLines.push('DTSTART:' + formatIcsDate(startDate));
+      icsLines.push('DTEND:' + formatIcsDate(endDate));
+      icsLines.push('SUMMARY:' + summary.replace(/,/g, '\\,'));
+      icsLines.push('LOCATION:' + (ev.location || 'Bushrod Park Field 1, Oakland, CA').replace(/,/g, '\\,'));
+      icsLines.push('DESCRIPTION:Free community pickup baseball. Check headcount and volunteer at https://www.pickupbaseballfoundation.org/event.html?id=' + ev.id);
+      icsLines.push('STATUS:CONFIRMED');
+      icsLines.push('END:VEVENT');
+    }
+
+    icsLines.push('END:VCALENDAR');
+
+    const blob = new Blob([icsLines.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename || 'pickup-baseball-schedule.ics';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  },
+
+  renderSubscribePanel(panelEl, options) {
+    if (!panelEl) return;
+    const opts = options || {};
+    const singleEvent = opts.event || null;
+    const isSingleGame = Boolean(singleEvent && singleEvent.id);
+    const host = window.location.host || 'www.pickupbaseballfoundation.org';
+    const origin = window.location.origin || ('https://' + host);
+    const feedPath = isSingleGame ? ('/api/events/' + singleEvent.id + '/calendar.ics') : '/api/events/calendar.ics';
+    const feedHttpUrl = opts.feedHttpUrl || (origin + feedPath);
+    const webcalUrl = opts.webcalUrl || ('webcal://' + host + feedPath);
+    const googleSubscribeUrl = 'https://calendar.google.com/calendar/r?cid=' + encodeURIComponent(webcalUrl);
+    const googleAddOnceUrl = isSingleGame ? this.getGoogleCalendarUrl(singleEvent) : '';
+
+    const titleText = isSingleGame
+      ? '🔄 Single-Game Live Calendar Sync (.ics)'
+      : this.t('calendar.subscribe_title', '🔄 All-Games Live Calendar Sync (.ics)');
+    const descText = isSingleGame
+      ? 'Subscribe to this game for live rainout alerts and time/field updates — or add it directly to Google Calendar.'
+      : this.t('calendar.subscribe_desc', 'Subscribe once so newly scheduled games, field changes, and rainout alerts update automatically on your phone or computer.');
+    const appleBtnLabel = this.t('calendar.subscribe_apple_btn', '🍎 Apple / Outlook (Live Sync)');
+    const googleLiveLabel = this.t('calendar.subscribe_google_btn', '📅 Google Calendar (Live Sync)');
+    const snapshotBtnLabel = isSingleGame
+      ? '📥 Download Game .ics'
+      : this.t('calendar.subscribe_snapshot_btn', '📥 Download One-Time .ics File');
+    const copyBtnLabel = this.t('calendar.subscribe_copy_btn', '📋 Copy Feed URL');
+    const copiedBtnLabel = this.t('calendar.subscribe_copied', '✓ Copied!');
+    const idPrefix = opts.idPrefix || 'calendar';
+
+    panelEl.innerHTML =
+      '<div class="subscribe-panel-header">' +
+        '<div>' +
+          '<h3 class="subscribe-panel-title">' + this.escapeHtml(titleText) + '</h3>' +
+          '<p class="subscribe-panel-desc">' + this.escapeHtml(descText) + '</p>' +
+        '</div>' +
+        '<button type="button" id="' + idPrefix + '-subscribe-close-btn" class="calendar-drawer-close-btn" aria-label="Close calendar sync options" title="Close">✕</button>' +
+      '</div>' +
+      '<div class="subscribe-actions-row">' +
+        '<a href="' + this.escapeHtml(webcalUrl) + '" class="btn btn-primary btn-sm" style="font-weight: 700; text-decoration: none;">' +
+          this.escapeHtml(appleBtnLabel) +
+        '</a>' +
+        '<a href="' + this.escapeHtml(googleSubscribeUrl) + '" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm" style="font-weight: 700; text-decoration: none;">' +
+          this.escapeHtml(googleLiveLabel) +
+        '</a>' +
+        (isSingleGame
+          ? '<a href="' + this.escapeHtml(googleAddOnceUrl) + '" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm" style="font-weight: 600; text-decoration: none;" title="Add this game once to your primary Google Calendar">➕ Add Once to Google Cal ↗</a>'
+          : '') +
+        '<button type="button" id="' + idPrefix + '-download-snapshot-btn" class="btn btn-outline btn-sm" title="Download a static .ics file">' +
+          this.escapeHtml(snapshotBtnLabel) +
+        '</button>' +
+      '</div>' +
+      '<div class="subscribe-url-row">' +
+        '<input type="text" id="' + idPrefix + '-feed-url-input" class="subscribe-url-input" value="' + this.escapeHtml(feedHttpUrl) + '" readonly aria-label="Live calendar subscription URL">' +
+        '<button type="button" id="' + idPrefix + '-copy-feed-btn" class="btn btn-outline btn-sm" style="white-space: nowrap; font-weight: 600;">' +
+          this.escapeHtml(copyBtnLabel) +
+        '</button>' +
+      '</div>';
+
+    const closeBtn = panelEl.querySelector('#' + idPrefix + '-subscribe-close-btn');
+    if (closeBtn && typeof opts.onClose === 'function') {
+      closeBtn.addEventListener('click', opts.onClose);
+    }
+
+    const self = this;
+    const snapshotBtn = panelEl.querySelector('#' + idPrefix + '-download-snapshot-btn');
+    if (snapshotBtn) {
+      snapshotBtn.addEventListener('click', function() {
+        if (isSingleGame) {
+          self.downloadEventsIcs([singleEvent], 'pickup-baseball-game-' + singleEvent.id + '.ics');
+        } else {
+          self.downloadEventsIcs(opts.events || [], 'pickup-baseball-schedule.ics');
+        }
+      });
+    }
+
+    const copyBtn = panelEl.querySelector('#' + idPrefix + '-copy-feed-btn');
+    const urlInput = panelEl.querySelector('#' + idPrefix + '-feed-url-input');
+    if (copyBtn && urlInput) {
+      copyBtn.addEventListener('click', function() {
+        const markCopied = function() {
+          copyBtn.textContent = copiedBtnLabel;
+          setTimeout(function() {
+            copyBtn.textContent = copyBtnLabel;
+          }, 2200);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(feedHttpUrl).then(markCopied).catch(function() {
+            urlInput.select();
+            try { document.execCommand('copy'); } catch (e) {}
+            markCopied();
+          });
+        } else {
+          urlInput.select();
+          try { document.execCommand('copy'); } catch (e) {}
+          markCopied();
+        }
+      });
+    }
   },
 
   renderNav(user) {

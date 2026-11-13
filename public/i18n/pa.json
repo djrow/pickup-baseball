@@ -213,7 +213,7 @@
   "calendar.prospective_badge": "📅 ਸੰਭਾਵੀ",
   "calendar.pickup_reminder": "ਮੁਫ਼ਤ ਕਮਿਊਨਿਟੀ ਪਿਕਅੱਪ ਬੇਸਬਾਲ ਹਰ ਐਤਵਾਰ ਦੁਪਹਿਰ 12:00 ਵਜੇ ਬੁਸ਼ਰੋਡ ਪਾਰਕ ਵਿੱਚ ਖੇਡਿਆ ਜਾਂਦਾ ਹੈ!",
   "calendar.view_details": "RSVP ਕਰੋ ਅਤੇ ਮੈਚ ਦੇ ਵੇਰਵੇ ਦੇਖੋ →",
-  "calendar.add_to_calendar": "ਗਾਹਕ ਬਣੋ (.ics)",
+  "calendar.add_to_calendar": "ਸਾਰੀਆਂ ਖੇਡਾਂ ਗਾਹਕੀ (.ics)",
   "calendar.export_btn": "📥 ਸ਼ਡਿਊਲ ਐਕਸਪੋਰਟ ਕਰੋ (.ics)",
   "calendar.sync_checking": "ਕਲਾਉਡ ਨਾਲ ਸਿੰਕ ਹੋ ਰਿਹਾ ਹੈ…",
   "calendar.sync_just_now": "ਕਲਾਉਡ ਸਿੰਕ ਹੋਇਆ • ਹੁਣੇ ਹੀ",
@@ -222,7 +222,7 @@
   "calendar.sync_offline_cached": "ਆਫਲਾਈਨ — ਸੰਭਾਲਿਆ ਸ਼ਡਿਊਲ ({time})",
   "calendar.sync_offline": "ਆਫਲਾਈਨ — ਸੰਭਾਲਿਆ ਸ਼ਡਿਊਲ ਦਿਖਾਇਆ ਜਾ ਰਿਹਾ ਹੈ",
   "calendar.sync_offline_empty": "ਆਫਲਾਈਨ — ਕਲਾਉਡ ਨਾਲ ਸੰਪਰਕ ਨਹੀਂ ਹੋ ਸਕਿਆ",
-  "calendar.subscribe_title": "🔄 ਲਾਈਵ ਕਲਾਉਡ ਕੈਲੰਡਰ ਸਿੰਕ (.ics)",
+  "calendar.subscribe_title": "🔄 ਸਾਰੀਆਂ ਖੇਡਾਂ ਲਾਈਵ ਕੈਲੰਡਰ ਸਿੰਕ (.ics)",
   "calendar.subscribe_desc": "ਇੱਕ ਵਾਰ ਸਬਸਕ੍ਰਾਈਬ ਕਰੋ ਤਾਂ ਜੋ ਨਵੇਂ ਮੈਚ, ਮੈਦਾਨ ਬਦਲਾਅ ਅਤੇ ਮੀਂਹ ਦੇ ਅਲਰਟ ਤੁਹਾਡੇ ਫ਼ੋਨ ਜਾਂ ਕੰਪਿਊਟਰ 'ਤੇ ਆਪਣੇ ਆਪ ਅੱਪਡੇਟ ਹੋ ਜਾਣ।",
   "calendar.subscribe_apple_btn": "🍎 Apple / Outlook (ਲਾਈਵ ਸਿੰਕ)",
   "calendar.subscribe_google_btn": "📅 Google ਕੈਲੰਡਰ (ਲਾਈਵ ਸਿੰਕ)",
@@ -259,5 +259,7 @@
   "rules.full_link": "📖 ਵੈੱਬਐਪ ਹੈਂਡਬੁੱਕ ਵਿੱਚ ਐਤਵਾਰ ਦੇ ਪੂਰੇ ਨਿਯਮ ਪੜ੍ਹੋ ↗",
   "footer.copyright": "© 2026 Pickup Baseball Foundation. Apache ਲਾਇਸੈਂਸ 2.0 (Apache-2.0) ਦੇ ਤਹਿਤ ਲਾਇਸੰਸਸ਼ੁਦਾ।",
   "nav.gallery": "ਗੈਲਰੀ ਅਤੇ ਕਲਾ",
-  "nav.gallery_title": "ਫ਼ੋਟੋ, ਵੀਡੀਓ ਅਤੇ ਕਲਾ ਗੈਲਰੀ"
+  "nav.gallery_title": "ਫ਼ੋਟੋ, ਵੀਡੀਓ ਅਤੇ ਕਲਾ ਗੈਲਰੀ",
+  "calendar.subscribe_game_btn": "🔄 ਇਸ ਖੇਡ ਦੀ ਗਾਹਕੀ (.ics)",
+  "event.calendar_label": "ਖੇਡ ਕੈਲੰਡਰ"
 }

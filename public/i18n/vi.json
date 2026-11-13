@@ -213,7 +213,7 @@
   "calendar.prospective_badge": "📅 Dự Kiến",
   "calendar.pickup_reminder": "Bóng chày tự phát miễn phí cho cộng đồng vào mỗi Chủ Nhật lúc 12:00 Trưa tại Bushrod Park!",
   "calendar.view_details": "Đăng Ký & Xem Chi Tiết Trận Đấu →",
-  "calendar.add_to_calendar": "Đăng Ký Theo Dõi (.ics)",
+  "calendar.add_to_calendar": "Theo Dõi Tất Cả (.ics)",
   "calendar.export_btn": "📥 Xuất Lịch Thi Đấu (.ics)",
   "calendar.sync_checking": "Đang đồng bộ với đám mây…",
   "calendar.sync_just_now": "Đã đồng bộ • Vừa xong",
@@ -222,7 +222,7 @@
   "calendar.sync_offline_cached": "Ngoại tuyến — lịch đã lưu ({time})",
   "calendar.sync_offline": "Ngoại tuyến — đang hiển thị lịch đã lưu",
   "calendar.sync_offline_empty": "Ngoại tuyến — không thể kết nối đám mây",
-  "calendar.subscribe_title": "🔄 Đồng Bộ Lịch Đám Mây Trực Tiếp (.ics)",
+  "calendar.subscribe_title": "🔄 Đồng Bộ Lịch Tất Cả Các Trận (.ics)",
   "calendar.subscribe_desc": "Đăng ký một lần để các trận đấu mới, thay đổi sân và thông báo mưa tự động cập nhật trên điện thoại hoặc máy tính của bạn.",
   "calendar.subscribe_apple_btn": "🍎 Apple / Outlook (Đồng Bộ Trực Tiếp)",
   "calendar.subscribe_google_btn": "📅 Google Calendar (Đồng Bộ Trực Tiếp)",
@@ -259,5 +259,7 @@
   "rules.full_link": "📖 Đọc toàn bộ quy tắc thi đấu trong Cẩm nang Webapp ↗",
   "footer.copyright": "© 2026 Pickup Baseball Foundation. Được cấp phép theo Giấy phép Apache 2.0 (Apache-2.0).",
   "nav.gallery": "Bộ sưu tập & Nghệ thuật",
-  "nav.gallery_title": "Thư viện ảnh, video và nghệ thuật"
+  "nav.gallery_title": "Thư viện ảnh, video và nghệ thuật",
+  "calendar.subscribe_game_btn": "🔄 Theo Dõi Trận Này (.ics)",
+  "event.calendar_label": "Lịch Trận Đấu"
 }

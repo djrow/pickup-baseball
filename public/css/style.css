@@ -885,7 +885,7 @@ header.site-header {
 /* Event Details & Grid */
 .event-meta-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(205px, 1fr));
   gap: 14px;
   margin-bottom: 22px;
   background: var(--bg-subtle);

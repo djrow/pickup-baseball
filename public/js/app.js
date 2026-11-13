@@ -315,72 +315,17 @@ function renderSubscribePanel() {
   const origin = window.location.origin || ('https://' + host);
   const feedHttpUrl = origin + '/api/events/calendar.ics';
   const webcalUrl = 'webcal://' + host + '/api/events/calendar.ics';
-  const googleSubscribeUrl = 'https://calendar.google.com/calendar/r?cid=' + encodeURIComponent(webcalUrl);
 
-  panel.innerHTML = `
-    <div class="subscribe-panel-header">
-      <div>
-        <h3 class="subscribe-panel-title">${API.escapeHtml(API.t('calendar.subscribe_title', '🔄 Live Cloud Calendar Sync (.ics)'))}</h3>
-        <p class="subscribe-panel-desc">${API.escapeHtml(API.t('calendar.subscribe_desc', 'Subscribe once so newly scheduled games, field changes, and rainout alerts update automatically on your phone or computer.'))}</p>
-      </div>
-      <button type="button" id="calendar-subscribe-close-btn" class="calendar-drawer-close-btn" aria-label="Close calendar sync options" title="Close">✕</button>
-    </div>
-    <div class="subscribe-actions-row">
-      <a href="${API.escapeHtml(webcalUrl)}" class="btn btn-primary btn-sm" style="font-weight: 700; text-decoration: none;">
-        ${API.escapeHtml(API.t('calendar.subscribe_apple_btn', '🍎 Apple / Outlook (Live Sync)'))}
-      </a>
-      <a href="${API.escapeHtml(googleSubscribeUrl)}" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm" style="font-weight: 700; text-decoration: none;">
-        ${API.escapeHtml(API.t('calendar.subscribe_google_btn', '📅 Google Calendar (Live Sync)'))}
-      </a>
-      <button type="button" id="calendar-download-snapshot-btn" class="btn btn-outline btn-sm" title="Download a one-time static .ics file snapshot">
-        ${API.escapeHtml(API.t('calendar.subscribe_snapshot_btn', '📥 Download One-Time .ics File'))}
-      </button>
-    </div>
-    <div class="subscribe-url-row">
-      <input type="text" id="calendar-feed-url-input" class="subscribe-url-input" value="${API.escapeHtml(feedHttpUrl)}" readonly aria-label="Live calendar subscription URL">
-      <button type="button" id="calendar-copy-feed-btn" class="btn btn-outline btn-sm" style="white-space: nowrap; font-weight: 600;">
-        ${API.escapeHtml(API.t('calendar.subscribe_copy_btn', '📋 Copy Feed URL'))}
-      </button>
-    </div>
-  `;
-
-  const closeBtn = document.getElementById('calendar-subscribe-close-btn');
-  if (closeBtn) {
-    closeBtn.addEventListener('click', function() {
+  API.renderSubscribePanel(panel, {
+    mode: 'all',
+    events: calendarEventsCache,
+    feedHttpUrl: feedHttpUrl,
+    webcalUrl: webcalUrl,
+    idPrefix: 'calendar',
+    onClose: function() {
       toggleSubscribePanel(true);
-    });
-  }
-
-  const snapshotBtn = document.getElementById('calendar-download-snapshot-btn');
-  if (snapshotBtn) {
-    snapshotBtn.addEventListener('click', function() {
-      downloadCalendarIcs(calendarEventsCache);
-    });
-  }
-
-  const copyBtn = document.getElementById('calendar-copy-feed-btn');
-  const urlInput = document.getElementById('calendar-feed-url-input');
-  if (copyBtn && urlInput) {
-    copyBtn.addEventListener('click', function() {
-      const markCopied = function() {
-        copyBtn.textContent = API.t('calendar.subscribe_copied', '✓ Copied!');
-        setTimeout(function() {
-          copyBtn.textContent = API.t('calendar.subscribe_copy_btn', '📋 Copy Feed URL');
-        }, 2200);
-      };
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(feedHttpUrl).then(markCopied).catch(function() {
-          urlInput.select();
-          try { document.execCommand('copy'); } catch (e) {}
-          markCopied();
-        });
-      } else {
-        urlInput.select();
-        try { document.execCommand('copy'); } catch (e) {}
-        markCopied();
-      }
-    });
-  }
+    }
+  });
 }
 
 function getPacificDateKey(dateInput) {
@@ -415,59 +360,7 @@ function getGoogleCalendarUrl(ev) {
 }
 
 function downloadCalendarIcs(events) {
-  const upcoming = (events || []).filter(e => e.status !== 'cancelled');
-  if (upcoming.length === 0) {
-    alert('No upcoming games scheduled to export.');
-    return;
-  }
-
-  const pad = n => String(n).padStart(2, '0');
-  const formatIcsDate = (d) => {
-    return d.getUTCFullYear() +
-      pad(d.getUTCMonth() + 1) +
-      pad(d.getUTCDate()) + 'T' +
-      pad(d.getUTCHours()) +
-      pad(d.getUTCMinutes()) +
-      pad(d.getUTCSeconds()) + 'Z';
-  };
-
-  const icsLines = [
-    'BEGIN:VCALENDAR',
-    'VERSION:2.0',
-    'PRODID:-//Pickup Baseball Foundation//NONSGML Pickup Baseball Calendar//EN',
-    'CALSCALE:GREGORIAN',
-    'METHOD:PUBLISH',
-    'X-WR-CALNAME:Sunday Pickup Baseball',
-    'X-WR-TIMEZONE:America/Los_Angeles'
-  ];
-
-  for (const ev of upcoming) {
-    const startDate = new Date(ev.event_date);
-    const endDate = new Date(startDate.getTime() + 3 * 60 * 60 * 1000);
-
-    icsLines.push('BEGIN:VEVENT');
-    icsLines.push(`UID:pickup-baseball-event-${ev.id}@pickupbaseballfoundation.org`);
-    icsLines.push(`DTSTAMP:${formatIcsDate(new Date())}`);
-    icsLines.push(`DTSTART:${formatIcsDate(startDate)}`);
-    icsLines.push(`DTEND:${formatIcsDate(endDate)}`);
-    icsLines.push(`SUMMARY:${(ev.title || 'Sunday Pickup Baseball - Noon Game').replace(/,/g, '\\,')}`);
-    icsLines.push(`LOCATION:${(ev.location || 'Bushrod Park Field 1, Oakland, CA').replace(/,/g, '\\,')}`);
-    icsLines.push(`DESCRIPTION:Free community pickup baseball. Check headcount and volunteer at https://www.pickupbaseballfoundation.org/event.html?id=${ev.id}`);
-    icsLines.push('STATUS:CONFIRMED');
-    icsLines.push('END:VEVENT');
-  }
-
-  icsLines.push('END:VCALENDAR');
-
-  const blob = new Blob([icsLines.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'pickup-baseball-schedule.ics';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  API.downloadEventsIcs(events, 'pickup-baseball-schedule.ics');
 }
 
 function renderCalendarDrawer(dateKey, game, isPast) {
@@ -512,7 +405,6 @@ function renderCalendarDrawer(dateKey, game, isPast) {
     const isRainout = game.status === 'rainout';
     const dateFormatted = API.formatDateTime(game.event_date);
     const translatedTitle = API.translateEventTitle(game);
-    const gCalUrl = getGoogleCalendarUrl(game);
     drawer.innerHTML = `
       <div class="drawer-header-row">
         <div class="drawer-title-group">
@@ -521,9 +413,9 @@ function renderCalendarDrawer(dateKey, game, isPast) {
           <h3>${API.escapeHtml(translatedTitle)}</h3>
         </div>
         <div class="drawer-actions">
-          <a href="${gCalUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm" title="Add this game to Google Calendar">
-            📅 Google Cal ↗
-          </a>
+          <button type="button" id="drawer-game-subscribe-btn" class="btn btn-outline btn-sm" aria-expanded="false" aria-controls="drawer-game-subscribe-panel" title="Subscribe to live updates for this game or add to Google Calendar">
+            ${API.escapeHtml(API.t('calendar.subscribe_game_btn', '🔄 Subscribe Game (.ics)'))}
+          </button>
           <a href="/event.html?id=${game.id}#bp-order-section" class="btn btn-outline btn-sm" style="font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
             ⚾ BP Signup Sheet
           </a>
@@ -533,6 +425,7 @@ function renderCalendarDrawer(dateKey, game, isPast) {
           <button type="button" class="calendar-drawer-close-btn" aria-label="Close details" title="Close">✕</button>
         </div>
       </div>
+      <div id="drawer-game-subscribe-panel" class="calendar-subscribe-panel" style="display: none; margin-top: 6px; margin-bottom: 8px;"></div>
       <div class="drawer-meta">
         <span class="drawer-meta-item"><span>📅</span> <strong>${API.escapeHtml(dateFormatted)}</strong></span>
         <span class="drawer-meta-item"><span>📍</span> ${API.escapeHtml(game.location)}</span>
@@ -592,6 +485,30 @@ function renderCalendarDrawer(dateKey, game, isPast) {
       const gridContainer = document.getElementById('calendar-grid-container');
       if (gridContainer) {
         gridContainer.querySelectorAll('.calendar-sunday-card').forEach(c => c.classList.remove('selected-sunday'));
+      }
+    });
+  }
+
+  const gameSubBtn = document.getElementById('drawer-game-subscribe-btn');
+  const gameSubPanel = document.getElementById('drawer-game-subscribe-panel');
+  if (gameSubBtn && gameSubPanel && game) {
+    const closeGameSub = function() {
+      gameSubPanel.style.display = 'none';
+      gameSubBtn.setAttribute('aria-expanded', 'false');
+    };
+    gameSubBtn.addEventListener('click', function() {
+      const isOpen = gameSubPanel.style.display !== 'none';
+      if (isOpen) {
+        closeGameSub();
+      } else {
+        API.renderSubscribePanel(gameSubPanel, {
+          mode: 'game',
+          event: game,
+          idPrefix: 'drawer-game',
+          onClose: closeGameSub
+        });
+        gameSubPanel.style.display = 'block';
+        gameSubBtn.setAttribute('aria-expanded', 'true');
       }
     });
   }

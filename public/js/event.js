@@ -167,8 +167,38 @@ function renderEventDetails() {
   document.getElementById('event-title').textContent = API.translateEventTitle(ev);
   const dtEl = document.getElementById('event-datetime');
   if (dtEl) {
-    const gCalUrl = API.getGoogleCalendarUrl(ev);
-    dtEl.innerHTML = API.escapeHtml(API.formatDateTime(ev.event_date)) + ' <a href="' + gCalUrl + '" target="_blank" rel="noopener noreferrer" style="display: inline-block; margin-left: 8px; font-size: 0.78rem; text-decoration: underline; color: var(--primary); font-weight: 600;" title="Add this game to Google Calendar">📅 Google Cal ↗</a>';
+    dtEl.textContent = API.formatDateTime(ev.event_date);
+  }
+  const eventSubBtn = document.getElementById('event-subscribe-ics-btn');
+  const eventSubPanel = document.getElementById('event-subscribe-panel');
+  if (eventSubBtn && eventSubPanel) {
+    const closeEventSub = function() {
+      eventSubPanel.style.display = 'none';
+      eventSubBtn.setAttribute('aria-expanded', 'false');
+    };
+    if (eventSubPanel.style.display !== 'none') {
+      API.renderSubscribePanel(eventSubPanel, {
+        mode: 'game',
+        event: ev,
+        idPrefix: 'event',
+        onClose: closeEventSub
+      });
+    }
+    eventSubBtn.onclick = function() {
+      const isOpen = eventSubPanel.style.display !== 'none';
+      if (isOpen) {
+        closeEventSub();
+      } else {
+        API.renderSubscribePanel(eventSubPanel, {
+          mode: 'game',
+          event: ev,
+          idPrefix: 'event',
+          onClose: closeEventSub
+        });
+        eventSubPanel.style.display = 'block';
+        eventSubBtn.setAttribute('aria-expanded', 'true');
+      }
+    };
   }
   document.getElementById('event-location').textContent = ev.location;
 

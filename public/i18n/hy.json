@@ -213,7 +213,7 @@
   "calendar.prospective_badge": "📅 Նախնական",
   "calendar.pickup_reminder": "Անվճար համայնքային բեյսբոլը տեղի է ունենում ամեն կիրակի 12:00-ին Բուշրոդ Պարկում:",
   "calendar.view_details": "Գրանցվել և Դիտել Խաղի Մանրամասները →",
-  "calendar.add_to_calendar": "Բաժանորդագրվել (.ics)",
+  "calendar.add_to_calendar": "Բաժանորդագրվել Բոլորին (.ics)",
   "calendar.export_btn": "📥 Արտահանել Օրացույցը (.ics)",
   "calendar.sync_checking": "Համաժամեցում ամպի հետ…",
   "calendar.sync_just_now": "Ամպային համաժամեցում • Հենց նոր",
@@ -222,7 +222,7 @@
   "calendar.sync_offline_cached": "Անցանց — պահված ժամանակացույց ({time})",
   "calendar.sync_offline": "Անցանց — ցուցադրվում է պահված ժամանակացույցը",
   "calendar.sync_offline_empty": "Անցանց — կապ չկա ամպի հետ",
-  "calendar.subscribe_title": "🔄 Ուղիղ Ամպային Օրացույցի Համաժամեցում (.ics)",
+  "calendar.subscribe_title": "🔄 Բոլոր Խաղերի Ուղիղ Համաժամեցում (.ics)",
   "calendar.subscribe_desc": "Բաժանորդագրվեք մեկ անգամ, որպեսզի նոր խաղերը, դաշտի փոփոխությունները և անձրևի ծանուցումները ավտոմատ թարմացվեն ձեր հեռախոսում կամ համակարգչում:",
   "calendar.subscribe_apple_btn": "🍎 Apple / Outlook (Ուղիղ Համաժամեցում)",
   "calendar.subscribe_google_btn": "📅 Google Calendar (Ուղիղ Համաժամեցում)",
@@ -259,5 +259,7 @@
   "rules.full_link": "📖 Կարդացեք կիրակնօրյա խաղի ամբողջական կանոնները ուղեցույցում ↗",
   "footer.copyright": "© 2026 Pickup Baseball Foundation. Լիցենզավորված է Apache 2.0 (Apache-2.0) արտոնագրով:",
   "nav.gallery": "Պատկերասրահ և արվեստ",
-  "nav.gallery_title": "Լուսանկարների, տեսանյութերի և արվեստի պատկերասրահ"
+  "nav.gallery_title": "Լուսանկարների, տեսանյութերի և արվեստի պատկերասրահ",
+  "calendar.subscribe_game_btn": "🔄 Բաժանորդագրվել Խաղին (.ics)",
+  "event.calendar_label": "Խաղի Օրացույց"
 }

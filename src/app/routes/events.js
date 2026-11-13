@@ -372,6 +372,20 @@ eventsRouter.get('/attendee-candidates', requireOrganizer, async (c) => {
   }
 });
 
+function createIcsResponse(icsContent, filename, forceDownload = false) {
+  const dispositionType = forceDownload ? 'attachment' : 'inline';
+  return new Response(icsContent, {
+    status: 200,
+    headers: {
+      'Content-Type': 'text/calendar; charset=utf-8',
+      'Content-Disposition': `${dispositionType}; filename="${filename}"`,
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'X-Content-Type-Options': 'nosniff',
+      'X-App-Version': CURRENT_APP_VERSION
+    }
+  });
+}
+
 eventsRouter.get('/calendar.ics', async (c) => {
   try {
     const { results: allEvents } = await c.env.DB.prepare(
@@ -379,20 +393,41 @@ eventsRouter.get('/calendar.ics', async (c) => {
     ).all();
     const origin = new URL(c.req.url).origin || 'https://www.pickupbaseballfoundation.org';
     const ics = buildCalendarIcs(allEvents || [], origin);
+    const forceDownload = c.req.query('download') === '1';
 
-    return new Response(ics, {
-      status: 200,
-      headers: {
-        'Content-Type': 'text/calendar; charset=utf-8',
-        'Content-Disposition': 'inline; filename="pickup-baseball-schedule.ics"',
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'X-Content-Type-Options': 'nosniff',
-        'X-App-Version': CURRENT_APP_VERSION
-      }
-    });
+    return createIcsResponse(ics, 'pickup-baseball-schedule.ics', forceDownload);
   } catch (err) {
     console.error('[Events] Error generating live calendar.ics feed:', err);
     return c.text('Failed to generate calendar feed.', 500);
+  }
+});
+
+eventsRouter.get('/:id/calendar.ics', async (c) => {
+  const eventId = parseInt(c.req.param('id'), 10);
+  if (isNaN(eventId) || eventId <= 0) {
+    return c.text('Invalid event ID.', 400);
+  }
+
+  try {
+    const ev = await c.env.DB.prepare(
+      "SELECT * FROM events WHERE id = ? AND status IN ('active', 'rainout')"
+    ).bind(eventId).first();
+    if (!ev || parseAllowedEmails(ev.allowed_emails).length > 0) {
+      return c.text('Event not found.', 404);
+    }
+
+    const origin = new URL(c.req.url).origin || 'https://www.pickupbaseballfoundation.org';
+    const baseTitle = ev.title || 'Sunday Pickup Baseball - Noon Game';
+    const ics = buildCalendarIcs([ev], origin, {
+      calendarName: baseTitle,
+      calendarDesc: `Live game updates for ${baseTitle} (${origin}/event.html?id=${ev.id})`
+    });
+    const forceDownload = c.req.query('download') === '1';
+
+    return createIcsResponse(ics, `pickup-baseball-game-${ev.id}.ics`, forceDownload);
+  } catch (err) {
+    console.error('[Events] Error generating single-game calendar.ics feed:', err);
+    return c.text('Failed to generate game calendar feed.', 500);
   }
 });
 

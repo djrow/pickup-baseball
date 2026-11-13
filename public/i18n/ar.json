@@ -213,7 +213,7 @@
   "calendar.prospective_badge": "📅 محتملة",
   "calendar.pickup_reminder": "مباريات البيسبول المجتمعية المجانية تُقام كل يوم أحد الساعة ١٢ ظهرًا في منتزه بوشرود!",
   "calendar.view_details": "تأكيد الحضور وعرض تفاصيل المباراة ←",
-  "calendar.add_to_calendar": "اشتراك في التقويم (.ics)",
+  "calendar.add_to_calendar": "الاشتراك في جميع المباريات (.ics)",
   "calendar.export_btn": "📥 تصدير الجدول (.ics)",
   "calendar.sync_checking": "جارٍ المزامنة مع السحابة…",
   "calendar.sync_just_now": "تمت المزامنة السحابية • للتو",
@@ -222,7 +222,7 @@
   "calendar.sync_offline_cached": "غير متصل — الجدول المحفوظ ({time})",
   "calendar.sync_offline": "غير متصل — عرض الجدول المحفوظ",
   "calendar.sync_offline_empty": "غير متصل — تعذر الاتصال بالسحابة",
-  "calendar.subscribe_title": "🔄 مزامنة التقويم السحابي المباشرة (.ics)",
+  "calendar.subscribe_title": "🔄 مزامنة تقويم جميع المباريات المباشرة (.ics)",
   "calendar.subscribe_desc": "اشترك مرة واحدة لتحديث المباريات الجديدة وتغييرات الملاعب وتنبيهات الأمطار تلقائيًا على هاتفك أو حاسوبك.",
   "calendar.subscribe_apple_btn": "🍎 Apple / Outlook (مزامنة مباشرة)",
   "calendar.subscribe_google_btn": "📅 تقويم Google (مزامنة مباشرة)",
@@ -259,5 +259,7 @@
   "rules.full_link": "📖 قراءة قواعد لعب يوم الأحد كاملة في دليل الويب ↗",
   "footer.copyright": "© 2026 مؤسسة Pickup Baseball Foundation. مرخص بموجب رخصة Apache 2.0 (Apache-2.0).",
   "nav.gallery": "المعرض والفنون",
-  "nav.gallery_title": "معرض الصور ومقاطع الفيديو والفنون"
+  "nav.gallery_title": "معرض الصور ومقاطع الفيديو والفنون",
+  "calendar.subscribe_game_btn": "🔄 الاشتراك في هذه المباراة (.ics)",
+  "event.calendar_label": "تقويم المباراة"
 }

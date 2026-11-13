@@ -213,7 +213,7 @@
   "calendar.prospective_badge": "📅 احتمالی",
   "calendar.pickup_reminder": "بیسبال رایگان محلی هر یکشنبه ساعت ۱۲ ظهر در بووشرود پارک برگزار می‌شود!",
   "calendar.view_details": "ثبت‌نام و مشاهده جزئیات بازی →",
-  "calendar.add_to_calendar": "اشتراک تقویم (.ics)",
+  "calendar.add_to_calendar": "اشتراک همه بازی‌ها (.ics)",
   "calendar.export_btn": "📥 خروجی تقویم (.ics)",
   "calendar.sync_checking": "در حال همگام‌سازی با فضای ابری…",
   "calendar.sync_just_now": "همگام با فضای ابری • همین الان",
@@ -222,7 +222,7 @@
   "calendar.sync_offline_cached": "آفلاین — برنامه ذخیره‌شده ({time})",
   "calendar.sync_offline": "آفلاین — نمایش برنامه ذخیره‌شده",
   "calendar.sync_offline_empty": "آفلاین — عدم برقراری ارتباط با سرور ابری",
-  "calendar.subscribe_title": "🔄 همگام‌سازی زنده تقویم ابری (.ics)",
+  "calendar.subscribe_title": "🔄 همگام‌سازی زنده تقویم همه بازی‌ها (.ics)",
   "calendar.subscribe_desc": "یک بار مشترک شوید تا بازی‌های تازه برنامه‌ریزی‌شده، تغییرات زمین و هشدارهای بارندگی به‌صورت خودکار در تلفن یا رایانه شما به‌روزرسانی شوند.",
   "calendar.subscribe_apple_btn": "🍎 اپل / اوت‌لوک (همگام‌سازی زنده)",
   "calendar.subscribe_google_btn": "📅 تقویم گوگل (همگام‌سازی زنده)",
@@ -259,5 +259,7 @@
   "rules.full_link": "📖 مطالعه قوانین کامل بازی یکشنبه‌ها در کتابچه راهنما ↗",
   "footer.copyright": "© 2026 بنیاد Pickup Baseball Foundation. تحت مجوز Apache 2.0 (Apache-2.0).",
   "nav.gallery": "گالری و هنر",
-  "nav.gallery_title": "گالری عکس، ویدیو و هنر"
+  "nav.gallery_title": "گالری عکس، ویدیو و هنر",
+  "calendar.subscribe_game_btn": "🔄 اشتراک این بازی (.ics)",
+  "event.calendar_label": "تقویم بازی"
 }
