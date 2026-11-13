@@ -66,6 +66,7 @@ app.use('/api', createNodeHttpBridge(honoApp, () => ({
   CHAT_DB: chatD1,
   DB: baseballD1 || d1
 })));
+app.use('/.well-known', express.static(path.join(__dirname, '..', 'public', '.well-known'), { dotfiles: 'allow' }));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 app.use((req, res, next) => {

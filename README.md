@@ -331,9 +331,9 @@ Signed-in administrators can download a complete `.sql` backup of the live Cloud
 ## 📜 Copyright & License
 © 2026 Pickup Baseball Foundation.
 
-Licensed under the **Creative Commons Attribution-NonCommercial 4.0 International License (CC BY-NC 4.0)**.
-- **BY (Attribution):** You must give appropriate credit to the Pickup Baseball Foundation.
-- **NC (NonCommercial):** You may not use the material for commercial purposes.
+Licensed under the **Apache License, Version 2.0 (Apache-2.0)**.
+- **Permissive Open Source:** Free to use, modify, and distribute with attribution and preserved copyright notices.
+- **Patent & Trademark Guardrails:** Includes an explicit patent license and prohibits using Pickup Baseball Foundation names or marks to imply endorsement.
 
 See [`LICENSE`](LICENSE) for the full license text.
 

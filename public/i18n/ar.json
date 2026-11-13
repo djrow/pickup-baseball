@@ -257,7 +257,7 @@
   "hero.handbook_btn": "📖 دليل الاستخدام وقواعد اللعب ↗",
   "rules.summary": "⚾ قواعد اللعب المعتادة أيام الأحد: مشاركة الجميع، آلة الرمي، والسلامة أولاً.",
   "rules.full_link": "📖 قراءة قواعد لعب يوم الأحد كاملة في دليل الويب ↗",
-  "footer.copyright": "© 2026 مؤسسة Pickup Baseball Foundation. مرخص بموجب رخصة المشاع الإبداعي نَسب المُصنَّف - غير تجاري 4.0 دولي (CC BY-NC 4.0).",
+  "footer.copyright": "© 2026 مؤسسة Pickup Baseball Foundation. مرخص بموجب رخصة Apache 2.0 (Apache-2.0).",
   "nav.gallery": "المعرض والفنون",
   "nav.gallery_title": "معرض الصور ومقاطع الفيديو والفنون"
 }

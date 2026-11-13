@@ -4,7 +4,7 @@ Welcome! This handbook explains **how to use** the [Pickup Baseball Foundation w
 
 The entire app was built with **zero frontend build tools** (plain HTML, CSS, and standard JavaScript) specifically so a human volunteer can read, understand, and edit it 5 or 10 years from now without framework upgrades or broken build pipelines.
 
-> ⚖️ **Copyright & License:** © 2026 Pickup Baseball Foundation. Content and code are licensed under [Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)](https://creativecommons.org/licenses/by-nc/4.0/).
+> ⚖️ **Copyright & License:** © 2026 Pickup Baseball Foundation. Content and code are licensed under the [Apache License, Version 2.0 (Apache-2.0)](https://www.apache.org/licenses/LICENSE-2.0).
 
 ---
 

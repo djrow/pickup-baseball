@@ -1537,10 +1537,10 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(apiJs.includes('footer.handbook'), 'api.js must render footer.handbook');
     assert.ok(indexHtml.includes('hero-handbook-btn'), 'index.html must include hero-handbook-btn');
     const licenseText = fs.readFileSync(path.join(__dirname, '..', 'LICENSE'), 'utf8');
-    assert.ok(licenseText.includes('Creative Commons Attribution-NonCommercial 4.0 International'), 'LICENSE must be Creative Commons BY-NC 4.0');
-    assert.ok(readmeMd.includes('Creative Commons Attribution-NonCommercial 4.0 International'), 'README.md must cite Creative Commons BY-NC 4.0');
+    assert.ok(licenseText.includes('Apache License') && licenseText.includes('Version 2.0, January 2004'), 'LICENSE must be Apache License 2.0');
+    assert.ok(readmeMd.includes('Apache License, Version 2.0 (Apache-2.0)'), 'README.md must cite Apache License 2.0');
     assert.ok(apiJs.includes('footer.copyright'), 'api.js must include footer.copyright');
-    assert.ok(apiJs.includes('Creative Commons BY-NC 4.0'), 'api.js must display Creative Commons BY-NC 4.0');
+    assert.ok(apiJs.includes('Apache License 2.0'), 'api.js must display Apache License 2.0');
   });
 
   await test('T9.17: RSS 2.0 Feed with Media RSS, Multimedia Interpretation, and Highlights Lifecycle', async () => {
@@ -2550,9 +2550,16 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     const redirectBody = await redirectRes.text();
     assert.equal(redirectBody.length, 0, 'Redirect response must have 0-byte body to avoid information leak flags');
 
-    // 5. Verify Cookie Disclaimer and object-src in public assets
+    // 5. Verify Cookie Disclaimer, security.txt, and object-src in public assets
     const headersFile = fs.readFileSync(path.join(publicDir, '_headers'), 'utf8');
     assert.ok(headersFile.includes("object-src 'none'"), '_headers CSP must contain object-src none');
+    assert.ok(headersFile.includes('/.well-known/security.txt'), '_headers must configure /.well-known/security.txt');
+    const securityTxtPath = path.join(publicDir, '.well-known', 'security.txt');
+    assert.ok(fs.existsSync(securityTxtPath), 'public/.well-known/security.txt must exist');
+    const securityTxt = fs.readFileSync(securityTxtPath, 'utf8');
+    assert.ok(securityTxt.includes('Contact: mailto:'), 'security.txt must specify a Contact address');
+    assert.ok(securityTxt.includes('Expires:'), 'security.txt must specify an Expires timestamp');
+    assert.ok(fs.existsSync(path.resolve(__dirname, '..', 'SECURITY.md')), 'SECURITY.md must exist');
     assert.ok(headersFile.includes('upgrade-insecure-requests;'), '_headers CSP must contain upgrade-insecure-requests');
 
     const apiJs = fs.readFileSync(path.join(publicDir, 'js', 'api.js'), 'utf8');

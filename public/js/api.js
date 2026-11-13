@@ -51,7 +51,7 @@ const EN_DICT = {
   "footer.subtext": "Built for simplicity and durability. Free & open-source.",
   "footer.about_site": "Built with Google Gemini in October 2026 for simplicity and durability. Free & open-source",
   "footer.handbook": "Handbook & Field Rules",
-  "footer.copyright": "© 2026 Pickup Baseball Foundation. Licensed under Creative Commons BY-NC 4.0.",
+  "footer.copyright": "© 2026 Pickup Baseball Foundation. Licensed under Apache License 2.0.",
   "hero.handbook_btn": "📖 Handbook & Field Rules ↗",
   "rules.summary": "⚾ Typical Rules of Play on Sundays: Casual, all skill levels, pitching machine, continuous batting, and safety first.",
   "rules.full_link": "📖 Read the Complete Sunday Rules of Play in the Webapp Handbook ↗",
@@ -308,7 +308,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '108',
+  CLIENT_VERSION: '109',
 
   // Current user cache
   currentUser: null,
@@ -700,7 +700,7 @@ const API = {
             <span data-i18n="footer.about_site">${this.escapeHtml(this.t('footer.about_site', 'Built with Google Gemini in October 2026 for simplicity and durability. Free & open-source'))}</span> on <a href="https://github.com/djrow/pickup-baseball" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">GitHub</a> • <a href="https://github.com/djrow/pickup-baseball/blob/trunk/HANDBOOK.md" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;" data-i18n="footer.handbook">${this.escapeHtml(this.t('footer.handbook', 'Handbook & Field Rules'))}</a> • <a href="/waiver.html" style="color: inherit; text-decoration: underline;">Player Waiver</a>.
           </p>
           <p style="margin-top: 6px; font-size: 0.75rem; color: #64748b; line-height: 1.4;">
-            <span data-i18n="footer.copyright">© 2026 Pickup Baseball Foundation. Licensed under <a href="https://creativecommons.org/licenses/by-nc/4.0/" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">Creative Commons BY-NC 4.0</a>.</span>
+            <span data-i18n="footer.copyright">© 2026 Pickup Baseball Foundation. Licensed under <a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">Apache License 2.0</a>.</span>
           </p>
         </div>
       `;
