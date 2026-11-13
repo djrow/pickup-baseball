@@ -73,7 +73,7 @@
   "event.signin_submit_btn": "ログインして出欠を送信",
   "event.name_label": "お名前 *",
   "event.name_placeholder": "お名前",
-  "event.email_label": "メールアドレス *",
+  "event.email_label": "メールアドレス",
   "event.email_placeholder": "試合リマインダー通知用",
   "event.will_attend": "参加しますか？",
   "event.attending_yes": "⚾ はい、参加します！",

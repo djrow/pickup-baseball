@@ -1438,6 +1438,61 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     detail = await apiReq('GET', `/api/events/${groupEventId}`, seedOrgCookie);
     const t1AfterCancel = detail.data.duties.find(d => d.id === task1Id);
     assert.equal(t1AfterCancel.assigned_players.length, 0, 'Declining RSVP must release group tasks');
+
+    // 11. Anonymous guest RSVPs without email address (name + optional details only)
+    const noEmailHtml = fs.readFileSync(path.join(publicDir, 'event.html'), 'utf8');
+    const noEmailEventJs = fs.readFileSync(path.join(publicDir, 'js/event.js'), 'utf8');
+    const noEmailApiJs = fs.readFileSync(path.join(publicDir, 'js/api.js'), 'utf8');
+    assert.ok(!noEmailHtml.includes('id="rsvp-email" required') && noEmailHtml.includes('Email Address (Optional)'), 'event.html must clearly mark email as optional');
+    assert.ok(!noEmailEventJs.includes("getElementById('rsvp-email').required = true"), 'event.js must not require rsvp-email for guests');
+    assert.ok(noEmailApiJs.includes('"event.email_label": "Email Address (Optional)"'), 'api.js EN_DICT must label guest email as optional');
+
+    const badEmailGuest = await apiReq('POST', `/api/events/${groupEventId}/rsvp`, null, {
+      name: 'Invalid Email Guest',
+      email: 'not-an-email',
+      players_count: 1
+    });
+    assert.equal(badEmailGuest.status, 400, 'Non-empty malformed email must still be rejected');
+
+    const anonNoEmail1 = await apiReq('POST', `/api/events/${groupEventId}/rsvp`, null, {
+      name: 'Walk-Up Player One',
+      email: '',
+      players_count: 1,
+      spectators_count: 0,
+      gear_bringing: 'Extra wooden bats'
+    });
+    assert.equal(anonNoEmail1.status, 200, 'Anonymous RSVP with name only (empty email) must succeed');
+    assert.equal(anonNoEmail1.data.status, 'attending');
+    const noEmailToken1 = anonNoEmail1.data.managementToken;
+    assert.ok(noEmailToken1, 'Email-optional guest RSVP must still issue managementToken');
+
+    const anonNoEmail2 = await apiReq('POST', `/api/events/${groupEventId}/rsvp`, null, {
+      name: 'Walk-Up Player Two',
+      players_count: 0,
+      spectators_count: 1,
+      duty_ids: [task1Id]
+    });
+    assert.equal(anonNoEmail2.status, 200, 'Second anonymous RSVP without email on same game must not collide on UNIQUE email');
+    assert.equal(anonNoEmail2.data.status, 'attending');
+
+    const noEmailLookup = await apiReq('GET', `/api/events/${groupEventId}?token=${encodeURIComponent(noEmailToken1)}`, null);
+    assert.equal(noEmailLookup.status, 200);
+    assert.ok(noEmailLookup.data.myRsvp && noEmailLookup.data.myRsvp.email === '', 'GET event with guest token must return empty email string rather than internal placeholder');
+
+    const noEmailUpdate = await apiReq('POST', `/api/events/${groupEventId}/rsvp`, null, {
+      name: 'Walk-Up Player One Updated',
+      email: '',
+      players_count: 1,
+      spectators_count: 1,
+      gear_bringing: 'Bats + Helmet',
+      management_token: noEmailToken1
+    });
+    assert.equal(noEmailUpdate.status, 200, 'Updating email-less RSVP via management_token must succeed');
+
+    detail = await apiReq('GET', `/api/events/${groupEventId}`, seedOrgCookie);
+    const updatedWalkUp = detail.data.attendees.find(a => a.name === 'Walk-Up Player One Updated');
+    assert.ok(updatedWalkUp && updatedWalkUp.gear_bringing === 'Bats + Helmet', 'Updated email-less guest details must appear on public roster');
+    assert.ok(detail.data.attendees.some(a => a.name === 'Walk-Up Player Two'), 'Second email-less guest must appear on public roster');
   });
 
   await t9.test('T9.16: Live Cloud Calendar Sync Pill, Auto-Refresh Lifecycle & Live .ics Subscription Feed', async () => {
@@ -2128,6 +2183,9 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     const fieldDuty = t1Detail.data.duties.find(d => d.title.toLowerCase().includes('drag'));
     assert.ok(machineDuty, 'Must have pitching machine duty');
     assert.ok(fieldDuty, 'Must have field dragging duty');
+    assert.equal(machineDuty.is_eligible, false, 'Logged-out visitor must not be eligible for certified task');
+    assert.equal(machineDuty.ineligibility_reason, 'To select this task you must first complete training');
+    assert.equal(fieldDuty.ineligibility_reason, 'To select this task you must first complete training');
 
     // Unauthenticated or unbadged player claiming machine duty -> 400
     const unbadgedAttempt = await apiReq('POST', `/api/events/${t1Id}/rsvp`, null, {
@@ -2137,7 +2195,8 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
       duty_ids: [machineDuty.id]
     });
     assert.equal(unbadgedAttempt.status, 400);
-    assert.ok(unbadgedAttempt.data.error.includes('Pitching Machine Badge') || unbadgedAttempt.data.error.includes('badged account'));
+    assert.ok(unbadgedAttempt.data.error.includes('complete training'));
+    assert.ok(unbadgedAttempt.data.error.includes('Pitching Machine Badge'));
 
     // Register a certified worker
     const workerUser = db.prepare("INSERT INTO users (name, email, role, machine_badge, field_badge, hero_credits) VALUES (?, ?, 'player', 1, 1, 0)").run(
@@ -2759,15 +2818,21 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     const { event: bpEvent } = await createEvRes.json();
     assert.ok(bpEvent && bpEvent.id);
 
-    // 3. GET event details - verify bp_signups is empty initially
+    // 3. GET event details (anonymous) - verify bp_signups is empty and canViewBpOrder is false
     const getEvRes = await fetch(`${baseUrl}/api/events/${bpEvent.id}`);
     assert.equal(getEvRes.status, 200);
     const evData = await getEvRes.json();
     assert.ok(Array.isArray(evData.bp_signups), 'bp_signups must be an array');
     assert.equal(evData.bp_signups.length, 0);
+    assert.equal(evData.canViewBpOrder, false, 'Anonymous viewer must have canViewBpOrder = false');
 
-    // 4. Standalone GET /api/events/:id/bp-order
-    const getBpRes = await fetch(`${baseUrl}/api/events/${bpEvent.id}/bp-order`);
+    // 4. Standalone GET /api/events/:id/bp-order must require authentication (401)
+    const anonBpRes = await fetch(`${baseUrl}/api/events/${bpEvent.id}/bp-order`);
+    assert.equal(anonBpRes.status, 401, 'Anonymous GET /bp-order must return 401');
+
+    const getBpRes = await fetch(`${baseUrl}/api/events/${bpEvent.id}/bp-order`, {
+      headers: { 'Cookie': seedPlayerCookie }
+    });
     assert.equal(getBpRes.status, 200);
     const bpData = await getBpRes.json();
     assert.equal(bpData.event_id, bpEvent.id);
@@ -2831,8 +2896,17 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     const p1Move = await p1MoveRes.json();
     assert.equal(p1Move.slot_number, 5);
 
-    // Verify Slot #1 is now open and Slot #5 is occupied
-    const checkOrderRes = await fetch(`${baseUrl}/api/events/${bpEvent.id}/bp-order`);
+    // Verify Slot #1 is now open and Slot #5 is occupied (signed-in sees it; anonymous must NOT)
+    const anonCheckOrderRes = await fetch(`${baseUrl}/api/events/${bpEvent.id}/bp-order`);
+    assert.equal(anonCheckOrderRes.status, 401, 'Anonymous user must be blocked from GET /bp-order');
+    const anonEvAfterClaim = await (await fetch(`${baseUrl}/api/events/${bpEvent.id}`)).json();
+    assert.equal(anonEvAfterClaim.bp_signups.length, 0, 'Anonymous GET /events/:id must NOT leak bp_signups');
+    assert.equal(anonEvAfterClaim.bpCount, 2, 'Aggregate bpCount may reflect count without exposing player names');
+
+    const checkOrderRes = await fetch(`${baseUrl}/api/events/${bpEvent.id}/bp-order`, {
+      headers: { 'Cookie': seedPlayerCookie }
+    });
+    assert.equal(checkOrderRes.status, 200);
     const { bp_signups: currentSignups } = await checkOrderRes.json();
     assert.equal(currentSignups.length, 2);
     assert.equal(currentSignups.some(s => s.slot_number === 1), false, 'Slot 1 must now be open');
@@ -2874,11 +2948,37 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     const rsvpBpData = await rsvpWithBpRes.json();
     assert.ok(rsvpBpData.message.includes('Batting Practice slot #1'));
 
-    // Verify 3 signups exist now
-    const orderAfterRsvp = await (await fetch(`${baseUrl}/api/events/${bpEvent.id}/bp-order`)).json();
+    // Verify 3 signups exist now when signed in (still hidden from anonymous callers)
+    const orderAfterRsvp = await (await fetch(`${baseUrl}/api/events/${bpEvent.id}/bp-order`, {
+      headers: { 'Cookie': seedPlayerCookie }
+    })).json();
     assert.equal(orderAfterRsvp.bp_signups.length, 3);
     const slot1Occupant = orderAfterRsvp.bp_signups.find(s => s.slot_number === 1);
     assert.ok(slot1Occupant && slot1Occupant.player_name.includes('Alex Slugger'));
+
+    // Verify invite-only event batting order blocks uninvited signed-in users (403) and allows invited/organizer (200)
+    const privBpCreate = await apiReq('POST', '/api/events', seedOrgCookie, {
+      title: 'Private Invite-Only BP Game',
+      location: 'Secret Diamond',
+      event_date: new Date(Date.now() + 86400000 * 6).toISOString(),
+      allowed_emails: ['vip_bp_only@sundaypickup.org']
+    });
+    assert.equal(privBpCreate.status, 200);
+    const privBpId = privBpCreate.data.eventId;
+    const privBpUninvited = await fetch(`${baseUrl}/api/events/${privBpId}/bp-order`, {
+      headers: { 'Cookie': seedPlayerCookie }
+    });
+    assert.equal(privBpUninvited.status, 403, 'Uninvited signed-in user must get 403 on invite-only /bp-order');
+    const privBpOrg = await fetch(`${baseUrl}/api/events/${privBpId}/bp-order`, {
+      headers: { 'Cookie': seedOrgCookie }
+    });
+    assert.equal(privBpOrg.status, 200, 'Organizer/invited user must get 200 on invite-only /bp-order');
+
+    // Verify Attendee Roster terminology & BP privacy gate in UI files
+    assert.ok(eventHtml.includes('Attendee Roster'), 'event.html must label roster as Attendee Roster');
+    assert.ok(eventJs.includes('Attendee Roster is Private') && eventJs.includes('Non-Playing'), 'event.js must use Attendee Roster and Non-Playing guest labels');
+    assert.ok(eventJs.includes('Batting Practice Order is Private'), 'event.js must hide BP grid behind login privacy gate when signed out');
+    assert.ok(apiJs.includes('"event.roster_private_title": "Attendee Roster is Private"'), 'api.js EN_DICT must label private roster as Attendee Roster');
 
     // 12. Delete / withdraw from BP slot
     const deleteRes = await fetch(`${baseUrl}/api/events/${bpEvent.id}/bp-order/${p1SignupId}`, {
@@ -2893,7 +2993,9 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
       headers: { 'Cookie': seedOrgCookie }
     });
     assert.equal(clearRes.status, 200);
-    const clearedOrder = await (await fetch(`${baseUrl}/api/events/${bpEvent.id}/bp-order`)).json();
+    const clearedOrder = await (await fetch(`${baseUrl}/api/events/${bpEvent.id}/bp-order`, {
+      headers: { 'Cookie': seedOrgCookie }
+    })).json();
     assert.equal(clearedOrder.bp_signups.length, 0);
 
     // 14. Call rainout and verify BP signup returns 400

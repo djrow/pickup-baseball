@@ -73,7 +73,7 @@
   "event.signin_submit_btn": "로그인 후 참가 신청 가능",
   "event.name_label": "이름 *",
   "event.name_placeholder": "이름 입력",
-  "event.email_label": "이메일 주소 *",
+  "event.email_label": "이메일 주소",
   "event.email_placeholder": "경기 알림 수신용 이메일",
   "event.will_attend": "경기에 참가하시나요?",
   "event.attending_yes": "⚾ 네, 참가합니다!",

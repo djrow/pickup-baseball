@@ -286,11 +286,12 @@ function renderEventDetails() {
   } else {
     if (rosterLabel) rosterLabel.textContent = API.t('event.roster_count', 'Roster Count');
     if (totalSpectators > 0) {
+      const totalAttendeesAll = totalPlayers + totalSpectators;
       document.getElementById('event-attendee-count').innerHTML = `
         <div style="display: flex; flex-direction: column; line-height: 1.2;">
-          <span>${API.escapeHtml(API.t('home.players_count', { count: totalPlayers }))}</span>
-          <span style="font-size: 0.8rem; font-weight: 600; color: var(--secondary); margin-top: 2px;">
-            + ${totalSpectators} ${totalSpectators === 1 ? 'Spectator' : 'Spectators'}
+          <span>${totalAttendeesAll} ${totalAttendeesAll === 1 ? 'Attendee' : 'Attendees'}</span>
+          <span style="font-size: 0.78rem; font-weight: 600; color: var(--secondary); margin-top: 2px;">
+            ${totalPlayers} ${totalPlayers === 1 ? 'Player' : 'Players'} + ${totalSpectators} Non-Playing
           </span>
         </div>
       `;
@@ -366,8 +367,11 @@ function renderAttendeesRoster() {
 
   const confirmedPlayers = eventData.totalAttendees != null ? eventData.totalAttendees : attendees.length;
   const confirmedSpectators = eventData.totalSpectators != null ? eventData.totalSpectators : 0;
+  const totalHeadcount = confirmedPlayers + confirmedSpectators;
 
-  if (maxPlayers && maxPlayers > 0) {
+  if (confirmedSpectators > 0) {
+    rosterBadge.textContent = `👥 ${totalHeadcount} ${totalHeadcount === 1 ? 'Attendee' : 'Attendees'} (${confirmedPlayers}${maxPlayers ? '/' + maxPlayers : ''} ${confirmedPlayers === 1 ? 'Player' : 'Players'})`;
+  } else if (maxPlayers && maxPlayers > 0) {
     rosterBadge.textContent = `⚾ ${confirmedPlayers}/${maxPlayers} Players`;
   } else {
     rosterBadge.textContent = `⚾ ${confirmedPlayers} ${confirmedPlayers === 1 ? 'Player' : 'Players'}`;
@@ -376,7 +380,7 @@ function renderAttendeesRoster() {
   if (spectatorsBadge) {
     if (confirmedSpectators > 0) {
       spectatorsBadge.style.display = 'inline-flex';
-      spectatorsBadge.textContent = `👏 ${confirmedSpectators} ${confirmedSpectators === 1 ? 'Spectator' : 'Spectators'}`;
+      spectatorsBadge.textContent = `👏 ${confirmedSpectators} Non-Playing ${confirmedSpectators === 1 ? 'Guest' : 'Guests'}`;
     } else {
       spectatorsBadge.style.display = 'none';
       spectatorsBadge.textContent = '';
@@ -391,13 +395,13 @@ function renderAttendeesRoster() {
       <div class="roster-private-card" style="text-align: center; padding: 28px 20px; background: var(--surface-2, #f5f8f7); border: 1.5px dashed var(--border); border-radius: 12px; margin-top: 8px;">
         <div style="font-size: 2.2rem; margin-bottom: 10px;">🔒</div>
         <h3 style="margin: 0 0 8px 0; color: var(--text); font-size: 1.15rem; font-weight: 700;">
-          ${API.escapeHtml(API.t('event.roster_private_title', 'Player Roster is Private'))}
+          ${API.escapeHtml(API.t('event.roster_private_title', 'Attendee Roster is Private'))}
         </h3>
         <p style="margin: 0 auto 16px auto; max-width: 440px; color: var(--text-muted); font-size: 0.92rem; line-height: 1.5;">
-          ${API.escapeHtml(API.t('event.roster_private_desc', "To protect privacy, individual names, spectators, and task assignments are only visible to attendees. RSVP above to see expected attendees!"))}
+          ${API.escapeHtml(API.t('event.roster_private_desc', "To protect attendee privacy, individual names, non-playing guests, and task assignments are only visible to attendees. RSVP above to see the attendee roster!"))}
         </p>
         <a href="#rsvp-section" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 8px; text-decoration: none; padding: 9px 18px; font-size: 0.9rem; font-weight: 600; border-radius: 8px;">
-          <span>⚾</span> <span>${API.escapeHtml(API.t('event.roster_private_cta', 'RSVP to View Roster'))}</span>
+          <span>⚾</span> <span>${API.escapeHtml(API.t('event.roster_private_cta', 'RSVP to View Attendee Roster'))}</span>
         </a>
       </div>
     `;
@@ -442,12 +446,12 @@ function renderAttendeesRoster() {
           }
           if (sCount > 0) {
             if (pCount === 0 && translatedDuties) {
-              roleBadges.push(`<span class="badge badge-volunteer" style="font-size: 0.7rem;">🙌 ${sCount === 1 ? 'Volunteer' : (sCount + ' Volunteers')}</span>`);
+              roleBadges.push(`<span class="badge badge-volunteer" style="font-size: 0.7rem;">🙌 ${sCount === 1 ? 'Volunteer (Non-Playing)' : (sCount + ' Volunteers (Non-Playing)')}</span>`);
             } else {
-              roleBadges.push(`<span class="badge badge-spectator" style="font-size: 0.7rem;">👏 ${sCount} ${sCount === 1 ? 'Spectator' : 'Spectators'}</span>`);
+              roleBadges.push(`<span class="badge badge-spectator" style="font-size: 0.7rem;">👏 ${sCount} Non-Playing ${sCount === 1 ? 'Guest' : 'Guests'}</span>`);
             }
           } else if (pCount === 0 && translatedDuties) {
-            roleBadges.push(`<span class="badge badge-volunteer" style="font-size: 0.7rem;">🙌 Volunteer</span>`);
+            roleBadges.push(`<span class="badge badge-volunteer" style="font-size: 0.7rem;">🙌 Volunteer (Non-Playing)</span>`);
           }
 
           return `
@@ -997,7 +1001,7 @@ async function setupRsvpState(preserveAlertHtml) {
     if (loginPrompt) loginPrompt.style.display = 'flex';
     if (guestFields) guestFields.style.display = 'grid';
     document.getElementById('rsvp-name').required = true;
-    document.getElementById('rsvp-email').required = true;
+    document.getElementById('rsvp-email').required = false;
   }
 
   if (!preserveAlertHtml && isRestricted && isAllowed && user && alertDiv && (!myRsvp || myRsvp.status !== 'attending')) {
@@ -1716,7 +1720,9 @@ function renderBpOrder() {
     bpSection.style.opacity = isRainout ? '0.6' : '1';
   }
 
-  const signups = eventData.bp_signups || [];
+  const isSignedIn = Boolean(API.currentUser);
+  const canViewBpOrder = Boolean(isSignedIn && (eventData.canViewBpOrder !== false));
+  const signups = canViewBpOrder ? (eventData.bp_signups || []) : [];
   const signupMap = new Map();
   let maxSlot = 15;
   for (let i = 0; i < signups.length; i++) {
@@ -1726,10 +1732,13 @@ function renderBpOrder() {
   }
 
   const totalDisplaySlots = Math.max(15, maxSlot);
+  const aggregateBpCount = canViewBpOrder
+    ? signups.length
+    : (eventData.bpCount != null ? eventData.bpCount : 0);
 
   const badgeEl = document.getElementById('bp-slots-badge');
   if (badgeEl) {
-    badgeEl.textContent = `${signups.length}/${totalDisplaySlots} Slots`;
+    badgeEl.textContent = `${aggregateBpCount}/${totalDisplaySlots} Slots`;
   }
 
   const metaBpSummary = document.getElementById('event-bp-summary');
@@ -1738,7 +1747,7 @@ function renderBpOrder() {
       metaBpSummary.textContent = 'Cancelled (Rainout)';
       metaBpSummary.style.color = 'var(--danger)';
     } else {
-      metaBpSummary.textContent = `${signups.length}/${totalDisplaySlots} Slots Claimed`;
+      metaBpSummary.textContent = `${aggregateBpCount}/${totalDisplaySlots} Slots Claimed`;
       metaBpSummary.style.color = 'var(--primary)';
     }
   }
@@ -1746,11 +1755,33 @@ function renderBpOrder() {
   const isOrganizer = Boolean(API.currentUser && (API.currentUser.canManageEvents || API.currentUser.isAdmin));
   const orgControls = document.getElementById('bp-organizer-controls');
   if (orgControls) {
-    orgControls.style.display = (isOrganizer && signups.length > 0) ? 'inline-flex' : 'none';
+    orgControls.style.display = (canViewBpOrder && isOrganizer && signups.length > 0) ? 'inline-flex' : 'none';
   }
 
-  const mySignup = signups.find(function(s) { return s.is_mine; });
   const quickJoinBtn = document.getElementById('bp-quick-claim-btn') || document.getElementById('bp-quick-join-btn');
+  if (!canViewBpOrder) {
+    if (quickJoinBtn) quickJoinBtn.style.display = 'none';
+    container.innerHTML = `
+      <div class="roster-private-card" style="grid-column: 1 / -1; text-align: center; padding: 24px 18px; background: var(--surface-2, #f5f8f7); border: 1.5px dashed var(--border); border-radius: 12px; margin-top: 6px;">
+        <div style="font-size: 2rem; margin-bottom: 8px;">🔒</div>
+        <h3 style="margin: 0 0 6px 0; color: var(--text); font-size: 1.08rem; font-weight: 700;">
+          Batting Practice Order is Private
+        </h3>
+        <p style="margin: 0 auto 14px auto; max-width: 440px; color: var(--text-muted); font-size: 0.88rem; line-height: 1.5;">
+          Sign in to view the batting practice lineup and claim a hitting slot.
+        </p>
+        <a href="/login.html" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 8px; text-decoration: none; padding: 8px 16px; font-size: 0.88rem; font-weight: 600; border-radius: 8px;">
+          <span>⚾</span> <span>Log In to View Order</span>
+        </a>
+      </div>
+    `;
+    return;
+  }
+
+  if (quickJoinBtn) {
+    quickJoinBtn.style.display = 'inline-flex';
+  }
+  const mySignup = signups.find(function(s) { return s.is_mine; });
   if (quickJoinBtn) {
     if (isRainout) {
       quickJoinBtn.disabled = true;

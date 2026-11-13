@@ -73,7 +73,7 @@
   "event.signin_submit_btn": "سجل الدخول لتأكيد الحضور",
   "event.name_label": "الاسم *",
   "event.name_placeholder": "اسمك",
-  "event.email_label": "البريد الإلكتروني *",
+  "event.email_label": "البريد الإلكتروني",
   "event.email_placeholder": "لإشعارات وتذكيرات المباراة",
   "event.will_attend": "هل ستحضر؟",
   "event.attending_yes": "⚾ نعم، سألعب!",

@@ -73,7 +73,7 @@
   "event.signin_submit_btn": "Մուտք Գործեք Գրանցվելու Համար",
   "event.name_label": "Անուն *",
   "event.name_placeholder": "Ձեր անունը",
-  "event.email_label": "Էլ. Փոստի Հասցե *",
+  "event.email_label": "Էլ. Փոստի Հասցե",
   "event.email_placeholder": "Խաղի հիշեցումներ ստանալու համար",
   "event.will_attend": "Կմասնակցե՞ք:",
   "event.attending_yes": "⚾ Այո, խաղալու եմ:",

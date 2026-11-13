@@ -73,7 +73,7 @@
   "event.signin_submit_btn": "Mag-Sign In para Mag-RSVP",
   "event.name_label": "Pangalan *",
   "event.name_placeholder": "Ang iyong pangalan",
-  "event.email_label": "Email Address *",
+  "event.email_label": "Email Address (Optional)",
   "event.email_placeholder": "Para sa mga paalala sa laro",
   "event.will_attend": "Pupunta ka ba?",
   "event.attending_yes": "⚾ Oo, maglalaro ako!",

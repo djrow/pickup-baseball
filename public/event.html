@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Game Details & RSVP - Sunday Pickup Baseball</title>
-  <link rel="stylesheet" href="/css/style.css?v=125">
+  <link rel="stylesheet" href="/css/style.css?v=126">
   <link rel="alternate" type="application/rss+xml" title="Sunday Pickup Baseball Highlights &amp; Updates" href="/feed.xml">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
@@ -202,8 +202,8 @@
                 <input type="text" id="rsvp-name" placeholder="Your name or group name" data-i18n-placeholder="event.name_placeholder" required>
               </div>
               <div class="form-group" style="margin-bottom: 0;">
-                <label for="rsvp-email" data-i18n="event.email_label">Email Address *</label>
-                <input type="email" id="rsvp-email" placeholder="For game reminder notifications" data-i18n-placeholder="event.email_placeholder" required>
+                <label for="rsvp-email" data-i18n="event.email_label">Email Address (Optional)</label>
+                <input type="email" id="rsvp-email" placeholder="Optional — only for email confirmations &amp; reminders" data-i18n-placeholder="event.email_placeholder">
               </div>
             </div>
 
@@ -281,20 +281,20 @@
                 </button>
               </div>
               <span style="font-size: 0.78rem; color: var(--text-muted);" data-i18n="event.rsvp_email_note">
-                📬 Confirmation email + 24h game reminder
+                📬 Email confirmation &amp; reminders sent if an email is provided
               </span>
             </div>
           </div>
         </form>
       </section>
 
-      <!-- Combined Expected Attendees Roster & Batting Practice (BP) Order Card -->
+      <!-- Combined Attendee Roster & Batting Practice (BP) Order Card -->
       <section class="card roster-bp-card" id="roster-bp-card" style="border-top: 4px solid var(--secondary);">
         <div class="card-header" style="margin-bottom: 6px;">
           <div style="display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px;">
-            <h2 class="card-title" style="font-size: 1.18rem; margin: 0;" data-i18n="event.roster_title">👥 Expected Attendees</h2>
+            <h2 class="card-title" style="font-size: 1.18rem; margin: 0;" data-i18n="event.roster_title">👥 Attendee Roster</h2>
             <p style="font-size: 0.78rem; color: var(--text-muted); margin: 0;" data-i18n="event.roster_desc">
-              Players, spectators, shared gear, and group tasks.
+              Players, non-playing guests, shared gear, and group tasks.
             </p>
           </div>
           <div id="roster-badges-wrap" style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
@@ -424,8 +424,8 @@
 
   <footer id="site-footer" class="site-footer"></footer>
 
-  <script src="/js/api.js?v=125"></script>
-  <script src="/js/weather.js?v=125"></script>
-  <script src="/js/event.js?v=125"></script>
+  <script src="/js/api.js?v=126"></script>
+  <script src="/js/weather.js?v=126"></script>
+  <script src="/js/event.js?v=126"></script>
 </body>
 </html>

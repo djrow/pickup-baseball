@@ -33,6 +33,13 @@ import {
 export const eventsRouter = new Hono();
 
 const AVATAR_EXPR = `CASE WHEN u.avatar_url LIKE 'data:%' THEN '/api/users/' || u.id || '/avatar?v=' || length(u.avatar_url) ELSE COALESCE(u.avatar_url, '') END`;
+const GUEST_NO_EMAIL_SUFFIX = '@noemail.invalid';
+
+function isDeliverableEmail(email) {
+  if (!email || typeof email !== 'string') return false;
+  const trimmed = email.trim().toLowerCase();
+  return Boolean(trimmed.includes('@') && !trimmed.endsWith(GUEST_NO_EMAIL_SUFFIX));
+}
 
 function runBackground(c, promise) {
   try {
@@ -73,12 +80,14 @@ async function promoteNextWaitlistedPlayer(c, origin, eventId) {
     await db.prepare("UPDATE attendees SET status = 'attending' WHERE id = ?").bind(nextWaitlisted.id).run();
     if (!firstPromoted) firstPromoted = nextWaitlisted;
 
-    runBackground(c, sendWaitlistPromotionEmail(c.env, origin, {
-      email: nextWaitlisted.email,
-      name: nextWaitlisted.name,
-      event,
-      managementToken: nextWaitlisted.management_token
-    }).catch(err => console.error('[Waitlist] Failed to dispatch promotion email:', err)));
+    if (isDeliverableEmail(nextWaitlisted.email)) {
+      runBackground(c, sendWaitlistPromotionEmail(c.env, origin, {
+        email: nextWaitlisted.email,
+        name: nextWaitlisted.name,
+        event,
+        managementToken: nextWaitlisted.management_token
+      }).catch(err => console.error('[Waitlist] Failed to dispatch promotion email:', err)));
+    }
   }
 
   return firstPromoted;
@@ -108,6 +117,7 @@ export async function sendRemindersForEventD1(db, env, origin, event) {
 
   const list = attendees || [];
   await runBoundedConcurrency(list, 5, async (att) => {
+    if (!isDeliverableEmail(att.email)) return;
     try {
       await sendEventReminder(env, origin, {
         email: att.email,
@@ -148,6 +158,7 @@ async function notifyConfirmedAttendees(c, event, note, emailFn) {
   ).bind(event.id).all();
   const origin = new URL(c.req.url).origin;
   await runBoundedConcurrency(attendees || [], 5, async (att) => {
+    if (!isDeliverableEmail(att.email)) return;
     try {
       await emailFn(c.env, origin, {
         email: att.email,
@@ -642,6 +653,9 @@ eventsRouter.get('/:id', async (c) => {
     const myRsvp = (batchRes[6] && batchRes[6].results && batchRes[6].results[0]) || null;
     if (myRsvp) {
       myRsvp.duty_ids = JSON.parse(myRsvp.duty_ids || '[]');
+      if (!isDeliverableEmail(myRsvp.email)) {
+        myRsvp.email = '';
+      }
     }
 
     const isOrganizer = Boolean(user && (user.canManageEvents || user.isAdmin));
@@ -702,7 +716,7 @@ eventsRouter.get('/:id', async (c) => {
           }
         } else {
           isEligible = false;
-          ineligibilityReason = 'Sign in with a certified badged account to select paid tasks.';
+          ineligibilityReason = 'To select this task you must first complete training';
         }
       }
 
@@ -769,6 +783,9 @@ eventsRouter.get('/:id', async (c) => {
       delete safeEventObj.allowed_emails;
     }
 
+    const canViewBpOrder = Boolean(user && canUserAccessEvent(user, earlyAllowedList));
+    const visibleBpSignups = canViewBpOrder ? decoratedBpSignups : [];
+
     const visibleAttendees = !canViewRoster
       ? []
       : (user ? attendees : attendees.filter(a => myRsvp && a.id === myRsvp.id));
@@ -782,7 +799,9 @@ eventsRouter.get('/:id', async (c) => {
       attendees: visibleAttendees,
       waitlist: visibleWaitlist,
       comments,
-      bp_signups: decoratedBpSignups,
+      bp_signups: visibleBpSignups,
+      bpCount: bpSignups.length,
+      canViewBpOrder,
       myRsvp,
       canViewRoster,
       totalAttendees: totalConfirmedPlayers,
@@ -1033,38 +1052,62 @@ eventsRouter.post('/:id/rsvp', async (c) => {
 
     let userId = user ? user.id : null;
     let isGuest = user ? 0 : 1;
+    let hasEmail = false;
 
     if (user) {
       name = (name ? String(name).trim() : user.name).slice(0, 120);
       email = user.email;
+      hasEmail = isDeliverableEmail(email);
     } else {
       if (!name || !String(name).trim()) return c.json({ error: 'Your name is required to RSVP.' }, 400);
-      if (!email || typeof email !== 'string' || !email.includes('@')) return c.json({ error: 'A valid email address is required.' }, 400);
       name = String(name).trim().slice(0, 120);
-      email = email.trim().toLowerCase();
+      const rawEmail = email != null ? String(email).trim().toLowerCase() : '';
+      if (rawEmail !== '') {
+        if (!rawEmail.includes('@') || rawEmail.length > 254 || rawEmail.endsWith(GUEST_NO_EMAIL_SUFFIX)) {
+          return c.json({ error: 'Please enter a valid email address or leave it blank.' }, 400);
+        }
+        email = rawEmail;
+        hasEmail = true;
 
-      const existingUser = await db.prepare('SELECT id FROM users WHERE email = ?').bind(email).first();
-      if (existingUser) {
-        userId = existingUser.id;
-        isGuest = 0;
+        const existingUser = await db.prepare('SELECT id FROM users WHERE email = ?').bind(email).first();
+        if (existingUser) {
+          userId = existingUser.id;
+          isGuest = 0;
+        }
+      } else {
+        email = '';
+        hasEmail = false;
       }
     }
 
-    const banRecord = await db.prepare('SELECT id FROM banned_emails WHERE email = ?').bind(email).first();
-    if (banRecord) {
-      return c.json({ error: 'This email address has been restricted from registering.' }, 403);
+    if (hasEmail) {
+      const banRecord = await db.prepare('SELECT id FROM banned_emails WHERE email = ?').bind(email).first();
+      if (banRecord) {
+        return c.json({ error: 'This email address has been restricted from registering.' }, 403);
+      }
     }
 
     const allowedList = parseAllowedEmails(event.allowed_emails);
     if (allowedList.length > 0 && status === 'attending') {
-      if (!(user && user.canManageEvents) && !allowedList.includes(email.toLowerCase())) {
-        return c.json({ error: 'RSVP for this game is restricted to invited player accounts. Your email is not on the allowed list.' }, 403);
+      if (!(user && user.canManageEvents)) {
+        if (!hasEmail) {
+          return c.json({ error: 'RSVP for this invite-only game requires signing in or entering an invited email address.' }, 403);
+        }
+        if (!allowedList.includes(email.toLowerCase())) {
+          return c.json({ error: 'RSVP for this game is restricted to invited player accounts. Your email is not on the allowed list.' }, 403);
+        }
       }
     }
 
     const cleanGear = String(gear_bringing || '').trim().slice(0, 300);
     const mgmtToken = management_token || generateToken();
-    const existingAttendee = await db.prepare('SELECT * FROM attendees WHERE event_id = ? AND email = ?').bind(eventId, email).first();
+    let existingAttendee = null;
+    if (!user && management_token) {
+      existingAttendee = await db.prepare('SELECT * FROM attendees WHERE event_id = ? AND management_token = ?').bind(eventId, management_token).first();
+    }
+    if (!existingAttendee && hasEmail) {
+      existingAttendee = await db.prepare('SELECT * FROM attendees WHERE event_id = ? AND email = ?').bind(eventId, email).first();
+    }
     const wasAttending = existingAttendee && existingAttendee.status === 'attending';
     const prevPlayersCount = existingAttendee
       ? (existingAttendee.players_count != null ? existingAttendee.players_count : (1 + (existingAttendee.additional_guests || 0)))
@@ -1072,10 +1115,15 @@ eventsRouter.post('/:id/rsvp', async (c) => {
 
     let finalStatus = status;
     if (status === 'attending' && playersCount > 0 && event.max_players && event.max_players > 0) {
-      const activeRow = await db.prepare(`
-        SELECT COALESCE(SUM(COALESCE(players_count, 1 + COALESCE(additional_guests, 0))), 0) as total
-        FROM attendees WHERE event_id = ? AND status = 'attending' AND email != ?
-      `).bind(eventId, email).first();
+      const activeRow = existingAttendee
+        ? await db.prepare(`
+            SELECT COALESCE(SUM(COALESCE(players_count, 1 + COALESCE(additional_guests, 0))), 0) as total
+            FROM attendees WHERE event_id = ? AND status = 'attending' AND id != ?
+          `).bind(eventId, existingAttendee.id).first()
+        : await db.prepare(`
+            SELECT COALESCE(SUM(COALESCE(players_count, 1 + COALESCE(additional_guests, 0))), 0) as total
+            FROM attendees WHERE event_id = ? AND status = 'attending'
+          `).bind(eventId).first();
       if ((activeRow ? activeRow.total : 0) + playersCount > event.max_players) {
         finalStatus = 'waitlist';
       }
@@ -1100,7 +1148,7 @@ eventsRouter.post('/:id/rsvp', async (c) => {
         const dType = getDutyType(duty.title);
         if (dType.isPaid) {
           if (!attendeeUser) {
-            return c.json({ error: `Selecting paid tasks (${duty.title}) requires signing in with a certified badged account.` }, 400);
+            return c.json({ error: `To select '${duty.title}', you must first complete training (${dType.badgeName}) and sign in.` }, 400);
           }
           const hasBadge = dType.type === 'machine' ? Boolean(attendeeUser.machine_badge) : Boolean(attendeeUser.field_badge);
           if (!hasBadge) {
@@ -1128,22 +1176,33 @@ eventsRouter.post('/:id/rsvp', async (c) => {
       }
     }
 
+    const activeToken = existingAttendee ? (existingAttendee.management_token || mgmtToken) : mgmtToken;
+    const storedEmail = hasEmail
+      ? email
+      : (existingAttendee ? existingAttendee.email : `guest-${activeToken}${GUEST_NO_EMAIL_SUFFIX}`);
+
     let attendeeId;
     if (existingAttendee) {
       if (!user && existingAttendee.management_token && management_token !== existingAttendee.management_token) {
         return c.json({ error: 'Invalid or missing management token for this RSVP. Please use your confirmation link or sign in.' }, 403);
       }
+      if (hasEmail && existingAttendee.email !== storedEmail) {
+        const collidingAttendee = await db.prepare('SELECT id FROM attendees WHERE event_id = ? AND email = ? AND id != ?').bind(eventId, storedEmail, existingAttendee.id).first();
+        if (collidingAttendee) {
+          return c.json({ error: 'An RSVP with this email address already exists for this game.' }, 409);
+        }
+      }
       attendeeId = existingAttendee.id;
       await db.prepare(`
         UPDATE attendees
-        SET name = ?, status = ?, gear_bringing = ?, players_count = ?, spectators_count = ?, additional_guests = ?, guest_names = ?, user_id = COALESCE(?, user_id), is_guest = ?
+        SET name = ?, email = ?, status = ?, gear_bringing = ?, players_count = ?, spectators_count = ?, additional_guests = ?, guest_names = ?, user_id = COALESCE(?, user_id), is_guest = ?
         WHERE id = ?
-      `).bind(name, finalStatus, cleanGear, playersCount, spectatorsCount, additionalGuests, cleanGuestNames, userId, isGuest, attendeeId).run();
+      `).bind(name, storedEmail, finalStatus, cleanGear, playersCount, spectatorsCount, additionalGuests, cleanGuestNames, userId, isGuest, attendeeId).run();
     } else {
       const ins = await db.prepare(`
         INSERT INTO attendees (event_id, user_id, name, email, is_guest, status, gear_bringing, players_count, spectators_count, additional_guests, guest_names, management_token)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).bind(eventId, userId, name, email, isGuest, finalStatus, cleanGear, playersCount, spectatorsCount, additionalGuests, cleanGuestNames, mgmtToken).run();
+      `).bind(eventId, userId, name, storedEmail, isGuest, finalStatus, cleanGear, playersCount, spectatorsCount, additionalGuests, cleanGuestNames, mgmtToken).run();
       attendeeId = ins.meta.last_row_id;
     }
 
@@ -1208,8 +1267,6 @@ eventsRouter.post('/:id/rsvp', async (c) => {
       await promoteNextWaitlistedPlayer(c, origin, eventId);
     }
 
-    const activeToken = existingAttendee ? (existingAttendee.management_token || mgmtToken) : mgmtToken;
-
     if (finalStatus === 'waitlist') {
       const posRow = await db.prepare(`
         SELECT COUNT(*) as count FROM attendees
@@ -1218,10 +1275,12 @@ eventsRouter.post('/:id/rsvp', async (c) => {
       `).bind(eventId, attendeeId, attendeeId, attendeeId).first();
       const waitlistPos = posRow ? posRow.count : 1;
 
-      runBackground(c, sendWaitlistConfirmation(c.env, origin, {
-        email, name, event, waitlistPosition: waitlistPos,
-        playersCount, spectatorsCount, managementToken: activeToken
-      }).catch(e => console.error('[Waitlist Email Error]:', e)));
+      if (hasEmail && isDeliverableEmail(storedEmail)) {
+        runBackground(c, sendWaitlistConfirmation(c.env, origin, {
+          email: storedEmail, name, event, waitlistPosition: waitlistPos,
+          playersCount, spectatorsCount, managementToken: activeToken
+        }).catch(e => console.error('[Waitlist Email Error]:', e)));
+      }
 
       return c.json({
         success: true,
@@ -1230,16 +1289,18 @@ eventsRouter.post('/:id/rsvp', async (c) => {
         playersCount,
         spectatorsCount,
         managementToken: activeToken,
-        message: `The playing roster is full (${event.max_players} players), so your group is #${waitlistPos} on the player waitlist! If a spot opens up, you will be automatically promoted and notified immediately.`
+        message: hasEmail
+          ? `The playing roster is full (${event.max_players} players), so your group is #${waitlistPos} on the player waitlist! If a spot opens up, you will be automatically promoted and notified immediately.`
+          : `The playing roster is full (${event.max_players} players), so your group is #${waitlistPos} on the player waitlist!`
       });
     }
 
     if (finalStatus === 'attending') {
       // Skip duplicate confirmation emails when editing an existing attending RSVP unless resend is requested
-      const shouldSendEmail = (send_confirmation_email !== false) && (!wasAttending || Boolean(resend_confirmation));
+      const shouldSendEmail = hasEmail && isDeliverableEmail(storedEmail) && (send_confirmation_email !== false) && (!wasAttending || Boolean(resend_confirmation));
       if (shouldSendEmail) {
         runBackground(c, sendRsvpConfirmation(c.env, origin, {
-          email, name, event,
+          email: storedEmail, name, event,
           dutyName: assignedDutyNames.join(', '),
           gearBringing: cleanGear,
           playersCount, spectatorsCount,
@@ -1249,10 +1310,10 @@ eventsRouter.post('/:id/rsvp', async (c) => {
       }
 
       const emailSuffix = shouldSendEmail
-        ? ` Confirmation sent to ${email}.`
+        ? ` Confirmation sent to ${storedEmail}.`
         : '';
       let confirmMsg = shouldSendEmail
-        ? `You're confirmed! A confirmation email has been sent to ${email}.`
+        ? `You're confirmed! A confirmation email has been sent to ${storedEmail}.`
         : (wasAttending ? 'Your RSVP has been updated!' : `You're confirmed!`);
       if (playersCount > 0 && spectatorsCount > 0) {
         confirmMsg = `RSVP ${wasAttending ? 'updated' : 'confirmed'} (${playersCount} ${playersCount === 1 ? 'player' : 'players'}, ${spectatorsCount} ${spectatorsCount === 1 ? 'spectator' : 'spectators'})!${emailSuffix}`;
@@ -1414,10 +1475,12 @@ eventsRouter.get('/:id/bp-order', async (c) => {
 
     const event = await db.prepare('SELECT id, title, status, allowed_emails FROM events WHERE id = ?').bind(eventId).first();
     if (!event) return c.json({ error: 'Event not found.' }, 404);
-    if (!canUserAccessEvent(user, event)) {
-      return c.json({ error: 'Access denied: this pickup game is restricted to an invite list.', restricted: true }, user ? 403 : 401);
+    if (!user) {
+      return c.json({ error: 'Sign in required to view the batting practice order.', restricted: true }, 401);
     }
-    if (!event) return c.json({ error: 'Event not found.' }, 404);
+    if (!canUserAccessEvent(user, event)) {
+      return c.json({ error: 'Access denied: this pickup game is restricted to an invite list.', restricted: true }, 403);
+    }
 
     let myAttendee = null;
     if (user) {
@@ -1517,7 +1580,11 @@ eventsRouter.post('/:id/bp-order', async (c) => {
         await db.prepare('UPDATE batting_practice_signups SET notes = ?, player_name = ? WHERE id = ?').bind(notes, playerName, slotOccupant.id).run();
         return c.json({ success: true, message: `Updated Batting Practice slot #${slotNumber}!`, slot_number: slotNumber });
       }
-      return c.json({ error: `Slot #${slotNumber} is already claimed by ${slotOccupant.player_name}. Please choose another slot.` }, 400);
+      return c.json({
+        error: user
+          ? `Slot #${slotNumber} is already claimed by ${slotOccupant.player_name}. Please choose another slot.`
+          : `Slot #${slotNumber} is already claimed. Please choose another slot.`
+      }, 400);
     }
 
     if (myCurrentSlot && !isOrganizer) {

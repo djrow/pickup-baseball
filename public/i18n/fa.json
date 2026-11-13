@@ -73,7 +73,7 @@
   "event.signin_submit_btn": "برای ثبت حضور وارد شوید",
   "event.name_label": "نام *",
   "event.name_placeholder": "نام شما",
-  "event.email_label": "نشانی ایمیل *",
+  "event.email_label": "نشانی ایمیل",
   "event.email_placeholder": "برای دریافت یادآوری بازی",
   "event.will_attend": "آیا شرکت می‌کنید؟",
   "event.attending_yes": "⚾ بله، بازی می‌کنم!",

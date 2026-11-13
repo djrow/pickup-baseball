@@ -73,7 +73,7 @@
   "event.signin_submit_btn": "请登录后提交报名",
   "event.name_label": "姓名 *",
   "event.name_placeholder": "您的名字",
-  "event.email_label": "电子邮箱 *",
+  "event.email_label": "电子邮箱",
   "event.email_placeholder": "用于接收比赛提醒通知",
   "event.will_attend": "您会参加吗？",
   "event.attending_yes": "⚾ 是的，我参加！",

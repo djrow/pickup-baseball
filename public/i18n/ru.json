@@ -73,7 +73,7 @@
   "event.signin_submit_btn": "Войдите для отправки RSVP",
   "event.name_label": "Имя *",
   "event.name_placeholder": "Ваше имя",
-  "event.email_label": "Email адрес *",
+  "event.email_label": "Email адрес",
   "event.email_placeholder": "Для напоминаний об игре",
   "event.will_attend": "Вы придете на игру?",
   "event.attending_yes": "⚾ Да, я играю!",

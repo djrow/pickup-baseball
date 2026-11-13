@@ -73,7 +73,7 @@
   "event.signin_submit_btn": "Connectez-vous pour Confirmer",
   "event.name_label": "Nom *",
   "event.name_placeholder": "Votre nom",
-  "event.email_label": "Adresse E-mail *",
+  "event.email_label": "Adresse E-mail",
   "event.email_placeholder": "Pour les rappels du match",
   "event.will_attend": "Serez-vous présent(e) ?",
   "event.attending_yes": "⚾ Oui, je joue !",

@@ -73,7 +73,7 @@
   "event.signin_submit_btn": "Đăng Nhập Để Báo Danh",
   "event.name_label": "Tên *",
   "event.name_placeholder": "Tên của bạn",
-  "event.email_label": "Địa Chỉ Email *",
+  "event.email_label": "Địa Chỉ Email",
   "event.email_placeholder": "Để nhận thông báo nhắc lịch thi đấu",
   "event.will_attend": "Bạn sẽ tham gia chứ?",
   "event.attending_yes": "⚾ Có, tôi sẽ chơi!",

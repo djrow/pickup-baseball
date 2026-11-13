@@ -73,7 +73,7 @@
   "event.signin_submit_btn": "Inicia Sesión para Confirmar",
   "event.name_label": "Nombre *",
   "event.name_placeholder": "Tu nombre",
-  "event.email_label": "Correo Electrónico *",
+  "event.email_label": "Correo Electrónico",
   "event.email_placeholder": "Para avisos y recordatorios del juego",
   "event.will_attend": "¿Asistirás?",
   "event.attending_yes": "⚾ ¡Sí, voy a jugar!",

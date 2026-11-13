@@ -73,7 +73,7 @@
   "event.signin_submit_btn": "RSVP के लिए साइन इन करें",
   "event.name_label": "नाम *",
   "event.name_placeholder": "आपका नाम",
-  "event.email_label": "ईमेल पता *",
+  "event.email_label": "ईमेल पता",
   "event.email_placeholder": "खेल रिमाइंडर सूचनाओं के लिए",
   "event.will_attend": "क्या आप शामिल होंगे?",
   "event.attending_yes": "⚾ हां, मैं खेल रहा हूँ!",
