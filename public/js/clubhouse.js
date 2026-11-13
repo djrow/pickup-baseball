@@ -2532,7 +2532,6 @@
 
     // Clubhouse Behavior Covenant modal
     var openCovenantBtn = el('btn-open-covenant');
-    var openCovenantGuestBtn = el('btn-open-covenant-guest');
     var covenantModal = el('ch-covenant-modal');
     var closeCovenantBtn = el('btn-close-covenant-modal');
     var doneCovenantBtn = el('btn-done-covenant-modal');
@@ -2543,7 +2542,6 @@
       if (covenantModal) covenantModal.classList.add('hidden');
     }
     if (openCovenantBtn) openCovenantBtn.addEventListener('click', openCovenantModal);
-    if (openCovenantGuestBtn) openCovenantGuestBtn.addEventListener('click', openCovenantModal);
     if (closeCovenantBtn) closeCovenantBtn.addEventListener('click', closeCovenantModal);
     if (doneCovenantBtn) doneCovenantBtn.addEventListener('click', closeCovenantModal);
     if (covenantModal) {
