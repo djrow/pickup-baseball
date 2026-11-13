@@ -88,6 +88,8 @@ module.exports = async function registerPwaCalendarTests(ctx, t9) {
     assert.ok(appJs.includes('is-past-card'), 'app.js must classify past event card with is-past-card');
     assert.ok(appJs.includes('sunday-past-pill'), 'app.js must render past game pill');
     assert.ok(appJs.includes('sunday-next-pill'), 'app.js must render next game pill');
+    assert.ok(appJs.includes('📜 Past<br>Game'), 'app.js must render two-line past game pill');
+    assert.ok(appJs.includes('⚾ Next<br>Game'), 'app.js must render two-line next game pill');
     assert.ok(appJs.includes('selectedUpcoming'), 'app.js must compute rolling upcoming schedule stream');
 
     const cssPath = path.join(publicDir, 'css/style.css');

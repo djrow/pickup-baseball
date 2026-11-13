@@ -2184,8 +2184,7 @@ footer.site-footer strong {
   opacity: 1;
 }
 
-.sunday-prospective-pill,
-.sunday-past-pill {
+.sunday-prospective-pill {
   font-size: 0.58rem;
   font-weight: 700;
   padding: 1px 4px;
@@ -2199,7 +2198,29 @@ footer.site-footer strong {
   flex-shrink: 0;
 }
 
-[data-theme="dark"] .sunday-prospective-pill {
+.sunday-past-pill,
+.sunday-next-pill {
+  display: inline-block;
+  text-align: center;
+  line-height: 1.1;
+  padding: 3px 7px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.sunday-past-pill {
+  font-size: 0.55rem;
+  font-weight: 700;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+[data-theme="dark"] .sunday-prospective-pill,
+[data-theme="dark"] .sunday-past-pill {
   background: rgba(255, 255, 255, 0.06);
   border-color: rgba(255, 255, 255, 0.12);
 }
@@ -2216,16 +2237,11 @@ footer.site-footer strong {
 }
 
 .sunday-next-pill {
-  font-size: 0.59rem;
+  font-size: 0.56rem;
   font-weight: 800;
-  padding: 1px 5px;
-  border-radius: 999px;
   background: var(--as-green);
   color: #ffffff;
-  letter-spacing: 0.03em;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-  white-space: nowrap;
-  flex-shrink: 0;
 }
 
 .sunday-player-badge.prospective-badge {
@@ -2254,7 +2270,7 @@ footer.site-footer strong {
 
 .sunday-card-top {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 4px;
   flex-wrap: nowrap;
@@ -2264,6 +2280,8 @@ footer.site-footer strong {
   display: inline-flex;
   align-items: baseline;
   gap: 4px;
+  flex-wrap: wrap;
+  row-gap: 1px;
   min-width: 0;
   white-space: nowrap;
 }

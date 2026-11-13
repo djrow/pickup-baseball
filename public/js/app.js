@@ -766,11 +766,11 @@ function renderCalendar(events) {
 
     let topPillHtml = '';
     if (isPast) {
-      topPillHtml = `<span class="sunday-past-pill">📜 Past Game</span>`;
+      topPillHtml = `<span class="sunday-past-pill">📜 Past<br>Game</span>`;
     } else if (isToday) {
       topPillHtml = `<span class="sunday-today-pill">${API.escapeHtml(API.t('calendar.today', 'Today'))}</span>`;
     } else if (dateKey === trueNextGameKey) {
-      topPillHtml = `<span class="sunday-next-pill">⚾ Next Game</span>`;
+      topPillHtml = `<span class="sunday-next-pill">⚾ Next<br>Game</span>`;
     } else if (!game) {
       topPillHtml = `<span class="sunday-prospective-pill">${API.escapeHtml(API.t('calendar.prospective_pill', 'Prospective'))}</span>`;
     }
