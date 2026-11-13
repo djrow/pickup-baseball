@@ -306,10 +306,24 @@ gifsRouter.post('/import-url', requireAuth, async (c) => {
       WHERE id = ?
     `).bind(gifId).first();
 
+    const meta = serializeGifMeta(created || {
+      id: gifId,
+      title,
+      tags,
+      mime_type: mimeType,
+      file_size: bytes.byteLength,
+      storage_provider: 'gdrive',
+      is_public: isPublic,
+      use_count: 1,
+      added_by: user.id,
+      added_by_name: user.name || 'Player',
+      created_at: new Date().toISOString()
+    });
+
     return c.json({
       success: true,
       deduplicated: false,
-      gif: serializeGifMeta(created)
+      gif: meta
     }, 201);
   } catch (err) {
     console.error('[GIFs] Failed to persist imported GIF metadata:', err && err.message ? err.message : err);

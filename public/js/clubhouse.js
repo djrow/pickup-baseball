@@ -2054,7 +2054,15 @@
       is_public: !isPrivateChannel
     }).then(function (res) {
       if (!res.ok || !res.data || !res.data.gif) {
-        throw new Error((res.data && res.data.error) || 'Could not import GIF URL.');
+        var errMsg = (res.data && res.data.error) || '';
+        if (!errMsg) {
+          var statusPart = res.status ? ('HTTP ' + res.status) : 'network error';
+          var rawPart = res.rawText
+            ? (' — ' + String(res.rawText).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 140))
+            : '';
+          errMsg = 'Could not import GIF URL (' + statusPart + rawPart + ').';
+        }
+        throw new Error(errMsg);
       }
       var saved = res.data.gif;
       var exists = false;

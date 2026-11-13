@@ -216,11 +216,32 @@
       }
     }
     return fetch(url, opts).then(function (res) {
+      if (typeof res.text === 'function') {
+        return res.text().then(function (text) {
+          var data = {};
+          var rawText = '';
+          if (text) {
+            try {
+              data = JSON.parse(text) || {};
+            } catch (e) {
+              rawText = String(text).slice(0, 300);
+            }
+          }
+          return {
+            ok: res.ok,
+            status: res.status,
+            data: data,
+            rawText: rawText,
+            headers: res.headers
+          };
+        });
+      }
       return res.json().catch(function () { return {}; }).then(function (data) {
         return {
           ok: res.ok,
           status: res.status,
           data: data,
+          rawText: '',
           headers: res.headers
         };
       });
