@@ -1724,8 +1724,13 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
 
     // 2. Execute weather.js in an isolated Node vm context to verify exports & heuristic execution
     const vm = require('vm');
+    const mockWidgetContainer = { innerHTML: '' };
     const sandbox = {
       window: {},
+      document: {
+        getElementById: (id) => (id === 'smart-rainout-widget' ? mockWidgetContainer : null),
+        querySelectorAll: () => []
+      },
       console: console,
       fetch: globalThis.fetch,
       Intl: Intl,
@@ -1803,6 +1808,13 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(Array.isArray(rSat.dailyForecast), 'rSat must contain dailyForecast array');
     assert.ok(rSat.effectiveMoisture < 0.10, 'Effective moisture must decay below 0.10" after 20 hours');
     assert.ok(rSat.recommendation.includes('Playable'));
+    assert.ok(rSat.maxSurfaceWater > rSat.maxHourlyRain, 'Cumulative surface water must exceed single-hour rainfall peak during multi-hour rain');
+    const rSatNoon = rSat.hourlyBreakdown.find(h => h.time === '2026-11-08T12:00');
+    assert.ok(rSatNoon && Math.abs(rSatNoon.surfaceWater - rSat.effectiveMoisture) < 1e-6, 'Noon hourly surfaceWater must match effectiveMoisture when noon is dry');
+    const rSatSat4pm = rSat.hourlyBreakdown.find(h => h.time === '2026-11-07T16:00');
+    const rSatSat5pm = rSat.hourlyBreakdown.find(h => h.time === '2026-11-07T17:00');
+    assert.ok(rSatSat4pm && rSatSat5pm && rSatSat4pm.rain === 0 && rSatSat4pm.surfaceWater > 0.30, 'Surface water must remain above 0.30" immediately after heavy Saturday rain stops');
+    assert.ok(rSatSat5pm.surfaceWater < rSatSat4pm.surfaceWater, 'Expected surface water must visibly decay during consecutive dry hours');
 
     // Test Drainage Heuristic: Scenario 3 - Event day and 9 previous days window
     const sampleDates = [
@@ -1849,6 +1861,16 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     }, '2026-11-08T12:00');
     assert.equal(rSun.status, 'rainout_risk', 'Rain 1-3h before warmups must trigger rainout risk due to standing puddles');
     assert.ok(rSun.effectiveMoisture >= 0.40, 'Surface moisture must remain high without drying time');
+
+    // Verify rendered widget clearly distinguishes Hourly Rainfall vs Expected Surface Water
+    ws.renderAssistantWidget('smart-rainout-widget', rSat, { locationName: 'Bushrod Park Field 1' });
+    const widgetHtml = mockWidgetContainer.innerHTML;
+    assert.ok(widgetHtml.includes('Hourly Rainfall vs. Expected Surface Water'), 'Widget must title the dual hourly chart');
+    assert.ok(widgetHtml.includes('Hourly Rainfall (in/hr)'), 'Widget legend must label Hourly Rainfall (in/hr)');
+    assert.ok(widgetHtml.includes('Expected Surface Water (in)'), 'Widget legend must label Expected Surface Water (in)');
+    assert.ok(widgetHtml.includes('drainage-bar-rain') && widgetHtml.includes('drainage-bar-surface'), 'Widget must render separate bars for rainfall and expected surface water');
+    assert.ok(widgetHtml.includes('💧 Rain') && widgetHtml.includes('🌊 Water'), 'Widget must label separate numeric rows for Rain and Water');
+    assert.ok(widgetHtml.includes('Noon Warmup Water:'), 'Widget must call out Noon Warmup Water summary chip');
 
     // 4. Verify UI Card & Page Integrations
     const appJs = fs.readFileSync(path.join(publicDir, 'js', 'app.js'), 'utf8');

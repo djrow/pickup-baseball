@@ -622,6 +622,9 @@
     var lastPreGameRainIdx = -1;
     var lastGameRainIdx = -1;
     var maxHourlyRain = 0;
+    var maxSurfaceWater = 0;
+    var runningSurfaceWater = 0;
+    var hourlyDecay = Math.exp(-1 / HEURISTIC_CONFIG.DRAINAGE_DECAY_HOURS);
     var hourlyBreakdown = [];
 
     var preGameCount = Math.max(0, targetIdx - startIdx);
@@ -631,6 +634,11 @@
       var r = hourlyPrecip[i] || 0;
       var actualIdx = startIdx + i;
       var isGameTime = (actualIdx >= targetIdx);
+
+      runningSurfaceWater = (runningSurfaceWater * hourlyDecay) + r;
+      if (runningSurfaceWater > maxSurfaceWater) {
+        maxSurfaceWater = runningSurfaceWater;
+      }
 
       if (!isGameTime) {
         totalRain24h += r;
@@ -652,6 +660,8 @@
         hourlyBreakdown.push({
           time: hourlyTimes[i],
           rain: r,
+          surfaceWater: runningSurfaceWater,
+          surfaceWaterFormatted: runningSurfaceWater.toFixed(2) + '"',
           hoursBefore: hoursBeforeGame,
           retention: retentionFactor,
           temp: Math.round(hourlyTemps[i]),
@@ -670,6 +680,8 @@
         hourlyBreakdown.push({
           time: hourlyTimes[i],
           rain: r,
+          surfaceWater: runningSurfaceWater,
+          surfaceWaterFormatted: runningSurfaceWater.toFixed(2) + '"',
           hoursBefore: 0,
           retention: 1,
           temp: Math.round(hourlyTemps[i]),
@@ -782,6 +794,7 @@
       hoursSinceRain: hoursSinceRain,
       rainDryingNote: rainDryingNote,
       maxHourlyRain: maxHourlyRain,
+      maxSurfaceWater: maxSurfaceWater,
       status: status,
       statusLabel: statusLabel,
       badgeClass: badgeClass,
@@ -946,6 +959,14 @@
         if (!isNaN(d2.getTime())) endDayName = daysOfWeek[d2.getUTCDay()];
       }
       var timelineRangeLabel = startDayName + ' 12 PM → ' + endDayName + ' 6 PM';
+      var scaleMax = Math.max(Number(r.maxHourlyRain) || 0, Number(r.maxSurfaceWater) || 0, 0.25);
+      var puddleThreshold = HEURISTIC_CONFIG.THRESHOLDS.DAMP_MAX;
+      var guideHtml = '';
+      if (scaleMax >= puddleThreshold) {
+        var guideTopPx = Math.max(25, Math.min(92, Math.round(25 + (1 - (puddleThreshold / scaleMax)) * 68)));
+        guideHtml = '<div class="hourly-threshold-guide" style="top: ' + guideTopPx + 'px;" title="Puddle Alert threshold: ' + puddleThreshold.toFixed(2) + '&quot; surface water"></div>';
+      }
+      var firstGameColMarked = false;
 
       var timelineItems = r.hourlyBreakdown.map(function(item) {
         var hParts = item.time.split('T')[1].split(':');
@@ -953,19 +974,38 @@
         var hourLabel = (hourNum === 0 || hourNum === 12) ? '12' : (hourNum % 12);
         var ampm = hourNum >= 12 ? 'p' : 'a';
         var shortTime = hourLabel + ampm;
-        var hasRain = item.rain >= 0.008;
-        var barHeight = hasRain ? Math.min(100, Math.max(25, item.rain * 200)) : 4;
+        var rainVal = Number(item.rain) || 0;
+        var surfaceVal = Number(item.surfaceWater) || 0;
+        var hasRain = rainVal >= 0.005;
+        var hasSurface = surfaceVal >= 0.005;
+        var rainBarHeight = hasRain ? Math.min(100, Math.max(8, Math.round((rainVal / scaleMax) * 100))) : 3;
+        var surfaceBarHeight = hasSurface ? Math.min(100, Math.max(8, Math.round((surfaceVal / scaleMax) * 100))) : 3;
         var isGame = Boolean(item.isGameTime);
-        var barColor = hasRain ? (isGame ? 'var(--secondary)' : 'var(--primary)') : 'var(--border)';
+        var isWarmupStart = false;
+        if (isGame && !firstGameColMarked) {
+          isWarmupStart = true;
+          firstGameColMarked = true;
+        }
+        var colClasses = 'drainage-col' + (isGame ? ' is-game-hour' : '') + (isWarmupStart ? ' is-warmup-hour' : '');
+        var tooltipText = item.time +
+          (isWarmupStart ? ' (Warmups 12 PM)' : (isGame ? ' (Game Window 12-6 PM)' : ' (Pre-Game Drainage)')) +
+          ' | Temp: ' + item.temp + '°F' +
+          ' | Hourly Rainfall: ' + rainVal.toFixed(2) + ' in/hr' +
+          ' | Expected Surface Water: ' + surfaceVal.toFixed(2) + ' in';
+        var safeTooltip = window.API ? window.API.escapeHtml(tooltipText) : tooltipText;
 
         return `
-          <div class="drainage-col" style="flex: 1; min-width: 18px; display: flex; flex-direction: column; align-items: center; gap: 3px; ${isGame ? 'background: rgba(0, 56, 49, 0.05); border-radius: 4px; padding: 2px 0;' : ''}" title="${item.time}${isGame ? ' (Game Window 12-6 PM)' : ' (Pre-Game Drainage)'}: ${item.rain.toFixed(2)} in/hr (${item.temp}°F)">
-            <div style="font-size: 0.65rem; color: ${isGame ? 'var(--secondary)' : 'var(--text-muted)'}; font-weight: ${isGame ? '700' : '600'};">${shortTime}</div>
-            <div style="height: 48px; width: 100%; display: flex; align-items: flex-end; justify-content: center;">
-              <div style="width: 80%; height: ${barHeight}%; background: ${barColor}; border-radius: 2px;"></div>
+          <div class="${colClasses}" title="${safeTooltip}">
+            <div class="drainage-hour-label">${shortTime}</div>
+            <div class="drainage-bars-slot">
+              <div class="drainage-bar drainage-bar-rain${hasRain ? '' : ' is-empty'}" style="height: ${rainBarHeight}%;"></div>
+              <div class="drainage-bar drainage-bar-surface${hasSurface ? '' : ' is-empty'}" style="height: ${surfaceBarHeight}%;"></div>
             </div>
-            <div style="font-size: 0.6rem; color: ${hasRain ? (isGame ? 'var(--secondary)' : 'var(--primary)') : 'var(--text-muted)'}; font-weight: 700;">
-              ${hasRain ? item.rain.toFixed(2) : '0'}
+            <div class="drainage-val-row rain${hasRain ? ' has-value' : ''}">
+              ${hasRain ? rainVal.toFixed(2) : '0'}
+            </div>
+            <div class="drainage-val-row surface${hasSurface ? ' has-value' : ''}">
+              ${hasSurface ? surfaceVal.toFixed(2) : '0'}
             </div>
           </div>
         `;
@@ -973,16 +1013,53 @@
 
       timelineHtml = `
         <div style="margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border);">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 4px;">
-            <span style="font-size: 0.82rem; font-weight: 700; color: var(--secondary);">
-              📊 Hourly Rain &amp; Drainage Timeline (${timelineRangeLabel})
+          <div class="hourly-drainage-header">
+            <span style="font-size: 0.84rem; font-weight: 700; color: var(--secondary);">
+              📊 Hourly Rainfall vs. Expected Surface Water (${timelineRangeLabel})
             </span>
-            <span style="font-size: 0.74rem; color: var(--text-muted);">
-              Rainfall (inches per hour)
-            </span>
+            <div class="hourly-drainage-summary-chips">
+              <span class="hourly-metric-chip rain">💧 Peak Rain: ${(Number(r.maxHourlyRain) || 0).toFixed(2)}"/hr</span>
+              <span class="hourly-metric-chip surface">🌊 Noon Warmup Water: ${r.effectiveMoistureFormatted}</span>
+            </div>
           </div>
-          <div style="display: flex; gap: 2px; overflow-x: auto; padding-bottom: 6px;">
-            ${timelineItems}
+          <div class="hourly-drainage-legend">
+            <span class="hourly-legend-item">
+              <span class="hourly-legend-swatch rain"></span>
+              <span>Hourly Rainfall (in/hr)</span>
+              <span class="hourly-legend-sub">· falling that hour</span>
+            </span>
+            <span class="hourly-legend-item">
+              <span class="hourly-legend-swatch surface"></span>
+              <span>Expected Surface Water (in)</span>
+              <span class="hourly-legend-sub">· left on field after τ = ${HEURISTIC_CONFIG.DRAINAGE_DECAY_HOURS}h drainage</span>
+            </span>
+            <span class="hourly-legend-item">
+              <span class="hourly-legend-swatch game-window"></span>
+              <span>Game Window (12 PM – 6 PM)</span>
+            </span>
+            ${scaleMax >= puddleThreshold ? `
+              <span class="hourly-legend-item">
+                <span class="hourly-legend-swatch threshold-line"></span>
+                <span>Puddle Alert (${puddleThreshold.toFixed(2)}")</span>
+              </span>
+            ` : ''}
+          </div>
+          <div class="hourly-drainage-scroll">
+            <div class="hourly-drainage-grid">
+              <div class="hourly-axis-col">
+                <div class="hourly-axis-hour">Hour</div>
+                <div class="hourly-axis-bars">
+                  <span>${scaleMax.toFixed(2)}"</span>
+                  <span>0.00"</span>
+                </div>
+                <div class="hourly-axis-val rain">💧 Rain</div>
+                <div class="hourly-axis-val surface">🌊 Water</div>
+              </div>
+              <div class="hourly-cols-track">
+                ${guideHtml}
+                ${timelineItems}
+              </div>
+            </div>
           </div>
         </div>
       `;
@@ -1085,7 +1162,7 @@
 
         <!-- Heuristic Transparency Note -->
         <div style="margin-top: 12px; font-size: 0.74rem; color: var(--text-muted); line-height: 1.4; background: var(--bg-subtle); padding: 8px 12px; border-radius: var(--radius-sm);">
-          💡 <strong>How the Drainage Heuristic Works:</strong> Tracks total rainfall in the 24 hours preceding 12:00 PM warmups, applying exponential soil percolation decay (half-life &tau; = ${HEURISTIC_CONFIG.DRAINAGE_DECAY_HOURS} hrs). When rain stops early enough, water clears into the subsurface drainage and the diamond stays playable. Puddle hazards only form when steady or heavy rain falls without sufficient drying hours before warmups.
+          💡 <strong>How the Drainage Heuristic Works:</strong> Tracks total rainfall in the 24 hours preceding 12:00 PM warmups, applying exponential soil percolation decay (&tau; = ${HEURISTIC_CONFIG.DRAINAGE_DECAY_HOURS} hrs). The hourly chart above compares <strong>Hourly Rainfall</strong> (blue bars/row, in/hr) against <strong>Expected Surface Water</strong> (amber bars/row, remaining inches on the field as prior rain drains). When rain stops early enough, expected surface water drops back into the playable zone before warmups.
         </div>
       </div>
     `;

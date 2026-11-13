@@ -3290,6 +3290,296 @@ footer.site-footer strong {
   border-radius: 4px;
 }
 
+.hourly-drainage-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.hourly-drainage-summary-chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.hourly-metric-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border);
+  background: var(--bg-subtle);
+  color: var(--text-main);
+}
+
+.hourly-metric-chip.rain {
+  border-color: rgba(14, 165, 233, 0.38);
+  color: #0369a1;
+  background: rgba(14, 165, 233, 0.10);
+}
+
+.hourly-metric-chip.surface {
+  border-color: rgba(245, 158, 11, 0.42);
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.11);
+}
+
+.hourly-drainage-legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  padding: 7px 10px;
+  margin-bottom: 8px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  font-size: 0.74rem;
+  color: var(--text-main);
+}
+
+.hourly-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.hourly-legend-sub {
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.hourly-legend-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 12px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.hourly-legend-swatch.rain {
+  background: #0ea5e9;
+}
+
+.hourly-legend-swatch.surface {
+  background: #f59e0b;
+}
+
+.hourly-legend-swatch.game-window {
+  width: 12px;
+  height: 12px;
+  background: rgba(0, 56, 49, 0.14);
+  border: 1px solid var(--secondary);
+}
+
+.hourly-legend-swatch.threshold-line {
+  width: 14px;
+  height: 0;
+  border-top: 2px dashed #dc2626;
+  border-radius: 0;
+}
+
+.hourly-drainage-scroll {
+  overflow-x: auto;
+  padding-bottom: 6px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.hourly-drainage-grid {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  min-width: 100%;
+  width: max-content;
+}
+
+.hourly-axis-col {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  flex: 0 0 64px;
+  width: 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 3px 6px 3px 2px;
+  background: var(--bg-card);
+  border-right: 1px solid var(--border);
+}
+
+.hourly-axis-hour {
+  height: 18px;
+  line-height: 18px;
+  font-size: 0.64rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.hourly-axis-bars {
+  height: 68px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  line-height: 1;
+}
+
+.hourly-axis-val {
+  height: 16px;
+  line-height: 16px;
+  font-size: 0.65rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.hourly-axis-val.rain {
+  color: #0369a1;
+}
+
+.hourly-axis-val.surface {
+  color: #b45309;
+}
+
+.hourly-cols-track {
+  position: relative;
+  display: flex;
+  flex: 1;
+  align-items: stretch;
+  gap: 2px;
+}
+
+.hourly-threshold-guide {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 25px; /* 3px col top padding + 18px hour + 4px gap = plot top; adjusted inline for plot offset */
+  border-top: 1.5px dashed rgba(220, 38, 38, 0.55);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.drainage-col {
+  flex: 1 0 28px;
+  min-width: 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 1px;
+  border-radius: 4px;
+  position: relative;
+  z-index: 2;
+}
+
+.drainage-col.is-game-hour {
+  background: rgba(0, 56, 49, 0.06);
+}
+
+.drainage-col.is-warmup-hour {
+  border-left: 2px solid var(--secondary);
+}
+
+.drainage-hour-label {
+  height: 18px;
+  line-height: 18px;
+  font-size: 0.64rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.drainage-col.is-game-hour .drainage-hour-label {
+  color: var(--secondary);
+  font-weight: 800;
+}
+
+.drainage-bars-slot {
+  height: 68px;
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  padding: 0 2px;
+  border-bottom: 1px solid var(--border);
+  box-sizing: border-box;
+}
+
+.drainage-bar {
+  flex: 1;
+  max-width: 8px;
+  min-width: 4px;
+  border-radius: 2px 2px 0 0;
+  transition: opacity 0.15s ease;
+}
+
+.drainage-bar-rain {
+  background: #0ea5e9;
+}
+
+.drainage-bar-surface {
+  background: #f59e0b;
+}
+
+.drainage-bar.is-empty {
+  background: var(--border);
+  opacity: 0.55;
+}
+
+.drainage-val-row {
+  height: 16px;
+  line-height: 16px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  opacity: 0.72;
+}
+
+.drainage-val-row.rain.has-value {
+  color: #0369a1;
+  opacity: 1;
+  font-weight: 800;
+}
+
+.drainage-val-row.surface.has-value {
+  color: #b45309;
+  opacity: 1;
+  font-weight: 800;
+}
+
+[data-theme="dark"] .hourly-metric-chip.rain,
+[data-theme="dark"] .hourly-axis-val.rain,
+[data-theme="dark"] .drainage-val-row.rain.has-value {
+  color: #38bdf8;
+}
+
+[data-theme="dark"] .hourly-metric-chip.surface,
+[data-theme="dark"] .hourly-axis-val.surface,
+[data-theme="dark"] .drainage-val-row.surface.has-value {
+  color: #fbbf24;
+}
+
+[data-theme="dark"] .drainage-col.is-game-hour {
+  background: rgba(52, 211, 153, 0.08);
+}
+
+[data-theme="dark"] .hourly-legend-swatch.game-window {
+  background: rgba(52, 211, 153, 0.18);
+}
+
 .admin-game-weather-row {
   display: inline-flex;
   align-items: center;
