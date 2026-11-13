@@ -118,7 +118,7 @@ const EN_DICT = {
   "feed.confirm_delete": "Delete this highlight from the community feed and RSS?",
   "feed.delete_btn": "Delete",
   "feed.game_badge": "⚾ Game Link",
-  "how.title": "How Our Pickup Baseball Program Works",
+  "how.title": "How Our Pickup Baseball Webapp Works",
   "how.s1_title": "1. RSVP Anytime",
   "how.s1_desc": "Sign up in seconds as a guest or with just your name & email. Knowing player numbers helps us balance teams and pick the right field.",
   "how.s2_title": "2. Coordinate Gear & Tasks",
@@ -308,7 +308,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '120',
+  CLIENT_VERSION: '121',
 
   // Current user cache
   currentUser: null,

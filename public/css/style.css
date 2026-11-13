@@ -2104,7 +2104,7 @@ footer.site-footer strong {
   border: 1.5px solid var(--border);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
-  padding: 20px 22px;
+  padding: 12px 14px;
   transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
@@ -2117,25 +2117,28 @@ footer.site-footer strong {
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 14px;
+  gap: 8px 12px;
   border-bottom: 1.5px solid var(--border);
-  padding-bottom: 14px;
-  margin-bottom: 16px;
+  padding-bottom: 9px;
+  margin-bottom: 10px;
 }
 
 .calendar-header-titles {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
 }
 
 .calendar-title-wrap {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .calendar-title-wrap h2 {
-  font-size: 1.35rem;
+  font-size: 1.2rem;
   font-weight: 800;
   color: var(--secondary);
   margin: 0;
@@ -2144,36 +2147,36 @@ footer.site-footer strong {
 
 .calendar-subtitle {
   margin: 4px 0 0 0;
-  font-size: 0.86rem;
+  font-size: 0.84rem;
   color: var(--text-muted);
 }
 
 .calendar-header-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
   flex-wrap: wrap;
 }
 
 .calendar-nav-controls {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 2px;
   background: var(--bg-subtle);
   border: 1.5px solid var(--border);
-  padding: 2px 4px;
+  padding: 2px 3px;
   border-radius: var(--radius-sm);
 }
 
 .calendar-nav-btn {
   background: transparent;
   border: none;
-  font-size: 1.3rem;
+  font-size: 1.15rem;
   font-weight: 700;
   color: var(--text-main);
   cursor: pointer;
-  width: 30px;
-  height: 30px;
+  width: 26px;
+  height: 26px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2188,16 +2191,16 @@ footer.site-footer strong {
 }
 
 .calendar-month-label {
-  font-size: 0.95rem;
+  font-size: 0.88rem;
   font-weight: 700;
   color: var(--secondary);
-  min-width: 140px;
+  min-width: 120px;
   text-align: center;
 }
 
 .calendar-today-btn {
-  font-size: 0.78rem !important;
-  padding: 4px 10px !important;
+  font-size: 0.74rem !important;
+  padding: 3px 8px !important;
   font-weight: 700 !important;
   border-radius: var(--radius-sm) !important;
   background: var(--bg-card) !important;
@@ -2211,7 +2214,7 @@ footer.site-footer strong {
 .calendar-sunday-track {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 12px;
+  gap: 8px;
   width: 100%;
   box-sizing: border-box;
 }
@@ -2220,17 +2223,17 @@ footer.site-footer strong {
   background: var(--bg-subtle);
   border: 1.5px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 12px 14px;
+  padding: 7px 9px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 8px;
+  gap: 4px;
   cursor: pointer;
   transition: transform 0.14s ease, border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
   user-select: none;
   position: relative;
   box-sizing: border-box;
-  min-height: 106px;
+  min-height: 0;
   text-align: start;
 }
 
@@ -2275,15 +2278,17 @@ footer.site-footer strong {
 
 .sunday-prospective-pill,
 .sunday-past-pill {
-  font-size: 0.62rem;
+  font-size: 0.58rem;
   font-weight: 700;
-  padding: 1px 5px;
+  padding: 1px 4px;
   border-radius: 4px;
   background: var(--bg-card);
   border: 1px solid var(--border);
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 [data-theme="dark"] .sunday-prospective-pill {
@@ -2303,14 +2308,16 @@ footer.site-footer strong {
 }
 
 .sunday-next-pill {
-  font-size: 0.65rem;
+  font-size: 0.59rem;
   font-weight: 800;
-  padding: 2px 6px;
+  padding: 1px 5px;
   border-radius: 999px;
   background: var(--as-green);
   color: #ffffff;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .sunday-player-badge.prospective-badge {
@@ -2341,32 +2348,44 @@ footer.site-footer strong {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
+  gap: 4px;
+  flex-wrap: nowrap;
+}
+
+.sunday-card-date-group {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+  white-space: nowrap;
 }
 
 .sunday-day-tag {
-  font-size: 0.74rem;
+  font-size: 0.68rem;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   color: var(--giants-orange);
 }
 
 .sunday-date-tag {
-  font-size: 0.96rem;
+  font-size: 0.86rem;
   font-weight: 800;
   color: var(--text-main);
+  white-space: nowrap;
 }
 
 .sunday-today-pill {
-  font-size: 0.65rem;
+  font-size: 0.59rem;
   font-weight: 800;
-  padding: 2px 6px;
+  padding: 1px 5px;
   border-radius: 999px;
   background: var(--giants-orange);
   color: #ffffff;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .sunday-card-body {
@@ -2375,17 +2394,26 @@ footer.site-footer strong {
   gap: 2px;
 }
 
+.sunday-time-weather-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
 .sunday-game-time {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 0.88rem;
+  gap: 4px;
+  font-size: 0.8rem;
   font-weight: 700;
   color: var(--text-main);
+  white-space: nowrap;
 }
 
 .sunday-game-location {
-  font-size: 0.76rem;
+  font-size: 0.72rem;
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -2396,11 +2424,11 @@ footer.site-footer strong {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
-  margin-top: 2px;
-  padding-top: 6px;
+  gap: 4px;
+  margin-top: 1px;
+  padding-top: 4px;
   border-top: 1px dashed var(--border);
-  font-size: 0.75rem;
+  font-size: 0.71rem;
 }
 
 .sunday-player-badge {
@@ -2409,11 +2437,11 @@ footer.site-footer strong {
 }
 
 .sunday-attending-pill {
-  font-size: 0.68rem;
+  font-size: 0.65rem;
   font-weight: 700;
   color: var(--as-green);
   background: rgba(0, 56, 49, 0.08);
-  padding: 1px 6px;
+  padding: 0 5px;
   border-radius: 4px;
 }
 
@@ -2422,65 +2450,86 @@ footer.site-footer strong {
 }
 
 .calendar-date-drawer {
-  margin-top: 16px;
-  padding: 16px 18px;
+  margin-top: 10px;
+  padding: 10px 12px;
   background: var(--bg-subtle);
   border: 1.5px solid var(--border);
   border-radius: var(--radius-sm);
   display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.drawer-header-row {
+  display: flex;
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 14px;
+  gap: 8px;
+  width: 100%;
 }
 
-.drawer-info h3 {
-  font-size: 1.15rem;
+.drawer-title-group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  min-width: 0;
+}
+
+.drawer-info h3,
+.drawer-title-group h3 {
+  font-size: 1.05rem;
   color: var(--secondary);
-  margin: 0 0 4px 0;
+  margin: 0;
+  line-height: 1.2;
 }
 
 .drawer-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 14px;
-  font-size: 0.88rem;
+  align-items: center;
+  gap: 4px 14px;
+  font-size: 0.82rem;
   color: var(--text-muted);
+  width: 100%;
 }
 
 .drawer-meta-item {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
 }
 
 .drawer-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
+  margin-left: auto;
 }
 
 .calendar-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
-  margin-top: 16px;
-  padding-top: 12px;
+  gap: 6px 14px;
+  margin-top: 8px;
+  padding-top: 7px;
   border-top: 1px dashed var(--border);
-  font-size: 0.8rem;
+  font-size: 0.74rem;
   color: var(--text-muted);
 }
 
 .legend-item {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
 }
 
 .legend-dot {
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
   display: inline-block;
 }
@@ -2493,29 +2542,31 @@ footer.site-footer strong {
 
 @media (max-width: 48em) {
   .calendar-card {
-    padding: 16px 14px;
+    padding: 10px;
   }
   .calendar-sunday-track {
     grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-    gap: 8px;
+    gap: 6px;
   }
   .calendar-sunday-card {
-    min-height: 94px;
-    padding: 10px;
+    min-height: 0;
+    padding: 6px 8px;
   }
   .sunday-date-tag {
-    font-size: 0.88rem;
-  }
-  .sunday-game-time {
     font-size: 0.82rem;
   }
-  .calendar-month-label {
-    min-width: 110px;
-    font-size: 0.86rem;
+  .sunday-game-time {
+    font-size: 0.76rem;
   }
-  .calendar-date-drawer {
-    flex-direction: column;
+  .calendar-month-label {
+    min-width: 105px;
+    font-size: 0.82rem;
+  }
+  .drawer-header-row {
     align-items: flex-start;
+  }
+  .drawer-actions {
+    margin-left: 0;
   }
 }
 
@@ -3128,10 +3179,10 @@ footer.site-footer strong {
 .weather-card-pill {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 7px;
+  gap: 3px;
+  padding: 1px 6px;
   border-radius: var(--radius-full);
-  font-size: 0.74rem;
+  font-size: 0.69rem;
   font-weight: 700;
   border: 1px solid var(--border);
   background: var(--bg-card);
@@ -3144,20 +3195,27 @@ footer.site-footer strong {
   color: var(--secondary);
   border-color: var(--border);
   font-weight: 600;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
 }
 
 .drawer-weather-meta {
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
+}
+
+.drawer-10day-weather-section {
+  width: 100%;
+  margin-top: 2px;
+  padding-top: 7px;
+  border-top: 1px solid var(--border);
 }
 
 .ten-day-rain-track {
   display: grid;
   grid-template-columns: repeat(10, minmax(0, 1fr));
-  gap: 5px;
+  gap: 4px;
   width: 100%;
-  margin-top: 6px;
+  margin-top: 4px;
   box-sizing: border-box;
 }
 
@@ -3169,8 +3227,8 @@ footer.site-footer strong {
     -webkit-overflow-scrolling: touch;
   }
   .ten-day-rain-col {
-    flex: 0 0 66px;
-    min-width: 66px;
+    flex: 0 0 74px;
+    min-width: 74px;
   }
 }
 
@@ -3178,14 +3236,40 @@ footer.site-footer strong {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 6px 3px;
+  padding: 4px 3px;
   text-align: center;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 2px;
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   box-sizing: border-box;
+}
+
+.ten-day-rain-col .day-head {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+.ten-day-rain-col .day-precip-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+.ten-day-rain-col .day-tags-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  flex-wrap: wrap;
+  margin-top: 1px;
 }
 
 .ten-day-rain-col.is-game-day {
@@ -3213,40 +3297,38 @@ footer.site-footer strong {
 }
 
 .ten-day-rain-col .today-pill {
-  font-size: 0.58rem;
+  font-size: 0.55rem;
   font-weight: 800;
   background: var(--secondary);
   color: #fff;
   padding: 1px 4px;
   border-radius: 3px;
   text-transform: uppercase;
-  margin-top: 2px;
   line-height: 1.1;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.4px;
 }
 
 .ten-day-rain-col .day-title {
   font-weight: 700;
   color: var(--secondary);
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   line-height: 1.1;
 }
 
 .ten-day-rain-col .day-date {
-  font-size: 0.66rem;
+  font-size: 0.64rem;
   color: var(--text-muted);
   line-height: 1.1;
 }
 
 .ten-day-rain-col .day-emoji {
-  font-size: 0.95rem;
-  margin: 1px 0;
-  line-height: 1.1;
+  font-size: 0.88rem;
+  line-height: 1;
 }
 
 .ten-day-rain-col .day-rain {
   font-weight: 700;
-  font-size: 0.72rem;
+  font-size: 0.71rem;
   color: var(--text-muted);
 }
 
@@ -3260,14 +3342,13 @@ footer.site-footer strong {
 }
 
 .ten-day-rain-col .game-day-pill {
-  font-size: 0.58rem;
+  font-size: 0.55rem;
   font-weight: 800;
   background: var(--primary);
   color: #fff;
   padding: 1px 4px;
   border-radius: 3px;
   text-transform: uppercase;
-  margin-top: 2px;
   line-height: 1.1;
 }
 

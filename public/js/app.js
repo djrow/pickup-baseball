@@ -484,29 +484,29 @@ function renderCalendarDrawer(dateKey, game, isPast) {
     const translatedTitle = API.translateEventTitle(game);
     const turnoutCount = game.actual_attendance != null ? game.actual_attendance : (game.attendee_count || 0);
     drawer.innerHTML = `
-      <div class="drawer-info" style="flex: 1; min-width: 250px;">
-        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+      <div class="drawer-header-row">
+        <div class="drawer-title-group">
           ${isRainout ? '<span class="badge badge-rainout">🌧️ Rained Out</span>' : '<span class="badge badge-gray">📜 Past Game Recap</span>'}
           ${game.my_rsvp && game.my_rsvp.status === 'attending' ? '<span class="badge badge-green">✓ You Attended</span>' : ''}
+          <h3>${API.escapeHtml(translatedTitle)}</h3>
         </div>
-        <h3 style="font-size: 1.15rem; color: var(--secondary); margin: 0 0 4px 0;">${API.escapeHtml(translatedTitle)}</h3>
-        <div class="drawer-meta" style="margin-top: 6px;">
-          <span class="drawer-meta-item"><span>📅</span> <strong>${API.escapeHtml(dateFormatted)}</strong></span>
-          <span class="drawer-meta-item"><span>📍</span> ${API.escapeHtml(game.location)}</span>
-          <span class="drawer-meta-item" style="color: var(--secondary); font-weight: 700;"><span>👥</span> ${turnoutCount} Players${game.spectator_count > 0 ? ` + ${game.spectator_count} ${game.spectator_count === 1 ? 'Spectator' : 'Spectators'}` : ''}</span>
-          <span class="drawer-meta-item"><span>🛡️</span> ${API.escapeHtml(API.t('home.duties_configured', { count: game.duty_count }))}</span>
+        <div class="drawer-actions">
+          <a href="/event.html?id=${game.id}" class="btn btn-primary btn-sm" style="font-weight: 700;">
+            📜 View Recap &amp; Comments →
+          </a>
+          <a href="/archive.html" class="btn btn-outline btn-sm">
+            Past Archive →
+          </a>
+          <button type="button" class="calendar-drawer-close-btn" aria-label="Close details" title="Close">✕</button>
         </div>
-        ${game.rainout_note ? `<div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 6px;"><em>Rainout note: "${API.escapeHtml(game.rainout_note)}"</em></div>` : ''}
       </div>
-      <div class="drawer-actions" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-        <a href="/event.html?id=${game.id}" class="btn btn-primary" style="font-weight: 700; font-size: 0.88rem;">
-          📜 View Recap &amp; Comments →
-        </a>
-        <a href="/archive.html" class="btn btn-outline btn-sm" style="font-size: 0.82rem;">
-          Past Archive →
-        </a>
-        <button type="button" class="calendar-drawer-close-btn" aria-label="Close details" title="Close">✕</button>
+      <div class="drawer-meta">
+        <span class="drawer-meta-item"><span>📅</span> <strong>${API.escapeHtml(dateFormatted)}</strong></span>
+        <span class="drawer-meta-item"><span>📍</span> ${API.escapeHtml(game.location)}</span>
+        <span class="drawer-meta-item" style="color: var(--secondary); font-weight: 700;"><span>👥</span> ${turnoutCount} Players${game.spectator_count > 0 ? ` + ${game.spectator_count} ${game.spectator_count === 1 ? 'Spectator' : 'Spectators'}` : ''}</span>
+        <span class="drawer-meta-item"><span>🛡️</span> ${API.escapeHtml(API.t('home.duties_configured', { count: game.duty_count }))}</span>
       </div>
+      ${game.rainout_note ? `<div style="font-size: 0.82rem; color: var(--text-muted);"><em>Rainout note: "${API.escapeHtml(game.rainout_note)}"</em></div>` : ''}
     `;
   } else if (game) {
     const isRainout = game.status === 'rainout';
@@ -514,34 +514,34 @@ function renderCalendarDrawer(dateKey, game, isPast) {
     const translatedTitle = API.translateEventTitle(game);
     const gCalUrl = getGoogleCalendarUrl(game);
     drawer.innerHTML = `
-      <div class="drawer-info" style="flex: 1; min-width: 250px;">
-        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+      <div class="drawer-header-row">
+        <div class="drawer-title-group">
           ${isRainout ? '<span class="badge badge-rainout">🌧️ Rained Out</span>' : '<span class="badge badge-orange">⚾ Game Day</span>'}
           ${game.my_rsvp && game.my_rsvp.status === 'attending' ? '<span class="badge badge-green">✓ You\'re Attending</span>' : ''}
+          <h3>${API.escapeHtml(translatedTitle)}</h3>
         </div>
-        <h3 style="font-size: 1.15rem; color: var(--secondary); margin: 0 0 4px 0;">${API.escapeHtml(translatedTitle)}</h3>
-        <div class="drawer-meta" style="margin-top: 6px;">
-          <span class="drawer-meta-item"><span>📅</span> <strong>${API.escapeHtml(dateFormatted)}</strong></span>
-          <span class="drawer-meta-item"><span>📍</span> ${API.escapeHtml(game.location)}</span>
-          <span class="drawer-meta-item drawer-weather-meta" id="drawer-weather-${dateKey}" style="display: none;"></span>
-          <span class="drawer-meta-item" style="color: var(--secondary); font-weight: 700;"><span>👥</span> ${API.escapeHtml(API.t('home.players_count', { count: game.attendee_count }))}${game.spectator_count > 0 ? ` + ${game.spectator_count} ${game.spectator_count === 1 ? 'Spectator' : 'Spectators'}` : ''}</span>
-          <span class="drawer-meta-item"><span>🛡️</span> ${API.escapeHtml(API.t('home.duties_configured', { count: game.duty_count }))}</span>
+        <div class="drawer-actions">
+          <a href="${gCalUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm" title="Add this game to Google Calendar">
+            📅 Google Cal ↗
+          </a>
+          <a href="/event.html?id=${game.id}#bp-order-section" class="btn btn-outline btn-sm" style="font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
+            ⚾ BP Signup Sheet
+          </a>
+          <a href="/event.html?id=${game.id}" class="btn btn-primary btn-sm" style="font-weight: 700;">
+            ${API.escapeHtml(API.t('calendar.view_details', 'RSVP & View Game Details →'))}
+          </a>
+          <button type="button" class="calendar-drawer-close-btn" aria-label="Close details" title="Close">✕</button>
         </div>
-        ${game.rainout_note ? `<div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 6px;"><em>Rainout note: "${API.escapeHtml(game.rainout_note)}"</em></div>` : ''}
       </div>
-      <div class="drawer-actions" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-        <a href="${gCalUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm" style="font-size: 0.82rem;" title="Add this game to Google Calendar">
-          📅 Google Cal ↗
-        </a>
-        <a href="/event.html?id=${game.id}#bp-order-section" class="btn btn-outline btn-sm" style="font-weight: 700; font-size: 0.82rem; display: inline-flex; align-items: center; gap: 4px;">
-          ⚾ BP Signup Sheet
-        </a>
-        <a href="/event.html?id=${game.id}" class="btn btn-primary" style="font-weight: 700; font-size: 0.88rem;">
-          ${API.escapeHtml(API.t('calendar.view_details', 'RSVP & View Game Details →'))}
-        </a>
-        <button type="button" class="calendar-drawer-close-btn" aria-label="Close details" title="Close">✕</button>
+      <div class="drawer-meta">
+        <span class="drawer-meta-item"><span>📅</span> <strong>${API.escapeHtml(dateFormatted)}</strong></span>
+        <span class="drawer-meta-item"><span>📍</span> ${API.escapeHtml(game.location)}</span>
+        <span class="drawer-meta-item drawer-weather-meta" id="drawer-weather-${dateKey}" style="display: none;"></span>
+        <span class="drawer-meta-item" style="color: var(--secondary); font-weight: 700;"><span>👥</span> ${API.escapeHtml(API.t('home.players_count', { count: game.attendee_count }))}${game.spectator_count > 0 ? ` + ${game.spectator_count} ${game.spectator_count === 1 ? 'Spectator' : 'Spectators'}` : ''}</span>
+        <span class="drawer-meta-item"><span>🛡️</span> ${API.escapeHtml(API.t('home.duties_configured', { count: game.duty_count }))}</span>
       </div>
-      <div class="drawer-10day-weather-section" id="drawer-10day-weather-${dateKey}" style="display: none; width: 100%; order: 3; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border);"></div>
+      ${game.rainout_note ? `<div style="font-size: 0.82rem; color: var(--text-muted);"><em>Rainout note: "${API.escapeHtml(game.rainout_note)}"</em></div>` : ''}
+      <div class="drawer-10day-weather-section" id="drawer-10day-weather-${dateKey}" style="display: none;"></div>
     `;
   } else {
     const [y, m, d] = dateKey.split('-').map(Number);
@@ -557,30 +557,30 @@ function renderCalendarDrawer(dateKey, game, isPast) {
     } catch (e) {}
 
     drawer.innerHTML = `
-      <div class="drawer-info" style="flex: 1; min-width: 250px;">
-        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+      <div class="drawer-header-row">
+        <div class="drawer-title-group">
           <span class="badge badge-gray" style="font-weight: 700; border: 1px dashed var(--border); background: var(--bg-card); color: var(--text-muted);">📅 Prospective Date • Unscheduled</span>
+          <h3>Sunday Pickup Baseball (Prospective)</h3>
         </div>
-        <h3 style="font-size: 1.15rem; color: var(--secondary); margin: 0 0 4px 0;">Sunday Pickup Baseball (Prospective)</h3>
-        <div class="drawer-meta" style="margin-top: 6px;">
-          <span class="drawer-meta-item"><span>📅</span> <strong>${API.escapeHtml(dateFormatted)} (Target: 12:00 PM)</strong></span>
-          <span class="drawer-meta-item"><span>📍</span> <strong>Location: TBA</strong></span>
-          <span class="drawer-meta-item drawer-weather-meta" id="drawer-weather-${dateKey}" style="display: none;"></span>
-          <span class="drawer-meta-item" style="color: var(--text-muted);"><span>ℹ️</span> <em>RSVP not yet open</em></span>
+        <div class="drawer-actions">
+          ${(API.currentUser && API.currentUser.canManageEvents) ? `
+            <a href="/admin.html" class="btn btn-primary btn-sm" style="font-weight: 700;">
+              ⚡ Schedule This Game →
+            </a>
+          ` : ''}
+          <button type="button" class="calendar-drawer-close-btn" aria-label="Close details" title="Close">✕ Close</button>
         </div>
-        <p style="margin: 8px 0 0 0; font-size: 0.86rem; color: var(--text-muted); line-height: 1.45;">
-          This Sunday date is prospective and not yet officially scheduled. Only near-future games with confirmed rosters are guaranteed. Organizers confirm field availability and publish official games as dates approach.
-        </p>
       </div>
-      <div class="drawer-actions" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-        ${(API.currentUser && API.currentUser.canManageEvents) ? `
-          <a href="/admin.html" class="btn btn-primary btn-sm" style="font-size: 0.82rem; font-weight: 700;">
-            ⚡ Schedule This Game →
-          </a>
-        ` : ''}
-        <button type="button" class="calendar-drawer-close-btn" aria-label="Close details" title="Close">✕ Close</button>
+      <div class="drawer-meta">
+        <span class="drawer-meta-item"><span>📅</span> <strong>${API.escapeHtml(dateFormatted)} (Target: 12:00 PM)</strong></span>
+        <span class="drawer-meta-item"><span>📍</span> <strong>Location: TBA</strong></span>
+        <span class="drawer-meta-item drawer-weather-meta" id="drawer-weather-${dateKey}" style="display: none;"></span>
+        <span class="drawer-meta-item" style="color: var(--text-muted);"><span>ℹ️</span> <em>RSVP not yet open</em></span>
       </div>
-      <div class="drawer-10day-weather-section" id="drawer-10day-weather-${dateKey}" style="display: none; width: 100%; order: 3; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border);"></div>
+      <p style="margin: 0; font-size: 0.81rem; color: var(--text-muted); line-height: 1.4;">
+        This Sunday date is prospective and not yet officially scheduled. Only near-future games with confirmed rosters are guaranteed. Organizers confirm field availability and publish official games as dates approach.
+      </p>
+      <div class="drawer-10day-weather-section" id="drawer-10day-weather-${dateKey}" style="display: none;"></div>
     `;
   }
 
@@ -618,12 +618,12 @@ function renderCalendarDrawer(dateKey, game, isPast) {
               '</span>';
           }
           stripEl.innerHTML =
-            '<div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 6px;">' +
-              '<span style="font-size: 0.82rem; font-weight: 700; color: var(--secondary); display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap;">' +
+            '<div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; margin-bottom: 4px;">' +
+              '<span style="font-size: 0.78rem; font-weight: 700; color: var(--secondary); display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap;">' +
                 '<span>🌧️ <strong>10-Day Rainfall Prediction: ' + fc.rainfall10DayFormatted + '</strong></span>' +
                 todaySnippet +
               '</span>' +
-              '<span style="font-size: 0.74rem; color: var(--text-muted); font-weight: 600;">' +
+              '<span style="font-size: 0.71rem; color: var(--text-muted); font-weight: 600;">' +
                 'Event day &amp; 9 previous days' +
               '</span>' +
             '</div>' +
@@ -770,7 +770,7 @@ function renderCalendar(events) {
   }
   const isMobile = (typeof window !== 'undefined' && window.innerWidth <= 768);
   const minColWidth = isMobile ? 130 : 160;
-  const colGap = isMobile ? 8 : 12;
+  const colGap = isMobile ? 6 : 8;
   const cols = Math.max(1, Math.floor((containerWidth + colGap) / (minColWidth + colGap)));
 
   // Target 2 complete rows on tablet/desktop, or 3 complete rows on 2-col mobile
@@ -863,16 +863,20 @@ function renderCalendar(events) {
     cardsHtml += `
       <div class="${cardClasses.join(' ')}" data-date-key="${dateKey}" role="button" tabindex="0" aria-label="${API.escapeHtml(weekdayShort)}, ${API.escapeHtml(monthShort)} ${item.day}">
         <div class="sunday-card-top">
-          <span class="sunday-day-tag">${API.escapeHtml(weekdayShort)}</span>
-          <span class="sunday-date-tag">${API.escapeHtml(monthShort)} ${item.day}</span>
+          <div class="sunday-card-date-group">
+            <span class="sunday-day-tag">${API.escapeHtml(weekdayShort)}</span>
+            <span class="sunday-date-tag">${API.escapeHtml(monthShort)} ${item.day}</span>
+          </div>
           ${topPillHtml}
         </div>
         <div class="sunday-card-body">
-          <div class="sunday-game-time">
-            <span class="sunday-time-icon">${timeIcon}</span>
-            <span class="sunday-time-text">${timeText}</span>
+          <div class="sunday-time-weather-row">
+            <div class="sunday-game-time">
+              <span class="sunday-time-icon">${timeIcon}</span>
+              <span class="sunday-time-text">${timeText}</span>
+            </div>
+            <div class="sunday-weather-badge" data-weather-date="${dateKey}" data-weather-location="${API.escapeHtml(game && game.location ? game.location : 'Bushrod Park Field 1')}" style="display: none;"></div>
           </div>
-          <div class="sunday-weather-badge" data-weather-date="${dateKey}" data-weather-location="${API.escapeHtml(game && game.location ? game.location : 'Bushrod Park Field 1')}" style="display: none; margin-top: 3px;"></div>
           <div class="sunday-game-location" title="${API.escapeHtml(locationTitle)}">
             📍 ${API.escapeHtml(locationName)}
           </div>

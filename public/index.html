@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pickup Baseball Foundation</title>
-  <link rel="stylesheet" href="/css/style.css?v=120">
+  <link rel="stylesheet" href="/css/style.css?v=121">
   <link rel="alternate" type="application/rss+xml" title="Sunday Pickup Baseball Highlights &amp; Updates" href="/feed.xml">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
@@ -83,41 +83,6 @@
 
     <!-- Login Success Toast -->
     <div id="login-success-banner" class="alert alert-success" style="display: none; margin-bottom: 24px; font-weight: 600; text-align: center; font-size: 1.05rem; box-shadow: var(--shadow-sm);"></div>
-
-    <!-- Sunday Afternoon Routine (12:00 PM – 4:00 PM) -->
-    <section id="sunday-routine-section" class="card" style="margin-bottom: 24px; padding: 18px 20px;">
-      <div class="flex-between" style="margin-bottom: 12px;">
-        <h2 style="font-size: 1.15rem; font-weight: 800; color: var(--secondary); margin: 0; display: flex; align-items: center; gap: 8px;">
-          <span>⚾</span> Sunday Afternoon Routine (12:00 PM – 4:00 PM)
-        </h2>
-        <span class="text-muted-sm" style="font-size: 0.8rem;">
-          Every Sunday at Bushrod Park Field 1 · All skill levels welcome
-        </span>
-      </div>
-      <div class="routine-grid">
-        <div class="routine-step">
-          <div style="font-weight: 800; font-size: 0.82rem; color: var(--primary);">12:00 PM – 12:30 PM</div>
-          <div style="font-weight: 700; font-size: 0.92rem; color: var(--secondary); margin-top: 2px;">Warmups &amp; Throwing</div>
-          <div class="text-muted-sm" style="font-size: 0.78rem; margin-top: 2px;">Stretch, loosen arms with catch, and set up the bases.</div>
-        </div>
-        <div class="routine-step alt" id="routine-bp-step">
-          <div style="font-weight: 800; font-size: 0.82rem; color: var(--secondary);">12:30 PM – 1:30 PM</div>
-          <div style="font-weight: 700; font-size: 0.92rem; color: var(--secondary); margin-top: 2px;">Batting Practice (BP)</div>
-          <div class="text-muted-sm" style="font-size: 0.78rem; margin-top: 2px;">1 full hour of machine-pitch BP while fielders shag balls.</div>
-          <a id="routine-bp-link" href="#site-calendar-section" style="display: inline-flex; align-items: center; gap: 4px; margin-top: 6px; font-size: 0.78rem; font-weight: 700; color: var(--primary); text-decoration: underline;">⚾ View BP Lineup Sheet ↓</a>
-        </div>
-        <div class="routine-step">
-          <div style="font-weight: 800; font-size: 0.82rem; color: var(--secondary);">1:30 PM – ~3:15 PM</div>
-          <div style="font-weight: 700; font-size: 0.92rem; color: var(--secondary); margin-top: 2px;">Pickup Game</div>
-          <div class="text-muted-sm" style="font-size: 0.78rem; margin-top: 2px;">Balanced teams, continuous batting order &amp; free defensive rotations.</div>
-        </div>
-        <div class="routine-step alt">
-          <div style="font-weight: 800; font-size: 0.82rem; color: var(--secondary);">3:15 PM – 4:00 PM</div>
-          <div style="font-weight: 700; font-size: 0.92rem; color: var(--secondary); margin-top: 2px;">Fielding Drills &amp; Care</div>
-          <div class="text-muted-sm" style="font-size: 0.78rem; margin-top: 2px;">Grounders and fly balls for extra reps, then drag and rake the infield dirt.</div>
-        </div>
-      </div>
-    </section>
 
     <!-- Game Calendar Section -->
     <section id="site-calendar-section" class="card calendar-card" style="margin-bottom: 32px;" aria-labelledby="calendar-title">
@@ -205,47 +170,82 @@
       </div>
     </section>
 
-    <!-- How It Works Section -->
-    <section class="card" style="margin-top: 48px; background: var(--bg-card);">
-      <h2 style="font-size: 1.3rem; color: var(--secondary); margin-bottom: 20px; text-align: center;" data-i18n="how.title">
-        How Our Pickup Baseball Program Works
+    <!-- How It Works & Sunday Afternoon Routine Section -->
+    <section id="how-it-works-section" class="card" style="margin-top: 32px; background: var(--bg-card);">
+      <h2 style="font-size: 1.3rem; color: var(--secondary); margin-bottom: 18px; text-align: center;" data-i18n="how.title">
+        How Our Pickup Baseball Webapp Works
       </h2>
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px;">
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px;">
         <div>
-          <div class="meta-icon" style="margin-bottom: 10px;">
+          <div class="meta-icon" style="margin-bottom: 8px;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           </div>
-          <h3 style="font-size: 1rem; margin-bottom: 6px;" data-i18n="how.s1_title">1. RSVP Anytime</h3>
-          <p style="font-size: 0.88rem; color: var(--text-muted);" data-i18n="how.s1_desc">
+          <h3 style="font-size: 1rem; margin-bottom: 4px;" data-i18n="how.s1_title">1. RSVP Anytime</h3>
+          <p style="font-size: 0.86rem; color: var(--text-muted);" data-i18n="how.s1_desc">
             Sign up in seconds as a guest or with just your name & email. Knowing player numbers helps us balance teams and pick the right field.
           </p>
         </div>
         <div>
-          <div class="meta-icon orange" style="margin-bottom: 10px;">
+          <div class="meta-icon orange" style="margin-bottom: 8px;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
           </div>
-          <h3 style="font-size: 1rem; margin-bottom: 6px;" data-i18n="how.s2_title">2. Coordinate Gear & Tasks</h3>
-          <p style="font-size: 0.88rem; color: var(--text-muted);" data-i18n="how.s2_desc">
+          <h3 style="font-size: 1rem; margin-bottom: 4px;" data-i18n="how.s2_title">2. Coordinate Gear & Tasks</h3>
+          <p style="font-size: 0.86rem; color: var(--text-muted);" data-i18n="how.s2_desc">
             Sign up to bring bases, balls, catcher's gear, or first aid. Tell everyone in advance what equipment you can share.
           </p>
         </div>
         <div>
-          <div class="meta-icon" style="margin-bottom: 10px;">
+          <div class="meta-icon" style="margin-bottom: 8px;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
           </div>
-          <h3 style="font-size: 1rem; margin-bottom: 6px;" data-i18n="how.s3_title">3. Email Reminders</h3>
-          <p style="font-size: 0.88rem; color: var(--text-muted);" data-i18n="how.s3_desc">
+          <h3 style="font-size: 1rem; margin-bottom: 4px;" data-i18n="how.s3_title">3. Email Reminders</h3>
+          <p style="font-size: 0.86rem; color: var(--text-muted);" data-i18n="how.s3_desc">
             You'll receive an instant confirmation upon RSVP, plus an automated reminder email the day before game day with field details and rosters.
           </p>
         </div>
         <div>
-          <div class="meta-icon orange" style="margin-bottom: 10px;">
+          <div class="meta-icon orange" style="margin-bottom: 8px;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
           </div>
-          <h3 style="font-size: 1rem; margin-bottom: 6px;" data-i18n="how.s4_title">4. Game Discussion</h3>
-          <p style="font-size: 0.88rem; color: var(--text-muted);" data-i18n="how.s4_desc">
+          <h3 style="font-size: 1rem; margin-bottom: 4px;" data-i18n="how.s4_title">4. Game Discussion</h3>
+          <p style="font-size: 0.86rem; color: var(--text-muted);" data-i18n="how.s4_desc">
             Discuss pre-game weather, field conditions, carpools, or share post-game photos and recaps directly on the event board.
           </p>
+        </div>
+      </div>
+
+      <!-- Sunday Afternoon Routine (12:00 PM – 4:00 PM) -->
+      <div id="sunday-routine-section" style="margin-top: 22px; padding-top: 18px; border-top: 1px dashed var(--border);">
+        <div class="flex-between" style="margin-bottom: 10px;">
+          <h3 style="font-size: 1.08rem; font-weight: 800; color: var(--secondary); margin: 0; display: flex; align-items: center; gap: 8px;">
+            <span>⚾</span> Sunday Afternoon Routine (12:00 PM – 4:00 PM)
+          </h3>
+          <span class="text-muted-sm" style="font-size: 0.8rem;">
+            Every Sunday at Bushrod Park Field 1 · All skill levels welcome
+          </span>
+        </div>
+        <div class="routine-grid">
+          <div class="routine-step">
+            <div style="font-weight: 800; font-size: 0.82rem; color: var(--primary);">12:00 PM – 12:30 PM</div>
+            <div style="font-weight: 700; font-size: 0.92rem; color: var(--secondary); margin-top: 2px;">Warmups &amp; Throwing</div>
+            <div class="text-muted-sm" style="font-size: 0.78rem; margin-top: 2px;">Stretch, loosen arms with catch, and set up the bases.</div>
+          </div>
+          <div class="routine-step alt" id="routine-bp-step">
+            <div style="font-weight: 800; font-size: 0.82rem; color: var(--secondary);">12:30 PM – 1:30 PM</div>
+            <div style="font-weight: 700; font-size: 0.92rem; color: var(--secondary); margin-top: 2px;">Batting Practice (BP)</div>
+            <div class="text-muted-sm" style="font-size: 0.78rem; margin-top: 2px;">1 full hour of machine-pitch BP while fielders shag balls.</div>
+            <a id="routine-bp-link" href="#site-calendar-section" style="display: inline-flex; align-items: center; gap: 4px; margin-top: 6px; font-size: 0.78rem; font-weight: 700; color: var(--primary); text-decoration: underline;">⚾ View BP Lineup Sheet ↓</a>
+          </div>
+          <div class="routine-step">
+            <div style="font-weight: 800; font-size: 0.82rem; color: var(--secondary);">1:30 PM – ~3:15 PM</div>
+            <div style="font-weight: 700; font-size: 0.92rem; color: var(--secondary); margin-top: 2px;">Pickup Game</div>
+            <div class="text-muted-sm" style="font-size: 0.78rem; margin-top: 2px;">Balanced teams, continuous batting order &amp; free defensive rotations.</div>
+          </div>
+          <div class="routine-step alt">
+            <div style="font-weight: 800; font-size: 0.82rem; color: var(--secondary);">3:15 PM – 4:00 PM</div>
+            <div style="font-weight: 700; font-size: 0.92rem; color: var(--secondary); margin-top: 2px;">Fielding Drills &amp; Care</div>
+            <div class="text-muted-sm" style="font-size: 0.78rem; margin-top: 2px;">Grounders and fly balls for extra reps, then drag and rake the infield dirt.</div>
+          </div>
         </div>
       </div>
     </section>
@@ -255,8 +255,8 @@
   <!-- Site Footer -->
   <footer id="site-footer" class="site-footer"></footer>
 
-  <script src="/js/api.js?v=120"></script>
-  <script src="/js/weather.js?v=120"></script>
-  <script src="/js/app.js?v=120"></script>
+  <script src="/js/api.js?v=121"></script>
+  <script src="/js/weather.js?v=121"></script>
+  <script src="/js/app.js?v=121"></script>
 </body>
 </html>

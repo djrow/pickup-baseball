@@ -860,16 +860,23 @@
 
       var probHtml = '';
       if (d.prob != null && d.prob >= 20) {
-        probHtml = '<span class="day-prob" style="font-size: 0.65rem; color: #0284c7; font-weight: 700; margin-top: 1px;">💧 ' + d.prob + '%</span>';
+        probHtml = '<span class="day-prob" style="font-size: 0.63rem; color: #0284c7; font-weight: 700;">💧' + d.prob + '%</span>';
       }
 
+      var metaItems = [];
+      if (probHtml) metaItems.push(probHtml);
+      for (var p = 0; p < pills.length; p++) metaItems.push(pills[p]);
+
       return '<div class="ten-day-rain-col ' + gameClass + (todayClass ? ' ' + todayClass : '') + '" title="' + (window.API ? window.API.escapeHtml(title) : title) + '">' +
-        '<span class="day-title">' + (d.dayName || '') + '</span>' +
-        '<span class="day-date">' + (d.dayMonth || '') + '</span>' +
-        '<span class="day-emoji">' + (d.emoji || '☀️') + '</span>' +
-        '<span class="day-rain ' + rainClass + '">' + d.rainFormatted + '</span>' +
-        probHtml +
-        (pills.length > 0 ? '<div style="display:flex; flex-direction:column; align-items:center; gap:2px; margin-top:2px;">' + pills.join('') + '</div>' : '') +
+        '<div class="day-head">' +
+          '<span class="day-title">' + (d.dayName || '') + '</span>' +
+          (d.dayMonth ? '<span class="day-date">' + d.dayMonth + '</span>' : '') +
+        '</div>' +
+        '<div class="day-precip-row">' +
+          '<span class="day-emoji">' + (d.emoji || '☀️') + '</span>' +
+          '<span class="day-rain ' + rainClass + '">' + d.rainFormatted + '</span>' +
+        '</div>' +
+        (metaItems.length > 0 ? '<div class="day-tags-row">' + metaItems.join('') + '</div>' : '') +
       '</div>';
     });
     return '<div class="ten-day-rain-track">' + cols.join('') + '</div>';
