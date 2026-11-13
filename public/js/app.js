@@ -102,7 +102,7 @@ function setupCloudSyncLifecycle() {
 
   setInterval(function() {
     updateSyncPillUi();
-    if (document.visibilityState === 'visible' && navigator.onLine !== false && (Date.now() - lastCloudSyncedAt > 300000)) {
+    if (document.visibilityState === 'visible' && navigator.onLine !== false && (Date.now() - lastCloudSyncedAt > 900000)) {
       loadGames(false, true);
     }
   }, 30000);

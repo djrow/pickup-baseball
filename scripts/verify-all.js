@@ -2647,6 +2647,9 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
     assert.ok(apiSrc.includes('footer-security-badges'), 'api.js footer must render security verification badges');
     assert.ok(apiSrc.includes('ssllabs.com/ssltest/analyze.html'), 'api.js footer must link to SSL Labs report');
     assert.ok(apiSrc.includes('developer.mozilla.org/en-US/observatory/analyze'), 'api.js footer must link to Mozilla HTTP Observatory');
+    assert.ok(apiSrc.includes('securityheaders.com') && apiSrc.includes('<span>📋 Security Headers</span><span class="footer-security-grade">A+</span>'), 'api.js footer Security Headers badge must show A+ grade');
+    assert.ok(apiSrc.includes('<span>✅ CodeQL &amp; Policy</span><span class="footer-security-grade">0 Advisories</span>'), 'api.js footer CodeQL & Policy badge must show status pill');
+    assert.ok(apiSrc.includes('<span>security.txt</span><span class="footer-security-grade">Valid</span>'), 'api.js footer security.txt badge must show Valid pill');
     assert.ok(headersFile.includes('upgrade-insecure-requests;'), '_headers CSP must contain upgrade-insecure-requests');
 
     const apiJs = fs.readFileSync(path.join(publicDir, 'js', 'api.js'), 'utf8');
@@ -2960,6 +2963,85 @@ test('Clubhouse Frontend & Native Waiver Verification', async (t) => {
       file_size: 25 * 1024 * 1024
     });
     assert.equal(oversizedAtt.status, 400, 'Local D1 attachment fallback must reject files over 10 MB');
+  });
+
+  await t.test('Check 8.4: Free-tier resource savings (RSVP email dedupe, voice heartbeat dedupe, edge cache & polling intervals)', async () => {
+    // 1. RSVP update on already-attending user skips duplicate Resend email unless resend_confirmation is true
+    const evRes = await apiReq('POST', '/api/events', seedOrgCookie, {
+      title: 'Free-Tier Optimization Test Game',
+      location: 'Bushrod Park Field 1',
+      event_date: '2026-12-27T20:00:00.000Z',
+      max_players: 20
+    });
+    assert.equal(evRes.status, 200);
+    const optEventId = evRes.data.eventId;
+
+    const firstRsvp = await apiReq('POST', `/api/events/${optEventId}/rsvp`, null, {
+      name: 'Quota Saver',
+      email: 'quota_saver@test.org',
+      status: 'attending',
+      players_count: 1,
+      spectators_count: 0
+    });
+    assert.equal(firstRsvp.status, 200);
+    assert.ok(firstRsvp.data.message.includes('confirmation email has been sent'), 'Initial RSVP should confirm email dispatch');
+
+    const editRsvp = await apiReq('POST', `/api/events/${optEventId}/rsvp`, null, {
+      name: 'Quota Saver',
+      email: 'quota_saver@test.org',
+      management_token: firstRsvp.data.managementToken,
+      status: 'attending',
+      players_count: 1,
+      spectators_count: 1,
+      gear_bringing: 'Extra bats'
+    });
+    assert.equal(editRsvp.status, 200);
+    assert.ok(editRsvp.data.message.includes('RSVP updated'), 'Editing an already-attending RSVP should report updated status');
+    assert.ok(!editRsvp.data.message.includes('Confirmation sent to'), 'Editing an already-attending RSVP should skip duplicate Resend email');
+
+    const resendRsvp = await apiReq('POST', `/api/events/${optEventId}/rsvp`, null, {
+      name: 'Quota Saver',
+      email: 'quota_saver@test.org',
+      management_token: firstRsvp.data.managementToken,
+      status: 'attending',
+      players_count: 1,
+      spectators_count: 1,
+      resend_confirmation: true
+    });
+    assert.equal(resendRsvp.status, 200);
+    assert.ok(resendRsvp.data.message.includes('Confirmation sent to'), 'Explicit resend_confirmation: true should still dispatch confirmation email');
+
+    // 2. Edge caching headers on public blog/RSS feeds vs strict no-store on live .ics/events
+    const postsHdrRes = await fetch(`${baseUrl}/api/posts`);
+    assert.equal(postsHdrRes.status, 200);
+    assert.ok((postsHdrRes.headers.get('cache-control') || '').includes('s-maxage=300'), '/api/posts should expose short CDN s-maxage caching');
+    const rssHdrRes = await fetch(`${baseUrl}/feed.xml`);
+    assert.equal(rssHdrRes.status, 200);
+    assert.ok((rssHdrRes.headers.get('cache-control') || '').includes('s-maxage=300'), '/feed.xml should expose short CDN s-maxage caching');
+
+    // 3. Frontend polling intervals, localStorage weather cache & ES6 safety checks
+    const publicDir = path.join(__dirname, '..', 'public');
+    const rtcJs = fs.readFileSync(path.join(publicDir, 'js/rtc.js'), 'utf8');
+    const storeJs = fs.readFileSync(path.join(publicDir, 'js/store.js'), 'utf8');
+    const homeAppJs = fs.readFileSync(path.join(publicDir, 'js/app.js'), 'utf8');
+    const weatherJs = fs.readFileSync(path.join(publicDir, 'js/weather.js'), 'utf8');
+
+    assert.ok(rtcJs.includes('HEARTBEAT_INTERVAL_MS = 16000'), 'rtc.js must use 16s voice heartbeat interval');
+    assert.ok(storeJs.includes('VISIBLE_IDLE_SYNC_MS = 8000'), 'store.js must preserve 8s idle visible poll interval');
+    assert.ok(storeJs.includes('maybeOptimizeChatImage'), 'store.js must include optional client-side chat photo compression');
+    assert.ok(homeAppJs.includes('900000'), 'app.js must relax background calendar auto-resync to 15 minutes');
+    assert.ok(weatherJs.includes('localStorage'), 'weather.js must persist forecast cache across tabs via localStorage');
+
+    // 4. Compact game detail card consolidation checks
+    const eventHtmlComp = fs.readFileSync(path.join(publicDir, 'event.html'), 'utf8');
+    const styleCssComp = fs.readFileSync(path.join(publicDir, 'css/style.css'), 'utf8');
+    assert.ok(eventHtmlComp.includes('event-detail-main') && eventHtmlComp.includes('organizer-controls-grid'), 'event.html must group organizer controls cleanly');
+    assert.ok(eventHtmlComp.includes('id="roster-bp-card"') && eventHtmlComp.includes('roster-bp-divider'), 'event.html must combine Expected Attendees and BP Order in one card');
+    assert.ok(styleCssComp.includes('.weather-kpi-grid') && styleCssComp.includes('.event-detail-main .bp-slot-card'), 'style.css must style compact detail page cards');
+
+    for (const [fname, src] of [['rtc.js', rtcJs], ['store.js', storeJs], ['app.js', homeAppJs], ['weather.js', weatherJs]]) {
+      assert.ok(!src.includes('?.') && !src.includes('??'), `${fname} must stay ES6 compatible without ?. or ??`);
+    }
   });
 });
 

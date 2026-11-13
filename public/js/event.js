@@ -1109,26 +1109,21 @@ function renderOrganizerRainoutPanel() {
 
   if (!isRainout) {
     panel.innerHTML = `
-      <div class="panel-header">
-        <span class="panel-icon">🌦️</span>
-        <div>
-          <h3 class="panel-title">Organizer Weather &amp; Rainout Controls</h3>
-          <p class="panel-desc">If rain or poor field conditions force a cancellation, mark the game as rained out below.</p>
+      <div class="panel-header" style="margin-bottom: 6px;">
+        <span class="panel-icon" style="font-size: 1.1rem;">🌦️</span>
+        <div style="display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px;">
+          <h3 class="panel-title" style="font-size: 0.88rem; margin: 0;">Weather &amp; Rainout</h3>
+          <span class="panel-desc" style="font-size: 0.75rem;">Cancel for rain if fields are unplayable</span>
         </div>
       </div>
-      <div class="panel-body">
-        <div class="form-group" style="margin-bottom: 12px;">
-          <label for="rainout-note-input" style="font-size: 0.85rem; font-weight: 700; margin-bottom: 4px; display: block;">
-            Rainout Note for Players (Optional):
+      <div class="panel-body" style="padding-top: 6px;">
+        <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 6px;">
+          <input type="text" id="rainout-note-input" class="form-control" style="flex: 1 1 190px; min-width: 150px; padding: 5px 8px; font-size: 0.84rem; border-radius: var(--radius-sm); border: 1.5px solid var(--border);" placeholder="Rainout note (optional, e.g. flooded infield)">
+          <label style="display: inline-flex; align-items: center; gap: 5px; font-size: 0.78rem; cursor: pointer; margin: 0; white-space: nowrap;">
+            <input type="checkbox" id="rainout-send-email-check" checked style="width: 14px; height: 14px;">
+            <span>Email (${attendeeCount})</span>
           </label>
-          <input type="text" id="rainout-note-input" class="form-control" style="width: 100%; box-sizing: border-box; padding: 8px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border);" placeholder="e.g. Infield is underwater and dugout is flooded at Bushrod">
-        </div>
-        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
-          <label style="display: flex; align-items: center; gap: 8px; font-size: 0.88rem; cursor: pointer;">
-            <input type="checkbox" id="rainout-send-email-check" checked>
-            <span>Send cancellation email to all confirmed groups (<strong>${attendeeCount}</strong>)</span>
-          </label>
-          <button type="button" id="btn-call-rainout" class="btn btn-danger btn-sm" style="font-weight: 700; padding: 7px 16px;">
+          <button type="button" id="btn-call-rainout" class="btn btn-danger btn-sm" style="font-weight: 700; padding: 5px 11px; font-size: 0.78rem; white-space: nowrap;">
             🌧️ Call Rainout
           </button>
         </div>
@@ -1288,46 +1283,46 @@ function renderOrganizerAttendancePanel() {
 
   if (ev.actual_attendance != null) {
     panel.innerHTML = `
-      <div style="background: var(--bg-card); border: 1.5px solid var(--border); border-left: 4px solid var(--secondary); border-inline-start: 4px solid var(--secondary); border-radius: 8px; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; box-shadow: var(--shadow-sm);">
-        <div style="display: flex; align-items: center; gap: 10px;">
-          <span style="font-size: 1.5rem;">⚾</span>
+      <div class="organizer-turnout-card is-recorded">
+        <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+          <span style="font-size: 1.15rem; line-height: 1;">⚾</span>
           <div>
-            <div style="font-weight: 700; color: var(--secondary); font-size: 0.98rem;">
-              Game Turnout: ${ev.actual_attendance} Players Played
+            <div style="font-weight: 700; color: var(--secondary); font-size: 0.88rem;">
+              Turnout: ${ev.actual_attendance} Played
             </div>
-            <div style="font-size: 0.8rem; color: var(--text-muted);">
-              ${API.t('event.turnout_count_sub', { count: eventData.totalAttendees })} — Recorded for the Past Games archive!
+            <div style="font-size: 0.74rem; color: var(--text-muted);">
+              ${API.t('event.turnout_count_sub', { count: eventData.totalAttendees })}
             </div>
           </div>
         </div>
         <div id="attendance-edit-controls-${ev.id}">
-          <button type="button" data-action="show-inline-attendance-edit" class="btn btn-outline btn-sm">
-            ✏️ Edit Headcount
+          <button type="button" data-action="show-inline-attendance-edit" class="btn btn-outline btn-sm" style="padding: 4px 10px; font-size: 0.76rem;">
+            ✏️ Edit
           </button>
         </div>
       </div>
     `;
   } else {
     panel.innerHTML = `
-      <div style="background: var(--bg-card); border: 1.5px solid var(--border); border-left: 4px solid var(--primary); border-radius: 8px; padding: 12px 16px; box-shadow: var(--shadow-sm);">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-          <div style="display: flex; align-items: center; gap: 10px;">
-            <span style="font-size: 1.5rem;">⚾</span>
+      <div class="organizer-turnout-card">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+            <span style="font-size: 1.15rem; line-height: 1;">⚾</span>
             <div>
-              <div style="font-weight: 700; color: var(--secondary); font-size: 0.98rem;">
-                Record Actual Game Attendance
+              <div style="font-weight: 700; color: var(--secondary); font-size: 0.88rem;">
+                Actual Turnout
               </div>
-              <div style="font-size: 0.82rem; color: var(--text-muted);">
-                ${eventData.totalAttendees} players signed up online. How many players actually showed up and played?
+              <div style="font-size: 0.74rem; color: var(--text-muted);">
+                ${eventData.totalAttendees} signed up online
               </div>
             </div>
           </div>
-          <form id="quick-attendance-form" data-action="save-quick-attendance" style="display: flex; align-items: center; gap: 8px; margin: 0;">
-            <input type="number" id="quick-attendance-input" min="0" max="200" placeholder="e.g. 18" required style="width: 85px; padding: 6px 10px; font-weight: 700; font-size: 1rem; border-radius: 6px; border: 1.5px solid var(--border);">
-            <button type="submit" id="quick-attendance-save-btn" class="btn btn-primary btn-sm">💾 Save Turnout</button>
+          <form id="quick-attendance-form" data-action="save-quick-attendance" style="display: flex; align-items: center; gap: 6px; margin: 0;">
+            <input type="number" id="quick-attendance-input" min="0" max="200" placeholder="e.g. 18" required style="width: 72px; padding: 5px 8px; font-weight: 700; font-size: 0.88rem; border-radius: 6px; border: 1.5px solid var(--border);">
+            <button type="submit" id="quick-attendance-save-btn" class="btn btn-primary btn-sm" style="padding: 5px 10px; font-size: 0.78rem; white-space: nowrap;">💾 Save</button>
           </form>
         </div>
-        <div id="quick-attendance-alert" style="margin-top: 6px;"></div>
+        <div id="quick-attendance-alert" style="margin-top: 4px;"></div>
       </div>
     `;
   }
@@ -1755,7 +1750,7 @@ function renderBpOrder() {
   }
 
   const mySignup = signups.find(function(s) { return s.is_mine; });
-  const quickJoinBtn = document.getElementById('bp-quick-join-btn');
+  const quickJoinBtn = document.getElementById('bp-quick-claim-btn') || document.getElementById('bp-quick-join-btn');
   if (quickJoinBtn) {
     if (isRainout) {
       quickJoinBtn.disabled = true;
@@ -1778,19 +1773,19 @@ function renderBpOrder() {
   let html = '';
   for (let slot = 1; slot <= totalDisplaySlots; slot++) {
     const item = signupMap.get(slot);
-    let groupLbl = 'Round 1';
+    let groupLbl = 'Rd 1';
     if (slot > 10) {
-      groupLbl = 'Round 3';
+      groupLbl = 'Rd 3';
     } else if (slot > 5) {
-      groupLbl = 'Round 2';
+      groupLbl = 'Rd 2';
     }
 
     if (item) {
       const isMine = Boolean(item.is_mine);
       const safeAvatar = API.safeAvatarUrl(item.avatar_url);
       const avatarImg = safeAvatar
-        ? `<img src="${API.escapeHtml(safeAvatar)}" alt="${API.escapeHtml(item.player_name)}" class="roster-avatar" style="width: 34px; height: 34px; border-radius: 50%;" loading="lazy">`
-        : `<span class="roster-avatar-placeholder" style="width: 34px; height: 34px; font-size: 0.85rem; border-radius: 50%;">${API.escapeHtml((item.player_name || 'P').charAt(0).toUpperCase())}</span>`;
+        ? `<img src="${API.escapeHtml(safeAvatar)}" alt="${API.escapeHtml(item.player_name)}" class="roster-avatar" style="width: 26px; height: 26px; border-radius: 50%;" loading="lazy">`
+        : `<span class="roster-avatar-placeholder" style="width: 26px; height: 26px; font-size: 0.74rem; border-radius: 50%;">${API.escapeHtml((item.player_name || 'P').charAt(0).toUpperCase())}</span>`;
 
       html += `
         <div class="bp-slot-card is-taken ${isMine ? 'is-mine' : ''}" data-slot="${slot}">

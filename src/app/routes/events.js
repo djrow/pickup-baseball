@@ -963,7 +963,7 @@ eventsRouter.post('/:id/rsvp', async (c) => {
       name, email, gear_bringing, duty_ids, redeem_hero_credit,
       management_token, status, players_count, spectators_count,
       additional_guests, guest_names, cf_turnstile_response,
-      bp_signup, bp_slot
+      bp_signup, bp_slot, resend_confirmation, send_confirmation_email
     } = await c.req.json();
     status = status === 'declined' ? 'declined' : 'attending';
 
@@ -1212,23 +1212,32 @@ eventsRouter.post('/:id/rsvp', async (c) => {
     }
 
     if (finalStatus === 'attending') {
-      runBackground(c, sendRsvpConfirmation(c.env, origin, {
-        email, name, event,
-        dutyName: assignedDutyNames.join(', '),
-        gearBringing: cleanGear,
-        playersCount, spectatorsCount,
-        guestNames: cleanGuestNames,
-        managementToken: activeToken
-      }).catch(e => console.error('[RSVP Email Error]:', e)));
+      // Skip duplicate confirmation emails when editing an existing attending RSVP unless resend is requested
+      const shouldSendEmail = (send_confirmation_email !== false) && (!wasAttending || Boolean(resend_confirmation));
+      if (shouldSendEmail) {
+        runBackground(c, sendRsvpConfirmation(c.env, origin, {
+          email, name, event,
+          dutyName: assignedDutyNames.join(', '),
+          gearBringing: cleanGear,
+          playersCount, spectatorsCount,
+          guestNames: cleanGuestNames,
+          managementToken: activeToken
+        }).catch(e => console.error('[RSVP Email Error]:', e)));
+      }
 
-      let confirmMsg = `You're confirmed! A confirmation email has been sent to ${email}.`;
+      const emailSuffix = shouldSendEmail
+        ? ` Confirmation sent to ${email}.`
+        : '';
+      let confirmMsg = shouldSendEmail
+        ? `You're confirmed! A confirmation email has been sent to ${email}.`
+        : (wasAttending ? 'Your RSVP has been updated!' : `You're confirmed!`);
       if (playersCount > 0 && spectatorsCount > 0) {
-        confirmMsg = `RSVP confirmed (${playersCount} ${playersCount === 1 ? 'player' : 'players'}, ${spectatorsCount} ${spectatorsCount === 1 ? 'spectator' : 'spectators'})! Confirmation sent to ${email}.`;
+        confirmMsg = `RSVP ${wasAttending ? 'updated' : 'confirmed'} (${playersCount} ${playersCount === 1 ? 'player' : 'players'}, ${spectatorsCount} ${spectatorsCount === 1 ? 'spectator' : 'spectators'})!${emailSuffix}`;
       } else if (playersCount === 0 && spectatorsCount > 0) {
         const label = assignedDutyNames.length > 0
           ? (spectatorsCount === 1 ? 'volunteer' : 'volunteers/spectators')
           : (spectatorsCount === 1 ? 'spectator' : 'spectators');
-        confirmMsg = `RSVP confirmed (${spectatorsCount} ${label})! Confirmation sent to ${email}.`;
+        confirmMsg = `RSVP ${wasAttending ? 'updated' : 'confirmed'} (${spectatorsCount} ${label})!${emailSuffix}`;
       }
       if (heroCreditEarned) confirmMsg += ' 🛡️ Short-notice urgent shift cover (<48 hrs): +1 Backup Hero Credit awarded!';
       if (heroCreditRedeemed) confirmMsg += ' 🛡️ 1 Backup Hero Credit redeemed for Tier 1 early access.';

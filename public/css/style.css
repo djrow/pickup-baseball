@@ -3376,8 +3376,8 @@ footer.site-footer strong {
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: 6px;
+  margin-bottom: 6px;
 }
 
 .hourly-drainage-summary-chips {
@@ -3416,13 +3416,13 @@ footer.site-footer strong {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px 14px;
-  padding: 7px 10px;
-  margin-bottom: 8px;
+  gap: 6px 12px;
+  padding: 4px 8px;
+  margin-bottom: 6px;
   border-radius: var(--radius-sm);
   background: var(--bg-subtle);
   border: 1px solid var(--border);
-  font-size: 0.74rem;
+  font-size: 0.7rem;
   color: var(--text-main);
 }
 
@@ -3486,20 +3486,20 @@ footer.site-footer strong {
   position: sticky;
   left: 0;
   z-index: 3;
-  flex: 0 0 64px;
-  width: 64px;
+  flex: 0 0 58px;
+  width: 58px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 3px 6px 3px 2px;
+  gap: 2px;
+  padding: 2px 5px 2px 2px;
   background: var(--bg-card);
   border-right: 1px solid var(--border);
 }
 
 .hourly-axis-hour {
-  height: 18px;
-  line-height: 18px;
-  font-size: 0.64rem;
+  height: 15px;
+  line-height: 15px;
+  font-size: 0.6rem;
   font-weight: 700;
   color: var(--text-muted);
   text-transform: uppercase;
@@ -3507,20 +3507,20 @@ footer.site-footer strong {
 }
 
 .hourly-axis-bars {
-  height: 68px;
+  height: 48px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  font-size: 0.62rem;
+  font-size: 0.6rem;
   font-weight: 700;
   color: var(--text-muted);
   line-height: 1;
 }
 
 .hourly-axis-val {
-  height: 16px;
-  line-height: 16px;
-  font-size: 0.65rem;
+  height: 14px;
+  line-height: 14px;
+  font-size: 0.62rem;
   font-weight: 800;
   white-space: nowrap;
 }
@@ -3545,20 +3545,20 @@ footer.site-footer strong {
   position: absolute;
   left: 0;
   right: 0;
-  top: 25px; /* 3px col top padding + 18px hour + 4px gap = plot top; adjusted inline for plot offset */
+  top: 19px; /* 2px col top padding + 15px hour + 2px gap = plot top; adjusted inline for plot offset */
   border-top: 1.5px dashed rgba(220, 38, 38, 0.55);
   pointer-events: none;
   z-index: 1;
 }
 
 .drainage-col {
-  flex: 1 0 28px;
-  min-width: 28px;
+  flex: 1 0 26px;
+  min-width: 26px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 3px 1px;
+  gap: 2px;
+  padding: 2px 1px;
   border-radius: 4px;
   position: relative;
   z-index: 2;
@@ -3573,9 +3573,9 @@ footer.site-footer strong {
 }
 
 .drainage-hour-label {
-  height: 18px;
-  line-height: 18px;
-  font-size: 0.64rem;
+  height: 15px;
+  line-height: 15px;
+  font-size: 0.6rem;
   color: var(--text-muted);
   font-weight: 600;
   white-space: nowrap;
@@ -3587,7 +3587,7 @@ footer.site-footer strong {
 }
 
 .drainage-bars-slot {
-  height: 68px;
+  height: 48px;
   width: 100%;
   display: flex;
   align-items: flex-end;
@@ -3620,9 +3620,9 @@ footer.site-footer strong {
 }
 
 .drainage-val-row {
-  height: 16px;
-  line-height: 16px;
-  font-size: 0.6rem;
+  height: 14px;
+  line-height: 14px;
+  font-size: 0.58rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--text-muted);
@@ -4917,4 +4917,285 @@ footer.site-footer strong {
   font-size: 0.7rem;
   font-weight: 800;
   letter-spacing: 0.02em;
+}
+
+/* ==========================================================================
+   Event Detail Page Compact Layout & Combined Cards (.event-detail-main)
+   ========================================================================== */
+.event-detail-main .card {
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+
+.event-detail-main .card-header {
+  margin-bottom: 10px;
+  gap: 8px;
+}
+
+.event-detail-main .organizer-controls-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(290px, 1.55fr);
+  gap: 8px;
+  margin-bottom: 10px;
+  align-items: stretch;
+}
+
+.event-detail-main .organizer-controls-grid:empty {
+  display: none;
+}
+
+.event-detail-main .organizer-controls-grid > div:empty {
+  display: none;
+}
+
+.event-detail-main .organizer-turnout-card {
+  background: var(--bg-subtle);
+  border: 1.5px solid var(--border);
+  border-left: 4px solid var(--primary);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.event-detail-main .organizer-turnout-card.is-recorded {
+  border-left-color: var(--secondary);
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.event-detail-main .organizer-inline-panel {
+  padding: 8px 10px;
+  margin-bottom: 0;
+  border-radius: var(--radius-sm);
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.event-detail-main .event-meta-grid {
+  grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+  gap: 8px 12px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+
+.event-detail-main .meta-item {
+  gap: 8px;
+}
+
+.event-detail-main .meta-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+}
+
+.event-detail-main .meta-icon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.event-detail-main .meta-label {
+  font-size: 0.65rem;
+}
+
+.event-detail-main .meta-value {
+  font-size: 0.86rem;
+  line-height: 1.25;
+}
+
+.weather-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.weather-kpi-tile {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 9px;
+}
+
+.weather-kpi-label {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.weather-kpi-val {
+  font-size: 0.96rem;
+  font-weight: 800;
+  color: var(--secondary);
+  margin-top: 1px;
+}
+
+.weather-kpi-sub {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  margin-top: 1px;
+  line-height: 1.25;
+}
+
+.weather-kpi-rec {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--secondary);
+  margin-top: 2px;
+  line-height: 1.25;
+}
+
+/* RSVP & Tasks compact density */
+.event-detail-main .rsvp-counters-grid {
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.event-detail-main .rsvp-counter-card {
+  padding: 8px 10px;
+}
+
+.event-detail-main .rsvp-counter-title {
+  font-size: 0.9rem;
+}
+
+.event-detail-main .rsvp-counter-sub {
+  font-size: 0.72rem;
+}
+
+.event-detail-main .stepper-btn,
+.event-detail-main .stepper-input {
+  height: 30px;
+}
+
+.event-detail-main .stepper-btn {
+  width: 30px;
+  font-size: 1rem;
+}
+
+.event-detail-main .rsvp-group-summary {
+  padding: 5px 10px;
+  margin-bottom: 8px;
+  font-size: 0.8rem;
+}
+
+.event-detail-main .rsvp-tasks-checklist {
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 6px;
+}
+
+.event-detail-main .rsvp-task-row {
+  padding: 6px 9px;
+  gap: 7px;
+}
+
+.event-detail-main .rsvp-task-row input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+}
+
+.event-detail-main .rsvp-optional-details {
+  margin-bottom: 6px;
+}
+
+.event-detail-main .rsvp-optional-details summary {
+  padding: 6px 10px;
+  font-size: 0.8rem;
+}
+
+.event-detail-main .rsvp-optional-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 8px 10px;
+  padding: 8px 10px 10px;
+}
+
+.event-detail-main input[type="text"],
+.event-detail-main input[type="email"],
+.event-detail-main input[type="number"],
+.event-detail-main textarea,
+.event-detail-main select {
+  padding: 7px 10px;
+}
+
+/* Unified Roster + Batting Practice (BP) Order inside a single compact card */
+.event-detail-main .roster-list {
+  grid-template-columns: repeat(auto-fill, minmax(235px, 1fr));
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.event-detail-main .roster-item {
+  padding: 8px 10px;
+}
+
+.event-detail-main .roster-bp-divider {
+  border-top: 1px solid var(--border);
+  margin-top: 12px;
+  padding-top: 12px;
+}
+
+.event-detail-main .bp-groups-legend {
+  gap: 6px;
+  margin-bottom: 8px;
+  padding: 5px 8px;
+}
+
+.event-detail-main .bp-group-tag {
+  padding: 2px 8px;
+  font-size: 0.71rem;
+}
+
+.event-detail-main .bp-slots-grid {
+  grid-template-columns: repeat(auto-fill, minmax(225px, 1fr));
+  gap: 6px;
+}
+
+.event-detail-main .bp-slot-card {
+  padding: 6px 8px;
+  gap: 7px;
+}
+
+.event-detail-main .bp-slot-num-badge {
+  width: 32px;
+  height: 32px;
+  font-size: 0.8rem;
+  border-radius: 7px;
+}
+
+.event-detail-main .bp-slot-round-lbl {
+  font-size: 0.54rem;
+}
+
+.event-detail-main .bp-slot-name {
+  font-size: 0.84rem;
+}
+
+.event-detail-main .bp-claim-slot-btn {
+  font-size: 0.72rem;
+  padding: 3px 8px;
+}
+
+/* Compact Discussion Board */
+.event-detail-main .comments-list {
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.event-detail-main .comment-bubble {
+  padding: 10px 12px;
+}
+
+@media (max-width: 720px) {
+  .event-detail-main .organizer-controls-grid {
+    grid-template-columns: 1fr;
+  }
 }

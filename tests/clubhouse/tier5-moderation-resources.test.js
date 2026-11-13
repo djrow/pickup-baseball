@@ -443,6 +443,43 @@ module.exports = async function runTier5(t, ctx) {
     assert.ok(rtcSrc.includes('broadcastTypingIndicator'), 'rtc.js must route typing indicators over WebRTC DataChannel');
     const apiSrc = fs.readFileSync(path.resolve(__dirname, '../../public/js/api.js'), 'utf8');
     assert.ok(apiSrc.includes('pb_version_last_check'), 'api.js must throttle version checks via localStorage');
+
+    // 5. Voice heartbeat keepalive skips sync_events insert when state is unchanged
+    const joinVoiceRes = await ctx.apiReq('POST', '/api/voice/dugout-voice/join', ctx.adminCookie, {
+      muted: false,
+      deafened: false,
+      screen_sharing: false
+    });
+    assert.equal(joinVoiceRes.status, 200);
+
+    const syncBaseline = await ctx.apiReq('GET', '/api/sync?since_event_id=0&since_message_id=0', ctx.adminCookie);
+    assert.equal(syncBaseline.status, 200);
+    const baseEventId = syncBaseline.data.latest_event_id || 0;
+    const baseMsgId = syncBaseline.data.latest_message_id || 0;
+
+    const noopStateRes = await ctx.apiReq('POST', '/api/voice/dugout-voice/state', ctx.adminCookie, {
+      muted: false,
+      deafened: false,
+      screen_sharing: false
+    });
+    assert.equal(noopStateRes.status, 200);
+    const syncAfterNoop = await ctx.apiReq('GET', `/api/sync?since_event_id=${baseEventId}&since_message_id=${baseMsgId}`, ctx.adminCookie);
+    assert.equal(syncAfterNoop.status, 200);
+    const noopVoiceUpdates = (syncAfterNoop.data.events || []).filter((e) => e.event_type === 'voice_update');
+    assert.equal(noopVoiceUpdates.length, 0, 'Unchanged voice heartbeat must not emit redundant voice_update sync events');
+
+    const muteChangeRes = await ctx.apiReq('POST', '/api/voice/dugout-voice/state', ctx.adminCookie, {
+      muted: true,
+      deafened: false,
+      screen_sharing: false
+    });
+    assert.equal(muteChangeRes.status, 200);
+    const syncAfterMute = await ctx.apiReq('GET', `/api/sync?since_event_id=${baseEventId}&since_message_id=${baseMsgId}`, ctx.adminCookie);
+    assert.equal(syncAfterMute.status, 200);
+    const muteVoiceUpdates = (syncAfterMute.data.events || []).filter((e) => e.event_type === 'voice_update');
+    assert.equal(muteVoiceUpdates.length, 1, 'Mute state change must still emit a voice_update sync event');
+
+    await ctx.apiReq('POST', '/api/voice/dugout-voice/leave', ctx.adminCookie);
   });
 
   await t.test('T5.8: Guest game privacy, invite-only event restriction, volunteer crew name hiding & Mod tab board card removal', async () => {

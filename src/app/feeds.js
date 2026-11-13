@@ -153,7 +153,7 @@ export async function renderFeedXmlResponse(db, requestUrl) {
       status: 200,
       headers: {
         'Content-Type': 'application/rss+xml; charset=utf-8',
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Cache-Control': 'public, max-age=60, s-maxage=300, stale-while-revalidate=600',
         'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
         'X-Content-Type-Options': 'nosniff',
         'X-App-Version': CURRENT_APP_VERSION

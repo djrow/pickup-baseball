@@ -349,9 +349,20 @@
       return mem.data;
     }
 
-    // 2. Check sessionStorage
+    // 2. Check persistent localStorage, then sessionStorage
     try {
-      var raw = sessionStorage.getItem(key);
+      var rawLocal = (typeof localStorage !== 'undefined') ? localStorage.getItem(key) : null;
+      if (rawLocal) {
+        var parsedLocal = JSON.parse(rawLocal);
+        if (parsedLocal && (Date.now() - parsedLocal.timestamp < HEURISTIC_CONFIG.CACHE_TTL_MS)) {
+          inMemoryCache[key] = parsedLocal;
+          return parsedLocal.data;
+        }
+      }
+    } catch (e) {}
+
+    try {
+      var raw = (typeof sessionStorage !== 'undefined') ? sessionStorage.getItem(key) : null;
       if (raw) {
         var parsed = JSON.parse(raw);
         if (parsed && (Date.now() - parsed.timestamp < HEURISTIC_CONFIG.CACHE_TTL_MS)) {
@@ -380,12 +391,21 @@
     }
     var data = await res.json();
 
-    // Cache the response
+    // Cache the response in memory, localStorage (persists across tabs), and sessionStorage
     var cacheEntry = { timestamp: Date.now(), data: data };
     inMemoryCache[key] = cacheEntry;
+    var serializedEntry = null;
     try {
-      sessionStorage.setItem(key, JSON.stringify(cacheEntry));
+      serializedEntry = JSON.stringify(cacheEntry);
     } catch (e) {}
+    if (serializedEntry) {
+      try {
+        if (typeof localStorage !== 'undefined') localStorage.setItem(key, serializedEntry);
+      } catch (e) {}
+      try {
+        if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(key, serializedEntry);
+      } catch (e) {}
+    }
 
     return data;
   }
@@ -1022,7 +1042,7 @@
       var puddleThreshold = HEURISTIC_CONFIG.THRESHOLDS.DAMP_MAX;
       var guideHtml = '';
       if (scaleMax >= puddleThreshold) {
-        var guideTopPx = Math.max(25, Math.min(92, Math.round(25 + (1 - (puddleThreshold / scaleMax)) * 68)));
+        var guideTopPx = Math.max(19, Math.min(66, Math.round(19 + (1 - (puddleThreshold / scaleMax)) * 48)));
         guideHtml = '<div class="hourly-threshold-guide" style="top: ' + guideTopPx + 'px;" title="Puddle Alert threshold: ' + puddleThreshold.toFixed(2) + '&quot; surface water"></div>';
       }
       var firstGameColMarked = false;
@@ -1071,9 +1091,9 @@
       }).join('');
 
       timelineHtml = `
-        <div style="margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border);">
+        <div style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border);">
           <div class="hourly-drainage-header">
-            <span style="font-size: 0.84rem; font-weight: 700; color: var(--secondary);">
+            <span style="font-size: 0.8rem; font-weight: 700; color: var(--secondary);">
               📊 Hourly Rainfall vs. Expected Surface Water (${timelineRangeLabel})
             </span>
             <div class="hourly-drainage-summary-chips">
@@ -1125,90 +1145,80 @@
     }
 
     container.innerHTML = `
-      <div class="card smart-rainout-card" style="border-top: 4px solid ${r.statusColor}; margin-bottom: 20px; box-shadow: var(--shadow-sm);">
-        <!-- Top Status Bar -->
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 12px;">
-          <div>
+      <div class="card smart-rainout-card" style="border-top: 4px solid ${r.statusColor}; margin-bottom: 14px; box-shadow: var(--shadow-sm);">
+        <!-- Top Status Bar (Badge + Title + Prognosis + Temp chip aligned cleanly) -->
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;">
+          <div style="flex: 1 1 360px; min-width: 0;">
             <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-              <span class="badge ${r.badgeClass}" style="font-size: 0.85rem; padding: 4px 10px; font-weight: 700;">
+              <h3 style="color: var(--secondary); font-size: 1.05rem; margin: 0;">
+                🌧️ Smart Rainout &amp; Surface Drainage
+              </h3>
+              <span class="badge ${r.badgeClass}" style="font-size: 0.74rem; padding: 2px 8px; font-weight: 700;">
                 ${r.statusIcon} ${r.statusLabel}
               </span>
-              <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">
+              <span style="font-size: 0.76rem; color: var(--text-muted); font-weight: 600;">
                 📍 ${fieldName}
               </span>
             </div>
-            <h3 style="color: var(--secondary); font-size: 1.15rem; margin: 8px 0 4px 0;">
-              🌧️ Smart Rainout Assistant &amp; Surface Drainage Tracker
-            </h3>
-            <p style="font-size: 0.88rem; color: var(--text-main); margin: 0; line-height: 1.4;">
+            <p style="font-size: 0.82rem; color: var(--text-main); margin: 4px 0 0 0; line-height: 1.35;">
               ${r.prognosis}
             </p>
           </div>
-          <div style="text-align: right; background: ${r.statusBg}; border: 1px solid ${r.statusBorder}; padding: 8px 14px; border-radius: var(--radius-sm);">
-            <div style="font-size: 1.35rem; font-weight: 800; color: ${r.statusColor}; display: flex; align-items: center; justify-content: flex-end; gap: 6px;">
+          <div style="display: flex; align-items: center; gap: 8px; background: ${r.statusBg}; border: 1px solid ${r.statusBorder}; padding: 5px 10px; border-radius: var(--radius-sm); flex-shrink: 0;">
+            <span style="font-size: 1.15rem; font-weight: 800; color: ${r.statusColor}; display: inline-flex; align-items: center; gap: 4px;">
               <span>${r.emoji}</span> <span>${r.temperature}°F</span>
-            </div>
-            <div style="font-size: 0.76rem; color: var(--text-muted); font-weight: 600;">
+            </span>
+            <span style="font-size: 0.74rem; color: var(--text-muted); font-weight: 600;">
               ${r.condition} at Noon
-            </div>
+            </span>
           </div>
         </div>
 
-        <!-- Metrics Grid -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-top: 10px;">
-          <div style="background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px;">
-            <div style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">10-Day Rain Prediction</div>
-            <div style="font-size: 1.1rem; font-weight: 800; color: var(--secondary); margin-top: 2px;">
-              🌧️ ${r.rainfall10DayFormatted}
-            </div>
-            <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">Event day &amp; 9 previous days</div>
+        <!-- Compact Metrics Grid -->
+        <div class="weather-kpi-grid">
+          <div class="weather-kpi-tile">
+            <div class="weather-kpi-label">10-Day Rain</div>
+            <div class="weather-kpi-val">🌧️ ${r.rainfall10DayFormatted}</div>
+            <div class="weather-kpi-sub">Game &amp; prior 9 days</div>
           </div>
 
-          <div style="background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px;">
-            <div style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">24h Rain Total</div>
-            <div style="font-size: 1.1rem; font-weight: 800; color: var(--secondary); margin-top: 2px;">
-              🌧️ ${r.totalRain24hFormatted}
-            </div>
-            <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">Fallen Sat 12p - Sun 12p</div>
+          <div class="weather-kpi-tile">
+            <div class="weather-kpi-label">24h Rain Total</div>
+            <div class="weather-kpi-val">🌧️ ${r.totalRain24hFormatted}</div>
+            <div class="weather-kpi-sub">Sat 12p – Sun 12p</div>
           </div>
 
-          <div style="background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px;">
-            <div style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Drying Clearance</div>
-            <div style="font-size: 1.1rem; font-weight: 800; color: var(--secondary); margin-top: 2px;">
-              ⏱️ ${r.hoursSinceRain >= 24 ? '24h+ Dry' : r.hoursSinceRain + 'h Dry'}
-            </div>
-            <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">${r.rainDryingNote}</div>
+          <div class="weather-kpi-tile">
+            <div class="weather-kpi-label">Drying Clearance</div>
+            <div class="weather-kpi-val">⏱️ ${r.hoursSinceRain >= 24 ? '24h+ Dry' : r.hoursSinceRain + 'h Dry'}</div>
+            <div class="weather-kpi-sub">${r.rainDryingNote}</div>
           </div>
 
-          <div style="background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px;">
-            <div style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Surface Moisture</div>
-            <div style="font-size: 1.1rem; font-weight: 800; color: ${r.statusColor}; margin-top: 2px;">
-              🌊 ${r.effectiveMoistureFormatted}
-            </div>
-            <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">Exponential drainage model</div>
+          <div class="weather-kpi-tile">
+            <div class="weather-kpi-label">Surface Moisture</div>
+            <div class="weather-kpi-val" style="color: ${r.statusColor};">🌊 ${r.effectiveMoistureFormatted}</div>
+            <div class="weather-kpi-sub">Exponential drainage</div>
           </div>
 
-          <div style="background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px;">
-            <div style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Recommendation</div>
-            <div style="font-size: 0.82rem; font-weight: 700; color: var(--secondary); margin-top: 4px; line-height: 1.3;">
-              ${r.recommendation}
-            </div>
+          <div class="weather-kpi-tile">
+            <div class="weather-kpi-label">Recommendation</div>
+            <div class="weather-kpi-rec">${r.recommendation}</div>
           </div>
         </div>
 
         <!-- 10-Day Rainfall Prediction Across the Card (Daily Breakdown) -->
         ${(r.dailyForecast && r.dailyForecast.length > 0) ? `
-          <div style="margin-top: 14px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px;">
-            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
-              <div style="font-size: 0.8rem; font-weight: 700; color: var(--secondary); display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+          <div style="margin-top: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 7px 10px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; margin-bottom: 4px;">
+              <div style="font-size: 0.76rem; font-weight: 700; color: var(--secondary); display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                 <span>🌧️ <strong>10-Day Rainfall Prediction: ${r.rainfall10DayFormatted}</strong></span>
                 ${r.todayForecast ? `
-                  <span class="badge" style="font-size: 0.72rem; padding: 2px 8px; font-weight: 700; background: rgba(0, 56, 49, 0.09); color: var(--secondary); border: 1.5px solid var(--secondary); border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
+                  <span class="badge" style="font-size: 0.68rem; padding: 1px 7px; font-weight: 700; background: rgba(0, 56, 49, 0.09); color: var(--secondary); border: 1px solid var(--secondary); border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
                     📍 Today's Rain: <strong>${r.todayForecast.rainFormatted}</strong> (${r.todayForecast.dayName || 'Today'})
                   </span>
                 ` : ''}
               </div>
-              <div style="font-size: 0.74rem; color: var(--text-muted); font-weight: 600;">
+              <div style="font-size: 0.7rem; color: var(--text-muted); font-weight: 600;">
                 Event day &amp; 9 previous days
               </div>
             </div>
@@ -1220,8 +1230,8 @@
         ${timelineHtml}
 
         <!-- Heuristic Transparency Note -->
-        <div style="margin-top: 12px; font-size: 0.74rem; color: var(--text-muted); line-height: 1.4; background: var(--bg-subtle); padding: 8px 12px; border-radius: var(--radius-sm);">
-          💡 <strong>How the Drainage Heuristic Works:</strong> Tracks total rainfall in the 24 hours preceding 12:00 PM warmups, applying exponential soil percolation decay (&tau; = ${HEURISTIC_CONFIG.DRAINAGE_DECAY_HOURS} hrs). The hourly chart above compares <strong>Hourly Rainfall</strong> (blue bars/row, in/hr) against <strong>Expected Surface Water</strong> (amber bars/row, remaining inches on the field as prior rain drains). When rain stops early enough, expected surface water drops back into the playable zone before warmups.
+        <div style="margin-top: 8px; font-size: 0.71rem; color: var(--text-muted); line-height: 1.35; background: var(--bg-subtle); padding: 5px 9px; border-radius: var(--radius-sm);">
+          💡 <strong>Drainage Model:</strong> Tracks prior 24h rain with &tau; = ${HEURISTIC_CONFIG.DRAINAGE_DECAY_HOURS}h percolation decay; compares hourly rain (blue, in/hr) vs. remaining surface water (amber, in).
         </div>
       </div>
     `;

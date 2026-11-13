@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Game Details & RSVP - Sunday Pickup Baseball</title>
-  <link rel="stylesheet" href="/css/style.css?v=122">
+  <link rel="stylesheet" href="/css/style.css?v=123">
   <link rel="alternate" type="application/rss+xml" title="Sunday Pickup Baseball Highlights &amp; Updates" href="/feed.xml">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
@@ -38,11 +38,11 @@
     </div>
   </header>
 
-  <main class="container" style="margin-top: 24px; margin-bottom: 60px;">
+  <main class="container event-detail-main" style="margin-top: 14px; margin-bottom: 36px;">
     
     <!-- Breadcrumb -->
-    <div style="margin-bottom: 16px;">
-      <a href="/index.html" style="color: var(--secondary); text-decoration: none; font-weight: 600; font-size: 0.9rem;" data-i18n="event.back_to_games">
+    <div style="margin-bottom: 10px;">
+      <a href="/index.html" style="color: var(--secondary); text-decoration: none; font-weight: 600; font-size: 0.86rem;" data-i18n="event.back_to_games">
         ← Back to All Games
       </a>
     </div>
@@ -59,21 +59,23 @@
     <div id="event-container" style="display: none;">
 
       <!-- Rainout Banner (Shown when event is rained out) -->
-      <div id="rainout-banner" style="display: none; margin-bottom: 20px;"></div>
+      <div id="rainout-banner" style="display: none; margin-bottom: 12px;"></div>
 
       <!-- Event Header Card -->
-      <div class="card" style="border-top: 5px solid var(--secondary);">
-        <div class="card-header">
-          <div>
+      <div class="card event-hero-card" style="border-top: 4px solid var(--secondary);">
+        <div class="card-header" style="margin-bottom: 10px;">
+          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
             <span class="badge badge-green" id="event-status-badge" data-i18n="event.upcoming_badge">Upcoming Game</span>
-            <h1 id="event-title" style="color: var(--secondary); font-size: 1.8rem; margin-top: 6px;"></h1>
+            <h1 id="event-title" style="color: var(--secondary); font-size: 1.45rem; margin: 0;"></h1>
           </div>
-          <div id="admin-actions-container" style="display: none; gap: 8px; flex-wrap: wrap;"></div>
+          <div id="admin-actions-container" style="display: none; gap: 6px; flex-wrap: wrap;"></div>
         </div>
 
-        <div id="edit-event-panel" style="display: none; margin-bottom: 18px;"></div>
-        <div id="organizer-attendance-panel" style="display: none; margin-bottom: 18px;"></div>
-        <div id="organizer-rainout-panel" style="display: none; margin-bottom: 18px;"></div>
+        <div id="edit-event-panel" style="display: none; margin-bottom: 10px;"></div>
+        <div class="organizer-controls-grid">
+          <div id="organizer-attendance-panel" style="display: none;"></div>
+          <div id="organizer-rainout-panel" style="display: none;"></div>
+        </div>
 
         <div class="event-meta-grid">
           <div class="meta-item">
@@ -155,22 +157,22 @@
           </div>
         </div>
 
-        <div id="event-subscribe-panel" class="calendar-subscribe-panel" style="display: none; margin-bottom: 16px;"></div>
+        <div id="event-subscribe-panel" class="calendar-subscribe-panel" style="display: none; margin-bottom: 10px;"></div>
 
-        <p id="event-description" style="color: var(--text-main); margin-top: 8px; white-space: pre-wrap;"></p>
+        <p id="event-description" style="color: var(--text-main); font-size: 0.88rem; margin: 4px 0 0 0; white-space: pre-wrap;"></p>
       </div>
 
       <!-- Smart Rainout Assistant & Field Surface Accumulation Widget -->
-      <div id="smart-rainout-widget" style="margin-bottom: 24px;"></div>
+      <div id="smart-rainout-widget" style="margin-bottom: 14px;"></div>
 
       <!-- Simplified Group RSVP & Volunteer Tasks Section -->
       <section class="card" id="rsvp-section" style="border: 2px solid var(--primary); background: var(--bg-card);">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
-          <div>
-            <h2 style="font-size: 1.32rem; color: var(--secondary); margin-bottom: 2px;" data-i18n="event.rsvp_heading">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+          <div style="display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px;">
+            <h2 style="font-size: 1.18rem; color: var(--secondary); margin: 0;" data-i18n="event.rsvp_heading">
               RSVP &amp; Volunteer Tasks
             </h2>
-            <p style="font-size: 0.86rem; color: var(--text-muted); margin: 0;" data-i18n="event.rsvp_subheading">
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;" data-i18n="event.rsvp_subheading">
               Sign up players, spectators, and group tasks in one step.
             </p>
           </div>
@@ -178,13 +180,13 @@
         </div>
 
         <div id="rsvp-alert"></div>
-        <div id="rsvp-rainout-notice" style="display: none; margin-bottom: 16px;"></div>
+        <div id="rsvp-rainout-notice" style="display: none; margin-bottom: 10px;"></div>
 
         <!-- Registered User Login Prompt -->
-        <div id="rsvp-login-prompt" style="background: var(--bg-subtle); border: 1.5px solid var(--border); border-radius: var(--radius-sm); padding: 12px 16px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+        <div id="rsvp-login-prompt" style="background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 12px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
           <div>
-            <strong style="color: var(--primary); font-size: 0.92rem;" data-i18n="event.already_account">Already have an account?</strong>
-            <div style="font-size: 0.82rem; color: var(--text-muted); margin-top: 2px;" data-i18n="event.login_autofill">Log in to save your group RSVP and manage tasks anytime.</div>
+            <strong style="color: var(--primary); font-size: 0.86rem;" data-i18n="event.already_account">Already have an account?</strong>
+            <span style="font-size: 0.78rem; color: var(--text-muted); margin-left: 6px;" data-i18n="event.login_autofill">Log in to save your group RSVP and manage tasks anytime.</span>
           </div>
           <a href="/login.html" class="btn btn-primary btn-sm" style="font-weight: 700; text-decoration: none;">
             ⚾ <span data-i18n="nav.login">Log In</span>
@@ -236,10 +238,10 @@
           </div>
 
           <!-- Unified Group Volunteer Tasks Checklist (Single source of truth on page) -->
-          <div class="form-group" id="duties-selection-group" style="margin-bottom: 14px;">
-            <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
-              <label style="margin-bottom: 0;" data-i18n="event.duties_label">🛡️ Group Volunteer Tasks</label>
-              <span style="font-size: 0.78rem; color: var(--text-muted);" data-i18n="event.duties_help">Your group covers checked tasks together</span>
+          <div class="form-group" id="duties-selection-group" style="margin-bottom: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 6px; margin-bottom: 6px;">
+              <label style="margin-bottom: 0; font-size: 0.86rem;" data-i18n="event.duties_label">🛡️ Group Volunteer Tasks</label>
+              <span style="font-size: 0.74rem; color: var(--text-muted);" data-i18n="event.duties_help">Your group covers checked tasks together</span>
             </div>
             <div id="rsvp-duties-list" class="rsvp-tasks-checklist">
               <!-- Populated dynamically -->
@@ -251,20 +253,20 @@
             <details id="rsvp-optional-details" class="rsvp-optional-details">
               <summary data-i18n="event.optional_details_summary">Add group names or shared gear (optional)</summary>
               <div class="rsvp-optional-body">
-                <div class="form-group" style="margin-bottom: 12px;">
-                  <label for="rsvp-guest-names" style="font-size: 0.85rem;" data-i18n="event.group_names_label">Group / Guest Names</label>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label for="rsvp-guest-names" style="font-size: 0.8rem;" data-i18n="event.group_names_label">Group / Guest Names</label>
                   <input type="text" id="rsvp-guest-names" placeholder="e.g. Alex, Jordan, Sam" data-i18n-placeholder="event.guest_names_placeholder">
                 </div>
                 <div class="form-group" style="margin-bottom: 0;">
-                  <label for="rsvp-gear" style="font-size: 0.85rem;" data-i18n="event.gear_label">Shared Gear Your Group Can Bring</label>
+                  <label for="rsvp-gear" style="font-size: 0.8rem;" data-i18n="event.gear_label">Shared Gear Your Group Can Bring</label>
                   <input type="text" id="rsvp-gear" placeholder="e.g. 2 wood bats, catcher's helmet, spare glove" data-i18n-placeholder="event.gear_placeholder">
                 </div>
               </div>
             </details>
 
-            <div class="form-group" style="margin-top: 10px; margin-bottom: 12px; background: var(--bg-subtle); padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
-              <label style="display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.88rem; font-weight: 600; color: var(--secondary); margin-bottom: 0;">
-                <input type="checkbox" id="rsvp-bp-signup" style="width: 17px; height: 17px; accent-color: var(--primary);">
+            <div class="form-group" style="margin-top: 6px; margin-bottom: 8px; background: var(--bg-subtle); padding: 7px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+              <label style="display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.83rem; font-weight: 600; color: var(--secondary); margin-bottom: 0;">
+                <input type="checkbox" id="rsvp-bp-signup" style="width: 16px; height: 16px; accent-color: var(--primary);">
                 <span data-i18n="event.bp_rsvp_checkbox">⚾ Sign me up for Batting Practice (BP) order (12:30 PM warmup)</span>
               </label>
             </div>
@@ -286,50 +288,70 @@
         </form>
       </section>
 
-      <!-- Batting Practice (BP) Order Signup Sheet Section -->
-      <section class="card bp-order-section" id="bp-order-section">
-        <div class="card-header" style="flex-wrap: wrap; gap: 10px;">
-          <div>
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 1.4rem;">⚾</span>
-              <h2 class="card-title" style="margin: 0;" data-i18n="event.bp_title">Batting Practice (BP) Order</h2>
-            </div>
-            <p style="font-size: 0.88rem; color: var(--text-muted); margin: 4px 0 0 0;" data-i18n="event.bp_subtitle">
-              12:30 PM – 1:30 PM machine-pitch warmup • Shag outfield fly balls while other rounds hit!
+      <!-- Combined Expected Attendees Roster & Batting Practice (BP) Order Card -->
+      <section class="card roster-bp-card" id="roster-bp-card" style="border-top: 4px solid var(--secondary);">
+        <div class="card-header" style="margin-bottom: 6px;">
+          <div style="display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px;">
+            <h2 class="card-title" style="font-size: 1.18rem; margin: 0;" data-i18n="event.roster_title">👥 Expected Attendees</h2>
+            <p style="font-size: 0.78rem; color: var(--text-muted); margin: 0;" data-i18n="event.roster_desc">
+              Players, spectators, shared gear, and group tasks.
             </p>
           </div>
-          <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-            <span id="bp-slots-badge" class="badge badge-green">0/15 Slots</span>
-            <button type="button" id="bp-quick-claim-btn" class="btn btn-primary btn-sm" style="display: inline-flex; align-items: center; gap: 4px;">
-              ⚡ <span data-i18n="event.bp_quick_claim">Claim Next Slot</span>
-            </button>
-            <div id="bp-organizer-controls" style="display: none; gap: 6px;">
-              <button type="button" id="bp-clear-btn" class="btn btn-outline btn-sm" style="color: var(--danger); font-size: 0.78rem;" title="Clear entire batting practice order">
-                🗑️ Clear Order
-              </button>
-            </div>
+          <div id="roster-badges-wrap" style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+            <span id="roster-badge" class="badge badge-green"></span>
+            <span id="spectators-badge" class="badge badge-spectator" style="display: none;"></span>
           </div>
         </div>
 
-        <div id="bp-alert"></div>
-
-        <!-- Rounds Navigation / Group Legend -->
-        <div class="bp-groups-legend">
-          <div class="bp-group-tag group-1"><strong>Group 1 (Slots 1–5):</strong> Hits First • Shags Round 2 &amp; 3</div>
-          <div class="bp-group-tag group-2"><strong>Group 2 (Slots 6–10):</strong> Shags Round 1 • Hits Round 2</div>
-          <div class="bp-group-tag group-3"><strong>Group 3 (Slots 11–15):</strong> Shags Round 1 &amp; 2 • Hits Round 3</div>
+        <div id="attendees-container">
+          <!-- Populated dynamically -->
         </div>
 
-        <!-- BP Slots Lineup Sheet Grid -->
-        <div id="bp-slots-grid" class="bp-slots-grid">
-          <!-- Populated dynamically -->
+        <!-- Integrated Batting Practice (BP) Order Signup Sheet -->
+        <div class="roster-bp-divider bp-order-section" id="bp-order-section">
+          <div class="card-header" style="flex-wrap: wrap; gap: 8px; margin-bottom: 8px;">
+            <div style="display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px;">
+              <h3 class="card-title" style="font-size: 1.08rem; margin: 0; display: inline-flex; align-items: center; gap: 6px;">
+                <span>⚾</span>
+                <span data-i18n="event.bp_title">Batting Practice (BP) Order</span>
+              </h3>
+              <p style="font-size: 0.78rem; color: var(--text-muted); margin: 0;" data-i18n="event.bp_subtitle">
+                12:30 PM – 1:30 PM machine-pitch warmup • Shag outfield fly balls while other rounds hit!
+              </p>
+            </div>
+            <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+              <span id="bp-slots-badge" class="badge badge-green">0/15 Slots</span>
+              <button type="button" id="bp-quick-claim-btn" class="btn btn-primary btn-sm" style="display: inline-flex; align-items: center; gap: 4px;">
+                ⚡ <span data-i18n="event.bp_quick_claim">Claim Next Slot</span>
+              </button>
+              <div id="bp-organizer-controls" style="display: none; gap: 6px;">
+                <button type="button" id="bp-clear-btn" class="btn btn-outline btn-sm" style="color: var(--danger); font-size: 0.74rem;" title="Clear entire batting practice order">
+                  🗑️ Clear Order
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div id="bp-alert"></div>
+
+          <!-- Rounds Navigation / Group Legend -->
+          <div class="bp-groups-legend">
+            <div class="bp-group-tag group-1"><strong>Group 1 (1–5):</strong> Hits 1st • Shags 2 &amp; 3</div>
+            <div class="bp-group-tag group-2"><strong>Group 2 (6–10):</strong> Shags 1 • Hits 2nd</div>
+            <div class="bp-group-tag group-3"><strong>Group 3 (11–15):</strong> Shags 1 &amp; 2 • Hits 3rd</div>
+          </div>
+
+          <!-- BP Slots Lineup Sheet Grid -->
+          <div id="bp-slots-grid" class="bp-slots-grid">
+            <!-- Populated dynamically -->
+          </div>
         </div>
 
         <!-- Modal Dialog for BP Claim / Edit -->
         <div id="bp-signup-modal" class="bp-modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="bp-modal-title">
           <div class="bp-modal-content card">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
-              <h3 id="bp-modal-title" style="margin: 0; font-size: 1.15rem; color: var(--secondary);">Sign Up for Batting Practice</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <h3 id="bp-modal-title" style="margin: 0; font-size: 1.1rem; color: var(--secondary);">Sign Up for Batting Practice</h3>
               <button type="button" id="bp-modal-close" class="bp-modal-close-btn" aria-label="Close">✕</button>
             </div>
             <form id="bp-signup-form">
@@ -348,7 +370,7 @@
                 <label for="bp-player-notes">Batting Stance / Notes (Optional)</label>
                 <input type="text" id="bp-player-notes" placeholder="e.g. Hits Righty, Switch, Needs 1st round" maxlength="200">
               </div>
-              <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px;">
+              <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px;">
                 <button type="button" id="bp-modal-cancel" class="btn btn-outline btn-sm">Cancel</button>
                 <button type="submit" id="bp-modal-submit" class="btn btn-primary btn-sm">Confirm BP Slot</button>
               </div>
@@ -357,32 +379,12 @@
         </div>
       </section>
 
-      <!-- Attendees Roster, Spectators & Group Tasks -->
-      <section class="card">
-        <div class="card-header">
-          <div>
-            <h2 class="card-title" data-i18n="event.roster_title">👥 Expected Attendees</h2>
-            <p style="font-size: 0.88rem; color: var(--text-muted);" data-i18n="event.roster_desc">
-              Players, spectators, shared gear, and group tasks.
-            </p>
-          </div>
-          <div id="roster-badges-wrap" style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
-            <span id="roster-badge" class="badge badge-green"></span>
-            <span id="spectators-badge" class="badge badge-spectator" style="display: none;"></span>
-          </div>
-        </div>
-
-        <div id="attendees-container">
-          <!-- Populated dynamically -->
-        </div>
-      </section>
-
       <!-- Event Discussion Board -->
       <section class="card">
-        <div class="card-header">
-          <div>
-            <h2 class="card-title" data-i18n="event.discussion_title">💬 Game Discussion Board</h2>
-            <p style="font-size: 0.88rem; color: var(--text-muted);" data-i18n="event.discussion_desc">
+        <div class="card-header" style="margin-bottom: 8px;">
+          <div style="display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px;">
+            <h2 class="card-title" style="font-size: 1.18rem; margin: 0;" data-i18n="event.discussion_title">💬 Game Discussion Board</h2>
+            <p style="font-size: 0.78rem; color: var(--text-muted); margin: 0;" data-i18n="event.discussion_desc">
               Coordinate carpools, ask about gear, discuss weather, or post post-game highlights!
             </p>
           </div>
@@ -393,26 +395,24 @@
         </div>
 
         <!-- Add Comment Form -->
-        <form id="comment-form" style="border-top: 1px solid var(--border); padding-top: 18px; margin-top: 18px;">
-          <h3 style="font-size: 1rem; color: var(--secondary); margin-bottom: 12px;" data-i18n="event.leave_message">Leave a Message</h3>
-          
-          <div id="comment-guest-fields" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 12px;">
+        <form id="comment-form" style="border-top: 1px solid var(--border); padding-top: 10px; margin-top: 10px;">
+          <div id="comment-guest-fields" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; margin-bottom: 8px;">
             <div class="form-group" style="margin-bottom: 0;">
-              <label for="comment-author-name" data-i18n="event.name_label">Name *</label>
+              <label for="comment-author-name" style="font-size: 0.8rem;" data-i18n="event.name_label">Name *</label>
               <input type="text" id="comment-author-name" placeholder="Your name" data-i18n-placeholder="event.name_placeholder" required>
             </div>
             <div class="form-group" style="margin-bottom: 0;">
-              <label for="comment-author-email" data-i18n="event.email_optional">Email (Optional)</label>
+              <label for="comment-author-email" style="font-size: 0.8rem;" data-i18n="event.email_optional">Email (Optional)</label>
               <input type="email" id="comment-author-email" placeholder="you@example.com">
             </div>
           </div>
 
-          <div class="form-group">
-            <label for="comment-content" data-i18n="event.message_label">Message</label>
-            <textarea id="comment-content" rows="3" placeholder="Field update, gear questions, or post-game shoutouts..." data-i18n-placeholder="event.message_placeholder" required></textarea>
+          <div class="form-group" style="margin-bottom: 8px;">
+            <label for="comment-content" style="font-size: 0.8rem;" data-i18n="event.leave_message">Leave a Message</label>
+            <textarea id="comment-content" rows="2" placeholder="Field update, gear questions, or post-game shoutouts..." data-i18n-placeholder="event.message_placeholder" required></textarea>
           </div>
 
-          <button type="submit" id="comment-submit-btn" class="btn btn-secondary" data-i18n="event.post_comment_btn">
+          <button type="submit" id="comment-submit-btn" class="btn btn-secondary btn-sm" data-i18n="event.post_comment_btn">
             Post to Discussion
           </button>
         </form>
@@ -424,8 +424,8 @@
 
   <footer id="site-footer" class="site-footer"></footer>
 
-  <script src="/js/api.js?v=122"></script>
-  <script src="/js/weather.js?v=122"></script>
-  <script src="/js/event.js?v=122"></script>
+  <script src="/js/api.js?v=123"></script>
+  <script src="/js/weather.js?v=123"></script>
+  <script src="/js/event.js?v=123"></script>
 </body>
 </html>

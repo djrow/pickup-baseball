@@ -13,7 +13,7 @@ postsRouter.get('/', async (c) => {
       ORDER BY p.created_at DESC
       LIMIT 100
     `).all();
-    c.header('Cache-Control', 'no-cache, no-store, must-revalidate');
+    c.header('Cache-Control', 'public, max-age=60, s-maxage=300, stale-while-revalidate=600');
     return c.json({ posts: posts || [] });
   } catch (err) {
     console.error('[Posts] Error fetching posts:', err);

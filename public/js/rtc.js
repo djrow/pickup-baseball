@@ -8,7 +8,7 @@
 (function (root) {
   'use strict';
 
-  var HEARTBEAT_INTERVAL_MS = 12000;
+  var HEARTBEAT_INTERVAL_MS = 16000;
   var DEFAULT_ICE_SERVERS = [
     { urls: 'stun:stun.cloudflare.com:3478' },
     { urls: 'stun:stun.l.google.com:19302' }

@@ -1123,6 +1123,98 @@
   }
 
   /**
+   * Client-side raster resize/re-encode for large chat photo attachments (>350KB, non-GIF).
+   * Gallery HD originals remain untouched in gallery.js; chat uploads keep whichever buffer is smaller.
+   */
+  function maybeOptimizeChatImage(file, rawBuf) {
+    var mime = String((file && file.type) || '').toLowerCase();
+    var isOptimizable = (mime === 'image/jpeg' || mime === 'image/jpg' || mime === 'image/png' || mime === 'image/webp');
+    if (
+      !isOptimizable ||
+      !rawBuf ||
+      rawBuf.byteLength <= 350 * 1024 ||
+      typeof document === 'undefined' ||
+      typeof Image === 'undefined' ||
+      typeof URL === 'undefined' ||
+      typeof URL.createObjectURL !== 'function'
+    ) {
+      return Promise.resolve({
+        buffer: rawBuf,
+        mimeType: file.type || 'application/octet-stream',
+        fileName: file.name
+      });
+    }
+
+    return new Promise(function (resolve) {
+      var fallback = {
+        buffer: rawBuf,
+        mimeType: file.type || 'application/octet-stream',
+        fileName: file.name
+      };
+      var objectUrl = '';
+      try {
+        objectUrl = URL.createObjectURL(new Blob([rawBuf], { type: mime }));
+      } catch (e) {
+        resolve(fallback);
+        return;
+      }
+
+      var img = new Image();
+      img.onload = function () {
+        try {
+          URL.revokeObjectURL(objectUrl);
+          var maxDim = 1600;
+          var w = img.naturalWidth || img.width || 0;
+          var h = img.naturalHeight || img.height || 0;
+          if (!w || !h) {
+            resolve(fallback);
+            return;
+          }
+          var scale = Math.min(1, maxDim / Math.max(w, h));
+          var targetW = Math.max(1, Math.round(w * scale));
+          var targetH = Math.max(1, Math.round(h * scale));
+          var canvas = document.createElement('canvas');
+          canvas.width = targetW;
+          canvas.height = targetH;
+          var ctx = canvas.getContext('2d');
+          if (!ctx || typeof canvas.toBlob !== 'function') {
+            resolve(fallback);
+            return;
+          }
+          ctx.drawImage(img, 0, 0, targetW, targetH);
+          canvas.toBlob(function (blob) {
+            if (!blob || blob.size >= rawBuf.byteLength) {
+              resolve(fallback);
+              return;
+            }
+            blob.arrayBuffer().then(function (optBuf) {
+              if (!optBuf || optBuf.byteLength >= rawBuf.byteLength) {
+                resolve(fallback);
+                return;
+              }
+              var baseName = String(file.name || 'image').replace(/\.[^.]+$/, '');
+              resolve({
+                buffer: optBuf,
+                mimeType: 'image/jpeg',
+                fileName: baseName + '.jpg'
+              });
+            }, function () {
+              resolve(fallback);
+            });
+          }, 'image/jpeg', 0.86);
+        } catch (err) {
+          resolve(fallback);
+        }
+      };
+      img.onerror = function () {
+        try { URL.revokeObjectURL(objectUrl); } catch (e) {}
+        resolve(fallback);
+      };
+      img.src = objectUrl;
+    });
+  }
+
+  /**
    * Direct Resumable Media Uploader (5 TB Google Drive or Local Fallback) with JPEG EXIF stripping.
    */
   function uploadAttachment(channelId, file, onProgress) {
@@ -1133,9 +1225,13 @@
     var needsE2ee = requiresE2eeChannel(ch);
 
     return file.arrayBuffer().then(function (rawBuf) {
-      var cleanBuf = rawBuf;
-      if ((file.type === 'image/jpeg' || file.type === 'image/jpg') && root.ClubhouseCrypto) {
-        cleanBuf = root.ClubhouseCrypto.stripJpegMetadata(rawBuf);
+      return maybeOptimizeChatImage(file, rawBuf);
+    }).then(function (opt) {
+      var cleanBuf = opt.buffer;
+      var uploadFileName = opt.fileName;
+      var uploadMimeType = opt.mimeType;
+      if ((uploadMimeType === 'image/jpeg' || uploadMimeType === 'image/jpg') && root.ClubhouseCrypto) {
+        cleanBuf = root.ClubhouseCrypto.stripJpegMetadata(cleanBuf);
       }
 
       var prepAtt = needsE2ee
@@ -1152,8 +1248,8 @@
         progressCb(10, 'Initializing upload session...');
         return apiRequest('POST', '/api/attachments/init', {
           channel_id: Number(channelId),
-          file_name: file.name,
-          mime_type: file.type || 'application/octet-stream',
+          file_name: uploadFileName,
+          mime_type: uploadMimeType || 'application/octet-stream',
           file_size: uploadBuf.byteLength,
           is_encrypted: prepared.isEncrypted,
           iv: prepared.iv
@@ -1167,7 +1263,7 @@
             (initRes.data.uploadMode === 'gdrive_resumable' ? 'gdrive' : 'local');
 
           if (storageProvider === 'gdrive' && uploadUrl && uploadUrl.indexOf('googleapis.com') !== -1) {
-            return uploadChunksToGDrive(uploadUrl, uploadBuf, prepared.isEncrypted ? 'application/octet-stream' : file.type, progressCb).then(function (gdriveMeta) {
+            return uploadChunksToGDrive(uploadUrl, uploadBuf, prepared.isEncrypted ? 'application/octet-stream' : uploadMimeType, progressCb).then(function (gdriveMeta) {
               progressCb(95, 'Finalizing Google Drive attachment...');
               var resolvedDriveId = (gdriveMeta && gdriveMeta.id) ? gdriveMeta.id : initRes.data.driveFileId;
               return apiRequest('POST', '/api/attachments/' + encodeURIComponent(attachmentId) + '/complete', {
@@ -1179,7 +1275,7 @@
                 throw new Error((compRes.data && compRes.data.error) || 'Failed to complete Google Drive upload');
               }
               progressCb(100, 'Upload complete!');
-              var outAtt = compRes.data.attachment || { id: attachmentId, file_name: file.name, mime_type: file.type, file_size: uploadBuf.byteLength };
+              var outAtt = compRes.data.attachment || { id: attachmentId, file_name: uploadFileName, mime_type: uploadMimeType, file_size: uploadBuf.byteLength };
               outAtt.is_encrypted = prepared.isEncrypted;
               outAtt.iv = prepared.iv;
               return outAtt;

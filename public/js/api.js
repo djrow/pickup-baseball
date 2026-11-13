@@ -310,7 +310,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '122',
+  CLIENT_VERSION: '123',
 
   // Current user cache
   currentUser: null,
@@ -699,20 +699,20 @@ const API = {
             <div id="footer-update-status" class="footer-update-status" style="display: none;" role="status" aria-live="polite"></div>
           </div>
           <div class="footer-security-badges" aria-label="Independent Security Verifications">
-            <a href="https://www.ssllabs.com/ssltest/analyze.html?d=pickupbaseballfoundation.org" target="_blank" rel="noopener noreferrer" class="footer-security-badge" title="View live Qualys SSL Labs TLS report">
+            <a href="https://www.ssllabs.com/ssltest/analyze.html?d=pickupbaseballfoundation.org" target="_blank" rel="noopener noreferrer" class="footer-security-badge" title="Qualys SSL Labs TLS report for pickupbaseballfoundation.org: Grade A+">
               <span>🔒 SSL Labs</span><span class="footer-security-grade">A+</span>
             </a>
-            <a href="https://developer.mozilla.org/en-US/observatory/analyze?host=pickupbaseballfoundation.org" target="_blank" rel="noopener noreferrer" class="footer-security-badge" title="View live Mozilla HTTP Observatory security header scorecard">
+            <a href="https://developer.mozilla.org/en-US/observatory/analyze?host=pickupbaseballfoundation.org" target="_blank" rel="noopener noreferrer" class="footer-security-badge" title="Mozilla HTTP Observatory scorecard for pickupbaseballfoundation.org: Grade A+ (Score 105)">
               <span>🛡️ HTTP Observatory</span><span class="footer-security-grade">A+</span>
             </a>
-            <a href="https://securityheaders.com/?q=https%3A%2F%2Fpickupbaseballfoundation.org&followRedirects=on" target="_blank" rel="noopener noreferrer" class="footer-security-badge" title="Verify live HTTP security headers">
-              <span>📋 Security Headers</span>
+            <a href="https://securityheaders.com/?q=https%3A%2F%2Fpickupbaseballfoundation.org&followRedirects=on" target="_blank" rel="noopener noreferrer" class="footer-security-badge" title="SecurityHeaders.com scan for pickupbaseballfoundation.org: Grade A+ (6/6 headers green)">
+              <span>📋 Security Headers</span><span class="footer-security-grade">A+</span>
             </a>
-            <a href="https://github.com/djrow/pickup-baseball/security" target="_blank" rel="noopener noreferrer" class="footer-security-badge" title="View GitHub CodeQL scans, Dependabot &amp; Security Policy">
-              <span>✅ CodeQL &amp; Policy</span>
+            <a href="https://github.com/djrow/pickup-baseball/security" target="_blank" rel="noopener noreferrer" class="footer-security-badge" title="GitHub Security Overview: SECURITY.md policy enabled, private reporting enabled, 0 published advisories">
+              <span>✅ CodeQL &amp; Policy</span><span class="footer-security-grade">0 Advisories</span>
             </a>
-            <a href="/.well-known/security.txt" target="_blank" rel="noopener noreferrer" class="footer-security-badge" title="RFC 9116 vulnerability disclosure policy">
-              <span>security.txt</span>
+            <a href="/.well-known/security.txt" target="_blank" rel="noopener noreferrer" class="footer-security-badge" title="RFC 9116 vulnerability disclosure policy (valid through 2027-11-01)">
+              <span>security.txt</span><span class="footer-security-grade">Valid</span>
             </a>
           </div>
           <p style="margin-top: 12px; font-size: 0.8rem; color: #94a3b8; line-height: 1.5;">

@@ -119,15 +119,24 @@ voiceRouter.post('/:channelId/state', requireAuth, async (c) => {
       heartbeat_at = excluded.heartbeat_at
   `).bind(channel.id, user.id, user.name, muted, deafened, screenSharing, nowSec).run();
 
-  await chatDb.prepare(`
-    INSERT INTO sync_events (channel_id, event_type, target_id, payload_json, created_at)
-    VALUES (?, 'voice_update', ?, ?, ?)
-  `).bind(
-    channel.id,
-    user.id,
-    JSON.stringify({ action: 'state', channel_id: channel.id, user_id: user.id, user_name: user.name, muted, deafened, screen_sharing: screenSharing }),
-    nowSec
-  ).run();
+  // Only emit a sync_events row when voice state actually changed (skip no-op heartbeat refreshes)
+  const stateChanged = !existing ||
+    Number(existing.muted) !== muted ||
+    Number(existing.deafened) !== deafened ||
+    Number(existing.screen_sharing) !== screenSharing ||
+    String(existing.user_name || '') !== String(user.name || '');
+
+  if (stateChanged) {
+    await chatDb.prepare(`
+      INSERT INTO sync_events (channel_id, event_type, target_id, payload_json, created_at)
+      VALUES (?, 'voice_update', ?, ?, ?)
+    `).bind(
+      channel.id,
+      user.id,
+      JSON.stringify({ action: 'state', channel_id: channel.id, user_id: user.id, user_name: user.name, muted, deafened, screen_sharing: screenSharing }),
+      nowSec
+    ).run();
+  }
 
   return c.json({
     success: true,
