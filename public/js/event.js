@@ -364,7 +364,7 @@ function renderAttendeesRoster() {
           ${API.escapeHtml(API.t('event.roster_private_title', 'Player Roster is Private'))}
         </h3>
         <p style="margin: 0 auto 16px auto; max-width: 440px; color: var(--text-muted); font-size: 0.92rem; line-height: 1.5;">
-          ${API.escapeHtml(API.t('event.roster_private_desc', "To protect privacy, individual names, spectators, and task assignments are only visible to attendees. RSVP above to see who's coming!"))}
+          ${API.escapeHtml(API.t('event.roster_private_desc', "To protect privacy, individual names, spectators, and task assignments are only visible to attendees. RSVP above to see expected attendees!"))}
         </p>
         <a href="#rsvp-section" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 8px; text-decoration: none; padding: 9px 18px; font-size: 0.9rem; font-weight: 600; border-radius: 8px;">
           <span>⚾</span> <span>${API.escapeHtml(API.t('event.roster_private_cta', 'RSVP to View Roster'))}</span>

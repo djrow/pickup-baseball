@@ -182,7 +182,7 @@ const EN_DICT = {
   "event.duty_covered": "Covered",
   "event.duty_covered_by": "✓ Covered by {names}",
   "event.duty_current_open": "Current: {names} ({count} open)",
-  "event.roster_title": "👥 Who's Coming",
+  "event.roster_title": "👥 Expected Attendees",
   "event.roster_desc": "Players, spectators, shared gear, and group tasks.",
   "event.actual_turnout": "Actual Turnout",
   "event.turnout_badge": "{count} Played",
@@ -308,7 +308,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '119',
+  CLIENT_VERSION: '120',
 
   // Current user cache
   currentUser: null,

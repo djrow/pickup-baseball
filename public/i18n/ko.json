@@ -96,7 +96,7 @@
   "event.duty_needs_count": "⚠️ {count}명 더 필요",
   "event.duty_covered_by": "✓ {names}님이 담당",
   "event.duty_current_open": "현재: {names} ({count}자리 남음)",
-  "event.roster_title": "👥 참가 선수 명단 및 장비",
+  "event.roster_title": "👥 참석 예정자",
   "event.roster_desc": "참가 선수와 준비된 장비, 담당 역할을 확인하세요.",
   "event.confirmed_badge": "{count}명 확정",
   "event.no_players_yet": "아직 등록된 선수가 없습니다. 첫 번째로 참가 신청을 해보세요!",

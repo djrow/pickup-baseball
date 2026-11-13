@@ -96,7 +96,7 @@
   "event.duty_needs_count": "⚠️ {count} ਵਲੰਟੀਅਰ ਦੀ ਲੋੜ",
   "event.duty_covered_by": "✓ {names} ਵੱਲੋਂ ਜ਼ਿੰਮੇਵਾਰੀ ਲਈ ਗਈ",
   "event.duty_current_open": "ਮੌਜੂਦਾ: {names} ({count} ਖਾਲੀ)",
-  "event.roster_title": "👥 ਖਿਡਾਰੀਆਂ ਦੀ ਸੂਚੀ ਅਤੇ ਸਾਮਾਨ",
+  "event.roster_title": "👥 ਸੰਭਾਵਿਤ ਹਾਜ਼ਰੀਨ",
   "event.roster_desc": "ਦੇਖੋ ਕੌਣ ਖੇਡ ਰਿਹਾ ਹੈ ਅਤੇ ਕਿਹੜਾ ਸਾਮਾਨ ਉਪਲਬਧ ਹੈ।",
   "event.confirmed_badge": "{count} ਪੱਕੇ",
   "event.no_players_yet": "ਅਜੇ ਸੂਚੀ ਵਿੱਚ ਕੋਈ ਖਿਡਾਰੀ ਨਹੀਂ ਹੈ। ਸਭ ਤੋਂ ਪਹਿਲਾਂ ਨਾਮ ਲਿਖਵਾਓ!",

@@ -96,7 +96,7 @@
   "event.duty_needs_count": "⚠️ 还需 {count} 名志愿者",
   "event.duty_covered_by": "✓ 已由 {names} 认领",
   "event.duty_current_open": "当前：{names}（还差 {count} 人）",
-  "event.roster_title": "👥 球员名单与装备",
+  "event.roster_title": "👥 预计出席人员",
   "event.roster_desc": "查看参赛球友、已准备的球具及分工情况。",
   "event.confirmed_badge": "{count} 人已确认",
   "event.no_players_yet": "名单上还没有球员，成为第一个报名的人吧！",

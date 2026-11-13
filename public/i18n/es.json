@@ -96,7 +96,7 @@
   "event.duty_needs_count": "⚠️ Faltan {count} voluntario(s)",
   "event.duty_covered_by": "✓ Cubierto por {names}",
   "event.duty_current_open": "Actual: {names} ({count} libres)",
-  "event.roster_title": "👥 Lista de Jugadores y Equipo",
+  "event.roster_title": "👥 Asistentes Esperados",
   "event.roster_desc": "Mira quiénes juegan, qué equipo llevan y las tareas asignadas.",
   "event.confirmed_badge": "{count} Confirmados",
   "event.no_players_yet": "Aún no hay jugadores anotados. ¡Sé el primero en confirmar tu asistencia!",

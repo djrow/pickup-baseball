@@ -96,7 +96,7 @@
   "event.duty_needs_count": "⚠️ يحتاج إلى {count} متطوع",
   "event.duty_covered_by": "✓ مغطى بواسطة {names}",
   "event.duty_current_open": "حالياً: {names} ({count} متاح)",
-  "event.roster_title": "👥 قائمة اللاعبين والمعدات",
+  "event.roster_title": "👥 الحضور المتوقعون",
   "event.roster_desc": "اطلع على المشاركين والمعدات المتوفرة ومهام الفريق.",
   "event.confirmed_badge": "{count} مؤكد",
   "event.no_players_yet": "لا يوجد لاعبون في القائمة بعد. كن أول المسجلين!",

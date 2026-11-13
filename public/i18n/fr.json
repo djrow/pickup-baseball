@@ -96,7 +96,7 @@
   "event.duty_needs_count": "⚠️ {count} volontaire(s) requis",
   "event.duty_covered_by": "✓ Pris en charge par {names}",
   "event.duty_current_open": "Actuel : {names} ({count} libre(s))",
-  "event.roster_title": "👥 Liste des Joueurs et Équipement",
+  "event.roster_title": "👥 Participants Attendus",
   "event.roster_desc": "Découvrez qui joue, quel matériel est prévu et la répartition des tâches.",
   "event.confirmed_badge": "{count} Confirmés",
   "event.no_players_yet": "Aucun joueur inscrit pour le moment. Soyez le premier !",

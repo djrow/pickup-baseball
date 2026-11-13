@@ -96,7 +96,7 @@
   "event.duty_needs_count": "⚠️ Kailangan ng {count} volunteer",
   "event.duty_covered_by": "✓ Sagot na ni {names}",
   "event.duty_current_open": "Kasalukuyan: {names} ({count} bakante)",
-  "event.roster_title": "👥 Roster ng Manlalaro at Kagamitan",
+  "event.roster_title": "👥 Mga Inaasahang Dadalo",
   "event.roster_desc": "Tingnan kung sino ang maglalaro at anong mga gamit ang dala.",
   "event.confirmed_badge": "{count} Kumpirmado",
   "event.no_players_yet": "Wala pang manlalaro sa roster. Maging unang magpalista!",

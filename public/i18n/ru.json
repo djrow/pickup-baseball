@@ -96,7 +96,7 @@
   "event.duty_needs_count": "⚠️ Нужно еще: {count}",
   "event.duty_covered_by": "✓ Взял(и) на себя: {names}",
   "event.duty_current_open": "Сейчас: {names} (свободно: {count})",
-  "event.roster_title": "👥 Состав игроков и экипировка",
+  "event.roster_title": "👥 Ожидаемые участники",
   "event.roster_desc": "Кто играет, какой инвентарь уже есть и кто за что отвечает.",
   "event.confirmed_badge": "{count} подтверждено",
   "event.no_players_yet": "В списке пока никого нет. Запишитесь первым!",

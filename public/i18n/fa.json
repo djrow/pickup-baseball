@@ -96,7 +96,7 @@
   "event.duty_needs_count": "⚠️ نیازمند {count} داوطلب",
   "event.duty_covered_by": "✓ برعهده {names}",
   "event.duty_current_open": "فعلی: {names} ({count} ظرفیت باز)",
-  "event.roster_title": "👥 لیست بازیکنان و تجهیزات",
+  "event.roster_title": "👥 شرکت‌کنندگان مورد انتظار",
   "event.roster_desc": "ببینید چه کسانی بازی می‌کنند و چه تجهیزاتی همراه دارند.",
   "event.confirmed_badge": "{count} نفر تاییدشده",
   "event.no_players_yet": "هنوز بازیکنی در لیست نیست. اولین نفر باشید!",

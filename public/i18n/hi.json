@@ -96,7 +96,7 @@
   "event.duty_needs_count": "⚠️ {count} स्वयंसेवक की आवश्यकता",
   "event.duty_covered_by": "✓ {names} द्वारा लिया गया",
   "event.duty_current_open": "वर्तमान: {names} ({count} खाली)",
-  "event.roster_title": "👥 खिलाड़ी रोस्टर और उपकरण",
+  "event.roster_title": "👥 अपेक्षित प्रतिभागी",
   "event.roster_desc": "देखें कौन खेल रहा है और कौन से उपकरण उपलब्ध हैं।",
   "event.confirmed_badge": "{count} पुष्ट",
   "event.no_players_yet": "अभी रोस्टर में कोई खिलाड़ी नहीं है। सबसे पहले साइन अप करें!",

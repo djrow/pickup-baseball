@@ -96,7 +96,7 @@
   "event.duty_needs_count": "⚠️ Precisa de {count} voluntário(s)",
   "event.duty_covered_by": "✓ Coberto por {names}",
   "event.duty_current_open": "Atual: {names} ({count} vaga(s))",
-  "event.roster_title": "👥 Lista de Jogadores e Equipamentos",
+  "event.roster_title": "👥 Participantes Esperados",
   "event.roster_desc": "Veja quem vai jogar, quais equipamentos estão garantidos e as tarefas do time.",
   "event.confirmed_badge": "{count} Confirmados",
   "event.no_players_yet": "Nenhum jogador na lista ainda. Seja o primeiro a confirmar!",

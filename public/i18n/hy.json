@@ -96,7 +96,7 @@
   "event.duty_needs_count": "⚠️ Անհրաժեշտ է ևս {count} կամավոր",
   "event.duty_covered_by": "✓ Ստանձնել է՝ {names}",
   "event.duty_current_open": "Այժմ՝ {names} ({count} ազատ տեղ)",
-  "event.roster_title": "👥 Խաղացողների Ցուցակ և Գույք",
+  "event.roster_title": "👥 Ակնկալվող Մասնակիցներ",
   "event.roster_desc": "Տեսեք, թե ովքեր են խաղում և ինչ գույք է առկա։",
   "event.confirmed_badge": "{count} Հաստատված",
   "event.no_players_yet": "Ցուցակում դեռ խաղացողներ չկան։ Եղեք առաջինը:",

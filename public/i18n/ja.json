@@ -96,7 +96,7 @@
   "event.duty_needs_count": "⚠️ あと{count}名必要",
   "event.duty_covered_by": "✓ {names}さんが担当",
   "event.duty_current_open": "現在：{names}（残り{count}枠）",
-  "event.roster_title": "👥 参加メンバー＆持参道具",
+  "event.roster_title": "👥 参加予定者",
   "event.roster_desc": "参加者一覧、集まっている道具、役割分担を確認できます。",
   "event.confirmed_badge": "{count}名 確定",
   "event.no_players_yet": "まだ参加登録がありません。最初の参加者になりましょう！",

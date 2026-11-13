@@ -96,7 +96,7 @@
   "event.duty_needs_count": "⚠️ Cần thêm {count} người",
   "event.duty_covered_by": "✓ Đã có {names} nhận",
   "event.duty_current_open": "Hiện tại: {names} (Còn trống {count})",
-  "event.roster_title": "👥 Danh Sách Cầu Thủ & Dụng Cụ",
+  "event.roster_title": "👥 Người Tham Dự Dự Kiến",
   "event.roster_desc": "Xem ai sẽ thi đấu, dụng cụ nào đã có và nhiệm vụ của từng người.",
   "event.confirmed_badge": "{count} Đã Xác Nhận",
   "event.no_players_yet": "Chưa có cầu thủ nào trong danh sách. Hãy là người đầu tiên đăng ký!",
