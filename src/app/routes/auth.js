@@ -22,13 +22,15 @@ import {
   verifyTurnstileIfConfigured,
   safeFetchExternalUrl,
   readResponseWithByteCap,
+  APPSCRIPT_EXEC_URL_RE,
+  validateAppscriptRedirectUrl,
   requireAuth,
   requireAdmin,
   ensureUserCalendarToken,
   regenerateUserCalendarToken,
   enforceUserSessionCap
 } from '../security.js';
-import { getRequireLoginSetting } from '../schema.js';
+import { getRequireLoginSetting, getDisallowZeroLoginMediaSetting } from '../schema.js';
 import { sendAuthCode } from '../mailer.js';
 
 export const authRouter = new Hono();
@@ -772,6 +774,7 @@ export async function serveUserAvatar(c) {
 
 export async function getSettingsHandler(c) {
   const requireLogin = await getRequireLoginSetting(c.env.DB, c.env);
+  const disallowZeroLoginMedia = await getDisallowZeroLoginMediaSetting(c.env.DB, c.env);
   let appscriptUrl = (c.env && c.env.APPSCRIPT_UPLOAD_URL) || '';
   if (c.env && c.env.DB) {
     try {
@@ -782,6 +785,7 @@ export async function getSettingsHandler(c) {
   const user = c.get('user');
   const payload = {
     require_login_to_rsvp: requireLogin,
+    disallow_zero_login_media: disallowZeroLoginMedia,
     appscript_configured: Boolean(appscriptUrl && appscriptUrl.trim())
   };
   if (user && user.isAdmin) {
@@ -790,33 +794,17 @@ export async function getSettingsHandler(c) {
   return c.json(payload);
 }
 
-const APPSCRIPT_EXEC_URL_RE = /^https:\/\/script\.google\.com\/macros\/s\/[a-zA-Z0-9_\-]+\/exec$/i;
-
-function validateAppscriptRedirectUrl(rawUrl) {
-  let parsed;
-  try {
-    parsed = new URL(String(rawUrl || '').trim());
-  } catch (e) {
-    return { ok: false, status: 400, error: 'Invalid Google Apps Script URL.' };
-  }
-  const host = parsed.hostname.toLowerCase();
-  const isGoogleAppsHost =
-    host === 'script.google.com' ||
-    host === 'script.googleusercontent.com' ||
-    host.endsWith('.googleusercontent.com');
-  if (parsed.protocol !== 'https:' || !isGoogleAppsHost) {
-    return { ok: false, status: 403, error: 'Apps Script redirects must stay on Google Apps Script domains.' };
-  }
-  parsed.hash = '';
-  return { ok: true, url: parsed.toString() };
-}
-
 export async function putSettingsHandler(c) {
   const body = await c.req.json().catch(() => ({}));
   let requireLoginVal = null;
   if (body.require_login_to_rsvp !== undefined) {
     requireLoginVal = body.require_login_to_rsvp ? 'true' : 'false';
     await c.env.DB.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('require_login_to_rsvp', ?)").bind(requireLoginVal).run();
+  }
+  let disallowZeroLoginMediaVal = null;
+  if (body.disallow_zero_login_media !== undefined) {
+    disallowZeroLoginMediaVal = body.disallow_zero_login_media ? 'true' : 'false';
+    await c.env.DB.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('disallow_zero_login_media', ?)").bind(disallowZeroLoginMediaVal).run();
   }
   if (body.appscript_upload_url !== undefined) {
     const cleanUrl = String(body.appscript_upload_url).trim();
@@ -828,6 +816,7 @@ export async function putSettingsHandler(c) {
   return c.json({
     success: true,
     require_login_to_rsvp: requireLoginVal !== null ? (requireLoginVal === 'true') : undefined,
+    disallow_zero_login_media: disallowZeroLoginMediaVal !== null ? (disallowZeroLoginMediaVal === 'true') : undefined,
     appscript_upload_url: body.appscript_upload_url !== undefined ? String(body.appscript_upload_url).trim() : undefined,
     message: 'Settings saved.'
   });

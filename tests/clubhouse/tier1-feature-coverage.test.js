@@ -562,6 +562,8 @@ async function runTier1(t, ctx) {
         return;
       }
       const testBuffer = Buffer.alloc(1024, 0x42);
+      // Write valid ISO-BMFF ftyp box header for video/mp4 magic-byte check
+      Buffer.from([0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6F, 0x6D]).copy(testBuffer, 0);
       const uploadRes = await apiReq('PUT', `/api/attachments/${attachmentId}/upload`, playerCookie, testBuffer);
       assert.equal(uploadRes.status, 200);
 

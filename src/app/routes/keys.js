@@ -333,7 +333,7 @@ keysRouter.post('/channel/:channelId/share', requireAuth, async (c) => {
   const isKeyShared = isDm || isPrivateBoard;
   const hasChannelAccess = isKeyShared
     ? await canUserAccessChannel(chatDb, user, channel, 'write')
-    : (canAccessChannel(user, channel.min_role_write || 'player') || await canUserAccessChannel(chatDb, user, channel, 'write'));
+    : (canAccessChannel(user, channel, 'write') || await canUserAccessChannel(chatDb, user, channel, 'write'));
   if (!hasChannelAccess) {
     return c.json({ error: 'Access denied: insufficient permissions for this channel.' }, 403);
   }
@@ -404,12 +404,23 @@ keysRouter.post('/channel/:channelId/share', requireAuth, async (c) => {
       const placeholders = recipientIds.slice(0, 80).map(() => '?').join(',');
       const { results: userRows } = await db.prepare(`
         SELECT u.id, COALESCE(u.clubhouse_opted_in, 0) as clubhouse_opted_in, u.role, u.is_admin,
-               EXISTS(SELECT 1 FROM banned_emails b WHERE LOWER(b.email) = LOWER(u.email)) as is_banned
+               EXISTS(SELECT 1 FROM banned_emails b WHERE LOWER(b.email) = LOWER(u.email)) as is_banned,
+               EXISTS (
+                 SELECT 1 FROM duty_assignments da
+                 JOIN event_duties ed ON da.duty_id = ed.id
+                 JOIN events e ON ed.event_id = e.id
+                 JOIN attendees a ON da.attendee_id = a.id
+                 WHERE (e.status IS NULL OR e.status NOT IN ('cancelled', 'rainout'))
+                   AND datetime(e.event_date) >= datetime('now', '-1 day')
+                   AND (ed.title = 'Game Facilitator' OR ed.title LIKE '%Facilitator%')
+                   AND (a.user_id = u.id OR a.email = u.email)
+                   AND a.status = 'attending'
+               ) as is_game_facilitator
         FROM users u WHERE u.id IN (${placeholders})
       `).bind(...recipientIds.slice(0, 80)).all();
       validUserSet = new Set(
         (userRows || [])
-          .filter((u) => !u.is_banned && Number(u.clubhouse_opted_in || 0) === 1 && canAccessChannel(u, channel.min_role_read || 'player'))
+          .filter((u) => !u.is_banned && Number(u.clubhouse_opted_in || 0) === 1 && canAccessChannel(u, channel, 'read'))
           .map((u) => Number(u.id))
       );
     }
@@ -530,7 +541,7 @@ keysRouter.get('/channel/:channelId', requireAuth, async (c) => {
   const isKeyShared = isDm || isPrivateBoard;
   const hasChannelAccess = isKeyShared
     ? await canUserAccessChannel(chatDb, user, channel, 'read')
-    : (canAccessChannel(user, channel.min_role_read || 'player') || await canUserAccessChannel(chatDb, user, channel, 'read'));
+    : (canAccessChannel(user, channel, 'read') || await canUserAccessChannel(chatDb, user, channel, 'read'));
   if (!hasChannelAccess) {
     return c.json({ error: 'Access denied: insufficient permissions for this channel.' }, 403);
   }

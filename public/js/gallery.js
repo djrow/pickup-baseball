@@ -143,6 +143,24 @@
     setupLightbox();
     setupCarouselPaddles();
 
+    try {
+      if (typeof API !== 'undefined' && API.getSettings) {
+        var appSettings = await API.getSettings();
+        var disallowZeroLogin = Boolean(appSettings && appSettings.disallow_zero_login_media);
+        var loginNotice = document.getElementById('media-login-required-notice');
+        var submitFormEl = document.getElementById('media-submit-form');
+        var dropStatusBadge = document.getElementById('media-drop-status-badge');
+        if (disallowZeroLogin && !currentUser) {
+          if (loginNotice) loginNotice.style.display = 'flex';
+          if (submitFormEl) submitFormEl.style.display = 'none';
+          if (dropStatusBadge) {
+            dropStatusBadge.className = 'badge badge-orange';
+            dropStatusBadge.textContent = '🔒 Sign-In Required';
+          }
+        }
+      }
+    } catch (e) {}
+
     await loadGalleryData();
 
     // Check if URL contains an album anchor
@@ -228,7 +246,7 @@
     }
 
     queueSection.style.display = 'block';
-    if (countBadge) countBadge.textContent = pendingList.length + ' Pending Approval';
+    if (countBadge) countBadge.textContent = pendingList.length + ' Hidden from Timeline';
 
     var html = pendingList.map(function(item) {
       var dateLabel = formatDisplayDate(item.date_taken);
@@ -1198,8 +1216,8 @@
     };
 
     var publishCheckbox = document.getElementById('media-publish-immediately');
-    if (publishCheckbox && publishCheckbox.checked) {
-      payload.publish_immediately = true;
+    if (isManagerUser() && publishCheckbox && !publishCheckbox.checked) {
+      payload.publish_immediately = false;
     }
 
     if (isLinkMode) {
@@ -1249,9 +1267,9 @@
           </div>
         ` : '';
 
-        var defaultMsg = res.requires_approval
-          ? '✓ Thank you! Once uploaded, David will approve it then it will be displayed in the webapp.'
-          : '✓ Media successfully saved!';
+        var defaultMsg = (res.requires_approval || res.is_approved === 0)
+          ? '✓ Media saved as hidden from the public timeline.'
+          : '✓ Media uploaded and published live to gallery!';
 
         alertBox.innerHTML = `
           <div class="alert ${alertClass}" style="font-weight: 600;">
@@ -1432,7 +1450,7 @@
 
       var statusBadge = item.is_approved === 1
         ? '<span class="badge badge-green" style="font-size: 0.7rem;">✓ Live in Carousel</span>'
-        : '<span class="badge badge-orange" style="font-size: 0.7rem;">⏳ Pending Review</span>';
+        : '<span class="badge badge-orange" style="font-size: 0.7rem;">🙈 Hidden from Timeline</span>';
 
       var typeBadge = item.media_type === 'youtube'
         ? '<span class="badge badge-orange" style="font-size: 0.7rem;">▶️ YouTube</span>'

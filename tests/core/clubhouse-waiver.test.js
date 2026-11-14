@@ -103,6 +103,9 @@ test('Clubhouse Frontend & Native Waiver Verification', async (t) => {
     assert.equal(anonCertJson.status, 200);
     assert.equal(anonCertJson.data.waiver.signature_data, null, 'Anonymous JSON certificate must redact signature_data');
     assert.equal(anonCertJson.data.waiver.printed_name, null, 'Anonymous JSON certificate must redact printed_name');
+    assert.equal(anonCertJson.data.waiver.user_id, null, 'Anonymous JSON certificate must redact user_id');
+    assert.equal(anonCertJson.data.waiver.signed_at, null, 'Anonymous JSON certificate must redact signed_at');
+    assert.equal(anonCertJson.data.waiver.gdrive_file_id, null, 'Anonymous JSON certificate must redact gdrive_file_id');
 
     // 5. Security hardening checks: reminders auth & oversized local attachment rejection
     const anonRem = await apiReq('GET', '/api/events/reminders/check', null);

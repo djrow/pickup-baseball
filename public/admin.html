@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Dashboard - Sunday Pickup Baseball</title>
-  <link rel="stylesheet" href="/css/style.css?v=139">
-  <link rel="stylesheet" href="/css/themes.css?v=139">
+  <link rel="stylesheet" href="/css/style.css?v=140">
+  <link rel="stylesheet" href="/css/themes.css?v=140">
   <link rel="alternate" type="application/rss+xml" title="Sunday Pickup Baseball Highlights &amp; Updates" href="/feed.xml">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
@@ -307,7 +307,7 @@
           <div style="display: flex; gap: 4px; flex-wrap: wrap; align-items: center; border-left: 1px solid var(--border); padding-left: 8px; margin-left: 4px;" id="admin-media-status-filter">
             <button type="button" class="btn btn-sm btn-outline active admin-media-status-btn" data-status="all">All Status</button>
             <button type="button" class="btn btn-sm btn-outline admin-media-status-btn" data-status="live">✓ Live</button>
-            <button type="button" class="btn btn-sm btn-outline admin-media-status-btn" data-status="pending">⏳ Pending</button>
+            <button type="button" class="btn btn-sm btn-outline admin-media-status-btn" data-status="pending">🙈 Hidden</button>
           </div>
         </div>
         <div style="display: flex; align-items: center; gap: 10px; flex: 1; max-width: 400px; min-width: 220px;">
@@ -383,6 +383,18 @@
         <div id="settings-alert" style="margin-top: 8px;"></div>
       </div>
 
+      <!-- Community Media Drop Zero-Login Policy Setting -->
+      <div class="subpanel" style="margin-bottom: 24px;">
+        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 700; color: var(--secondary); margin-bottom: 4px;">
+          <input type="checkbox" id="setting-disallow-zero-login-media" style="width: 18px; height: 18px; cursor: pointer;">
+          Disallow Zero-Login Community Media Drops (Require Sign-In to Upload)
+        </label>
+        <p class="text-muted-sm" style="margin-left: 28px;">
+          When checked, visitors must sign in before uploading photos or videos to the Community Media Drop. Leave unchecked to allow immediate drops without logging in.
+        </p>
+        <div id="media-policy-settings-alert" style="margin-top: 8px;"></div>
+      </div>
+
       <!-- Google Drive & Apps Script Storage Setting -->
       <div class="subpanel" style="margin-bottom: 24px;">
         <div class="flex-between" style="margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
@@ -448,8 +460,8 @@
 
   <footer id="site-footer" class="site-footer"></footer>
 
-  <script src="/js/api.js?v=139"></script>
-  <script src="/js/weather.js?v=139"></script>
-  <script src="/js/admin.js?v=139"></script>
+  <script src="/js/api.js?v=140"></script>
+  <script src="/js/weather.js?v=140"></script>
+  <script src="/js/admin.js?v=140"></script>
 </body>
 </html>

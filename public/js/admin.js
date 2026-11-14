@@ -1483,6 +1483,8 @@ function setupAdminSecurity() {
 
   const requireLoginCheckbox = document.getElementById('setting-require-login');
   const settingsAlert = document.getElementById('settings-alert');
+  const disallowZeroLoginMediaCheckbox = document.getElementById('setting-disallow-zero-login-media');
+  const mediaPolicyAlert = document.getElementById('media-policy-settings-alert');
   const bannedTableBody = document.getElementById('banned-emails-table-body');
   const bannedAlert = document.getElementById('banned-emails-alert');
   const banForm = document.getElementById('ban-email-form');
@@ -1494,6 +1496,9 @@ function setupAdminSecurity() {
       const s = await API.getSettings();
       if (requireLoginCheckbox && s && s.require_login_to_rsvp !== undefined) {
         requireLoginCheckbox.checked = Boolean(s.require_login_to_rsvp);
+      }
+      if (disallowZeroLoginMediaCheckbox && s && s.disallow_zero_login_media !== undefined) {
+        disallowZeroLoginMediaCheckbox.checked = Boolean(s.disallow_zero_login_media);
       }
       const appscriptInput = document.getElementById('setting-appscript-url');
       const appscriptBadge = document.getElementById('appscript-status-badge');
@@ -1591,6 +1596,23 @@ function setupAdminSecurity() {
         }
       } catch (err) {
         if (settingsAlert) settingsAlert.innerHTML = '<span style="font-size: 0.8rem; color: var(--danger);">Failed to save policy.</span>';
+      }
+    });
+  }
+
+  if (disallowZeroLoginMediaCheckbox) {
+    disallowZeroLoginMediaCheckbox.addEventListener('change', async function(e) {
+      const isChecked = e.target.checked;
+      if (mediaPolicyAlert) mediaPolicyAlert.innerHTML = '<span style="font-size: 0.8rem; color: var(--text-muted);">Saving media drop policy...</span>';
+      try {
+        const res = await API.updateSettings({ disallow_zero_login_media: isChecked });
+        if (mediaPolicyAlert) {
+          mediaPolicyAlert.innerHTML = res.error
+            ? '<span style="font-size: 0.8rem; color: var(--danger);">' + API.escapeHtml(res.error) + '</span>'
+            : '<span style="font-size: 0.8rem; color: var(--success); font-weight: 700;">✓ Policy updated: ' + (isChecked ? 'Sign-in required for Community Media Drops (Zero-login disabled)' : 'Zero-login Community Media Drops permitted') + '</span>';
+        }
+      } catch (err) {
+        if (mediaPolicyAlert) mediaPolicyAlert.innerHTML = '<span style="font-size: 0.8rem; color: var(--danger);">Failed to save media drop policy.</span>';
       }
     });
   }
@@ -1938,7 +1960,7 @@ async function setupMediaCarouselsAdmin() {
 
       const statusBadge = item.is_approved === 1
         ? '<span class="badge badge-green" style="font-size: 0.7rem;">✓ Live</span>'
-        : '<span class="badge badge-orange" style="font-size: 0.7rem;">⏳ Pending</span>';
+        : '<span class="badge badge-orange" style="font-size: 0.7rem;">🙈 Hidden</span>';
 
       const dateLabel = item.date_taken ? API.escapeHtml(item.date_taken) : '';
       const album = item.album ? API.escapeHtml(item.album) : 'General';
@@ -1971,7 +1993,10 @@ async function setupMediaCarouselsAdmin() {
               ${item.is_approved === 0 ? `
               <button type="button" class="btn btn-outline btn-sm btn-admin-publish-media" data-id="${item.id}" style="color: var(--secondary); border-color: var(--secondary); font-weight: 700; font-size: 0.78rem; padding: 5px 8px;">
                 ✓ Publish
-              </button>` : ''}
+              </button>` : `
+              <button type="button" class="btn btn-outline btn-sm btn-admin-hide-media" data-id="${item.id}" style="color: var(--text-muted); border-color: var(--border); font-weight: 700; font-size: 0.78rem; padding: 5px 8px;">
+                🙈 Hide
+              </button>`}
               <button type="button" class="btn btn-outline btn-sm btn-admin-remove-media" data-id="${item.id}" data-type="${item.media_type}" style="color: var(--danger); border-color: #fca5a5; font-weight: 700; font-size: 0.78rem; padding: 5px 8px;">
                 🗑️ Remove
               </button>
@@ -2107,6 +2132,29 @@ async function setupMediaCarouselsAdmin() {
           alert('Failed to publish media: ' + (err.message || 'Error'));
           btn.disabled = false;
           btn.textContent = '✓ Publish';
+        }
+      });
+    });
+
+    // Wire up Hide from timeline button
+    container.querySelectorAll('.btn-admin-hide-media').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.getAttribute('data-id');
+        btn.disabled = true;
+        btn.textContent = 'Hiding...';
+        try {
+          await API.updateMedia(id, { is_approved: 0 });
+          const found = allCarouselMedia.find(m => String(m.id) === String(id));
+          if (found) found.is_approved = 0;
+          if (alertEl) {
+            alertEl.innerHTML = `<div class="alert alert-success" style="padding: 10px 14px; margin-bottom: 12px;">🙈 Media item hidden from the public timeline.</div>`;
+            setTimeout(() => { alertEl.innerHTML = ''; }, 4000);
+          }
+          renderMediaItems();
+        } catch (err) {
+          alert('Failed to hide media: ' + (err.message || 'Error'));
+          btn.disabled = false;
+          btn.textContent = '🙈 Hide';
         }
       });
     });

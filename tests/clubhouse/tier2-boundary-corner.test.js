@@ -618,6 +618,85 @@ async function runTier2(t, ctx) {
       assert.equal(count, 1, 'Must not duplicate attendee rows');
     });
   });
+
+  // =========================================================================
+  // CHECK 9 BOUNDARIES — SECURITY HARDENING REGRESSIONS
+  // =========================================================================
+  await t.test('Tier 2 Check 9: Hardening & Security Vulnerability Regressions', async (c9) => {
+    await c9.test('T2.9.1: Role-restricted non-private board ACL enforcement on /api/keys/*', async () => {
+      // Create a role-restricted public board requiring organizer/facilitator roles
+      const boardRes = await apiReq('POST', '/api/channels', adminCookie, {
+        name: 'Locked Ops Board',
+        slug: 'locked-ops-board-' + Date.now(),
+        channel_type: 'text',
+        min_role_read: 'organizer',
+        min_role_write: 'organizer',
+        is_encrypted: 1,
+        is_private: 0
+      });
+      assert.equal(boardRes.status, 201, 'Admin must create role-restricted board');
+      const boardId = boardRes.data.id;
+
+      // Regular player must receive 403 when reading or sharing keys on organizer-only board
+      const playerGetRes = await apiReq('GET', `/api/keys/channel/${boardId}`, playerCookie);
+      assert.equal(playerGetRes.status, 403, 'Player must be blocked from GET /api/keys/channel/:id on organizer board');
+
+      const playerShareRes = await apiReq('POST', `/api/keys/channel/${boardId}/share`, playerCookie, {
+        key_epoch: 1,
+        shares: [{ recipient_user_id: playerUser.id, wrapped_key_base64: 'dGVzdA==', wrap_iv: 'dGVzdA==' }]
+      });
+      assert.equal(playerShareRes.status, 403, 'Player must be blocked from POST /api/keys/channel/:id/share on organizer board');
+
+      // Admin share for organizer/admin succeeds, whereas player recipient fails role check
+      const playerTargetShareRes = await apiReq('POST', `/api/keys/channel/${boardId}/share`, adminCookie, {
+        key_epoch: 1,
+        shares: [{ recipient_user_id: playerUser.id, wrapped_key_base64: 'dGVzdA==', wrap_iv: 'dGVzdA==' }]
+      });
+      assert.equal(playerTargetShareRes.status, 403, 'Player ineligible for organizer board must be rejected as key recipient');
+
+      await apiReq('DELETE', `/api/channels/${boardId}`, adminCookie);
+    });
+
+    await c9.test('T2.9.2: Magic-byte validation on PDF attachments and sandbox/attachment response headers', async () => {
+      const pdfInit = await apiReq('POST', '/api/attachments/init', playerCookie, {
+        channel_id: 2,
+        file_name: 'roster.pdf',
+        mime_type: 'application/pdf',
+        file_size: 128
+      });
+      assert.equal(pdfInit.status, 200);
+
+      // Spoofed HTML bytes disguised as application/pdf -> 400
+      const spoofedPdf = Buffer.from('<html><script>alert(1)</script></html>');
+      const spoofRes = await apiReq('PUT', `/api/attachments/${pdfInit.data.attachmentId}/upload`, playerCookie, spoofedPdf);
+      assert.equal(spoofRes.status, 400, 'Spoofed non-PDF bytes must be rejected with 400');
+
+      // Valid %PDF- header -> 200 and streams with sandbox CSP + Content-Disposition: attachment
+      const validPdf = Buffer.from('%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF\n');
+      const okRes = await apiReq('PUT', `/api/attachments/${pdfInit.data.attachmentId}/upload`, playerCookie, validPdf);
+      assert.equal(okRes.status, 200, 'Valid PDF header must be accepted');
+
+      await apiReq('POST', `/api/attachments/${pdfInit.data.attachmentId}/complete`, playerCookie);
+      const streamRes = await apiReq('GET', `/api/attachments/${pdfInit.data.attachmentId}/stream`, playerCookie);
+      assert.equal(streamRes.status, 200);
+      assert.equal(streamRes.headers.get('content-security-policy'), "default-src 'none'; sandbox");
+      assert.equal(streamRes.headers.get('content-disposition'), 'attachment');
+    });
+
+    await c9.test('T2.9.3: CSRF Sec-Fetch-Site cross-site guard on mutating requests', async () => {
+      const csrfRes = await apiReq('POST', '/api/auth/logout-other-devices', playerCookie, {}, {
+        'Sec-Fetch-Site': 'cross-site'
+      });
+      assert.equal(csrfRes.status, 403, 'Cross-site Sec-Fetch-Site header must be blocked');
+    });
+
+    await c9.test('T2.9.4: Fail-closed DNS SSRF guard & strict channel object check', async () => {
+      const { canAccessChannel, safeFetchExternalUrl } = await import('../../src/app/security.js');
+      assert.equal(canAccessChannel(playerUser, 'organizer', 'read'), false, 'String channel argument must fail closed');
+      const dnsFail = await safeFetchExternalUrl('https://nonexistent.invalid/test.gif', { isTestEnv: false });
+      assert.equal(dnsFail.ok, false, 'DNS lookup failure must fail closed in safeFetchExternalUrl');
+    });
+  });
 }
 
 // Standalone execution support

@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Photo &amp; Video Gallery | Pickup Baseball Foundation</title>
-  <link rel="stylesheet" href="/css/style.css?v=139">
-  <link rel="stylesheet" href="/css/themes.css?v=139">
+  <link rel="stylesheet" href="/css/style.css?v=140">
+  <link rel="stylesheet" href="/css/themes.css?v=140">
   <link rel="alternate" type="application/rss+xml" title="Sunday Pickup Baseball Highlights &amp; Updates" href="/feed.xml">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
@@ -230,21 +230,32 @@
     <section id="submit-media-section" class="card" style="margin-top: 32px; margin-bottom: 48px; border-top: 4px solid var(--primary); background: var(--bg-card);">
       <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; flex-wrap: wrap;">
         <div>
-          <h2 style="font-size: 1.3rem; color: var(--secondary); margin: 0 0 4px 0; display: flex; align-items: center; gap: 8px;">
-            <span>📥</span> <span>Community Media Drop (Zero-Login)</span>
+          <h2 id="media-drop-heading-title" style="font-size: 1.3rem; color: var(--secondary); margin: 0 0 4px 0; display: flex; align-items: center; gap: 8px;">
+            <span>📥</span> <span>Community Media Drop</span>
           </h2>
-          <p style="color: var(--text-muted); font-size: 0.9rem; margin: 0;">
-            Snap game photos on your phone or have highlights to share? Drop files or paste links below — no Google account login required!
+          <p id="media-drop-heading-desc" style="color: var(--text-muted); font-size: 0.9rem; margin: 0;">
+            Snap game photos on your phone or have highlights to share? Drop files or paste links below — posts go live immediately!
           </p>
         </div>
-        <span class="badge badge-green" style="font-size: 0.8rem; font-weight: 700;">✓ Public Submission Open</span>
+        <span id="media-drop-status-badge" class="badge badge-green" style="font-size: 0.8rem; font-weight: 700;">⚡ Immediate Publish</span>
       </div>
 
-      <!-- Moderation Approval Notice -->
+      <!-- Sign-In Required Notice (shown when admin disables zero-login drops) -->
+      <div id="media-login-required-notice" class="upload-approval-notice" style="display: none; background: var(--bg-subtle); border-left: 4px solid var(--secondary); border-radius: var(--radius-sm); padding: 16px; margin-bottom: 18px; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="font-size: 1.45rem; line-height: 1;">🔒</span>
+          <div style="font-size: 0.92rem; color: var(--text-main); line-height: 1.4;">
+            <strong>Sign-In Required to Upload:</strong> An admin currently requires members to sign in before dropping photos or videos.
+          </div>
+        </div>
+        <a href="/login.html?redirect=/gallery.html#submit-media-section" class="btn btn-primary btn-sm">Sign In to Upload</a>
+      </div>
+
+      <!-- Community Publishing Notice -->
       <div class="upload-approval-notice" style="background: var(--bg-subtle); border-left: 4px solid var(--primary); border-radius: var(--radius-sm); padding: 12px 16px; margin-bottom: 18px; display: flex; align-items: center; gap: 12px;">
-        <span style="font-size: 1.35rem; line-height: 1;">🛡️</span>
+        <span style="font-size: 1.35rem; line-height: 1;">⚡</span>
         <div style="font-size: 0.9rem; color: var(--text-main); line-height: 1.4;">
-          <strong>Moderation Notice:</strong> Once uploaded, David will approve it then it will be displayed in the webapp.
+          <strong>Live Timeline:</strong> Uploaded photos and links are published immediately to the gallery. Organizers can hide items from the public timeline anytime if needed.
         </div>
       </div>
 
@@ -278,7 +289,7 @@
               📂 Select Files
             </button>
             <div style="font-size: 0.82rem; color: var(--secondary); font-weight: 600; margin-top: 10px;">
-              🛡️ Once uploaded, David will approve it then it will be displayed in the webapp.
+              ⚡ Uploads publish immediately to the public gallery timeline.
             </div>
             <div id="dropzone-file-name" style="margin-top: 10px; font-weight: 600; color: var(--primary); font-size: 0.9rem;"></div>
           </div>
@@ -350,19 +361,19 @@
         <!-- Manager Direct Publish Option -->
         <div id="media-manager-options" style="display: none; margin-top: 14px; padding: 10px 14px; background: var(--bg-subtle); border-radius: var(--radius-sm); border: 1px dashed var(--border);">
           <label style="display: flex; align-items: center; gap: 8px; font-size: 0.88rem; font-weight: 600; cursor: pointer; color: var(--secondary);">
-            <input type="checkbox" id="media-publish-immediately" name="publish_immediately">
-            <span>⚡ Publish immediately to live carousels (bypass moderation queue)</span>
+            <input type="checkbox" id="media-publish-immediately" name="publish_immediately" checked>
+            <span>⚡ Publish immediately to live carousels</span>
           </label>
           <p style="margin: 4px 0 0 24px; font-size: 0.78rem; color: var(--text-muted);">
-            Leave unchecked to submit this photo to the Pending Moderation Queue for review.
+            Uncheck to save this item hidden from the public timeline until you publish it in Admin.
           </p>
         </div>
 
         <!-- Submit Button & Notice -->
         <div style="margin-top: 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
           <div style="font-size: 0.85rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
-            <span>🛡️</span>
-            <span>Once uploaded, David will approve it then it will be displayed in the webapp.</span>
+            <span>⚡</span>
+            <span>Publishes immediately to the gallery timeline. Organizers can hide media anytime.</span>
           </div>
           <button type="submit" id="media-submit-btn" class="btn btn-primary" style="padding: 12px 24px; font-size: 1rem; font-weight: 700;">
             🚀 Submit to Community Gallery
@@ -409,7 +420,7 @@
   <!-- Site Footer -->
   <footer id="site-footer" class="site-footer"></footer>
 
-  <script src="/js/api.js?v=139"></script>
-  <script src="/js/gallery.js?v=139"></script>
+  <script src="/js/api.js?v=140"></script>
+  <script src="/js/gallery.js?v=140"></script>
 </body>
 </html>

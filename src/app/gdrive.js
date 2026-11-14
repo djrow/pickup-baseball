@@ -224,6 +224,24 @@ export function serveByteRangeResponse(bytes, mimeType, rangeHeader, cacheContro
   const payload = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || 0);
   const totalSize = payload.byteLength;
   const contentType = mimeType || 'application/octet-stream';
+  const normalizedMime = String(contentType).toLowerCase().split(';')[0].trim();
+  const isPdfOrNonMedia =
+    normalizedMime === 'application/pdf' ||
+    (!normalizedMime.startsWith('image/') && !normalizedMime.startsWith('video/') && !normalizedMime.startsWith('audio/'));
+
+  const buildBaseHeaders = () => {
+    const hdrs = {
+      'Content-Type': contentType,
+      'Accept-Ranges': 'bytes',
+      'Cache-Control': cacheControl,
+      'X-Content-Type-Options': 'nosniff',
+      'Content-Security-Policy': "default-src 'none'; sandbox"
+    };
+    if (isPdfOrNonMedia) {
+      hdrs['Content-Disposition'] = 'attachment';
+    }
+    return hdrs;
+  };
 
   if (rangeHeader) {
     const match = rangeHeader.match(/bytes=(\d+)-(\d*)/);
@@ -257,12 +275,9 @@ export function serveByteRangeResponse(bytes, mimeType, rangeHeader, cacheContro
     return new Response(chunk, {
       status: 206,
       headers: {
-        'Content-Type': contentType,
+        ...buildBaseHeaders(),
         'Content-Range': `bytes ${start}-${start + chunkLen - 1}/${totalSize}`,
-        'Content-Length': String(chunkLen),
-        'Accept-Ranges': 'bytes',
-        'Cache-Control': cacheControl,
-        'X-Content-Type-Options': 'nosniff'
+        'Content-Length': String(chunkLen)
       }
     });
   }
@@ -270,11 +285,8 @@ export function serveByteRangeResponse(bytes, mimeType, rangeHeader, cacheContro
   return new Response(payload, {
     status: 200,
     headers: {
-      'Content-Type': contentType,
-      'Content-Length': String(totalSize),
-      'Accept-Ranges': 'bytes',
-      'Cache-Control': cacheControl,
-      'X-Content-Type-Options': 'nosniff'
+      ...buildBaseHeaders(),
+      'Content-Length': String(totalSize)
     }
   });
 }
@@ -349,6 +361,9 @@ export async function streamGDriveFile(env, driveFileId, rangeHeader, fallbackMi
     'X-Content-Type-Options': 'nosniff',
     'Content-Security-Policy': "default-src 'none'; sandbox"
   };
+  if (String(responseHeaders['Content-Type']).toLowerCase().includes('application/pdf')) {
+    responseHeaders['Content-Disposition'] = 'attachment';
+  }
 
   const contentRange = upstreamRes.headers.get('content-range');
   if (contentRange) {

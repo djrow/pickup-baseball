@@ -588,7 +588,9 @@ module.exports = async function registerWeatherGalleryTests(ctx, t9) {
     assert.ok(galleryHtml.includes('id="media-submit-form"'), 'gallery.html must contain #media-submit-form');
     assert.ok(galleryHtml.includes('id="media-date-input"'), 'gallery.html must ask for approximate date taken');
     assert.ok(galleryHtml.includes('id="gallery-lightbox"'), 'gallery.html must contain #gallery-lightbox modal');
-    assert.ok(galleryHtml.includes('Once uploaded, David will approve it then it will be displayed in the webapp'), 'gallery.html must notify user that David will approve uploads before display');
+    assert.ok(galleryHtml.includes('id="media-login-required-notice"'), 'gallery.html must contain #media-login-required-notice for when zero-login drops are disabled');
+    assert.ok(!galleryHtml.includes('David will approve it'), 'gallery.html must not tell users David will approve uploads before display');
+    assert.ok(galleryHtml.includes('published immediately'), 'gallery.html must notify user that uploads publish immediately');
     assert.ok(galleryHtml.includes('/js/gallery.js'), 'gallery.html must load /js/gallery.js');
     assert.ok(galleryHtml.includes('/js/api.js'), 'gallery.html must load /js/api.js');
 
@@ -656,7 +658,7 @@ module.exports = async function registerWeatherGalleryTests(ctx, t9) {
     assert.equal(ytData.item.media_type, 'youtube', 'YouTube submissions must be marked media_type: youtube');
     assert.ok(ytData.item.file_url.includes('youtube.com'), 'YouTube link must be preserved as streaming link');
     assert.equal(ytData.item.date_taken, '2026-10-26', 'Approximate date taken must be saved');
-    assert.equal(ytData.item.is_approved, 0, 'Public YouTube submission must require admin approval (is_approved=0)');
+    assert.equal(ytData.item.is_approved, 1, 'Public YouTube submission must publish immediately without manual approval (is_approved=1)');
 
     // 6. Zero-Login Submission copying remote/Facebook-hosted image ("copy it all")
     const remoteImgUrl = `${baseUrl}/icons/favicon-32x32.png`;
@@ -676,38 +678,53 @@ module.exports = async function registerWeatherGalleryTests(ctx, t9) {
     assert.equal(copyData.item.media_type, 'photo', 'Copied image must be marked media_type: photo');
     assert.ok(copyData.item.file_url.startsWith('/api/media/'), 'Copied image must be served from local /api/media/:id/file route');
     assert.equal(copyData.item.original_url, remoteImgUrl, 'Original external image URL must be preserved');
-    assert.equal(copyData.item.is_approved, 0, 'Public photo submission must require admin approval (is_approved=0)');
+    assert.equal(copyData.item.is_approved, 1, 'Public photo submission must publish immediately without manual approval (is_approved=1)');
 
-    // Verify unapproved media is hidden from public gallery and unapproved file is 404 for unauthenticated public
-    const unapprovedCheck = await fetch(`${baseUrl}/api/media`);
-    const unapprovedData = await unapprovedCheck.json();
-    assert.ok(!unapprovedData.media.some(m => m.id === copyData.item.id), 'Unapproved media must NOT be displayed in public gallery');
+    // Immediately verify submission appears in public gallery and file endpoint without admin approval
+    const immediateCheck = await fetch(`${baseUrl}/api/media`);
+    const immediateData = await immediateCheck.json();
+    assert.ok(immediateData.media.some(m => m.id === copyData.item.id), 'New submission must immediately appear in public gallery');
 
-    // Moderation security check: unauthenticated public request to unapproved file returns 404
-    const unapprovedFileCheck = await fetch(`${baseUrl}${copyData.item.file_url}`);
-    assert.equal(unapprovedFileCheck.status, 404, 'Unapproved media file must return 404 to unauthenticated users');
+    const immediateFileCheck = await fetch(`${baseUrl}${copyData.item.file_url}`);
+    assert.equal(immediateFileCheck.status, 200, 'Immediately published image file must return 200 to public users');
 
-    // Organizer manager preview can access unapproved media file
+    // 7. Organizer/Admin Hiding Workflow: Hide item from public timeline via PUT /api/media/:id
+    const hideRes = await apiReq('PUT', `/api/media/${copyData.item.id}`, seedOrgCookie, {
+      is_approved: 0
+    });
+    assert.equal(hideRes.status, 200, 'Organizer must be able to hide media item from public timeline');
+    assert.equal(hideRes.data.item.is_approved, 0, 'Hidden media item must have is_approved=0');
+
+    // Verify hidden media is excluded from public gallery and unapproved file is 404 for unauthenticated public
+    const hiddenCheck = await fetch(`${baseUrl}/api/media`);
+    const hiddenData = await hiddenCheck.json();
+    assert.ok(!hiddenData.media.some(m => m.id === copyData.item.id), 'Hidden media must NOT be displayed in public gallery');
+
+    // Moderation security check: unauthenticated public request to hidden file returns 404
+    const hiddenFileCheck = await fetch(`${baseUrl}${copyData.item.file_url}`);
+    assert.equal(hiddenFileCheck.status, 404, 'Hidden media file must return 404 to unauthenticated users');
+
+    // Organizer manager preview can still access hidden media file
     const managerFilePreview = await fetch(`${baseUrl}${copyData.item.file_url}`, {
       headers: { 'Cookie': seedOrgCookie }
     });
-    assert.equal(managerFilePreview.status, 200, 'Organizer preview of unapproved file must return 200');
+    assert.equal(managerFilePreview.status, 200, 'Organizer preview of hidden file must return 200');
 
-    // 8. Admin Approval Workflow: Organizer approves media item via PUT /api/media/:id/approve
+    // 8. Organizer restores / republishes hidden media item via PUT /api/media/:id/approve
     const approveRes = await apiReq('PUT', `/api/media/${copyData.item.id}/approve`, seedOrgCookie);
-    assert.equal(approveRes.status, 200, 'Organizer must be able to approve pending media item');
+    assert.equal(approveRes.status, 200, 'Organizer must be able to republish hidden media item');
 
-    // 7. Verify serving the copied image binary via GET /api/media/:id/file once approved
+    // Verify serving the copied image binary via GET /api/media/:id/file once restored
     const serveImgRes = await fetch(`${baseUrl}${copyData.item.file_url}`);
-    assert.equal(serveImgRes.status, 200, 'Serving approved copied image must return 200');
+    assert.equal(serveImgRes.status, 200, 'Serving restored copied image must return 200');
     assert.ok(serveImgRes.headers.get('content-type').includes('image/'), 'Content-Type must be image');
     const imgBuf = await serveImgRes.arrayBuffer();
     assert.ok(imgBuf.byteLength > 0, 'Copied image binary must have non-zero size');
 
-    // Once approved, it appears in public gallery
+    // Once restored, it appears in public gallery
     const approvedCheck = await fetch(`${baseUrl}/api/media`);
     const approvedData = await approvedCheck.json();
-    assert.ok(approvedData.media.some(m => m.id === copyData.item.id), 'Approved media item must now appear in public gallery');
+    assert.ok(approvedData.media.some(m => m.id === copyData.item.id), 'Restored media item must reappear in public gallery');
 
     // 9. Verify Chronological Ordering (desc vs asc)
     const descRes = await fetch(`${baseUrl}/api/media?order=desc`);
@@ -797,14 +814,53 @@ module.exports = async function registerWeatherGalleryTests(ctx, t9) {
     assert.ok(adminHtml.includes('id="admin-media-grid"'), 'admin.html must contain #admin-media-grid');
     assert.ok(adminHtml.includes('admin-media-status-btn'), 'admin.html must include status filter buttons');
     assert.ok(adminHtml.includes('setting-appscript-url'), 'admin.html must contain #setting-appscript-url for Google Drive');
+    assert.ok(adminHtml.includes('id="setting-disallow-zero-login-media"'), 'admin.html must contain #setting-disallow-zero-login-media checkbox');
 
     const adminJs = fs.readFileSync(path.join(publicDir, 'js', 'admin.js'), 'utf8');
     assert.ok(adminJs.includes('setupMediaCarouselsAdmin'), 'admin.js must implement setupMediaCarouselsAdmin');
     assert.ok(adminJs.includes('appscript_upload_url'), 'admin.js must handle appscript_upload_url');
+    assert.ok(adminJs.includes('disallow_zero_login_media'), 'admin.js must handle disallow_zero_login_media policy setting');
+    assert.ok(adminJs.includes('btn-admin-hide-media'), 'admin.js must provide btn-admin-hide-media to hide items from public timeline');
     assert.ok(adminJs.includes('btn-admin-remove-media'), 'admin.js must provide btn-admin-remove-media to remove items from carousels');
     assert.ok(adminJs.includes('btn-admin-edit-media'), 'admin.js must provide btn-admin-edit-media to edit items');
     assert.ok(adminJs.includes('admin-media-edit-form'), 'admin.js must provide media edit form');
     assert.ok(adminJs.includes('updateMedia'), 'admin.js must call updateMedia');
+
+    // Verify Admin Toggle: Disallow Zero-Login Community Media Drops
+    const enableNoZeroLoginRes = await apiReq('PUT', '/api/settings', seedAdminCookie, { disallow_zero_login_media: true });
+    assert.equal(enableNoZeroLoginRes.status, 200, 'Admin must be able to enable disallow_zero_login_media');
+    assert.equal(enableNoZeroLoginRes.data.disallow_zero_login_media, true, 'PUT /api/settings must echo disallow_zero_login_media=true');
+
+    const getSettingsRes = await fetch(`${baseUrl}/api/settings`);
+    assert.equal(getSettingsRes.status, 200, 'GET /api/settings must return 200');
+    const settingsData = await getSettingsRes.json();
+    assert.equal(settingsData.disallow_zero_login_media, true, 'GET /api/settings must reflect disallow_zero_login_media=true');
+
+    // Unauthenticated drop must now be rejected with 401
+    const blockedZeroLoginRes = await fetch(`${baseUrl}/api/media`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        title: 'Blocked Zero Login Video',
+        date_taken: '2026-10-27'
+      })
+    });
+    assert.equal(blockedZeroLoginRes.status, 401, 'Zero-login drop must return 401 when disallow_zero_login_media is enabled');
+
+    // Authenticated player drop must still succeed and publish immediately
+    const authedDropRes = await apiReq('POST', '/api/media', seedPlayerCookie, {
+      url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      title: 'Signed-In Drop While Zero-Login Disabled',
+      date_taken: '2026-10-27'
+    });
+    assert.equal(authedDropRes.status, 200, 'Signed-in user must still be able to post media when zero-login is disabled');
+    assert.equal(authedDropRes.data.item.is_approved, 1, 'Signed-in user media must publish immediately');
+    await apiReq('DELETE', `/api/media/${authedDropRes.data.item.id}`, seedPlayerCookie);
+
+    // Restore default setting (allow zero-login drops)
+    const disableNoZeroLoginRes = await apiReq('PUT', '/api/settings', seedAdminCookie, { disallow_zero_login_media: false });
+    assert.equal(disableNoZeroLoginRes.status, 200, 'Admin must be able to re-enable zero-login drops');
 
     assert.ok(galleryHtml.includes('id="lightbox-delete-btn"'), 'gallery.html must provide #lightbox-delete-btn in lightbox modal');
     assert.ok(galleryHtml.includes('id="user-submissions-container"'), 'gallery.html must provide #user-submissions-container');

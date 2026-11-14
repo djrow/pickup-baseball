@@ -14,7 +14,9 @@ import {
   rejectIfClubhouseOptedOut,
   isPrivateIpOrHost,
   safeFetchExternalUrl,
-  readResponseWithByteCap
+  readResponseWithByteCap,
+  APPSCRIPT_EXEC_URL_RE,
+  validateAppscriptRedirectUrl
 } from '../security.js';
 import { arrayBufferToBase64, base64ToUint8Array, stripJpegMetadata } from '../security.js';
 import {
@@ -27,6 +29,7 @@ import {
   getGDriveStorageQuota
 } from '../gdrive.js';
 import { resolveChannel, canUserAccessChannel } from './chat.js';
+import { getDisallowZeroLoginMediaSetting } from '../schema.js';
 
 export const mediaRouter = new Hono();
 export const attachmentsRouter = new Hono();
@@ -333,6 +336,10 @@ mediaRouter.post('/', async (c) => {
       return c.json({ error: 'Too many media uploads from this address. Please wait an hour before submitting more.' }, 429);
     }
 
+    if (!user && await getDisallowZeroLoginMediaSetting(c.env.DB, c.env)) {
+      return c.json({ error: 'Zero-login media uploads are currently disabled. Please sign in to upload media.' }, 401);
+    }
+
     const body = await c.req.json();
     const { title, caption, date_taken, album, contributor_name, event_id, url, file_data, mime_type, file_name, cf_turnstile_response } = body;
 
@@ -552,24 +559,31 @@ mediaRouter.post('/', async (c) => {
 
           const safeFilename = `${baseName}_${dateStamp}_${randSuffix}${ext}`;
 
-          const asRes = await fetch(appscriptUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            signal: typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(15000) : undefined,
-            body: JSON.stringify({
-              action: 'upload',
-              base64: storedFileData,
-              mimeType: storedMimeType,
-              filename: safeFilename
-            })
-          });
+          if (APPSCRIPT_EXEC_URL_RE.test(appscriptUrl)) {
+            const asFetched = await safeFetchExternalUrl(
+              appscriptUrl,
+              {
+                method: 'POST',
+                validator: validateAppscriptRedirectUrl,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  action: 'upload',
+                  base64: storedFileData,
+                  mimeType: storedMimeType,
+                  filename: safeFilename
+                })
+              },
+              3,
+              15000
+            );
 
-          if (asRes.ok) {
-            const asJson = await asRes.json().catch(() => null);
-            if (asJson && asJson.success && asJson.fileUrl) {
-              fileUrl = asJson.fileUrl;
-              originalUrl = asJson.downloadUrl || asJson.previewUrl || fileUrl;
-              storedFileData = null; // Free up D1 space completely! Store zero binary bytes in D1!
+            if (asFetched.ok && asFetched.res && asFetched.res.ok) {
+              const asJson = await asFetched.res.json().catch(() => null);
+              if (asJson && asJson.success && asJson.fileUrl) {
+                fileUrl = asJson.fileUrl;
+                originalUrl = asJson.downloadUrl || asJson.previewUrl || fileUrl;
+                storedFileData = null; // Free up D1 space completely! Store zero binary bytes in D1!
+              }
             }
           }
         } catch (err) {
@@ -589,11 +603,16 @@ mediaRouter.post('/', async (c) => {
       return c.json({ error: 'Either a media URL (YouTube/image) or an uploaded file is required.' }, 400);
     }
 
-    // Approval status: by default submissions require review so organizers/admins can review before publishing
-    // Organizers/admins can optionally pass publish_immediately: true or auto_approve: true to bypass review
+    // Publish immediately by default so community submissions go live without manual approval.
+    // Managers can still hide any item anytime via PUT /api/media/:id (or pass publish_immediately: false when posting).
     const isManager = Boolean(user && (user.role === 'admin' || user.role === 'organizer' || user.isAdmin || user.canManageEvents));
-    const publishImmediately = Boolean(body.publish_immediately === true || body.publish_immediately === 'true' || body.auto_approve === true);
-    const isApproved = (isManager && publishImmediately) ? 1 : 0;
+    const hideExplicitly = isManager && (
+      body.publish_immediately === false ||
+      body.publish_immediately === 'false' ||
+      body.is_approved === 0 ||
+      body.is_approved === false
+    );
+    const isApproved = hideExplicitly ? 0 : 1;
     const deleteToken = generateToken();
 
     // Insert media row into D1 / SQLite
@@ -638,8 +657,8 @@ mediaRouter.post('/', async (c) => {
       is_approved: isApproved,
       requires_approval: isApproved === 0,
       message: isApproved === 1
-        ? (finalMediaType === 'youtube' ? '✓ YouTube link saved and published!' : '✓ Image copied and published to gallery!')
-        : '✓ Thank you! Once uploaded, David will approve it then it will be displayed in the webapp.'
+        ? (finalMediaType === 'youtube' ? '✓ YouTube link saved and published to gallery!' : '✓ Media uploaded and published to gallery!')
+        : '✓ Media saved as hidden from the public timeline.'
     });
   } catch (err) {
     console.error('[Media] Error saving media submission:', err);
@@ -796,12 +815,18 @@ async function handleMediaDelete(c) {
         const otherRef = await c.env.DB.prepare(
           'SELECT 1 FROM media_items WHERE id != ? AND (file_url LIKE ? OR original_url LIKE ?) LIMIT 1'
         ).bind(id, likePattern, likePattern).first();
-        if (!otherRef) {
-          fetch(appscriptUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'delete', fileId: targetDriveId })
-          }).catch(() => {});
+        if (!otherRef && APPSCRIPT_EXEC_URL_RE.test(appscriptUrl)) {
+          safeFetchExternalUrl(
+            appscriptUrl,
+            {
+              method: 'POST',
+              validator: validateAppscriptRedirectUrl,
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'delete', fileId: targetDriveId })
+            },
+            3,
+            8000
+          ).catch(() => {});
         }
       }
     }
@@ -841,17 +866,32 @@ const MAX_GDRIVE_ATTACHMENT_BYTES = 500 * 1024 * 1024; // 500 MB per file on Goo
 const MAX_LOCAL_D1_ATTACHMENT_BYTES = 10 * 1024 * 1024; // 10 MB per file when falling back to D1
 
 function isValidContainerMediaBuffer(bytes, mimeType) {
-  if (!bytes || bytes.length < 12) return false;
+  if (!bytes || bytes.length < 4) return false;
   const mime = String(mimeType || '').toLowerCase();
   if (mime === 'image/avif' || mime === 'video/mp4' || mime === 'video/quicktime') {
     // ISO-BMFF ftyp box at offset 4
-    return bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70;
+    return bytes.length >= 12 && bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70;
   }
   if (mime === 'video/webm' || mime === 'audio/webm') {
     // EBML header 0x1A 0x45 0xDF 0xA3
     return bytes[0] === 0x1A && bytes[1] === 0x45 && bytes[2] === 0xDF && bytes[3] === 0xA3;
   }
-  return true;
+  if (mime === 'audio/ogg') {
+    // "OggS"
+    return bytes[0] === 0x4F && bytes[1] === 0x67 && bytes[2] === 0x67 && bytes[3] === 0x53;
+  }
+  if (mime === 'audio/mpeg') {
+    // ID3v2 header ("ID3") or MPEG audio frame sync (0xFF 0xE0+)
+    return (
+      (bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) ||
+      (bytes[0] === 0xFF && (bytes[1] & 0xE0) === 0xE0)
+    );
+  }
+  if (mime === 'application/pdf') {
+    // "%PDF-"
+    return bytes.length >= 5 && bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46 && bytes[4] === 0x2D;
+  }
+  return false;
 }
 
 /**
@@ -890,11 +930,20 @@ function hasInvalidOrSpoofedMagicBytes(bytes, mimeType, isEncrypted) {
   if (mime === 'image/webp') {
     return !(bytes.length >= 4 && bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46);
   }
-  if (mime === 'image/avif') {
+  if (
+    mime === 'image/avif' ||
+    mime === 'video/mp4' ||
+    mime === 'video/quicktime' ||
+    mime === 'video/webm' ||
+    mime === 'audio/webm' ||
+    mime === 'audio/ogg' ||
+    mime === 'audio/mpeg' ||
+    mime === 'application/pdf'
+  ) {
     return !isValidContainerMediaBuffer(bytes, mime);
   }
 
-  return false;
+  return true;
 }
 
 // ---------------------------------------------------------------------------

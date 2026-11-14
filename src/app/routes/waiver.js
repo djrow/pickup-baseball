@@ -82,13 +82,14 @@ async function getProvenanceSecretMaterial(env, db = null) {
     } catch (err) {}
   }
 
+  if (!e.NODE_ENV || e.NODE_ENV !== 'test') {
+    throw new Error('WAIVER_SIGNING_SECRET or database binding is required for persistent waiver provenance seals.');
+  }
+
   if (!ephemeralProvenanceSecret) {
     const bytes = new Uint8Array(32);
     globalThis.crypto.getRandomValues(bytes);
     ephemeralProvenanceSecret = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
-    if (!e.NODE_ENV || e.NODE_ENV !== 'test') {
-      console.warn('[Waiver] WAIVER_SIGNING_SECRET is not set; using ephemeral per-isolate key for HMAC provenance seals.');
-    }
   }
   return ephemeralProvenanceSecret;
 }
@@ -634,6 +635,13 @@ waiverRouter.get('/certificate/:id', async (c) => {
   const paramId = String(c.req.param('id') || '').trim();
   const user = c.get('user');
 
+  if ((!user || !user.isAdmin) && c.env && c.env.DB) {
+    const certLimit = await checkRateLimit(c.env.DB, 'waiver_cert_' + getClientIp(c), 30, 600, c.env);
+    if (!certLimit.allowed) {
+      return c.json({ error: 'Too many certificate lookup requests. Please try again later.' }, 429);
+    }
+  }
+
   let row = null;
   if (/^\d+$/.test(paramId)) {
     if (!user || (!user.isAdmin && user.id !== parseInt(paramId, 10))) {
@@ -690,7 +698,7 @@ waiverRouter.get('/certificate/:id', async (c) => {
   return c.json({
     waiver: {
       certificate_id: row.certificate_id,
-      user_id: row.user_id,
+      user_id: canViewPii ? row.user_id : null,
       email: canViewPii ? row.email : null,
       printed_name: canViewPii ? row.printed_name : null,
       signed_date: row.signed_date,
@@ -700,8 +708,8 @@ waiverRouter.get('/certificate/:id', async (c) => {
       waiver_text_sha256: row.waiver_text_sha256,
       document_sha256: row.document_sha256,
       provenance_seal: row.provenance_seal,
-      gdrive_file_id: row.gdrive_file_id || null,
-      signed_at: row.signed_at,
+      gdrive_file_id: canViewPii ? (row.gdrive_file_id || null) : null,
+      signed_at: canViewPii ? row.signed_at : null,
       integrity_verified: integrityVerified
     }
   });

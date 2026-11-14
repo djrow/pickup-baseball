@@ -462,15 +462,12 @@
         : null;
       var senderUid = Number(share.senderUserId || share.sender_user_id || 0);
       var myUid = state.user && state.user.id ? Number(state.user.id) : 0;
-      var epPub = parseJwkSafe(share.senderEphemeralPubJwk || share.sender_ephemeral_pub_jwk);
       var pubPromise = apiRequest('GET', '/api/keys/identity/' + encodeURIComponent(senderUid)).then(function (idRes) {
         if (!idRes.ok || !idRes.data) {
-          if (epPub) return epPub;
           throw createE2eeError('E2EE_PEER_KEY_MISSING', 'Sender public key could not be retrieved.');
         }
         var idPubJwk = parseJwkSafe(idRes.data.ecdh_public_key_jwk);
         if (!idPubJwk) {
-          if (epPub) return epPub;
           throw createE2eeError('E2EE_PEER_KEY_MISSING', 'Missing sender ECDH public key.');
         }
         var tofuPromise = (senderUid && senderUid !== myUid && root.ClubhouseCrypto.computeKeyFingerprint && root.ClubhouseCrypto.getPeerVerificationState)
@@ -483,7 +480,7 @@
             })
           : Promise.resolve();
         return tofuPromise.then(function () {
-          return epPub || idPubJwk;
+          return idPubJwk;
         });
       });
 

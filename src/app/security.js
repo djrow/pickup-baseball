@@ -520,7 +520,7 @@ export async function resolveUserByCalendarToken(db, rawToken) {
 
 // RBAC & Channel Access Helpers
 export function canAccessChannel(user, channel, mode = 'read') {
-  if (!user || !channel) return false;
+  if (!user || !channel || typeof channel !== 'object') return false;
 
   // Super-admin has unrestricted access to all channels
   if (user.role === 'admin' || user.isAdmin || user.is_admin === 1) {
@@ -704,6 +704,27 @@ export function validateExternalGifUrl(rawUrl, options = {}) {
   return { ok: true, url: parsed.toString() };
 }
 
+export const APPSCRIPT_EXEC_URL_RE = /^https:\/\/script\.google\.com\/macros\/s\/[a-zA-Z0-9_\-]+\/exec$/i;
+
+export function validateAppscriptRedirectUrl(rawUrl) {
+  let parsed;
+  try {
+    parsed = new URL(String(rawUrl || '').trim());
+  } catch (e) {
+    return { ok: false, status: 400, error: 'Invalid Google Apps Script URL.' };
+  }
+  const host = parsed.hostname.toLowerCase();
+  const isGoogleAppsHost =
+    host === 'script.google.com' ||
+    host === 'script.googleusercontent.com' ||
+    host.endsWith('.googleusercontent.com');
+  if (parsed.protocol !== 'https:' || !isGoogleAppsHost) {
+    return { ok: false, status: 403, error: 'Apps Script redirects must stay on Google Apps Script domains.' };
+  }
+  parsed.hash = '';
+  return { ok: true, url: parsed.toString() };
+}
+
 export async function safeFetchExternalUrl(urlStr, options = {}, maxRedirects = 3, timeoutMs = 8000) {
   const {
     isTestEnv = false,
@@ -723,17 +744,44 @@ export async function safeFetchExternalUrl(urlStr, options = {}, maxRedirects = 
   let currentUrl = initialCheck.url;
 
   for (let hop = 0; hop <= maxRedirects; hop++) {
-    if (!isTestEnv && typeof process !== 'undefined' && process.versions && process.versions.node) {
-      try {
-        const hostName = new URL(currentUrl).hostname.replace(/^\[|\]$/g, '');
-        if (hostName && !/^\d+\.\d+\.\d+\.\d+$/.test(hostName) && !hostName.includes(':')) {
+    const parsedHop = new URL(currentUrl);
+    const hostName = parsedHop.hostname.replace(/^\[|\]$/g, '');
+    if (!isTestEnv && hostName && !/^\d+\.\d+\.\d+\.\d+$/.test(hostName) && !hostName.includes(':')) {
+      if (typeof process !== 'undefined' && process.versions && process.versions.node) {
+        let resolved;
+        try {
           const dns = await import('node:dns/promises');
-          const resolved = await dns.lookup(hostName, { all: true });
-          if (Array.isArray(resolved) && resolved.some((entry) => entry && isPrivateIpOrHost(entry.address, false))) {
-            return { ok: false, status: 403, error: 'Resolved host IP points to a restricted private or local network.' };
-          }
+          resolved = await dns.lookup(hostName, { all: true });
+        } catch (dnsErr) {
+          return { ok: false, status: 400, error: 'Failed to resolve remote hostname via DNS.' };
         }
-      } catch (dnsErr) {}
+        if (!Array.isArray(resolved) || resolved.length === 0) {
+          return { ok: false, status: 400, error: 'Remote hostname did not resolve to any IP address.' };
+        }
+        if (resolved.some((entry) => !entry || isPrivateIpOrHost(entry.address, false))) {
+          return { ok: false, status: 403, error: 'Resolved host IP points to a restricted private or local network.' };
+        }
+      } else if (hostName !== 'cloudflare-dns.com') {
+        try {
+          const dohAbort = typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
+            ? AbortSignal.timeout(3000)
+            : undefined;
+          for (const rrType of ['A', 'AAAA']) {
+            const dohRes = await fetch(
+              `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(hostName)}&type=${rrType}`,
+              { headers: { 'Accept': 'application/dns-json' }, signal: dohAbort }
+            );
+            if (!dohRes.ok) continue;
+            const dohJson = await dohRes.json().catch(() => null);
+            const answers = dohJson && Array.isArray(dohJson.Answer) ? dohJson.Answer : [];
+            if (answers.some((ans) => ans && ans.data && (ans.type === 1 || ans.type === 28) && isPrivateIpOrHost(ans.data, false))) {
+              return { ok: false, status: 403, error: 'Resolved host IP points to a restricted private or local network.' };
+            }
+          }
+        } catch (dohErr) {
+          return { ok: false, status: 400, error: 'Failed to verify remote hostname DNS resolution.' };
+        }
+      }
     }
 
     let res;

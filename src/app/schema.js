@@ -917,3 +917,12 @@ export async function getRequireLoginSetting(db, env) {
   if (row) return row.value === 'true';
   return env && env.NODE_ENV === 'test' ? false : true;
 }
+
+export async function getDisallowZeroLoginMediaSetting(db, env) {
+  if (!db) return false;
+  try {
+    const row = await db.prepare("SELECT value FROM app_settings WHERE key = 'disallow_zero_login_media'").first();
+    if (row) return row.value === 'true';
+  } catch (e) {}
+  return false;
+}

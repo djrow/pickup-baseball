@@ -96,11 +96,16 @@ app.use('*', async (c, next) => {
     return c.json({ error: 'Direct origin/preview API access is disabled. Please use www.pickupbaseballfoundation.org.' }, 403);
   }
 
-  // CSRF Origin verification on state-changing requests
+  // CSRF Origin / Fetch-Metadata verification on state-changing requests
   if (!['GET', 'HEAD', 'OPTIONS'].includes(c.req.method)) {
     const reqOrigin = reqUrl.origin;
     const originHeader = c.req.header('Origin');
     const refererHeader = c.req.header('Referer');
+    const secFetchSite = (c.req.header('Sec-Fetch-Site') || '').toLowerCase();
+    const contentType = (c.req.header('Content-Type') || '').toLowerCase();
+    if (secFetchSite && secFetchSite !== 'same-origin' && secFetchSite !== 'none') {
+      return c.json({ error: 'Cross-site request blocked (CSRF protection).' }, 403);
+    }
     if (originHeader && originHeader !== reqOrigin) {
       return c.json({ error: 'Cross-origin request blocked (CSRF protection).' }, 403);
     }
@@ -112,6 +117,13 @@ app.use('*', async (c, next) => {
       } catch (e) {
         return c.json({ error: 'Invalid referer header.' }, 403);
       }
+    }
+    if (!originHeader && !refererHeader && (
+      contentType.includes('application/x-www-form-urlencoded') ||
+      contentType.includes('multipart/form-data') ||
+      contentType.startsWith('text/plain')
+    )) {
+      return c.json({ error: 'Missing Origin or Referer header on form request (CSRF protection).' }, 403);
     }
   }
 
