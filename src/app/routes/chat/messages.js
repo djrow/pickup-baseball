@@ -209,11 +209,29 @@ chatMessagesRouter.post('/channels/:id/messages', requireAuth, async (c) => {
   if (iv && iv.length > 128) {
     return c.json({ error: 'encryption_iv exceeds maximum allowed size (128 chars).' }, 400);
   }
-  if ((channel.channel_type === 'dm' || channel.channel_type === 'group_dm' || isPrivateEncryptedBoard(channel)) && !iv) {
+  const requiresE2eeChannel = channel.channel_type === 'dm' || channel.channel_type === 'group_dm' || isPrivateEncryptedBoard(channel);
+  if (requiresE2eeChannel && !iv) {
     return c.json({ error: 'Direct messages and private boards must be end-to-end encrypted (missing encryption_iv).' }, 400);
   }
-  const keyEpoch = body.key_epoch ? parseInt(body.key_epoch, 10) : 1;
-  const allowedMessageTypes = new Set(['text', 'system', 'poll', 'image', 'video', 'file']);
+  const keyEpoch = body.key_epoch !== undefined ? parseInt(body.key_epoch, 10) : 1;
+  if (isNaN(keyEpoch) || keyEpoch < 1) {
+    return c.json({ error: 'Invalid key_epoch.' }, 400);
+  }
+  if (requiresE2eeChannel) {
+    const maxEpRow = await chatDb.prepare(
+      'SELECT MAX(key_epoch) as max_epoch FROM channel_key_shares WHERE channel_id = ?'
+    ).bind(channel.id).first();
+    if (maxEpRow && maxEpRow.max_epoch && keyEpoch < Number(maxEpRow.max_epoch)) {
+      return c.json({
+        error: `Message must be encrypted with the latest channel key epoch (${maxEpRow.max_epoch}).`,
+        code: 'STALE_KEY_EPOCH'
+      }, 409);
+    }
+  }
+  const isPrivilegedMsgSender = Boolean(user.isAdmin || user.isModerator || user.canModerateChat || user.canManageEvents);
+  const allowedMessageTypes = new Set(
+    isPrivilegedMsgSender ? ['text', 'system', 'poll', 'image', 'video', 'file'] : ['text', 'poll', 'image', 'video', 'file']
+  );
   const messageType = allowedMessageTypes.has(String(body.message_type || 'text')) ? String(body.message_type || 'text') : 'text';
   const metadataJson = body.metadata_json
     ? (typeof body.metadata_json === 'string' ? body.metadata_json : JSON.stringify(body.metadata_json))
@@ -375,12 +393,24 @@ chatMessagesRouter.patch('/messages/:id', requireAuth, async (c) => {
     return c.json({ error: 'encryption_iv exceeds maximum allowed size (128 chars).' }, 400);
   }
   const newIv = rawEditIv !== undefined ? rawEditIv : existing.iv;
+  const editKeyEpoch = body.key_epoch !== undefined ? parseInt(body.key_epoch, 10) : (existing.key_epoch || 1);
+  if (isNaN(editKeyEpoch) || editKeyEpoch < 1) {
+    return c.json({ error: 'Invalid key_epoch.' }, 400);
+  }
+  if ((isDmMsg || isPrivateMsg) && body.key_epoch !== undefined) {
+    const maxEpRow = await chatDb.prepare(
+      'SELECT MAX(key_epoch) as max_epoch FROM channel_key_shares WHERE channel_id = ?'
+    ).bind(existing.channel_id).first();
+    if (maxEpRow && maxEpRow.max_epoch && editKeyEpoch < Number(maxEpRow.max_epoch)) {
+      return c.json({ error: `Message edit must use the latest channel key epoch (${maxEpRow.max_epoch}).`, code: 'STALE_KEY_EPOCH' }, 409);
+    }
+  }
   const nowIso = new Date().toISOString();
   const nowSec = Math.floor(Date.now() / 1000);
 
   await chatDb.prepare(
-    'UPDATE messages SET content = ?, iv = ?, edited_at = ? WHERE id = ?'
-  ).bind(newContent, newIv, nowIso, msgId).run();
+    'UPDATE messages SET content = ?, iv = ?, key_epoch = ?, edited_at = ? WHERE id = ?'
+  ).bind(newContent, newIv, editKeyEpoch, nowIso, msgId).run();
 
   await chatDb.prepare(`
     INSERT INTO sync_events (channel_id, event_type, target_id, payload_json, created_at)

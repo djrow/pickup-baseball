@@ -299,7 +299,13 @@
       return;
     }
 
-    nameEl.textContent = u.name || u.email || 'Player';
+    var selfMembersList = (window.ClubhouseStore && window.ClubhouseStore.state && Array.isArray(window.ClubhouseStore.state.members))
+      ? window.ClubhouseStore.state.members
+      : [];
+    var selfDisplay = u.name
+      ? abbreviateMemberNames([u].concat(selfMembersList))[0]
+      : (u.email || 'Player');
+    nameEl.textContent = selfDisplay;
     var badges = [];
     if (u.role === 'admin' || u.isAdmin) badges.push('Admin');
     else if (u.isModerator || u.canModerateChat || u.is_moderator === 1) badges.push('🛡️ Moderator');
@@ -2871,6 +2877,18 @@
         } else if (evType === 'speaking_update') {
           renderChannelSidebar();
           renderVoiceVideoTiles();
+        } else if (evType === 'privacy_relay_unavailable') {
+          var mediaStage = el('ch-media-stage');
+          if (mediaStage) {
+            var warnEl = el('ch-rtc-relay-warning');
+            if (!warnEl) {
+              warnEl = document.createElement('div');
+              warnEl.id = 'ch-rtc-relay-warning';
+              warnEl.style.cssText = 'margin:6px 0;padding:8px 10px;border-radius:6px;background:rgba(245,158,11,0.14);border:1px solid rgba(245,158,11,0.45);color:#fbbf24;font-size:12px;';
+              mediaStage.insertBefore(warnEl, mediaStage.firstChild);
+            }
+            warnEl.textContent = 'Privacy Relay Mode blocked direct P2P voice because no TURN relay server is configured.';
+          }
         }
       });
     }

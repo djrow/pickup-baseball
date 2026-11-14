@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Dashboard - Sunday Pickup Baseball</title>
-  <link rel="stylesheet" href="/css/style.css?v=140">
-  <link rel="stylesheet" href="/css/themes.css?v=140">
+  <link rel="stylesheet" href="/css/style.css?v=142">
+  <link rel="stylesheet" href="/css/themes.css?v=142">
   <link rel="alternate" type="application/rss+xml" title="Sunday Pickup Baseball Highlights &amp; Updates" href="/feed.xml">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
@@ -31,10 +31,20 @@
           <span class="brand-short">PBF</span>
         </a>
         <div class="nav-links">
-          <a href="/clubhouse.html" class="nav-link-clubhouse" title="Clubhouse Chat &amp; Voice Dugout"><span>💬</span> <span data-i18n="nav.clubhouse">Clubhouse</span></a>
-          <a href="/gallery.html" class="nav-link-gallery" title="Photo, Video &amp; Art Gallery"><span class="nav-gallery-icon">📸</span> Gallery &amp; Art</a>
-          <a href="/donate.html" class="nav-link-donate">Donate</a>
-          <a href="/login.html" class="btn-login"><span class="btn-login-icon">⚾ </span>Log In</a>
+          <a href="/login.html" class="btn-login"><span class="btn-login-icon">⚾ </span><span data-i18n="nav.login">Log In</span></a>
+          <div class="nav-dropdown" id="nav-menu-dropdown">
+            <button type="button" id="nav-menu-toggle" class="nav-menu-btn" aria-haspopup="true" aria-expanded="false" aria-controls="nav-menu-panel">
+              <span class="nav-menu-icon" aria-hidden="true">☰</span>
+              <span class="nav-menu-label" data-i18n="nav.menu">Menu</span>
+              <span class="nav-menu-caret" aria-hidden="true">▾</span>
+            </button>
+            <div id="nav-menu-panel" class="nav-dropdown-menu" role="menu" aria-hidden="true">
+              <a href="/clubhouse.html" role="menuitem" class="nav-dropdown-item nav-link-clubhouse" title="Clubhouse Chat &amp; Voice Dugout"><span>💬</span> <span data-i18n="nav.clubhouse">Clubhouse</span></a>
+              <a href="/gallery.html" role="menuitem" class="nav-dropdown-item nav-link-gallery" title="Photo, Video &amp; Art Gallery"><span class="nav-gallery-icon">📸</span> <span data-i18n="nav.gallery">Gallery &amp; Art</span></a>
+              <a href="/about.html" role="menuitem" class="nav-dropdown-item nav-link-about" title="About Pickup Baseball Foundation"><span>ℹ️</span> <span data-i18n="nav.about">About Us</span></a>
+              <a href="/donate.html" role="menuitem" class="nav-dropdown-item nav-link-donate"><span>❤️</span> <span data-i18n="nav.donate">Donate</span></a>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -460,8 +470,8 @@
 
   <footer id="site-footer" class="site-footer"></footer>
 
-  <script src="/js/api.js?v=140"></script>
-  <script src="/js/weather.js?v=140"></script>
-  <script src="/js/admin.js?v=140"></script>
+  <script src="/js/api.js?v=142"></script>
+  <script src="/js/weather.js?v=142"></script>
+  <script src="/js/admin.js?v=142"></script>
 </body>
 </html>

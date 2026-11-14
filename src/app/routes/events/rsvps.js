@@ -6,6 +6,7 @@
 import { Hono } from 'hono';
 import {
   generateToken,
+  constantTimeEqual,
   getClientIp,
   getSafePublicOrigin,
   checkRateLimit,
@@ -86,8 +87,8 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
     const additionalGuests = status === 'declined' ? 0 : Math.max(0, playersCount - 1);
     const cleanGuestNames = status === 'declined' ? '' : String(guest_names || '').trim().slice(0, 500);
 
-    if (event.status === 'rainout' && status === 'attending') {
-      return c.json({ error: 'RSVPs are closed because this game has been called for rain.' }, 400);
+    if ((event.status === 'rainout' || event.status === 'cancelled') && status === 'attending') {
+      return c.json({ error: 'RSVPs are closed because this game has been called for rain or cancelled.' }, 400);
     }
 
     if (!user && !(await verifyTurnstileIfConfigured(c.env, cf_turnstile_response, clientIp))) {
@@ -130,22 +131,22 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
       }
     }
 
+    const registeredUser = (!user && hasEmail)
+      ? await db.prepare('SELECT id FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1').bind(email).first()
+      : null;
+
     const allowedList = parseAllowedEmails(event.allowed_emails);
     if (allowedList.length > 0) {
       if (!user || !user.canManageEvents) {
         if (!hasEmail) {
           return c.json({ error: 'RSVP for this invite-only game requires signing in or entering an invited email address.' }, 403);
         }
-        if (!allowedList.includes(email.toLowerCase())) {
-          return c.json({ error: 'RSVP for this game is restricted to invited player accounts. Your email is not on the allowed list.' }, 403);
-        }
-        if (!user) {
-          const registeredUser = await db.prepare('SELECT id FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1').bind(email).first();
-          if (registeredUser) {
-            return c.json({ error: 'This invited email belongs to a registered account. Please sign in to RSVP.' }, 401);
-          }
+        if (!allowedList.includes(email.toLowerCase()) || registeredUser) {
+          return c.json({ error: 'RSVP for this game is restricted to invited player accounts. Please sign in to RSVP if your account is invited.' }, 403);
         }
       }
+    } else if (registeredUser) {
+      return c.json({ error: 'This email belongs to a registered account. Please sign in to RSVP.' }, 401);
     }
 
     const cleanGear = String(gear_bringing || '').trim().slice(0, 300);
@@ -190,10 +191,16 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
         ? await db.prepare('SELECT id, machine_badge, field_badge, hero_credits FROM users WHERE id = ?').bind(user.id).first()
         : null;
 
+      const preExistingDutyRows = existingAttendee
+        ? (await db.prepare('SELECT duty_id FROM duty_assignments WHERE attendee_id = ?').bind(existingAttendee.id).all()).results
+        : [];
+      const preExistingDutyIds = new Set((preExistingDutyRows || []).map((r) => Number(r.duty_id)));
+      const uniquePreDutyIds = [...new Set(duty_ids.map((d) => parseInt(d, 10)).filter((n) => !isNaN(n) && n > 0))];
+
       let creditsNeeded = 0;
       const dutyCapCache = {};
       const rollingShiftsCache = {};
-      for (const dId of duty_ids) {
+      for (const dId of uniquePreDutyIds) {
         const duty = await db.prepare('SELECT * FROM event_duties WHERE id = ? AND event_id = ?').bind(dId, eventId).first();
         if (!duty) continue;
         const dType = getDutyType(duty.title);
@@ -205,7 +212,7 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
           if (!hasBadge) {
             return c.json({ error: `Selecting '${duty.title}' requires the ${dType.badgeName}. Contact an administrator to be certified.` }, 400);
           }
-          if (tierInfo.tier === 'tier1') {
+          if (tierInfo.tier === 'tier1' && !preExistingDutyIds.has(dId)) {
             if (dutyCapCache[dType.type] === undefined) {
               dutyCapCache[dType.type] = await getDutyTier1Cap(db, dType.type);
             }
@@ -255,7 +262,7 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
 
     let attendeeId;
     if (existingAttendee) {
-      if (!user && (!existingAttendee.management_token || management_token !== existingAttendee.management_token)) {
+      if (!user && (!existingAttendee.management_token || !constantTimeEqual(management_token, existingAttendee.management_token))) {
         return c.json({ error: 'Invalid or missing management token for this RSVP. Please use your confirmation link or sign in.' }, 403);
       }
       if (!user && existingAttendee.user_id) {
@@ -285,7 +292,7 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
       attendeeId = ins.meta.last_row_id;
     }
 
-    if (finalStatus === 'attending' && playersCount > 0 && event.max_players && event.max_players > 0 && !wasAttending) {
+    if (finalStatus === 'attending' && playersCount > 0 && event.max_players && event.max_players > 0 && (!wasAttending || playersCount > prevPlayersCount)) {
       const postCapRow = await db.prepare(`
         SELECT COALESCE(SUM(COALESCE(players_count, 1 + COALESCE(additional_guests, 0))), 0) as total
         FROM attendees WHERE event_id = ? AND status = 'attending'
@@ -405,7 +412,7 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
           'UPDATE attendees SET urgent_credit_awarded = 0 WHERE id = ? AND COALESCE(urgent_credit_awarded, 0) = 1'
         ).bind(attendeeId).run();
         if (unclaimRes.meta && unclaimRes.meta.changes === 1) {
-          await db.prepare('UPDATE users SET hero_credits = COALESCE(hero_credits, 0) - 1 WHERE id = ?').bind(creditUserId).run();
+          await db.prepare('UPDATE users SET hero_credits = CASE WHEN COALESCE(hero_credits, 0) > 0 THEN hero_credits - 1 ELSE 0 END WHERE id = ?').bind(creditUserId).run();
         }
       }
     } else if (finalStatus !== 'attending') {
@@ -414,7 +421,7 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
           'UPDATE attendees SET urgent_credit_awarded = 0 WHERE id = ? AND COALESCE(urgent_credit_awarded, 0) = 1'
         ).bind(attendeeId).run();
         if (unclaimRes.meta && unclaimRes.meta.changes === 1) {
-          await db.prepare('UPDATE users SET hero_credits = COALESCE(hero_credits, 0) - 1 WHERE id = ?').bind(creditUserId).run();
+          await db.prepare('UPDATE users SET hero_credits = CASE WHEN COALESCE(hero_credits, 0) > 0 THEN hero_credits - 1 ELSE 0 END WHERE id = ?').bind(creditUserId).run();
         }
       }
       await db.prepare('DELETE FROM duty_assignments WHERE attendee_id = ?').bind(attendeeId).run();

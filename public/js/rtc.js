@@ -55,21 +55,27 @@
     }
   }
 
-  function getIceConfiguration(privacyRelayMode) {
-    var servers = Array.isArray(rtcState.customIceServers) && rtcState.customIceServers.length > 0
+  function getIceServersList() {
+    return Array.isArray(rtcState.customIceServers) && rtcState.customIceServers.length > 0
       ? rtcState.customIceServers.slice()
       : DEFAULT_ICE_SERVERS.slice();
+  }
+
+  function hasTurnRelayServer(servers) {
+    return servers.some(function (s) {
+      var u = s && s.urls ? (Array.isArray(s.urls) ? s.urls.join(',') : String(s.urls)) : '';
+      return /^turns?:/i.test(u) || /turns?:/i.test(u);
+    });
+  }
+
+  function getIceConfiguration(privacyRelayMode) {
+    var servers = getIceServersList();
     var cfg = {
       iceServers: servers
     };
     if (privacyRelayMode) {
-      var hasTurn = servers.some(function (s) {
-        var u = s && s.urls ? (Array.isArray(s.urls) ? s.urls.join(',') : String(s.urls)) : '';
-        return /^turns?:/i.test(u) || /turns?:/i.test(u);
-      });
-      if (hasTurn) {
-        cfg.iceTransportPolicy = 'relay';
-      } else {
+      cfg.iceTransportPolicy = 'relay';
+      if (!hasTurnRelayServer(servers)) {
         console.warn('[ClubhouseRTC] Privacy Relay Mode requested, but no TURN relay server is configured.');
         emitRtc('privacy_relay_unavailable', {});
       }
@@ -112,7 +118,10 @@
           if (root.ClubhouseStore && root.ClubhouseStore.state && Array.isArray(root.ClubhouseStore.state.members)) {
             for (var m = 0; m < root.ClubhouseStore.state.members.length; m++) {
               if (Number(root.ClubhouseStore.state.members[m].id) === Number(peerUserId)) {
-                memberDisplayName = root.ClubhouseStore.state.members[m].display_name || root.ClubhouseStore.state.members[m].name || 'Player';
+                var rawMemberName = root.ClubhouseStore.state.members[m].display_name || root.ClubhouseStore.state.members[m].name || '';
+                memberDisplayName = rawMemberName
+                  ? ((root.API && root.API.formatDisplayName) ? root.API.formatDisplayName(rawMemberName, 'Player') : rawMemberName)
+                  : 'Player';
                 break;
               }
             }
@@ -151,6 +160,10 @@
     var existing = rtcState.peerConnections[peerUserId];
     if (existing) return existing;
     if (typeof RTCPeerConnection === 'undefined') return null;
+    if (rtcState.privacyRelayMode && !hasTurnRelayServer(getIceServersList())) {
+      emitRtc('privacy_relay_unavailable', { peerUserId: peerUserId });
+      return null;
+    }
 
     var pc = new RTCPeerConnection(getIceConfiguration(rtcState.privacyRelayMode));
     rtcState.peerConnections[peerUserId] = pc;
@@ -170,6 +183,13 @@
 
     pc.onicecandidate = function (ev) {
       if (ev.candidate && rtcState.activeChannelId) {
+        if (rtcState.privacyRelayMode) {
+          var candStr = String(ev.candidate.candidate || '');
+          var candType = ev.candidate.type || '';
+          if (candType !== 'relay' && candStr.indexOf(' typ relay') === -1) {
+            return;
+          }
+        }
         sendSignal(rtcState.activeChannelId, peerUserId, 'ice-candidate', {
           candidate: ev.candidate
         });

@@ -248,9 +248,12 @@
     queueSection.style.display = 'block';
     if (countBadge) countBadge.textContent = pendingList.length + ' Hidden from Timeline';
 
-    var html = pendingList.map(function(item) {
+    var pendingAbbr = API.abbreviateDisplayNames ? API.abbreviateDisplayNames(pendingList, 'contributor_name', 'user_id', 'Community User') : [];
+    var html = pendingList.map(function(item, pIdx) {
       var dateLabel = formatDisplayDate(item.date_taken);
-      var contributor = item.contributor_name ? API.escapeHtml(item.contributor_name) : 'Community User';
+      var contributor = item.contributor_name
+        ? API.escapeHtml(pendingAbbr[pIdx] || API.formatDisplayName(item.contributor_name, 'Community User'))
+        : 'Community User';
       var title = item.title ? API.escapeHtml(item.title) : (item.media_type === 'youtube' ? 'YouTube Video' : 'Photo Submission');
       var album = item.album ? API.escapeHtml(item.album) : 'General';
       var thumbHtml = '';
@@ -504,9 +507,12 @@
 
     var isManager = isManagerUser();
 
+    var photoAbbr = API.abbreviateDisplayNames ? API.abbreviateDisplayNames(photos, 'contributor_name', 'user_id', 'Community') : [];
     var html = photos.map(function(pt, idx) {
       var ptDate = formatDisplayDate(pt.date_taken);
-      var ptContributor = pt.contributor_name ? API.escapeHtml(pt.contributor_name) : 'Community';
+      var ptContributor = pt.contributor_name
+        ? API.escapeHtml(photoAbbr[idx] || API.formatDisplayName(pt.contributor_name, 'Community'))
+        : 'Community';
       var ptTitle = pt.title ? API.escapeHtml(pt.title) : '';
       var ptAlbum = pt.album || 'General';
       var ptAlbumSlug = slugify(ptAlbum);
@@ -621,9 +627,12 @@
 
     var isManager = isManagerUser();
 
-    var html = videos.map(function(vid) {
+    var videoAbbr = API.abbreviateDisplayNames ? API.abbreviateDisplayNames(videos, 'contributor_name', 'user_id', 'Community') : [];
+    var html = videos.map(function(vid, vIdx) {
       var dateLabel = formatDisplayDate(vid.date_taken);
-      var contributor = vid.contributor_name ? API.escapeHtml(vid.contributor_name) : 'Community';
+      var contributor = vid.contributor_name
+        ? API.escapeHtml(videoAbbr[vIdx] || API.formatDisplayName(vid.contributor_name, 'Community'))
+        : 'Community';
       var title = vid.title ? API.escapeHtml(vid.title) : 'Game Highlights';
       var caption = vid.caption ? API.escapeHtml(vid.caption) : '';
       var albumTag = vid.album ? API.escapeHtml(vid.album) : 'General';
@@ -889,7 +898,10 @@
     }
     if (meta) {
       var d = formatDisplayDate(photo.date_taken);
-      var c = photo.contributor_name ? photo.contributor_name : 'Community Member';
+      var lightboxAbbr = API.abbreviateDisplayNames ? API.abbreviateDisplayNames(currentPhotoItems, 'contributor_name', 'user_id', 'Community Member') : [];
+      var c = photo.contributor_name
+        ? (lightboxAbbr[currentLightboxIndex] || (API.formatDisplayName ? API.formatDisplayName(photo.contributor_name, 'Community Member') : photo.contributor_name))
+        : 'Community Member';
       var a = photo.album ? photo.album : 'General';
       meta.textContent = '📅 ' + d + ' • 📷 By ' + c + ' • 📌 ' + a + ' (' + (currentLightboxIndex + 1) + '/' + currentPhotoItems.length + ')';
     }

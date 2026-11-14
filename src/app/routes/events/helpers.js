@@ -97,7 +97,10 @@ export async function promoteNextWaitlistedPlayer(c, origin, eventId) {
       : (1 + (nextWaitlisted.additional_guests || 0));
     if (event.max_players && partyPlayers > availableSlots) break;
 
-    await db.prepare("UPDATE attendees SET status = 'attending' WHERE id = ?").bind(nextWaitlisted.id).run();
+    const promoRes = await db.prepare(
+      "UPDATE attendees SET status = 'attending' WHERE id = ? AND status = 'waitlist'"
+    ).bind(nextWaitlisted.id).run();
+    if (!promoRes.meta || promoRes.meta.changes !== 1) continue;
     if (!firstPromoted) firstPromoted = nextWaitlisted;
 
     if (isDeliverableEmail(nextWaitlisted.email)) {

@@ -285,5 +285,21 @@
   "login.shared_device_help": "Déconnexion à la fermeture du navigateur ou après 4 heures, sans enregistrer votre e-mail ici.",
   "profile.sessions_title": "🔐 Appareils Connectés",
   "profile.sessions_desc": "Les comptes restent connectés sur jusqu’à 5 appareils à la fois. Si vous avez oublié de vous déconnecter chez un ami, fermez les autres sessions ci-dessous.",
-  "profile.logout_other_devices_btn": "Déconnecter Tous les Autres Appareils"
+  "profile.logout_other_devices_btn": "Déconnecter Tous les Autres Appareils",
+  "nav.about": "À propos",
+  "nav.about_title": "À propos de Pickup Baseball Foundation",
+  "nav.menu": "Menu",
+  "about.hero_pill": "⚾ Organisme à but non lucratif 501(c)(3) • Oakland, CA • Fondé en 2021",
+  "about.hero_title": "À propos de nous",
+  "about.hero_desc": "Accès gratuit au baseball pickup pour les ados et adultes dans la grande baie de San Francisco.",
+  "about.mission_title": "Notre mission",
+  "about.mission_p1": "Pickup Baseball Foundation (PBF) offre un accès gratuit au baseball pickup aux adolescents et aux adultes de tous âges, genres et niveaux. Nous favorisons un environnement accueillant et inclusif pour créer des liens avec des passionnés de baseball de tous horizons dans la grande région de la baie de San Francisco.",
+  "about.mission_p2": "PBF est une organisation à but non lucratif 501(c)(3) fondée en 2021 et basée à Oakland, CA.",
+  "about.contact_desc": "Contactez-nous à <a href=\"mailto:pickupbaseballfoundation@gmail.com\">pickupbaseballfoundation@gmail.com</a>.",
+  "about.play_title": "⚾ Matchs du dimanche",
+  "about.play_desc": "Consultez le calendrier, inscrivez-vous en quelques secondes et coordonnez battes, balles, bases et équipement.",
+  "about.play_btn": "Voir le calendrier →",
+  "about.support_title": "❤️ Garder les matchs gratuits",
+  "about.support_desc": "Chaque match pickup est gratuit. Les dons aident à acheter du matériel et à garder le baseball accessible à tous.",
+  "about.support_btn": "Faire un don →"
 }

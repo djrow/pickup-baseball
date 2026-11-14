@@ -285,5 +285,21 @@
   "login.shared_device_help": "ブラウザを閉じるか4時間経過でサインアウトされ、メールアドレスも保存されません。",
   "profile.sessions_title": "🔐 ログイン中の端末",
   "profile.sessions_desc": "アカウントは同時に最大5台の端末でログインを維持できます。友人のスマホでログアウトし忘れた場合は、以下から他の端末をログアウトできます。",
-  "profile.logout_other_devices_btn": "他のすべての端末からログアウト"
+  "profile.logout_other_devices_btn": "他のすべての端末からログアウト",
+  "nav.about": "団体について",
+  "nav.about_title": "Pickup Baseball Foundationについて",
+  "nav.menu": "メニュー",
+  "about.hero_pill": "⚾ 501(c)(3) 非営利団体 • カリフォルニア州オークランド • 2021年設立",
+  "about.hero_title": "団体について",
+  "about.hero_desc": "サンフランシスコ・ベイエリアの10代と大人に無料のピックアップ野球を提供しています。",
+  "about.mission_title": "私たちのミッション",
+  "about.mission_p1": "Pickup Baseball Foundation（PBF）は、あらゆる年齢・性別・スキルレベルの10代と大人に無料のピックアップ野球を提供しています。サンフランシスコ・ベイエリア広域で、多様な背景を持つ野球ファンとコミュニティを築くための温かく包摂的な環境を育んでいます。",
+  "about.mission_p2": "PBFは2021年に設立され、カリフォルニア州オークランドに拠点を置く501(c)(3)非営利団体です。",
+  "about.contact_desc": "お問い合わせは <a href=\"mailto:pickupbaseballfoundation@gmail.com\">pickupbaseballfoundation@gmail.com</a> までご連絡ください。",
+  "about.play_title": "⚾ 日曜日のピックアップゲーム",
+  "about.play_desc": "試合カレンダーを確認し、数秒で参加登録し、バットやボール、ベース、キャッチャー防具を調整できます。",
+  "about.play_btn": "試合カレンダーを見る →",
+  "about.support_title": "❤️ 試合を無料に保つ",
+  "about.support_desc": "すべてのピックアップゲームは無料です。ご寄付は用具の購入と誰もが参加できる環境の維持に役立ちます。",
+  "about.support_btn": "寄付する →"
 }

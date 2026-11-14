@@ -585,6 +585,77 @@ test('T3: User Role Management & Session Persistence', async (t) => {
     });
     assert.equal(playerAttemptRes.status, 403, 'Player attempting to update event actual_attendance must return HTTP 403');
   });
+
+  await t.test('T3.11: Display name formatting renders First L. with collision disambiguation across community UI', async () => {
+    const vm = require('node:vm');
+    const apiCode = fs.readFileSync(path.join(ctx.rootDir, 'public', 'js', 'api.js'), 'utf8');
+    const navEl = { innerHTML: '' };
+    const doc = {
+      readyState: 'loading',
+      head: { appendChild: () => {} },
+      body: { appendChild: () => {} },
+      documentElement: { setAttribute: () => {}, removeAttribute: () => {}, classList: { add: () => {}, remove: () => {} } },
+      createElement: () => ({ style: {}, setAttribute: () => {}, addEventListener: () => {}, remove: () => {} }),
+      getElementById: (id) => (id === 'main-nav' ? navEl : null),
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      addEventListener: () => {}
+    };
+    const sandbox = {
+      window: {
+        location: { protocol: 'http:', pathname: '/', search: '', hash: '' },
+        localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+        matchMedia: () => ({ matches: false, addEventListener: () => {} }),
+        addEventListener: () => {}
+      },
+      document: doc,
+      navigator: { language: 'en-US' },
+      localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+      fetch: async () => ({ ok: false, json: async () => ({}) }),
+      Intl,
+      URL,
+      encodeURIComponent,
+      decodeURIComponent
+    };
+    sandbox.window.window = sandbox.window;
+    vm.runInNewContext(apiCode, sandbox);
+    const API = sandbox.window.API;
+
+    // 1. Single display name formatting & idempotency
+    assert.equal(API.formatDisplayName('David Row'), 'David R.');
+    assert.equal(API.formatDisplayName('David R.'), 'David R.');
+    assert.equal(API.formatDisplayName('Mary Jo Smith'), 'Mary Jo S.');
+    assert.equal(API.formatDisplayName('Solo'), 'Solo');
+    assert.equal(API.formatDisplayName('', 'Guest'), 'Guest');
+
+    // 2. Group guest list formatting
+    assert.equal(API.formatDisplayNameList('Alex Johnson, Jordan Lee'), 'Alex J., Jordan L.');
+
+    // 3. List disambiguation ("First La.") for collisions across distinct people, but not same user twice
+    const rosterAbbr = API.abbreviateDisplayNames([
+      { user_id: 1, name: 'David Alpha' },
+      { user_id: 2, name: 'David Adams' },
+      { user_id: 3, name: 'Maria Sanchez' },
+      { user_id: 3, name: 'Maria Sanchez' }
+    ]);
+    assert.deepEqual(rosterAbbr, ['David Al.', 'David Ad.', 'Maria S.', 'Maria S.']);
+
+    // 4. Navbar user badge must display abbreviated name, never full last name
+    API.renderNav({ name: 'Morgan Freeman', avatarUrl: null, canManageEvents: false });
+    assert.ok(navEl.innerHTML.includes('Morgan F.'), 'Nav badge must display First L.');
+    assert.ok(!navEl.innerHTML.includes('Morgan Freeman'), 'Nav badge must not expose full last name');
+
+    // 5. Verify public/community modules wire through display-name formatting
+    const appJs = fs.readFileSync(path.join(ctx.rootDir, 'public', 'js', 'app.js'), 'utf8');
+    const eventJs = fs.readFileSync(path.join(ctx.rootDir, 'public', 'js', 'event.js'), 'utf8');
+    const galleryJs = fs.readFileSync(path.join(ctx.rootDir, 'public', 'js', 'gallery.js'), 'utf8');
+    const clubhouseJs = fs.readFileSync(path.join(ctx.rootDir, 'public', 'js', 'clubhouse.js'), 'utf8');
+    assert.ok(appJs.includes('API.formatDisplayName(data.user.name') && appJs.includes('API.formatDisplayName(post.author_name'), 'app.js must abbreviate welcome & post author names');
+    assert.ok(eventJs.includes("API.abbreviateDisplayNames(attendees, 'name'") && eventJs.includes("API.abbreviateDisplayNames(comments, 'author_name'") && eventJs.includes("API.abbreviateDisplayNames(signups, 'player_name'"), 'event.js must abbreviate roster, comments, and BP slots');
+    assert.ok(eventJs.includes('API.formatDisplayNameList(a.guest_names)'), 'event.js must abbreviate group guest names');
+    assert.ok(galleryJs.includes("API.abbreviateDisplayNames(photos, 'contributor_name'") && galleryJs.includes("API.abbreviateDisplayNames(videos, 'contributor_name'"), 'gallery.js must abbreviate contributor names');
+    assert.ok(clubhouseJs.includes('abbreviateMemberNames([u].concat(selfMembersList))'), 'clubhouse.js must abbreviate self user card name');
+  });
 });
 
 // ---------------------------------------------------------------------------

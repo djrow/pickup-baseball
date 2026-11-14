@@ -216,7 +216,7 @@ async function loadGames(justLoggedIn = false, isBackgroundRefresh = false) {
         const banner = document.getElementById('login-success-banner');
         if (banner) {
           banner.style.display = 'block';
-          const displayName = data.user ? data.user.name : 'Player';
+          const displayName = data.user ? API.formatDisplayName(data.user.name, 'Player') : 'Player';
           banner.innerHTML = `🎉 <strong>${API.escapeHtml(API.t('home.welcome_signed_in', { name: displayName }))}</strong>`;
         }
       }
@@ -956,7 +956,7 @@ function renderFeedPosts(posts) {
       }
     }
 
-    const authorDisplay = post.author_name ? API.escapeHtml(post.author_name) : 'Organizer';
+    const authorDisplay = post.author_name ? API.escapeHtml(API.formatDisplayName(post.author_name, 'Organizer')) : 'Organizer';
 
     let gameBadgeHtml = '';
     if (post.event_id) {

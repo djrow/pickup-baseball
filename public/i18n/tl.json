@@ -285,5 +285,21 @@
   "login.shared_device_help": "Magsa-sign out pagkasara ng browser o pagkalipas ng 4 na oras, at hindi ise-save ang email mo rito.",
   "profile.sessions_title": "🔐 Mga Naka-Sign-In na Device",
   "profile.sessions_desc": "Hanggang 5 device nang sabay-sabay ang puwedeng naka-sign in. Kung nakalimutan mong mag-log out sa phone ng kaibigan, mag-sign out sa ibang device sa ibaba.",
-  "profile.logout_other_devices_btn": "Mag-Sign Out sa Lahat ng Ibang Device"
+  "profile.logout_other_devices_btn": "Mag-Sign Out sa Lahat ng Ibang Device",
+  "nav.about": "Tungkol sa Amin",
+  "nav.about_title": "Tungkol sa Pickup Baseball Foundation",
+  "nav.menu": "Menu",
+  "about.hero_pill": "⚾ 501(c)(3) Nonprofit • Oakland, CA • Est. 2021",
+  "about.hero_title": "Tungkol sa Amin",
+  "about.hero_desc": "Libreng pickup baseball para sa mga teen at adult sa mas malawak na San Francisco Bay Area.",
+  "about.mission_title": "Aming Misyon",
+  "about.mission_p1": "Nagbibigay ang Pickup Baseball Foundation (PBF) ng libreng access sa pickup baseball para sa mga teen at adult anuman ang edad, kasarian, at antas ng kasanayan. Pinapalago namin ang isang magiliw at inklusibong komunidad para sa lahat ng tagahanga ng baseball sa mas malawak na San Francisco Bay Area.",
+  "about.mission_p2": "Ang PBF ay isang 501(c)(3) nonprofit na organisasyon na itinatag noong 2021 at nakabase sa Oakland, CA.",
+  "about.contact_desc": "Makipag-ugnayan sa amin sa <a href=\"mailto:pickupbaseballfoundation@gmail.com\">pickupbaseballfoundation@gmail.com</a>.",
+  "about.play_title": "⚾ Mga Laro Tuwing Linggo",
+  "about.play_desc": "Tingnan ang kalendaryo ng laro, mag-RSVP sa ilang segundo, at makipag-ugnayan para sa mga gamit sa paglalaro.",
+  "about.play_btn": "Tingnan ang Kalendaryo ng Laro →",
+  "about.support_title": "❤️ Panatilihing Libre ang mga Laro",
+  "about.support_desc": "Libre ang bawat laro. Nakakatulong ang mga donasyon sa pagbili ng gamit at pagpapanatiling bukas ang baseball sa lahat.",
+  "about.support_btn": "Mag-donate →"
 }

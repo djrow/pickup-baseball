@@ -1167,7 +1167,12 @@
     var prep = needsE2ee
       ? ensureChannelE2eeKey(ch.id, { readonly: false }).then(function (e2eeKey) {
           return root.ClubhouseCrypto.encryptPayload(e2eeKey, newContent).then(function (enc) {
-            return { content: enc.ciphertextB64, iv: enc.ivB64, encryption_iv: enc.ivB64 };
+            return {
+              content: enc.ciphertextB64,
+              iv: enc.ivB64,
+              encryption_iv: enc.ivB64,
+              key_epoch: getActiveChannelEpoch(ch.id)
+            };
           });
         })
       : Promise.resolve({ content: newContent });
@@ -1641,12 +1646,23 @@
       if (state.user && Number(state.user.id) === targetUid) {
         state.user.chatMuted = Boolean(payload.chat_muted);
         state.user.chat_muted = payload.chat_muted ? 1 : 0;
-        state.user.chatMutedReason = payload.chat_muted_reason || null;
+        if (!payload.chat_muted) {
+          state.user.chatMutedReason = null;
+        } else if (payload.chat_muted_reason) {
+          state.user.chatMutedReason = payload.chat_muted_reason;
+        } else {
+          apiRequest('GET', '/api/auth/me').then(function (meRes) {
+            if (meRes && meRes.ok && meRes.data && meRes.data.user && state.user && Number(state.user.id) === targetUid) {
+              state.user.chatMutedReason = meRes.data.user.chat_muted_reason || null;
+              emit('user_mute_updated', payload);
+            }
+          }).catch(function () {});
+        }
       }
       for (var mu = 0; mu < state.members.length; mu++) {
         if (Number(state.members[mu].id) === targetUid) {
           state.members[mu].chatMuted = Boolean(payload.chat_muted);
-          state.members[mu].chatMutedReason = payload.chat_muted_reason || null;
+          state.members[mu].chatMutedReason = payload.chat_muted ? (payload.chat_muted_reason || state.members[mu].chatMutedReason || null) : null;
         }
       }
       emit('user_mute_updated', payload);

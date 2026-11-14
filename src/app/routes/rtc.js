@@ -31,7 +31,7 @@ voiceRouter.post('/:channelId/join', requireAuth, async (c) => {
     return c.json({ error: 'This channel does not support voice or WebRTC calls.' }, 400);
   }
 
-  if (!(await canUserAccessChannel(chatDb, user, channel, 'read'))) {
+  if (!(await canUserAccessChannel(chatDb, user, channel, 'write'))) {
     return c.json({ error: 'Access denied: insufficient permissions to join this voice room.' }, 403);
   }
 
@@ -125,14 +125,40 @@ voiceRouter.post('/:channelId/state', requireAuth, async (c) => {
     return c.json({ error: 'This channel does not support voice or WebRTC calls.' }, 400);
   }
 
-  if (!(await canUserAccessChannel(chatDb, user, channel, 'read'))) {
+  if (!(await canUserAccessChannel(chatDb, user, channel, 'write'))) {
     return c.json({ error: 'Access denied.' }, 403);
   }
+
+  const nowSecState = Math.floor(Date.now() / 1000);
+  const stateRateKey = `user_${user.id}_voice_state`;
+  const stateCutoff = nowSecState - 60;
+  try {
+    await chatDb.prepare(`
+      INSERT INTO chat_rate_limits (key, count, window_start)
+      VALUES (?, 1, ?)
+      ON CONFLICT(key) DO UPDATE SET
+        count = CASE WHEN chat_rate_limits.window_start <= ? THEN 1 ELSE chat_rate_limits.count + 1 END,
+        window_start = CASE WHEN chat_rate_limits.window_start <= ? THEN ? ELSE chat_rate_limits.window_start END
+    `).bind(stateRateKey, nowSecState, stateCutoff, stateCutoff, nowSecState).run();
+    const stateRateRow = await chatDb.prepare('SELECT count FROM chat_rate_limits WHERE key = ?').bind(stateRateKey).first();
+    if (stateRateRow && stateRateRow.count > 60) {
+      return c.json({ error: 'Too many voice state requests. Please wait a moment.' }, 429);
+    }
+  } catch (e) {}
 
   const body = await c.req.json().catch(() => ({}));
   const existing = await chatDb.prepare(
     'SELECT * FROM voice_participants WHERE channel_id = ? AND user_id = ?'
   ).bind(channel.id, user.id).first();
+
+  if (!existing || Number(existing.heartbeat_at || 0) <= nowSecState - 25) {
+    const vpCountRow = await chatDb.prepare(
+      'SELECT COUNT(*) as total FROM voice_participants WHERE channel_id = ? AND user_id != ? AND heartbeat_at > ?'
+    ).bind(channel.id, user.id, nowSecState - 25).first();
+    if (vpCountRow && vpCountRow.total >= 24) {
+      return c.json({ error: 'This voice room has reached its maximum capacity (24 participants).' }, 429);
+    }
+  }
 
   const muted = body.muted !== undefined ? (body.muted ? 1 : 0) : (existing ? existing.muted : 0);
   const deafened = body.deafened !== undefined ? (body.deafened ? 1 : 0) : (existing ? existing.deafened : 0);
@@ -271,7 +297,7 @@ rtcRouter.post('/signal', requireAuth, async (c) => {
   }
 
   // Verify sender has permission to access this room before disclosing channel type or validating payload details
-  if (!(await canUserAccessChannel(chatDb, user, channel, 'read'))) {
+  if (!(await canUserAccessChannel(chatDb, user, channel, 'write'))) {
     return c.json({ error: 'Access denied: insufficient permissions for this voice/signaling room.' }, 403);
   }
 

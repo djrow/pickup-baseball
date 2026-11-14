@@ -6,6 +6,7 @@
 import { Hono } from 'hono';
 import { requireAuth, canAccessChannel, rejectIfChatMuted, rejectIfClubhouseOptedOut } from '../security.js';
 import { resolveChannel, canUserAccessChannel, isPrivateEncryptedBoard } from './chat.js';
+import { chunkArray } from './chat/helpers.js';
 
 export const keysRouter = new Hono();
 
@@ -294,6 +295,7 @@ keysRouter.get('/identity/:id', requireAuth, async (c) => {
       SELECT user_id, ecdh_public_key_jwk, ecdsa_public_key_jwk, privacy_relay_mode, status_text
       FROM user_crypto_keys
       WHERE user_id = ?
+        AND user_id NOT IN (SELECT user_id FROM clubhouse_opted_out)
     `).bind(targetId).first();
 
     if (!row) {
@@ -369,17 +371,20 @@ keysRouter.post('/channel/:channelId/share', requireAuth, async (c) => {
     if (currentMaxEpoch > 0 && defaultEpoch < currentMaxEpoch && !canForceRotate) {
       return c.json({ error: 'Cannot backfill historical key epochs.' }, 403);
     }
-    if (defaultEpoch > currentMaxEpoch && currentMaxEpoch > 0 && !canForceRotate) {
+    if (defaultEpoch > currentMaxEpoch && currentMaxEpoch > 0 && !canForceRotate && !isDm) {
       return c.json({ error: 'Only the channel creator, moderator, or admin can rotate to a new key epoch.' }, 403);
     }
     if (defaultEpoch > currentMaxEpoch + 10) {
       return c.json({ error: 'Invalid key_epoch jump.' }, 400);
     }
-    if (body.force_rotate && !canForceRotate) {
+    if (body.force_rotate && !canForceRotate && !isDm) {
       return c.json({ error: 'Only channel owners, moderators, or admins can force key rotation.' }, 403);
     }
     if (body.force_rotate && currentMaxEpoch > 0 && defaultEpoch <= currentMaxEpoch) {
       return c.json({ error: 'Forced key rotation must advance key_epoch above the current epoch.' }, 400);
+    }
+    if (!isKeyShared && currentMaxEpoch === 0 && !canForceRotate) {
+      return c.json({ error: 'Only channel owners, moderators, or admins can initialize key epochs for this board.' }, 403);
     }
 
     let validMembers = null;
@@ -401,28 +406,39 @@ keysRouter.post('/channel/:channelId/share', requireAuth, async (c) => {
     )];
     let validUserSet = null;
     if (db && recipientIds.length > 0) {
-      const placeholders = recipientIds.slice(0, 80).map(() => '?').join(',');
-      const { results: userRows } = await db.prepare(`
-        SELECT u.id, COALESCE(u.clubhouse_opted_in, 0) as clubhouse_opted_in, u.role, u.is_admin,
-               EXISTS(SELECT 1 FROM banned_emails b WHERE LOWER(b.email) = LOWER(u.email)) as is_banned,
-               EXISTS (
-                 SELECT 1 FROM duty_assignments da
-                 JOIN event_duties ed ON da.duty_id = ed.id
-                 JOIN events e ON ed.event_id = e.id
-                 JOIN attendees a ON da.attendee_id = a.id
-                 WHERE (e.status IS NULL OR e.status NOT IN ('cancelled', 'rainout'))
-                   AND datetime(e.event_date) >= datetime('now', '-1 day')
-                   AND (ed.title = 'Game Facilitator' OR ed.title LIKE '%Facilitator%')
-                   AND (a.user_id = u.id OR a.email = u.email)
-                   AND a.status = 'attending'
-               ) as is_game_facilitator
-        FROM users u WHERE u.id IN (${placeholders})
-      `).bind(...recipientIds.slice(0, 80)).all();
-      validUserSet = new Set(
-        (userRows || [])
-          .filter((u) => !u.is_banned && Number(u.clubhouse_opted_in || 0) === 1 && canAccessChannel(u, channel, 'read'))
-          .map((u) => Number(u.id))
-      );
+      validUserSet = new Set();
+      for (const idChunk of chunkArray(recipientIds, 80)) {
+        const placeholders = idChunk.map(() => '?').join(',');
+        const { results: userRows } = await db.prepare(`
+          SELECT u.id, COALESCE(u.clubhouse_opted_in, 0) as clubhouse_opted_in, u.role, u.is_admin,
+                 EXISTS(SELECT 1 FROM banned_emails b WHERE LOWER(b.email) = LOWER(u.email)) as is_banned,
+                 EXISTS (
+                   SELECT 1 FROM duty_assignments da
+                   JOIN event_duties ed ON da.duty_id = ed.id
+                   JOIN events e ON ed.event_id = e.id
+                   JOIN attendees a ON da.attendee_id = a.id
+                   WHERE (e.status IS NULL OR e.status NOT IN ('cancelled', 'rainout'))
+                     AND datetime(e.event_date) >= datetime('now', '-1 day')
+                     AND (ed.title = 'Game Facilitator' OR ed.title LIKE '%Facilitator%')
+                     AND (a.user_id = u.id OR a.email = u.email)
+                     AND a.status = 'attending'
+                 ) as is_game_facilitator
+          FROM users u WHERE u.id IN (${placeholders})
+        `).bind(...idChunk).all();
+        for (const u of (userRows || [])) {
+          if (!u.is_banned && Number(u.clubhouse_opted_in || 0) === 1 && (isKeyShared || canAccessChannel(u, channel, 'read'))) {
+            validUserSet.add(Number(u.id));
+          }
+        }
+      }
+    }
+
+    if (isKeyShared && currentMaxEpoch === 0 && !canForceRotate && validMembers) {
+      const submittedSet = new Set(recipientIds);
+      const missingMember = Array.from(validMembers).some((mId) => (!validUserSet || validUserSet.has(mId)) && !submittedSet.has(mId));
+      if (missingMember) {
+        return c.json({ error: 'Initial encrypted key epoch must include wrapped key shares for all active members.' }, 400);
+      }
     }
 
     const batchStatements = [];
@@ -452,7 +468,7 @@ keysRouter.post('/channel/:channelId/share', requireAuth, async (c) => {
           error: 'Recipient is not a member of this encrypted conversation or private board.'
         }, 403);
       }
-      if (!isKeyShared && validUserSet && !validUserSet.has(Number(recipientUserId))) {
+      if (validUserSet && !validUserSet.has(Number(recipientUserId))) {
         return c.json({ error: 'Recipient does not have access to this board or is ineligible for key shares.' }, 403);
       }
       if (existingEpochRecipients.has(Number(recipientUserId))) {

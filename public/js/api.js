@@ -22,11 +22,27 @@ const EN_DICT = {
   "nav.clubhouse": "Clubhouse",
   "nav.clubhouse_title": "Clubhouse Chat & Voice Dugout",
   "nav.donate": "Donate",
+  "nav.about": "About Us",
+  "nav.about_title": "About Pickup Baseball Foundation",
+  "nav.menu": "Menu",
   "nav.handbook": "Handbook",
   "nav.login": "Log In",
   "nav.logout": "Log Out",
   "nav.admin": "⚙️ Admin",
   "nav.org": "⚾ Org",
+  "about.hero_pill": "⚾ 501(c)(3) Nonprofit • Oakland, CA • Est. 2021",
+  "about.hero_title": "About Us",
+  "about.hero_desc": "Free access to pickup baseball for teens and adults in the greater San Francisco Bay Area.",
+  "about.mission_title": "Our Mission",
+  "about.mission_p1": "Pickup Baseball Foundation (PBF) provides free access to pickup baseball for teens and adults of all ages, genders, and skill levels. We foster a welcoming and inclusive environment for building community with fellow baseball fans of all backgrounds in the greater San Francisco Bay Area.",
+  "about.mission_p2": "PBF is a 501(c)(3) nonprofit organization founded in 2021 and based in Oakland, CA.",
+  "about.contact_desc": "Get in touch with us at <a href=\"mailto:pickupbaseballfoundation@gmail.com\">pickupbaseballfoundation@gmail.com</a>.",
+  "about.play_title": "⚾ Sunday Pickup Games",
+  "about.play_desc": "Check the game calendar, RSVP in seconds, and coordinate bats, balls, bases, and catcher's gear.",
+  "about.play_btn": "View Game Calendar →",
+  "about.support_title": "❤️ Keep Games Free",
+  "about.support_desc": "Every pickup game is free to join. Donations help buy equipment and keep baseball accessible to all.",
+  "about.support_btn": "Donate →",
   "calendar.title": "Game Calendar",
   "calendar.subtitle": "Sunday Pickup Games • 12:00 PM • Bushrod Park",
   "calendar.today": "Today",
@@ -326,7 +342,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '140',
+  CLIENT_VERSION: '142',
 
   // Current user cache
   currentUser: null,
@@ -732,7 +748,7 @@ const API = {
             </a>
           </div>
           <p style="margin-top: 12px; font-size: 0.8rem; color: #94a3b8; line-height: 1.5;">
-            <span data-i18n="footer.about_site">${this.escapeHtml(this.t('footer.about_site', 'Prototyped with Google Gemini in October 2026 for simplicity and durability. Free & open-source'))}</span> on <a href="https://github.com/djrow/pickup-baseball" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">GitHub</a> • <a href="/waiver.html" style="color: inherit; text-decoration: underline;">Player Waiver</a>.
+            <span data-i18n="footer.about_site">${this.escapeHtml(this.t('footer.about_site', 'Prototyped with Google Gemini in October 2026 for simplicity and durability. Free & open-source'))}</span> on <a href="https://github.com/djrow/pickup-baseball" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">GitHub</a> • <a href="/about.html" data-i18n="nav.about" style="color: inherit; text-decoration: underline;">About Us</a> • <a href="/waiver.html" style="color: inherit; text-decoration: underline;">Player Waiver</a>.
           </p>
           <p style="margin-top: 6px; font-size: 0.75rem; color: #64748b; line-height: 1.4;">
             <a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;" data-i18n="footer.copyright">${this.escapeHtml(this.t('footer.copyright', '© 2026 Pickup Baseball Foundation. Licensed under Apache License 2.0.'))}</a> • <span id="footer-app-version" class="footer-app-version" title="Loaded web app version">v${this.escapeHtml(this.CLIENT_VERSION)}</span>
@@ -1984,21 +2000,30 @@ const API = {
     if (!navContainer) return;
 
     const currentLang = this.getLang();
+    const pathname = (typeof window !== 'undefined' && window.location && window.location.pathname) ? window.location.pathname : '';
+    const isProfilePage = pathname.endsWith('profile.html') || pathname === '/profile';
+    const isAdminPage = pathname.endsWith('admin.html') || pathname === '/admin';
+    const isDonatePage = pathname.endsWith('donate.html') || pathname === '/donate';
+    const isAboutPage = pathname.endsWith('about.html') || pathname === '/about';
+    const isArtPage = pathname.endsWith('art.html') || pathname === '/art';
+    const isGalleryPage = pathname.endsWith('gallery.html') || pathname === '/gallery';
+    const isClubhousePage = pathname.endsWith('clubhouse.html') || pathname === '/clubhouse';
+
     let authHtml = '';
     if (user) {
+      const displayName = this.formatDisplayName(user.name, 'Player');
       const safeAvatar = this.safeAvatarUrl(user.avatarUrl);
       const avatarImg = safeAvatar
-        ? `<img src="${this.escapeHtml(safeAvatar)}" alt="${this.escapeHtml(user.name)}" class="nav-avatar" decoding="async">`
-        : `<span class="nav-avatar-placeholder">${this.escapeHtml((user.name || 'P').charAt(0).toUpperCase())}</span>`;
+        ? `<img src="${this.escapeHtml(safeAvatar)}" alt="${this.escapeHtml(displayName)}" class="nav-avatar" decoding="async">`
+        : `<span class="nav-avatar-placeholder">${this.escapeHtml((displayName || 'P').charAt(0).toUpperCase())}</span>`;
 
       authHtml = `
-        <a href="/profile.html" class="nav-user-badge" title="${this.escapeHtml(user.name)}">
+        <a href="/profile.html" class="nav-user-badge${isProfilePage ? ' active' : ''}" title="${this.escapeHtml(displayName)}">
           ${avatarImg}
           <span class="nav-user-name">
-            ${this.escapeHtml(user.name)}
+            ${this.escapeHtml(displayName)}
           </span>
         </a>
-        ${user.canManageEvents ? `<a href="/admin.html" class="btn btn-outline btn-sm">${this.escapeHtml(user.isAdmin ? this.t('nav.admin') : this.t('nav.org'))}</a>` : ''}
       `;
     } else {
       authHtml = `
@@ -2006,14 +2031,16 @@ const API = {
       `;
     }
 
-    const isDonatePage = typeof window !== 'undefined' && (window.location.pathname.endsWith('donate.html') || window.location.pathname === '/donate');
-    const isArtPage = typeof window !== 'undefined' && (window.location.pathname.endsWith('art.html') || window.location.pathname === '/art');
-    const isGalleryPage = typeof window !== 'undefined' && (window.location.pathname.endsWith('gallery.html') || window.location.pathname === '/gallery');
-    const isClubhousePage = typeof window !== 'undefined' && (window.location.pathname.endsWith('clubhouse.html') || window.location.pathname === '/clubhouse');
     // nav.art community art merged into nav.gallery (/art.html redirects to /gallery.html#community-art-section; nav-link-art alias)
-    const clubhouseLinkHtml = `<a href="/clubhouse.html" class="nav-link-clubhouse${isClubhousePage ? ' active' : ''}" title="${this.escapeHtml(this.t('nav.clubhouse_title', 'Clubhouse Chat & Voice Dugout'))}"><span>💬</span> <span>${this.escapeHtml(this.t('nav.clubhouse', 'Clubhouse'))}</span></a>`;
-    const galleryLinkHtml = `<a href="/gallery.html" class="nav-link-gallery${isGalleryPage || isArtPage ? ' active' : ''}" title="${this.escapeHtml(this.t('nav.gallery_title', 'Photo, Video & Art Gallery'))}"><span class="nav-gallery-icon">📸</span> <span>${this.escapeHtml(this.t('nav.gallery', 'Gallery & Art'))}</span></a>`;
-    const donateLinkHtml = `<a href="/donate.html" class="nav-link-donate${isDonatePage ? ' active' : ''}">${this.escapeHtml(this.t('nav.donate'))}</a>`;
+    const clubhouseLinkHtml = `<a href="/clubhouse.html" role="menuitem" class="nav-dropdown-item nav-link-clubhouse${isClubhousePage ? ' active' : ''}" title="${this.escapeHtml(this.t('nav.clubhouse_title', 'Clubhouse Chat & Voice Dugout'))}"><span>💬</span> <span>${this.escapeHtml(this.t('nav.clubhouse', 'Clubhouse'))}</span></a>`;
+    const galleryLinkHtml = `<a href="/gallery.html" role="menuitem" class="nav-dropdown-item nav-link-gallery${isGalleryPage || isArtPage ? ' active' : ''}" title="${this.escapeHtml(this.t('nav.gallery_title', 'Photo, Video & Art Gallery'))}"><span class="nav-gallery-icon">📸</span> <span>${this.escapeHtml(this.t('nav.gallery', 'Gallery & Art'))}</span></a>`;
+    const aboutLinkHtml = `<a href="/about.html" role="menuitem" class="nav-dropdown-item nav-link-about${isAboutPage ? ' active' : ''}" title="${this.escapeHtml(this.t('nav.about_title', 'About Pickup Baseball Foundation'))}"><span>ℹ️</span> <span>${this.escapeHtml(this.t('nav.about', 'About Us'))}</span></a>`;
+    const donateLinkHtml = `<a href="/donate.html" role="menuitem" class="nav-dropdown-item nav-link-donate${isDonatePage ? ' active' : ''}"><span>❤️</span> <span>${this.escapeHtml(this.t('nav.donate'))}</span></a>`;
+    const adminLinkHtml = (user && user.canManageEvents)
+      ? `<div class="nav-dropdown-divider" role="separator"></div><a href="/admin.html" role="menuitem" class="nav-dropdown-item nav-link-admin${isAdminPage ? ' active' : ''}"><span>${this.escapeHtml(user.isAdmin ? this.t('nav.admin') : this.t('nav.org'))}</span></a>`
+      : '';
+
+    const menuActive = isClubhousePage || isGalleryPage || isArtPage || isAboutPage || isDonatePage || isAdminPage;
 
     navContainer.innerHTML = `
       <div class="nav-wrap">
@@ -2023,19 +2050,134 @@ const API = {
           <span class="brand-short">PBF</span>
         </a>
         <div class="nav-links">
-          ${clubhouseLinkHtml}
-          ${galleryLinkHtml}
-          ${donateLinkHtml}
           ${authHtml}
+          <div class="nav-dropdown" id="nav-menu-dropdown">
+            <button type="button" id="nav-menu-toggle" class="nav-menu-btn${menuActive ? ' has-active' : ''}" aria-haspopup="true" aria-expanded="false" aria-controls="nav-menu-panel">
+              <span class="nav-menu-icon" aria-hidden="true">☰</span>
+              <span class="nav-menu-label">${this.escapeHtml(this.t('nav.menu', 'Menu'))}</span>
+              <span class="nav-menu-caret" aria-hidden="true">▾</span>
+            </button>
+            <div id="nav-menu-panel" class="nav-dropdown-menu" role="menu" aria-hidden="true">
+              ${clubhouseLinkHtml}
+              ${galleryLinkHtml}
+              ${aboutLinkHtml}
+              ${donateLinkHtml}
+              ${adminLinkHtml}
+            </div>
+          </div>
         </div>
       </div>
     `;
 
+    this.initNavDropdown();
     this.renderFooter();
     const langSelect = document.getElementById('lang-select');
     if (langSelect && langSelect.value !== currentLang) {
       langSelect.value = currentLang;
     }
+  },
+
+  initNavDropdown() {
+    if (typeof document === 'undefined' || typeof document.getElementById !== 'function') return;
+    const dropdown = document.getElementById('nav-menu-dropdown');
+    const toggleBtn = document.getElementById('nav-menu-toggle');
+    const panel = document.getElementById('nav-menu-panel');
+    if (!dropdown || !toggleBtn || !panel) return;
+
+    const setOpen = (open) => {
+      dropdown.classList.toggle('is-open', open);
+      toggleBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      panel.setAttribute('aria-hidden', open ? 'false' : 'true');
+    };
+
+    toggleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setOpen(!dropdown.classList.contains('is-open'));
+    });
+
+    panel.addEventListener('click', (e) => {
+      if (e.target && e.target.closest && e.target.closest('a')) {
+        setOpen(false);
+      }
+    });
+
+    if (!this._navDropdownGlobalBound && typeof document.addEventListener === 'function') {
+      this._navDropdownGlobalBound = true;
+      document.addEventListener('click', (e) => {
+        const dd = document.getElementById('nav-menu-dropdown');
+        const btn = document.getElementById('nav-menu-toggle');
+        const p = document.getElementById('nav-menu-panel');
+        if (!dd || !btn || !p || !dd.classList.contains('is-open')) return;
+        if (!dd.contains(e.target)) {
+          dd.classList.remove('is-open');
+          btn.setAttribute('aria-expanded', 'false');
+          p.setAttribute('aria-hidden', 'true');
+        }
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        const dd = document.getElementById('nav-menu-dropdown');
+        const btn = document.getElementById('nav-menu-toggle');
+        const p = document.getElementById('nav-menu-panel');
+        if (dd && dd.classList.contains('is-open')) {
+          dd.classList.remove('is-open');
+          if (btn) btn.setAttribute('aria-expanded', 'false');
+          if (p) p.setAttribute('aria-hidden', 'true');
+          if (btn && typeof btn.focus === 'function') btn.focus();
+        }
+      });
+    }
+  },
+
+  formatDisplayName(rawName, fallback) {
+    const fb = fallback !== undefined ? fallback : 'Player';
+    const raw = rawName ? String(rawName).trim() : '';
+    if (!raw) return fb;
+    const parts = raw.split(/\s+/);
+    if (parts.length < 2) return raw;
+    const first = parts.slice(0, -1).join(' ');
+    const last = parts[parts.length - 1].replace(/\.+$/, '');
+    if (!last) return first || fb;
+    return first + ' ' + last.charAt(0) + '.';
+  },
+
+  formatDisplayNameList(rawList) {
+    const raw = rawList ? String(rawList).trim() : '';
+    if (!raw) return '';
+    return raw.split(',').map((entry) => {
+      const trimmed = entry.trim();
+      return trimmed ? this.formatDisplayName(trimmed, trimmed) : '';
+    }).filter(Boolean).join(', ');
+  },
+
+  abbreviateDisplayNames(records, nameProp, idProp, fallback) {
+    const list = Array.isArray(records) ? records : [];
+    const prop = nameProp || 'name';
+    const fb = fallback !== undefined ? fallback : 'Player';
+    const seenIds = {};
+    const keyCounts = {};
+
+    const parsed = list.map((rec, idx) => {
+      const raw = (rec && rec[prop]) ? String(rec[prop]).trim() : '';
+      const parts = raw ? raw.split(/\s+/) : [];
+      const first = parts.length > 1 ? parts.slice(0, -1).join(' ') : (parts[0] || '');
+      const last = parts.length > 1 ? parts[parts.length - 1].replace(/\.+$/, '') : '';
+      const key = (first && last) ? (first.toLowerCase() + '|' + last.charAt(0).toLowerCase()) : '';
+      const uid = rec && (idProp ? rec[idProp] : (rec.user_id || rec.id));
+      const personId = uid ? ('u:' + String(uid)) : (raw ? ('n:' + raw.toLowerCase()) : ('i:' + idx));
+      if (key && !Object.prototype.hasOwnProperty.call(seenIds, personId)) {
+        seenIds[personId] = true;
+        keyCounts[key] = (keyCounts[key] || 0) + 1;
+      }
+      return { raw: raw, first: first, last: last, key: key };
+    });
+
+    return parsed.map((p) => {
+      if (!p.raw) return fb;
+      if (!p.last) return p.raw;
+      const len = keyCounts[p.key] > 1 ? 2 : 1;
+      return p.first + ' ' + p.last.slice(0, len) + '.';
+    });
   },
 
   escapeHtml(str) {

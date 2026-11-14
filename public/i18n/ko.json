@@ -285,5 +285,21 @@
   "login.shared_device_help": "브라우저를 닫거나 4시간 후 로그아웃되며, 이 기기에 이메일이 저장되지 않습니다.",
   "profile.sessions_title": "🔐 로그인된 기기",
   "profile.sessions_desc": "계정은 동시에 최대 5대의 기기에서 로그인 상태를 유지할 수 있습니다. 친구의 휴대폰에서 로그아웃하는 것을 잊었다면 아래에서 다른 기기를 로그아웃하세요.",
-  "profile.logout_other_devices_btn": "다른 모든 기기에서 로그아웃"
+  "profile.logout_other_devices_btn": "다른 모든 기기에서 로그아웃",
+  "nav.about": "소개",
+  "nav.about_title": "Pickup Baseball Foundation 소개",
+  "nav.menu": "메뉴",
+  "about.hero_pill": "⚾ 501(c)(3) 비영리 단체 • 오클랜드, CA • 2021년 설립",
+  "about.hero_title": "소개",
+  "about.hero_desc": "샌프란시스코 베이 지역 청소년과 성인을 위한 무료 픽업 야구.",
+  "about.mission_title": "우리의 사명",
+  "about.mission_p1": "Pickup Baseball Foundation(PBF)은 모든 연령, 성별, 실력 수준의 청소년과 성인에게 무료 픽업 야구 참여 기회를 제공합니다. 우리는 샌프란시스코 베이 전역의 다양한 배경을 가진 야구 팬들과 함께 커뮤니티를 만들어가는 따뜻하고 포용적인 환경을 조성합니다.",
+  "about.mission_p2": "PBF는 2021년에 설립되었으며 캘리포니아주 오클랜드에 기반을 둔 501(c)(3) 비영리 단체입니다.",
+  "about.contact_desc": "문의: <a href=\"mailto:pickupbaseballfoundation@gmail.com\">pickupbaseballfoundation@gmail.com</a>",
+  "about.play_title": "⚾ 일요일 픽업 경기",
+  "about.play_desc": "경기 캘린더를 확인하고 몇 초 만에 참가 신청하며 배트, 공, 베이스, 포수 장비를 조율하세요.",
+  "about.play_btn": "경기 캘린더 보기 →",
+  "about.support_title": "❤️ 무료 경기 유지하기",
+  "about.support_desc": "모든 픽업 경기는 무료입니다. 후원은 장비 구입과 모두를 위한 야구 접근성 유지에 쓰입니다.",
+  "about.support_btn": "후원하기 →"
 }

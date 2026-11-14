@@ -696,6 +696,371 @@ async function runTier2(t, ctx) {
       const dnsFail = await safeFetchExternalUrl('https://nonexistent.invalid/test.gif', { isTestEnv: false });
       assert.equal(dnsFail.ok, false, 'DNS lookup failure must fail closed in safeFetchExternalUrl');
     });
+
+    await c9.test('T2.9.5: Media proxy MIME whitelist, private event masking & E2EE attachment enforcement', async () => {
+      const restrictedEv = baseballDb.prepare(`
+        INSERT INTO events (title, location, event_date, max_players, allowed_emails, status, created_by)
+        VALUES ('Secret Tryout Practice', 'Hidden Field', '2099-11-15', 16, 'admin@pickupbaseball.org', 'active', ?)
+      `).run(adminUser.id);
+      const restrictedEventId = Number(restrictedEv.lastInsertRowid);
+
+      let uploadedMediaId = null;
+      let evilProxyMediaId = null;
+      const origFetch = globalThis.fetch;
+
+      try {
+        // 1. Player cannot link media to a private/invite-only event they cannot access
+        const forbiddenMedia = await apiReq('POST', '/api/media', playerCookie, {
+          title: 'Sneaky Tag',
+          url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+          date_taken: '2099-11-15',
+          event_id: restrictedEventId
+        });
+        assert.equal(forbiddenMedia.status, 403, 'Player must be blocked from attaching media to inaccessible invite-only event');
+
+        // 2. Admin can attach media to the restricted event, and public/non-invited GET /api/media masks event_title
+        const adminMedia = await apiReq('POST', '/api/media', adminCookie, {
+          title: 'Admin Highlight',
+          url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+          date_taken: '2099-11-15',
+          event_id: restrictedEventId
+        });
+        assert.equal(adminMedia.status, 200);
+        uploadedMediaId = adminMedia.data && adminMedia.data.item && adminMedia.data.item.id;
+
+        const listAnon = await apiReq('GET', '/api/media');
+        assert.equal(listAnon.status, 200);
+        const maskedItem = (listAnon.data.media || []).find((it) => Number(it.id) === Number(uploadedMediaId));
+        assert.ok(maskedItem, 'Approved media item should be listed');
+        assert.equal(maskedItem.event_title, null, 'Inaccessible invite-only event_title must be masked on GET /api/media');
+
+        // 3. Remote media proxy must reject HTML/SVG MIME types with 415
+        const htmlItem = baseballDb.prepare(`
+          INSERT INTO media_items (title, media_type, original_url, file_url, mime_type, date_taken, contributor_name, contributor_id, is_approved)
+          VALUES ('HTML Proxy Test', 'photo', 'https://93.184.216.34/xss.html', 'https://93.184.216.34/xss.html', 'text/html', '2099-11-15', 'Alice A.', ?, 1)
+        `).run(adminUser.id);
+        evilProxyMediaId = Number(htmlItem.lastInsertRowid);
+
+        globalThis.fetch = async (url, opts) => {
+          if (String(url).startsWith('https://93.184.216.34/')) {
+            return new Response('<html><script>alert(1)</script></html>', {
+              status: 200,
+              headers: { 'content-type': 'text/html; charset=utf-8' }
+            });
+          }
+          return origFetch(url, opts);
+        };
+
+        const proxyRes = await apiReq('GET', `/api/media/${evilProxyMediaId}/file`);
+        assert.equal(proxyRes.status, 415, 'Remote media proxy must reject non-media MIME types like text/html with 415');
+
+        // 4. Private E2EE boards/DMs must require is_encrypted + iv and valid image data: URLs on /attachments/init
+        const pvtRes = await apiReq('POST', '/api/channels', adminCookie, {
+          name: 'T2.9.5 Private Media Board',
+          category: 'Private Boards',
+          channel_type: 'text',
+          is_private: true,
+          member_ids: [adminUser.id, playerUser.id]
+        });
+        assert.equal(pvtRes.status, 201);
+        const pvtAttChId = pvtRes.data.channel.id;
+        try {
+          const unencAtt = await apiReq('POST', '/api/attachments/init', playerCookie, {
+            channel_id: pvtAttChId,
+            file_name: 'plain.png',
+            mime_type: 'image/png',
+            file_size: 1024,
+            is_encrypted: 0
+          });
+          assert.equal(unencAtt.status, 400, 'Private E2EE channels must reject unencrypted /attachments/init uploads');
+
+          const badThumbAtt = await apiReq('POST', '/api/attachments/init', playerCookie, {
+            channel_id: pvtAttChId,
+            file_name: 'photo.png',
+            mime_type: 'image/png',
+            file_size: 1024,
+            is_encrypted: 1,
+            iv: 'AAAAAAAAAAAAAAAA',
+            thumbnail_base64: 'data:text/html;base64,PHNjcmlwdD4='
+          });
+          assert.equal(badThumbAtt.status, 400, 'Non-image thumbnail_base64 data URLs must be rejected');
+        } finally {
+          chatDb.prepare('DELETE FROM channels WHERE id = ?').run(pvtAttChId);
+        }
+      } finally {
+        globalThis.fetch = origFetch;
+        if (uploadedMediaId) baseballDb.prepare('DELETE FROM media_items WHERE id = ?').run(uploadedMediaId);
+        if (evilProxyMediaId) baseballDb.prepare('DELETE FROM media_items WHERE id = ?').run(evilProxyMediaId);
+        baseballDb.prepare('DELETE FROM events WHERE id = ?').run(restrictedEventId);
+      }
+    });
+
+    await c9.test('T2.9.6: Clubhouse voice write/cap, report redaction, mute privacy, system msg & E2EE epoch guards', async () => {
+      const nowSec = Math.floor(Date.now() / 1000);
+      const roVoice = chatDb.prepare(`
+        INSERT INTO channels (slug, name, category, channel_type, topic, min_role_read, min_role_write, is_encrypted, sort_order)
+        VALUES ('ro-voice-test', 'RO Voice', 'Voice', 'voice', 'Announcements', 'player', 'organizer', 0, 99)
+      `).run();
+      const roVoiceId = Number(roVoice.lastInsertRowid);
+
+      const pvtBoard = await apiReq('POST', '/api/channels', adminCookie, {
+        name: 'T2.9.6 Secret Strategy',
+        category: 'Private Boards',
+        channel_type: 'text',
+        is_private: true,
+        member_ids: [adminUser.id, playerUser.id]
+      });
+      assert.equal(pvtBoard.status, 201);
+      const pvtBoardId = pvtBoard.data.channel.id;
+
+      let syntheticRptId = null;
+      try {
+        // 1. Voice write-role guard on /join and /state
+        const joinRo = await apiReq('POST', `/api/voice/${roVoiceId}/join`, playerCookie);
+        assert.equal(joinRo.status, 403, 'Read-only voice listener cannot join via write check');
+        const stateRo = await apiReq('POST', `/api/voice/${roVoiceId}/state`, playerCookie, { muted: 1 });
+        assert.equal(stateRo.status, 403, 'Read-only voice listener cannot post voice state');
+
+        // 2. Voice 24-participant cap (ensure playerUser is a new/rejoining entrant)
+        chatDb.prepare('DELETE FROM voice_participants WHERE channel_id = 6 AND user_id = ?').run(playerUser.id);
+        const insVp = chatDb.prepare(`
+          INSERT OR REPLACE INTO voice_participants (channel_id, user_id, user_name, muted, deafened, screen_sharing, heartbeat_at)
+          VALUES (6, ?, ?, 0, 0, 0, ?)
+        `);
+        for (let uid = 9101; uid <= 9124; uid++) {
+          insVp.run(uid, `Player ${uid}`, nowSec);
+        }
+        const capRes = await apiReq('POST', '/api/voice/6/state', playerCookie, { muted: 0 });
+        assert.equal(capRes.status, 429, 'Voice room at 24 active participants must reject a 25th entrant');
+        chatDb.prepare('DELETE FROM voice_participants WHERE user_id BETWEEN 9101 AND 9124').run();
+
+        // 3. Regular player cannot spoof message_type: 'system'
+        const spoofMsg = await apiReq('POST', '/api/channels/general/messages', playerCookie, {
+          content: 'Fake system notice',
+          message_type: 'system'
+        });
+        assert.equal(spoofMsg.status, 201);
+        assert.equal(spoofMsg.data.message.message_type, 'text', 'Player message_type: system must be coerced to text');
+        chatDb.prepare('DELETE FROM messages WHERE id = ?').run(spoofMsg.data.message.id);
+
+        // 4. Stale key_epoch enforcement on E2EE private board (when key_epoch 2 exists in channel_key_shares)
+        chatDb.prepare(`
+          INSERT INTO channel_key_shares (channel_id, key_epoch, recipient_user_id, sender_user_id, wrapped_key_base64, wrap_iv)
+          VALUES (?, 2, ?, ?, 'd3JhcHBlZA==', 'aXYxMjM0NTY=')
+        `).run(pvtBoardId, playerUser.id, adminUser.id);
+        const msgEpoch2 = await apiReq('POST', `/api/channels/${pvtBoardId}/messages`, adminCookie, {
+          content: 'ciphertwo',
+          iv: 'ivtwo1234567890',
+          key_epoch: 2
+        });
+        assert.equal(msgEpoch2.status, 201);
+        const staleMsg = await apiReq('POST', `/api/channels/${pvtBoardId}/messages`, playerCookie, {
+          content: 'cipherone',
+          iv: 'ivone1234567890',
+          key_epoch: 1
+        });
+        assert.equal(staleMsg.status, 409, 'Older key_epoch than latest channel epoch must be rejected with 409');
+        assert.equal(staleMsg.data.code, 'STALE_KEY_EPOCH');
+        const staleEdit = await apiReq('PATCH', `/api/messages/${msgEpoch2.data.message.id}`, adminCookie, {
+          content: 'editedcipher',
+          iv: 'ivedited1234567',
+          key_epoch: 1
+        });
+        assert.equal(staleEdit.status, 409, 'PATCH /messages/:id with stale key_epoch must also be rejected with 409');
+
+        // 5. Non-creator/non-admin private board member cannot modify member_ids via PATCH /channels/:id
+        const patchMembersDenied = await apiReq('PATCH', `/api/channels/${pvtBoardId}`, playerCookie, {
+          member_ids: [adminUser.id, playerUser.id, facilitatorUser.id]
+        });
+        assert.equal(patchMembersDenied.status, 403, 'Non-creator member cannot modify private board membership');
+
+        // 6. Global user_mute_update sync event must omit private chat_muted_reason
+        const muteRes = await apiReq('PUT', `/api/moderation/users/${facilitatorUser.id}/mute`, adminCookie, {
+          muted: true,
+          reason: 'Private moderator note: repeated spam'
+        });
+        assert.equal(muteRes.status, 200);
+        const muteSyncRow = chatDb.prepare(
+          "SELECT payload_json FROM sync_events WHERE event_type = 'user_mute_update' ORDER BY id DESC LIMIT 1"
+        ).get();
+        assert.ok(muteSyncRow, 'Mute sync event should exist');
+        const mutePayload = JSON.parse(muteSyncRow.payload_json);
+        assert.equal(mutePayload.chat_muted_reason, undefined, 'Global mute sync event must not leak chat_muted_reason');
+        await apiReq('PUT', `/api/moderation/users/${facilitatorUser.id}/mute`, adminCookie, { muted: false });
+
+        // 7. Moderation reports endpoint must redact metadata for channels the caller cannot view
+        const secretMsg = chatDb.prepare(`
+          INSERT INTO messages (channel_id, author_id, author_name, content, iv, key_epoch, message_type)
+          VALUES (?, ?, 'Charlie P.', 'secretcipher', 'secretiv12345678', 2, 'text')
+        `).run(pvtBoardId, playerUser.id);
+        const secretMsgId = Number(secretMsg.lastInsertRowid);
+        const rptRes = chatDb.prepare(`
+          INSERT INTO chat_reports (channel_id, reporter_id, reporter_name, target_type, target_user_id, target_message_id, reason, status, resolution_note, reviewed_by, reviewed_at)
+          VALUES (?, ?, 'Charlie P.', 'message', ?, ?, 'Secret dispute', 'resolved', 'Internal admin note', ?, ?)
+        `).run(pvtBoardId, playerUser.id, adminUser.id, secretMsgId, adminUser.id, nowSec);
+        syntheticRptId = Number(rptRes.lastInsertRowid);
+
+        baseballDb.prepare("UPDATE users SET is_moderator = 1 WHERE email = 'organizer@pickupbaseball.org'").run();
+        const orgReports = await apiReq('GET', '/api/moderation/reports?status=resolved', orgCookie);
+        assert.equal(orgReports.status, 200);
+        const redactedRpt = (orgReports.data.reports || []).find((r) => Number(r.id) === syntheticRptId);
+        assert.ok(redactedRpt, 'Delegated moderator should retrieve the report entry');
+        assert.equal(redactedRpt.target_message_id, null, 'Private channel report must redact target_message_id for non-member moderator');
+        assert.equal(redactedRpt.resolution_note, null, 'Private channel report must redact resolution_note');
+        assert.equal(redactedRpt.reviewed_by_name, null, 'Private channel report must redact reviewed_by_name');
+      } finally {
+        baseballDb.prepare("UPDATE users SET is_moderator = 0 WHERE email = 'organizer@pickupbaseball.org'").run();
+        if (syntheticRptId) chatDb.prepare('DELETE FROM chat_reports WHERE id = ?').run(syntheticRptId);
+        chatDb.prepare('DELETE FROM voice_participants WHERE user_id BETWEEN 9101 AND 9124').run();
+        chatDb.prepare('DELETE FROM channels WHERE id IN (?, ?)').run(roVoiceId, pvtBoardId);
+      }
+    });
+
+    await c9.test('T2.9.7: RSVP account oracle & token rotation, hero_credits floor, and BP cancelled/duplicate guards', async () => {
+      baseballDb.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('require_login_to_rsvp', 'false')").run();
+      baseballDb.prepare('UPDATE users SET hero_credits = 0 WHERE id = ?').run(playerUser.id);
+
+      const pubEv = baseballDb.prepare(`
+        INSERT INTO events (title, location, event_date, max_players, status, created_by)
+        VALUES ('Public Oracle Test', 'Field A', '2099-11-19', 18, 'active', ?)
+      `).run(adminUser.id);
+      const pubEvId = Number(pubEv.lastInsertRowid);
+
+      const invEv = baseballDb.prepare(`
+        INSERT INTO events (title, location, event_date, max_players, allowed_emails, status, created_by)
+        VALUES ('Invite Oracle Test', 'Field A', '2099-11-20', 18, ?, 'active', ?)
+      `).run(playerUser.email, adminUser.id);
+      const invEvId = Number(invEv.lastInsertRowid);
+
+      const cancelEv = baseballDb.prepare(`
+        INSERT INTO events (title, location, event_date, max_players, status, created_by)
+        VALUES ('Cancelled Game Test', 'Field A', '2099-11-21', 18, 'cancelled', ?)
+      `).run(adminUser.id);
+      const cancelEvId = Number(cancelEv.lastInsertRowid);
+
+      try {
+        // 1. Unauthenticated RSVP on public event using registered account email must return 401
+        const pubRegRes = await apiReq('POST', `/api/events/${pubEvId}/rsvp`, null, {
+          name: 'Charlie P.',
+          email: playerUser.email,
+          status: 'attending'
+        });
+        assert.equal(pubRegRes.status, 401, 'Public unauthenticated RSVP with registered email must require login (401)');
+
+        // 2. Invite-only event must return uniform 403 for both registered invited email and unknown email when logged out
+        const invRegRes = await apiReq('POST', `/api/events/${invEvId}/rsvp`, null, {
+          name: 'Charlie P.',
+          email: playerUser.email,
+          status: 'attending'
+        });
+        const invStrangerRes = await apiReq('POST', `/api/events/${invEvId}/rsvp`, null, {
+          name: 'Stranger',
+          email: 'nobody_oracle_probe@example.com',
+          status: 'attending'
+        });
+        assert.equal(invRegRes.status, 403);
+        assert.equal(invStrangerRes.status, 403, 'Invite-only event must not distinguish registered invited vs unknown unauthenticated emails');
+
+        // 3. quick-rsvp claiming guest RSVP rotates management_token, clears is_guest, and never drops hero_credits below 0
+        baseballDb.prepare(`
+          INSERT INTO attendees (event_id, user_id, name, email, status, players_count, is_guest, management_token)
+          VALUES (?, NULL, 'Charlie Guest', ?, 'attending', 1, 1, 'stale_guest_token_abc')
+        `).run(pubEvId, playerUser.email);
+
+        const quickOut = await apiReq('POST', `/api/baseball/events/${pubEvId}/quick-rsvp`, playerCookie, {
+          status: 'declined'
+        });
+        assert.equal(quickOut.status, 200);
+        const claimedAtt = baseballDb.prepare(
+          'SELECT is_guest, management_token, status FROM attendees WHERE event_id = ? AND email = ?'
+        ).get(pubEvId, playerUser.email);
+        assert.equal(claimedAtt.is_guest, 0, 'Claimed RSVP must clear is_guest');
+        assert.notEqual(claimedAtt.management_token, 'stale_guest_token_abc', 'Claiming a guest RSVP must rotate management_token');
+        const userCreditsRow = baseballDb.prepare('SELECT hero_credits FROM users WHERE id = ?').get(playerUser.id);
+        assert.ok(userCreditsRow.hero_credits >= 0, 'hero_credits must never become negative');
+
+        // 4. BP signups blocked on cancelled games and duplicate anonymous unlinked names rejected
+        const bpCancel = await apiReq('POST', `/api/events/${cancelEvId}/bp-order`, adminCookie, {
+          slot_number: 1,
+          player_name: 'Alice A.'
+        });
+        assert.equal(bpCancel.status, 400, 'Cancelled events must reject BP signups');
+
+        const bpFirst = await apiReq('POST', `/api/events/${pubEvId}/bp-order`, null, {
+          slot_number: 1,
+          player_name: 'Anon Slugger'
+        });
+        assert.equal(bpFirst.status, 200);
+        const bpDup = await apiReq('POST', `/api/events/${pubEvId}/bp-order`, null, {
+          slot_number: 2,
+          player_name: 'anon slugger'
+        });
+        assert.equal(bpDup.status, 401, 'Unauthenticated user cannot hold multiple anonymous BP slots under the same name');
+      } finally {
+        baseballDb.prepare('DELETE FROM batting_practice_signups WHERE event_id IN (?, ?)').run(pubEvId, cancelEvId);
+        baseballDb.prepare('DELETE FROM attendees WHERE event_id IN (?, ?, ?)').run(pubEvId, invEvId, cancelEvId);
+        baseballDb.prepare('DELETE FROM events WHERE id IN (?, ?, ?)').run(pubEvId, invEvId, cancelEvId);
+      }
+    });
+
+    await c9.test('T2.9.8: Expanded IPv4-mapped IPv6 SSRF blocking & getClientIp X-Forwarded-For precedence', async () => {
+      const { isPrivateIpOrHost, getClientIp } = await import('../../src/app/security.js');
+      assert.equal(isPrivateIpOrHost('0:0:0:0:0:ffff:7f00:1'), true, 'Expanded IPv4-mapped loopback IPv6 must be blocked');
+      assert.equal(isPrivateIpOrHost('[::ffff:169.254.169.254]'), true, 'Bracketed IPv4-mapped link-local IMDS IPv6 must be blocked');
+      assert.equal(isPrivateIpOrHost('::ffff:10.0.0.1'), true, 'IPv4-mapped RFC1918 IPv6 must be blocked');
+
+      const fakeCtxXff = {
+        req: {
+          header(name) {
+            const key = name.toLowerCase();
+            if (key === 'x-real-ip') return '1.1.1.1';
+            if (key === 'x-forwarded-for') return '203.0.113.5, 198.51.100.77';
+            return undefined;
+          }
+        }
+      };
+      assert.equal(getClientIp(fakeCtxXff), '198.51.100.77', 'getClientIp must use rightmost X-Forwarded-For over X-Real-IP');
+
+      const fakeCtxCf = {
+        req: {
+          header(name) {
+            const key = name.toLowerCase();
+            if (key === 'cf-connecting-ip') return '192.0.2.44';
+            if (key === 'x-forwarded-for') return '198.51.100.77';
+            return undefined;
+          }
+        }
+      };
+      assert.equal(getClientIp(fakeCtxCf), '192.0.2.44', 'CF-Connecting-IP must remain highest priority');
+    });
+
+    await c9.test('T2.9.9: ClubhouseRTC Privacy Relay Mode fails closed without TURN server', async () => {
+      const ClubhouseRTC = require('../../public/js/rtc.js');
+      const events = [];
+      ClubhouseRTC.onRtcEvent((type, data) => events.push({ type, data }));
+
+      const cfg = ClubhouseRTC.getIceConfiguration(true);
+      assert.equal(cfg.iceTransportPolicy, 'relay', 'Privacy Relay Mode must force iceTransportPolicy=relay');
+
+      ClubhouseRTC.state.privacyRelayMode = true;
+      ClubhouseRTC.state.iceServers = [{ urls: ['stun:stun.l.google.com:19302'] }];
+      ClubhouseRTC.state.activeChannelId = 6;
+      try {
+        await ClubhouseRTC.handleIncomingSignals([{
+          id: 999001,
+          channel_id: 6,
+          sender_user_id: 1,
+          signal_type: 'offer',
+          payload_json: JSON.stringify({ type: 'offer', sdp: 'v=0\r\n' })
+        }]);
+        const relayWarn = events.find((e) => e.type === 'privacy_relay_unavailable');
+        assert.ok(relayWarn, 'Privacy Relay Mode with STUN-only servers must emit privacy_relay_unavailable');
+        assert.equal(ClubhouseRTC.state.peerConnections[1], undefined, 'No peer connection may be created without TURN under Privacy Relay Mode');
+      } finally {
+        ClubhouseRTC.state.privacyRelayMode = false;
+        ClubhouseRTC.state.activeChannelId = null;
+      }
+    });
   });
 }
 

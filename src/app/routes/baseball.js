@@ -224,9 +224,14 @@ baseballRouter.post('/events/:eventId/quick-rsvp', requireAuth, async (c) => {
       const hoursUntilEvent = (new Date(event.event_date).getTime() - Date.now()) / (3600 * 1000);
       const isUrgentWindow = hoursUntilEvent > 0 && hoursUntilEvent < 48;
       if (hadPaidDuty && isUrgentWindow && wasAttending) {
-        await baseballDb.prepare(
-          'UPDATE users SET hero_credits = CASE WHEN COALESCE(hero_credits, 0) > 0 THEN hero_credits - 1 ELSE 0 END WHERE id = ?'
-        ).bind(user.id).run();
+        const unclaimRes = await baseballDb.prepare(
+          'UPDATE attendees SET urgent_credit_awarded = 0 WHERE id = ? AND COALESCE(urgent_credit_awarded, 0) = 1'
+        ).bind(existing.id).run();
+        if (unclaimRes.meta && unclaimRes.meta.changes === 1) {
+          await baseballDb.prepare(
+            'UPDATE users SET hero_credits = CASE WHEN COALESCE(hero_credits, 0) > 0 THEN hero_credits - 1 ELSE 0 END WHERE id = ?'
+          ).bind(user.id).run();
+        }
       }
       await baseballDb.prepare('DELETE FROM duty_assignments WHERE attendee_id = ?').bind(existing.id).run();
       await baseballDb.prepare(
@@ -234,10 +239,12 @@ baseballRouter.post('/events/:eventId/quick-rsvp', requireAuth, async (c) => {
       ).bind(eventId, existing.id, user.id).run();
     }
 
+    const shouldRotateClaimToken = Boolean(!existing.user_id || existing.user_id !== user.id || existing.is_guest);
+    const nextToken = shouldRotateClaimToken ? generateToken() : (existing.management_token || generateToken());
     await baseballDb.prepare(`
       UPDATE attendees
-      SET user_id = ?, name = ?, status = ?, players_count = ?, spectators_count = ?,
-          additional_guests = ?, gear_bringing = COALESCE(?, gear_bringing), notes = COALESCE(?, notes)
+      SET user_id = ?, name = ?, is_guest = 0, status = ?, players_count = ?, spectators_count = ?,
+          additional_guests = ?, gear_bringing = COALESCE(?, gear_bringing), notes = COALESCE(?, notes), management_token = ?
       WHERE id = ?
     `).bind(
       user.id,
@@ -248,8 +255,20 @@ baseballRouter.post('/events/:eventId/quick-rsvp', requireAuth, async (c) => {
       additionalGuests,
       gearBringing,
       notes,
+      nextToken,
       existing.id
     ).run();
+
+    if (finalStatus === 'attending' && playersCount > 0 && event.max_players && event.max_players > 0 && (!wasAttending || playersCount > prevPlayersCount)) {
+      const postCapRow = await baseballDb.prepare(`
+        SELECT COALESCE(SUM(COALESCE(players_count, 1 + COALESCE(additional_guests, 0))), 0) as total
+        FROM attendees WHERE event_id = ? AND status = 'attending'
+      `).bind(eventId).first();
+      if ((postCapRow ? postCapRow.total : 0) > event.max_players) {
+        await baseballDb.prepare("UPDATE attendees SET status = 'waitlist' WHERE id = ?").bind(existing.id).run();
+        finalStatus = 'waitlist';
+      }
+    }
 
     if (wasAttending && (finalStatus !== 'attending' || prevPlayersCount > playersCount)) {
       const origin = getSafePublicOrigin(c);
@@ -257,7 +276,7 @@ baseballRouter.post('/events/:eventId/quick-rsvp', requireAuth, async (c) => {
     }
   } else {
     const mgmtToken = generateToken();
-    await baseballDb.prepare(`
+    const ins = await baseballDb.prepare(`
       INSERT INTO attendees (
         event_id, user_id, name, email, is_guest, status,
         gear_bringing, notes, players_count, spectators_count, additional_guests, management_token
@@ -275,6 +294,17 @@ baseballRouter.post('/events/:eventId/quick-rsvp', requireAuth, async (c) => {
       additionalGuests,
       mgmtToken
     ).run();
+    const insertedId = ins && ins.meta ? ins.meta.last_row_id : null;
+    if (insertedId && finalStatus === 'attending' && playersCount > 0 && event.max_players && event.max_players > 0) {
+      const postCapRow = await baseballDb.prepare(`
+        SELECT COALESCE(SUM(COALESCE(players_count, 1 + COALESCE(additional_guests, 0))), 0) as total
+        FROM attendees WHERE event_id = ? AND status = 'attending'
+      `).bind(eventId).first();
+      if ((postCapRow ? postCapRow.total : 0) > event.max_players) {
+        await baseballDb.prepare("UPDATE attendees SET status = 'waitlist' WHERE id = ?").bind(insertedId).run();
+        finalStatus = 'waitlist';
+      }
+    }
   }
 
   return c.json({

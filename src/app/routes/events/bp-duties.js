@@ -4,7 +4,7 @@
  */
 
 import { Hono } from 'hono';
-import { requireOrganizer, requireAdmin, getClientIp, checkRateLimit } from '../../security.js';
+import { requireOrganizer, requireAdmin, getClientIp, checkRateLimit, verifyTurnstileIfConfigured } from '../../security.js';
 import { getDefaultDuties, getRequireLoginSetting } from '../../schema.js';
 import { canUserAccessEvent } from '../../policy.js';
 import { AVATAR_EXPR } from './helpers.js';
@@ -129,10 +129,14 @@ eventsBpDutiesRouter.get('/:id/bp-order', async (c) => {
 eventsBpDutiesRouter.post('/:id/bp-order', async (c) => {
   try {
     const eventId = parseInt(c.req.param('id'), 10);
+    if (!eventId || isNaN(eventId)) {
+      return c.json({ error: 'Invalid event ID.' }, 400);
+    }
     const user = c.get('user');
     const db = c.env.DB;
+    const clientIp = getClientIp(c);
 
-    const bpLimit = await checkRateLimit(db, `bp_${getClientIp(c)}`, 30, 60, c.env);
+    const bpLimit = await checkRateLimit(db, `bp_${clientIp}`, 30, 60, c.env);
     if (!bpLimit.allowed) {
       return c.json({ error: 'Too many batting practice requests. Please wait a minute and try again.' }, 429);
     }
@@ -142,11 +146,14 @@ eventsBpDutiesRouter.post('/:id/bp-order', async (c) => {
     if (!canUserAccessEvent(user, event)) {
       return c.json({ error: 'Access denied: this pickup game is restricted to an invite list.', restricted: true }, user ? 403 : 401);
     }
-    if (event.status === 'rainout') {
-      return c.json({ error: 'Batting practice is unavailable because this game was called for rain.' }, 400);
+    if (event.status === 'rainout' || event.status === 'cancelled') {
+      return c.json({ error: 'Batting practice is unavailable because this game was called for rain or cancelled.' }, 400);
     }
 
     const body = await c.req.json().catch(() => ({}));
+    if (!user && !(await verifyTurnstileIfConfigured(c.env, body.cf_turnstile_response, clientIp))) {
+      return c.json({ error: 'Bot verification failed. Please refresh and try again.' }, 403);
+    }
     let playerName = String(body.player_name || (user ? user.name : '')).trim();
     let slotNumber = parseInt(body.slot_number, 10);
     const notes = String(body.notes || '').trim().slice(0, 200);
@@ -185,8 +192,23 @@ eventsBpDutiesRouter.post('/:id/bp-order', async (c) => {
       return c.json({ error: 'Please sign in or RSVP first to claim a Batting Practice slot.' }, 401);
     }
 
+    if (!user && !attendeeId) {
+      const anonBpLimit = await checkRateLimit(db, `bp_anon_${eventId}_${clientIp}`, 3, 3600, c.env);
+      if (!anonBpLimit.allowed) {
+        return c.json({ error: 'Too many unauthenticated batting practice signups. Please sign in or RSVP first.' }, 429);
+      }
+    }
+
     const { results: existingSlots } = await db.prepare('SELECT id, slot_number, user_id, attendee_id, player_name FROM batting_practice_signups WHERE event_id = ?').bind(eventId).all();
     const existingList = existingSlots || [];
+
+    if (!user && !attendeeId) {
+      const normalizedTargetName = playerName.toLowerCase();
+      const dupAnonSlot = existingList.find((s) => !s.user_id && !s.attendee_id && String(s.player_name || '').trim().toLowerCase() === normalizedTargetName);
+      if (dupAnonSlot && (isNaN(slotNumber) || dupAnonSlot.slot_number !== slotNumber)) {
+        return c.json({ error: 'Please RSVP or sign in to claim or move a Batting Practice slot.' }, 401);
+      }
+    }
 
     if (isNaN(slotNumber) || slotNumber < 1) {
       const takenNums = new Set(existingList.map(s => s.slot_number));

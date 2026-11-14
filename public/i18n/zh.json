@@ -285,5 +285,21 @@
   "login.shared_device_help": "关闭浏览器或 4 小时后自动退出登录，且不会在此设备上保存您的邮箱。",
   "profile.sessions_title": "🔐 已登录的设备",
   "profile.sessions_desc": "账号最多可同时在 5 台设备上保持登录。如果您忘记在朋友手机上退出登录，可以在下方退出所有其他设备。",
-  "profile.logout_other_devices_btn": "退出所有其他设备"
+  "profile.logout_other_devices_btn": "退出所有其他设备",
+  "nav.about": "关于我们",
+  "nav.about_title": "关于 Pickup Baseball Foundation",
+  "nav.menu": "菜单",
+  "about.hero_pill": "⚾ 501(c)(3) 非营利组织 • 加州奥克兰 • 成立于 2021 年",
+  "about.hero_title": "关于我们",
+  "about.hero_desc": "为大旧金山湾区的青少年与成年人提供免费的自由组队棒球活动。",
+  "about.mission_title": "我们的使命",
+  "about.mission_p1": "Pickup Baseball Foundation（PBF）为各种年龄、性别和水平的大旧金山湾区青少年及成年人提供免费的自由组队棒球活动。我们致力于营造热情包容的氛围，帮助来自不同背景的棒球爱好者建立社区联系。",
+  "about.mission_p2": "PBF 是一家成立于 2021 年的 501(c)(3) 非营利组织，总部位于加州奥克兰（Oakland, CA）。",
+  "about.contact_desc": "欢迎通过电子邮件联系我们：<a href=\"mailto:pickupbaseballfoundation@gmail.com\">pickupbaseballfoundation@gmail.com</a>。",
+  "about.play_title": "⚾ 周日棒球活动",
+  "about.play_desc": "查看比赛日历，几秒钟即可报名参加，并协调球棒、棒球、垒包和捕手护具。",
+  "about.play_btn": "查看比赛日历 →",
+  "about.support_title": "❤️ 让比赛保持免费",
+  "about.support_desc": "每场活动均可免费参加。您的捐赠将用于购置器材，让所有人都能参与棒球运动。",
+  "about.support_btn": "捐赠支持 →"
 }

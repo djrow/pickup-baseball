@@ -285,5 +285,21 @@
   "login.shared_device_help": "Se cierra al cerrar el navegador o tras 4 horas, y no guardará tu correo aquí.",
   "profile.sessions_title": "🔐 Dispositivos con Sesión Iniciada",
   "profile.sessions_desc": "Las cuentas pueden mantener sesión activa en hasta 5 dispositivos a la vez. Si olvidaste cerrar sesión en el teléfono de un amigo, cierra las demás abajo.",
-  "profile.logout_other_devices_btn": "Cerrar Sesión en Todos los Demás Dispositivos"
+  "profile.logout_other_devices_btn": "Cerrar Sesión en Todos los Demás Dispositivos",
+  "nav.about": "Sobre Nosotros",
+  "nav.about_title": "Sobre Pickup Baseball Foundation",
+  "nav.menu": "Menú",
+  "about.hero_pill": "⚾ Organización sin fines de lucro 501(c)(3) • Oakland, CA • Est. 2021",
+  "about.hero_title": "Sobre Nosotros",
+  "about.hero_desc": "Acceso gratuito al béisbol pickup para adolescentes y adultos en el área de la Bahía de San Francisco.",
+  "about.mission_title": "Nuestra Misión",
+  "about.mission_p1": "Pickup Baseball Foundation (PBF) brinda acceso gratuito al béisbol pickup para adolescentes y adultos de todas las edades, géneros y niveles de habilidad. Fomentamos un ambiente acogedor e inclusivo para construir comunidad con otros aficionados al béisbol de todos los orígenes en el área metropolitana de la Bahía de San Francisco.",
+  "about.mission_p2": "PBF es una organización sin fines de lucro 501(c)(3) fundada en 2021 con sede en Oakland, CA.",
+  "about.contact_desc": "Ponte en contacto con nosotros en <a href=\"mailto:pickupbaseballfoundation@gmail.com\">pickupbaseballfoundation@gmail.com</a>.",
+  "about.play_title": "⚾ Juegos Dominicales",
+  "about.play_desc": "Consulta el calendario de juegos, confirma tu asistencia en segundos y coordina bates, pelotas, bases y equipo.",
+  "about.play_btn": "Ver Calendario de Juegos →",
+  "about.support_title": "❤️ Mantén los Juegos Gratis",
+  "about.support_desc": "Cada juego pickup es gratuito. Las donaciones ayudan a comprar equipo y mantener el béisbol accesible para todos.",
+  "about.support_btn": "Donar →"
 }

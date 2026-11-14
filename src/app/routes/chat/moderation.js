@@ -179,10 +179,15 @@ chatModerationRouter.get('/moderation/reports', requireModerator, async (c) => {
       reporter_name: canViewChannel ? r.reporter_name : 'Redacted',
       target_user_id: canViewChannel ? r.target_user_id : null,
       target_user_name: canViewChannel ? r.target_user_name : 'Redacted',
+      target_message_id: canViewChannel ? r.target_message_id : null,
       reason: canViewChannel ? r.reason : '[Private board report]',
       channel_id: canViewChannel ? r.channel_id : null,
+      reviewed_by: canViewChannel ? r.reviewed_by : null,
+      reviewed_by_name: canViewChannel ? r.reviewed_by_name : null,
+      resolution_note: canViewChannel ? r.resolution_note : null,
+      reviewed_at: canViewChannel ? r.reviewed_at : null,
       message_preview: m ? (!canViewChannel ? '[Private channel message]' : (m.deleted_at ? '[deleted]' : m.content)) : null,
-      message_hidden: Boolean(m && m.hidden_at),
+      message_hidden: canViewChannel ? Boolean(m && m.hidden_at) : false,
       message_hidden_reason: canViewChannel && m ? m.hidden_reason : null,
       target_chat_muted: canViewChannel ? Boolean(u && u.chat_muted) : false,
       target_chat_muted_reason: canViewChannel && u ? u.chat_muted_reason : null
@@ -327,8 +332,7 @@ chatModerationRouter.put('/moderation/users/:id/mute', requireModerator, async (
         targetId,
         JSON.stringify({
           user_id: targetId,
-          chat_muted: shouldMute ? 1 : 0,
-          chat_muted_reason: shouldMute ? reason : null
+          chat_muted: shouldMute ? 1 : 0
         }),
         Math.floor(Date.now() / 1000)
       ).run();

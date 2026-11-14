@@ -431,13 +431,15 @@ function renderAttendeesRoster() {
       </p>
     `;
   } else {
+    const attendeeAbbr = API.abbreviateDisplayNames(attendees, 'name', 'user_id', 'Player');
     rosterHtml = `
       <ul class="roster-list">
-        ${attendees.map(function(a) {
+        ${attendees.map(function(a, idx) {
+          const displayName = attendeeAbbr[idx] || API.formatDisplayName(a.name, 'Player');
           const safeAvatar = API.safeAvatarUrl(a.avatar_url);
           const avatarImg = safeAvatar
-            ? `<img src="${API.escapeHtml(safeAvatar)}" alt="${API.escapeHtml(a.name)}" class="roster-avatar" loading="lazy" decoding="async">`
-            : `<span class="roster-avatar-placeholder">${API.escapeHtml((a.name || 'P').charAt(0).toUpperCase())}</span>`;
+            ? `<img src="${API.escapeHtml(safeAvatar)}" alt="${API.escapeHtml(displayName)}" class="roster-avatar" loading="lazy" decoding="async">`
+            : `<span class="roster-avatar-placeholder">${API.escapeHtml((displayName || 'P').charAt(0).toUpperCase())}</span>`;
           const translatedDuties = a.duties_assigned
             ? a.duties_assigned.split(',').map(function(part) { return API.translatePhrase(part.trim()); }).join(', ')
             : '';
@@ -475,7 +477,7 @@ function renderAttendeesRoster() {
               <div style="flex: 1; min-width: 0;">
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; flex-wrap: wrap;">
                   <div class="roster-name">
-                    ${API.escapeHtml(a.name)}
+                    ${API.escapeHtml(displayName)}
                     ${a.is_guest ? `<span style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal;"> ${API.escapeHtml(API.t('event.guest_tag'))}</span>` : ''}
                   </div>
                   <div style="display: flex; gap: 5px; align-items: center; flex-wrap: wrap;">
@@ -483,7 +485,7 @@ function renderAttendeesRoster() {
                     ${canMod ? `<button type="button" data-action="remove-attendee" data-attendee-id="${a.id}" title="Remove from roster" style="background:none;border:none;cursor:pointer;font-size:0.85rem;color:var(--danger);padding:0 2px;">🗑️</button>` : ''}
                   </div>
                 </div>
-                ${a.guest_names ? `<div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 3px;">👥 <em>${API.escapeHtml(API.t('event.guests_prefix', 'Group:'))} ${API.escapeHtml(a.guest_names)}</em></div>` : ''}
+                ${a.guest_names ? `<div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 3px;">👥 <em>${API.escapeHtml(API.t('event.guests_prefix', 'Group:'))} ${API.escapeHtml(API.formatDisplayNameList(a.guest_names))}</em></div>` : ''}
                 ${translatedDuties ? `<div style="font-size: 0.79rem; color: var(--primary); font-weight: 700; margin-top: 3px;">🛡️ Group Tasks: ${API.escapeHtml(translatedDuties)}</div>` : ''}
                 ${a.gear_bringing ? `<div class="roster-gear">🎒 <em>${API.escapeHtml(a.gear_bringing)}</em></div>` : ''}
                 ${a.bio ? `<div class="player-bio-text">"${API.escapeHtml(a.bio)}"</div>` : ''}
@@ -497,6 +499,7 @@ function renderAttendeesRoster() {
 
   let waitlistHtml = '';
   if (waitlist.length > 0) {
+    const waitlistAbbr = API.abbreviateDisplayNames(waitlist, 'name', 'user_id', 'Player');
     waitlistHtml = `
       <div style="margin-top: 26px; padding-top: 18px; border-top: 1.5px dashed var(--border);">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
@@ -507,10 +510,11 @@ function renderAttendeesRoster() {
         </div>
         <ul class="roster-list" style="opacity: 0.95;">
           ${waitlist.map(function(w, idx) {
+            const wDisplayName = waitlistAbbr[idx] || API.formatDisplayName(w.name, 'Player');
             const safeAvatar = API.safeAvatarUrl(w.avatar_url);
             const avatarImg = safeAvatar
-              ? `<img src="${API.escapeHtml(safeAvatar)}" alt="${API.escapeHtml(w.name)}" class="roster-avatar" loading="lazy" decoding="async">`
-              : `<span class="roster-avatar-placeholder" style="background: var(--bg-subtle); color: var(--text-muted);">${API.escapeHtml((w.name || 'W').charAt(0).toUpperCase())}</span>`;
+              ? `<img src="${API.escapeHtml(safeAvatar)}" alt="${API.escapeHtml(wDisplayName)}" class="roster-avatar" loading="lazy" decoding="async">`
+              : `<span class="roster-avatar-placeholder" style="background: var(--bg-subtle); color: var(--text-muted);">${API.escapeHtml((wDisplayName || 'W').charAt(0).toUpperCase())}</span>`;
             const wPlayers = w.players_count != null ? w.players_count : (1 + (w.additional_guests || 0));
             const wSpectators = w.spectators_count || 0;
             return `
@@ -519,7 +523,7 @@ function renderAttendeesRoster() {
                 <div style="flex: 1; min-width: 0;">
                   <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
                     <div class="roster-name" style="font-size: 0.9rem;">
-                      ${API.escapeHtml(w.name)}
+                      ${API.escapeHtml(wDisplayName)}
                       <span class="badge badge-subtle" style="font-weight: 700; margin-left: 6px; font-size: 0.7rem; background: var(--bg-subtle); color: var(--secondary); border: 1px solid var(--border);">⚾ ${wPlayers} ${wPlayers === 1 ? 'player' : 'players'}${wSpectators > 0 ? `, +${wSpectators} spec.` : ''}</span>
                       ${w.is_guest ? `<span style="font-size: 0.72rem; color: var(--text-muted); font-weight: normal;"> ${API.escapeHtml(API.t('event.guest_tag'))}</span>` : ''}
                     </div>
@@ -528,7 +532,7 @@ function renderAttendeesRoster() {
                       ${canMod ? `<button type="button" data-action="remove-attendee" data-attendee-id="${w.id}" title="Remove from waitlist" style="background:none;border:none;cursor:pointer;font-size:0.85rem;color:var(--danger);padding:0 2px;">🗑️</button>` : ''}
                     </div>
                   </div>
-                  ${w.guest_names ? `<div style="font-size: 0.76rem; color: var(--text-muted); margin-top: 2px;">👥 <em>${API.escapeHtml(API.t('event.guests_prefix', 'Group:'))} ${API.escapeHtml(w.guest_names)}</em></div>` : ''}
+                  ${w.guest_names ? `<div style="font-size: 0.76rem; color: var(--text-muted); margin-top: 2px;">👥 <em>${API.escapeHtml(API.t('event.guests_prefix', 'Group:'))} ${API.escapeHtml(API.formatDisplayNameList(w.guest_names))}</em></div>` : ''}
                 </div>
               </li>
             `;
@@ -564,11 +568,13 @@ function renderComments() {
     return;
   }
 
-  container.innerHTML = comments.map(function(c) {
+  const commentAbbr = API.abbreviateDisplayNames(comments, 'author_name', 'user_id', 'Player');
+  container.innerHTML = comments.map(function(c, idx) {
+    const authorDisplay = commentAbbr[idx] || API.formatDisplayName(c.author_name, 'Player');
     const safeAvatar = API.safeAvatarUrl(c.avatar_url);
     const avatarImg = safeAvatar
-      ? `<img src="${API.escapeHtml(safeAvatar)}" alt="${API.escapeHtml(c.author_name)}" class="comment-avatar" loading="lazy" decoding="async">`
-      : `<span class="comment-avatar-placeholder">${API.escapeHtml((c.author_name || 'P').charAt(0).toUpperCase())}</span>`;
+      ? `<img src="${API.escapeHtml(safeAvatar)}" alt="${API.escapeHtml(authorDisplay)}" class="comment-avatar" loading="lazy" decoding="async">`
+      : `<span class="comment-avatar-placeholder">${API.escapeHtml((authorDisplay || 'P').charAt(0).toUpperCase())}</span>`;
     const canMod = API.currentUser && API.currentUser.canManageEvents;
 
     return `
@@ -577,7 +583,7 @@ function renderComments() {
         <div style="flex: 1; min-width: 0;">
           <div class="comment-header">
             <div>
-              <span class="comment-author">${API.escapeHtml(c.author_name)}</span>
+              <span class="comment-author">${API.escapeHtml(authorDisplay)}</span>
               ${c.bio ? `<span style="font-size: 0.75rem; color: var(--text-muted); font-style: italic; margin-left: 6px;">• ${API.escapeHtml(c.bio)}</span>` : ''}
             </div>
             <div style="display: flex; gap: 8px; align-items: center;">
@@ -673,7 +679,10 @@ function renderTasksChecklist(isInteractive) {
     const totalFilledCount = assigned.length;
     const isFullForMe = otherFilledCount >= d.slots_needed;
     const isCompletelyFull = totalFilledCount >= d.slots_needed;
-    const volunteerNames = assigned.map(function(p) { return API.escapeHtml(p.name); }).filter(Boolean).join(', ');
+    const assignedAbbr = API.abbreviateDisplayNames(assigned, 'name', 'user_id', 'Player');
+    const volunteerNames = assigned.map(function(p, idx) {
+      return API.escapeHtml(assignedAbbr[idx] || API.formatDisplayName(p.name, 'Player'));
+    }).filter(Boolean).join(', ');
     const translatedTitle = API.translatePhrase(d.title);
     const translatedDesc = API.translatePhrase(d.description || '');
 
@@ -1816,6 +1825,12 @@ function renderBpOrder() {
     }
   }
 
+  const bpAbbrList = API.abbreviateDisplayNames(signups, 'player_name', 'user_id', 'Player');
+  const bpDisplayById = new Map();
+  signups.forEach(function(s, idx) {
+    bpDisplayById.set(s.slot_number, bpAbbrList[idx] || API.formatDisplayName(s.player_name, 'Player'));
+  });
+
   let html = '';
   for (let slot = 1; slot <= totalDisplaySlots; slot++) {
     const item = signupMap.get(slot);
@@ -1827,11 +1842,12 @@ function renderBpOrder() {
     }
 
     if (item) {
+      const bpDisplayName = bpDisplayById.get(slot) || API.formatDisplayName(item.player_name, 'Player');
       const isMine = Boolean(item.is_mine);
       const safeAvatar = API.safeAvatarUrl(item.avatar_url);
       const avatarImg = safeAvatar
-        ? `<img src="${API.escapeHtml(safeAvatar)}" alt="${API.escapeHtml(item.player_name)}" class="roster-avatar" style="width: 26px; height: 26px; border-radius: 50%;" loading="lazy">`
-        : `<span class="roster-avatar-placeholder" style="width: 26px; height: 26px; font-size: 0.74rem; border-radius: 50%;">${API.escapeHtml((item.player_name || 'P').charAt(0).toUpperCase())}</span>`;
+        ? `<img src="${API.escapeHtml(safeAvatar)}" alt="${API.escapeHtml(bpDisplayName)}" class="roster-avatar" style="width: 26px; height: 26px; border-radius: 50%;" loading="lazy">`
+        : `<span class="roster-avatar-placeholder" style="width: 26px; height: 26px; font-size: 0.74rem; border-radius: 50%;">${API.escapeHtml((bpDisplayName || 'P').charAt(0).toUpperCase())}</span>`;
 
       html += `
         <div class="bp-slot-card is-taken ${isMine ? 'is-mine' : ''}" data-slot="${slot}">
@@ -1842,7 +1858,7 @@ function renderBpOrder() {
           ${avatarImg}
           <div class="bp-slot-details">
             <div class="bp-slot-name-row">
-              <span class="bp-slot-name">${API.escapeHtml(item.player_name)}</span>
+              <span class="bp-slot-name">${API.escapeHtml(bpDisplayName)}</span>
               ${isMine ? `<span class="badge badge-green" style="font-size: 0.65rem; padding: 2px 6px;">${API.escapeHtml(API.t('event.bp_your_slot', 'Your Spot'))}</span>` : ''}
             </div>
             ${item.notes ? `<div class="bp-slot-notes">🎯 ${API.escapeHtml(item.notes)}</div>` : ''}
@@ -1921,6 +1937,11 @@ function openBpModal(preferredSlot, existingSignupOrId) {
 
   let maxSlot = 20;
   signups.forEach(function(s) { if (s.slot_number > maxSlot) maxSlot = s.slot_number + 1; });
+  const bpOptionAbbr = API.abbreviateDisplayNames(signups, 'player_name', 'user_id', 'Player');
+  const bpOptionDisplay = new Map();
+  signups.forEach(function(s, idx) {
+    bpOptionDisplay.set(s.slot_number, bpOptionAbbr[idx] || API.formatDisplayName(s.player_name, 'Player'));
+  });
   let selectHtml = '';
   for (let i = 1; i <= maxSlot; i++) {
     const occ = takenMap.get(i);
@@ -1928,7 +1949,7 @@ function openBpModal(preferredSlot, existingSignupOrId) {
     if (!occ || isCurrent) {
       selectHtml += `<option value="${i}" ${i === preferredSlot ? 'selected' : ''}>Slot #${i} (Open)</option>`;
     } else {
-      selectHtml += `<option value="${i}" disabled>Slot #${i} (${API.escapeHtml(occ.player_name)})</option>`;
+      selectHtml += `<option value="${i}" disabled>Slot #${i} (${API.escapeHtml(bpOptionDisplay.get(i) || API.formatDisplayName(occ.player_name, 'Player'))})</option>`;
     }
   }
   slotSelect.innerHTML = selectHtml;

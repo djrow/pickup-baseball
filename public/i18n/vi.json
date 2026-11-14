@@ -285,5 +285,21 @@
   "login.shared_device_help": "Tự đăng xuất khi đóng trình duyệt hoặc sau 4 giờ và sẽ không lưu email của bạn tại đây.",
   "profile.sessions_title": "🔐 Thiết Bị Đang Đăng Nhập",
   "profile.sessions_desc": "Tài khoản có thể đăng nhập tối đa 5 thiết bị cùng lúc. Nếu bạn quên đăng xuất trên điện thoại của bạn bè, hãy đăng xuất các thiết bị khác bên dưới.",
-  "profile.logout_other_devices_btn": "Đăng Xuất Khỏi Tất Cả Thiết Bị Khác"
+  "profile.logout_other_devices_btn": "Đăng Xuất Khỏi Tất Cả Thiết Bị Khác",
+  "nav.about": "Giới thiệu",
+  "nav.about_title": "Giới thiệu về Pickup Baseball Foundation",
+  "nav.menu": "Menu",
+  "about.hero_pill": "⚾ Tổ chức phi lợi nhuận 501(c)(3) • Oakland, CA • Thành lập 2021",
+  "about.hero_title": "Về chúng tôi",
+  "about.hero_desc": "Bóng chày giao hữu miễn phí cho thanh thiếu niên và người lớn tại khu vực Vịnh San Francisco.",
+  "about.mission_title": "Sứ mệnh của chúng tôi",
+  "about.mission_p1": "Pickup Baseball Foundation (PBF) mang đến cơ hội chơi bóng chày giao hữu miễn phí cho thanh thiếu niên và người lớn ở mọi lứa tuổi, giới tính và trình độ. Chúng tôi xây dựng môi trường thân thiện và cởi mở để kết nối cộng đồng yêu bóng chày từ mọi nền tảng tại khu vực Vịnh San Francisco mở rộng.",
+  "about.mission_p2": "PBF là tổ chức phi lợi nhuận 501(c)(3) được thành lập vào năm 2021 và có trụ sở tại Oakland, CA.",
+  "about.contact_desc": "Liên hệ với chúng tôi qua email <a href=\"mailto:pickupbaseballfoundation@gmail.com\">pickupbaseballfoundation@gmail.com</a>.",
+  "about.play_title": "⚾ Các trận đấu Chủ nhật",
+  "about.play_desc": "Xem lịch thi đấu, đăng ký tham gia nhanh chóng và điều phối gậy, bóng, chốt và dụng cụ.",
+  "about.play_btn": "Xem lịch thi đấu →",
+  "about.support_title": "❤️ Giữ các trận đấu miễn phí",
+  "about.support_desc": "Mọi trận đấu đều miễn phí. Đóng góp của bạn giúp mua sắm thiết bị và duy trì sân chơi cho tất cả mọi người.",
+  "about.support_btn": "Ủng hộ →"
 }

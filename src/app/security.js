@@ -173,8 +173,6 @@ export function isValidRasterImageBuffer(buffer, mime) {
 export function getClientIp(c) {
   const cfIp = (c.req.header('CF-Connecting-IP') || '').trim();
   if (cfIp) return cfIp;
-  const realIp = (c.req.header('X-Real-IP') || '').trim();
-  if (realIp) return realIp;
   const xffParts = (c.req.header('X-Forwarded-For') || '')
     .split(',')
     .map((s) => s.trim())
@@ -182,6 +180,8 @@ export function getClientIp(c) {
   if (xffParts.length > 0) {
     return xffParts[xffParts.length - 1];
   }
+  const realIp = (c.req.header('X-Real-IP') || '').trim();
+  if (realIp) return realIp;
   return 'unknown';
 }
 
@@ -658,6 +658,7 @@ export function isPrivateIpOrHost(hostname, isTestEnv = false) {
       /^2002:/i.test(ipv6Raw) ||
       /^0?100::/i.test(ipv6Raw) ||
       ipv6Raw.includes('::ffff:') ||
+      /(?:^|:)0{0,4}:ffff:/i.test(ipv6Raw) ||
       /^::[0-9a-f]{1,4}(?::[0-9a-f]{1,4})?$/i.test(ipv6Raw) ||
       ipv6Raw.includes('.')
     ) {
@@ -766,17 +767,27 @@ export async function safeFetchExternalUrl(urlStr, options = {}, maxRedirects = 
           const dohAbort = typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
             ? AbortSignal.timeout(3000)
             : undefined;
+          let resolvedAny = false;
           for (const rrType of ['A', 'AAAA']) {
             const dohRes = await fetch(
               `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(hostName)}&type=${rrType}`,
               { headers: { 'Accept': 'application/dns-json' }, signal: dohAbort }
             );
-            if (!dohRes.ok) continue;
+            if (!dohRes.ok) {
+              return { ok: false, status: 400, error: 'Failed to verify remote hostname DNS resolution.' };
+            }
             const dohJson = await dohRes.json().catch(() => null);
             const answers = dohJson && Array.isArray(dohJson.Answer) ? dohJson.Answer : [];
-            if (answers.some((ans) => ans && ans.data && (ans.type === 1 || ans.type === 28) && isPrivateIpOrHost(ans.data, false))) {
+            const ipAnswers = answers.filter((ans) => ans && ans.data && (ans.type === 1 || ans.type === 28));
+            if (ipAnswers.length > 0) {
+              resolvedAny = true;
+            }
+            if (ipAnswers.some((ans) => isPrivateIpOrHost(ans.data, false))) {
               return { ok: false, status: 403, error: 'Resolved host IP points to a restricted private or local network.' };
             }
+          }
+          if (!resolvedAny) {
+            return { ok: false, status: 400, error: 'Remote hostname did not resolve to any IP address.' };
           }
         } catch (dohErr) {
           return { ok: false, status: 400, error: 'Failed to verify remote hostname DNS resolution.' };

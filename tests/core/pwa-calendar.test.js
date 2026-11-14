@@ -755,4 +755,105 @@ module.exports = async function registerPwaCalendarTests(ctx, t9) {
     const apiJs = fs.readFileSync(path.join(publicDir, 'js', 'api.js'), 'utf8');
     assert.ok(apiJs.includes('pickup_i18n_v'), 'api.js loadLangDict must use version-busted localStorage cache key');
   });
+
+  await test('T9.19: Reorganized Header Dropdown Navigation & About Us Foundation Page', async () => {
+    const vm = require('node:vm');
+
+    // 1. Verify About Us page content & exact foundation mission copy
+    const aboutPath = path.join(publicDir, 'about.html');
+    assert.ok(fs.existsSync(aboutPath), 'public/about.html must exist');
+    const aboutHtml = fs.readFileSync(aboutPath, 'utf8');
+    assert.ok(
+      aboutHtml.includes('Pickup Baseball Foundation (PBF) provides free access to pickup baseball for teens and adults of all ages, genders, and skill levels. We foster a welcoming and inclusive environment for building community with fellow baseball fans of all backgrounds in the greater San Francisco Bay Area.'),
+      'about.html must contain the exact PBF mission statement'
+    );
+    assert.ok(
+      aboutHtml.includes('PBF is a 501(c)(3) nonprofit organization founded in 2021 and based in Oakland, CA.'),
+      'about.html must state 501(c)(3) nonprofit founded in 2021 in Oakland, CA'
+    );
+    assert.ok(
+      aboutHtml.includes('mailto:pickupbaseballfoundation@gmail.com'),
+      'about.html must include mailto:pickupbaseballfoundation@gmail.com link'
+    );
+
+    // 2. Verify all 12 calendar-webapp HTML pages include the reorganized #nav-menu-dropdown shell
+    const navPages = [
+      'about.html', 'index.html', 'archive.html', 'event.html',
+      'donate.html', 'art.html', 'gallery.html', 'login.html',
+      'profile.html', 'admin.html', 'waiver.html', '404.html'
+    ];
+    for (const page of navPages) {
+      const html = fs.readFileSync(path.join(publicDir, page), 'utf8');
+      assert.ok(html.includes('id="nav-menu-dropdown"'), `${page} static header must include #nav-menu-dropdown`);
+      assert.ok(html.includes('href="/about.html"'), `${page} static header menu must link to /about.html`);
+    }
+
+    // 3. Verify HTTP serving of GET /about.html
+    const aboutRes = await fetch(`${baseUrl}/about.html`);
+    assert.equal(aboutRes.status, 200, 'GET /about.html must respond 200 OK');
+
+    // 4. Verify API.renderNav places Profile/Login next to #nav-menu-dropdown with Clubhouse, Gallery, About Us, Donate, and role-gated Admin
+    const apiCode = fs.readFileSync(path.join(publicDir, 'js', 'api.js'), 'utf8');
+    const navEl = { innerHTML: '' };
+    const doc = {
+      readyState: 'loading',
+      head: { appendChild: () => {} },
+      body: { appendChild: () => {} },
+      documentElement: { setAttribute: () => {}, removeAttribute: () => {}, classList: { add: () => {}, remove: () => {} } },
+      createElement: () => ({ style: {}, setAttribute: () => {}, addEventListener: () => {}, remove: () => {} }),
+      getElementById: (id) => (id === 'main-nav' ? navEl : null),
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      addEventListener: () => {}
+    };
+    const sandbox = {
+      window: {
+        location: { protocol: 'http:', pathname: '/index.html', search: '', hash: '' },
+        localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+        matchMedia: () => ({ matches: false, addEventListener: () => {} }),
+        addEventListener: () => {}
+      },
+      document: doc,
+      navigator: { language: 'en-US' },
+      localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+      fetch: async () => ({ ok: false, json: async () => ({}) }),
+      Intl,
+      URL,
+      encodeURIComponent,
+      decodeURIComponent
+    };
+    sandbox.window.window = sandbox.window;
+    vm.runInNewContext(apiCode, sandbox);
+    const API = sandbox.window.API;
+
+    // Logged out
+    API.renderNav(null);
+    assert.ok(navEl.innerHTML.includes('class="btn-login"'), 'Logged-out nav must render Log In button');
+    assert.ok(navEl.innerHTML.includes('id="nav-menu-dropdown"'), 'Logged-out nav must render dropdown menu');
+    assert.ok(navEl.innerHTML.indexOf('class="btn-login"') < navEl.innerHTML.indexOf('id="nav-menu-dropdown"'), 'Dropdown menu must appear next to/after Log In button');
+    for (const href of ['/clubhouse.html', '/gallery.html', '/about.html', '/donate.html']) {
+      assert.ok(navEl.innerHTML.includes(`href="${href}"`), `Dropdown menu must include ${href}`);
+    }
+    assert.ok(!navEl.innerHTML.includes('/admin.html'), 'Logged-out nav must not expose Admin link');
+
+    // Regular player
+    API.renderNav({ name: 'Jackie Robinson', avatarUrl: null, canManageEvents: false, isAdmin: false });
+    assert.ok(navEl.innerHTML.includes('class="nav-user-badge"'), 'Player nav must render Profile badge');
+    assert.ok(navEl.innerHTML.indexOf('class="nav-user-badge"') < navEl.innerHTML.indexOf('id="nav-menu-dropdown"'), 'Dropdown menu must appear next to/after Profile badge');
+    assert.ok(!navEl.innerHTML.includes('/admin.html'), 'Player nav must not expose Admin link');
+
+    // Organizer / Admin
+    API.renderNav({ name: 'David Row', avatarUrl: null, canManageEvents: true, isAdmin: true });
+    assert.ok(navEl.innerHTML.includes('href="/admin.html"'), 'Admin/Organizer nav must include Admin link inside dropdown');
+
+    // 5. Verify 14 non-English i18n bundles contain new About Us & Menu keys
+    const i18nDir = path.join(publicDir, 'i18n');
+    const languages = ['ar', 'es', 'fa', 'fr', 'hi', 'hy', 'ja', 'ko', 'pa', 'pt', 'ru', 'tl', 'vi', 'zh'];
+    for (const lang of languages) {
+      const dict = JSON.parse(fs.readFileSync(path.join(i18nDir, `${lang}.json`), 'utf8'));
+      for (const k of ['nav.about', 'nav.menu', 'about.mission_p1', 'about.mission_p2', 'about.contact_desc']) {
+        assert.ok(typeof dict[k] === 'string' && dict[k].trim().length > 0, `i18n/${lang}.json must define '${k}'`);
+      }
+    }
+  });
 };

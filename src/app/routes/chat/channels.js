@@ -11,7 +11,8 @@ import {
   resolveChannel,
   isPrivateEncryptedBoard,
   canUserAccessChannel,
-  getAccessibleChannels
+  getAccessibleChannels,
+  chunkArray
 } from './helpers.js';
 
 export const chatChannelsRouter = new Hono();
@@ -90,6 +91,7 @@ chatChannelsRouter.post('/channels', requireAuth, async (c) => {
   if (!slug || !name) {
     return c.json({ error: 'Channel name and slug are required.' }, 400);
   }
+  const isPrivateBoard = !isDm && channelType !== 'voice' && Boolean(body.is_private);
 
   const nowSecCreate = Math.floor(Date.now() / 1000);
   const chRateKey = `user_${user.id}_channel_create`;
@@ -108,23 +110,26 @@ chatChannelsRouter.post('/channels', requireAuth, async (c) => {
     }
   } catch (e) {}
 
-  if (isDm) {
+  if (isDm || isPrivateBoard) {
     const otherIds = dmMemberIds.filter((uid) => Number(uid) !== Number(user.id));
     const baseballDb = c.env && (c.env.BASEBALL_DB || c.env.DB);
     if (baseballDb && otherIds.length > 0) {
-      const ph = otherIds.map(() => '?').join(',');
-      const { results: targetUsers } = await baseballDb.prepare(`
-        SELECT u.id, COALESCE(u.clubhouse_opted_in, 0) as clubhouse_opted_in,
-               EXISTS(SELECT 1 FROM banned_emails b WHERE LOWER(b.email) = LOWER(u.email)) as is_banned
-        FROM users u WHERE u.id IN (${ph})
-      `).bind(...otherIds).all();
-      const validSet = new Set(
-        (targetUsers || [])
-          .filter((u) => !u.is_banned && Number(u.clubhouse_opted_in) === 1)
-          .map((u) => Number(u.id))
-      );
+      const validSet = new Set();
+      for (const idChunk of chunkArray(otherIds, 80)) {
+        const ph = idChunk.map(() => '?').join(',');
+        const { results: targetUsers } = await baseballDb.prepare(`
+          SELECT u.id, COALESCE(u.clubhouse_opted_in, 0) as clubhouse_opted_in,
+                 EXISTS(SELECT 1 FROM banned_emails b WHERE LOWER(b.email) = LOWER(u.email)) as is_banned
+          FROM users u WHERE u.id IN (${ph})
+        `).bind(...idChunk).all();
+        for (const u of (targetUsers || [])) {
+          if (!u.is_banned && Number(u.clubhouse_opted_in) === 1) {
+            validSet.add(Number(u.id));
+          }
+        }
+      }
       if (otherIds.some((uid) => !validSet.has(Number(uid)))) {
-        return c.json({ error: 'One or more target DM recipients do not exist or have opted out of Clubhouse.' }, 403);
+        return c.json({ error: 'One or more target members do not exist, are banned, or have opted out of Clubhouse.' }, 403);
       }
     }
   }
@@ -155,7 +160,6 @@ chatChannelsRouter.post('/channels', requireAuth, async (c) => {
 
   const category = String(body.category || (isDm ? 'Direct Messages' : (channelType === 'voice' ? 'Voice Lounges' : 'Text Channels'))).trim().slice(0, 60);
   const topic = String(body.topic || '').trim().slice(0, 300);
-  const isPrivateBoard = !isDm && channelType !== 'voice' && Boolean(body.is_private);
   const validReadRoleList = ['guest', 'public', 'player', 'facilitator', 'organizer', 'admin', 'invite'];
   const validWriteRoleList = ['player', 'facilitator', 'organizer', 'admin'];
   const requestedRead = body.min_role_read;
@@ -312,7 +316,30 @@ chatChannelsRouter.patch('/channels/:id', requireAuth, async (c) => {
 
   let updatedMembers = null;
   if (isPrivateBoard && Array.isArray(body.member_ids)) {
+    if (!user.isAdmin && channel.created_by !== user.id) {
+      return c.json({ error: 'Access denied: only the board creator or an administrator can manage private board members.' }, 403);
+    }
     const cleanIds = body.member_ids.map((id) => parseInt(id, 10)).filter((n) => !isNaN(n) && n > 0).slice(0, 90);
+    const baseballDb = c.env && (c.env.BASEBALL_DB || c.env.DB);
+    if (baseballDb && cleanIds.length > 0) {
+      const validSet = new Set();
+      for (const idChunk of chunkArray(cleanIds, 80)) {
+        const ph = idChunk.map(() => '?').join(',');
+        const { results: targetUsers } = await baseballDb.prepare(`
+          SELECT u.id, COALESCE(u.clubhouse_opted_in, 0) as clubhouse_opted_in,
+                 EXISTS(SELECT 1 FROM banned_emails b WHERE LOWER(b.email) = LOWER(u.email)) as is_banned
+          FROM users u WHERE u.id IN (${ph})
+        `).bind(...idChunk).all();
+        for (const u of (targetUsers || [])) {
+          if (!u.is_banned && Number(u.clubhouse_opted_in) === 1) {
+            validSet.add(Number(u.id));
+          }
+        }
+      }
+      if (cleanIds.some((uid) => !validSet.has(Number(uid)))) {
+        return c.json({ error: 'One or more target members do not exist, are banned, or have opted out of Clubhouse.' }, 403);
+      }
+    }
     const ownerId = channel.created_by || user.id;
     updatedMembers = Array.from(new Set([ownerId, user.id, ...cleanIds]));
     const ph = updatedMembers.map(() => '?').join(',');

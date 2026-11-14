@@ -29,6 +29,8 @@ import {
   getGDriveStorageQuota
 } from '../gdrive.js';
 import { resolveChannel, canUserAccessChannel } from './chat.js';
+import { isPrivateEncryptedBoard } from './chat/helpers.js';
+import { canUserAccessEvent } from '../policy.js';
 import { getDisallowZeroLoginMediaSetting } from '../schema.js';
 
 export const mediaRouter = new Hono();
@@ -126,7 +128,8 @@ mediaRouter.get('/', async (c) => {
     const querySql = `
       SELECT m.id, m.title, m.caption, m.media_type, m.original_url, m.file_url,
              m.mime_type, m.file_size, m.album, m.date_taken, m.contributor_name,
-             m.contributor_id, m.event_id, m.is_approved, m.created_at, e.title as event_title
+             m.contributor_id, m.event_id, m.is_approved, m.created_at,
+             e.title as event_title, e.allowed_emails as event_allowed_emails
       FROM media_items m
       LEFT JOIN events e ON m.event_id = e.id
       ${whereSql}
@@ -134,9 +137,17 @@ mediaRouter.get('/', async (c) => {
       LIMIT 200
     `;
 
-    const { results: media } = bindings.length > 0
+    const { results: rawMedia } = bindings.length > 0
       ? await c.env.DB.prepare(querySql).bind(...bindings).all()
       : await c.env.DB.prepare(querySql).all();
+
+    const media = (rawMedia || []).map((item) => {
+      const { event_allowed_emails, ...rest } = item;
+      if (event_allowed_emails && !canUserAccessEvent(user, { allowed_emails: event_allowed_emails })) {
+        rest.event_title = null;
+      }
+      return rest;
+    });
 
     // Fetch album metadata for quick bookmarks navigation (only counting approved media)
     const { results: albums } = await c.env.DB.prepare(`
@@ -258,12 +269,26 @@ mediaRouter.get('/:id/file', async (c) => {
         return c.text(capped.error || 'Upstream file exceeds maximum size limit', capped.status || 413);
       }
 
-      const contentType = upstreamRes.headers.get('content-type') || row.mime_type || 'image/jpeg';
+      const ALLOWED_PROXY_MIME_TYPES = new Set([
+        'image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif', 'image/avif',
+        'video/mp4', 'video/webm', 'video/quicktime'
+      ]);
+      const upstreamCt = (upstreamRes.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+      const storedCt = (row.mime_type || '').split(';')[0].trim().toLowerCase();
+      let safeProxyCt = null;
+      if (ALLOWED_PROXY_MIME_TYPES.has(upstreamCt)) {
+        safeProxyCt = upstreamCt;
+      } else if ((!upstreamCt || upstreamCt === 'application/octet-stream' || upstreamCt === 'binary/octet-stream') && ALLOWED_PROXY_MIME_TYPES.has(storedCt)) {
+        safeProxyCt = storedCt;
+      }
+      if (!safeProxyCt) {
+        return c.text('Unsupported remote media content-type.', 415);
+      }
 
       return new Response(capped.buffer, {
         status: 200,
         headers: {
-          'Content-Type': contentType,
+          'Content-Type': safeProxyCt,
           'Cache-Control': 'public, max-age=604800, stale-while-revalidate=2592000',
           'ETag': etag,
           'X-Content-Type-Options': 'nosniff',
@@ -359,7 +384,14 @@ mediaRouter.post('/', async (c) => {
     const cleanContributor = (contributor_name && String(contributor_name).trim()
       ? String(contributor_name).trim()
       : (user && user.name ? user.name : 'Community Player')).slice(0, 120);
-    const cleanEventId = event_id ? parseInt(event_id, 10) : null;
+    const rawEventId = event_id ? parseInt(event_id, 10) : null;
+    const cleanEventId = (rawEventId && !isNaN(rawEventId) && rawEventId > 0) ? rawEventId : null;
+    if (cleanEventId) {
+      const targetEv = await c.env.DB.prepare('SELECT id, allowed_emails FROM events WHERE id = ?').bind(cleanEventId).first();
+      if (!targetEv || !canUserAccessEvent(user, targetEv)) {
+        return c.json({ error: 'Access denied: cannot link media to this game.' }, 403);
+      }
+    }
     const isTestEnv = Boolean(c.env && (c.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'test'));
 
     let finalMediaType = 'photo';
@@ -979,6 +1011,26 @@ attachmentsRouter.post('/init', requireAuth, async (c) => {
   if (thumbnailBase64 && thumbnailBase64.length > 150000) {
     return c.json({ error: 'thumbnail_base64 exceeds maximum allowed length.' }, 400);
   }
+  if (thumbnailBase64 && !/^data:image\/(?:png|jpeg|jpg|webp|gif);base64,[A-Za-z0-9+/=]+$/i.test(thumbnailBase64)) {
+    return c.json({ error: 'thumbnail_base64 must be a valid image base64 data URL.' }, 400);
+  }
+
+  const nowSecAtt = Math.floor(Date.now() / 1000);
+  const attRateKey = `user_${user.id}_att_init`;
+  const attCutoff = nowSecAtt - 600;
+  try {
+    await chatDb.prepare(`
+      INSERT INTO chat_rate_limits (key, count, window_start)
+      VALUES (?, 1, ?)
+      ON CONFLICT(key) DO UPDATE SET
+        count = CASE WHEN chat_rate_limits.window_start <= ? THEN 1 ELSE chat_rate_limits.count + 1 END,
+        window_start = CASE WHEN chat_rate_limits.window_start <= ? THEN ? ELSE chat_rate_limits.window_start END
+    `).bind(attRateKey, nowSecAtt, attCutoff, attCutoff, nowSecAtt).run();
+    const attRateRow = await chatDb.prepare('SELECT count FROM chat_rate_limits WHERE key = ?').bind(attRateKey).first();
+    if (attRateRow && attRateRow.count > 30) {
+      return c.json({ error: 'Too many file uploads initialized. Please wait a few minutes and try again.' }, 429);
+    }
+  } catch (e) {}
 
   if (!ALLOWED_ATTACHMENT_MIME_TYPES.has(mimeType)) {
     return c.json({ error: `Disallowed MIME type: ${mimeType}.` }, 400);
@@ -1005,6 +1057,10 @@ attachmentsRouter.post('/init', requireAuth, async (c) => {
 
   if (!(await canUserAccessChannel(chatDb, user, channel, 'write'))) {
     return c.json({ error: 'Access denied: insufficient permissions to upload to this channel.' }, 403);
+  }
+  const requiresEncryptedUpload = channel.channel_type === 'dm' || channel.channel_type === 'group_dm' || isPrivateEncryptedBoard(channel);
+  if (requiresEncryptedUpload && (!isEncrypted || !iv)) {
+    return c.json({ error: 'Attachments in direct messages and private boards must be end-to-end encrypted.' }, 400);
   }
 
   const attachmentId = `att_${generateToken().slice(0, 24)}`;

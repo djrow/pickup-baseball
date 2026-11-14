@@ -285,5 +285,21 @@
   "login.shared_device_help": "Encerra a sessão ao fechar o navegador ou após 4 horas e não salva seu e-mail aqui.",
   "profile.sessions_title": "🔐 Dispositivos Conectados",
   "profile.sessions_desc": "As contas permanecem conectadas em até 5 dispositivos ao mesmo tempo. Se você esqueceu de sair no celular de um amigo, saia dos outros aparelhos abaixo.",
-  "profile.logout_other_devices_btn": "Sair de Todos os Outros Dispositivos"
+  "profile.logout_other_devices_btn": "Sair de Todos os Outros Dispositivos",
+  "nav.about": "Sobre Nós",
+  "nav.about_title": "Sobre a Pickup Baseball Foundation",
+  "nav.menu": "Menu",
+  "about.hero_pill": "⚾ Organização sem fins lucrativos 501(c)(3) • Oakland, CA • Est. 2021",
+  "about.hero_title": "Sobre Nós",
+  "about.hero_desc": "Acesso gratuito ao beisebol pickup para adolescentes e adultos na região da Baía de São Francisco.",
+  "about.mission_title": "Nossa Missão",
+  "about.mission_p1": "A Pickup Baseball Foundation (PBF) oferece acesso gratuito ao beisebol pickup para adolescentes e adultos de todas as idades, gêneros e níveis de habilidade. Promovemos um ambiente acolhedor e inclusivo para construir comunidade com fãs de beisebol de todas as origens na grande região da Baía de São Francisco.",
+  "about.mission_p2": "A PBF é uma organização sem fins lucrativos 501(c)(3) fundada em 2021 e sediada em Oakland, CA.",
+  "about.contact_desc": "Entre em contato conosco pelo e-mail <a href=\"mailto:pickupbaseballfoundation@gmail.com\">pickupbaseballfoundation@gmail.com</a>.",
+  "about.play_title": "⚾ Jogos de Domingo",
+  "about.play_desc": "Confira o calendário de jogos, confirme presença em segundos e coordene tacos, bolas, bases e equipamentos.",
+  "about.play_btn": "Ver Calendário de Jogos →",
+  "about.support_title": "❤️ Mantenha os Jogos Gratuitos",
+  "about.support_desc": "Cada jogo pickup é gratuito. As doações ajudam a comprar equipamentos e manter o beisebol acessível a todos.",
+  "about.support_btn": "Doar →"
 }
