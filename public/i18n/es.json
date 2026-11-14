@@ -280,5 +280,10 @@
   "phrase.duty_facilitator": "Coordinador del Juego",
   "phrase.duty_facilitator_desc": "Ayudar a coordinar equipos, orden al bat y juego limpio durante el partido.",
   "phrase.duty_water_food": "Agua / Comida",
-  "phrase.duty_water_food_desc": "Traer agua para beber, hielo y bocadillos o fruta para los jugadores."
+  "phrase.duty_water_food_desc": "Traer agua para beber, hielo y bocadillos o fruta para los jugadores.",
+  "login.shared_device": "Este es un dispositivo compartido o de un amigo (inicio de sesión temporal de 4 horas)",
+  "login.shared_device_help": "Se cierra al cerrar el navegador o tras 4 horas, y no guardará tu correo aquí.",
+  "profile.sessions_title": "🔐 Dispositivos con Sesión Iniciada",
+  "profile.sessions_desc": "Las cuentas pueden mantener sesión activa en hasta 5 dispositivos a la vez. Si olvidaste cerrar sesión en el teléfono de un amigo, cierra las demás abajo.",
+  "profile.logout_other_devices_btn": "Cerrar Sesión en Todos los Demás Dispositivos"
 }

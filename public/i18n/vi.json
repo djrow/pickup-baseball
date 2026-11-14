@@ -280,5 +280,10 @@
   "phrase.duty_facilitator": "Điều phối trận đấu",
   "phrase.duty_facilitator_desc": "Hỗ trợ chia đội, xếp thứ tự đánh bóng và đảm bảo tinh thần thể thao suốt trận.",
   "phrase.duty_water_food": "Nước uống / Đồ ăn nhẹ",
-  "phrase.duty_water_food_desc": "Mang nước uống, đá lạnh và đồ ăn nhẹ hoặc trái cây cho người chơi."
+  "phrase.duty_water_food_desc": "Mang nước uống, đá lạnh và đồ ăn nhẹ hoặc trái cây cho người chơi.",
+  "login.shared_device": "Đây là thiết bị dùng chung hoặc của bạn bè (đăng nhập tạm thời 4 giờ)",
+  "login.shared_device_help": "Tự đăng xuất khi đóng trình duyệt hoặc sau 4 giờ và sẽ không lưu email của bạn tại đây.",
+  "profile.sessions_title": "🔐 Thiết Bị Đang Đăng Nhập",
+  "profile.sessions_desc": "Tài khoản có thể đăng nhập tối đa 5 thiết bị cùng lúc. Nếu bạn quên đăng xuất trên điện thoại của bạn bè, hãy đăng xuất các thiết bị khác bên dưới.",
+  "profile.logout_other_devices_btn": "Đăng Xuất Khỏi Tất Cả Thiết Bị Khác"
 }

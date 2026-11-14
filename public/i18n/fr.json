@@ -280,5 +280,10 @@
   "phrase.duty_facilitator": "Coordinateur du match",
   "phrase.duty_facilitator_desc": "Aider à coordonner les équipes, l'ordre au bâton et le fair-play pendant tout le match.",
   "phrase.duty_water_food": "Eau / Collations",
-  "phrase.duty_water_food_desc": "Apporter de l'eau potable, de la glace et des collations ou fruits pour les joueurs."
+  "phrase.duty_water_food_desc": "Apporter de l'eau potable, de la glace et des collations ou fruits pour les joueurs.",
+  "login.shared_device": "Ceci est un appareil partagé ou celui d’un ami (connexion temporaire de 4 heures)",
+  "login.shared_device_help": "Déconnexion à la fermeture du navigateur ou après 4 heures, sans enregistrer votre e-mail ici.",
+  "profile.sessions_title": "🔐 Appareils Connectés",
+  "profile.sessions_desc": "Les comptes restent connectés sur jusqu’à 5 appareils à la fois. Si vous avez oublié de vous déconnecter chez un ami, fermez les autres sessions ci-dessous.",
+  "profile.logout_other_devices_btn": "Déconnecter Tous les Autres Appareils"
 }

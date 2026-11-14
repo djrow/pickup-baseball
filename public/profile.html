@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Player Profile &amp; Settings - Sunday Pickup Baseball</title>
-  <link rel="stylesheet" href="/css/style.css?v=138">
-  <link rel="stylesheet" href="/css/themes.css?v=138">
+  <link rel="stylesheet" href="/css/style.css?v=139">
+  <link rel="stylesheet" href="/css/themes.css?v=139">
   <link rel="alternate" type="application/rss+xml" title="Sunday Pickup Baseball Highlights &amp; Updates" href="/feed.xml">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
@@ -110,6 +110,22 @@
         </div>
       </div>
 
+      <!-- Account Security & Signed-In Devices Card -->
+      <div id="profile-security-card" style="padding: 16px 20px; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+        <div style="flex: 1; min-width: 220px;">
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px;">
+            <h3 style="font-size: 0.95rem; color: var(--secondary); margin: 0;" data-i18n="profile.sessions_title">🔐 Signed-In Devices</h3>
+            <span id="badge-sessions-pill" class="badge badge-gray">Checking...</span>
+          </div>
+          <p id="profile-sessions-desc" style="font-size: 0.8rem; color: var(--text-muted); margin: 0;" data-i18n="profile.sessions_desc">
+            Accounts stay signed in on up to 5 devices at once. If you forgot to log out on a friend's phone, sign out everywhere else below.
+          </p>
+        </div>
+        <button type="button" id="btn-logout-other-devices" class="btn btn-outline btn-sm" style="color: var(--danger); border-color: var(--danger); font-weight: 600; white-space: nowrap;" data-i18n="profile.logout_other_devices_btn">
+          Sign Out of All Other Devices
+        </button>
+      </div>
+
       <!-- Avatar Section -->
       <div style="display: flex; align-items: center; gap: 20px; padding: 20px; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 24px; flex-wrap: wrap;">
         <div id="avatar-preview-container"></div>
@@ -169,7 +185,7 @@
 
   <footer id="site-footer" class="site-footer"></footer>
 
-  <script src="/js/api.js?v=138"></script>
-  <script src="/js/profile.js?v=138"></script>
+  <script src="/js/api.js?v=139"></script>
+  <script src="/js/profile.js?v=139"></script>
 </body>
 </html>

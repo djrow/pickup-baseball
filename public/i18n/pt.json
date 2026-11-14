@@ -280,5 +280,10 @@
   "phrase.duty_facilitator": "Coordenador do Jogo",
   "phrase.duty_facilitator_desc": "Ajudar a coordenar times, ordem de rebatida e fair play durante todo o jogo.",
   "phrase.duty_water_food": "Água / Lanches",
-  "phrase.duty_water_food_desc": "Trazer água potável, gelo e lanches ou frutas para os jogadores."
+  "phrase.duty_water_food_desc": "Trazer água potável, gelo e lanches ou frutas para os jogadores.",
+  "login.shared_device": "Este é um dispositivo compartilhado ou de um amigo (login temporário de 4 horas)",
+  "login.shared_device_help": "Encerra a sessão ao fechar o navegador ou após 4 horas e não salva seu e-mail aqui.",
+  "profile.sessions_title": "🔐 Dispositivos Conectados",
+  "profile.sessions_desc": "As contas permanecem conectadas em até 5 dispositivos ao mesmo tempo. Se você esqueceu de sair no celular de um amigo, saia dos outros aparelhos abaixo.",
+  "profile.logout_other_devices_btn": "Sair de Todos os Outros Dispositivos"
 }

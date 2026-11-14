@@ -15,6 +15,8 @@
 
 export const SESSION_COOKIE_NAME = 'baseball_session';
 export const SESSION_DURATION_SECONDS = 90 * 24 * 60 * 60; // 90 days
+export const TEMPORARY_SESSION_DURATION_SECONDS = 4 * 60 * 60; // 4 hours (shared/friend device)
+export const MAX_SESSIONS_PER_USER = 5;
 export const AUTH_CODE_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
 export const MAX_CODE_VERIFY_ATTEMPTS = 5;
 
@@ -292,7 +294,8 @@ export async function getUserFromSession(db, sessionId, chatDb, options = {}) {
   const session = await baseballDb.prepare(`
     SELECT 
       s.id as session_id, 
-      s.expires_at, 
+      s.expires_at,
+      COALESCE(s.is_temporary, 0) as session_is_temporary,
       u.id, 
       u.name, 
       u.email, 
@@ -426,8 +429,35 @@ export async function getUserFromSession(db, sessionId, chatDb, options = {}) {
     clubhouseOptedIn: Boolean(session.clubhouse_opted_in),
     clubhouse_opted_in: session.clubhouse_opted_in ? 1 : 0,
     calendarToken,
-    calendar_token: calendarToken
+    calendar_token: calendarToken,
+    sessionIsTemporary: Boolean(session.session_is_temporary),
+    session_is_temporary: session.session_is_temporary ? 1 : 0
   };
+}
+
+/**
+ * Remove expired sessions and evict oldest active sessions beyond `maxKeep` for a user.
+ * @param {object} db - Baseball D1 binding.
+ * @param {number} userId
+ * @param {number} [maxKeep=MAX_SESSIONS_PER_USER]
+ * @returns {Promise<void>}
+ */
+export async function enforceUserSessionCap(db, userId, maxKeep = MAX_SESSIONS_PER_USER) {
+  if (!db || !userId) return;
+  const keepCount = Math.max(0, Number(maxKeep) || 0);
+  await db.prepare(
+    "DELETE FROM sessions WHERE user_id = ? AND datetime(expires_at) <= datetime('now')"
+  ).bind(userId).run();
+  await db.prepare(`
+    DELETE FROM sessions
+    WHERE user_id = ?
+      AND rowid NOT IN (
+        SELECT rowid FROM sessions
+        WHERE user_id = ? AND datetime(expires_at) > datetime('now')
+        ORDER BY datetime(created_at) DESC, rowid DESC
+        LIMIT ?
+      )
+  `).bind(userId, userId, keepCount).run();
 }
 
 export async function ensureUserCalendarToken(db, userId, existingToken = null) {

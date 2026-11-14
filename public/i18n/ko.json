@@ -280,5 +280,10 @@
   "phrase.duty_facilitator": "경기 진행 도우미",
   "phrase.duty_facilitator_desc": "경기 내내 팀 구성, 타순 및 페어플레이 진행을 돕습니다.",
   "phrase.duty_water_food": "식수 / 간식",
-  "phrase.duty_water_food_desc": "선수들을 위한 식수, 얼음 및 더그아웃 간식이나 과일을 가져옵니다."
+  "phrase.duty_water_food_desc": "선수들을 위한 식수, 얼음 및 더그아웃 간식이나 과일을 가져옵니다.",
+  "login.shared_device": "공용 기기 또는 친구의 기기입니다 (4시간 임시 로그인)",
+  "login.shared_device_help": "브라우저를 닫거나 4시간 후 로그아웃되며, 이 기기에 이메일이 저장되지 않습니다.",
+  "profile.sessions_title": "🔐 로그인된 기기",
+  "profile.sessions_desc": "계정은 동시에 최대 5대의 기기에서 로그인 상태를 유지할 수 있습니다. 친구의 휴대폰에서 로그아웃하는 것을 잊었다면 아래에서 다른 기기를 로그아웃하세요.",
+  "profile.logout_other_devices_btn": "다른 모든 기기에서 로그아웃"
 }

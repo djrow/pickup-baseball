@@ -96,11 +96,17 @@ export async function dispatchEmail(env, { to, subject, text, html }) {
   return { messageId: 'mock-' + Date.now() };
 }
 
-export async function sendAuthCode(env, origin, { email, name, code, token }) {
+export async function sendAuthCode(env, origin, { email, name, code, token, sharedDevice = false }) {
   const appName = (env && env.APP_NAME) || 'Sunday Pickup Baseball';
   const magicLink = `${origin}/api/auth/verify-magic?token=${encodeURIComponent(token)}`;
   const subject = `Your Sign-In Code for ${appName}: ${code}`;
-  const text = `Hi ${name || 'there'},\n\nWelcome to ${appName}!\n\nYour 6-digit sign-in code is: ${code}\n\nOr click the link below to sign in automatically:\n${magicLink}\n\nThis code and link will expire in 10 minutes.\n\nPlay ball!\n- ${appName} Team`;
+  const sharedNote = sharedDevice
+    ? '\n\nNote: Shared-device temporary mode was selected — this session will automatically expire when the browser closes or after 4 hours.'
+    : '';
+  const sharedHtmlNote = sharedDevice
+    ? '<p style="color: #9a3412; background: #fff7ed; border: 1px solid #fed7aa; padding: 10px 12px; border-radius: 6px; font-size: 13px; margin: 14px 0 0;">Shared-device temporary sign-in selected: expires when the browser closes or after 4 hours.</p>'
+    : '';
+  const text = `Hi ${name || 'there'},\n\nWelcome to ${appName}!\n\nYour 6-digit sign-in code is: ${code}\n\nOr click the link below to sign in automatically:\n${magicLink}${sharedNote}\n\nThis code and link will expire in 10 minutes.\n\nPlay ball!\n- ${appName} Team`;
 
   const html = renderEmailLayout({
     origin,
@@ -111,7 +117,8 @@ export async function sendAuthCode(env, origin, { email, name, code, token }) {
       <p style="color: #546e66; font-size: 15px;">Use the code below to sign in to your account:</p>
       <div style="background: #f5f8f7; border: 1px solid #dbe4e0; padding: 18px; border-radius: 8px; text-align: center; margin: 24px 0;">
         <span style="font-size: 34px; font-weight: 800; letter-spacing: 6px; color: #003831;">${escapeHtml(code)}</span>
-      </div>`,
+      </div>
+      ${sharedHtmlNote}`,
     ctaUrl: magicLink,
     ctaLabel: 'Or Click to Sign In Instantly →',
     footerText: 'This code expires in 10 minutes and is invalidated after 5 failed attempts. If you did not request this, you can safely ignore this email.'

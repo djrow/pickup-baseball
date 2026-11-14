@@ -3,6 +3,8 @@ import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import {
   SESSION_COOKIE_NAME,
   SESSION_DURATION_SECONDS,
+  TEMPORARY_SESSION_DURATION_SECONDS,
+  MAX_SESSIONS_PER_USER,
   AUTH_CODE_EXPIRY_MS,
   MAX_CODE_VERIFY_ATTEMPTS,
   generateToken,
@@ -23,14 +25,15 @@ import {
   requireAuth,
   requireAdmin,
   ensureUserCalendarToken,
-  regenerateUserCalendarToken
+  regenerateUserCalendarToken,
+  enforceUserSessionCap
 } from '../security.js';
 import { getRequireLoginSetting } from '../schema.js';
 import { sendAuthCode } from '../mailer.js';
 
 export const authRouter = new Hono();
 
-async function upsertUserAndCreateSession(c, cleanEmail, fallbackName) {
+async function upsertUserAndCreateSession(c, cleanEmail, fallbackName, { sharedDevice = false } = {}) {
   const db = c.env.DB;
   let user = await db.prepare('SELECT * FROM users WHERE email = ?').bind(cleanEmail).first();
   if (!user) {
@@ -49,26 +52,38 @@ async function upsertUserAndCreateSession(c, cleanEmail, fallbackName) {
     await ensureUserCalendarToken(db, user.id, user.calendar_token);
   }
 
+  // Prune expired sessions and keep at most (MAX_SESSIONS_PER_USER - 1) prior active sessions
+  await enforceUserSessionCap(db, user.id, Math.max(0, MAX_SESSIONS_PER_USER - 1));
+
+  const isTemporary = Boolean(sharedDevice);
+  const durationSeconds = isTemporary ? TEMPORARY_SESSION_DURATION_SECONDS : SESSION_DURATION_SECONDS;
   const sessionId = generateToken();
-  const expiresAt = new Date(Date.now() + SESSION_DURATION_SECONDS * 1000).toISOString();
-  await db.prepare('INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)').bind(sessionId, user.id, expiresAt).run();
+  const expiresAt = new Date(Date.now() + durationSeconds * 1000).toISOString();
+  await db.prepare(
+    'INSERT INTO sessions (id, user_id, expires_at, is_temporary) VALUES (?, ?, ?, ?)'
+  ).bind(sessionId, user.id, expiresAt, isTemporary ? 1 : 0).run();
 
   const isHttps = new URL(c.req.url).protocol === 'https:';
-  setCookie(c, SESSION_COOKIE_NAME, sessionId, {
+  const cookieOpts = {
     httpOnly: true,
     sameSite: 'Lax',
     secure: isHttps,
-    path: '/',
-    maxAge: SESSION_DURATION_SECONDS
-  });
+    path: '/'
+  };
+  // Shared-device logins omit maxAge so browsers treat them as session-only cookies (paired with 4h server TTL)
+  if (!isTemporary) {
+    cookieOpts.maxAge = SESSION_DURATION_SECONDS;
+  }
+  setCookie(c, SESSION_COOKIE_NAME, sessionId, cookieOpts);
 
-  return user;
+  return { user, isTemporary };
 }
 
 async function handleSendCode(c) {
   try {
     const body = await c.req.json();
     let { email, name, cf_turnstile_response } = body;
+    const sharedDevice = Boolean(body.shared_device || body.sharedDevice);
     if (!email || typeof email !== 'string' || !email.includes('@') || email.length > 254) {
       return c.json({ error: 'A valid email address is required.' }, 400);
     }
@@ -110,12 +125,12 @@ async function handleSendCode(c) {
     await c.env.DB.batch([
       c.env.DB.prepare('UPDATE auth_codes SET used_at = CURRENT_TIMESTAMP WHERE email = ? AND used_at IS NULL').bind(email),
       c.env.DB.prepare(
-        'INSERT INTO auth_codes (email, name, code, token, attempts, expires_at) VALUES (?, ?, ?, ?, 0, ?)'
-      ).bind(email, name, storedCode, storedToken, expiresAt)
+        'INSERT INTO auth_codes (email, name, code, token, attempts, shared_device, expires_at) VALUES (?, ?, ?, ?, 0, ?, ?)'
+      ).bind(email, name, storedCode, storedToken, sharedDevice ? 1 : 0, expiresAt)
     ]);
 
     const origin = getSafePublicOrigin(c);
-    await sendAuthCode(c.env, origin, { email, name: name || 'Player', code, token });
+    await sendAuthCode(c.env, origin, { email, name: name || 'Player', code, token, sharedDevice });
 
     return c.json({
       success: true,
@@ -132,7 +147,8 @@ authRouter.post('/request-code', handleSendCode);
 
 authRouter.post('/verify-code', async (c) => {
   try {
-    const { email, code } = await c.req.json();
+    const body = await c.req.json();
+    const { email, code } = body;
     if (!email || !code) {
       return c.json({ error: 'Email and 6-digit verification code are required.' }, 400);
     }
@@ -191,10 +207,14 @@ authRouter.post('/verify-code', async (c) => {
     if (!consumeRes || !consumeRes.meta || consumeRes.meta.changes === 0) {
       return c.json({ error: 'Invalid or expired code. Please request a new code.' }, 400);
     }
-    const user = await upsertUserAndCreateSession(c, cleanEmail, latestActive.name);
+    const sharedDevice = body.shared_device !== undefined
+      ? Boolean(body.shared_device)
+      : (body.sharedDevice !== undefined ? Boolean(body.sharedDevice) : Boolean(latestActive.shared_device));
+    const { user, isTemporary } = await upsertUserAndCreateSession(c, cleanEmail, latestActive.name, { sharedDevice });
 
     return c.json({
       success: true,
+      temporarySession: isTemporary,
       user: {
         id: user.id,
         name: user.name,
@@ -250,7 +270,11 @@ authRouter.get('/verify-magic', async (c) => {
     if (!consumeRes || !consumeRes.meta || consumeRes.meta.changes === 0) {
       return c.text('This sign-in link has already been used or has expired. Please request a new one on the login page.', 400);
     }
-    await upsertUserAndCreateSession(c, cleanEmail, authRecord.name);
+    const sharedDeviceQuery = c.req.query('shared_device');
+    const sharedDevice = sharedDeviceQuery !== undefined
+      ? (sharedDeviceQuery === '1' || sharedDeviceQuery === 'true')
+      : Boolean(authRecord.shared_device);
+    await upsertUserAndCreateSession(c, cleanEmail, authRecord.name, { sharedDevice });
 
     return c.redirect(getSafeRelativeRedirect(redirect));
   } catch (err) {
@@ -635,6 +659,66 @@ authRouter.delete('/banned-emails/:id', requireAdmin, async (c) => {
   const id = parseInt(c.req.param('id'), 10);
   await c.env.DB.prepare('DELETE FROM banned_emails WHERE id = ?').bind(id).run();
   return c.json({ success: true, message: 'Ban removed.' });
+});
+
+authRouter.get('/sessions', requireAuth, async (c) => {
+  const user = c.get('user');
+  const db = c.env && c.env.DB;
+  if (!db) return c.json({ error: 'Database unavailable.' }, 500);
+
+  const currentSessionId = getCookie(c, SESSION_COOKIE_NAME) || '';
+  await db.prepare(
+    "DELETE FROM sessions WHERE user_id = ? AND datetime(expires_at) <= datetime('now')"
+  ).bind(user.id).run();
+
+  const { results } = await db.prepare(`
+    SELECT id, expires_at, COALESCE(is_temporary, 0) as is_temporary, created_at
+    FROM sessions
+    WHERE user_id = ? AND datetime(expires_at) > datetime('now')
+    ORDER BY datetime(created_at) DESC, rowid DESC
+  `).bind(user.id).all();
+
+  const rows = results || [];
+  const sessions = rows.map((row) => ({
+    isCurrent: row.id === currentSessionId,
+    isTemporary: Boolean(row.is_temporary),
+    createdAt: row.created_at,
+    expiresAt: row.expires_at
+  }));
+
+  return c.json({
+    activeCount: sessions.length,
+    maxSessions: MAX_SESSIONS_PER_USER,
+    currentSessionTemporary: Boolean(user.sessionIsTemporary),
+    sessions
+  });
+});
+
+authRouter.post('/logout-other-devices', requireAuth, async (c) => {
+  const user = c.get('user');
+  const db = c.env && c.env.DB;
+  if (!db) return c.json({ error: 'Database unavailable.' }, 500);
+
+  const currentSessionId = getCookie(c, SESSION_COOKIE_NAME) || '';
+  const delRes = await db.prepare(
+    'DELETE FROM sessions WHERE user_id = ? AND id != ?'
+  ).bind(user.id, currentSessionId).run();
+  const revokedCount = (delRes && delRes.meta && typeof delRes.meta.changes === 'number') ? delRes.meta.changes : 0;
+
+  const countRow = await db.prepare(
+    "SELECT COUNT(*) as c FROM sessions WHERE user_id = ? AND datetime(expires_at) > datetime('now')"
+  ).bind(user.id).first();
+  const activeCount = countRow ? Number(countRow.c || 0) : 1;
+
+  return c.json({
+    success: true,
+    revokedCount,
+    activeCount,
+    maxSessions: MAX_SESSIONS_PER_USER,
+    message: revokedCount > 0
+      ? `Signed out of ${revokedCount} other device(s). Only this device remains signed in.`
+      : 'No other active devices found — only this device is signed in.'
+  });
 });
 
 authRouter.post('/logout', async (c) => {

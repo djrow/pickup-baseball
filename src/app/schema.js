@@ -46,6 +46,7 @@ export const CREATE_TABLES_SQL = [
     id TEXT PRIMARY KEY,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     expires_at DATETIME NOT NULL,
+    is_temporary INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`,
   `CREATE TABLE IF NOT EXISTS auth_codes (
@@ -55,6 +56,7 @@ export const CREATE_TABLES_SQL = [
     code TEXT NOT NULL,
     token TEXT NOT NULL UNIQUE,
     attempts INTEGER DEFAULT 0,
+    shared_device INTEGER DEFAULT 0,
     expires_at DATETIME NOT NULL,
     used_at DATETIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -262,11 +264,13 @@ export const ALTER_STATEMENTS = [
   'ALTER TABLE users ADD COLUMN chat_muted_at DATETIME DEFAULT NULL',
   'ALTER TABLE users ADD COLUMN clubhouse_opted_in INTEGER DEFAULT 0',
   'ALTER TABLE users ADD COLUMN calendar_token TEXT DEFAULT NULL',
+  'ALTER TABLE sessions ADD COLUMN is_temporary INTEGER DEFAULT 0',
+  'ALTER TABLE auth_codes ADD COLUMN shared_device INTEGER DEFAULT 0',
   'CREATE UNIQUE INDEX IF NOT EXISTS idx_users_calendar_token ON users(calendar_token) WHERE calendar_token IS NOT NULL'
 ];
 
 const migratedDbs = new WeakSet();
-const BASEBALL_SCHEMA_VERSION = '2026-11-13.2';
+const BASEBALL_SCHEMA_VERSION = '2026-11-14.1';
 
 async function runSchemaBatch(db, sqlList) {
   if (typeof db.batch === 'function' && sqlList.length > 1) {

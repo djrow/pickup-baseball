@@ -565,8 +565,8 @@ module.exports = async function registerPwaCalendarTests(ctx, t9) {
     const readmeMd = fs.readFileSync(path.join(ctx.rootDir, 'README.md'), 'utf8');
     assert.ok(!indexHtml.includes('data-i18n="hero.notice"'), 'October 2026 notice must be moved out of the hero section');
     assert.ok(!apiJs.includes('This site is new and few people know about it.'), 'Removed sentence must not appear in api.js');
-    assert.ok(apiJs.includes('Built with Google Gemini in October 2026 for simplicity and durability. Free & open-source'), 'Site footer must include clean Built with Google Gemini in October 2026 attribution');
-    assert.ok(readmeMd.includes('Built with Google Gemini in October 2026 for simplicity and durability'), 'README.md must include Built with Google Gemini in October 2026 for simplicity and durability');
+    assert.ok(apiJs.includes('Prototyped with Google Gemini in October 2026 for simplicity and durability. Free & open-source'), 'Site footer must include clean Prototyped with Google Gemini in October 2026 attribution');
+    assert.ok(readmeMd.includes('Prototyped with Google Gemini in October 2026 for simplicity and durability'), 'README.md must include Prototyped with Google Gemini in October 2026 for simplicity and durability');
     assert.ok(readmeMd.includes('(HANDBOOK.md)'), 'README.md must link to HANDBOOK.md');
     assert.ok(fs.existsSync(path.join(ctx.rootDir, 'HANDBOOK.md')), 'HANDBOOK.md must exist in repository root');
     const handbookMd = fs.readFileSync(path.join(ctx.rootDir, 'HANDBOOK.md'), 'utf8');
@@ -576,13 +576,13 @@ module.exports = async function registerPwaCalendarTests(ctx, t9) {
     assert.ok(handbookMd.includes('Typical Rules of Play on the Field on Sundays'), 'HANDBOOK.md must contain typical rules of play section');
     assert.ok(handbookMd.includes('id="rules-of-play"'), 'HANDBOOK.md must have anchor for rules of play');
     assert.ok(!apiJs.includes('nav-link-handbook'), 'api.js top bar must not render nav-link-handbook');
-    assert.ok(apiJs.includes('footer.handbook'), 'api.js must render footer.handbook');
+    assert.ok(!apiJs.includes('data-i18n="footer.handbook"'), 'api.js footer must not render handbook & field rules link');
     assert.ok(indexHtml.includes('hero-handbook-btn'), 'index.html must include hero-handbook-btn');
     const licenseText = fs.readFileSync(path.join(ctx.rootDir, 'LICENSE'), 'utf8');
     assert.ok(licenseText.includes('Apache License') && licenseText.includes('Version 2.0, January 2004'), 'LICENSE must be Apache License 2.0');
     assert.ok(readmeMd.includes('Apache License, Version 2.0 (Apache-2.0)'), 'README.md must cite Apache License 2.0');
     assert.ok(apiJs.includes('footer.copyright'), 'api.js must include footer.copyright');
-    assert.ok(apiJs.includes('Apache License 2.0'), 'api.js must display Apache License 2.0');
+    assert.ok(apiJs.includes('href="https://www.apache.org/licenses/LICENSE-2.0"') && apiJs.includes('data-i18n="footer.copyright"') && !apiJs.includes('>Apache License 2.0</a>'), 'api.js must link footer.copyright directly to Apache License 2.0 without extra link text');
   });
 
   await test('T9.17: RSS 2.0 Feed with Media RSS, Multimedia Interpretation, and Highlights Lifecycle', async () => {

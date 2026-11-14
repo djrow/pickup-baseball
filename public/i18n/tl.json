@@ -280,5 +280,10 @@
   "phrase.duty_facilitator": "Tagapag-ugnay ng Laro",
   "phrase.duty_facilitator_desc": "Tumulong sa pag-coordinate ng mga team, batting order, at patas na laro.",
   "phrase.duty_water_food": "Tubig / Pagkain",
-  "phrase.duty_water_food_desc": "Magdala ng maiinom na tubig, yelo, at meryenda o prutas para sa mga manlalaro."
+  "phrase.duty_water_food_desc": "Magdala ng maiinom na tubig, yelo, at meryenda o prutas para sa mga manlalaro.",
+  "login.shared_device": "Nakikigamit o device ito ng kaibigan (pansamantalang 4-oras na sign-in)",
+  "login.shared_device_help": "Magsa-sign out pagkasara ng browser o pagkalipas ng 4 na oras, at hindi ise-save ang email mo rito.",
+  "profile.sessions_title": "🔐 Mga Naka-Sign-In na Device",
+  "profile.sessions_desc": "Hanggang 5 device nang sabay-sabay ang puwedeng naka-sign in. Kung nakalimutan mong mag-log out sa phone ng kaibigan, mag-sign out sa ibang device sa ibaba.",
+  "profile.logout_other_devices_btn": "Mag-Sign Out sa Lahat ng Ibang Device"
 }

@@ -337,4 +337,4 @@ Licensed under the **Apache License, Version 2.0 (Apache-2.0)**.
 
 See [`LICENSE`](LICENSE) for the full license text.
 
-Built with Google Gemini in October 2026 for simplicity and durability.
+Prototyped with Google Gemini in October 2026 for simplicity and durability.

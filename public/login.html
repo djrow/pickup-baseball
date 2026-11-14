@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sign In / Register - Sunday Pickup Baseball</title>
-  <link rel="stylesheet" href="/css/style.css?v=138">
-  <link rel="stylesheet" href="/css/themes.css?v=138">
+  <link rel="stylesheet" href="/css/style.css?v=139">
+  <link rel="stylesheet" href="/css/themes.css?v=139">
   <link rel="alternate" type="application/rss+xml" title="Sunday Pickup Baseball Highlights &amp; Updates" href="/feed.xml">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
@@ -92,6 +92,16 @@
           </label>
         </div>
 
+        <div class="form-group" style="margin-bottom: 10px;">
+          <label style="display: flex; align-items: flex-start; gap: 8px; font-weight: 500; font-size: 0.88rem; cursor: pointer;">
+            <input type="checkbox" id="shared-device" style="width: 16px; height: 16px; cursor: pointer; margin-top: 2px;">
+            <span>
+              <span data-i18n="login.shared_device">This is a shared or friend's device (temporary 4-hour sign-in)</span>
+              <span class="help-text" style="display: block; font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;" data-i18n="login.shared_device_help">Signs out when the browser closes or after 4 hours, and won't save your email here.</span>
+            </span>
+          </label>
+        </div>
+
         <button type="submit" id="send-code-btn" class="btn btn-primary" style="width: 100%; margin-top: 8px;" data-i18n="login.send_code_btn">
           Send Sign-In Code
         </button>
@@ -136,7 +146,7 @@
 
   <footer id="site-footer" class="site-footer"></footer>
 
-  <script src="/js/api.js?v=138"></script>
-  <script src="/js/login.js?v=138"></script>
+  <script src="/js/api.js?v=139"></script>
+  <script src="/js/login.js?v=139"></script>
 </body>
 </html>

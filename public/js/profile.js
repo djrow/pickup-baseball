@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', async function() {
   API.renderNav(currentUser);
   populateProfileData();
   setupClubhouseOptIn();
+  setupSessionManagement();
   setupAvatarUpload();
   setupProfileForm();
   setupLogoutButtons();
@@ -178,6 +179,59 @@ function setupClubhouseOptIn() {
     } finally {
       btn.disabled = false;
       renderClubhouseOptInState();
+    }
+  });
+}
+
+function updateSessionBadgeUi(activeCount, maxSessions, isTemporary) {
+  const pill = document.getElementById('badge-sessions-pill');
+  if (!pill) return;
+  const count = Number(activeCount || 1);
+  const cap = Number(maxSessions || 5);
+  let label = count + ' / ' + cap + ' Active Device' + (count === 1 ? '' : 's');
+  if (isTemporary) {
+    label += ' • Temporary (4h)';
+  }
+  pill.className = count > 1 ? 'badge badge-orange' : 'badge badge-green';
+  pill.textContent = label;
+}
+
+async function loadSessionStatus() {
+  const pill = document.getElementById('badge-sessions-pill');
+  if (!pill) return;
+  try {
+    const res = await API.getActiveSessions();
+    if (res && !res.error && typeof res.activeCount === 'number') {
+      updateSessionBadgeUi(res.activeCount, res.maxSessions, Boolean(res.currentSessionTemporary));
+    } else {
+      updateSessionBadgeUi(1, 5, Boolean(currentUser && currentUser.sessionIsTemporary));
+    }
+  } catch (err) {
+    updateSessionBadgeUi(1, 5, Boolean(currentUser && currentUser.sessionIsTemporary));
+  }
+}
+
+function setupSessionManagement() {
+  loadSessionStatus();
+  const btn = document.getElementById('btn-logout-other-devices');
+  if (!btn) return;
+  btn.addEventListener('click', async function() {
+    btn.disabled = true;
+    const origText = btn.textContent;
+    btn.textContent = 'Signing out...';
+    try {
+      const res = await API.logoutOtherDevices();
+      if (res.error) {
+        showAlert(res.error, true);
+      } else {
+        updateSessionBadgeUi(res.activeCount || 1, res.maxSessions || 5, Boolean(currentUser && currentUser.sessionIsTemporary));
+        showAlert(res.message || 'Signed out of all other devices.', false);
+      }
+    } catch (err) {
+      showAlert('Failed to sign out of other devices.', true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = origText;
     }
   });
 }

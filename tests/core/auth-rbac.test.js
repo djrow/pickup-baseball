@@ -114,6 +114,139 @@ test('T1: Authentication & Session Cookies', async (t) => {
     assert.equal(meAfterLogout.status, 200);
     assert.equal(meAfterLogout.data.user, null, 'GET /me must return null user after logout');
   });
+
+  await t.test('T1.6: Per-user active session cap (max 5) evicts oldest sessions on new login', async () => {
+    const email = 'cap_tester@sundaypickup.org';
+    const sessionCookies = [];
+
+    for (let i = 0; i < 6; i++) {
+      const sendRes = await apiReq('POST', '/api/auth/send-code', null, { email, name: 'Cap Tester' });
+      assert.equal(sendRes.status, 200);
+      const codeRow = db.prepare('SELECT code FROM auth_codes WHERE email = ? ORDER BY id DESC LIMIT 1').get(email);
+      assert.ok(codeRow && codeRow.code);
+      const verifyRes = await apiReq('POST', '/api/auth/verify-code', null, { email, code: codeRow.code });
+      assert.equal(verifyRes.status, 200);
+      const sid = getCookie(verifyRes.headers, 'baseball_session');
+      assert.ok(sid);
+      sessionCookies.push(`baseball_session=${sid}`);
+    }
+
+    const userRow = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+    const activeRows = db.prepare("SELECT id FROM sessions WHERE user_id = ? AND datetime(expires_at) > datetime('now')").all(userRow.id);
+    assert.equal(activeRows.length, 5, 'User must have at most 5 active sessions after 6 logins');
+
+    // Oldest session (#0) must be evicted; newest session (#5) must still work
+    const oldestMe = await apiReq('GET', '/api/auth/me', sessionCookies[0]);
+    assert.equal(oldestMe.data.user, null, 'Oldest session beyond cap must be invalidated');
+
+    const secondMe = await apiReq('GET', '/api/auth/me', sessionCookies[1]);
+    assert.equal(secondMe.data.user.email, email, 'Second session within cap must remain valid');
+
+    const newestMe = await apiReq('GET', '/api/auth/me', sessionCookies[5]);
+    assert.equal(newestMe.data.user.email, email, 'Newest session must remain valid');
+  });
+
+  await t.test('T1.7: Shared-device checkbox triggers temporary 4h session-only cookie across code & magic link', async () => {
+    // 1. 6-digit code login with shared_device: true
+    const email1 = 'shared_code@sundaypickup.org';
+    const send1 = await apiReq('POST', '/api/auth/send-code', null, {
+      email: email1,
+      name: 'Shared Code Player',
+      shared_device: true
+    });
+    assert.equal(send1.status, 200);
+
+    const auth1 = db.prepare('SELECT * FROM auth_codes WHERE email = ? ORDER BY id DESC LIMIT 1').get(email1);
+    assert.equal(auth1.shared_device, 1, 'auth_codes must persist shared_device = 1');
+
+    const verify1 = await apiReq('POST', '/api/auth/verify-code', null, {
+      email: email1,
+      code: auth1.code,
+      shared_device: true
+    });
+    assert.equal(verify1.status, 200);
+    assert.equal(verify1.data.temporarySession, true, 'verify-code response must indicate temporarySession');
+
+    const setCookie1 = typeof verify1.headers.getSetCookie === 'function'
+      ? (verify1.headers.getSetCookie().join('; '))
+      : (verify1.headers.get('set-cookie') || '');
+    assert.ok(!/max-age=/i.test(setCookie1), 'Shared-device cookie must omit Max-Age so it expires on browser close');
+
+    const sid1 = getCookie(verify1.headers, 'baseball_session');
+    const dbSess1 = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sid1);
+    assert.equal(dbSess1.is_temporary, 1, 'Session row must be flagged is_temporary = 1');
+    const ttlHours1 = (new Date(dbSess1.expires_at).getTime() - Date.now()) / (1000 * 60 * 60);
+    assert.ok(ttlHours1 > 3.5 && ttlHours1 <= 4.1, `Temporary session TTL should be ~4 hours (got ${ttlHours1.toFixed(2)}h)`);
+
+    const me1 = await apiReq('GET', '/api/auth/me', `baseball_session=${sid1}`);
+    assert.equal(me1.data.user.sessionIsTemporary, true, '/api/auth/me must report sessionIsTemporary: true');
+
+    // 2. Magic link login inheriting shared_device = 1 from auth_codes
+    const email2 = 'shared_magic@sundaypickup.org';
+    const send2 = await apiReq('POST', '/api/auth/send-code', null, {
+      email: email2,
+      name: 'Shared Magic Player',
+      shared_device: true
+    });
+    assert.equal(send2.status, 200);
+    const auth2 = db.prepare('SELECT * FROM auth_codes WHERE email = ? ORDER BY id DESC LIMIT 1').get(email2);
+    const magic2 = await apiReq('GET', `/api/auth/verify-magic?token=${auth2.token}`);
+    assert.equal(magic2.status, 302);
+    const setCookie2 = typeof magic2.headers.getSetCookie === 'function'
+      ? (magic2.headers.getSetCookie().join('; '))
+      : (magic2.headers.get('set-cookie') || '');
+    assert.ok(!/max-age=/i.test(setCookie2), 'Shared-device magic-link cookie must omit Max-Age');
+    const sid2 = getCookie(magic2.headers, 'baseball_session');
+    const dbSess2 = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sid2);
+    assert.equal(dbSess2.is_temporary, 1, 'Magic-link shared-device session must be marked is_temporary = 1');
+  });
+
+  await t.test('T1.8: Sign out of all other devices API + Login/Profile UI controls', async () => {
+    // 1. Unauthenticated access to session endpoints must fail closed (401)
+    const unauthList = await apiReq('GET', '/api/auth/sessions', null);
+    assert.equal(unauthList.status, 401);
+    const unauthRevoke = await apiReq('POST', '/api/auth/logout-other-devices', null, {});
+    assert.equal(unauthRevoke.status, 401);
+
+    // 2. Create 3 sessions for the same user
+    const email = 'multi_device@sundaypickup.org';
+    const cookies = [];
+    for (let i = 0; i < 3; i++) {
+      await apiReq('POST', '/api/auth/send-code', null, { email, name: 'Multi Device' });
+      const row = db.prepare('SELECT code FROM auth_codes WHERE email = ? ORDER BY id DESC LIMIT 1').get(email);
+      const res = await apiReq('POST', '/api/auth/verify-code', null, { email, code: row.code });
+      cookies.push(`baseball_session=${getCookie(res.headers, 'baseball_session')}`);
+    }
+
+    const listRes = await apiReq('GET', '/api/auth/sessions', cookies[2]);
+    assert.equal(listRes.status, 200);
+    assert.equal(listRes.data.activeCount, 3, 'Must report 3 active sessions');
+    assert.equal(listRes.data.maxSessions, 5, 'Must report maxSessions cap of 5');
+
+    // 3. Sign out of all other devices from cookies[2]
+    const revokeRes = await apiReq('POST', '/api/auth/logout-other-devices', cookies[2], {});
+    assert.equal(revokeRes.status, 200);
+    assert.equal(revokeRes.data.success, true);
+    assert.equal(revokeRes.data.revokedCount, 2, 'Must revoke the 2 other sessions');
+    assert.equal(revokeRes.data.activeCount, 1, 'Only 1 active session must remain');
+
+    const meOther0 = await apiReq('GET', '/api/auth/me', cookies[0]);
+    const meOther1 = await apiReq('GET', '/api/auth/me', cookies[1]);
+    const meCurrent = await apiReq('GET', '/api/auth/me', cookies[2]);
+    assert.equal(meOther0.data.user, null, 'Other device #0 must be signed out');
+    assert.equal(meOther1.data.user, null, 'Other device #1 must be signed out');
+    assert.equal(meCurrent.data.user.email, email, 'Current device must remain signed in');
+
+    // 4. Verify UI controls exist cleanly in login.html/login.js and profile.html/profile.js
+    const loginHtml = fs.readFileSync(path.join(ctx.rootDir, 'public', 'login.html'), 'utf8');
+    const loginJs = fs.readFileSync(path.join(ctx.rootDir, 'public', 'js', 'login.js'), 'utf8');
+    const profileHtml = fs.readFileSync(path.join(ctx.rootDir, 'public', 'profile.html'), 'utf8');
+    const profileJs = fs.readFileSync(path.join(ctx.rootDir, 'public', 'js', 'profile.js'), 'utf8');
+    assert.ok(loginHtml.includes('id="shared-device"'), 'login.html must include shared-device checkbox');
+    assert.ok(loginJs.includes("getElementById('shared-device')"), 'login.js must bind shared-device checkbox');
+    assert.ok(profileHtml.includes('id="btn-logout-other-devices"'), 'profile.html must include sign out of all other devices button');
+    assert.ok(profileJs.includes("getElementById('btn-logout-other-devices')"), 'profile.js must bind logout-other-devices button');
+  });
 });
 
 // ---------------------------------------------------------------------------

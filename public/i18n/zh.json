@@ -280,5 +280,10 @@
   "phrase.duty_facilitator": "比赛协调员",
   "phrase.duty_facilitator_desc": "协助协调分队、击球顺序及比赛全程公平竞赛。",
   "phrase.duty_water_food": "饮用水 / 零食",
-  "phrase.duty_water_food_desc": "为球员带来饮用水、冰块及休息区零食或水果。"
+  "phrase.duty_water_food_desc": "为球员带来饮用水、冰块及休息区零食或水果。",
+  "login.shared_device": "这是公用设备或朋友的设备（临时登录 4 小时）",
+  "login.shared_device_help": "关闭浏览器或 4 小时后自动退出登录，且不会在此设备上保存您的邮箱。",
+  "profile.sessions_title": "🔐 已登录的设备",
+  "profile.sessions_desc": "账号最多可同时在 5 台设备上保持登录。如果您忘记在朋友手机上退出登录，可以在下方退出所有其他设备。",
+  "profile.logout_other_devices_btn": "退出所有其他设备"
 }

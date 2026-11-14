@@ -61,7 +61,7 @@ const EN_DICT = {
   "calendar.view_details": "RSVP & View Game Details →",
   "footer.tagline": "Building community through America's pastime.",
   "footer.subtext": "Built for simplicity and durability. Free & open-source.",
-  "footer.about_site": "Built with Google Gemini in October 2026 for simplicity and durability. Free & open-source",
+  "footer.about_site": "Prototyped with Google Gemini in October 2026 for simplicity and durability. Free & open-source",
   "footer.handbook": "Handbook & Field Rules",
   "footer.copyright": "© 2026 Pickup Baseball Foundation. Licensed under Apache License 2.0.",
   "hero.handbook_btn": "📖 Handbook & Field Rules ↗",
@@ -242,6 +242,8 @@ const EN_DICT = {
   "login.name_help": "Only needed if this is your first time playing with us.",
   "login.email_label": "Email Address *",
   "login.remember_email": "Remember my email address on this device",
+  "login.shared_device": "This is a shared or friend's device (temporary 4-hour sign-in)",
+  "login.shared_device_help": "Signs out when the browser closes or after 4 hours, and won't save your email here.",
   "login.send_code_btn": "Send Sign-In Code",
   "login.enter_code_label": "Enter 6-Digit Code",
   "login.code_help": "Or click the link sent to your email to log in instantly. (Code expires in 10 minutes.)",
@@ -267,6 +269,9 @@ const EN_DICT = {
   "profile.bio_help": "Shown on the game roster alongside gear you bring.",
   "profile.save_btn": "Save Changes",
   "profile.cancel_btn": "Cancel",
+  "profile.sessions_title": "🔐 Signed-In Devices",
+  "profile.sessions_desc": "Accounts stay signed in on up to 5 devices at once. If you forgot to log out on a friend's phone, sign out everywhere else below.",
+  "profile.logout_other_devices_btn": "Sign Out of All Other Devices",
   "donate.hero_pill": "❤️ Support Free Community Baseball",
   "donate.hero_title": "Help Keep the Games Free",
   "donate.hero_desc": "Pickup Baseball Foundation provides free, welcoming Sunday baseball for everyone in the community. Your donation helps us buy equipment, maintain gear, and keep the games open to all.",
@@ -321,7 +326,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '138',
+  CLIENT_VERSION: '139',
 
   // Current user cache
   currentUser: null,
@@ -727,10 +732,10 @@ const API = {
             </a>
           </div>
           <p style="margin-top: 12px; font-size: 0.8rem; color: #94a3b8; line-height: 1.5;">
-            <span data-i18n="footer.about_site">${this.escapeHtml(this.t('footer.about_site', 'Built with Google Gemini in October 2026 for simplicity and durability. Free & open-source'))}</span> on <a href="https://github.com/djrow/pickup-baseball" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">GitHub</a> • <a href="https://github.com/djrow/pickup-baseball/blob/trunk/HANDBOOK.md" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;" data-i18n="footer.handbook">${this.escapeHtml(this.t('footer.handbook', 'Handbook & Field Rules'))}</a> • <a href="/waiver.html" style="color: inherit; text-decoration: underline;">Player Waiver</a>.
+            <span data-i18n="footer.about_site">${this.escapeHtml(this.t('footer.about_site', 'Prototyped with Google Gemini in October 2026 for simplicity and durability. Free & open-source'))}</span> on <a href="https://github.com/djrow/pickup-baseball" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">GitHub</a> • <a href="/waiver.html" style="color: inherit; text-decoration: underline;">Player Waiver</a>.
           </p>
           <p style="margin-top: 6px; font-size: 0.75rem; color: #64748b; line-height: 1.4;">
-            <span data-i18n="footer.copyright">© 2026 Pickup Baseball Foundation. Licensed under Apache License 2.0.</span> • <a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">Apache License 2.0</a> • <span id="footer-app-version" class="footer-app-version" title="Loaded web app version">v${this.escapeHtml(this.CLIENT_VERSION)}</span>
+            <a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;" data-i18n="footer.copyright">${this.escapeHtml(this.t('footer.copyright', '© 2026 Pickup Baseball Foundation. Licensed under Apache License 2.0.'))}</a> • <span id="footer-app-version" class="footer-app-version" title="Loaded web app version">v${this.escapeHtml(this.CLIENT_VERSION)}</span>
           </p>
         </div>
       `;
@@ -1385,12 +1390,28 @@ const API = {
     });
   },
 
-  async sendLoginCode(email, name = '') {
-    return this.request('POST', '/api/auth/send-code', { email: email, name: name });
+  async sendLoginCode(email, name = '', sharedDevice = false) {
+    return this.request('POST', '/api/auth/send-code', {
+      email: email,
+      name: name,
+      shared_device: Boolean(sharedDevice)
+    });
   },
 
-  async verifyLoginCode(email, code) {
-    return this.request('POST', '/api/auth/verify-code', { email: email, code: code });
+  async verifyLoginCode(email, code, sharedDevice) {
+    const payload = { email: email, code: code };
+    if (sharedDevice !== undefined) {
+      payload.shared_device = Boolean(sharedDevice);
+    }
+    return this.request('POST', '/api/auth/verify-code', payload);
+  },
+
+  async getActiveSessions() {
+    return this.request('GET', '/api/auth/sessions', null, { noStore: true });
+  },
+
+  async logoutOtherDevices() {
+    return this.request('POST', '/api/auth/logout-other-devices', {});
   },
 
   async updateProfile(name, bio) {

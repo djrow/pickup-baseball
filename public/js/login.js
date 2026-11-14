@@ -72,8 +72,21 @@ document.addEventListener('DOMContentLoaded', async function() {
   const sentNotice = document.getElementById('code-sent-notice');
   const startOverBtn = document.getElementById('start-over-btn');
   const rememberBox = document.getElementById('remember-email');
+  const sharedDeviceBox = document.getElementById('shared-device');
 
   let currentEmail = '';
+  let currentSharedDevice = false;
+
+  if (sharedDeviceBox && rememberBox) {
+    sharedDeviceBox.addEventListener('change', function() {
+      if (sharedDeviceBox.checked) {
+        rememberBox.checked = false;
+        rememberBox.disabled = true;
+      } else {
+        rememberBox.disabled = false;
+      }
+    });
+  }
 
   try {
     const savedEmail = localStorage.getItem('pickup_remembered_email');
@@ -99,6 +112,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     const name = document.getElementById('player-name').value.trim();
     const email = document.getElementById('player-email').value.trim().toLowerCase();
+    const isSharedDevice = Boolean(sharedDeviceBox && sharedDeviceBox.checked);
     const sendBtn = document.getElementById('send-code-btn');
 
     if (!email) {
@@ -107,7 +121,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
 
     try {
-      if (rememberBox.checked) {
+      if (rememberBox.checked && !isSharedDevice) {
         localStorage.setItem('pickup_remembered_email', email);
         if (name) localStorage.setItem('pickup_remembered_name', name);
       } else {
@@ -120,16 +134,18 @@ document.addEventListener('DOMContentLoaded', async function() {
     sendBtn.textContent = 'Sending code...';
 
     try {
-      const res = await API.sendLoginCode(email, name);
+      const res = await API.sendLoginCode(email, name, isSharedDevice);
       if (res.error) {
         showAlert(res.error, true);
         sendBtn.disabled = false;
         sendBtn.textContent = 'Send Sign-In Code';
       } else {
         currentEmail = email;
+        currentSharedDevice = isSharedDevice;
         requestForm.style.display = 'none';
         verifyForm.style.display = 'block';
-        sentNotice.innerHTML = '📬 We sent a 6-digit code and magic link to <strong>' + API.escapeHtml(email) + '</strong>.';
+        sentNotice.innerHTML = '📬 We sent a 6-digit code and magic link to <strong>' + API.escapeHtml(email) + '</strong>.'
+          + (isSharedDevice ? '<br><small>⏳ Temporary shared-device mode: session expires when browser closes or after 4 hours.</small>' : '');
         document.getElementById('auth-code').focus();
       }
     } catch (err) {
@@ -155,7 +171,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     verifyBtn.textContent = 'Verifying...';
 
     try {
-      const res = await API.verifyLoginCode(currentEmail, code);
+      const res = await API.verifyLoginCode(currentEmail, code, currentSharedDevice);
       if (res.error) {
         showAlert(res.error, true);
         verifyBtn.disabled = false;

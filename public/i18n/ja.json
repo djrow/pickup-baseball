@@ -280,5 +280,10 @@
   "phrase.duty_facilitator": "試合進行係",
   "phrase.duty_facilitator_desc": "チーム分け、打順、試合全体のフェアプレー進行をサポートします。",
   "phrase.duty_water_food": "飲料水・軽食",
-  "phrase.duty_water_food_desc": "選手用の飲料水、氷、ダグアウト用の軽食や果物を持参します。"
+  "phrase.duty_water_food_desc": "選手用の飲料水、氷、ダグアウト用の軽食や果物を持参します。",
+  "login.shared_device": "共有端末または友人の端末です（4時間の一時ログイン）",
+  "login.shared_device_help": "ブラウザを閉じるか4時間経過でサインアウトされ、メールアドレスも保存されません。",
+  "profile.sessions_title": "🔐 ログイン中の端末",
+  "profile.sessions_desc": "アカウントは同時に最大5台の端末でログインを維持できます。友人のスマホでログアウトし忘れた場合は、以下から他の端末をログアウトできます。",
+  "profile.logout_other_devices_btn": "他のすべての端末からログアウト"
 }
