@@ -256,9 +256,20 @@ rtcRouter.post('/signal', requireAuth, async (c) => {
   // Verify recipient user exists in BASEBALL_DB and can access this channel
   if (baseballDb) {
     const recipientUser = await baseballDb.prepare(`
-      SELECT id, email, role, is_moderator, COALESCE(clubhouse_opted_in, 1) as clubhouse_opted_in,
-             EXISTS(SELECT 1 FROM banned_emails b WHERE LOWER(b.email) = LOWER(users.email)) as is_banned
-      FROM users WHERE id = ?
+      SELECT u.id, u.email, u.role, u.is_admin, u.is_moderator, COALESCE(u.clubhouse_opted_in, 1) as clubhouse_opted_in,
+             EXISTS(SELECT 1 FROM banned_emails b WHERE LOWER(b.email) = LOWER(u.email)) as is_banned,
+             CASE WHEN COALESCE(u.role, 'player') = 'facilitator' THEN 1 ELSE EXISTS(
+               SELECT 1 FROM duty_assignments da
+               JOIN event_duties ed ON ed.id = da.duty_id
+               JOIN events e ON e.id = ed.event_id
+               JOIN attendees a ON a.id = da.attendee_id
+               WHERE (e.status IS NULL OR e.status NOT IN ('cancelled', 'rainout'))
+                 AND datetime(e.event_date) >= datetime('now', '-1 day')
+                 AND (ed.title = 'Game Facilitator' OR ed.title LIKE '%Facilitator%')
+                 AND (a.user_id = u.id OR LOWER(a.email) = LOWER(u.email))
+                 AND a.status = 'attending'
+             ) END as facilitator_flag
+      FROM users u WHERE u.id = ?
     `).bind(recipientUserId).first();
     if (!recipientUser) {
       return c.json({ error: 'Recipient user not found.' }, 404);
@@ -266,18 +277,28 @@ rtcRouter.post('/signal', requireAuth, async (c) => {
     if (recipientUser.is_banned || Number(recipientUser.clubhouse_opted_in) === 0) {
       return c.json({ error: 'Recipient cannot receive Clubhouse signals.' }, 403);
     }
-    const rRole = (recipientUser.role || 'player').toLowerCase();
+    const rRole = (recipientUser.role || (recipientUser.is_admin === 1 ? 'admin' : 'player')).toLowerCase();
     const recipientNorm = {
       id: recipientUser.id,
       email: recipientUser.email,
       role: rRole,
-      isAdmin: rRole === 'admin',
-      isModerator: Boolean(recipientUser.is_moderator) || rRole === 'admin',
-      canManageEvents: rRole === 'organizer' || rRole === 'admin'
+      isAdmin: rRole === 'admin' || Boolean(recipientUser.is_admin),
+      is_admin: recipientUser.is_admin ? 1 : 0,
+      isModerator: Boolean(recipientUser.is_moderator) || rRole === 'admin' || Boolean(recipientUser.is_admin),
+      isGameFacilitator: Boolean(recipientUser.facilitator_flag),
+      canManageEvents: rRole === 'organizer' || rRole === 'admin' || Boolean(recipientUser.is_admin)
     };
     if (!(await canUserAccessChannel(chatDb, recipientNorm, channel, 'read'))) {
       return c.json({ error: 'Recipient does not have permission to access this channel.' }, 403);
     }
+  }
+
+  // Require sender to have an active voice participant presence in this room (prevents stealth wiretapping)
+  const senderActiveVp = await chatDb.prepare(
+    'SELECT 1 FROM voice_participants WHERE channel_id = ? AND user_id = ? AND heartbeat_at > ? LIMIT 1'
+  ).bind(channel.id, user.id, nowSec - 25).first();
+  if (!senderActiveVp) {
+    return c.json({ error: 'Access denied: you must join this voice room before sending WebRTC signals.' }, 403);
   }
 
   // Check if recipient personally muted sender

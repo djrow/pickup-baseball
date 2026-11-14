@@ -5,7 +5,7 @@
  */
 
 import { Hono } from 'hono';
-import { requireAuth, requireOrganizer, generateToken } from '../security.js';
+import { requireAuth, requireOrganizer, generateToken, getSafePublicOrigin } from '../security.js';
 import { parseAllowedEmails, canUserAccessEvent, getDutyType } from '../policy.js';
 import { canUserAccessChannel } from './chat.js';
 import { promoteNextWaitlistedPlayer } from './events/helpers.js';
@@ -96,7 +96,7 @@ baseballRouter.get('/upcoming', async (c) => {
   if (chatDb && user) {
     try {
       const candidateCh = await chatDb.prepare(
-        'SELECT * FROM channels WHERE linked_event_id = ? LIMIT 1'
+        "SELECT * FROM channels WHERE linked_event_id = ? AND channel_type NOT IN ('dm', 'group_dm') LIMIT 1"
       ).bind(event.id).first();
       if (candidateCh && (await canUserAccessChannel(chatDb, user, candidateCh, 'read'))) {
         linkedChannel = candidateCh;
@@ -246,7 +246,7 @@ baseballRouter.post('/events/:eventId/quick-rsvp', requireAuth, async (c) => {
     ).run();
 
     if (wasAttending && (finalStatus !== 'attending' || prevPlayersCount > playersCount)) {
-      const origin = new URL(c.req.url).origin;
+      const origin = getSafePublicOrigin(c);
       await promoteNextWaitlistedPlayer(c, origin, eventId);
     }
   } else {
@@ -419,8 +419,11 @@ baseballRouter.post('/events/:eventId/sync-channel', requireOrganizer, async (c)
     return c.json({ error: 'This event is restricted to invited players.' }, 403);
   }
 
+  const invitedEmails = parseAllowedEmails(event.allowed_emails);
+  const isInviteRestricted = invitedEmails.length > 0;
+
   let channel = await chatDb.prepare(
-    'SELECT * FROM channels WHERE linked_event_id = ? LIMIT 1'
+    "SELECT * FROM channels WHERE linked_event_id = ? AND channel_type NOT IN ('dm', 'group_dm') LIMIT 1"
   ).bind(eventId).first();
 
   if (!channel) {
@@ -438,45 +441,72 @@ baseballRouter.post('/events/:eventId/sync-channel', requireOrganizer, async (c)
       const insRes = await chatDb.prepare(`
         INSERT INTO channels (
           slug, name, category, channel_type, topic,
-          min_role_read, min_role_write, is_encrypted, linked_event_id, sort_order, created_by
-        ) VALUES (?, ?, 'Text Channels', 'text', ?, 'player', 'player', 1, ?, 3, ?)
-      `).bind(slug, name, topic, eventId, user.id).run();
+          min_role_read, min_role_write, is_encrypted, is_private, linked_event_id, sort_order, created_by
+        ) VALUES (?, ?, 'Text Channels', 'text', ?, ?, 'player', 1, ?, ?, 3, ?)
+      `).bind(
+        slug,
+        name,
+        topic,
+        isInviteRestricted ? 'invite' : 'player',
+        isInviteRestricted ? 1 : 0,
+        eventId,
+        user.id
+      ).run();
 
-      channel = await chatDb.prepare('SELECT * FROM channels WHERE id = ?').bind(insRes.meta.last_row_id).first();
+      const createdChId = insRes.meta.last_row_id;
+      if (isInviteRestricted) {
+        const { results: userRows } = await baseballDb.prepare('SELECT id, email FROM users').all();
+        const emailSet = new Set(invitedEmails);
+        const invitedIds = Array.from(new Set([
+          user.id,
+          ...(userRows || []).filter((u) => emailSet.has(String(u.email || '').trim().toLowerCase())).map((u) => u.id)
+        ]));
+        if (invitedIds.length > 0) {
+          await chatDb.batch(invitedIds.map((uid) =>
+            chatDb.prepare(
+              'INSERT INTO channel_members (channel_id, user_id, role) VALUES (?, ?, ?) ON CONFLICT(channel_id, user_id) DO NOTHING'
+            ).bind(createdChId, uid, uid === user.id ? 'owner' : 'member')
+          ));
+        }
+      }
+
+      channel = await chatDb.prepare('SELECT * FROM channels WHERE id = ?').bind(createdChId).first();
     } catch (insertErr) {
       channel = await chatDb.prepare(
-        'SELECT * FROM channels WHERE linked_event_id = ? OR slug = ? LIMIT 1'
+        "SELECT * FROM channels WHERE (linked_event_id = ? OR slug = ?) AND channel_type NOT IN ('dm', 'group_dm') LIMIT 1"
       ).bind(eventId, slug).first();
       if (!channel) throw insertErr;
     }
   }
 
-  // Post a game_embed announcement message into #announcements
-  try {
-    const announcementsCh = await chatDb.prepare("SELECT id FROM channels WHERE slug = 'announcements'").first();
-    if (announcementsCh) {
-      const embedMeta = JSON.stringify({
-        event_id: event.id,
-        title: event.title,
-        location: event.location,
-        event_date: event.event_date,
-        channel_id: channel.id,
-        channel_slug: channel.slug
-      });
-      await chatDb.prepare(`
-        INSERT INTO messages (
-          channel_id, author_id, author_name, author_role, content, message_type, metadata_json
-        ) VALUES (?, ?, ?, ?, ?, 'game_embed', ?)
-      `).bind(
-        announcementsCh.id,
-        user.id,
-        user.name,
-        user.role || 'organizer',
-        `⚾ Game Day Channel Opened: ${event.title} at ${event.location} — Join ${channel.name}!`,
-        embedMeta
-      ).run();
-    }
-  } catch (e) {}
+  // Post a game_embed announcement message into #announcements (only for non-private events)
+  if (!isInviteRestricted) {
+    try {
+      const announcementsCh = await chatDb.prepare("SELECT id FROM channels WHERE slug = 'announcements'").first();
+      if (announcementsCh) {
+        const embedMeta = JSON.stringify({
+          event_id: event.id,
+          title: event.title,
+          location: event.location,
+          event_date: event.event_date,
+          channel_id: channel.id,
+          channel_slug: channel.slug
+        });
+        await chatDb.prepare(`
+          INSERT INTO messages (
+            channel_id, author_id, author_name, author_role, content, message_type, metadata_json
+          ) VALUES (?, ?, ?, ?, ?, 'game_embed', ?)
+        `).bind(
+          announcementsCh.id,
+          user.id,
+          user.name,
+          user.role || 'organizer',
+          `⚾ Game Day Channel Opened: ${event.title} at ${event.location} — Join ${channel.name}!`,
+          embedMeta
+        ).run();
+      }
+    } catch (e) {}
+  }
 
   return c.json({
     success: true,

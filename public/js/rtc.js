@@ -221,7 +221,7 @@
     if (!Array.isArray(signals) || signals.length === 0) return;
     for (var i = 0; i < signals.length; i++) {
       (function (sig) {
-        if (sig.channel_id && Number(sig.channel_id) !== Number(rtcState.activeChannelId)) return;
+        if (!sig.channel_id || Number(sig.channel_id) !== Number(rtcState.activeChannelId)) return;
         var senderId = Number(sig.sender_user_id);
         if (!senderId || senderId === Number(rtcState.currentUserId)) return;
         var payload = {};
@@ -232,6 +232,12 @@
         }
 
         if (sig.signal_type === 'offer') {
+          if (root.ClubhouseStore && root.ClubhouseStore.state && Array.isArray(root.ClubhouseStore.state.voiceParticipants)) {
+            var activeInChannel = root.ClubhouseStore.state.voiceParticipants.some(function (p) {
+              return Number(p.user_id) === senderId && Number(p.channel_id) === Number(rtcState.activeChannelId);
+            });
+            if (!activeInChannel) return;
+          }
           var pc = getOrCreatePeerConnection(senderId, false);
           if (!pc) return;
           pc.setRemoteDescription(new RTCSessionDescription(payload)).then(function () {
@@ -300,6 +306,7 @@
         }
         rtcState.activeChannelId = data.channel_id;
         rtcState.activeChannelSlug = String(channelIdOrSlug);
+        rtcState.currentUserId = currentUserId ? Number(currentUserId) : null;
         var participants = Array.isArray(data.participants) ? data.participants : [];
 
         startHeartbeatLoop();
@@ -433,6 +440,7 @@
 
     rtcState.activeChannelId = null;
     rtcState.activeChannelSlug = null;
+    rtcState.currentUserId = null;
     rtcState.screenSharing = false;
 
     if (!targetId) {

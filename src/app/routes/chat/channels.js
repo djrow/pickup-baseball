@@ -65,7 +65,7 @@ chatChannelsRouter.post('/channels', requireAuth, async (c) => {
   const rawMemberIds = Array.isArray(body.member_ids)
     ? body.member_ids
     : (body.dm_user_id ? [body.dm_user_id] : []);
-  const dmMemberIds = rawMemberIds.map((id) => parseInt(id, 10)).filter((n) => !isNaN(n) && n > 0);
+  const dmMemberIds = rawMemberIds.map((id) => parseInt(id, 10)).filter((n) => !isNaN(n) && n > 0).slice(0, 90);
   if (isDm) {
     const allParticipants = Array.from(new Set([user.id, ...dmMemberIds])).sort((a, b) => a - b);
     if (allParticipants.length < 2) {
@@ -126,7 +126,8 @@ chatChannelsRouter.post('/channels', requireAuth, async (c) => {
   const minRoleRead = isPrivateBoard ? 'invite' : (requestedRead || 'player');
   const minRoleWrite = requestedWrite || (channelType === 'announcement' ? 'organizer' : 'player');
   const isEncrypted = isPrivateBoard ? 1 : (body.is_encrypted !== undefined ? (body.is_encrypted ? 1 : 0) : 1);
-  const linkedEventId = body.linked_event_id ? parseInt(body.linked_event_id, 10) : null;
+  const canLinkEvent = Boolean(!isDm && (user.canManageEvents || user.isAdmin));
+  const linkedEventId = canLinkEvent && body.linked_event_id ? parseInt(body.linked_event_id, 10) : null;
   const sortOrder = body.sort_order !== undefined ? parseInt(body.sort_order, 10) : 10;
 
   const insRes = await chatDb.prepare(`
@@ -166,10 +167,11 @@ chatChannelsRouter.post('/channels', requireAuth, async (c) => {
   }
   if (!isDm && created) {
     try {
+      const isRoleRestricted = isPrivateBoard || !['player', 'guest', 'public'].includes(minRoleRead);
       await chatDb.prepare(`
         INSERT INTO sync_events (channel_id, event_type, target_id, payload_json, created_at)
         VALUES (?, 'channel_create', ?, ?, ?)
-      `).bind(isPrivateBoard ? newChannelId : 0, newChannelId, JSON.stringify(created), Math.floor(Date.now() / 1000)).run();
+      `).bind(isRoleRestricted ? newChannelId : 0, newChannelId, JSON.stringify(created), Math.floor(Date.now() / 1000)).run();
     } catch (e) {}
   }
   return c.json({ success: true, channel: created, id: newChannelId }, 201);
@@ -183,6 +185,8 @@ chatChannelsRouter.patch('/channels/:id', requireAuth, async (c) => {
   if (!user.isAdmin && !user.isModerator && !user.canModerateChat && !user.canManageEvents) {
     return c.json({ error: 'Access denied: Moderator, Event Organizer, or Administrator privileges required to edit boards.' }, 403);
   }
+  const mutedResp = rejectIfChatMuted(c, user);
+  if (mutedResp) return mutedResp;
 
   const channel = await resolveChannel(chatDb, c.req.param('id'));
   if (!channel) {
@@ -193,6 +197,17 @@ chatChannelsRouter.patch('/channels/:id', requireAuth, async (c) => {
   }
   if (!(await canUserAccessChannel(chatDb, user, channel, 'read'))) {
     return c.json({ error: 'Access denied: insufficient permissions to manage this board.' }, 403);
+  }
+  const isProtectedCoreBoard = channel.slug === 'general' || channel.slug === 'announcements';
+  const existingNeedsAdmin = Boolean(
+    isProtectedCoreBoard ||
+    channel.min_role_read === 'admin' ||
+    channel.min_role_write === 'admin' ||
+    channel.min_role_read === 'guest' ||
+    channel.min_role_read === 'public'
+  );
+  if (!user.isAdmin && existingNeedsAdmin) {
+    return c.json({ error: 'Access denied: only administrators can modify core or admin-configured boards.' }, 403);
   }
 
   const body = await c.req.json().catch(() => ({}));
@@ -207,9 +222,13 @@ chatChannelsRouter.patch('/channels/:id', requireAuth, async (c) => {
   const channelType = body.channel_type !== undefined
     ? (allowedTypes.includes(body.channel_type) ? body.channel_type : channel.channel_type)
     : channel.channel_type;
+  const wasPrivateBoard = isPrivateEncryptedBoard(channel);
   const isPrivateBoard = body.is_private !== undefined
     ? (channelType !== 'voice' && Boolean(body.is_private))
-    : isPrivateEncryptedBoard(channel);
+    : wasPrivateBoard;
+  if (isProtectedCoreBoard && isPrivateBoard) {
+    return c.json({ error: 'Core community boards (#general, #announcements) cannot be converted into private boards.' }, 400);
+  }
   const allowedRoles = ['guest', 'public', 'player', 'facilitator', 'organizer', 'admin', 'invite'];
   if (!user.isAdmin && (body.min_role_read === 'admin' || body.min_role_write === 'admin' || body.min_role_read === 'guest' || body.min_role_read === 'public')) {
     return c.json({ error: 'Access denied: only admins can configure admin or public guest channel roles.' }, 403);
@@ -231,7 +250,7 @@ chatChannelsRouter.patch('/channels/:id', requireAuth, async (c) => {
 
   let updatedMembers = null;
   if (isPrivateBoard && Array.isArray(body.member_ids)) {
-    const cleanIds = body.member_ids.map((id) => parseInt(id, 10)).filter((n) => !isNaN(n) && n > 0);
+    const cleanIds = body.member_ids.map((id) => parseInt(id, 10)).filter((n) => !isNaN(n) && n > 0).slice(0, 90);
     const ownerId = channel.created_by || user.id;
     updatedMembers = Array.from(new Set([ownerId, user.id, ...cleanIds]));
     const ph = updatedMembers.map(() => '?').join(',');
@@ -246,6 +265,22 @@ chatChannelsRouter.patch('/channels/:id', requireAuth, async (c) => {
       );
     }
     await chatDb.batch(batchMemberOps);
+  } else if (isPrivateBoard && !wasPrivateBoard) {
+    // Converting public -> private without member_ids must purge stale read-watermark rows
+    const ownerId = channel.created_by || user.id;
+    updatedMembers = Array.from(new Set([ownerId, user.id]));
+    const ph = updatedMembers.map(() => '?').join(',');
+    const batchReset = [
+      chatDb.prepare(`DELETE FROM channel_members WHERE channel_id = ? AND user_id NOT IN (${ph})`).bind(channel.id, ...updatedMembers)
+    ];
+    for (const uid of updatedMembers) {
+      batchReset.push(
+        chatDb.prepare(
+          'INSERT INTO channel_members (channel_id, user_id, role) VALUES (?, ?, ?) ON CONFLICT(channel_id, user_id) DO NOTHING'
+        ).bind(channel.id, uid, uid === ownerId ? 'owner' : 'member')
+      );
+    }
+    await chatDb.batch(batchReset);
   } else if (isPrivateBoard) {
     const { results: mRows } = await chatDb.prepare(
       'SELECT user_id FROM channel_members WHERE channel_id = ?'
@@ -258,10 +293,11 @@ chatChannelsRouter.patch('/channels/:id', requireAuth, async (c) => {
     updated.member_ids = updatedMembers;
   }
   try {
+    const isRoleRestricted = isPrivateBoard || !['player', 'guest', 'public'].includes(minRoleRead);
     await chatDb.prepare(`
       INSERT INTO sync_events (channel_id, event_type, target_id, payload_json, created_at)
       VALUES (?, 'channel_update', ?, ?, ?)
-    `).bind(isPrivateBoard ? channel.id : 0, channel.id, JSON.stringify(updated), Math.floor(Date.now() / 1000)).run();
+    `).bind(isRoleRestricted ? channel.id : 0, channel.id, JSON.stringify(updated), Math.floor(Date.now() / 1000)).run();
   } catch (e) {}
 
   return c.json({ success: true, channel: updated });
@@ -269,6 +305,8 @@ chatChannelsRouter.patch('/channels/:id', requireAuth, async (c) => {
 
 chatChannelsRouter.delete('/channels/:id', requireModerator, async (c) => {
   const user = c.get('user');
+  const mutedResp = rejectIfChatMuted(c, user);
+  if (mutedResp) return mutedResp;
   const chatDb = c.env && c.env.CHAT_DB;
   if (!chatDb) return c.json({ error: 'Chat database unavailable.' }, 500);
 
@@ -276,8 +314,8 @@ chatChannelsRouter.delete('/channels/:id', requireModerator, async (c) => {
   if (!channel) {
     return c.json({ error: 'Message board not found.' }, 404);
   }
-  if (channel.slug === 'general') {
-    return c.json({ error: 'The primary #general board cannot be deleted.' }, 400);
+  if (channel.slug === 'general' || channel.slug === 'announcements') {
+    return c.json({ error: 'Core system boards (#general, #announcements) cannot be deleted.' }, 400);
   }
   if (channel.channel_type === 'dm' || channel.channel_type === 'group_dm') {
     return c.json({ error: 'Direct message conversations cannot be deleted via board management.' }, 400);
@@ -285,13 +323,17 @@ chatChannelsRouter.delete('/channels/:id', requireModerator, async (c) => {
   if (!(await canUserAccessChannel(chatDb, user, channel, 'read'))) {
     return c.json({ error: 'Access denied: insufficient permissions to delete this board.' }, 403);
   }
+  if (!user.isAdmin && (channel.min_role_read === 'admin' || channel.min_role_write === 'admin')) {
+    return c.json({ error: 'Access denied: only administrators can delete admin-restricted boards.' }, 403);
+  }
 
   await chatDb.prepare('DELETE FROM channels WHERE id = ?').bind(channel.id).run();
   try {
+    const isRoleRestricted = isPrivateEncryptedBoard(channel) || !['player', 'guest', 'public'].includes(channel.min_role_read || 'player');
     await chatDb.prepare(`
       INSERT INTO sync_events (channel_id, event_type, target_id, payload_json, created_at)
       VALUES (?, 'channel_delete', ?, ?, ?)
-    `).bind(isPrivateEncryptedBoard(channel) ? channel.id : 0, channel.id, JSON.stringify({ id: channel.id, slug: channel.slug }), Math.floor(Date.now() / 1000)).run();
+    `).bind(isRoleRestricted ? channel.id : 0, channel.id, JSON.stringify({ id: channel.id, slug: channel.slug }), Math.floor(Date.now() / 1000)).run();
   } catch (e) {}
 
   return c.json({ success: true, id: channel.id, slug: channel.slug });

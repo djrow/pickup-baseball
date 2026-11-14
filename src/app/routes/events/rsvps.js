@@ -7,6 +7,7 @@ import { Hono } from 'hono';
 import {
   generateToken,
   getClientIp,
+  getSafePublicOrigin,
   checkRateLimit,
   verifyTurnstileIfConfigured,
   requireAuth,
@@ -226,7 +227,15 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
       }
     }
 
-    const activeToken = existingAttendee ? (existingAttendee.management_token || freshToken) : freshToken;
+    const shouldRotateClaimToken = Boolean(
+      existingAttendee &&
+      user &&
+      user.id &&
+      (!existingAttendee.user_id || existingAttendee.user_id !== user.id)
+    );
+    const activeToken = existingAttendee
+      ? (shouldRotateClaimToken ? freshToken : (existingAttendee.management_token || freshToken))
+      : freshToken;
     const storedEmail = hasEmail
       ? email
       : (existingAttendee ? existingAttendee.email : `guest-${activeToken}${GUEST_NO_EMAIL_SUFFIX}`);
@@ -256,9 +265,9 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
       attendeeId = existingAttendee.id;
       await db.prepare(`
         UPDATE attendees
-        SET name = ?, email = ?, status = ?, gear_bringing = ?, players_count = ?, spectators_count = ?, additional_guests = ?, guest_names = ?, user_id = COALESCE(?, user_id), is_guest = ?
+        SET name = ?, email = ?, status = ?, gear_bringing = ?, players_count = ?, spectators_count = ?, additional_guests = ?, guest_names = ?, user_id = COALESCE(?, user_id), is_guest = ?, management_token = ?
         WHERE id = ?
-      `).bind(name, storedEmail, finalStatus, cleanGear, playersCount, spectatorsCount, additionalGuests, cleanGuestNames, userId, isGuest, attendeeId).run();
+      `).bind(name, storedEmail, finalStatus, cleanGear, playersCount, spectatorsCount, additionalGuests, cleanGuestNames, userId, isGuest, activeToken, attendeeId).run();
     } else {
       const ins = await db.prepare(`
         INSERT INTO attendees (event_id, user_id, name, email, is_guest, status, gear_bringing, players_count, spectators_count, additional_guests, guest_names, management_token)
@@ -282,6 +291,7 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
     `).bind(attendeeId).all();
     const prevDuties = (pRows || []).map(r => r.duty_id);
     const prevHadPaidDuty = (pRows || []).some(r => getDutyType(r.title).isPaid);
+    const creditUserId = (user && user.id) || (existingAttendee && existingAttendee.user_id) || null;
     let newHasPaidDuty = false;
 
     if (finalStatus === 'attending' && Array.isArray(duty_ids)) {
@@ -321,7 +331,8 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
                   creditsRedeemedCount += 1;
                 }
               }
-              if (isUrgentWindow && !prevDuties.includes(dId) && !heroCreditEarned) {
+              // Award urgent cover credit only on net transition from 0 paid duties -> >=1 paid duty on this event
+              if (isUrgentWindow && !prevHadPaidDuty && !heroCreditEarned) {
                 batchOps.push(db.prepare('UPDATE users SET hero_credits = hero_credits + 1 WHERE id = ?').bind(user.id));
                 heroCreditEarned = true;
               }
@@ -329,19 +340,19 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
           }
         }
       }
-      if (prevHadPaidDuty && !newHasPaidDuty && isUrgentWindow && wasAttending && user && user.id) {
-        batchOps.push(db.prepare('UPDATE users SET hero_credits = CASE WHEN COALESCE(hero_credits, 0) > 0 THEN hero_credits - 1 ELSE 0 END WHERE id = ?').bind(user.id));
+      if (prevHadPaidDuty && !newHasPaidDuty && isUrgentWindow && wasAttending && creditUserId) {
+        batchOps.push(db.prepare('UPDATE users SET hero_credits = CASE WHEN COALESCE(hero_credits, 0) > 0 THEN hero_credits - 1 ELSE 0 END WHERE id = ?').bind(creditUserId));
       }
       await db.batch(batchOps);
     } else if (finalStatus !== 'attending') {
-      if (prevHadPaidDuty && isUrgentWindow && wasAttending && user && user.id) {
-        await db.prepare('UPDATE users SET hero_credits = CASE WHEN COALESCE(hero_credits, 0) > 0 THEN hero_credits - 1 ELSE 0 END WHERE id = ?').bind(user.id).run();
+      if (prevHadPaidDuty && isUrgentWindow && wasAttending && creditUserId) {
+        await db.prepare('UPDATE users SET hero_credits = CASE WHEN COALESCE(hero_credits, 0) > 0 THEN hero_credits - 1 ELSE 0 END WHERE id = ?').bind(creditUserId).run();
       }
       await db.prepare('DELETE FROM duty_assignments WHERE attendee_id = ?').bind(attendeeId).run();
       await db.prepare('DELETE FROM batting_practice_signups WHERE event_id = ? AND (attendee_id = ? OR (user_id IS NOT NULL AND user_id = ?))').bind(eventId, attendeeId, userId).run();
     }
 
-    const origin = new URL(c.req.url).origin;
+    const origin = getSafePublicOrigin(c);
     if (wasAttending && (status === 'declined' || finalStatus === 'waitlist' || prevPlayersCount > playersCount)) {
       await promoteNextWaitlistedPlayer(c, origin, eventId);
     }
@@ -553,7 +564,7 @@ eventsRsvpsRouter.delete('/:id/attendees/:attendeeId', requireOrganizer, async (
       c.env.DB.prepare('DELETE FROM attendees WHERE id = ? AND event_id = ?').bind(attendeeId, eventId)
     ]);
     if (existing && existing.status === 'attending') {
-      await promoteNextWaitlistedPlayer(c, new URL(c.req.url).origin, eventId);
+      await promoteNextWaitlistedPlayer(c, getSafePublicOrigin(c), eventId);
     }
     return c.json({ success: true, message: 'Attendee removed from roster.' });
   } catch (err) {

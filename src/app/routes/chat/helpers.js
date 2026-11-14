@@ -7,6 +7,23 @@
 import { canAccessChannel } from '../../security.js';
 
 /**
+ * Split an array into chunks (keeps Cloudflare D1 `IN (...)` bound parameters well below 100).
+ * @template T
+ * @param {T[]} items
+ * @param {number} [chunkSize=80]
+ * @returns {T[][]}
+ */
+export function chunkArray(items, chunkSize = 80) {
+  const list = Array.isArray(items) ? items : [];
+  if (list.length === 0) return [];
+  const chunks = [];
+  for (let i = 0; i < list.length; i += chunkSize) {
+    chunks.push(list.slice(i, i + chunkSize));
+  }
+  return chunks;
+}
+
+/**
  * Abbreviate last names in a member directory ("First L.", or "First La."
  * when multiple distinct users share the same first name and last initial).
  * @param {Array<{user_id?: number, id?: number, name?: string}>} records
@@ -172,14 +189,16 @@ export async function getAccessibleChannels(chatDb, user, options = {}) {
 
   if (keySharedChannelIds.length > 0) {
     try {
-      const ph = keySharedChannelIds.map(() => '?').join(',');
-      const { results: memberListRows } = await chatDb.prepare(
-        `SELECT channel_id, user_id FROM channel_members WHERE channel_id IN (${ph})`
-      ).bind(...keySharedChannelIds).all();
       const memberMap = new Map();
-      for (const row of (memberListRows || [])) {
-        if (!memberMap.has(row.channel_id)) memberMap.set(row.channel_id, []);
-        memberMap.get(row.channel_id).push(row.user_id);
+      for (const idChunk of chunkArray(keySharedChannelIds, 80)) {
+        const ph = idChunk.map(() => '?').join(',');
+        const { results: memberListRows } = await chatDb.prepare(
+          `SELECT channel_id, user_id FROM channel_members WHERE channel_id IN (${ph})`
+        ).bind(...idChunk).all();
+        for (const row of (memberListRows || [])) {
+          if (!memberMap.has(row.channel_id)) memberMap.set(row.channel_id, []);
+          memberMap.get(row.channel_id).push(row.user_id);
+        }
       }
       for (const ch of accessible) {
         if (ch.channel_type === 'dm' || ch.channel_type === 'group_dm' || isPrivateEncryptedBoard(ch)) {
@@ -261,32 +280,38 @@ export function normalizeMessageRow(msg, reactionsByMsg = new Map(), attachments
 export async function hydrateMessages(chatDb, messages) {
   if (!messages || messages.length === 0) return [];
   const msgIds = messages.map((m) => m.id);
-  const placeholders = msgIds.map(() => '?').join(',');
+  const idChunks = chunkArray(msgIds, 80);
 
   const reactionsByMsg = new Map();
   const attachmentsByMsg = new Map();
 
   try {
-    const { results: reactions } = await chatDb.prepare(
-      `SELECT * FROM message_reactions WHERE message_id IN (${placeholders}) AND user_id NOT IN (SELECT user_id FROM clubhouse_opted_out) ORDER BY id ASC`
-    ).bind(...msgIds).all();
-    for (const r of (reactions || [])) {
-      if (!reactionsByMsg.has(r.message_id)) reactionsByMsg.set(r.message_id, []);
-      reactionsByMsg.get(r.message_id).push(r);
+    for (const chunk of idChunks) {
+      const placeholders = chunk.map(() => '?').join(',');
+      const { results: reactions } = await chatDb.prepare(
+        `SELECT * FROM message_reactions WHERE message_id IN (${placeholders}) AND user_id NOT IN (SELECT user_id FROM clubhouse_opted_out) ORDER BY id ASC`
+      ).bind(...chunk).all();
+      for (const r of (reactions || [])) {
+        if (!reactionsByMsg.has(r.message_id)) reactionsByMsg.set(r.message_id, []);
+        reactionsByMsg.get(r.message_id).push(r);
+      }
     }
   } catch (e) {}
 
   try {
-    const { results: attachments } = await chatDb.prepare(
-      `SELECT id, channel_id, message_id, uploader_id, file_name, mime_type, file_size, storage_provider, upload_status, is_encrypted, iv, thumbnail_base64, promoted_media_id, created_at
-       FROM chat_attachments WHERE message_id IN (${placeholders}) ORDER BY created_at ASC`
-    ).bind(...msgIds).all();
-    for (const a of (attachments || [])) {
-      if (!attachmentsByMsg.has(a.message_id)) attachmentsByMsg.set(a.message_id, []);
-      attachmentsByMsg.get(a.message_id).push({
-        ...a,
-        stream_url: `/api/attachments/${a.id}/stream`
-      });
+    for (const chunk of idChunks) {
+      const placeholders = chunk.map(() => '?').join(',');
+      const { results: attachments } = await chatDb.prepare(
+        `SELECT id, channel_id, message_id, uploader_id, file_name, mime_type, file_size, storage_provider, upload_status, is_encrypted, iv, thumbnail_base64, promoted_media_id, created_at
+         FROM chat_attachments WHERE message_id IN (${placeholders}) ORDER BY created_at ASC`
+      ).bind(...chunk).all();
+      for (const a of (attachments || [])) {
+        if (!attachmentsByMsg.has(a.message_id)) attachmentsByMsg.set(a.message_id, []);
+        attachmentsByMsg.get(a.message_id).push({
+          ...a,
+          stream_url: `/api/attachments/${a.id}/stream`
+        });
+      }
     }
   } catch (e) {}
 

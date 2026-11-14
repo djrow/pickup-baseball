@@ -152,12 +152,16 @@ eventsBpDutiesRouter.post('/:id/bp-order', async (c) => {
     const notes = String(body.notes || '').trim().slice(0, 200);
     const managementToken = body.management_token || c.req.query('token');
     let attendeeId = null;
+    let targetBpUserId = user ? user.id : null;
 
     if (body.attendee_id && user && (user.canManageEvents || user.isAdmin)) {
       const requestedAttId = parseInt(body.attendee_id, 10);
       if (requestedAttId > 0) {
-        const validAtt = await db.prepare('SELECT id FROM attendees WHERE id = ? AND event_id = ?').bind(requestedAttId, eventId).first();
-        if (validAtt) attendeeId = validAtt.id;
+        const validAtt = await db.prepare('SELECT id, user_id FROM attendees WHERE id = ? AND event_id = ?').bind(requestedAttId, eventId).first();
+        if (validAtt) {
+          attendeeId = validAtt.id;
+          targetBpUserId = validAtt.user_id || null;
+        }
       }
     }
 
@@ -198,9 +202,8 @@ eventsBpDutiesRouter.post('/:id/bp-order', async (c) => {
     const isOrganizer = Boolean(user && (user.canManageEvents || user.isAdmin));
 
     const myCurrentSlot = existingList.find(s =>
-      (user && s.user_id && s.user_id === user.id) ||
-      (attendeeId && s.attendee_id && s.attendee_id === attendeeId) ||
-      (!user && !isOrganizer && !s.user_id && (!s.attendee_id || (attendeeId && s.attendee_id === attendeeId)) && s.player_name && s.player_name.toLowerCase() === playerName.toLowerCase())
+      (user && !body.attendee_id && s.user_id && s.user_id === user.id) ||
+      (attendeeId && s.attendee_id && s.attendee_id === attendeeId)
     );
 
     if (slotOccupant) {
@@ -225,7 +228,7 @@ eventsBpDutiesRouter.post('/:id/bp-order', async (c) => {
     const ins = await db.prepare(`
       INSERT INTO batting_practice_signups (event_id, user_id, attendee_id, slot_number, player_name, notes)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(eventId, user ? user.id : null, attendeeId, slotNumber, playerName, notes).run();
+    `).bind(eventId, targetBpUserId, attendeeId, slotNumber, playerName, notes).run();
 
     return c.json({
       success: true,

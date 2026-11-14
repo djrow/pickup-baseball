@@ -8,6 +8,7 @@ import {
   sendWaitlistPromotionEmail,
   sendEventReminder
 } from '../../mailer.js';
+import { getSafePublicOrigin } from '../../security.js';
 
 /** SQL projection normalizing inline data-URI avatars to cached endpoint URLs. */
 export const AVATAR_EXPR = `CASE WHEN u.avatar_url LIKE 'data:%' THEN '/api/users/' || u.id || '/avatar?v=' || length(u.avatar_url) ELSE COALESCE(u.avatar_url, '') END`;
@@ -185,7 +186,7 @@ export async function notifyConfirmedAttendees(c, event, note, emailFn) {
   const { results: attendees } = await c.env.DB.prepare(
     "SELECT * FROM attendees WHERE event_id = ? AND status = 'attending'"
   ).bind(event.id).all();
-  const origin = new URL(c.req.url).origin;
+  const origin = getSafePublicOrigin(c);
   await runBoundedConcurrency(attendees || [], 5, async (att) => {
     if (!isDeliverableEmail(att.email)) return;
     try {

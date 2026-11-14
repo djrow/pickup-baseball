@@ -4,6 +4,7 @@ import {
   requireOrganizer,
   requireAdmin,
   getClientIp,
+  getSafePublicOrigin,
   checkRateLimit,
   isValidRasterImageBuffer,
   generateToken,
@@ -417,6 +418,8 @@ mediaRouter.post('/', async (c) => {
           if (!isValidRasterImageBuffer(arrayBuf, candidateMime)) {
             return c.json({ error: 'Fetched remote file is not a valid image.' }, 400);
           }
+        } else if (candidateMime === 'image/avif' && !isValidContainerMediaBuffer(new Uint8Array(arrayBuf), candidateMime)) {
+          return c.json({ error: 'Fetched remote file is not a valid AVIF image.' }, 400);
         }
 
         storedMimeType = candidateMime;
@@ -459,10 +462,14 @@ mediaRouter.post('/', async (c) => {
         return c.json({ error: 'Unsupported media format (' + storedMimeType + '). To ensure reliable web playback, please upload standard formats: JPG, PNG, WebP, GIF, AVIF for photos, or MP4, WebM for videos (HEIC, TIFF, MOV, and AVI are disallowed).' }, 400);
       }
 
-      // Verify raster image magic bytes if image
-      if (storedMimeType.startsWith('image/') && ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'].includes(storedMimeType)) {
+      // Verify raster image / container magic bytes
+      if (['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'].includes(storedMimeType)) {
         if (!isValidRasterImageBuffer(bytes.buffer, storedMimeType)) {
           return c.json({ error: 'Invalid or corrupted image file.' }, 400);
+        }
+      } else if (['image/avif', 'video/mp4', 'video/webm'].includes(storedMimeType)) {
+        if (!isValidContainerMediaBuffer(bytes, storedMimeType)) {
+          return c.json({ error: 'Invalid or corrupted media file header.' }, 400);
         }
       }
 
@@ -740,7 +747,7 @@ async function handleMediaDelete(c) {
       return c.json({ error: 'Access denied: You do not have permission to take down this submission.' }, 403);
     }
 
-    // Attempt Google Drive file deletion if managed via Apps Script
+    // Attempt Google Drive file deletion ONLY for actual binary uploads (file_size > 0) not referenced elsewhere
     let appscriptUrl = (c.env && c.env.APPSCRIPT_UPLOAD_URL) || null;
     if (!appscriptUrl && c.env && c.env.DB) {
       try {
@@ -748,15 +755,22 @@ async function handleMediaDelete(c) {
         if (row && row.value) appscriptUrl = row.value.trim();
       } catch (e) {}
     }
-    if (appscriptUrl && (existing.file_url || existing.original_url)) {
+    if (appscriptUrl && Number(existing.file_size || 0) > 0 && (existing.file_url || existing.original_url)) {
       const combined = `${existing.file_url || ''} ${existing.original_url || ''}`;
       const match = combined.match(/(?:lh3\.googleusercontent\.com\/d\/|id=|file\/d\/)([\w-]{25,})/);
       if (match && match[1]) {
-        fetch(appscriptUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'delete', fileId: match[1] })
-        }).catch(() => {});
+        const targetDriveId = match[1];
+        const likePattern = `%${targetDriveId}%`;
+        const otherRef = await c.env.DB.prepare(
+          'SELECT 1 FROM media_items WHERE id != ? AND (file_url LIKE ? OR original_url LIKE ?) LIMIT 1'
+        ).bind(id, likePattern, likePattern).first();
+        if (!otherRef) {
+          fetch(appscriptUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'delete', fileId: targetDriveId })
+          }).catch(() => {});
+        }
       }
     }
 
@@ -794,6 +808,20 @@ const ALLOWED_ATTACHMENT_MIME_TYPES = new Set([
 const MAX_GDRIVE_ATTACHMENT_BYTES = 500 * 1024 * 1024; // 500 MB per file on Google Drive
 const MAX_LOCAL_D1_ATTACHMENT_BYTES = 10 * 1024 * 1024; // 10 MB per file when falling back to D1
 
+function isValidContainerMediaBuffer(bytes, mimeType) {
+  if (!bytes || bytes.length < 12) return false;
+  const mime = String(mimeType || '').toLowerCase();
+  if (mime === 'image/avif' || mime === 'video/mp4' || mime === 'video/quicktime') {
+    // ISO-BMFF ftyp box at offset 4
+    return bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70;
+  }
+  if (mime === 'video/webm' || mime === 'audio/webm') {
+    // EBML header 0x1A 0x45 0xDF 0xA3
+    return bytes[0] === 0x1A && bytes[1] === 0x45 && bytes[2] === 0xDF && bytes[3] === 0xA3;
+  }
+  return true;
+}
+
 /**
  * Inspect uploaded bytes for executable / magic-byte spoofing
  */
@@ -806,6 +834,10 @@ function hasInvalidOrSpoofedMagicBytes(bytes, mimeType, isEncrypted) {
   }
   // Reject ELF ("\x7FELF") executable header
   if (bytes.length >= 4 && bytes[0] === 0x7F && bytes[1] === 0x45 && bytes[2] === 0x4C && bytes[3] === 0x46) {
+    return true;
+  }
+  // Reject Unix shebang scripts ("#!")
+  if (bytes.length >= 2 && bytes[0] === 0x23 && bytes[1] === 0x21) {
     return true;
   }
 
@@ -825,6 +857,9 @@ function hasInvalidOrSpoofedMagicBytes(bytes, mimeType, isEncrypted) {
   }
   if (mime === 'image/webp') {
     return !(bytes.length >= 4 && bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46);
+  }
+  if (mime === 'image/avif') {
+    return !isValidContainerMediaBuffer(bytes, mime);
   }
 
   return false;
@@ -888,7 +923,7 @@ attachmentsRouter.post('/init', requireAuth, async (c) => {
 
   if (useGDrive) {
     try {
-      const origin = c.req.header('Origin') || new URL(c.req.url).origin;
+      const origin = getSafePublicOrigin(c);
       const { sessionUri, driveFileId } = await initGDriveResumableSession(c.env, {
         fileName,
         mimeType,
@@ -989,6 +1024,14 @@ attachmentsRouter.put('/:id/upload', requireAuth, async (c) => {
   if (attachment.uploader_id !== user.id && !user.isAdmin) {
     return c.json({ error: 'Access denied.' }, 403);
   }
+  if (
+    attachment.storage_provider !== 'local' ||
+    attachment.upload_status === 'completed' ||
+    attachment.message_id !== null ||
+    attachment.promoted_media_id !== null
+  ) {
+    return c.json({ error: 'Attachment upload is already finalized and cannot be overwritten.' }, 409);
+  }
 
   const contentLength = parseInt(c.req.header('Content-Length') || '0', 10);
   if (!isNaN(contentLength) && contentLength > MAX_LOCAL_D1_ATTACHMENT_BYTES) {
@@ -1045,6 +1088,13 @@ attachmentsRouter.post('/:id/complete', requireAuth, async (c) => {
 
   if (attachment.uploader_id !== user.id && !user.isAdmin) {
     return c.json({ error: 'Access denied.' }, 403);
+  }
+  if (
+    attachment.message_id !== null ||
+    attachment.promoted_media_id !== null ||
+    (attachment.storage_provider === 'gdrive' && attachment.upload_status === 'completed')
+  ) {
+    return c.json({ error: 'Attachment is already finalized and cannot be modified.' }, 409);
   }
 
   const body = await c.req.json().catch(() => ({}));

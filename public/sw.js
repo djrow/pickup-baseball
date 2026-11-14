@@ -1,5 +1,5 @@
 // Service Worker for Pickup Baseball Foundation PWA
-const CACHE_NAME = 'pbf-cache-v134';
+const CACHE_NAME = 'pbf-cache-v136';
 
 // Core app shell & pages precached on install; i18n bundles (~312 KB) are cached on demand
 const STATIC_ASSETS = [
@@ -95,7 +95,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   // 1. Dynamic API & RSS Feed calls: ALWAYS Network Only (Never cache live database, auth, roster, or feed data)
-  if (url.pathname.startsWith('/api/') || url.pathname === '/feed.xml') {
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/uploads/') || url.pathname === '/feed.xml') {
     event.respondWith(fetch(req));
     return;
   }

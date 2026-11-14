@@ -46,6 +46,10 @@ chatMessagesRouter.get('/channels/:id/messages', async (c) => {
     if (!channel) {
       return c.json({ error: 'Channel not found.' }, 404);
     }
+    if (!isPublicGuestChannel(channel)) {
+      const optResp = rejectIfClubhouseOptedOut(c, user);
+      if (optResp) return optResp;
+    }
     if (!(await canUserAccessChannel(chatDb, user, channel, 'read'))) {
       return c.json({ error: 'Access denied: insufficient permissions to read this channel.' }, 403);
     }
@@ -202,6 +206,9 @@ chatMessagesRouter.post('/channels/:id/messages', requireAuth, async (c) => {
 
   const rawIv = body.iv !== undefined ? body.iv : body.encryption_iv;
   const iv = rawIv ? String(rawIv).trim() : null;
+  if (iv && iv.length > 128) {
+    return c.json({ error: 'encryption_iv exceeds maximum allowed size (128 chars).' }, 400);
+  }
   if ((channel.channel_type === 'dm' || channel.channel_type === 'group_dm' || isPrivateEncryptedBoard(channel)) && !iv) {
     return c.json({ error: 'Direct messages and private boards must be end-to-end encrypted (missing encryption_iv).' }, 400);
   }
@@ -210,6 +217,9 @@ chatMessagesRouter.post('/channels/:id/messages', requireAuth, async (c) => {
   const metadataJson = body.metadata_json
     ? (typeof body.metadata_json === 'string' ? body.metadata_json : JSON.stringify(body.metadata_json))
     : null;
+  if (metadataJson && metadataJson.length > 4096) {
+    return c.json({ error: 'metadata_json exceeds maximum allowed size (4 KB).' }, 400);
+  }
 
   const authorBadges = JSON.stringify({
     machine: Boolean(user.machineBadge),
@@ -268,19 +278,27 @@ chatMessagesRouter.post('/channels/:id/messages', requireAuth, async (c) => {
 
   if (channel.channel_type === 'dm' || channel.channel_type === 'group_dm') {
     try {
-      const hiddenRow = await chatDb.prepare(
-        'SELECT 1 FROM channel_members WHERE channel_id = ? AND COALESCE(hidden, 0) = 1 LIMIT 1'
-      ).bind(channel.id).first();
+      const hiddenRow = await chatDb.prepare(`
+        SELECT 1 FROM channel_members cm
+        WHERE cm.channel_id = ?
+          AND COALESCE(cm.hidden, 0) = 1
+          AND cm.user_id NOT IN (SELECT muter_user_id FROM user_mutes WHERE muted_user_id = ?)
+        LIMIT 1
+      `).bind(channel.id, user.id).first();
       if (hiddenRow) {
-        await chatDb.prepare(
-          'UPDATE channel_members SET hidden = 0 WHERE channel_id = ? AND COALESCE(hidden, 0) = 1'
-        ).bind(channel.id).run();
+        await chatDb.prepare(`
+          UPDATE channel_members
+          SET hidden = 0
+          WHERE channel_id = ?
+            AND COALESCE(hidden, 0) = 1
+            AND user_id NOT IN (SELECT muter_user_id FROM user_mutes WHERE muted_user_id = ?)
+        `).bind(channel.id, user.id).run();
         const { results: dmMemRows } = await chatDb.prepare(
-          'SELECT user_id FROM channel_members WHERE channel_id = ?'
+          'SELECT user_id FROM channel_members WHERE channel_id = ? AND COALESCE(hidden, 0) = 0'
         ).bind(channel.id).all();
         const memberIds = Array.from(new Set([
           ...(dmMemRows || []).map((r) => r.user_id),
-          ...(channel.created_by ? [channel.created_by] : [])
+          user.id
         ]));
         await chatDb.prepare(`
           INSERT INTO sync_events (channel_id, event_type, target_id, payload_json, created_at)
@@ -323,6 +341,9 @@ chatMessagesRouter.patch('/messages/:id', requireAuth, async (c) => {
   if (!existing || existing.deleted_at) {
     return c.json({ error: 'Message not found.' }, 404);
   }
+  if (existing.hidden_at) {
+    return c.json({ error: 'Moderated/hidden messages cannot be edited.' }, 403);
+  }
 
   const msgChannel = await resolveChannel(chatDb, existing.channel_id);
   if (!msgChannel || !(await canUserAccessChannel(chatDb, user, msgChannel, 'write'))) {
@@ -332,7 +353,7 @@ chatMessagesRouter.patch('/messages/:id', requireAuth, async (c) => {
   const isDmMsg = Boolean(msgChannel && (msgChannel.channel_type === 'dm' || msgChannel.channel_type === 'group_dm'));
   const isPrivateMsg = isPrivateEncryptedBoard(msgChannel);
 
-  if (existing.author_id !== user.id && (isDmMsg || isPrivateMsg || !user.isAdmin)) {
+  if (existing.author_id !== user.id) {
     return c.json({ error: 'Access denied: only the message author can edit this message.' }, 403);
   }
 
@@ -371,12 +392,13 @@ chatMessagesRouter.patch('/messages/:id', requireAuth, async (c) => {
   ).run();
 
   const updated = await chatDb.prepare('SELECT * FROM messages WHERE id = ?').bind(msgId).first();
+  const [sanitizedUpdated] = await hydrateMessages(chatDb, [updated]);
   return c.json({
     success: true,
     id: msgId,
     content: newContent,
     edited_at: nowIso,
-    message: updated
+    message: sanitizedUpdated
   });
 });
 
@@ -400,8 +422,18 @@ chatMessagesRouter.delete('/messages/:id', requireAuth, async (c) => {
     return c.json({ error: 'Access denied: insufficient permissions to moderate this board.' }, 403);
   }
 
-  if (existing.author_id !== user.id && !user.isAdmin && !user.canManageEvents && !user.isModerator && !user.canModerateChat) {
-    return c.json({ error: 'Access denied: insufficient permissions to delete this message.' }, 403);
+  if (existing.author_id !== user.id) {
+    const mutedResp = rejectIfChatMuted(c, user);
+    if (mutedResp) return mutedResp;
+    const isDmMsg = msgChannel.channel_type === 'dm' || msgChannel.channel_type === 'group_dm';
+    const isAdminOnlyBoard = msgChannel.min_role_write === 'admin';
+    const targetIsAdminAuthor = existing.author_role === 'admin';
+    if (!user.isAdmin && !user.canManageEvents && !user.isModerator && !user.canModerateChat) {
+      return c.json({ error: 'Access denied: insufficient permissions to delete this message.' }, 403);
+    }
+    if (!user.isAdmin && (isDmMsg || isAdminOnlyBoard || targetIsAdminAuthor)) {
+      return c.json({ error: 'Access denied: only administrators may delete messages in DMs, admin boards, or admin announcements.' }, 403);
+    }
   }
 
   const nowIso = new Date().toISOString();
@@ -465,9 +497,39 @@ chatMessagesRouter.post('/messages/:id/reactions', requireAuth, async (c) => {
   }
 
   const nowSec = Math.floor(Date.now() / 1000);
+  const rxRateKey = `user_${user.id}_rx`;
+  const rxCutoff = nowSec - 60;
+  try {
+    await chatDb.prepare(`
+      INSERT INTO chat_rate_limits (key, count, window_start)
+      VALUES (?, 1, ?)
+      ON CONFLICT(key) DO UPDATE SET
+        count = CASE WHEN chat_rate_limits.window_start <= ? THEN 1 ELSE chat_rate_limits.count + 1 END,
+        window_start = CASE WHEN chat_rate_limits.window_start <= ? THEN ? ELSE chat_rate_limits.window_start END
+    `).bind(rxRateKey, nowSec, rxCutoff, rxCutoff, nowSec).run();
+    const rxRateRow = await chatDb.prepare('SELECT count FROM chat_rate_limits WHERE key = ?').bind(rxRateKey).first();
+    if (rxRateRow && rxRateRow.count > 60) {
+      return c.json({ error: 'Too many reaction updates. Please wait a moment.' }, 429);
+    }
+  } catch (e) {}
+
   const existingRx = await chatDb.prepare(
     'SELECT id FROM message_reactions WHERE message_id = ? AND user_id = ? AND emoji = ?'
   ).bind(msgId, user.id, emoji).first();
+
+  if (!existingRx) {
+    const emojiExistsOnMsg = await chatDb.prepare(
+      'SELECT 1 FROM message_reactions WHERE message_id = ? AND emoji = ? LIMIT 1'
+    ).bind(msgId, emoji).first();
+    if (!emojiExistsOnMsg) {
+      const cntRow = await chatDb.prepare(
+        'SELECT COUNT(DISTINCT emoji) as cnt FROM message_reactions WHERE message_id = ?'
+      ).bind(msgId).first();
+      if (cntRow && cntRow.cnt >= 20) {
+        return c.json({ error: 'Maximum number of distinct emoji reactions reached for this message.' }, 400);
+      }
+    }
+  }
 
   if (existingRx) {
     await chatDb.prepare('DELETE FROM message_reactions WHERE id = ?').bind(existingRx.id).run();
@@ -512,6 +574,8 @@ chatMessagesRouter.post('/messages/:id/reactions', requireAuth, async (c) => {
 
 async function hideMessageHandler(c) {
   const user = c.get('user');
+  const mutedResp = rejectIfChatMuted(c, user);
+  if (mutedResp) return mutedResp;
   const chatDb = c.env && c.env.CHAT_DB;
   if (!chatDb) return c.json({ error: 'Chat database unavailable.' }, 500);
 
@@ -528,6 +592,20 @@ async function hideMessageHandler(c) {
   const msgChannel = await resolveChannel(chatDb, existing.channel_id);
   if (!msgChannel || !(await canUserAccessChannel(chatDb, user, msgChannel, 'read'))) {
     return c.json({ error: 'Access denied: insufficient permissions to moderate this board.' }, 403);
+  }
+  if (!user.isAdmin) {
+    if (existing.author_role === 'admin' || msgChannel.min_role_write === 'admin') {
+      return c.json({ error: 'Access denied: only administrators may hide administrator messages or admin-board notices.' }, 403);
+    }
+    const isDmMsg = msgChannel.channel_type === 'dm' || msgChannel.channel_type === 'group_dm';
+    if (isDmMsg) {
+      const openReport = await chatDb.prepare(
+        "SELECT 1 FROM chat_reports WHERE target_message_id = ? AND status = 'open' LIMIT 1"
+      ).bind(msgId).first();
+      if (!openReport) {
+        return c.json({ error: 'Access denied: DM messages can only be hidden by an administrator or pursuant to an open report.' }, 403);
+      }
+    }
   }
 
   const body = await c.req.json().catch(() => ({}));
@@ -585,6 +663,8 @@ chatMessagesRouter.patch('/messages/:id/hide', requireModerator, hideMessageHand
 
 chatMessagesRouter.post('/messages/:id/unhide', requireModerator, async (c) => {
   const user = c.get('user');
+  const mutedResp = rejectIfChatMuted(c, user);
+  if (mutedResp) return mutedResp;
   const chatDb = c.env && c.env.CHAT_DB;
   if (!chatDb) return c.json({ error: 'Chat database unavailable.' }, 500);
 

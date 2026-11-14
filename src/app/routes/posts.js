@@ -84,7 +84,7 @@ postsRouter.post('/', requireOrganizer, async (c) => {
       }
     }
     const finalMediaType = parseMediaType(cleanMediaUrl, media_type);
-    const cleanSummary = summary ? String(summary).trim() : (cleanContent.slice(0, 160) + (cleanContent.length > 160 ? '…' : ''));
+    const cleanSummary = summary ? String(summary).trim().slice(0, 600) : (cleanContent.slice(0, 160) + (cleanContent.length > 160 ? '…' : ''));
     const eventId = event_id ? parseInt(event_id, 10) : null;
 
     const result = await c.env.DB.prepare(`
@@ -147,7 +147,7 @@ postsRouter.put('/:id', requireOrganizer, async (c) => {
     }
     const finalMediaType = parseMediaType(cleanMediaUrl, media_type !== undefined ? media_type : existing.media_type);
     const cleanSummary = summary !== undefined
-      ? String(summary).trim()
+      ? String(summary).trim().slice(0, 600)
       : (cleanContent.slice(0, 160) + (cleanContent.length > 160 ? '…' : ''));
     const eventId = event_id !== undefined ? (event_id ? parseInt(event_id, 10) : null) : existing.event_id;
 

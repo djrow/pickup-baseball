@@ -59,13 +59,16 @@ async function handleGetSelfIdentity(c) {
   }
 }
 
-// Helper to validate and serialize a JWK input (string or object)
+// Helper to validate and serialize a public EC P-256 JWK input (string or object)
 function validateAndSerializeJwk(jwk, name) {
   if (!jwk) {
     throw new Error(`Missing ${name}`);
   }
   let parsed = null;
   if (typeof jwk === 'string') {
+    if (jwk.length > 2048) {
+      throw new Error(`${name} exceeds maximum allowed size (2 KB)`);
+    }
     try {
       parsed = JSON.parse(jwk);
     } catch (e) {
@@ -80,8 +83,28 @@ function validateAndSerializeJwk(jwk, name) {
   if (!parsed || typeof parsed !== 'object' || parsed.kty !== 'EC' || parsed.crv !== 'P-256') {
     throw new Error(`Malformed ${name} structure: EC P-256 JWK required`);
   }
+  if (parsed.d !== undefined) {
+    throw new Error(`${name} must not contain private scalar "d"`);
+  }
+  if (typeof parsed.x !== 'string' || typeof parsed.y !== 'string' || !parsed.x || !parsed.y || parsed.x.length > 128 || parsed.y.length > 128) {
+    throw new Error(`Malformed ${name} coordinates: valid x and y values required`);
+  }
 
-  return JSON.stringify(parsed);
+  const clean = {
+    kty: 'EC',
+    crv: 'P-256',
+    x: parsed.x,
+    y: parsed.y
+  };
+  if (typeof parsed.ext === 'boolean') clean.ext = parsed.ext;
+  if (Array.isArray(parsed.key_ops) && parsed.key_ops.every((op) => typeof op === 'string' && op.length <= 24)) {
+    clean.key_ops = parsed.key_ops.slice(0, 4);
+  }
+  const serialized = JSON.stringify(clean);
+  if (serialized.length > 2048) {
+    throw new Error(`${name} exceeds maximum allowed serialized size`);
+  }
+  return serialized;
 }
 
 /**
@@ -300,8 +323,8 @@ keysRouter.post('/channel/:channelId/share', requireAuth, async (c) => {
   const isPrivateBoard = isPrivateEncryptedBoard(channel);
   const isKeyShared = isDm || isPrivateBoard;
   const hasChannelAccess = isKeyShared
-    ? await canUserAccessChannel(chatDb, user, channel, 'read')
-    : (canAccessChannel(user, channel, 'read') || await canUserAccessChannel(chatDb, user, channel, 'read'));
+    ? await canUserAccessChannel(chatDb, user, channel, 'write')
+    : (canAccessChannel(user, channel, 'write') || await canUserAccessChannel(chatDb, user, channel, 'write'));
   if (!hasChannelAccess) {
     return c.json({ error: 'Access denied: insufficient permissions for this channel.' }, 403);
   }
@@ -329,8 +352,17 @@ keysRouter.post('/channel/:channelId/share', requireAuth, async (c) => {
       'SELECT 1 FROM channel_key_shares WHERE channel_id = ? AND key_epoch = ? LIMIT 1'
     ).bind(channel.id, defaultEpoch).first();
 
+    if (currentMaxEpoch === 0 && defaultEpoch !== 1) {
+      return c.json({ error: 'Initial channel key_epoch must be 1.' }, 400);
+    }
+    if (currentMaxEpoch > 0 && defaultEpoch < currentMaxEpoch && !canForceRotate) {
+      return c.json({ error: 'Cannot backfill historical key epochs.' }, 403);
+    }
     if (defaultEpoch > currentMaxEpoch && currentMaxEpoch > 0 && !canForceRotate) {
       return c.json({ error: 'Only the channel creator, moderator, or admin can rotate to a new key epoch.' }, 403);
+    }
+    if (defaultEpoch > currentMaxEpoch + 10) {
+      return c.json({ error: 'Invalid key_epoch jump.' }, 400);
     }
 
     let validMembers = null;

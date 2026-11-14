@@ -7,8 +7,8 @@
  */
 
 import { Hono } from 'hono';
-import { requireAuth, requireModerator, rejectIfClubhouseOptedOut } from '../../security.js';
-import { resolveChannel, isPrivateEncryptedBoard, canUserAccessChannel } from './helpers.js';
+import { requireAuth, requireModerator, rejectIfChatMuted, rejectIfClubhouseOptedOut } from '../../security.js';
+import { resolveChannel, canUserAccessChannel, chunkArray } from './helpers.js';
 
 export const chatModerationRouter = new Hono();
 
@@ -110,6 +110,8 @@ chatModerationRouter.post('/reports', requireAuth, async (c) => {
 
 chatModerationRouter.get('/moderation/reports', requireModerator, async (c) => {
   const user = c.get('user');
+  const mutedResp = rejectIfChatMuted(c, user);
+  if (mutedResp) return mutedResp;
   const chatDb = c.env && c.env.CHAT_DB;
   const baseballDb = c.env && (c.env.BASEBALL_DB || c.env.DB);
   if (!chatDb) return c.json({ error: 'Chat database unavailable.' }, 500);
@@ -126,11 +128,11 @@ chatModerationRouter.get('/moderation/reports', requireModerator, async (c) => {
   const userIds = Array.from(new Set(list.map((r) => r.target_user_id).filter(Boolean)));
 
   const msgMap = new Map();
-  if (msgIds.length > 0) {
-    const ph = msgIds.map(() => '?').join(',');
+  for (const chunk of chunkArray(msgIds, 80)) {
+    const ph = chunk.map(() => '?').join(',');
     const { results: msgRows } = await chatDb.prepare(
       `SELECT id, channel_id, content, hidden_at, hidden_reason, deleted_at FROM messages WHERE id IN (${ph})`
-    ).bind(...msgIds).all();
+    ).bind(...chunk).all();
     for (const m of (msgRows || [])) msgMap.set(m.id, m);
   }
 
@@ -139,11 +141,11 @@ chatModerationRouter.get('/moderation/reports', requireModerator, async (c) => {
     const m = r.target_message_id ? msgMap.get(r.target_message_id) : null;
     return (m && m.channel_id) || r.channel_id || null;
   }).filter(Boolean)));
-  if (channelIds.length > 0) {
-    const ph = channelIds.map(() => '?').join(',');
+  for (const chunk of chunkArray(channelIds, 80)) {
+    const ph = chunk.map(() => '?').join(',');
     const { results: chRows } = await chatDb.prepare(
       `SELECT * FROM channels WHERE id IN (${ph})`
-    ).bind(...channelIds).all();
+    ).bind(...chunk).all();
     for (const ch of (chRows || [])) {
       const allowed = await canUserAccessChannel(chatDb, user, ch, 'read');
       channelAccessMap.set(ch.id, allowed);
@@ -151,27 +153,36 @@ chatModerationRouter.get('/moderation/reports', requireModerator, async (c) => {
   }
 
   const userMuteMap = new Map();
-  if (baseballDb && userIds.length > 0) {
-    const ph = userIds.map(() => '?').join(',');
-    const { results: uRows } = await baseballDb.prepare(
-      `SELECT id, COALESCE(chat_muted, 0) as chat_muted, chat_muted_reason FROM users WHERE id IN (${ph})`
-    ).bind(...userIds).all();
-    for (const u of (uRows || [])) userMuteMap.set(u.id, u);
+  if (baseballDb) {
+    for (const chunk of chunkArray(userIds, 80)) {
+      const ph = chunk.map(() => '?').join(',');
+      const { results: uRows } = await baseballDb.prepare(
+        `SELECT id, COALESCE(chat_muted, 0) as chat_muted, chat_muted_reason FROM users WHERE id IN (${ph})`
+      ).bind(...chunk).all();
+      for (const u of (uRows || [])) userMuteMap.set(u.id, u);
+    }
   }
 
   const enriched = list.map((r) => {
     const m = r.target_message_id ? msgMap.get(r.target_message_id) : null;
     const u = r.target_user_id ? userMuteMap.get(r.target_user_id) : null;
     const chId = (m && m.channel_id) || r.channel_id || null;
-    const canViewChannel = chId && channelAccessMap.has(chId) ? channelAccessMap.get(chId) : true;
+    const canViewChannel = chId
+      ? (channelAccessMap.has(chId) ? channelAccessMap.get(chId) : Boolean(user.isAdmin))
+      : true;
     return {
       ...r,
+      reporter_id: canViewChannel ? r.reporter_id : null,
+      reporter_name: canViewChannel ? r.reporter_name : 'Redacted',
+      target_user_id: canViewChannel ? r.target_user_id : null,
+      target_user_name: canViewChannel ? r.target_user_name : 'Redacted',
+      reason: canViewChannel ? r.reason : '[Private board report]',
       channel_id: canViewChannel ? r.channel_id : null,
       message_preview: m ? (!canViewChannel ? '[Private channel message]' : (m.deleted_at ? '[deleted]' : m.content)) : null,
       message_hidden: Boolean(m && m.hidden_at),
       message_hidden_reason: canViewChannel && m ? m.hidden_reason : null,
-      target_chat_muted: Boolean(u && u.chat_muted),
-      target_chat_muted_reason: u ? u.chat_muted_reason : null
+      target_chat_muted: canViewChannel ? Boolean(u && u.chat_muted) : false,
+      target_chat_muted_reason: canViewChannel && u ? u.chat_muted_reason : null
     };
   });
 
@@ -180,6 +191,8 @@ chatModerationRouter.get('/moderation/reports', requireModerator, async (c) => {
 
 chatModerationRouter.patch('/moderation/reports/:id', requireModerator, async (c) => {
   const user = c.get('user');
+  const mutedResp = rejectIfChatMuted(c, user);
+  if (mutedResp) return mutedResp;
   const chatDb = c.env && c.env.CHAT_DB;
   if (!chatDb) return c.json({ error: 'Chat database unavailable.' }, 500);
 
@@ -187,6 +200,15 @@ chatModerationRouter.patch('/moderation/reports/:id', requireModerator, async (c
   const existing = await chatDb.prepare('SELECT * FROM chat_reports WHERE id = ?').bind(reportId).first();
   if (!existing) {
     return c.json({ error: 'Report not found.' }, 404);
+  }
+  if (!user.isAdmin && Number(existing.target_user_id) === Number(user.id)) {
+    return c.json({ error: 'You cannot resolve or dismiss a report targeting your own account.' }, 403);
+  }
+  if (!user.isAdmin && existing.channel_id) {
+    const ch = await resolveChannel(chatDb, existing.channel_id);
+    if (!ch || !(await canUserAccessChannel(chatDb, user, ch, 'read'))) {
+      return c.json({ error: 'Access denied: you do not have permission to resolve reports for this board.' }, 403);
+    }
   }
 
   const body = await c.req.json().catch(() => ({}));
@@ -208,6 +230,9 @@ chatModerationRouter.patch('/moderation/reports/:id', requireModerator, async (c
 });
 
 chatModerationRouter.get('/moderation/users', requireModerator, async (c) => {
+  const user = c.get('user');
+  const mutedResp = rejectIfChatMuted(c, user);
+  if (mutedResp) return mutedResp;
   const baseballDb = c.env && (c.env.BASEBALL_DB || c.env.DB);
   if (!baseballDb) return c.json({ error: 'Database unavailable.' }, 500);
 
@@ -230,6 +255,8 @@ chatModerationRouter.get('/moderation/users', requireModerator, async (c) => {
 
 chatModerationRouter.put('/moderation/users/:id/mute', requireModerator, async (c) => {
   const actor = c.get('user');
+  const mutedResp = rejectIfChatMuted(c, actor);
+  if (mutedResp) return mutedResp;
   const baseballDb = c.env && (c.env.BASEBALL_DB || c.env.DB);
   const chatDb = c.env && c.env.CHAT_DB;
   if (!baseballDb) return c.json({ error: 'Database unavailable.' }, 500);
@@ -251,11 +278,15 @@ chatModerationRouter.put('/moderation/users/:id/mute', requireModerator, async (
 
   const targetIsAdmin = Boolean(targetUser.is_admin || targetUser.role === 'admin');
   const targetIsMod = Boolean(targetUser.is_moderator);
+  const targetIsOrganizer = targetUser.role === 'organizer';
   if (targetIsAdmin) {
     return c.json({ error: 'Administrators cannot be blanket-muted.' }, 403);
   }
   if (targetIsMod && !actor.isAdmin) {
     return c.json({ error: 'Only an Administrator can mute a delegated Moderator.' }, 403);
+  }
+  if (targetIsOrganizer && !actor.isAdmin) {
+    return c.json({ error: 'Only an Administrator can blanket-mute an Event Organizer.' }, 403);
   }
 
   const body = await c.req.json().catch(() => ({}));

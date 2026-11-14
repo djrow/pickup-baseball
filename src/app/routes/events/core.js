@@ -12,7 +12,8 @@ import {
   requireAdmin,
   resolveUserByCalendarToken,
   constantTimeEqual,
-  checkRateLimit
+  checkRateLimit,
+  getSafePublicOrigin
 } from '../../security.js';
 import { getDefaultDuties, getRequireLoginSetting } from '../../schema.js';
 import {
@@ -256,7 +257,7 @@ eventsCoreRouter.get('/calendar.ics', async (c) => {
     const { results: allEvents } = await c.env.DB.prepare(
       "SELECT * FROM events WHERE status IN ('active', 'rainout') ORDER BY event_date ASC LIMIT 500"
     ).all();
-    const origin = new URL(c.req.url).origin || 'https://www.pickupbaseballfoundation.org';
+    const origin = getSafePublicOrigin(c);
     const ics = buildCalendarIcs(allEvents || [], origin, { viewerUser });
     const forceDownload = c.req.query('download') === '1';
 
@@ -284,7 +285,7 @@ eventsCoreRouter.get('/:id/calendar.ics', async (c) => {
       return c.text('Event not found.', 404);
     }
 
-    const origin = new URL(c.req.url).origin || 'https://www.pickupbaseballfoundation.org';
+    const origin = getSafePublicOrigin(c);
     const baseTitle = ev.title || 'Sunday Pickup Baseball - Noon Game';
     const ics = buildCalendarIcs([ev], origin, {
       viewerUser,
@@ -322,7 +323,7 @@ eventsCoreRouter.all('/reminders/check', async (c) => {
   }
 
   try {
-    const origin = new URL(c.req.url).origin || 'https://www.pickupbaseballfoundation.org';
+    const origin = getSafePublicOrigin(c);
     const processed = await processUpcomingEventRemindersD1(c.env.DB, c.env, origin);
     return c.json({ success: true, processed, message: 'Reminder check executed.' });
   } catch (err) {
@@ -847,7 +848,7 @@ eventsCoreRouter.post('/:id/send-reminders', requireAdmin, async (c) => {
     const event = await c.env.DB.prepare('SELECT * FROM events WHERE id = ?').bind(eventId).first();
     if (!event) return c.json({ error: 'Event not found.' }, 404);
 
-    await sendRemindersForEventD1(c.env.DB, c.env, new URL(c.req.url).origin, event);
+    await sendRemindersForEventD1(c.env.DB, c.env, getSafePublicOrigin(c), event);
     return c.json({ success: true, message: 'Reminders have been sent to all confirmed attendees.' });
   } catch (err) {
     console.error('[Events] Error sending reminders manually:', err);

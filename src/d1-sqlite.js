@@ -95,10 +95,14 @@ function createD1Adapter(sqliteDb) {
   };
 }
 
-function getFullRequestUrl(req) {
-  const proto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
-  const host = req.headers.host || '127.0.0.1';
-  return `${proto}://${host}${req.originalUrl || req.url}`;
+const MAX_NODE_REQUEST_BODY_BYTES = 75 * 1024 * 1024; // 75 MB upper bound to accommodate base64 media payloads while preventing OOM DoS
+
+function getFullRequestUrl(req, trustProxy = false) {
+  const rawProto = trustProxy ? (req.headers['x-forwarded-proto'] || req.protocol || 'http') : (req.protocol || 'http');
+  const proto = rawProto === 'https' ? 'https' : 'http';
+  const rawHost = String(req.headers.host || '127.0.0.1').trim();
+  const safeHost = /^[a-z0-9.\-:\[\]]+$/i.test(rawHost) ? rawHost : '127.0.0.1';
+  return `${proto}://${safeHost}${req.originalUrl || req.url}`;
 }
 
 async function sendWebResponse(webRes, res) {
@@ -125,25 +129,46 @@ async function sendWebResponse(webRes, res) {
 function createNodeHttpBridge(honoApp, envOrFactory) {
   return async (req, res, next) => {
     try {
-      const fullUrl = getFullRequestUrl(req);
+      const env = typeof envOrFactory === 'function' ? envOrFactory() : envOrFactory;
+      const trustProxy = (process.env.TRUST_PROXY === '1') || Boolean(env && env.TRUST_PROXY === '1');
+      const fullUrl = getFullRequestUrl(req, trustProxy);
       const headers = new Headers();
       for (const [k, v] of Object.entries(req.headers)) {
         if (v === undefined) continue;
         headers.set(k, Array.isArray(v) ? v.join(', ') : String(v));
       }
 
+      if (!trustProxy) {
+        headers.delete('cf-connecting-ip');
+        headers.delete('x-forwarded-for');
+        headers.delete('x-forwarded-proto');
+        headers.delete('x-forwarded-host');
+        headers.delete('x-real-ip');
+        const remoteAddr = (req.socket && req.socket.remoteAddress) || (req.connection && req.connection.remoteAddress) || '127.0.0.1';
+        headers.set('x-forwarded-for', String(remoteAddr));
+      }
+
       let body;
       if (req.method !== 'GET' && req.method !== 'HEAD') {
+        const declaredLen = parseInt(req.headers['content-length'] || '0', 10);
+        if (!isNaN(declaredLen) && declaredLen > MAX_NODE_REQUEST_BODY_BYTES) {
+          return res.status(413).json({ error: 'Request payload exceeds maximum allowed size.' });
+        }
         const chunks = [];
+        let totalBytes = 0;
         for await (const chunk of req) {
-          chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+          const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+          totalBytes += buf.byteLength;
+          if (totalBytes > MAX_NODE_REQUEST_BODY_BYTES) {
+            return res.status(413).json({ error: 'Request payload exceeds maximum allowed size.' });
+          }
+          chunks.push(buf);
         }
         if (chunks.length > 0) {
           body = Buffer.concat(chunks);
         }
       }
 
-      const env = typeof envOrFactory === 'function' ? envOrFactory() : envOrFactory;
       const executionCtx = {
         waitUntil(p) { Promise.resolve(p).catch(() => {}); },
         passThroughOnException() {}

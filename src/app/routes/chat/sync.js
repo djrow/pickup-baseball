@@ -5,10 +5,13 @@
  */
 
 import { Hono } from 'hono';
-import { requireAuth } from '../../security.js';
+import { requireAuth, rejectIfClubhouseOptedOut } from '../../security.js';
+import { canUserAccessEvent } from '../../policy.js';
 import {
   abbreviateMemberNames,
+  chunkArray,
   resolveChannel,
+  isPublicGuestChannel,
   getAccessibleChannels,
   hydrateMessages
 } from './helpers.js';
@@ -27,6 +30,47 @@ chatSyncRouter.get('/bootstrap', requireAuth, async (c) => {
   }
 
   const nowSec = Math.floor(Date.now() / 1000);
+  const isOptedIn = Boolean(user && (user.clubhouseOptedIn || user.clubhouse_opted_in === 1));
+
+  const channels = isOptedIn
+    ? await getAccessibleChannels(chatDb, user)
+    : (await getAccessibleChannels(chatDb, user)).filter((ch) => isPublicGuestChannel(ch));
+  const accessibleIds = new Set(channels.map((ch) => ch.id));
+
+  let upcoming_game = null;
+  if (baseballDb) {
+    try {
+      const { results: upcomingCandidates } = await baseballDb.prepare(`
+        SELECT * FROM events
+        WHERE (status IS NULL OR status NOT IN ('cancelled'))
+          AND datetime(event_date) >= datetime('now', '-1 day')
+        ORDER BY
+          CASE WHEN strftime('%w', event_date) = '0' OR title LIKE '%Sunday%' THEN 0 ELSE 1 END,
+          event_date ASC
+        LIMIT 20
+      `).all();
+      const visibleEvent = (upcomingCandidates || []).find((ev) => canUserAccessEvent(user, ev)) || null;
+      if (visibleEvent) {
+        const isOrganizer = Boolean(user && (user.canManageEvents || user.isAdmin));
+        const { allowed_emails, ...restEvent } = visibleEvent;
+        upcoming_game = isOrganizer ? visibleEvent : restEvent;
+      }
+    } catch (e) {}
+  }
+
+  if (!isOptedIn) {
+    return c.json({
+      user,
+      channels,
+      voice_participants: [],
+      unread_counts: {},
+      members: [],
+      muted_user_ids: [],
+      upcoming_game,
+      last_message_id: 0,
+      last_event_id: 0
+    });
+  }
 
   // Prune stale voice participants only when stale rows actually exist (avoids idle D1 writes)
   try {
@@ -38,31 +82,33 @@ chatSyncRouter.get('/bootstrap', requireAuth, async (c) => {
     }
   } catch (e) {}
 
-  const channels = await getAccessibleChannels(chatDb, user);
-  const accessibleIds = new Set(channels.map((ch) => ch.id));
-
   // Active voice participants (<25s heartbeat)
   const { results: rawVoice } = await chatDb.prepare(
     'SELECT * FROM voice_participants WHERE heartbeat_at > ? AND user_id NOT IN (SELECT user_id FROM clubhouse_opted_out) ORDER BY heartbeat_at DESC'
   ).bind(nowSec - 25).all();
   const voice_participants = (rawVoice || []).filter((vp) => accessibleIds.has(vp.channel_id));
 
-  // Unread counts per accessible channel
+  // Unread counts per accessible channel (chunked for D1 100-param limit)
   const unread_counts = {};
   if (channels.length > 0) {
     try {
-      const ph = channels.map(() => '?').join(',');
-      const { results: unreadRows } = await chatDb.prepare(`
-        SELECT m.channel_id, COUNT(*) as c
-        FROM messages m
-        LEFT JOIN channel_members cm ON cm.channel_id = m.channel_id AND cm.user_id = ?
-        WHERE m.channel_id IN (${ph})
-          AND m.deleted_at IS NULL
-          AND m.author_id NOT IN (SELECT user_id FROM clubhouse_opted_out)
-          AND m.id > COALESCE(cm.last_read_message_id, 0)
-        GROUP BY m.channel_id
-      `).bind(user.id, ...channels.map((ch) => ch.id)).all();
-      const countMap = new Map((unreadRows || []).map((r) => [r.channel_id, r.c || 0]));
+      const countMap = new Map();
+      for (const chChunk of chunkArray(channels.map((ch) => ch.id), 80)) {
+        const ph = chChunk.map(() => '?').join(',');
+        const { results: unreadRows } = await chatDb.prepare(`
+          SELECT m.channel_id, COUNT(*) as c
+          FROM messages m
+          LEFT JOIN channel_members cm ON cm.channel_id = m.channel_id AND cm.user_id = ?
+          WHERE m.channel_id IN (${ph})
+            AND m.deleted_at IS NULL
+            AND m.author_id NOT IN (SELECT user_id FROM clubhouse_opted_out)
+            AND m.id > COALESCE(cm.last_read_message_id, 0)
+          GROUP BY m.channel_id
+        `).bind(user.id, ...chChunk).all();
+        for (const r of (unreadRows || [])) {
+          countMap.set(r.channel_id, r.c || 0);
+        }
+      }
 
       for (const ch of channels) {
         const cnt = countMap.get(ch.id) || 0;
@@ -92,13 +138,15 @@ chatSyncRouter.get('/bootstrap', requireAuth, async (c) => {
       `).all();
 
       const memberIds = (usersList || []).map((u) => u.id);
-      let cryptoRows = [];
-      if (memberIds.length > 0) {
-        const ph = memberIds.map(() => '?').join(',');
+      const cryptoRows = [];
+      for (const idChunk of chunkArray(memberIds, 80)) {
+        const ph = idChunk.map(() => '?').join(',');
         const cryptoRes = await chatDb.prepare(
           `SELECT user_id, status_text, (ecdh_public_key_jwk IS NOT NULL) as has_key FROM user_crypto_keys WHERE user_id IN (${ph})`
-        ).bind(...memberIds).all();
-        cryptoRows = cryptoRes.results || [];
+        ).bind(...idChunk).all();
+        if (cryptoRes && Array.isArray(cryptoRes.results)) {
+          cryptoRows.push(...cryptoRes.results);
+        }
       }
       const cryptoMap = new Map(cryptoRows.map((r) => [r.user_id, r]));
 
@@ -134,21 +182,6 @@ chatSyncRouter.get('/bootstrap', requireAuth, async (c) => {
     muted_user_ids = (muteRows || []).map((r) => r.muted_user_id);
   } catch (e) {}
 
-  let upcoming_game = null;
-  if (baseballDb) {
-    try {
-      upcoming_game = await baseballDb.prepare(`
-        SELECT * FROM events
-        WHERE (status IS NULL OR status NOT IN ('cancelled'))
-          AND datetime(event_date) >= datetime('now', '-1 day')
-        ORDER BY
-          CASE WHEN strftime('%w', event_date) = '0' OR title LIKE '%Sunday%' THEN 0 ELSE 1 END,
-          event_date ASC
-        LIMIT 1
-      `).first();
-    } catch (e) {}
-  }
-
   let last_message_id = 0;
   let last_event_id = 0;
   try {
@@ -173,6 +206,8 @@ chatSyncRouter.get('/bootstrap', requireAuth, async (c) => {
 
 chatSyncRouter.get('/sync', requireAuth, async (c) => {
   const user = c.get('user');
+  const optResp = rejectIfClubhouseOptedOut(c, user);
+  if (optResp) return optResp;
   const chatDb = c.env && c.env.CHAT_DB;
   if (!chatDb) {
     return c.json({ error: 'Chat database unavailable.' }, 500);
@@ -234,26 +269,33 @@ chatSyncRouter.get('/sync', requireAuth, async (c) => {
   let events = [];
 
   if (targetChannelIds.length > 0) {
-    const placeholders = targetChannelIds.map(() => '?').join(',');
+    const rawMsgs = [];
+    const rawEvents = [];
+    for (const chChunk of chunkArray(targetChannelIds, 80)) {
+      const placeholders = chChunk.map(() => '?').join(',');
+      const { results: msgChunk } = await chatDb.prepare(
+        `SELECT * FROM messages
+         WHERE id > ? AND channel_id IN (${placeholders}) AND deleted_at IS NULL
+           AND author_id NOT IN (SELECT user_id FROM clubhouse_opted_out)
+         ORDER BY id ASC
+         LIMIT 200`
+      ).bind(sinceMsgId, ...chChunk).all();
+      if (msgChunk && msgChunk.length) rawMsgs.push(...msgChunk);
 
-    const { results: rawMsgs } = await chatDb.prepare(
-      `SELECT * FROM messages
-       WHERE id > ? AND channel_id IN (${placeholders}) AND deleted_at IS NULL
-         AND author_id NOT IN (SELECT user_id FROM clubhouse_opted_out)
-       ORDER BY id ASC
-       LIMIT 200`
-    ).bind(sinceMsgId, ...targetChannelIds).all();
+      const { results: evtChunk } = await chatDb.prepare(
+        `SELECT * FROM sync_events
+         WHERE id > ? AND (channel_id = 0 OR channel_id IN (${placeholders}))
+         ORDER BY id ASC
+         LIMIT 200`
+      ).bind(sinceEventId, ...chChunk).all();
+      if (evtChunk && evtChunk.length) rawEvents.push(...evtChunk);
+    }
 
-    messages = await hydrateMessages(chatDb, rawMsgs || []);
-
-    const { results: rawEvents } = await chatDb.prepare(
-      `SELECT * FROM sync_events
-       WHERE id > ? AND (channel_id = 0 OR channel_id IN (${placeholders}))
-       ORDER BY id ASC
-       LIMIT 200`
-    ).bind(sinceEventId, ...targetChannelIds).all();
-
-    events = rawEvents || [];
+    rawMsgs.sort((a, b) => Number(a.id) - Number(b.id));
+    rawEvents.sort((a, b) => Number(a.id) - Number(b.id));
+    const uniqueEvents = Array.from(new Map(rawEvents.map((e) => [e.id, e])).values()).slice(0, 200);
+    messages = await hydrateMessages(chatDb, rawMsgs.slice(0, 200));
+    events = uniqueEvents;
   }
 
   // Throttle background TTL pruning writes to at most once every 60s and only when expired rows exist

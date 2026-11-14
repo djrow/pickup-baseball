@@ -321,7 +321,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '134',
+  CLIENT_VERSION: '136',
 
   // Current user cache
   currentUser: null,
@@ -1111,7 +1111,7 @@ const API = {
           k &&
           (k.startsWith('pickup_cached_event') ||
             k.startsWith('pbf_weather_v') ||
-            (k.startsWith('pickup_i18n_v') && !k.startsWith('pickup_i18n_v' + this.APP_VERSION + '_')))
+            (k.startsWith('pickup_i18n_v') && !k.startsWith('pickup_i18n_v' + this.CLIENT_VERSION + '_')))
         ) {
           keysToRemove.push(k);
         }

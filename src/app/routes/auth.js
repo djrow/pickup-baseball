@@ -14,10 +14,12 @@ import {
   stripJpegMetadata,
   isValidRasterImageBuffer,
   getClientIp,
+  getSafePublicOrigin,
   checkRateLimit,
   constantTimeEqual,
   verifyTurnstileIfConfigured,
   safeFetchExternalUrl,
+  readResponseWithByteCap,
   requireAuth,
   requireAdmin,
   ensureUserCalendarToken,
@@ -94,7 +96,9 @@ async function handleSendCode(c) {
     }
 
     const existingUser = await c.env.DB.prepare('SELECT id, name FROM users WHERE email = ?').bind(email).first();
-    if (existingUser && !name) name = existingUser.name;
+    if (existingUser && existingUser.name) {
+      name = existingUser.name;
+    }
 
     const code = generateCode();
     const token = generateToken();
@@ -110,7 +114,7 @@ async function handleSendCode(c) {
       ).bind(email, name, storedCode, storedToken, expiresAt)
     ]);
 
-    const origin = new URL(c.req.url).origin;
+    const origin = getSafePublicOrigin(c);
     await sendAuthCode(c.env, origin, { email, name: name || 'Player', code, token });
 
     return c.json({
@@ -702,6 +706,27 @@ export async function getSettingsHandler(c) {
   return c.json(payload);
 }
 
+const APPSCRIPT_EXEC_URL_RE = /^https:\/\/script\.google\.com\/macros\/s\/[a-zA-Z0-9_\-]+\/exec$/i;
+
+function validateAppscriptRedirectUrl(rawUrl) {
+  let parsed;
+  try {
+    parsed = new URL(String(rawUrl || '').trim());
+  } catch (e) {
+    return { ok: false, status: 400, error: 'Invalid Google Apps Script URL.' };
+  }
+  const host = parsed.hostname.toLowerCase();
+  const isGoogleAppsHost =
+    host === 'script.google.com' ||
+    host === 'script.googleusercontent.com' ||
+    host.endsWith('.googleusercontent.com');
+  if (parsed.protocol !== 'https:' || !isGoogleAppsHost) {
+    return { ok: false, status: 403, error: 'Apps Script redirects must stay on Google Apps Script domains.' };
+  }
+  parsed.hash = '';
+  return { ok: true, url: parsed.toString() };
+}
+
 export async function putSettingsHandler(c) {
   const body = await c.req.json().catch(() => ({}));
   let requireLoginVal = null;
@@ -711,7 +736,7 @@ export async function putSettingsHandler(c) {
   }
   if (body.appscript_upload_url !== undefined) {
     const cleanUrl = String(body.appscript_upload_url).trim();
-    if (cleanUrl && !/^https:\/\/script\.google\.com\/macros\/s\/[a-zA-Z0-9_\-]+\/exec/i.test(cleanUrl)) {
+    if (cleanUrl && !APPSCRIPT_EXEC_URL_RE.test(cleanUrl)) {
       return c.json({ error: 'Invalid Google Apps Script URL. Expected format: https://script.google.com/macros/s/.../exec' }, 400);
     }
     await c.env.DB.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('appscript_upload_url', ?)").bind(cleanUrl).run();
@@ -742,7 +767,7 @@ export async function testAppscriptHandler(c) {
       return c.json({ success: false, error: 'No Google Apps Script URL provided.' }, 400);
     }
 
-    if (!/^https:\/\/script\.google\.com\/macros\/s\/[a-zA-Z0-9_\-]+\/exec/i.test(targetUrl)) {
+    if (!APPSCRIPT_EXEC_URL_RE.test(targetUrl)) {
       return c.json({ success: false, error: 'Invalid Google Apps Script URL. Expected format: https://script.google.com/macros/s/.../exec' }, 400);
     }
 
@@ -750,6 +775,7 @@ export async function testAppscriptHandler(c) {
       targetUrl,
       {
         method: 'GET',
+        validator: validateAppscriptRedirectUrl,
         headers: {
           'Accept': 'application/json'
         }
@@ -779,8 +805,20 @@ export async function testAppscriptHandler(c) {
       }, 400);
     }
 
-    const data = await res.json().catch(() => null);
-    if (!data || (data.status !== 'ok' && data.success === false)) {
+    const capped = await readResponseWithByteCap(res, 65536);
+    if (!capped.ok) {
+      return c.json({
+        success: false,
+        error: capped.error || 'Google Apps Script response exceeded size limit.'
+      }, 400);
+    }
+    let data = null;
+    try {
+      data = JSON.parse(new TextDecoder().decode(capped.bytes));
+    } catch (e) {
+      data = null;
+    }
+    if (!data || (data.status !== 'ok' && data.success !== true)) {
       return c.json({
         success: false,
         error: `Unexpected response from Apps Script: ${JSON.stringify(data || {})}`

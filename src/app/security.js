@@ -168,8 +168,35 @@ export function getClientIp(c) {
   return (
     c.req.header('CF-Connecting-IP') ||
     (c.req.header('X-Forwarded-For') || '').split(',')[0].trim() ||
+    c.req.header('X-Real-IP') ||
     'unknown'
   );
+}
+
+export function getSafePublicOrigin(c) {
+  const configured = c && c.env && c.env.PUBLIC_ORIGIN ? String(c.env.PUBLIC_ORIGIN).trim() : '';
+  if (configured) {
+    try {
+      return new URL(configured).origin;
+    } catch (e) {}
+  }
+  try {
+    const parsed = new URL(c.req.url);
+    const host = parsed.hostname.toLowerCase();
+    const isTestEnv = Boolean(c && c.env && c.env.NODE_ENV === 'test');
+    if (
+      host === 'www.pickupbaseballfoundation.org' ||
+      host === 'pickupbaseballfoundation.org' ||
+      host.endsWith('.pickupbaseballfoundation.org') ||
+      host === 'localhost' ||
+      host === '127.0.0.1' ||
+      host === '[::1]' ||
+      isTestEnv
+    ) {
+      return parsed.origin;
+    }
+  } catch (e) {}
+  return 'https://www.pickupbaseballfoundation.org';
 }
 
 export async function checkRateLimit(db, key, maxRequests, windowSeconds, env) {
@@ -550,11 +577,12 @@ export function rejectIfClubhouseOptedOut(c, user) {
 
 export function isPrivateIpOrHost(hostname, isTestEnv = false) {
   if (!hostname) return true;
-  const h = hostname.toLowerCase().trim();
-  if (isTestEnv && (h === 'localhost' || h === '127.0.0.1' || h === '::1')) {
+  const h = String(hostname).toLowerCase().trim().replace(/\.+$/, '');
+  if (!h) return true;
+  if (isTestEnv && (h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || h === '::1')) {
     return false;
   }
-  if (h === 'localhost' || h === '::1' || h === '0.0.0.0' || h === '0' || h.endsWith('.local') || h.endsWith('.internal') || h.endsWith('.localhost')) {
+  if (h === 'localhost' || h === '::1' || h === '[::1]' || h === '0.0.0.0' || h === '0' || h.endsWith('.local') || h.endsWith('.internal') || h.endsWith('.localhost')) {
     return true;
   }
 
@@ -575,14 +603,18 @@ export function isPrivateIpOrHost(hostname, isTestEnv = false) {
   if (/^\d+$/.test(h) || /^0x[0-9a-f]+$/i.test(h)) return true;
 
   if (h.startsWith('[') && h.endsWith(']')) {
-    const inner = h.slice(1, -1);
+    const inner = h.slice(1, -1).toLowerCase();
     if (
       inner === '::1' ||
       inner === '::' ||
-      inner.startsWith('fe80:') ||
-      inner.startsWith('fc00:') ||
-      inner.startsWith('fd00:') ||
-      inner.includes('::ffff:')
+      inner === '0:0:0:0:0:0:0:1' ||
+      inner === '0:0:0:0:0:0:0:0' ||
+      /^fe[89ab][0-9a-f]:/i.test(inner) ||
+      /^f[cd][0-9a-f]{2}:/i.test(inner) ||
+      /^ff[0-9a-f]{2}:/i.test(inner) ||
+      inner.includes('::ffff:') ||
+      /^::[0-9a-f]{1,4}(?::[0-9a-f]{1,4})?$/i.test(inner) ||
+      inner.includes('.')
     ) {
       return true;
     }
@@ -603,6 +635,9 @@ export function validateExternalGifUrl(rawUrl, options = {}) {
     return { ok: false, status: 400, error: 'Invalid URL provided.' };
   }
 
+  if (parsed.hostname.endsWith('.')) {
+    return { ok: false, status: 400, error: 'Trailing dots in remote hostnames are not allowed.' };
+  }
   const allowHttpInTest = isTestEnv && (parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost');
   if (parsed.protocol !== 'https:' && !(allowHttpInTest && parsed.protocol === 'http:')) {
     return { ok: false, status: 400, error: 'Only HTTPS GIF links are allowed.' };

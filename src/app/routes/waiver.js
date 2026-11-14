@@ -10,6 +10,8 @@ import {
   base64ToUint8Array,
   isValidRasterImageBuffer,
   getClientIp,
+  getSafePublicOrigin,
+  constantTimeEqual,
   checkRateLimit,
   requireAuth,
   requireAdmin
@@ -43,14 +45,42 @@ function getSubtleCrypto() {
 
 let ephemeralProvenanceSecret = null;
 
-function getProvenanceSecretMaterial(env) {
-  const e = env || process.env || {};
-  const configured =
-    e.WAIVER_SIGNING_SECRET ||
-    e.SESSION_SECRET ||
-    e.GDRIVE_CLIENT_SECRET ||
-    e.TURNSTILE_SECRET_KEY;
-  if (configured) return configured;
+async function getProvenanceSecretMaterial(env, db = null) {
+  const e = env || (typeof process !== 'undefined' ? process.env : {}) || {};
+  if (e.WAIVER_SIGNING_SECRET) {
+    return String(e.WAIVER_SIGNING_SECRET);
+  }
+  const baseSecret = e.SESSION_SECRET || e.GDRIVE_CLIENT_SECRET || e.TURNSTILE_SECRET_KEY;
+  if (baseSecret) {
+    const subtle = getSubtleCrypto();
+    const baseKey = await subtle.importKey(
+      'raw',
+      new TextEncoder().encode(String(baseSecret)),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
+    const derived = await subtle.sign('HMAC', baseKey, new TextEncoder().encode('pickup-waiver-provenance-key-v1'));
+    return Array.from(new Uint8Array(derived), (b) => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  const targetDb = db || e.DB || e.BASEBALL_DB || null;
+  if (targetDb) {
+    try {
+      const existing = await targetDb.prepare("SELECT value FROM app_settings WHERE key = 'waiver_provenance_secret'").first();
+      if (existing && existing.value) {
+        return String(existing.value);
+      }
+      const bytes = new Uint8Array(32);
+      globalThis.crypto.getRandomValues(bytes);
+      const generated = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+      await targetDb.prepare("INSERT OR IGNORE INTO app_settings (key, value) VALUES ('waiver_provenance_secret', ?)").bind(generated).run();
+      const row = await targetDb.prepare("SELECT value FROM app_settings WHERE key = 'waiver_provenance_secret'").first();
+      if (row && row.value) {
+        return String(row.value);
+      }
+    } catch (err) {}
+  }
 
   if (!ephemeralProvenanceSecret) {
     const bytes = new Uint8Array(32);
@@ -63,8 +93,8 @@ function getProvenanceSecretMaterial(env) {
   return ephemeralProvenanceSecret;
 }
 
-export async function computeProvenanceSeal(env, payloadStr) {
-  const secretMaterial = getProvenanceSecretMaterial(env);
+export async function computeProvenanceSeal(env, payloadStr, db = null) {
+  const secretMaterial = await getProvenanceSecretMaterial(env, db);
   const subtle = getSubtleCrypto();
   const keyBytes = new TextEncoder().encode(secretMaterial);
   const cryptoKey = await subtle.importKey(
@@ -490,7 +520,7 @@ waiverRouter.post('/sign', requireAuth, async (c) => {
   });
   const documentSha256 = await sha256Hex(canonicalPayload);
   const certificateId = generateCertificateId(signedDate);
-  const provenanceSeal = await computeProvenanceSeal(c.env, `${certificateId}:${documentSha256}`);
+  const provenanceSeal = await computeProvenanceSeal(c.env, `${certificateId}:${documentSha256}`, c.env.DB);
   const signedAtIso = new Date().toISOString();
   const userAgent = (c.req.header('User-Agent') || 'unknown').slice(0, 250);
 
@@ -540,7 +570,7 @@ waiverRouter.post('/sign', requireAuth, async (c) => {
     signed_at: signedAtIso
   };
 
-  const origin = new URL(c.req.url).origin;
+  const origin = getSafePublicOrigin(c);
 
   const backgroundWork = (async () => {
     try {
@@ -635,10 +665,10 @@ waiverRouter.get('/certificate/:id', async (c) => {
     electronic_consent: Boolean(row.electronic_consent)
   });
   const recomputedDocSha256 = await sha256Hex(expectedCanonical);
-  const recomputedSeal = await computeProvenanceSeal(c.env, `${row.certificate_id}:${recomputedDocSha256}`);
+  const recomputedSeal = await computeProvenanceSeal(c.env, `${row.certificate_id}:${recomputedDocSha256}`, c.env.DB);
   const integrityVerified = (
-    recomputedDocSha256 === row.document_sha256 &&
-    recomputedSeal === row.provenance_seal
+    constantTimeEqual(recomputedDocSha256, row.document_sha256) &&
+    constantTimeEqual(recomputedSeal, row.provenance_seal)
   );
 
   const canViewPii = Boolean(user && (user.isAdmin || user.id === row.user_id));

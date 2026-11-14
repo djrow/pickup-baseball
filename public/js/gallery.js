@@ -1125,16 +1125,17 @@
         `;
       }
     } else {
-      if (selectedFileBase64) {
+      if (selectedFileBase64 && (selectedFileBase64.startsWith('data:image/') || selectedFileBase64.startsWith('data:video/'))) {
         previewBox.style.display = 'block';
         var isVideo = selectedFileMime && selectedFileMime.startsWith('video/');
+        var safePreviewSrc = API.escapeHtml(selectedFileBase64);
         if (isVideo) {
           previewTarget.innerHTML = `
-            <video src="${selectedFileBase64}" controls style="max-width: 100%; max-height: 250px; border-radius: var(--radius-sm);"></video>
+            <video src="${safePreviewSrc}" controls style="max-width: 100%; max-height: 250px; border-radius: var(--radius-sm);"></video>
           `;
         } else {
           previewTarget.innerHTML = `
-            <img src="${selectedFileBase64}" alt="Upload Preview" style="max-width: 100%; max-height: 250px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+            <img src="${safePreviewSrc}" alt="Upload Preview" style="max-width: 100%; max-height: 250px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
           `;
         }
       } else {

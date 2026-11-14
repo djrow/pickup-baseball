@@ -125,6 +125,29 @@
     });
   }
 
+  function clearCryptoIdb() {
+    if (typeof indexedDB === 'undefined') return Promise.resolve();
+    return new Promise(function (resolve) {
+      var settled = false;
+      function finish() {
+        if (!settled) {
+          settled = true;
+          resolve();
+        }
+      }
+      var timer = setTimeout(finish, 400);
+      try {
+        var req = indexedDB.deleteDatabase('pickup_clubhouse_crypto');
+        req.onsuccess = function () { clearTimeout(timer); finish(); };
+        req.onerror = function () { clearTimeout(timer); finish(); };
+        req.onblocked = function () { clearTimeout(timer); finish(); };
+      } catch (e) {
+        clearTimeout(timer);
+        finish();
+      }
+    });
+  }
+
   function clearStoreIdb(storeNames) {
     var names = Array.isArray(storeNames) && storeNames.length > 0
       ? storeNames
@@ -837,7 +860,7 @@
         localStorage.removeItem('pickup_ch_collapsed_cats');
       }
     } catch (e) {}
-    return clearStoreIdb();
+    return Promise.all([clearStoreIdb(), clearCryptoIdb()]);
   }
 
   function loadPublicGuestChannels() {
@@ -914,7 +937,11 @@
       var activeUid = (d.user && d.user.id) ? Number(d.user.id) : 0;
       getMetaFromIdb('cached_user_id').then(function (prevUid) {
         if (prevUid && activeUid && Number(prevUid) !== activeUid) {
-          return clearStoreIdb(['messages']).then(function () {
+          clearCachedDmKeys();
+          if (root.ClubhouseCrypto && typeof root.ClubhouseCrypto.clearMemoryKeys === 'function') {
+            root.ClubhouseCrypto.clearMemoryKeys();
+          }
+          return Promise.all([clearStoreIdb(['messages']), clearCryptoIdb()]).then(function () {
             setMetaInIdb('cached_user_id', activeUid);
           });
         }
