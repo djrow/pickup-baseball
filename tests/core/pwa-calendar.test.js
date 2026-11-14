@@ -141,27 +141,45 @@ module.exports = async function registerPwaCalendarTests(ctx, t9) {
     assert.equal(blockedRsvp.status, 403, 'Non-invited player must receive 403 Forbidden on restricted event');
     assert.ok(blockedRsvp.data.error.includes('restricted to invited player accounts'), 'Error must specify restricted RSVP');
 
-    // 4. Invited player RSVPs -> 200 OK
-    const allowedRsvp = await apiReq('POST', `/api/events/${restrictedEventId}/rsvp`, null, {
+    // 4. Unauthenticated RSVP with invited external email is rejected (login required for invite-only events)
+    const unauthAllowedRsvp = await apiReq('POST', `/api/events/${restrictedEventId}/rsvp`, null, {
       name: 'Special Invitee',
       email: 'special_invitee@sundaypickup.org',
       gear_bringing: 'Catcher gear'
     });
-    assert.equal(allowedRsvp.status, 200, 'Invited player must successfully RSVP with 200 OK');
+    assert.equal(unauthAllowedRsvp.status, 403, 'Invite-only event must require login even for invited emails');
+
+    // 5. Invited player signs in and RSVPs -> 200 OK
+    const inviteeIns = db.prepare(
+      "INSERT OR IGNORE INTO users (name, email, role, is_admin) VALUES ('Special Invitee', 'special_invitee@sundaypickup.org', 'player', 0)"
+    ).run();
+    const inviteeRow = inviteeIns.lastInsertRowid
+      ? { id: inviteeIns.lastInsertRowid }
+      : db.prepare("SELECT id FROM users WHERE email = 'special_invitee@sundaypickup.org'").get();
+    const specialInviteeCookie = `baseball_session=${createSession(inviteeRow.id).sessionId}`;
+
+    const allowedRsvp = await apiReq('POST', `/api/events/${restrictedEventId}/rsvp`, specialInviteeCookie, {
+      name: 'Special Invitee',
+      gear_bringing: 'Catcher gear'
+    });
+    assert.equal(allowedRsvp.status, 200, 'Signed-in invited player must successfully RSVP with 200 OK');
     assert.equal(allowedRsvp.data.status, 'attending', 'RSVP response status must be attending');
 
-    // 5. Organizer updates event whitelist to open to all (allowed_emails: null)
+    // 6. Organizer updates event whitelist to open to all (allowed_emails: null)
     const updateRes = await apiReq('PUT', `/api/events/${restrictedEventId}`, seedOrgCookie, {
       allowed_emails: null
     });
     assert.equal(updateRes.status, 200, 'Updating event to clear whitelist must receive 200');
 
-    // 6. Previously blocked player can now RSVP -> 200 OK
+    // 7. Previously blocked player can now RSVP -> 200 OK; leaked management_token does not grant anon myRsvp
     const previouslyBlockedRsvp = await apiReq('POST', `/api/events/${restrictedEventId}/rsvp`, seedPlayerCookie, {
       name: 'Player One',
       gear_bringing: 'Glove'
     });
     assert.equal(previouslyBlockedRsvp.status, 200, 'Player can now RSVP after whitelist is lifted');
+    const leakedTokenGet = await apiReq('GET', `/api/events/${restrictedEventId}?token=${encodeURIComponent(allowedRsvp.data.managementToken)}`);
+    assert.equal(leakedTokenGet.status, 200);
+    assert.equal(leakedTokenGet.data.myRsvp, null, 'Registered user management_token must not resolve myRsvp anonymously');
   });
 
   await t9.test("T9.13: 'Next Game' badge anchored strictly to actual upcoming game across month pagination", () => {

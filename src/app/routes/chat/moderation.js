@@ -113,6 +113,8 @@ chatModerationRouter.post('/reports', requireAuth, async (c) => {
 
 chatModerationRouter.get('/moderation/reports', requireModerator, async (c) => {
   const user = c.get('user');
+  const optResp = rejectIfClubhouseOptedOut(c, user);
+  if (optResp) return optResp;
   const mutedResp = rejectIfChatMuted(c, user);
   if (mutedResp) return mutedResp;
   const chatDb = c.env && c.env.CHAT_DB;
@@ -173,14 +175,16 @@ chatModerationRouter.get('/moderation/reports', requireModerator, async (c) => {
     const canViewChannel = chId
       ? (channelAccessMap.has(chId) ? channelAccessMap.get(chId) : Boolean(user.isAdmin))
       : true;
+    const selfTargeted = !user.isAdmin && r.target_user_id && Number(r.target_user_id) === Number(user.id);
+    const showReporter = canViewChannel && !selfTargeted;
     return {
       ...r,
-      reporter_id: canViewChannel ? r.reporter_id : null,
-      reporter_name: canViewChannel ? r.reporter_name : 'Redacted',
+      reporter_id: showReporter ? r.reporter_id : null,
+      reporter_name: showReporter ? r.reporter_name : 'Redacted',
       target_user_id: canViewChannel ? r.target_user_id : null,
       target_user_name: canViewChannel ? r.target_user_name : 'Redacted',
       target_message_id: canViewChannel ? r.target_message_id : null,
-      reason: canViewChannel ? r.reason : '[Private board report]',
+      reason: showReporter ? r.reason : (canViewChannel ? '[Report against you — details redacted]' : '[Private board report]'),
       channel_id: canViewChannel ? r.channel_id : null,
       reviewed_by: canViewChannel ? r.reviewed_by : null,
       reviewed_by_name: canViewChannel ? r.reviewed_by_name : null,
@@ -199,6 +203,8 @@ chatModerationRouter.get('/moderation/reports', requireModerator, async (c) => {
 
 chatModerationRouter.patch('/moderation/reports/:id', requireModerator, async (c) => {
   const user = c.get('user');
+  const optResp = rejectIfClubhouseOptedOut(c, user);
+  if (optResp) return optResp;
   const mutedResp = rejectIfChatMuted(c, user);
   if (mutedResp) return mutedResp;
   const chatDb = c.env && c.env.CHAT_DB;
@@ -239,6 +245,8 @@ chatModerationRouter.patch('/moderation/reports/:id', requireModerator, async (c
 
 chatModerationRouter.get('/moderation/users', requireModerator, async (c) => {
   const user = c.get('user');
+  const optResp = rejectIfClubhouseOptedOut(c, user);
+  if (optResp) return optResp;
   const mutedResp = rejectIfChatMuted(c, user);
   if (mutedResp) return mutedResp;
   const baseballDb = c.env && (c.env.BASEBALL_DB || c.env.DB);
@@ -263,6 +271,8 @@ chatModerationRouter.get('/moderation/users', requireModerator, async (c) => {
 
 chatModerationRouter.put('/moderation/users/:id/mute', requireModerator, async (c) => {
   const actor = c.get('user');
+  const optResp = rejectIfClubhouseOptedOut(c, actor);
+  if (optResp) return optResp;
   const mutedResp = rejectIfChatMuted(c, actor);
   if (mutedResp) return mutedResp;
   const baseballDb = c.env && (c.env.BASEBALL_DB || c.env.DB);
@@ -353,6 +363,8 @@ chatModerationRouter.put('/moderation/users/:id/mute', requireModerator, async (
 
 chatModerationRouter.get('/mutes', requireAuth, async (c) => {
   const user = c.get('user');
+  const optResp = rejectIfClubhouseOptedOut(c, user);
+  if (optResp) return optResp;
   const chatDb = c.env && c.env.CHAT_DB;
   if (!chatDb) return c.json({ error: 'Chat database unavailable.' }, 500);
 
@@ -368,6 +380,8 @@ chatModerationRouter.get('/mutes', requireAuth, async (c) => {
 
 chatModerationRouter.post('/mutes', requireAuth, async (c) => {
   const user = c.get('user');
+  const optResp = rejectIfClubhouseOptedOut(c, user);
+  if (optResp) return optResp;
   const chatDb = c.env && c.env.CHAT_DB;
   const baseballDb = c.env && (c.env.BASEBALL_DB || c.env.DB);
   if (!chatDb) return c.json({ error: 'Chat database unavailable.' }, 500);
@@ -407,6 +421,8 @@ chatModerationRouter.post('/mutes', requireAuth, async (c) => {
 
 chatModerationRouter.delete('/mutes/:userId', requireAuth, async (c) => {
   const user = c.get('user');
+  const optResp = rejectIfClubhouseOptedOut(c, user);
+  if (optResp) return optResp;
   const chatDb = c.env && c.env.CHAT_DB;
   if (!chatDb) return c.json({ error: 'Chat database unavailable.' }, 500);
 

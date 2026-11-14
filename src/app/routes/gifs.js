@@ -129,6 +129,8 @@ async function fetchExternalGifSafely(initialUrl, isTestEnv) {
 // ---------------------------------------------------------------------------
 gifsRouter.get('/', requireAuth, async (c) => {
   const user = c.get('user');
+  const optResp = rejectIfClubhouseOptedOut(c, user);
+  if (optResp) return optResp;
   const chatDb = c.env && c.env.CHAT_DB;
   if (!chatDb) return c.json({ gifs: [] });
 
@@ -314,6 +316,10 @@ gifsRouter.post('/import-url', requireAuth, async (c) => {
 // ---------------------------------------------------------------------------
 gifsRouter.post('/:id/use', requireAuth, async (c) => {
   const user = c.get('user');
+  const optResp = rejectIfClubhouseOptedOut(c, user);
+  if (optResp) return optResp;
+  const mutedResp = rejectIfChatMuted(c, user);
+  if (mutedResp) return mutedResp;
   const chatDb = c.env && c.env.CHAT_DB;
   if (!chatDb) return c.json({ success: true });
   const id = String(c.req.param('id') || '').trim();
@@ -345,6 +351,8 @@ gifsRouter.get('/:id/stream', async (c) => {
     if (!user) {
       return c.json({ error: 'Authentication required to view unlisted GIF.' }, 401);
     }
+    const optResp = rejectIfClubhouseOptedOut(c, user);
+    if (optResp) return optResp;
   }
 
   const rangeHeader = c.req.header('Range');
@@ -376,6 +384,10 @@ gifsRouter.get('/:id/stream', async (c) => {
 // ---------------------------------------------------------------------------
 gifsRouter.delete('/:id', requireAuth, async (c) => {
   const user = c.get('user');
+  const optResp = rejectIfClubhouseOptedOut(c, user);
+  if (optResp) return optResp;
+  const mutedResp = rejectIfChatMuted(c, user);
+  if (mutedResp) return mutedResp;
   const chatDb = c.env && c.env.CHAT_DB;
   if (!chatDb) return c.json({ error: 'Chat database unavailable.' }, 500);
 

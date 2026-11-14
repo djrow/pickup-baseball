@@ -5,7 +5,7 @@
  */
 
 import { Hono } from 'hono';
-import { requireAuth, requireOrganizer, generateToken, getSafePublicOrigin, checkRateLimit, getClientIp } from '../security.js';
+import { requireAuth, requireOrganizer, generateToken, getSafePublicOrigin, checkRateLimit } from '../security.js';
 import { parseAllowedEmails, canUserAccessEvent, getDutyType } from '../policy.js';
 import { canUserAccessChannel } from './chat.js';
 import { chunkArray } from './chat/helpers.js';
@@ -94,7 +94,7 @@ baseballRouter.get('/upcoming', async (c) => {
   `).bind(event.id).all();
 
   let linkedChannel = null;
-  if (chatDb && user) {
+  if (chatDb && user && user.clubhouseOptedIn !== false) {
     try {
       const candidateCh = await chatDb.prepare(
         "SELECT * FROM channels WHERE linked_event_id = ? AND channel_type NOT IN ('dm', 'group_dm') LIMIT 1"
@@ -154,7 +154,7 @@ baseballRouter.post('/events/:eventId/quick-rsvp', requireAuth, async (c) => {
   const baseballDb = c.env && (c.env.BASEBALL_DB || c.env.DB);
   if (!baseballDb) return c.json({ error: 'Baseball database unavailable.' }, 500);
 
-  const rl = await checkRateLimit(baseballDb, `quick_rsvp:${user.id}:${getClientIp(c)}`, 30, 60, c.env);
+  const rl = await checkRateLimit(baseballDb, `quick_rsvp:${user.id}`, 30, 60, c.env);
   if (!rl.allowed) {
     return c.json({ error: 'Too many RSVP updates. Please wait a moment.' }, 429);
   }
@@ -212,6 +212,10 @@ baseballRouter.post('/events/:eventId/quick-rsvp', requireAuth, async (c) => {
   const wasAttending = existing && existing.status === 'attending';
   const prevPlayersCount = existing ? Number(existing.players_count || (1 + Number(existing.additional_guests || 0))) : 0;
 
+  if (wasAttending && targetStatus === 'attending' && finalStatus === 'waitlist') {
+    return c.json({ error: 'Unable to increase headcount because the game roster is already at capacity.' }, 409);
+  }
+
   if (existing) {
     if (finalStatus !== 'attending') {
       const { results: prevDutyRows } = await baseballDb.prepare(`
@@ -265,8 +269,15 @@ baseballRouter.post('/events/:eventId/quick-rsvp', requireAuth, async (c) => {
         FROM attendees WHERE event_id = ? AND status = 'attending'
       `).bind(eventId).first();
       if ((postCapRow ? postCapRow.total : 0) > event.max_players) {
+        if (wasAttending) {
+          await baseballDb.prepare(
+            'UPDATE attendees SET players_count = ?, additional_guests = ? WHERE id = ?'
+          ).bind(prevPlayersCount, Math.max(0, prevPlayersCount - 1), existing.id).run();
+          return c.json({ error: 'Unable to increase headcount because the game roster is already at capacity.' }, 409);
+        }
         await baseballDb.prepare("UPDATE attendees SET status = 'waitlist' WHERE id = ?").bind(existing.id).run();
         finalStatus = 'waitlist';
+        await promoteNextWaitlistedPlayer(c, getSafePublicOrigin(c), eventId);
       }
     }
 
@@ -303,6 +314,7 @@ baseballRouter.post('/events/:eventId/quick-rsvp', requireAuth, async (c) => {
       if ((postCapRow ? postCapRow.total : 0) > event.max_players) {
         await baseballDb.prepare("UPDATE attendees SET status = 'waitlist' WHERE id = ?").bind(insertedId).run();
         finalStatus = 'waitlist';
+        await promoteNextWaitlistedPlayer(c, getSafePublicOrigin(c), eventId);
       }
     }
   }
@@ -325,7 +337,7 @@ baseballRouter.post('/events/:eventId/quick-bp', requireAuth, async (c) => {
   const baseballDb = c.env && (c.env.BASEBALL_DB || c.env.DB);
   if (!baseballDb) return c.json({ error: 'Baseball database unavailable.' }, 500);
 
-  const rl = await checkRateLimit(baseballDb, `quick_bp:${user.id}:${getClientIp(c)}`, 30, 60, c.env);
+  const rl = await checkRateLimit(baseballDb, `quick_bp:${user.id}`, 30, 60, c.env);
   if (!rl.allowed) {
     return c.json({ error: 'Too many batting practice updates. Please wait a moment.' }, 429);
   }
@@ -474,9 +486,12 @@ baseballRouter.post('/events/:eventId/sync-channel', requireOrganizer, async (c)
       const normalized = chunk.map((e) => String(e).trim().toLowerCase()).filter(Boolean);
       if (normalized.length === 0) continue;
       const placeholders = normalized.map(() => '?').join(', ');
-      const { results: userRows } = await baseballDb.prepare(
-        `SELECT id FROM users WHERE LOWER(email) IN (${placeholders})`
-      ).bind(...normalized).all();
+      const { results: userRows } = await baseballDb.prepare(`
+        SELECT u.id
+        FROM users u
+        WHERE LOWER(u.email) IN (${placeholders})
+          AND NOT EXISTS (SELECT 1 FROM banned_emails b WHERE LOWER(b.email) = LOWER(u.email))
+      `).bind(...normalized).all();
       for (const u of (userRows || [])) {
         invitedIds.add(u.id);
       }
@@ -530,8 +545,29 @@ baseballRouter.post('/events/:eventId/sync-channel', requireOrganizer, async (c)
       ).bind(eventId, slug).first();
       if (!channel) throw insertErr;
     }
-  } else if (isInviteRestricted && channel.is_private) {
+  } else if (isInviteRestricted) {
+    if (!channel.is_private || channel.min_role_read !== 'invite') {
+      await chatDb.prepare(
+        "UPDATE channels SET is_private = 1, min_role_read = 'invite' WHERE id = ?"
+      ).bind(channel.id).run();
+      channel = { ...channel, is_private: 1, min_role_read: 'invite' };
+    }
     const invitedIds = await resolveInvitedMemberIds();
+    const invitedSet = new Set(invitedIds.map(Number));
+    const { results: currentMemberRows } = await chatDb.prepare(
+      'SELECT user_id FROM channel_members WHERE channel_id = ?'
+    ).bind(channel.id).all();
+    const staleIds = (currentMemberRows || [])
+      .map((r) => Number(r.user_id))
+      .filter((uid) => !invitedSet.has(uid));
+    if (staleIds.length > 0) {
+      for (const staleChunk of chunkArray(staleIds, 80)) {
+        const ph = staleChunk.map(() => '?').join(', ');
+        await chatDb.prepare(
+          `DELETE FROM channel_members WHERE channel_id = ? AND user_id IN (${ph})`
+        ).bind(channel.id, ...staleChunk).run();
+      }
+    }
     if (invitedIds.length > 0) {
       await chatDb.batch(invitedIds.map((uid) =>
         chatDb.prepare(

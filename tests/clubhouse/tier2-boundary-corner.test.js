@@ -718,7 +718,7 @@ async function runTier2(t, ctx) {
         });
         assert.equal(forbiddenMedia.status, 403, 'Player must be blocked from attaching media to inaccessible invite-only event');
 
-        // 2. Admin can attach media to the restricted event, and public/non-invited GET /api/media masks event_title
+        // 2. Admin can attach media to the restricted event; non-invited viewers must not see the item at all
         const adminMedia = await apiReq('POST', '/api/media', adminCookie, {
           title: 'Admin Highlight',
           url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
@@ -730,9 +730,16 @@ async function runTier2(t, ctx) {
 
         const listAnon = await apiReq('GET', '/api/media');
         assert.equal(listAnon.status, 200);
-        const maskedItem = (listAnon.data.media || []).find((it) => Number(it.id) === Number(uploadedMediaId));
-        assert.ok(maskedItem, 'Approved media item should be listed');
-        assert.equal(maskedItem.event_title, null, 'Inaccessible invite-only event_title must be masked on GET /api/media');
+        const hiddenItem = (listAnon.data.media || []).find((it) => Number(it.id) === Number(uploadedMediaId));
+        assert.equal(hiddenItem, undefined, 'Invite-only event media must be omitted from GET /api/media for non-invited viewers');
+        const listPlayer = await apiReq('GET', '/api/media', playerCookie);
+        assert.equal((listPlayer.data.media || []).some((it) => Number(it.id) === Number(uploadedMediaId)), false, 'Non-invited player must not see invite-only event media');
+        const listAdmin = await apiReq('GET', '/api/media', adminCookie);
+        const adminItem = (listAdmin.data.media || []).find((it) => Number(it.id) === Number(uploadedMediaId));
+        assert.ok(adminItem, 'Admin must still see invite-only event media');
+        assert.equal(adminItem.event_title, 'Secret Tryout Practice');
+        const hiddenFile = await apiReq('GET', `/api/media/${uploadedMediaId}/file`);
+        assert.equal(hiddenFile.status, 404, 'Invite-only event media file must not be served to non-invited viewers');
 
         // 3. Remote media proxy must reject HTML/SVG MIME types with 415
         const htmlItem = baseballDb.prepare(`
@@ -1061,6 +1068,92 @@ async function runTier2(t, ctx) {
         ClubhouseRTC.state.activeChannelId = null;
       }
     });
+  });
+
+  await t.test('T2.10: Security Hardening Regressions (RTC prototype safety, SSRF IPv6, Crypto pin persistence, fail-closed edit)', async () => {
+    // 1. Null-prototype maps & __proto__/constructor rejection in ClubhouseRTC typing handler
+    const ClubhouseRTC = require('../../public/js/rtc.js');
+    assert.equal(Object.getPrototypeOf(ClubhouseRTC.state.typingUsersByChannel), null, 'typingUsersByChannel must use null prototype');
+    assert.equal(Object.getPrototypeOf(ClubhouseRTC.state.peerConnections), null, 'peerConnections must use null prototype');
+
+    const origRtcPeerConn = global.RTCPeerConnection;
+    const origRtcDesc = global.RTCSessionDescription;
+    let capturedPc = null;
+    try {
+      global.RTCSessionDescription = function (d) { return d; };
+      global.RTCPeerConnection = function () {
+        capturedPc = {
+          signalingState: 'have-remote-offer',
+          createOffer: async () => ({ type: 'offer', sdp: 'v=0\r\n' }),
+          createAnswer: async () => ({ type: 'answer', sdp: 'v=0\r\n' }),
+          setLocalDescription: async () => {},
+          setRemoteDescription: async () => {},
+          addIceCandidate: async () => {},
+          createDataChannel: () => ({ readyState: 'open', send: () => {}, close: () => {} }),
+          close: () => {}
+        };
+        return capturedPc;
+      };
+      ClubhouseRTC.state.activeChannelId = 6;
+      await ClubhouseRTC.handleIncomingSignals([{
+        id: 999111,
+        channel_id: 6,
+        sender_user_id: 42,
+        signal_type: 'offer',
+        payload_json: JSON.stringify({ type: 'offer', sdp: 'v=0\r\n' })
+      }]);
+      const fakeDc = { readyState: 'open', send: () => {}, close: () => {} };
+      capturedPc.ondatachannel({ channel: fakeDc });
+      fakeDc.onmessage({ data: JSON.stringify({ type: 'typing', channelId: '__proto__' }) });
+      fakeDc.onmessage({ data: JSON.stringify({ type: 'typing', channelId: 'constructor' }) });
+      assert.equal(({}).polluted, undefined, 'Object.prototype must not be polluted');
+      assert.equal(Object.prototype.hasOwnProperty.call(ClubhouseRTC.state.typingUsersByChannel, '__proto__'), false);
+      assert.equal(Object.prototype.hasOwnProperty.call(ClubhouseRTC.state.typingUsersByChannel, 'constructor'), false);
+      fakeDc.onmessage({ data: JSON.stringify({ type: 'typing', channelId: 6 }) });
+      assert.equal(Object.getPrototypeOf(ClubhouseRTC.state.typingUsersByChannel['6']), null, 'Per-channel typing map must use null prototype');
+      delete ClubhouseRTC.state.typingUsersByChannel['6'];
+    } finally {
+      ClubhouseRTC.state.activeChannelId = null;
+      ClubhouseRTC.leaveVoiceChannel();
+      global.RTCPeerConnection = origRtcPeerConn;
+      global.RTCSessionDescription = origRtcDesc;
+    }
+
+    // 2. Backend security helpers: expanded IPv6 SSRF block, guest/public channel rank, email validation
+    const { isPrivateIpOrHost, canAccessChannel, isValidEmailAddress } = await import('../../src/app/security.js');
+    assert.equal(isPrivateIpOrHost('http://[0000:0000:0000:0000:0000:0000:0000:0001]/'), true, 'Expanded IPv6 loopback must be blocked');
+    assert.equal(isPrivateIpOrHost('http://[2001:db8::1]/'), true, 'Documentation IPv6 prefix must be blocked');
+    assert.equal(isPrivateIpOrHost('http://[64:ff9b::127.0.0.1]/'), true, 'NAT64 IPv4-embedded loopback must be blocked');
+    assert.equal(canAccessChannel({ role: 'player' }, { channel_type: 'public', min_role_read: 'guest', min_role_write: 'public' }, 'write'), true, 'guest/public channel roles must allow authenticated players');
+    assert.equal(isValidEmailAddress('bad\r\n@evil.com'), false, 'CRLF in email must be rejected');
+    assert.equal(isValidEmailAddress('ok@example.com'), true, 'Valid email must pass');
+
+    // 3. Crypto TOFU pin store survives clearMemoryKeys()
+    const ClubhouseCrypto = require('../../public/js/crypto.js');
+    await ClubhouseCrypto.markPeerFingerprintVerified(777, 'AAAA BBBB CCCC DDDD EEEE FFFF 1111 2222');
+    ClubhouseCrypto.clearMemoryKeys();
+    const afterLogoutPin = await ClubhouseCrypto.getPeerVerificationState(777, 'AAAA BBBB CCCC DDDD EEEE FFFF 1111 2222');
+    assert.equal(afterLogoutPin.verified, true, 'Verified peer pin must persist across key memory clear on logout');
+    const swappedPin = await ClubhouseCrypto.getPeerVerificationState(777, '9999 8888 7777 6666 5555 4444 3333 2222');
+    assert.equal(swappedPin.keyChangedWarning, true, 'Swapped peer key after logout must still raise keyChangedWarning');
+
+    // 4. Fail-closed sendMessage / editMessage / uploadAttachment when channel state is unresolved
+    const ClubhouseStore = require('../../public/js/store.js');
+    await assert.rejects(
+      () => ClubhouseStore.sendMessage(99999999, 'secret plaintext send'),
+      (err) => err && err.code === 'E2EE_CHANNEL_UNKNOWN',
+      'sendMessage must fail closed rather than sending plaintext when channel cannot be resolved'
+    );
+    await assert.rejects(
+      () => ClubhouseStore.uploadAttachment(99999999, { name: 'secret.png', type: 'image/png', size: 12, arrayBuffer: async () => new ArrayBuffer(12) }),
+      (err) => err && err.code === 'E2EE_CHANNEL_UNKNOWN',
+      'uploadAttachment must fail closed when channel cannot be resolved'
+    );
+    await assert.rejects(
+      () => ClubhouseStore.editMessage(99999999, 'secret plaintext edit'),
+      (err) => err && err.code === 'E2EE_CHANNEL_UNKNOWN',
+      'editMessage must fail closed rather than sending plaintext when channel cannot be resolved'
+    );
   });
 }
 

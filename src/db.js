@@ -54,11 +54,10 @@ function initBaseballDatabase(force = false) {
 
   const adminCount = baseballDb.prepare("SELECT COUNT(*) as c FROM users WHERE role = 'admin' OR is_admin = 1").get().c;
   if (adminCount === 0) {
-    const targetUser = baseballDb.prepare("SELECT id, email FROM users WHERE email = 'pickupbaseballfoundation@gmail.com'").get()
-      || baseballDb.prepare('SELECT id, email FROM users ORDER BY id ASC LIMIT 1').get();
+    const targetUser = baseballDb.prepare("SELECT id, email FROM users WHERE email = 'pickupbaseballfoundation@gmail.com'").get();
     if (targetUser) {
       baseballDb.prepare("UPDATE users SET role = 'admin', is_admin = 1 WHERE id = ?").run(targetUser.id);
-      console.log(`[Database] Auto-promoted initial user ${targetUser.email} to Administrator.`);
+      console.log(`[Database] Auto-promoted foundation user ${targetUser.email} to Administrator.`);
     }
   }
 

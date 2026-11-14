@@ -159,10 +159,11 @@ eventsCoreRouter.get('/admin/backup-db', requireAdmin, async (c) => {
           for (const table of tables) {
             let offset = 0;
             let headerWritten = false;
+            const tableQuery = table === 'app_settings'
+              ? `SELECT * FROM "app_settings" WHERE key NOT IN ('waiver_provenance_secret', 'appscript_upload_url') LIMIT ? OFFSET ?`
+              : `SELECT * FROM "${table}" LIMIT ? OFFSET ?`;
             while (true) {
-              const { results: rows } = await db.prepare(
-                `SELECT * FROM "${table}" LIMIT ? OFFSET ?`
-              ).bind(PAGE_SIZE, offset).all();
+              const { results: rows } = await db.prepare(tableQuery).bind(PAGE_SIZE, offset).all();
               if (!rows || rows.length === 0) break;
               if (!headerWritten) {
                 controller.enqueue(encoder.encode(`-- Table: ${table}\n`));
@@ -170,11 +171,14 @@ eventsCoreRouter.get('/admin/backup-db', requireAdmin, async (c) => {
               }
               let chunk = '';
               for (const row of rows) {
-                const cols = Object.keys(row).map(k => `"${k}"`).join(', ');
+                const cols = Object.keys(row).map(k => `"${String(k).replace(/"/g, '""')}"`).join(', ');
                 const vals = Object.values(row).map(v => {
                   if (v === null || v === undefined) return 'NULL';
-                  if (typeof v === 'number') return v;
-                  return `'${String(v).replace(/'/g, "''")}'`;
+                  if (typeof v === 'number') return Number.isFinite(v) ? v : 'NULL';
+                  if (v instanceof Uint8Array) {
+                    return `X'${Array.from(v, (b) => b.toString(16).padStart(2, '0')).join('')}'`;
+                  }
+                  return `'${String(v).replace(/\0/g, '').replace(/'/g, "''")}'`;
                 }).join(', ');
                 chunk += `INSERT OR IGNORE INTO "${table}" (${cols}) VALUES (${vals});\n`;
               }
@@ -206,7 +210,7 @@ eventsCoreRouter.get('/admin/backup-db', requireAdmin, async (c) => {
     });
   } catch (err) {
     console.error('[Backup] Error creating SQL dump:', err);
-    return c.text('Failed to generate database backup: ' + err.message, 500);
+    return c.text('Failed to generate database backup.', 500);
   }
 });
 
@@ -426,7 +430,7 @@ eventsCoreRouter.get('/:id', async (c) => {
             a.additional_guests, a.guest_names, a.management_token,
             (SELECT json_group_array(duty_id) FROM duty_assignments WHERE attendee_id = a.id) as duty_ids
           FROM attendees a
-          WHERE a.event_id = ? AND a.management_token = ?
+          WHERE a.event_id = ? AND a.management_token = ? AND a.user_id IS NULL
         `).bind(eventId, token)
       );
     }

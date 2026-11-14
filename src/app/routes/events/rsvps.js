@@ -11,6 +11,7 @@ import {
   getSafePublicOrigin,
   checkRateLimit,
   verifyTurnstileIfConfigured,
+  isValidEmailAddress,
   requireAuth,
   requireOrganizer
 } from '../../security.js';
@@ -113,7 +114,7 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
       name = String(name).trim().slice(0, 120);
       const rawEmail = email != null ? String(email).trim().toLowerCase() : '';
       if (rawEmail !== '') {
-        if (!rawEmail.includes('@') || rawEmail.length > 254 || rawEmail.endsWith(GUEST_NO_EMAIL_SUFFIX)) {
+        if (!isValidEmailAddress(rawEmail) || rawEmail.endsWith(GUEST_NO_EMAIL_SUFFIX)) {
           return c.json({ error: 'Please enter a valid email address or leave it blank.' }, 400);
         }
         email = rawEmail;
@@ -137,13 +138,11 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
 
     const allowedList = parseAllowedEmails(event.allowed_emails);
     if (allowedList.length > 0) {
-      if (!user || !user.canManageEvents) {
-        if (!hasEmail) {
-          return c.json({ error: 'RSVP for this invite-only game requires signing in or entering an invited email address.' }, 403);
-        }
-        if (!allowedList.includes(email.toLowerCase()) || registeredUser) {
-          return c.json({ error: 'RSVP for this game is restricted to invited player accounts. Please sign in to RSVP if your account is invited.' }, 403);
-        }
+      if (!user) {
+        return c.json({ error: 'RSVP for this game is restricted to invited player accounts. Please sign in to RSVP if your account is invited.' }, 403);
+      }
+      if (!user.canManageEvents && (!hasEmail || !allowedList.includes(email.toLowerCase()))) {
+        return c.json({ error: 'RSVP for this game is restricted to invited player accounts. Please sign in to RSVP if your account is invited.' }, 403);
       }
     } else if (registeredUser) {
       return c.json({ error: 'This email belongs to a registered account. Please sign in to RSVP.' }, 401);
@@ -584,7 +583,11 @@ eventsRsvpsRouter.post('/:id/comments', async (c) => {
       userId = user.id;
     } else {
       name = String(author_name || '').trim().slice(0, 120);
-      email = String(author_email || '').trim().toLowerCase().slice(0, 254);
+      const rawGuestEmail = String(author_email || '').trim().toLowerCase().slice(0, 254);
+      if (rawGuestEmail && !isValidEmailAddress(rawGuestEmail)) {
+        return c.json({ error: 'Please enter a valid email address or leave it blank.' }, 400);
+      }
+      email = rawGuestEmail;
       if (!name) return c.json({ error: 'Please enter your name to post a comment.' }, 400);
     }
 

@@ -21,10 +21,14 @@
   var CRYPTO_DB_NAME = 'pickup_clubhouse_crypto';
   var CRYPTO_DB_VERSION = 1;
   var KEY_STORE_NAME = 'keystore';
+  var PIN_DB_NAME = 'pickup_clubhouse_pins';
+  var PIN_DB_VERSION = 1;
+  var PIN_STORE_NAME = 'pins';
   var PBKDF2_ITERATIONS = 600000;
 
   var subtle = (root.crypto && root.crypto.subtle) ? root.crypto.subtle : null;
   var memoryKeyStore = {};
+  var memoryPinStore = {};
 
   function getRandomBytes(length) {
     if (!root.crypto || typeof root.crypto.getRandomValues !== 'function') {
@@ -204,6 +208,91 @@
         try {
           var tx = db.transaction([KEY_STORE_NAME], 'readwrite');
           var store = tx.objectStore(KEY_STORE_NAME);
+          var req = store.put(value, key);
+          req.onsuccess = function () { resolve(true); };
+          req.onerror = function () { resolve(false); };
+        } catch (e) {
+          resolve(false);
+        }
+      });
+    });
+  }
+
+  var cachedPinDbPromise = null;
+
+  function openPinDb() {
+    if (cachedPinDbPromise) return cachedPinDbPromise;
+    cachedPinDbPromise = new Promise(function (resolve) {
+      if (!root.indexedDB) {
+        resolve(null);
+        return;
+      }
+      try {
+        var req = root.indexedDB.open(PIN_DB_NAME, PIN_DB_VERSION);
+        req.onupgradeneeded = function (ev) {
+          var db = ev.target.result;
+          if (!db.objectStoreNames.contains(PIN_STORE_NAME)) {
+            db.createObjectStore(PIN_STORE_NAME);
+          }
+        };
+        req.onsuccess = function (ev) {
+          var db = ev.target.result;
+          db.onversionchange = function () {
+            try { db.close(); } catch (e) {}
+            cachedPinDbPromise = null;
+          };
+          db.onclose = function () {
+            cachedPinDbPromise = null;
+          };
+          resolve(db);
+        };
+        req.onerror = function () {
+          cachedPinDbPromise = null;
+          resolve(null);
+        };
+        req.onblocked = function () {
+          cachedPinDbPromise = null;
+          resolve(null);
+        };
+      } catch (e) {
+        cachedPinDbPromise = null;
+        resolve(null);
+      }
+    });
+    return cachedPinDbPromise;
+  }
+
+  function pinDbGet(key) {
+    return openPinDb().then(function (db) {
+      if (!db) {
+        return memoryPinStore[key] !== undefined ? memoryPinStore[key] : null;
+      }
+      return new Promise(function (resolve) {
+        try {
+          var tx = db.transaction([PIN_STORE_NAME], 'readonly');
+          var store = tx.objectStore(PIN_STORE_NAME);
+          var req = store.get(key);
+          req.onsuccess = function () {
+            resolve(req.result !== undefined ? req.result : null);
+          };
+          req.onerror = function () {
+            resolve(memoryPinStore[key] !== undefined ? memoryPinStore[key] : null);
+          };
+        } catch (e) {
+          resolve(memoryPinStore[key] !== undefined ? memoryPinStore[key] : null);
+        }
+      });
+    });
+  }
+
+  function pinDbPut(key, value) {
+    memoryPinStore[key] = value;
+    return openPinDb().then(function (db) {
+      if (!db) return true;
+      return new Promise(function (resolve) {
+        try {
+          var tx = db.transaction([PIN_STORE_NAME], 'readwrite');
+          var store = tx.objectStore(PIN_STORE_NAME);
           var req = store.put(value, key);
           req.onsuccess = function () { resolve(true); };
           req.onerror = function () { resolve(false); };
@@ -721,12 +810,34 @@
     });
   }
 
+  // TOFU pins are namespaced by the signed-in user so another account on a shared device
+  // cannot inherit this user's pinned/verified peer fingerprints.
+  var pinOwnerId = 0;
+
+  function setPinOwner(userId) {
+    pinOwnerId = Number(userId) || 0;
+  }
+
+  function pinKeyFor(peerUserId) {
+    return 'peer_key_pin_' + (pinOwnerId ? 'u' + String(pinOwnerId) + '_' : '') + String(peerUserId);
+  }
+
   function getPeerVerificationState(peerUserId, currentFingerprint) {
-    var storeKey = 'peer_key_pin_' + String(peerUserId);
-    return idbGet(storeKey).then(function (pin) {
+    var storeKey = pinKeyFor(peerUserId);
+    return pinDbGet(storeKey).then(function (pin) {
+      if (!pin && !pinOwnerId) {
+        return idbGet('peer_key_pin_' + String(peerUserId)).then(function (legacyPin) {
+          if (legacyPin) {
+            return pinDbPut(storeKey, legacyPin).then(function () { return legacyPin; });
+          }
+          return null;
+        });
+      }
+      return pin;
+    }).then(function (pin) {
       if (!pin) {
         if (currentFingerprint) {
-          return idbPut(storeKey, {
+          return pinDbPut(storeKey, {
             lastSeenFingerprint: currentFingerprint,
             verifiedFingerprint: null,
             verifiedAt: null
@@ -757,24 +868,26 @@
     if (!peerUserId || !fingerprint) {
       return Promise.reject(new Error('Valid peer ID and key fingerprint are required.'));
     }
-    var storeKey = 'peer_key_pin_' + String(peerUserId);
+    var storeKey = pinKeyFor(peerUserId);
     var record = {
       lastSeenFingerprint: fingerprint,
       verifiedFingerprint: fingerprint,
       verifiedAt: new Date().toISOString()
     };
-    return idbPut(storeKey, record).then(function () {
+    return pinDbPut(storeKey, record).then(function () {
       return record;
     });
   }
 
   function clearMemoryKeys() {
     memoryKeyStore = {};
+    pinOwnerId = 0;
     closeKeyDbHandle();
   }
 
   var ClubhouseCrypto = {
     clearMemoryKeys: clearMemoryKeys,
+    setPinOwner: setPinOwner,
     stripJpegMetadata: stripJpegMetadata,
     arrayBufferToBase64: arrayBufferToBase64,
     base64ToUint8Array: base64ToUint8Array,

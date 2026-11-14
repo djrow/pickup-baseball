@@ -342,7 +342,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '142',
+  CLIENT_VERSION: '143',
 
   // Current user cache
   currentUser: null,
@@ -1088,7 +1088,10 @@ const API = {
   setCachedUser(user) {
     try {
       if (user) {
-        localStorage.setItem('pickup_cached_user', JSON.stringify(user));
+        var sanitized = Object.assign({}, user);
+        delete sanitized.calendarToken;
+        delete sanitized.calendar_token;
+        localStorage.setItem('pickup_cached_user', JSON.stringify(sanitized));
       } else {
         localStorage.removeItem('pickup_cached_user');
       }
@@ -1239,11 +1242,12 @@ const API = {
       if (typeof window !== 'undefined' && window.ClubhouseCrypto && typeof window.ClubhouseCrypto.clearMemoryKeys === 'function') {
         window.ClubhouseCrypto.clearMemoryKeys();
       }
-      if (typeof caches !== 'undefined' && typeof caches.keys === 'function') {
-        caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k)))).catch(() => {});
-      }
+      var clearCachePromise = (typeof caches !== 'undefined' && typeof caches.keys === 'function')
+        ? caches.keys().then(function (keys) { return Promise.all(keys.map(function (k) { return caches.delete(k); })); }).catch(function () {})
+        : Promise.resolve();
       await Promise.all([
         API.clearClubhouseIndexedDb(),
+        clearCachePromise,
         fetch('/api/auth/logout', { method: 'POST' })
       ]);
     } finally {
@@ -2314,7 +2318,8 @@ document.addEventListener('error', (e) => {
   const t = e.target;
   if (t && t.tagName === 'IMG' && t.dataset && t.dataset.fallback && !t.dataset.fallbackApplied) {
     t.dataset.fallbackApplied = '1';
-    t.src = t.dataset.fallback;
+    const safeFallback = API.safeUrl(t.dataset.fallback);
+    if (safeFallback) t.src = safeFallback;
   }
 }, true);
 if (document.readyState === 'loading') {

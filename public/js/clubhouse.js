@@ -943,7 +943,7 @@
         var currentText = targetMsg ? (targetMsg.decrypted_content || targetMsg.content || '') : '';
         var nextText = typeof window.prompt === 'function' ? window.prompt('Edit message:', currentText) : null;
         if (nextText !== null && nextText.trim() && nextText.trim() !== currentText) {
-          Store.editMessage(editId, nextText.trim()).then(function () {
+          Store.editMessage(editId, nextText.trim(), Number(uiState.activeChannelId)).then(function () {
             renderMessageStream();
           });
         }
@@ -2016,10 +2016,18 @@
     var html = '';
     for (var j = 0; j < filtered.length; j++) {
       var g = filtered[j];
+      var rawGifUrl = String(g.url || '').trim();
+      var gifUrl = '';
+      if (rawGifUrl.charAt(0) === '/' && rawGifUrl.charAt(1) !== '/' && rawGifUrl.charAt(1) !== '\\') {
+        gifUrl = rawGifUrl;
+      } else if (/^https:\/\//i.test(rawGifUrl)) {
+        gifUrl = rawGifUrl;
+      }
+      if (!gifUrl) continue;
       var isDrive = g.source === 'drive';
       var gifIdAttr = isDrive ? (' data-gif-drive-id="' + escapeHtml(g.id) + '"') : '';
-      html += '<button type="button" class="ch-gif-card" data-gif-url="' + escapeHtml(g.url) + '" data-gif-title="' + escapeHtml(g.title || 'GIF') + '"' + gifIdAttr + '>';
-      html += '<img src="' + escapeHtml(g.url) + '" alt="' + escapeHtml(g.title || 'GIF') + '" loading="lazy" />';
+      html += '<button type="button" class="ch-gif-card" data-gif-url="' + escapeHtml(gifUrl) + '" data-gif-title="' + escapeHtml(g.title || 'GIF') + '"' + gifIdAttr + '>';
+      html += '<img src="' + escapeHtml(gifUrl) + '" alt="' + escapeHtml(g.title || 'GIF') + '" loading="lazy" />';
       html += '<span class="ch-gif-card-label">' + escapeHtml(g.title || 'GIF') + (isDrive ? ' ☁️' : '') + '</span>';
       html += '</button>';
     }
@@ -2337,13 +2345,29 @@
           is_encrypted: isPrivateVal ? true : undefined,
           member_ids: isPrivateVal ? invitedMemberIds : undefined
         };
+        var prevMemberIds = [];
+        if (editId && Store.state && Array.isArray(Store.state.channels)) {
+          for (var pc = 0; pc < Store.state.channels.length; pc++) {
+            if (Number(Store.state.channels[pc].id) === Number(editId) && Array.isArray(Store.state.channels[pc].member_ids)) {
+              prevMemberIds = Store.state.channels[pc].member_ids.map(Number);
+              break;
+            }
+          }
+        }
+        var removedMemberIds = [];
+        if (editId && isPrivateVal) {
+          for (var pm = 0; pm < prevMemberIds.length; pm++) {
+            if (invitedMemberIds.indexOf(prevMemberIds[pm]) === -1) removedMemberIds.push(prevMemberIds[pm]);
+          }
+        }
         var op = editId ? Store.updateChannel(editId, payload) : Store.createChannel(payload);
         op.then(function (ch) {
           closeBoardModal();
           renderChannelSidebar();
           if (ch && ch.id) {
             if (isPrivateVal && Store.ensureChannelE2eeKey) {
-              Store.ensureChannelE2eeKey(ch.id, { readonly: false }).catch(function () {});
+              // Rotate the channel key whenever members are removed so they cannot read future messages.
+              Store.ensureChannelE2eeKey(ch.id, { readonly: false, forceRotate: removedMemberIds.length > 0 }).catch(function () {});
             }
             if (!editId || Number(uiState.activeChannelId) === Number(ch.id)) {
               selectTextChannel(ch.id);
@@ -2657,6 +2681,14 @@
           navigator.clipboard.writeText(val).then(function () {
             if (statusEl) statusEl.textContent = '✓ Safety number copied to clipboard.';
           }).catch(function () {});
+        }
+      });
+    }
+    var relayToggleEl = el('ch-privacy-relay-toggle');
+    if (relayToggleEl) {
+      relayToggleEl.addEventListener('change', function () {
+        if (RtcEngine && RtcEngine.state) {
+          RtcEngine.state.privacyRelayMode = relayToggleEl.checked;
         }
       });
     }

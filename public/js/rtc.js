@@ -24,11 +24,11 @@
     privacyRelayMode: false,
     localAudioStream: null,
     localScreenStream: null,
-    peerConnections: {},
-    dataChannels: {},
-    remoteStreams: {},
-    speakingUsers: {},
-    typingUsersByChannel: {},
+    peerConnections: Object.create(null),
+    dataChannels: Object.create(null),
+    remoteStreams: Object.create(null),
+    speakingUsers: Object.create(null),
+    typingUsersByChannel: Object.create(null),
     heartbeatTimer: null,
     audioContext: null,
     speakingCheckTimer: null,
@@ -102,17 +102,33 @@
     });
   }
 
-  var typingCleanupTimers = {};
+  var typingCleanupTimers = Object.create(null);
 
   function attachDataChannelHandlers(peerUserId, dc) {
-    rtcState.dataChannels[peerUserId] = dc;
+    var peerKey = Number(peerUserId);
+    if (!Number.isInteger(peerKey) || peerKey <= 0) return;
+    rtcState.dataChannels[peerKey] = dc;
     dc.onmessage = function (ev) {
       try {
         var msg = JSON.parse(ev.data);
         if (msg && msg.type === 'typing' && msg.channelId) {
-          var chId = String(msg.channelId);
+          var parsedChId = Number(msg.channelId);
+          if (!Number.isInteger(parsedChId) || parsedChId <= 0) {
+            return;
+          }
+          var chId = String(parsedChId);
+          // Only accept typing indicators for channels this user can actually see
+          var knownChannels = (root.ClubhouseStore && root.ClubhouseStore.state && Array.isArray(root.ClubhouseStore.state.channels))
+            ? root.ClubhouseStore.state.channels : null;
+          if (knownChannels) {
+            var channelKnown = false;
+            for (var kc = 0; kc < knownChannels.length; kc++) {
+              if (Number(knownChannels[kc].id) === parsedChId) { channelKnown = true; break; }
+            }
+            if (!channelKnown) return;
+          }
           if (!rtcState.typingUsersByChannel[chId]) {
-            rtcState.typingUsersByChannel[chId] = {};
+            rtcState.typingUsersByChannel[chId] = Object.create(null);
           }
           var memberDisplayName = 'Player';
           if (root.ClubhouseStore && root.ClubhouseStore.state && Array.isArray(root.ClubhouseStore.state.members)) {
@@ -152,7 +168,9 @@
       } catch (e) {}
     };
     dc.onclose = function () {
-      delete rtcState.dataChannels[peerUserId];
+      if (rtcState.dataChannels[peerKey] === dc) {
+        delete rtcState.dataChannels[peerKey];
+      }
     };
   }
 
@@ -283,6 +301,8 @@
           if (payload.type !== 'offer' || typeof payload.sdp !== 'string' || !payload.sdp) return;
           var pc = getOrCreatePeerConnection(senderId, false);
           if (!pc) return;
+          // Ignore offers arriving mid-negotiation (SDP glare / replayed offers) to avoid state disruption
+          if (pc.signalingState !== 'stable') return;
           pc.setRemoteDescription(new RTCSessionDescription({ type: payload.type, sdp: payload.sdp })).then(function () {
             return pc.createAnswer();
           }).then(function (answer) {

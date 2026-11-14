@@ -108,6 +108,8 @@ chatMessagesRouter.get('/channels/:id/messages', async (c) => {
 
 chatMessagesRouter.post('/channels/:id/read', requireAuth, async (c) => {
   const user = c.get('user');
+  const optResp = rejectIfClubhouseOptedOut(c, user);
+  if (optResp) return optResp;
   const chatDb = c.env && c.env.CHAT_DB;
   if (!chatDb) return c.json({ error: 'Chat database unavailable.' }, 500);
 
@@ -226,6 +228,12 @@ chatMessagesRouter.post('/channels/:id/messages', requireAuth, async (c) => {
         error: `Message must be encrypted with the latest channel key epoch (${maxEpRow.max_epoch}).`,
         code: 'STALE_KEY_EPOCH'
       }, 409);
+    }
+    if (maxEpRow && maxEpRow.max_epoch && keyEpoch > Number(maxEpRow.max_epoch)) {
+      return c.json({
+        error: `Invalid key_epoch: channel key epoch ${keyEpoch} does not exist.`,
+        code: 'UNKNOWN_KEY_EPOCH'
+      }, 400);
     }
   }
   const isPrivilegedMsgSender = Boolean(user.isAdmin || user.isModerator || user.canModerateChat || user.canManageEvents);
@@ -385,7 +393,8 @@ chatMessagesRouter.patch('/messages/:id', requireAuth, async (c) => {
     return c.json({ error: 'Updated message content exceeds maximum length (16 KB).' }, 400);
   }
 
-  const rawEditIv = body.iv !== undefined ? body.iv : body.encryption_iv;
+  const rawEditIvInput = body.iv !== undefined ? body.iv : body.encryption_iv;
+  const rawEditIv = (rawEditIvInput !== undefined && rawEditIvInput !== null) ? String(rawEditIvInput).trim() : rawEditIvInput;
   if ((isDmMsg || isPrivateMsg) && !rawEditIv) {
     return c.json({ error: 'Direct message and private board edits must remain end-to-end encrypted (missing encryption_iv).' }, 400);
   }
@@ -397,12 +406,15 @@ chatMessagesRouter.patch('/messages/:id', requireAuth, async (c) => {
   if (isNaN(editKeyEpoch) || editKeyEpoch < 1) {
     return c.json({ error: 'Invalid key_epoch.' }, 400);
   }
-  if ((isDmMsg || isPrivateMsg) && body.key_epoch !== undefined) {
+  if (isDmMsg || isPrivateMsg) {
     const maxEpRow = await chatDb.prepare(
       'SELECT MAX(key_epoch) as max_epoch FROM channel_key_shares WHERE channel_id = ?'
     ).bind(existing.channel_id).first();
     if (maxEpRow && maxEpRow.max_epoch && editKeyEpoch < Number(maxEpRow.max_epoch)) {
       return c.json({ error: `Message edit must use the latest channel key epoch (${maxEpRow.max_epoch}).`, code: 'STALE_KEY_EPOCH' }, 409);
+    }
+    if (maxEpRow && maxEpRow.max_epoch && editKeyEpoch > Number(maxEpRow.max_epoch)) {
+      return c.json({ error: `Invalid key_epoch: channel key epoch ${editKeyEpoch} does not exist.`, code: 'UNKNOWN_KEY_EPOCH' }, 400);
     }
   }
   const nowIso = new Date().toISOString();
@@ -418,7 +430,7 @@ chatMessagesRouter.patch('/messages/:id', requireAuth, async (c) => {
   `).bind(
     existing.channel_id,
     msgId,
-    JSON.stringify({ id: msgId, content: newContent, iv: newIv, encryption_iv: newIv, edited_at: nowIso }),
+    JSON.stringify({ id: msgId, content: newContent, iv: newIv, encryption_iv: newIv, key_epoch: editKeyEpoch, edited_at: nowIso }),
     nowSec
   ).run();
 
@@ -435,6 +447,8 @@ chatMessagesRouter.patch('/messages/:id', requireAuth, async (c) => {
 
 chatMessagesRouter.delete('/messages/:id', requireAuth, async (c) => {
   const user = c.get('user');
+  const optResp = rejectIfClubhouseOptedOut(c, user);
+  if (optResp) return optResp;
   const chatDb = c.env && c.env.CHAT_DB;
   if (!chatDb) return c.json({ error: 'Chat database unavailable.' }, 500);
 
@@ -459,7 +473,7 @@ chatMessagesRouter.delete('/messages/:id', requireAuth, async (c) => {
     const isDmMsg = msgChannel.channel_type === 'dm' || msgChannel.channel_type === 'group_dm';
     const isAdminOnlyBoard = msgChannel.min_role_write === 'admin';
     const targetIsAdminAuthor = existing.author_role === 'admin';
-    if (!user.isAdmin && !user.canManageEvents && !user.isModerator && !user.canModerateChat) {
+    if (!user.isAdmin && !user.isModerator && !user.canModerateChat) {
       return c.json({ error: 'Access denied: insufficient permissions to delete this message.' }, 403);
     }
     if (!user.isAdmin && (isDmMsg || isAdminOnlyBoard || targetIsAdminAuthor)) {
@@ -605,6 +619,8 @@ chatMessagesRouter.post('/messages/:id/reactions', requireAuth, async (c) => {
 
 async function hideMessageHandler(c) {
   const user = c.get('user');
+  const optResp = rejectIfClubhouseOptedOut(c, user);
+  if (optResp) return optResp;
   const mutedResp = rejectIfChatMuted(c, user);
   if (mutedResp) return mutedResp;
   const chatDb = c.env && c.env.CHAT_DB;
@@ -694,6 +710,8 @@ chatMessagesRouter.patch('/messages/:id/hide', requireModerator, hideMessageHand
 
 chatMessagesRouter.post('/messages/:id/unhide', requireModerator, async (c) => {
   const user = c.get('user');
+  const optResp = rejectIfClubhouseOptedOut(c, user);
+  if (optResp) return optResp;
   const mutedResp = rejectIfChatMuted(c, user);
   if (mutedResp) return mutedResp;
   const chatDb = c.env && c.env.CHAT_DB;

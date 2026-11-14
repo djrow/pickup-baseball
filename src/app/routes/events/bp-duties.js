@@ -29,7 +29,7 @@ async function authorizeBpSignupMutation(c, db, eventId, signupId, actionLabel) 
   const managementToken = body.management_token || c.req.query('token');
   let isGuestOwner = false;
   if (managementToken && existing.attendee_id) {
-    const att = await db.prepare('SELECT id FROM attendees WHERE id = ? AND management_token = ?').bind(existing.attendee_id, managementToken).first();
+    const att = await db.prepare('SELECT id FROM attendees WHERE id = ? AND management_token = ? AND user_id IS NULL').bind(existing.attendee_id, managementToken).first();
     if (att) isGuestOwner = true;
   }
 
@@ -182,7 +182,7 @@ eventsBpDutiesRouter.post('/:id/bp-order', async (c) => {
       if (user) {
         att = await db.prepare('SELECT id, name FROM attendees WHERE event_id = ? AND (user_id = ? OR email = ?)').bind(eventId, user.id, user.email).first();
       } else if (managementToken) {
-        att = await db.prepare('SELECT id, name FROM attendees WHERE event_id = ? AND management_token = ?').bind(eventId, managementToken).first();
+        att = await db.prepare('SELECT id, name FROM attendees WHERE event_id = ? AND management_token = ? AND user_id IS NULL').bind(eventId, managementToken).first();
       }
       if (att) attendeeId = att.id;
     }

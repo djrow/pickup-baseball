@@ -15,9 +15,16 @@ console.log('Found tables:', tables.map(t => t.name).join(', '));
 
 let dumpSql = '-- Sunday Pickup Baseball D1 Schema & Seed\n\n';
 
+const OMIT_DATA_TABLES = new Set(['sessions', 'auth_codes']);
+const EXCLUDED_SETTING_KEYS = new Set(['waiver_provenance_secret', 'appscript_upload_url']);
+
 for (const t of tables) {
   dumpSql += `${t.sql};\n\n`;
-  const rows = db.prepare(`SELECT * FROM "${t.name}"`).all();
+  if (OMIT_DATA_TABLES.has(t.name)) continue;
+  let rows = db.prepare(`SELECT * FROM "${t.name}"`).all();
+  if (t.name === 'app_settings') {
+    rows = rows.filter(r => !EXCLUDED_SETTING_KEYS.has(r.key));
+  }
   if (rows.length > 0) {
     for (const row of rows) {
       const cols = Object.keys(row).map(c => `"${c}"`).join(', ');
@@ -37,6 +44,6 @@ for (const idx of indices) {
   dumpSql += `${idx.sql};\n`;
 }
 
-const outPath = path.join(__dirname, '..', 'd1_schema.sql');
+const outPath = path.join(__dirname, '..', 'data', 'd1_dump.sql');
 fs.writeFileSync(outPath, dumpSql);
 console.log('Dumped schema and data to:', outPath);

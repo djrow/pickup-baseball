@@ -158,7 +158,7 @@ async function loadEventData(preserveAlertHtml) {
           }),
           attendees: [],
           comments: res.comments,
-          bp_signups: res.bp_signups,
+          bp_signups: [],
           totalAttendees: res.totalAttendees,
           totalSpectators: res.totalSpectators,
           totalHeadcount: res.totalHeadcount,

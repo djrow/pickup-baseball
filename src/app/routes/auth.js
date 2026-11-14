@@ -14,6 +14,7 @@ import {
   arrayBufferToBase64,
   base64ToUint8Array,
   stripJpegMetadata,
+  isValidEmailAddress,
   isValidRasterImageBuffer,
   getClientIp,
   getSafePublicOrigin,
@@ -86,7 +87,7 @@ async function handleSendCode(c) {
     const body = await c.req.json();
     let { email, name, cf_turnstile_response } = body;
     const sharedDevice = Boolean(body.shared_device || body.sharedDevice);
-    if (!email || typeof email !== 'string' || !email.includes('@') || email.length > 254) {
+    if (!isValidEmailAddress(email)) {
       return c.json({ error: 'A valid email address is required.' }, 400);
     }
 
@@ -639,7 +640,7 @@ authRouter.get('/banned-emails', requireAdmin, async (c) => {
 authRouter.post('/banned-emails', requireAdmin, async (c) => {
   const currentUser = c.get('user');
   const { email, reason } = await c.req.json();
-  if (!email || typeof email !== 'string' || !email.includes('@')) {
+  if (!isValidEmailAddress(email)) {
     return c.json({ error: 'A valid email is required.' }, 400);
   }
   const cleanEmail = email.trim().toLowerCase();

@@ -60,6 +60,7 @@ export async function dispatchEmail(env, { to, subject, text, html }) {
   const appName = safeEnv.APP_NAME || 'Sunday Pickup Baseball';
   const from = safeEnv.FROM_EMAIL || `"${appName}" <games@pickupbaseballfoundation.org>`;
   const replyTo = safeEnv.REPLY_TO_EMAIL || 'pickupbaseballfoundation@gmail.com';
+  const cleanSubject = String(subject || '').replace(/[\r\n\x00-\x1f\x7f]+/g, ' ').trim();
   const apiKey = safeEnv.RESEND_API_KEY;
 
   if (apiKey) {
@@ -74,7 +75,7 @@ export async function dispatchEmail(env, { to, subject, text, html }) {
           from,
           to: Array.isArray(to) ? to : [to],
           reply_to: replyTo,
-          subject,
+          subject: cleanSubject,
           text,
           html
         })

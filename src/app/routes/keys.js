@@ -368,16 +368,29 @@ keysRouter.post('/channel/:channelId/share', requireAuth, async (c) => {
     if (currentMaxEpoch === 0 && defaultEpoch !== 1) {
       return c.json({ error: 'Initial channel key_epoch must be 1.' }, 400);
     }
+    // Prevent share squatting: only the creator, a moderator, or an admin may add shares for new
+    // recipients to an already-initialized epoch of a private board or group DM.
+    if (currentMaxEpoch > 0 && defaultEpoch === currentMaxEpoch && existingEpochShare && !canForceRotate &&
+        (isPrivateBoard || channel.channel_type === 'group_dm')) {
+      const hasNewRecipient = body.shares.some((s) => {
+        const rid = parseInt(s.recipient_user_id !== undefined ? s.recipient_user_id : s.recipientUserId, 10);
+        return rid && !isNaN(rid) && !existingEpochRecipients.has(Number(rid));
+      });
+      if (hasNewRecipient) {
+        return c.json({ error: 'Only the channel creator, moderator, or admin can distribute keys to new members of an existing key epoch.' }, 403);
+      }
+    }
     if (currentMaxEpoch > 0 && defaultEpoch < currentMaxEpoch && !canForceRotate) {
       return c.json({ error: 'Cannot backfill historical key epochs.' }, 403);
     }
-    if (defaultEpoch > currentMaxEpoch && currentMaxEpoch > 0 && !canForceRotate && !isDm) {
+    const isOneToOneDm = channel.channel_type === 'dm';
+    if (defaultEpoch > currentMaxEpoch && currentMaxEpoch > 0 && !canForceRotate && !isOneToOneDm) {
       return c.json({ error: 'Only the channel creator, moderator, or admin can rotate to a new key epoch.' }, 403);
     }
     if (defaultEpoch > currentMaxEpoch + 10) {
       return c.json({ error: 'Invalid key_epoch jump.' }, 400);
     }
-    if (body.force_rotate && !canForceRotate && !isDm) {
+    if (body.force_rotate && !canForceRotate && !isOneToOneDm) {
       return c.json({ error: 'Only channel owners, moderators, or admins can force key rotation.' }, 403);
     }
     if (body.force_rotate && currentMaxEpoch > 0 && defaultEpoch <= currentMaxEpoch) {
@@ -404,10 +417,13 @@ keysRouter.post('/channel/:channelId/share', requireAuth, async (c) => {
         .map((s) => parseInt(s.recipient_user_id !== undefined ? s.recipient_user_id : s.recipientUserId, 10))
         .filter((n) => !isNaN(n) && n > 0)
     )];
+    const userCheckIds = isKeyShared && validMembers
+      ? [...new Set([...recipientIds, ...Array.from(validMembers)])]
+      : recipientIds;
     let validUserSet = null;
-    if (db && recipientIds.length > 0) {
+    if (db && userCheckIds.length > 0) {
       validUserSet = new Set();
-      for (const idChunk of chunkArray(recipientIds, 80)) {
+      for (const idChunk of chunkArray(userCheckIds, 80)) {
         const placeholders = idChunk.map(() => '?').join(',');
         const { results: userRows } = await db.prepare(`
           SELECT u.id, COALESCE(u.clubhouse_opted_in, 0) as clubhouse_opted_in, u.role, u.is_admin,
@@ -433,11 +449,11 @@ keysRouter.post('/channel/:channelId/share', requireAuth, async (c) => {
       }
     }
 
-    if (isKeyShared && currentMaxEpoch === 0 && !canForceRotate && validMembers) {
+    if (isKeyShared && defaultEpoch > currentMaxEpoch && validMembers) {
       const submittedSet = new Set(recipientIds);
       const missingMember = Array.from(validMembers).some((mId) => (!validUserSet || validUserSet.has(mId)) && !submittedSet.has(mId));
       if (missingMember) {
-        return c.json({ error: 'Initial encrypted key epoch must include wrapped key shares for all active members.' }, 400);
+        return c.json({ error: 'New encrypted key epoch must include wrapped key shares for all active members.' }, 400);
       }
     }
 

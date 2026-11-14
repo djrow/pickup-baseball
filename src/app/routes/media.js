@@ -141,22 +141,38 @@ mediaRouter.get('/', async (c) => {
       ? await c.env.DB.prepare(querySql).bind(...bindings).all()
       : await c.env.DB.prepare(querySql).all();
 
-    const media = (rawMedia || []).map((item) => {
+    // Media linked to invite-only events is hidden entirely from viewers who cannot access the event.
+    const media = (rawMedia || []).filter((item) => {
+      return !(item.event_allowed_emails && !canUserAccessEvent(user, { allowed_emails: item.event_allowed_emails }));
+    }).map((item) => {
       const { event_allowed_emails, ...rest } = item;
-      if (event_allowed_emails && !canUserAccessEvent(user, { allowed_emails: event_allowed_emails })) {
-        rest.event_title = null;
-      }
       return rest;
     });
 
-    // Fetch album metadata for quick bookmarks navigation (only counting approved media)
-    const { results: albums } = await c.env.DB.prepare(`
-      SELECT album, COUNT(*) as count, MAX(date_taken) as latest_date, MIN(date_taken) as earliest_date
-      FROM media_items
-      WHERE is_approved = 1
-      GROUP BY album
-      ORDER BY latest_date ASC
+    // Fetch album metadata for quick bookmarks navigation (only counting approved media the viewer may see)
+    const { results: albumRows } = await c.env.DB.prepare(`
+      SELECT m.album, m.date_taken, e.allowed_emails as event_allowed_emails
+      FROM media_items m
+      LEFT JOIN events e ON m.event_id = e.id
+      WHERE m.is_approved = 1
     `).all();
+    const albumMap = new Map();
+    for (const row of (albumRows || [])) {
+      if (row.event_allowed_emails && !canUserAccessEvent(user, { allowed_emails: row.event_allowed_emails })) continue;
+      const key = row.album;
+      let agg = albumMap.get(key);
+      if (!agg) {
+        agg = { album: key, count: 0, latest_date: row.date_taken, earliest_date: row.date_taken };
+        albumMap.set(key, agg);
+      }
+      agg.count += 1;
+      if (row.date_taken > agg.latest_date) agg.latest_date = row.date_taken;
+      if (row.date_taken < agg.earliest_date) agg.earliest_date = row.date_taken;
+    }
+    const albums = Array.from(albumMap.values()).sort((a, b) => {
+      if (a.latest_date === b.latest_date) return 0;
+      return a.latest_date < b.latest_date ? -1 : 1;
+    });
 
     // If manager, fetch pending moderation queue items
     let pendingMedia = [];
@@ -176,6 +192,14 @@ mediaRouter.get('/', async (c) => {
     c.header('Cache-Control', 'no-cache, no-store, must-revalidate');
     const normalizeItem = (m) => {
       if (!m) return m;
+      const isAttachmentStream = Boolean(m.file_url && m.file_url.startsWith('/api/attachments/')) ||
+        Boolean(m.original_url && m.original_url.startsWith('/api/attachments/'));
+      if (isAttachmentStream) {
+        return {
+          ...m,
+          file_url: (m.file_url && m.file_url.startsWith('/api/attachments/')) ? m.file_url : m.original_url
+        };
+      }
       const isDirectExternal = m.media_type === 'youtube' ||
         Boolean(m.file_url && (m.file_url.includes('drive.google.com') || /\.(mp4|webm)($|[?#])/i.test(m.file_url))) ||
         Boolean(m.original_url && (m.original_url.includes('drive.google.com') || /\.(mp4|webm)($|[?#])/i.test(m.original_url)));
@@ -207,8 +231,19 @@ mediaRouter.get('/:id/file', async (c) => {
     const id = parseInt(c.req.param('id'), 10);
     if (!id || isNaN(id)) return c.text('Not found', 404);
 
-    const row = await c.env.DB.prepare('SELECT file_data, file_url, original_url, mime_type, is_approved FROM media_items WHERE id = ?').bind(id).first();
+    const row = await c.env.DB.prepare(`
+      SELECT m.file_data, m.file_url, m.original_url, m.mime_type, m.is_approved, e.allowed_emails as event_allowed_emails
+      FROM media_items m
+      LEFT JOIN events e ON m.event_id = e.id
+      WHERE m.id = ?
+    `).bind(id).first();
     if (!row) return c.text('Not found', 404);
+
+    // Media linked to invite-only events is only available to invited users and managers
+    if (row.event_allowed_emails && !canUserAccessEvent(c.get('user'), { allowed_emails: row.event_allowed_emails })) {
+      return c.text('Not found', 404);
+    }
+    const mediaCacheControl = row.event_allowed_emails ? 'private, no-store' : 'public, max-age=604800, stale-while-revalidate=2592000';
 
     // Moderation security check: Only approved media or organizers/admins can view files
     if (row.is_approved !== 1) {
@@ -239,7 +274,7 @@ mediaRouter.get('/:id/file', async (c) => {
           status: 304,
           headers: {
             'ETag': etag,
-            'Cache-Control': 'public, max-age=604800, stale-while-revalidate=2592000'
+            'Cache-Control': mediaCacheControl
           }
         });
       }
@@ -289,7 +324,7 @@ mediaRouter.get('/:id/file', async (c) => {
         status: 200,
         headers: {
           'Content-Type': safeProxyCt,
-          'Cache-Control': 'public, max-age=604800, stale-while-revalidate=2592000',
+          'Cache-Control': mediaCacheControl,
           'ETag': etag,
           'X-Content-Type-Options': 'nosniff',
           'Content-Security-Policy': "default-src 'none'; sandbox"
@@ -306,7 +341,7 @@ mediaRouter.get('/:id/file', async (c) => {
         status: 304,
         headers: {
           'ETag': etag,
-          'Cache-Control': 'public, max-age=604800, stale-while-revalidate=2592000'
+          'Cache-Control': mediaCacheControl
         }
       });
     }
@@ -328,7 +363,7 @@ mediaRouter.get('/:id/file', async (c) => {
     }
     const headers = {
       'Content-Type': mimeType,
-      'Cache-Control': 'public, max-age=604800, stale-while-revalidate=2592000',
+      'Cache-Control': mediaCacheControl,
       'ETag': etag,
       'X-Content-Type-Options': 'nosniff',
       'Content-Security-Policy': "default-src 'none'; sandbox"
@@ -864,6 +899,11 @@ async function handleMediaDelete(c) {
     }
 
     await c.env.DB.prepare('DELETE FROM media_items WHERE id = ?').bind(id).run();
+    if (c.env && c.env.CHAT_DB) {
+      try {
+        await c.env.CHAT_DB.prepare('UPDATE chat_attachments SET promoted_media_id = NULL WHERE promoted_media_id = ?').bind(id).run();
+      } catch (clearErr) {}
+    }
     return c.json({ success: true, message: 'Media submission taken down and deleted.' });
   } catch (err) {
     console.error('[Media] Error deleting media item:', err);
@@ -1160,6 +1200,10 @@ attachmentsRouter.post('/init', requireAuth, async (c) => {
 // ---------------------------------------------------------------------------
 attachmentsRouter.put('/:id/upload', requireAuth, async (c) => {
   const user = c.get('user');
+  const optResp = rejectIfClubhouseOptedOut(c, user);
+  if (optResp) return optResp;
+  const mutedResp = rejectIfChatMuted(c, user);
+  if (mutedResp) return mutedResp;
   const chatDb = c.env && c.env.CHAT_DB;
   if (!chatDb) return c.json({ error: 'Chat database unavailable.' }, 500);
 
@@ -1225,6 +1269,10 @@ attachmentsRouter.put('/:id/upload', requireAuth, async (c) => {
 // ---------------------------------------------------------------------------
 attachmentsRouter.post('/:id/complete', requireAuth, async (c) => {
   const user = c.get('user');
+  const optResp = rejectIfClubhouseOptedOut(c, user);
+  if (optResp) return optResp;
+  const mutedResp = rejectIfChatMuted(c, user);
+  if (mutedResp) return mutedResp;
   const chatDb = c.env && c.env.CHAT_DB;
   if (!chatDb) return c.json({ error: 'Chat database unavailable.' }, 500);
 
@@ -1354,8 +1402,24 @@ attachmentsRouter.get('/:id/stream', async (c) => {
     return c.json({ error: 'Attachment not found.' }, 404);
   }
 
-  // Enforce channel read access unless attachment has been promoted to public gallery
-  if (!attachment.promoted_media_id) {
+  let isPublicPromoted = Boolean(attachment.promoted_media_id);
+  if (isPublicPromoted) {
+    const baseballDb = c.env && (c.env.BASEBALL_DB || c.env.DB);
+    if (baseballDb) {
+      const promoRow = await baseballDb.prepare('SELECT id, is_approved FROM media_items WHERE id = ? LIMIT 1').bind(attachment.promoted_media_id).first();
+      if (!promoRow) {
+        isPublicPromoted = false;
+        try {
+          await chatDb.prepare('UPDATE chat_attachments SET promoted_media_id = NULL WHERE id = ?').bind(id).run();
+        } catch (clearPromoErr) {}
+      } else if (Number(promoRow.is_approved) !== 1) {
+        isPublicPromoted = false;
+      }
+    }
+  }
+
+  // Enforce channel read access & parent message visibility unless validly promoted to public gallery
+  if (!isPublicPromoted) {
     const user = c.get('user');
     if (!user) {
       return c.json({ error: 'Authentication required.' }, 401);
@@ -1366,10 +1430,20 @@ attachmentsRouter.get('/:id/stream', async (c) => {
     if (!channel || !(await canUserAccessChannel(chatDb, user, channel, 'read'))) {
       return c.json({ error: 'Access denied.' }, 403);
     }
+    if (attachment.message_id) {
+      const parentMsg = await chatDb.prepare('SELECT deleted_at, hidden_at FROM messages WHERE id = ? LIMIT 1').bind(attachment.message_id).first();
+      if (!parentMsg || parentMsg.deleted_at) {
+        return c.json({ error: 'Attachment not found.' }, 404);
+      }
+      const isModOrAdmin = Boolean(user.isAdmin || user.isModerator || user.role === 'admin');
+      if (parentMsg.hidden_at && !isModOrAdmin) {
+        return c.json({ error: 'Access denied.' }, 403);
+      }
+    }
   }
 
   if (attachment.storage_provider === 'gdrive' && attachment.drive_file_id && isGDriveConfigured(c.env)) {
-    const streamOpts = attachment.promoted_media_id
+    const streamOpts = isPublicPromoted
       ? { useEdgeCache: true, cacheControl: 'public, max-age=31536000, immutable' }
       : { useEdgeCache: false, cacheControl: 'private, max-age=3600' };
     return await streamGDriveFile(c.env, attachment.drive_file_id, rangeHeader, attachment.mime_type, c.req.url, streamOpts);
@@ -1386,7 +1460,7 @@ attachmentsRouter.get('/:id/stream', async (c) => {
     return c.json({ error: 'Invalid attachment binary payload.' }, 400);
   }
   const mimeType = attachment.mime_type || 'application/octet-stream';
-  const localCacheControl = attachment.promoted_media_id ? 'public, max-age=31536000, immutable' : 'private, max-age=3600';
+  const localCacheControl = isPublicPromoted ? 'public, max-age=31536000, immutable' : 'private, max-age=3600';
   return serveByteRangeResponse(bytes, mimeType, rangeHeader, localCacheControl);
 });
 
@@ -1483,20 +1557,47 @@ attachmentsRouter.post('/:id/promote-to-gallery', requireAdmin, async (c) => {
 // ---------------------------------------------------------------------------
 attachmentsRouter.delete('/:id', requireAuth, async (c) => {
   const user = c.get('user');
+  const optResp = rejectIfClubhouseOptedOut(c, user);
+  if (optResp) return optResp;
+  const mutedResp = rejectIfChatMuted(c, user);
+  if (mutedResp) return mutedResp;
   const chatDb = c.env && c.env.CHAT_DB;
   if (!chatDb) return c.json({ error: 'Chat database unavailable.' }, 500);
 
   const id = String(c.req.param('id') || '').trim();
   if (!id) return c.json({ error: 'Invalid attachment ID.' }, 400);
 
-  const att = await chatDb.prepare('SELECT id, uploader_id, drive_file_id, promoted_media_id FROM chat_attachments WHERE id = ?').bind(id).first();
+  const att = await chatDb.prepare('SELECT id, channel_id, uploader_id, drive_file_id, promoted_media_id FROM chat_attachments WHERE id = ?').bind(id).first();
   if (!att) {
     return c.json({ error: 'Attachment not found.' }, 404);
   }
 
-  const isStaff = Boolean(user.isAdmin || user.isModerator || user.role === 'admin');
-  if (!isStaff && Number(att.uploader_id) !== Number(user.id)) {
+  const isAdmin = Boolean(user.isAdmin || user.role === 'admin');
+  const isStaff = Boolean(isAdmin || user.isModerator);
+  const isOwner = Number(att.uploader_id) === Number(user.id);
+  if (!isAdmin && att.promoted_media_id) {
+    return c.json({ error: 'Promoted gallery attachments can only be deleted by removing them from the gallery first or by an administrator.' }, 403);
+  }
+  if (!isStaff && !isOwner) {
     return c.json({ error: 'Access denied.' }, 403);
+  }
+  if (!isAdmin) {
+    const channel = await resolveChannel(chatDb, att.channel_id);
+    if (!channel || !(await canUserAccessChannel(chatDb, user, channel, 'read'))) {
+      return c.json({ error: 'Access denied.' }, 403);
+    }
+    if (!isOwner) {
+      if (channel.channel_type === 'dm' || channel.channel_type === 'group_dm' || channel.min_role_write === 'admin') {
+        return c.json({ error: 'Access denied.' }, 403);
+      }
+      const baseballDb = c.env && (c.env.BASEBALL_DB || c.env.DB);
+      if (baseballDb && att.uploader_id) {
+        const uploader = await baseballDb.prepare('SELECT role, is_admin FROM users WHERE id = ?').bind(att.uploader_id).first();
+        if (uploader && (uploader.is_admin === 1 || uploader.role === 'admin')) {
+          return c.json({ error: 'Moderators cannot delete administrator uploads.' }, 403);
+        }
+      }
+    }
   }
 
   await chatDb.prepare('DELETE FROM chat_attachments WHERE id = ?').bind(id).run();

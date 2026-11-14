@@ -1791,4 +1791,239 @@ module.exports = async function runTier5(t, ctx) {
     const afterDel = await ctx.apiReq('DELETE', `/api/attachments/${attId}`, ctx.playerCookie);
     assert.equal(afterDel.status, 404, 'Deleted attachment must return 404');
   });
+
+  await t.test('T5.18: Key Rotation Authorization / Coverage & Deleted Attachment Stream Revocation', async () => {
+    // 1. Private board key rotation: non-creator cannot advance epoch; creator cannot omit active members on epoch > 1
+    const privRes = await ctx.apiReq('POST', '/api/channels', ctx.adminCookie, {
+      name: 'rot-guard-board',
+      category: 'Private Huddles',
+      topic: 'Rotation guard',
+      is_private: true,
+      member_ids: [ctx.playerUser.id, ctx.facilitatorUser.id]
+    });
+    assert.equal(privRes.status, 201);
+    const rotCh = privRes.data.channel;
+
+    const nonCreatorRot = await ctx.apiReq('POST', `/api/keys/channel/${rotCh.id}/share`, ctx.playerCookie, {
+      key_epoch: 1,
+      force_rotate: true,
+      shares: [
+        { recipient_user_id: ctx.adminUser.id, key_epoch: 1, wrapped_key_base64: 'dGVzdA==', wrap_iv: 'dGVzdGl2MTIzNDU2' },
+        { recipient_user_id: ctx.playerUser.id, key_epoch: 1, wrapped_key_base64: 'dGVzdA==', wrap_iv: 'dGVzdGl2MTIzNDU2' },
+        { recipient_user_id: ctx.facilitatorUser.id, key_epoch: 1, wrapped_key_base64: 'dGVzdA==', wrap_iv: 'dGVzdGl2MTIzNDU2' }
+      ]
+    });
+    assert.equal(nonCreatorRot.status, 403, 'Non-creator must be denied force_rotate on private board');
+
+    const fullEp1 = await ctx.apiReq('POST', `/api/keys/channel/${rotCh.id}/share`, ctx.adminCookie, {
+      key_epoch: 1,
+      shares: [
+        { recipient_user_id: ctx.adminUser.id, key_epoch: 1, wrapped_key_base64: 'dGVzdA==', wrap_iv: 'dGVzdGl2MTIzNDU2' },
+        { recipient_user_id: ctx.playerUser.id, key_epoch: 1, wrapped_key_base64: 'dGVzdA==', wrap_iv: 'dGVzdGl2MTIzNDU2' },
+        { recipient_user_id: ctx.facilitatorUser.id, key_epoch: 1, wrapped_key_base64: 'dGVzdA==', wrap_iv: 'dGVzdGl2MTIzNDU2' }
+      ]
+    });
+    assert.equal(fullEp1.status, 200);
+
+    const partialEp2 = await ctx.apiReq('POST', `/api/keys/channel/${rotCh.id}/share`, ctx.adminCookie, {
+      key_epoch: 2,
+      force_rotate: true,
+      shares: [
+        { recipient_user_id: ctx.adminUser.id, key_epoch: 2, wrapped_key_base64: 'dGVzdA==', wrap_iv: 'dGVzdGl2MTIzNDU2' }
+      ]
+    });
+    assert.equal(partialEp2.status, 400, 'Partial share epoch advance must be rejected even on epoch > 1');
+
+    // 2. Chat attachment promoted -> gallery deleted -> message soft-deleted => /stream must deny (404)
+    const bootRes = await ctx.apiReq('GET', '/api/bootstrap', ctx.playerCookie);
+    const generalCh = (bootRes.data.channels || []).find((c) => c.slug === 'general');
+    assert.ok(generalCh, '#general channel must exist');
+
+    const pngBytes = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3, 4]);
+    const initAtt = await ctx.apiReq('POST', '/api/attachments/init', ctx.playerCookie, {
+      channel_id: generalCh.id,
+      file_name: 'stream-revoke.png',
+      mime_type: 'image/png',
+      file_size: pngBytes.length
+    });
+    assert.equal(initAtt.status, 200);
+    const attId = initAtt.data.attachment_id;
+
+    if (initAtt.data.storageProvider === 'local') {
+      const upRes = await ctx.apiReq('PUT', `/api/attachments/${attId}/upload`, ctx.playerCookie, pngBytes);
+      assert.equal(upRes.status, 200);
+      const compRes = await ctx.apiReq('POST', `/api/attachments/${attId}/complete`, ctx.playerCookie);
+      assert.equal(compRes.status, 200);
+
+      const msgRes = await ctx.apiReq('POST', '/api/channels/general/messages', ctx.playerCookie, {
+        content: 'Attachment for stream revocation check',
+        attachment_ids: [attId]
+      });
+      assert.equal(msgRes.status, 201);
+      const msgId = Number(msgRes.data.message.id);
+
+      const promoRes = await ctx.apiReq('POST', `/api/attachments/${attId}/promote-to-gallery`, ctx.adminCookie, {
+        title: 'Revoke Test Photo'
+      });
+      assert.equal(promoRes.status, 200);
+      const mediaId = Number(promoRes.data.media_id);
+
+      // Unapproving promoted media item must immediately revoke public anonymous stream access
+      const unapproveRes = await ctx.apiReq('PUT', `/api/media/${mediaId}`, ctx.adminCookie, { is_approved: 0 });
+      assert.equal(unapproveRes.status, 200);
+      const anonUnapprovedStream = await ctx.apiReq('GET', `/api/attachments/${attId}/stream`);
+      assert.equal(anonUnapprovedStream.status, 401, 'Unapproved promoted attachment must not stream publicly');
+
+      // Non-admin uploader cannot delete an attachment linked to promoted gallery media
+      const ownerDelPromoted = await ctx.apiReq('DELETE', `/api/attachments/${attId}`, ctx.playerCookie);
+      assert.equal(ownerDelPromoted.status, 403, 'Promoted gallery attachment deletion must be restricted');
+
+      const mediaDel = await ctx.apiReq('DELETE', `/api/media/${mediaId}`, ctx.adminCookie);
+      assert.equal(mediaDel.status, 200);
+
+      const liveStream = await ctx.apiReq('GET', `/api/attachments/${attId}/stream`, ctx.playerCookie);
+      assert.equal(liveStream.status, 200, 'Live message attachment stream remains accessible after gallery deletion');
+
+      const msgDel = await ctx.apiReq('DELETE', `/api/messages/${msgId}`, ctx.playerCookie);
+      assert.equal(msgDel.status, 200);
+
+      const revokedStream = await ctx.apiReq('GET', `/api/attachments/${attId}/stream`, ctx.playerCookie);
+      assert.equal(revokedStream.status, 404, 'Deleted message + de-promoted attachment stream must return 404');
+    }
+
+    // 3. PATCH /api/channels/:id must not mutate channel row before returning 403 on member management
+    const pubBoardRes = await ctx.apiReq('POST', '/api/channels', ctx.adminCookie, {
+      name: 'PreWrite Check Board',
+      category: 'General',
+      channel_type: 'text'
+    });
+    assert.equal(pubBoardRes.status, 201);
+    const pubBoardId = pubBoardRes.data.channel.id;
+    ctx.baseballDb.prepare('UPDATE users SET is_moderator = 1 WHERE id = ?').run(ctx.facilitatorUser.id);
+    try {
+      const modAttempt = await ctx.apiReq('PATCH', `/api/channels/${pubBoardId}`, ctx.facilitatorCookie, {
+        name: 'Hijacked Board',
+        is_private: true,
+        member_ids: [ctx.facilitatorUser.id]
+      });
+      assert.equal(modAttempt.status, 403, 'Non-creator moderator must be denied private member_ids update');
+      const rowAfter = ctx.chatDb.prepare('SELECT name, is_private, min_role_read FROM channels WHERE id = ?').get(pubBoardId);
+      assert.equal(rowAfter.is_private, 0, 'Channel must not be persisted as private on rejected PATCH');
+      assert.notEqual(rowAfter.min_role_read, 'invite', 'Channel min_role_read must not mutate on rejected PATCH');
+    } finally {
+      ctx.baseballDb.prepare('UPDATE users SET is_moderator = 0 WHERE id = ?').run(ctx.facilitatorUser.id);
+      ctx.chatDb.prepare('DELETE FROM channels WHERE id = ?').run(pubBoardId);
+    }
+
+    // 4. PATCH /api/messages/:id must reject edits lacking key_epoch >= MAX(key_epoch) on private board
+    const rotEp1Msg = await ctx.apiReq('POST', `/api/channels/${rotCh.id}/messages`, ctx.adminCookie, {
+      content: 'dGVzdGNpcGhlcjE=',
+      encryption_iv: 'dGVzdGl2MTIzNDU2',
+      key_epoch: 1
+    });
+    assert.equal(rotEp1Msg.status, 201);
+    const ep1MsgId = rotEp1Msg.data.message.id;
+    const ep2Shares = await ctx.apiReq('POST', `/api/keys/channel/${rotCh.id}/share`, ctx.adminCookie, {
+      key_epoch: 2,
+      force_rotate: true,
+      shares: [
+        { recipient_user_id: ctx.adminUser.id, key_epoch: 2, wrapped_key_base64: 'dGVzdA==', wrap_iv: 'dGVzdGl2MTIzNDU2' },
+        { recipient_user_id: ctx.playerUser.id, key_epoch: 2, wrapped_key_base64: 'dGVzdA==', wrap_iv: 'dGVzdGl2MTIzNDU2' },
+        { recipient_user_id: ctx.facilitatorUser.id, key_epoch: 2, wrapped_key_base64: 'dGVzdA==', wrap_iv: 'dGVzdGl2MTIzNDU2' }
+      ]
+    });
+    assert.equal(ep2Shares.status, 200);
+    const staleEdit = await ctx.apiReq('PATCH', `/api/messages/${ep1MsgId}`, ctx.adminCookie, {
+      content: 'dGVzdGNpcGhlcjI=',
+      encryption_iv: 'dGVzdGl2MTIzNDU2'
+    });
+    assert.equal(staleEdit.status, 409, 'Omitting key_epoch on rotated E2EE message edit must return 409 STALE_KEY_EPOCH');
+  });
+
+  await t.test('T5.19: Moderator Privilege Boundaries, Organizer Message Deletion, Unknown Key Epochs & Share Squatting', async () => {
+    const shareRow = (uid, ep) => ({ recipient_user_id: uid, key_epoch: ep, wrapped_key_base64: 'dGVzdA==', wrap_iv: 'dGVzdGl2MTIzNDU2' });
+
+    // Admin-created private board; delegated (non-admin) moderator who is a member cannot edit or delete it
+    const privRes = await ctx.apiReq('POST', '/api/channels', ctx.adminCookie, {
+      name: 'mod-boundary-board',
+      category: 'Private Huddles',
+      topic: 'Moderator boundary',
+      is_private: true,
+      member_ids: [ctx.playerUser.id, ctx.facilitatorUser.id]
+    });
+    assert.equal(privRes.status, 201);
+    const privCh = privRes.data.channel;
+
+    const grantRes = await ctx.apiReq('PUT', `/api/auth/users/${ctx.playerUser.id}/moderator`, ctx.adminCookie, { is_moderator: true });
+    assert.equal(grantRes.status, 200);
+    try {
+      const modPatchPrivate = await ctx.apiReq('PATCH', `/api/channels/${privCh.id}`, ctx.playerCookie, { name: 'hijacked' });
+      assert.equal(modPatchPrivate.status, 403, 'Non-creator moderator must not edit an admin-created private board');
+      const modDeletePrivate = await ctx.apiReq('DELETE', `/api/channels/${privCh.id}`, ctx.playerCookie);
+      assert.equal(modDeletePrivate.status, 403, 'Non-creator moderator must not delete an admin-created private board');
+
+      // Moderator cannot convert a shared admin-created board into a private board
+      const sharedRes = await ctx.apiReq('POST', '/api/channels', ctx.adminCookie, {
+        name: 'mod-boundary-shared',
+        category: 'Text Channels',
+        topic: 'Shared board'
+      });
+      assert.equal(sharedRes.status, 201);
+      const sharedCh = sharedRes.data.channel;
+      const modPrivatize = await ctx.apiReq('PATCH', `/api/channels/${sharedCh.id}`, ctx.playerCookie, { is_private: true });
+      assert.equal(modPrivatize.status, 403, 'Non-creator moderator must not privatize a shared board');
+      const modRaiseRole = await ctx.apiReq('PATCH', `/api/channels/${sharedCh.id}`, ctx.playerCookie, { min_role_write: 'organizer' });
+      assert.equal(modRaiseRole.status, 403, 'Player-rank moderator must not require a higher role than their own');
+      const modDeleteShared = await ctx.apiReq('DELETE', `/api/channels/${sharedCh.id}`, ctx.playerCookie);
+      assert.equal(modDeleteShared.status, 403, 'Moderator must not delete a board they did not create');
+    } finally {
+      await ctx.apiReq('PUT', `/api/auth/users/${ctx.playerUser.id}/moderator`, ctx.adminCookie, { is_moderator: false });
+    }
+
+    // Event organizer (non-moderator) cannot delete other users' chat messages
+    const playerMsg = await ctx.apiReq('POST', '/api/channels/general/messages', ctx.playerCookie, { content: 'Organizer must not delete this' });
+    assert.equal(playerMsg.status, 201);
+    const orgDelete = await ctx.apiReq('DELETE', `/api/messages/${playerMsg.data.message.id}`, ctx.orgCookie);
+    assert.equal(orgDelete.status, 403, 'Organizer without moderator capability must not delete other users messages');
+    const adminDelete = await ctx.apiReq('DELETE', `/api/messages/${playerMsg.data.message.id}`, ctx.adminCookie);
+    assert.equal(adminDelete.status, 200);
+
+    // Unknown (future) key epochs are rejected and non-owners cannot squat new-recipient shares on an initialized epoch
+    const epochRes = await ctx.apiReq('POST', '/api/channels', ctx.adminCookie, {
+      name: 'epoch-bounds-board',
+      category: 'Private Huddles',
+      topic: 'Epoch bounds',
+      is_private: true,
+      member_ids: [ctx.playerUser.id]
+    });
+    assert.equal(epochRes.status, 201);
+    const epochCh = epochRes.data.channel;
+    const initShares = await ctx.apiReq('POST', `/api/keys/channel/${epochCh.id}/share`, ctx.adminCookie, {
+      key_epoch: 1,
+      shares: [shareRow(ctx.adminUser.id, 1), shareRow(ctx.playerUser.id, 1)]
+    });
+    assert.equal(initShares.status, 200);
+
+    const addMember = await ctx.apiReq('PATCH', `/api/channels/${epochCh.id}`, ctx.adminCookie, { member_ids: [ctx.playerUser.id, ctx.facilitatorUser.id] });
+    assert.equal(addMember.status, 200);
+
+    const futureEpochMsg = await ctx.apiReq('POST', `/api/channels/${epochCh.id}/messages`, ctx.adminCookie, {
+      content: 'dGVzdGNpcGhlcg==',
+      encryption_iv: 'dGVzdGl2MTIzNDU2',
+      key_epoch: 9
+    });
+    assert.equal(futureEpochMsg.status, 400, 'Messages must not reference a key epoch that does not exist');
+
+    const squat = await ctx.apiReq('POST', `/api/keys/channel/${epochCh.id}/share`, ctx.facilitatorCookie, {
+      key_epoch: 1,
+      shares: [shareRow(ctx.facilitatorUser.id, 1)]
+    });
+    assert.equal(squat.status, 403, 'Non-owner member must not distribute shares for new recipients on an initialized epoch');
+
+    const ownerFill = await ctx.apiReq('POST', `/api/keys/channel/${epochCh.id}/share`, ctx.adminCookie, {
+      key_epoch: 1,
+      shares: [shareRow(ctx.facilitatorUser.id, 1)]
+    });
+    assert.equal(ownerFill.status, 200, 'Board owner can still distribute a share to a newly added member');
+  });
 };

@@ -656,6 +656,35 @@ test('T3: User Role Management & Session Persistence', async (t) => {
     assert.ok(galleryJs.includes("API.abbreviateDisplayNames(photos, 'contributor_name'") && galleryJs.includes("API.abbreviateDisplayNames(videos, 'contributor_name'"), 'gallery.js must abbreviate contributor names');
     assert.ok(clubhouseJs.includes('abbreviateMemberNames([u].concat(selfMembersList))'), 'clubhouse.js must abbreviate self user card name');
   });
+
+  await t.test('T3.12: Security Hardening Regressions (SQL backup secret filtering & email CRLF rejection)', async () => {
+    // Seed sensitive app_settings temporarily to ensure backup-db excludes them
+    db.prepare(
+      "INSERT OR REPLACE INTO app_settings (key, value) VALUES ('waiver_provenance_secret', 'super-secret-hmac-material')"
+    ).run();
+    db.prepare(
+      "INSERT OR REPLACE INTO app_settings (key, value) VALUES ('appscript_upload_url', 'https://script.google.com/macros/s/secret/exec')"
+    ).run();
+
+    const res = await fetch(`${ctx.baseUrl}/api/events/admin/backup-db`, {
+      headers: { Cookie: seedAdminCookie }
+    });
+    assert.equal(res.status, 200, 'Admin SQL backup must return 200');
+    const sqlDump = await res.text();
+    assert.ok(!sqlDump.includes('super-secret-hmac-material'), 'backup-db must exclude waiver_provenance_secret');
+    assert.ok(!sqlDump.includes('https://script.google.com/macros/s/secret/exec'), 'backup-db must exclude appscript_upload_url');
+
+    // Email header / CRLF injection rejection on send-code & ban-email
+    const badEmailRes = await apiReq('POST', '/api/auth/send-code', null, {
+      email: 'attacker@example.com\r\nBcc:victim@example.com'
+    });
+    assert.equal(badEmailRes.status, 400, 'send-code must reject CRLF-injected email');
+
+    const badBanRes = await apiReq('POST', '/api/auth/banned-emails', seedAdminCookie, {
+      email: 'attacker@example.com\nX-Header:1'
+    });
+    assert.equal(badBanRes.status, 400, 'banned-emails must reject newline-injected email');
+  });
 });
 
 // ---------------------------------------------------------------------------

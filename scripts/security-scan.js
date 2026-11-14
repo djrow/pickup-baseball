@@ -53,8 +53,10 @@ function rel(filePath) {
 
 function getTrackedFiles() {
   try {
-    const raw = execSync('git ls-files -z', { cwd: ROOT, stdio: ['ignore', 'pipe', 'ignore'] });
-    return raw.toString('utf8').split('\0').filter(Boolean);
+    // Include tracked files AND untracked-but-not-ignored files so anything that
+    // `git add -A` would stage (e.g. a new .env.local) is scanned before release.
+    const raw = execSync('git ls-files -z --cached --others --exclude-standard', { cwd: ROOT, stdio: ['ignore', 'pipe', 'ignore'] });
+    return Array.from(new Set(raw.toString('utf8').split('\0').filter(Boolean)));
   } catch {
     return walkFiles(ROOT).map(rel);
   }

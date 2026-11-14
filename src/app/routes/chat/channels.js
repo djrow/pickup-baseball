@@ -17,6 +17,15 @@ import {
 
 export const chatChannelsRouter = new Hono();
 
+const CHANNEL_ROLE_RANKS = { guest: 0, public: 0, invite: 0, player: 1, facilitator: 2, organizer: 3, admin: 4 };
+
+function getUserRoleRank(user) {
+  if (user.role === 'admin' || user.isAdmin) return 4;
+  if (user.role === 'organizer' || user.canManageEvents) return 3;
+  if (user.isGameFacilitator || user.is_game_facilitator) return 2;
+  return 1;
+}
+
 chatChannelsRouter.get('/public/channels', async (c) => {
   const chatDb = c.env && c.env.CHAT_DB;
   if (!chatDb) return c.json({ error: 'Chat database unavailable.' }, 500);
@@ -43,17 +52,14 @@ chatChannelsRouter.post('/channels', requireAuth, async (c) => {
   const user = c.get('user');
   const optResp = rejectIfClubhouseOptedOut(c, user);
   if (optResp) return optResp;
+  const mutedResp = rejectIfChatMuted(c, user);
+  if (mutedResp) return mutedResp;
   const chatDb = c.env && c.env.CHAT_DB;
   if (!chatDb) return c.json({ error: 'Chat database unavailable.' }, 500);
 
   const body = await c.req.json().catch(() => ({}));
   const channelType = body.channel_type || 'text';
   const isDm = channelType === 'dm' || channelType === 'group_dm';
-
-  if (isDm) {
-    const mutedResp = rejectIfChatMuted(c, user);
-    if (mutedResp) return mutedResp;
-  }
 
   if (!isDm && !user.isAdmin && !user.isModerator && !user.canModerateChat) {
     return c.json({ error: 'Access denied: Moderator or Administrator privileges required to create boards.' }, 403);
@@ -91,7 +97,11 @@ chatChannelsRouter.post('/channels', requireAuth, async (c) => {
   if (!slug || !name) {
     return c.json({ error: 'Channel name and slug are required.' }, 400);
   }
-  const isPrivateBoard = !isDm && channelType !== 'voice' && Boolean(body.is_private);
+  const requestedRead = body.min_role_read;
+  if (channelType === 'voice' && (body.is_private || requestedRead === 'invite')) {
+    return c.json({ error: 'Voice lounges do not support private invite-only mode.' }, 400);
+  }
+  const isPrivateBoard = !isDm && channelType !== 'voice' && Boolean(body.is_private || requestedRead === 'invite');
 
   const nowSecCreate = Math.floor(Date.now() / 1000);
   const chRateKey = `user_${user.id}_channel_create`;
@@ -162,7 +172,6 @@ chatChannelsRouter.post('/channels', requireAuth, async (c) => {
   const topic = String(body.topic || '').trim().slice(0, 300);
   const validReadRoleList = ['guest', 'public', 'player', 'facilitator', 'organizer', 'admin', 'invite'];
   const validWriteRoleList = ['player', 'facilitator', 'organizer', 'admin'];
-  const requestedRead = body.min_role_read;
   const requestedWrite = body.min_role_write;
   if (requestedRead !== undefined && !validReadRoleList.includes(requestedRead)) {
     return c.json({ error: 'Invalid min_role_read.' }, 400);
@@ -238,6 +247,8 @@ chatChannelsRouter.post('/channels', requireAuth, async (c) => {
 
 chatChannelsRouter.patch('/channels/:id', requireAuth, async (c) => {
   const user = c.get('user');
+  const optResp = rejectIfClubhouseOptedOut(c, user);
+  if (optResp) return optResp;
   const chatDb = c.env && c.env.CHAT_DB;
   if (!chatDb) return c.json({ error: 'Chat database unavailable.' }, 500);
 
@@ -281,24 +292,80 @@ chatChannelsRouter.patch('/channels/:id', requireAuth, async (c) => {
   const channelType = body.channel_type !== undefined
     ? (allowedTypes.includes(body.channel_type) ? body.channel_type : channel.channel_type)
     : channel.channel_type;
+  const allowedReadRoles = ['guest', 'public', 'player', 'facilitator', 'organizer', 'admin', 'invite'];
+  const allowedWriteRoles = ['player', 'facilitator', 'organizer', 'admin'];
+  if (!user.isAdmin && (body.min_role_read === 'admin' || body.min_role_write === 'admin' || body.min_role_read === 'guest' || body.min_role_read === 'public')) {
+    return c.json({ error: 'Access denied: only admins can configure admin or public guest channel roles.' }, 403);
+  }
+  if (body.min_role_read !== undefined && !allowedReadRoles.includes(body.min_role_read)) {
+    return c.json({ error: 'Invalid min_role_read.' }, 400);
+  }
+  if (body.min_role_write !== undefined && !allowedWriteRoles.includes(body.min_role_write)) {
+    return c.json({ error: 'Invalid min_role_write.' }, 400);
+  }
   const wasPrivateBoard = isPrivateEncryptedBoard(channel);
+  const requestedInvite = body.min_role_read === 'invite';
+  if (channelType === 'voice' && (body.is_private || requestedInvite)) {
+    return c.json({ error: 'Voice lounges do not support private invite-only mode.' }, 400);
+  }
+  if (body.is_private === false && requestedInvite) {
+    return c.json({ error: 'Invite-only read access requires private board mode.' }, 400);
+  }
   const isPrivateBoard = body.is_private !== undefined
     ? (channelType !== 'voice' && Boolean(body.is_private))
-    : wasPrivateBoard;
+    : (requestedInvite && channelType !== 'voice' ? true : wasPrivateBoard);
   if (wasPrivateBoard && !user.isAdmin && (!isPrivateBoard || channelType === 'voice')) {
     return c.json({ error: 'Access denied: only administrators may downgrade a private invite-only board to public.' }, 403);
   }
   if (isProtectedCoreBoard && isPrivateBoard) {
     return c.json({ error: 'Core community boards (#general, #announcements) cannot be converted into private boards.' }, 400);
   }
-  const allowedReadRoles = ['guest', 'public', 'player', 'facilitator', 'organizer', 'admin', 'invite'];
-  const allowedWriteRoles = ['player', 'facilitator', 'organizer', 'admin'];
-  if (!user.isAdmin && (body.min_role_read === 'admin' || body.min_role_write === 'admin' || body.min_role_read === 'guest' || body.min_role_read === 'public')) {
-    return c.json({ error: 'Access denied: only admins can configure admin or public guest channel roles.' }, 403);
+  if (!user.isAdmin && wasPrivateBoard && channel.created_by !== user.id) {
+    return c.json({ error: 'Access denied: only the board creator or an administrator can edit a private board.' }, 403);
+  }
+  if (!user.isAdmin && isPrivateBoard && !wasPrivateBoard && channel.created_by !== user.id) {
+    return c.json({ error: 'Access denied: only the board creator or an administrator can convert a shared board into a private board.' }, 403);
+  }
+  if (!user.isAdmin) {
+    const callerRank = getUserRoleRank(user);
+    const requestedReadRank = body.min_role_read !== undefined ? (CHANNEL_ROLE_RANKS[body.min_role_read] || 0) : 0;
+    const requestedWriteRank = body.min_role_write !== undefined ? (CHANNEL_ROLE_RANKS[body.min_role_write] || 0) : 0;
+    if (requestedReadRank > callerRank || requestedWriteRank > callerRank) {
+      return c.json({ error: 'Access denied: you cannot require a role higher than your own for a board.' }, 403);
+    }
   }
   if (!user.isAdmin && channel.min_role_read === 'invite' && body.min_role_read && body.min_role_read !== 'invite') {
     return c.json({ error: 'Access denied: only administrators may remove invite-only restriction.' }, 403);
   }
+
+  let validatedCleanIds = null;
+  if (isPrivateBoard && Array.isArray(body.member_ids)) {
+    if (!user.isAdmin && channel.created_by !== user.id) {
+      return c.json({ error: 'Access denied: only the board creator or an administrator can manage private board members.' }, 403);
+    }
+    validatedCleanIds = body.member_ids.map((id) => parseInt(id, 10)).filter((n) => !isNaN(n) && n > 0).slice(0, 90);
+    const baseballDb = c.env && (c.env.BASEBALL_DB || c.env.DB);
+    if (baseballDb && validatedCleanIds.length > 0) {
+      const validSet = new Set();
+      for (const idChunk of chunkArray(validatedCleanIds, 80)) {
+        const ph = idChunk.map(() => '?').join(',');
+        const { results: targetUsers } = await baseballDb.prepare(`
+          SELECT u.id, COALESCE(u.clubhouse_opted_in, 0) as clubhouse_opted_in,
+                 EXISTS(SELECT 1 FROM banned_emails b WHERE LOWER(b.email) = LOWER(u.email)) as is_banned
+          FROM users u WHERE u.id IN (${ph})
+        `).bind(...idChunk).all();
+        for (const u of (targetUsers || [])) {
+          if (!u.is_banned && Number(u.clubhouse_opted_in) === 1) {
+            validSet.add(Number(u.id));
+          }
+        }
+      }
+      if (validatedCleanIds.some((uid) => !validSet.has(Number(uid)))) {
+        return c.json({ error: 'One or more target members do not exist, are banned, or have opted out of Clubhouse.' }, 403);
+      }
+    }
+  }
+
   const minRoleRead = isPrivateBoard
     ? 'invite'
     : (allowedReadRoles.includes(body.min_role_read) ? body.min_role_read : ((channel.min_role_read === 'invite' ? 'player' : channel.min_role_read) || 'player'));
@@ -315,33 +382,9 @@ chatChannelsRouter.patch('/channels/:id', requireAuth, async (c) => {
   `).bind(name, category, topic, channelType, minRoleRead, minRoleWrite, isEncrypted, isPrivateBoard ? 1 : 0, sortOrder, channel.id).run();
 
   let updatedMembers = null;
-  if (isPrivateBoard && Array.isArray(body.member_ids)) {
-    if (!user.isAdmin && channel.created_by !== user.id) {
-      return c.json({ error: 'Access denied: only the board creator or an administrator can manage private board members.' }, 403);
-    }
-    const cleanIds = body.member_ids.map((id) => parseInt(id, 10)).filter((n) => !isNaN(n) && n > 0).slice(0, 90);
-    const baseballDb = c.env && (c.env.BASEBALL_DB || c.env.DB);
-    if (baseballDb && cleanIds.length > 0) {
-      const validSet = new Set();
-      for (const idChunk of chunkArray(cleanIds, 80)) {
-        const ph = idChunk.map(() => '?').join(',');
-        const { results: targetUsers } = await baseballDb.prepare(`
-          SELECT u.id, COALESCE(u.clubhouse_opted_in, 0) as clubhouse_opted_in,
-                 EXISTS(SELECT 1 FROM banned_emails b WHERE LOWER(b.email) = LOWER(u.email)) as is_banned
-          FROM users u WHERE u.id IN (${ph})
-        `).bind(...idChunk).all();
-        for (const u of (targetUsers || [])) {
-          if (!u.is_banned && Number(u.clubhouse_opted_in) === 1) {
-            validSet.add(Number(u.id));
-          }
-        }
-      }
-      if (cleanIds.some((uid) => !validSet.has(Number(uid)))) {
-        return c.json({ error: 'One or more target members do not exist, are banned, or have opted out of Clubhouse.' }, 403);
-      }
-    }
+  if (isPrivateBoard && validatedCleanIds !== null) {
     const ownerId = channel.created_by || user.id;
-    updatedMembers = Array.from(new Set([ownerId, user.id, ...cleanIds]));
+    updatedMembers = Array.from(new Set([ownerId, user.id, ...validatedCleanIds]));
     const ph = updatedMembers.map(() => '?').join(',');
     const batchMemberOps = [
       chatDb.prepare(`DELETE FROM channel_members WHERE channel_id = ? AND user_id NOT IN (${ph})`).bind(channel.id, ...updatedMembers)
@@ -394,6 +437,8 @@ chatChannelsRouter.patch('/channels/:id', requireAuth, async (c) => {
 
 chatChannelsRouter.delete('/channels/:id', requireModerator, async (c) => {
   const user = c.get('user');
+  const optResp = rejectIfClubhouseOptedOut(c, user);
+  if (optResp) return optResp;
   const mutedResp = rejectIfChatMuted(c, user);
   if (mutedResp) return mutedResp;
   const chatDb = c.env && c.env.CHAT_DB;
@@ -411,6 +456,9 @@ chatChannelsRouter.delete('/channels/:id', requireModerator, async (c) => {
   }
   if (!(await canUserAccessChannel(chatDb, user, channel, 'write')) && !user.isAdmin && channel.created_by !== user.id) {
     return c.json({ error: 'Access denied: insufficient permissions to delete this board.' }, 403);
+  }
+  if (!user.isAdmin && channel.created_by !== user.id) {
+    return c.json({ error: 'Access denied: only the board creator or an administrator can delete a board.' }, 403);
   }
   if (!user.isAdmin && (channel.min_role_read === 'admin' || channel.min_role_write === 'admin')) {
     return c.json({ error: 'Access denied: only administrators can delete admin-restricted boards.' }, 403);
@@ -430,6 +478,8 @@ chatChannelsRouter.delete('/channels/:id', requireModerator, async (c) => {
 
 async function setDmChannelHiddenState(c, hidden) {
   const user = c.get('user');
+  const optResp = rejectIfClubhouseOptedOut(c, user);
+  if (optResp) return optResp;
   const chatDb = c.env && c.env.CHAT_DB;
   if (!chatDb) return c.json({ error: 'Chat database unavailable.' }, 500);
 

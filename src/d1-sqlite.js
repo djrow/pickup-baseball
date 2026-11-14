@@ -98,8 +98,9 @@ function createD1Adapter(sqliteDb) {
 const MAX_NODE_REQUEST_BODY_BYTES = 75 * 1024 * 1024; // 75 MB upper bound to accommodate base64 media payloads while preventing OOM DoS
 
 function getFullRequestUrl(req, trustProxy = false) {
-  const rawProto = trustProxy ? (req.headers['x-forwarded-proto'] || req.protocol || 'http') : (req.protocol || 'http');
-  const proto = rawProto === 'https' ? 'https' : 'http';
+  const rawProtoHeader = trustProxy ? (req.headers['x-forwarded-proto'] || req.protocol || 'http') : (req.protocol || 'http');
+  const firstProto = String(rawProtoHeader).split(',')[0].trim().toLowerCase();
+  const proto = firstProto === 'https' ? 'https' : 'http';
   const rawHost = String(req.headers.host || '127.0.0.1').trim();
   let safeHost = '127.0.0.1';
   if (/^[a-z0-9.\-:\[\]]+$/i.test(rawHost)) {

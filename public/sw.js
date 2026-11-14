@@ -1,5 +1,5 @@
 // Service Worker for Pickup Baseball Foundation PWA
-const CACHE_NAME = 'pbf-cache-v142';
+const CACHE_NAME = 'pbf-cache-v143';
 
 // Core app shell & pages precached on install; i18n bundles (~312 KB) are cached on demand
 const STATIC_ASSETS = [
@@ -85,6 +85,13 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// Only cache successful same-origin responses that do not opt out of storage
+function isCacheableResponse(res) {
+  if (!res || res.status !== 200 || res.type !== 'basic') return false;
+  const cacheControl = (res.headers.get('Cache-Control') || '').toLowerCase();
+  return cacheControl.indexOf('no-store') === -1 && cacheControl.indexOf('private') === -1;
+}
+
 // Fetch: Strategy depending on request type
 self.addEventListener('fetch', (event) => {
   const req = event.request;
@@ -111,7 +118,7 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(req)
         .then((networkRes) => {
-          if (!hasSensitiveParams && networkRes && networkRes.status === 200) {
+          if (!hasSensitiveParams && isCacheableResponse(networkRes)) {
             const clone = networkRes.clone();
             caches.open(CACHE_NAME).then((cache) => cache.put(normalizedNavKey, clone));
           }
@@ -132,7 +139,7 @@ self.addEventListener('fetch', (event) => {
     caches.match(req, { ignoreSearch: true }).then((cachedRes) => {
       const fetchPromise = fetch(req)
         .then((networkRes) => {
-          if (networkRes && networkRes.status === 200) {
+          if (isCacheableResponse(networkRes)) {
             const clone = networkRes.clone();
             caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
           }

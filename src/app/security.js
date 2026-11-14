@@ -154,6 +154,14 @@ export function stripJpegMetadata(buffer) {
   return out.buffer;
 }
 
+export function isValidEmailAddress(raw) {
+  if (typeof raw !== 'string') return false;
+  const clean = raw.trim();
+  if (!clean || clean.length > 254) return false;
+  if (/[\s\x00-\x1f\x7f,<>;]/.test(clean)) return false;
+  return /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)+$/i.test(clean);
+}
+
 export function isValidRasterImageBuffer(buffer, mime) {
   const bytes = new Uint8Array(buffer);
   if (bytes.length < 12) return false;
@@ -211,9 +219,14 @@ export function getSafePublicOrigin(c) {
   return 'https://www.pickupbaseballfoundation.org';
 }
 
-export async function checkRateLimit(db, key, maxRequests, windowSeconds, env) {
-  if (!db || (env && env.NODE_ENV === 'test' && !key.startsWith('test_'))) {
+export async function checkRateLimit(db, key, maxRequests, windowSeconds, env, options = {}) {
+  const isTestBypass = Boolean(env && env.NODE_ENV === 'test' && !key.startsWith('test_'));
+  if (isTestBypass) {
     return { allowed: true };
+  }
+  const failClosed = options.failClosed !== false;
+  if (!db) {
+    return failClosed ? { allowed: false, remaining: 0 } : { allowed: true };
   }
   const nowSec = Math.floor(Date.now() / 1000);
   const windowStartCutoff = nowSec - windowSeconds;
@@ -239,13 +252,20 @@ export async function checkRateLimit(db, key, maxRequests, windowSeconds, env) {
       newCount = row ? Number(row.count) : 1;
     }
 
+    // Opportunistically prune stale rows older than 24h to prevent unbounded growth
+    if (nowSec % 20 === 0) {
+      try {
+        await db.prepare('DELETE FROM rate_limits WHERE window_start < ?').bind(nowSec - 86400).run();
+      } catch (pruneErr) {}
+    }
+
     if (newCount > maxRequests) {
       return { allowed: false, remaining: 0 };
     }
     return { allowed: true, remaining: Math.max(0, maxRequests - newCount) };
   } catch (err) {
-    console.warn('[RateLimit] Fallback allow due to error:', err.message);
-    return { allowed: true };
+    console.warn('[RateLimit] Error enforcing rate limit:', err.message);
+    return failClosed ? { allowed: false, remaining: 0 } : { allowed: true };
   }
 }
 
@@ -529,12 +549,14 @@ export function canAccessChannel(user, channel, mode = 'read') {
 
   const minRole = (mode === 'write' ? channel.min_role_write : channel.min_role_read) || 'player';
 
-  // Role Rank hierarchy: admin: 4, organizer: 3, facilitator: 2, player: 1
+  // Role Rank hierarchy: admin: 4, organizer: 3, facilitator: 2, player: 1, guest/public: 0
   const ROLE_RANKS = {
     admin: 4,
     organizer: 3,
     facilitator: 2,
-    player: 1
+    player: 1,
+    guest: 0,
+    public: 0
   };
 
   let userRank = 1;
@@ -615,6 +637,47 @@ export function rejectIfClubhouseOptedOut(c, user) {
   return null;
 }
 
+function parseIpv6Words(raw) {
+  let s = String(raw || '').toLowerCase().trim();
+  const zoneIdx = s.indexOf('%');
+  if (zoneIdx !== -1) s = s.slice(0, zoneIdx);
+  if (!s.includes(':')) return null;
+
+  // Handle embedded IPv4 suffix (e.g., ::ffff:127.0.0.1)
+  if (s.includes('.')) {
+    const lastColon = s.lastIndexOf(':');
+    const ipv4Part = s.slice(lastColon + 1);
+    const m = ipv4Part.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+    if (!m) return null;
+    const octets = m.slice(1).map((x) => parseInt(x, 10));
+    if (octets.some((n) => n < 0 || n > 255)) return null;
+    const wHi = ((octets[0] << 8) | octets[1]).toString(16);
+    const wLo = ((octets[2] << 8) | octets[3]).toString(16);
+    s = `${s.slice(0, lastColon + 1)}${wHi}:${wLo}`;
+  }
+
+  const dblParts = s.split('::');
+  if (dblParts.length > 2) return null;
+
+  let head = dblParts[0] ? dblParts[0].split(':').filter(Boolean) : [];
+  let tail = dblParts.length === 2 && dblParts[1] ? dblParts[1].split(':').filter(Boolean) : [];
+  if (dblParts.length === 1 && s.startsWith(':')) return null;
+  if (dblParts.length === 1 && s.endsWith(':')) return null;
+
+  const missing = 8 - (head.length + tail.length);
+  if (dblParts.length === 1 && missing !== 0) return null;
+  if (dblParts.length === 2 && missing < 1) return null;
+
+  const full = [...head, ...new Array(missing).fill('0'), ...tail];
+  if (full.length !== 8) return null;
+  const words = [];
+  for (const part of full) {
+    if (!/^[0-9a-f]{1,4}$/i.test(part)) return null;
+    words.push(parseInt(part, 16));
+  }
+  return words;
+}
+
 export function isPrivateIpOrHost(hostname, isTestEnv = false) {
   if (!hostname) return true;
   const h = String(hostname).toLowerCase().trim().replace(/\.+$/, '');
@@ -646,24 +709,20 @@ export function isPrivateIpOrHost(hostname, isTestEnv = false) {
 
   const ipv6Raw = (h.startsWith('[') && h.endsWith(']')) ? h.slice(1, -1).toLowerCase() : h.toLowerCase();
   if (ipv6Raw.includes(':')) {
-    if (
-      ipv6Raw === '::1' ||
-      ipv6Raw === '::' ||
-      ipv6Raw === '0:0:0:0:0:0:0:1' ||
-      ipv6Raw === '0:0:0:0:0:0:0:0' ||
-      /^fe[89abcdef][0-9a-f]:/i.test(ipv6Raw) ||
-      /^f[cd][0-9a-f]{2}:/i.test(ipv6Raw) ||
-      /^ff[0-9a-f]{2}:/i.test(ipv6Raw) ||
-      /^64:ff9b:/i.test(ipv6Raw) ||
-      /^2002:/i.test(ipv6Raw) ||
-      /^0?100::/i.test(ipv6Raw) ||
-      ipv6Raw.includes('::ffff:') ||
-      /(?:^|:)0{0,4}:ffff:/i.test(ipv6Raw) ||
-      /^::[0-9a-f]{1,4}(?::[0-9a-f]{1,4})?$/i.test(ipv6Raw) ||
-      ipv6Raw.includes('.')
-    ) {
-      return true;
-    }
+    const words = parseIpv6Words(ipv6Raw);
+    if (!words) return true; // Fail closed on unparseable IPv6-like literal
+    const [w0, w1, w2, w3, w4, w5, w6, w7] = words;
+    if (words.every((w) => w === 0)) return true; // ::/128
+    if (w0 === 0 && w1 === 0 && w2 === 0 && w3 === 0 && w4 === 0 && w5 === 0 && w6 === 0 && w7 === 1) return true; // ::1/128
+    if (w0 === 0 && w1 === 0 && w2 === 0 && w3 === 0 && w4 === 0 && (w5 === 0xffff || w5 === 0)) return true; // ::ffff:0:0/96 & ::/96
+    if ((w0 & 0xffc0) === 0xfe80) return true; // fe80::/10 link-local
+    if ((w0 & 0xfe00) === 0xfc00) return true; // fc00::/7 ULA
+    if ((w0 & 0xff00) === 0xff00) return true; // ff00::/8 multicast
+    if ((w0 & 0xffc0) === 0xfec0) return true; // fec0::/10 site-local
+    if (w0 === 0x0064 && w1 === 0xff9b && ((w2 === 0 && w3 === 0 && w4 === 0 && w5 === 0) || w2 === 0x0001)) return true; // 64:ff9b::/96 & 64:ff9b:1::/48 NAT64
+    if (w0 === 0x0100 && w1 === 0 && w2 === 0 && w3 === 0) return true; // 100::/64 discard
+    if (w0 === 0x2001 && w1 === 0x0db8) return true; // 2001:db8::/32 docs
+    if (w0 === 0x2002) return true; // 2002::/16 6to4
   }
   return false;
 }
@@ -726,6 +785,80 @@ export function validateAppscriptRedirectUrl(rawUrl) {
   return { ok: true, url: parsed.toString() };
 }
 
+async function fetchWithPinnedNodeIp(targetUrl, pinnedAddress, pinnedFamily, { method = 'GET', headers, body, timeoutMs = 8000 } = {}) {
+  const parsed = new URL(targetUrl);
+  const modName = parsed.protocol === 'https:' ? 'node:https' : 'node:http';
+  const transport = await import(modName);
+  const reqFn = transport.request || (transport.default && transport.default.request);
+  const family = pinnedFamily === 6 || String(pinnedAddress).includes(':') ? 6 : 4;
+
+  return new Promise((resolve, reject) => {
+    const req = reqFn({
+      protocol: parsed.protocol,
+      hostname: parsed.hostname.replace(/^\[|\]$/g, ''),
+      port: parsed.port ? parseInt(parsed.port, 10) : (parsed.protocol === 'https:' ? 443 : 80),
+      path: `${parsed.pathname}${parsed.search}`,
+      method,
+      headers: headers || {},
+      timeout: timeoutMs,
+      lookup(_host, opts, cb) {
+        if (typeof opts === 'function') {
+          return opts(null, pinnedAddress, family);
+        }
+        if (opts && opts.all) {
+          return cb(null, [{ address: pinnedAddress, family }]);
+        }
+        return cb(null, pinnedAddress, family);
+      }
+    }, (nodeRes) => {
+      const respHeaders = new Headers();
+      for (const [k, v] of Object.entries(nodeRes.headers || {})) {
+        if (v === undefined) continue;
+        if (Array.isArray(v)) {
+          for (const item of v) respHeaders.append(k, String(item));
+        } else {
+          respHeaders.set(k, String(v));
+        }
+      }
+      const status = Number(nodeRes.statusCode || 200);
+      const hasNoBodyStatus = status === 204 || status === 304 || (status >= 300 && status < 400);
+      if (hasNoBodyStatus || method.toUpperCase() === 'HEAD') {
+        nodeRes.resume();
+        resolve(new Response(null, { status, headers: respHeaders }));
+        return;
+      }
+      const stream = new ReadableStream({
+        start(controller) {
+          nodeRes.on('data', (chunk) => {
+            try {
+              controller.enqueue(chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk));
+            } catch (e) {}
+          });
+          nodeRes.on('end', () => {
+            try { controller.close(); } catch (e) {}
+          });
+          nodeRes.on('error', (err) => {
+            try { controller.error(err); } catch (e) {}
+          });
+        },
+        cancel() {
+          try { nodeRes.destroy(); } catch (e) {}
+        }
+      });
+      resolve(new Response(stream, { status, headers: respHeaders }));
+    });
+
+    req.on('timeout', () => {
+      req.destroy(new Error('Request timed out'));
+    });
+    req.on('error', reject);
+    if (body !== undefined && body !== null && method.toUpperCase() !== 'GET' && method.toUpperCase() !== 'HEAD') {
+      req.write(typeof body === 'string' || body instanceof Uint8Array ? body : String(body));
+    }
+    req.end();
+  });
+}
+
 export async function safeFetchExternalUrl(urlStr, options = {}, maxRedirects = 3, timeoutMs = 8000) {
   const {
     isTestEnv = false,
@@ -747,6 +880,7 @@ export async function safeFetchExternalUrl(urlStr, options = {}, maxRedirects = 
   for (let hop = 0; hop <= maxRedirects; hop++) {
     const parsedHop = new URL(currentUrl);
     const hostName = parsedHop.hostname.replace(/^\[|\]$/g, '');
+    let pinnedNodeTarget = null;
     if (!isTestEnv && hostName && !/^\d+\.\d+\.\d+\.\d+$/.test(hostName) && !hostName.includes(':')) {
       if (typeof process !== 'undefined' && process.versions && process.versions.node) {
         let resolved;
@@ -762,6 +896,7 @@ export async function safeFetchExternalUrl(urlStr, options = {}, maxRedirects = 
         if (resolved.some((entry) => !entry || isPrivateIpOrHost(entry.address, false))) {
           return { ok: false, status: 403, error: 'Resolved host IP points to a restricted private or local network.' };
         }
+        pinnedNodeTarget = resolved[0];
       } else if (hostName !== 'cloudflare-dns.com') {
         try {
           const dohAbort = typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
@@ -797,15 +932,24 @@ export async function safeFetchExternalUrl(urlStr, options = {}, maxRedirects = 
 
     let res;
     try {
-      res = await fetch(currentUrl, {
-        method,
-        headers,
-        body,
-        redirect: 'manual',
-        signal: typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
-          ? AbortSignal.timeout(timeoutMs)
-          : undefined
-      });
+      if (pinnedNodeTarget && pinnedNodeTarget.address) {
+        res = await fetchWithPinnedNodeIp(currentUrl, pinnedNodeTarget.address, pinnedNodeTarget.family, {
+          method,
+          headers,
+          body,
+          timeoutMs
+        });
+      } else {
+        res = await fetch(currentUrl, {
+          method,
+          headers,
+          body,
+          redirect: 'manual',
+          signal: typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
+            ? AbortSignal.timeout(timeoutMs)
+            : undefined
+        });
+      }
     } catch (err) {
       return { ok: false, status: 422, error: 'Could not connect to the remote host (timeout or network error).' };
     }

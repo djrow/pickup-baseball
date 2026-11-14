@@ -33,7 +33,7 @@ function applyApiSecurityHeaders(c) {
   if (!existingCsp) {
     const ct = (c.res && c.res.headers && c.res.headers.get('Content-Type')) || '';
     if (ct.includes('text/html')) {
-      c.header('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; object-src 'none'; frame-ancestors 'none';");
+      c.header('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'none';");
     } else {
       c.header('Content-Security-Policy', "default-src 'none'; object-src 'none'; frame-ancestors 'none';");
     }

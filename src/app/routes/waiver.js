@@ -50,7 +50,7 @@ async function getProvenanceSecretMaterial(env, db = null) {
   if (e.WAIVER_SIGNING_SECRET) {
     return String(e.WAIVER_SIGNING_SECRET);
   }
-  const baseSecret = e.SESSION_SECRET || e.GDRIVE_CLIENT_SECRET || e.TURNSTILE_SECRET_KEY;
+  const baseSecret = e.SESSION_SECRET;
   if (baseSecret) {
     const subtle = getSubtleCrypto();
     const baseKey = await subtle.importKey(
@@ -690,7 +690,7 @@ waiverRouter.get('/certificate/:id', async (c) => {
         'Cache-Control': 'no-store',
         'X-Content-Type-Options': 'nosniff',
         'X-Frame-Options': 'DENY',
-        'Content-Security-Policy': "default-src 'self'; img-src 'self' data:; style-src 'unsafe-inline'; script-src 'none'; object-src 'none'; frame-ancestors 'none';"
+        'Content-Security-Policy': "default-src 'self'; img-src 'self' data:; style-src 'unsafe-inline'; script-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'; frame-ancestors 'none';"
       }
     });
   }
