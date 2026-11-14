@@ -4,8 +4,8 @@
  */
 
 import { Hono } from 'hono';
-import { requireOrganizer, requireAdmin } from '../../security.js';
-import { getDefaultDuties } from '../../schema.js';
+import { requireOrganizer, requireAdmin, getClientIp, checkRateLimit } from '../../security.js';
+import { getDefaultDuties, getRequireLoginSetting } from '../../schema.js';
 import { canUserAccessEvent } from '../../policy.js';
 import { AVATAR_EXPR } from './helpers.js';
 
@@ -51,6 +51,9 @@ eventsBpDutiesRouter.put('/default-duties', requireAdmin, async (c) => {
     if (!Array.isArray(duties)) {
       return c.json({ error: 'duties array is required.' }, 400);
     }
+    if (duties.length > 25) {
+      return c.json({ error: 'Default duties template cannot exceed 25 tasks.' }, 400);
+    }
 
     const batch = [c.env.DB.prepare('DELETE FROM default_duties')];
     duties.filter(d => d && d.title && String(d.title).trim()).forEach((d, idx) => {
@@ -58,7 +61,7 @@ eventsBpDutiesRouter.put('/default-duties', requireAdmin, async (c) => {
         c.env.DB.prepare('INSERT INTO default_duties (title, description, slots_needed, sort_order) VALUES (?, ?, ?, ?)').bind(
           String(d.title).trim().slice(0, 120),
           String(d.description || '').trim().slice(0, 300),
-          parseInt(d.slots_needed || 1, 10),
+          Math.min(50, Math.max(1, parseInt(d.slots_needed || 1, 10) || 1)),
           idx
         )
       );
@@ -129,6 +132,11 @@ eventsBpDutiesRouter.post('/:id/bp-order', async (c) => {
     const user = c.get('user');
     const db = c.env.DB;
 
+    const bpLimit = await checkRateLimit(db, `bp_${getClientIp(c)}`, 30, 60, c.env);
+    if (!bpLimit.allowed) {
+      return c.json({ error: 'Too many batting practice requests. Please wait a minute and try again.' }, 429);
+    }
+
     const event = await db.prepare('SELECT id, status, allowed_emails FROM events WHERE id = ?').bind(eventId).first();
     if (!event) return c.json({ error: 'Event not found.' }, 404);
     if (!canUserAccessEvent(user, event)) {
@@ -143,7 +151,15 @@ eventsBpDutiesRouter.post('/:id/bp-order', async (c) => {
     let slotNumber = parseInt(body.slot_number, 10);
     const notes = String(body.notes || '').trim().slice(0, 200);
     const managementToken = body.management_token || c.req.query('token');
-    let attendeeId = body.attendee_id ? parseInt(body.attendee_id, 10) : null;
+    let attendeeId = null;
+
+    if (body.attendee_id && user && (user.canManageEvents || user.isAdmin)) {
+      const requestedAttId = parseInt(body.attendee_id, 10);
+      if (requestedAttId > 0) {
+        const validAtt = await db.prepare('SELECT id FROM attendees WHERE id = ? AND event_id = ?').bind(requestedAttId, eventId).first();
+        if (validAtt) attendeeId = validAtt.id;
+      }
+    }
 
     if (!playerName) {
       return c.json({ error: 'Player name is required to sign up for batting practice.' }, 400);
@@ -158,6 +174,11 @@ eventsBpDutiesRouter.post('/:id/bp-order', async (c) => {
         att = await db.prepare('SELECT id, name FROM attendees WHERE event_id = ? AND management_token = ?').bind(eventId, managementToken).first();
       }
       if (att) attendeeId = att.id;
+    }
+
+    const requireLogin = await getRequireLoginSetting(db, c.env);
+    if (requireLogin && !user && !attendeeId) {
+      return c.json({ error: 'Please sign in to sign up for batting practice.' }, 401);
     }
 
     const { results: existingSlots } = await db.prepare('SELECT id, slot_number, user_id, attendee_id, player_name FROM batting_practice_signups WHERE event_id = ?').bind(eventId).all();
@@ -302,7 +323,7 @@ eventsBpDutiesRouter.post('/:id/duties', requireOrganizer, async (c) => {
       eventId,
       String(title).trim().slice(0, 120),
       String(description || '').trim().slice(0, 300),
-      parseInt(slots_needed || 1, 10),
+      Math.min(50, Math.max(1, parseInt(slots_needed || 1, 10) || 1)),
       nextSort
     ).run();
 
@@ -333,7 +354,7 @@ eventsBpDutiesRouter.put('/:id/duties/:dutyId', requireOrganizer, async (c) => {
     `).bind(
       title ? String(title).trim().slice(0, 120) : null,
       description !== undefined ? String(description).trim().slice(0, 300) : null,
-      slots_needed ? parseInt(slots_needed, 10) : null,
+      slots_needed ? Math.min(50, Math.max(1, parseInt(slots_needed, 10) || 1)) : null,
       dutyId,
       eventId
     ).run();

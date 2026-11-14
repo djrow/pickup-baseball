@@ -184,6 +184,9 @@ chatSyncRouter.get('/sync', requireAuth, async (c) => {
   const rawSinceEvent = parseInt(c.req.query('since_event_id') || '0', 10);
   const sinceEventId = isNaN(rawSinceEvent) || rawSinceEvent < 0 ? 0 : rawSinceEvent;
 
+  const rawSinceSignal = parseInt(c.req.query('since_signal_id') || '0', 10);
+  const sinceSignalId = isNaN(rawSinceSignal) || rawSinceSignal < 0 ? 0 : rawSinceSignal;
+
   const channelFilterParam = c.req.query('channel_id');
   const nowSec = Math.floor(Date.now() / 1000);
 
@@ -193,9 +196,9 @@ chatSyncRouter.get('/sync', requireAuth, async (c) => {
       SELECT
         (SELECT COALESCE(MAX(id), 0) FROM messages) as max_msg_id,
         (SELECT COALESCE(MAX(id), 0) FROM sync_events) as max_event_id,
-        EXISTS(SELECT 1 FROM rtc_signals WHERE recipient_user_id = ? AND created_at > ?) as has_signals,
+        EXISTS(SELECT 1 FROM rtc_signals WHERE recipient_user_id = ? AND created_at > ? AND id > ?) as has_signals,
         EXISTS(SELECT 1 FROM voice_participants WHERE heartbeat_at > ?) as has_voice
-    `).bind(user.id, nowSec - 60, nowSec - 25).first();
+    `).bind(user.id, nowSec - 60, sinceSignalId, nowSec - 25).first();
 
     if (
       watermark &&
@@ -270,12 +273,12 @@ chatSyncRouter.get('/sync', requireAuth, async (c) => {
 
   const { results: rawSignals } = await chatDb.prepare(
     `SELECT * FROM rtc_signals
-     WHERE recipient_user_id = ? AND created_at > ?
-     ORDER BY id ASC
+     WHERE recipient_user_id = ? AND created_at > ? AND id > ?
+     ORDER BY id DESC
      LIMIT 100`
-  ).bind(user.id, nowSec - 60).all();
+  ).bind(user.id, nowSec - 60, sinceSignalId).all();
 
-  const rtc_signals = rawSignals || [];
+  const rtc_signals = (rawSignals || []).slice().reverse();
 
   const { results: rawVoice } = await chatDb.prepare(
     'SELECT * FROM voice_participants WHERE heartbeat_at > ? AND user_id NOT IN (SELECT user_id FROM clubhouse_opted_out) ORDER BY heartbeat_at DESC'

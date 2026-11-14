@@ -33,6 +33,7 @@
     unreadByChannel: {},
     lastMessageId: 0,
     lastEventId: 0,
+    lastSignalId: 0,
     lastChatActivityAt: 0,
     syncTimer: null,
     syncInFlight: false,
@@ -201,7 +202,16 @@
         var tx = db.transaction(['messages'], 'readwrite');
         var store = tx.objectStore('messages');
         for (var i = 0; i < messages.length; i++) {
-          store.put(messages[i]);
+          var msg = messages[i];
+          if (!msg) continue;
+          if (msg.is_e2ee_decrypted || msg.iv || msg.encryption_iv || msg.sender_key_id) {
+            var toStore = Object.assign({}, msg);
+            delete toStore.decrypted_content;
+            delete toStore.is_e2ee_decrypted;
+            store.put(toStore);
+          } else {
+            store.put(msg);
+          }
         }
       } catch (e) {}
     });
@@ -445,10 +455,22 @@
       }
 
       var generatedKey;
+      var myUid = state.user && state.user.id ? Number(state.user.id) : 0;
       return root.ClubhouseCrypto.generateChannelKey().then(function (chKey) {
         generatedKey = chKey;
         return Promise.all(participantIds.map(function (uid) {
-          return root.ClubhouseCrypto.deriveEcdhSharedKey(idKeys.ecdhPrivateKey, pubMap[uid]).then(function (shared) {
+          var peerCheckPromise = (root.ClubhouseCrypto.computeKeyFingerprint && root.ClubhouseCrypto.getPeerVerificationState)
+            ? root.ClubhouseCrypto.computeKeyFingerprint(pubMap[uid]).then(function (peerFp) {
+                return root.ClubhouseCrypto.getPeerVerificationState(uid, peerFp);
+              }).then(function (vState) {
+                if (Number(uid) !== myUid && vState && vState.keyChangedWarning) {
+                  throw createE2eeError('E2EE_KEY_CHANGED', 'A participant changed their encryption key. Verify their safety number before rotating keys.');
+                }
+              })
+            : Promise.resolve();
+          return peerCheckPromise.then(function () {
+            return root.ClubhouseCrypto.deriveEcdhSharedKey(idKeys.ecdhPrivateKey, pubMap[uid]);
+          }).then(function (shared) {
             return root.ClubhouseCrypto.wrapChannelKey(generatedKey, shared).then(function (wrapped) {
               return {
                 recipient_user_id: uid,
@@ -750,7 +772,7 @@
     }).then(function (plaintext) {
       var copy = Object.assign({}, msg);
       copy.decrypted_content = plaintext;
-      copy.is_e2ee_decrypted = true;
+      copy.is_e2ee_decrypted = false;
       return copy;
     }).catch(function () {
       var copy = Object.assign({}, msg);
@@ -803,8 +825,12 @@
     state.unreadByChannel = {};
     state.lastMessageId = 0;
     state.lastEventId = 0;
+    state.lastSignalId = 0;
     state.lastChatActivityAt = 0;
     clearCachedDmKeys();
+    if (root.ClubhouseCrypto && typeof root.ClubhouseCrypto.clearMemoryKeys === 'function') {
+      root.ClubhouseCrypto.clearMemoryKeys();
+    }
     try {
       if (typeof localStorage !== 'undefined') {
         localStorage.removeItem('pickup_cached_user');
@@ -956,17 +982,6 @@
           encryption_iv: enc.ivB64,
           key_epoch: getActiveChannelEpoch(ch.id),
           plaintextPreview: targetEncText
-        };
-      });
-    } else if (opts.encryptWithWebCrypto && ch && ch.is_encrypted && root.ClubhouseCrypto && text) {
-      var targetChId = ch.id;
-      prepPromise = root.ClubhouseCrypto.deriveFallbackChannelKey(targetChId, 1).then(function (channelKey) {
-        return root.ClubhouseCrypto.encryptPayload(channelKey, text);
-      }).then(function (enc) {
-        return {
-          content: enc.ciphertextB64,
-          encryption_iv: enc.ivB64,
-          key_epoch: 1
         };
       });
     } else {
@@ -1371,7 +1386,8 @@
     state.syncInFlight = true;
 
     var url = '/api/sync?since_msg_id=' + encodeURIComponent(state.lastMessageId) +
-      '&since_event_id=' + encodeURIComponent(state.lastEventId);
+      '&since_event_id=' + encodeURIComponent(state.lastEventId) +
+      '&since_signal_id=' + encodeURIComponent(state.lastSignalId || 0);
 
     return apiRequest('GET', url).then(function (res) {
       state.syncInFlight = false;
@@ -1401,6 +1417,11 @@
       }
 
       if (rtcSignals.length > 0) {
+        for (var j = 0; j < rtcSignals.length; j++) {
+          if (Number(rtcSignals[j].id) > state.lastSignalId) {
+            state.lastSignalId = Number(rtcSignals[j].id);
+          }
+        }
         emit('rtc_signals', rtcSignals);
       }
 
@@ -1841,7 +1862,22 @@
       }).then(function (cipherBuf) {
         return root.ClubhouseCrypto.decryptBinaryBuffer(e2eeKey, cipherBuf, att.iv);
       }).then(function (plainBuf) {
-        var blob = new Blob([plainBuf], { type: att.mime_type || 'application/octet-stream' });
+        var rawMime = String(att.mime_type || '').toLowerCase().split(';')[0].trim();
+        var allowedInlineMimes = {
+          'image/jpeg': true,
+          'image/png': true,
+          'image/webp': true,
+          'image/gif': true,
+          'video/mp4': true,
+          'video/webm': true,
+          'audio/webm': true,
+          'audio/mp4': true,
+          'audio/mpeg': true,
+          'audio/ogg': true,
+          'application/pdf': true
+        };
+        var safeMime = allowedInlineMimes[rawMime] ? rawMime : 'application/octet-stream';
+        var blob = new Blob([plainBuf], { type: safeMime });
         var url = URL.createObjectURL(blob);
         decryptedAttBlobUrls[cacheKey] = url;
         return url;

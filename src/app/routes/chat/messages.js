@@ -253,8 +253,8 @@ chatMessagesRouter.post('/channels/:id/messages', requireAuth, async (c) => {
     const attIds = body.attachment_ids.slice(0, 20).map((attId) => String(attId));
     await chatDb.batch(attIds.map((attId) =>
       chatDb.prepare(
-        'UPDATE chat_attachments SET message_id = ? WHERE id = ? AND uploader_id = ?'
-      ).bind(newMsgId, attId, user.id)
+        'UPDATE chat_attachments SET message_id = ? WHERE id = ? AND uploader_id = ? AND channel_id = ? AND message_id IS NULL'
+      ).bind(newMsgId, attId, user.id, channel.id)
     ));
   }
 
@@ -307,6 +307,8 @@ chatMessagesRouter.post('/channels/:id/messages', requireAuth, async (c) => {
 
 chatMessagesRouter.patch('/messages/:id', requireAuth, async (c) => {
   const user = c.get('user');
+  const optResp = rejectIfClubhouseOptedOut(c, user);
+  if (optResp) return optResp;
   const mutedResp = rejectIfChatMuted(c, user);
   if (mutedResp) return mutedResp;
   const chatDb = c.env && c.env.CHAT_DB;
@@ -323,12 +325,8 @@ chatMessagesRouter.patch('/messages/:id', requireAuth, async (c) => {
   }
 
   const msgChannel = await resolveChannel(chatDb, existing.channel_id);
-  if (
-    msgChannel &&
-    (msgChannel.channel_type === 'dm' || msgChannel.channel_type === 'group_dm' || isPrivateEncryptedBoard(msgChannel)) &&
-    !(await canUserAccessChannel(chatDb, user, msgChannel, 'read'))
-  ) {
-    return c.json({ error: 'Access denied: cannot modify an encrypted conversation you do not belong to.' }, 403);
+  if (!msgChannel || !(await canUserAccessChannel(chatDb, user, msgChannel, 'write'))) {
+    return c.json({ error: 'Access denied: insufficient permissions to edit messages in this board.' }, 403);
   }
 
   const isDmMsg = Boolean(msgChannel && (msgChannel.channel_type === 'dm' || msgChannel.channel_type === 'group_dm'));
@@ -343,10 +341,16 @@ chatMessagesRouter.patch('/messages/:id', requireAuth, async (c) => {
   if (!newContent) {
     return c.json({ error: 'Updated content is required.' }, 400);
   }
+  if (newContent.length > 16384) {
+    return c.json({ error: 'Updated message content exceeds maximum length (16 KB).' }, 400);
+  }
 
   const rawEditIv = body.iv !== undefined ? body.iv : body.encryption_iv;
   if ((isDmMsg || isPrivateMsg) && !rawEditIv) {
     return c.json({ error: 'Direct message and private board edits must remain end-to-end encrypted (missing encryption_iv).' }, 400);
+  }
+  if (rawEditIv && String(rawEditIv).length > 512) {
+    return c.json({ error: 'encryption_iv exceeds maximum allowed size.' }, 400);
   }
   const newIv = rawEditIv !== undefined ? rawEditIv : existing.iv;
   const nowIso = new Date().toISOString();
@@ -392,12 +396,8 @@ chatMessagesRouter.delete('/messages/:id', requireAuth, async (c) => {
   }
 
   const msgChannel = await resolveChannel(chatDb, existing.channel_id);
-  if (
-    msgChannel &&
-    (msgChannel.channel_type === 'dm' || msgChannel.channel_type === 'group_dm' || isPrivateEncryptedBoard(msgChannel)) &&
-    !(await canUserAccessChannel(chatDb, user, msgChannel, 'read'))
-  ) {
-    return c.json({ error: 'Access denied: cannot moderate an encrypted conversation you do not belong to.' }, 403);
+  if (!msgChannel || !(await canUserAccessChannel(chatDb, user, msgChannel, 'read'))) {
+    return c.json({ error: 'Access denied: insufficient permissions to moderate this board.' }, 403);
   }
 
   if (existing.author_id !== user.id && !user.isAdmin && !user.canManageEvents && !user.isModerator && !user.canModerateChat) {
@@ -526,12 +526,8 @@ async function hideMessageHandler(c) {
   }
 
   const msgChannel = await resolveChannel(chatDb, existing.channel_id);
-  if (
-    msgChannel &&
-    (msgChannel.channel_type === 'dm' || msgChannel.channel_type === 'group_dm' || isPrivateEncryptedBoard(msgChannel)) &&
-    !(await canUserAccessChannel(chatDb, user, msgChannel, 'read'))
-  ) {
-    return c.json({ error: 'Access denied: cannot moderate an encrypted conversation you do not belong to.' }, 403);
+  if (!msgChannel || !(await canUserAccessChannel(chatDb, user, msgChannel, 'read'))) {
+    return c.json({ error: 'Access denied: insufficient permissions to moderate this board.' }, 403);
   }
 
   const body = await c.req.json().catch(() => ({}));
@@ -603,12 +599,8 @@ chatMessagesRouter.post('/messages/:id/unhide', requireModerator, async (c) => {
   }
 
   const msgChannel = await resolveChannel(chatDb, existing.channel_id);
-  if (
-    msgChannel &&
-    (msgChannel.channel_type === 'dm' || msgChannel.channel_type === 'group_dm' || isPrivateEncryptedBoard(msgChannel)) &&
-    !(await canUserAccessChannel(chatDb, user, msgChannel, 'read'))
-  ) {
-    return c.json({ error: 'Access denied: cannot moderate an encrypted conversation you do not belong to.' }, 403);
+  if (!msgChannel || !(await canUserAccessChannel(chatDb, user, msgChannel, 'read'))) {
+    return c.json({ error: 'Access denied: insufficient permissions to moderate this board.' }, 403);
   }
   if (!existing.hidden_at) {
     return c.json({ error: 'Message is not hidden.' }, 400);

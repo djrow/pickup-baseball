@@ -5,6 +5,8 @@ import {
   rejectIfClubhouseOptedOut,
   checkRateLimit,
   validateExternalGifUrl,
+  safeFetchExternalUrl,
+  readResponseWithByteCap,
   isValidRasterImageBuffer,
   base64ToUint8Array,
   generateToken
@@ -84,73 +86,42 @@ function detectAnimatedMime(bytes, contentTypeHeader) {
 }
 
 async function fetchExternalGifSafely(initialUrl, isTestEnv) {
-  let currentUrl = initialUrl;
-  for (let hop = 0; hop < 4; hop++) {
-    let res;
-    try {
-      res = await fetch(currentUrl, {
-        method: 'GET',
-        redirect: 'manual',
-        headers: {
-          'Accept': 'image/gif,image/webp;q=0.9,*/*;q=0.1',
-          'User-Agent': 'SundayPickupBaseball/1.0 (+https://pickupbaseballfoundation.org)'
-        }
-      });
-    } catch (err) {
-      return { ok: false, status: 422, error: 'Could not connect to the remote GIF host.' };
-    }
-
-    if (res.status >= 300 && res.status < 400) {
-      const loc = res.headers.get('location');
-      if (!loc) {
-        return { ok: false, status: 400, error: 'Remote GIF redirect was missing a Location header.' };
+  const fetchedRes = await safeFetchExternalUrl(
+    initialUrl,
+    {
+      isTestEnv,
+      headers: {
+        'Accept': 'image/gif,image/webp;q=0.9,*/*;q=0.1',
+        'User-Agent': 'SundayPickupBaseball/1.0 (+https://pickupbaseballfoundation.org)'
       }
-      let nextRaw;
-      try {
-        nextRaw = new URL(loc, currentUrl).toString();
-      } catch (e) {
-        return { ok: false, status: 400, error: 'Invalid redirect URL from remote host.' };
-      }
-      const check = validateExternalGifUrl(nextRaw, { isTestEnv });
-      if (!check.ok) {
-        return check;
-      }
-      currentUrl = check.url;
-      continue;
-    }
-
-    if (!res.ok) {
-      return { ok: false, status: 400, error: `Could not fetch GIF (remote host returned HTTP ${res.status}).` };
-    }
-
-    const declaredLen = parseInt(res.headers.get('content-length') || '0', 10);
-    if (declaredLen > MAX_GIF_BYTES) {
-      return { ok: false, status: 413, error: 'Remote GIF exceeds the 8 MB size limit.' };
-    }
-
-    let buf;
-    try {
-      buf = await res.arrayBuffer();
-    } catch (err) {
-      return { ok: false, status: 422, error: 'Failed while downloading GIF data from the remote host.' };
-    }
-    if (!buf || buf.byteLength === 0) {
-      return { ok: false, status: 400, error: 'Remote GIF response was empty.' };
-    }
-    if (buf.byteLength > MAX_GIF_BYTES) {
-      return { ok: false, status: 413, error: 'Remote GIF exceeds the 8 MB size limit.' };
-    }
-
-    const bytes = new Uint8Array(buf);
-    const mimeType = detectAnimatedMime(bytes, res.headers.get('content-type'));
-    if (!mimeType) {
-      return { ok: false, status: 400, error: 'That link did not return a valid GIF or WebP image file.' };
-    }
-
-    return { ok: true, bytes, mimeType, finalUrl: currentUrl };
+    },
+    3,
+    8000
+  );
+  if (!fetchedRes.ok) {
+    return fetchedRes;
   }
 
-  return { ok: false, status: 400, error: 'Too many redirects while fetching remote GIF.' };
+  const { res, finalUrl } = fetchedRes;
+  if (!res.ok) {
+    return { ok: false, status: 400, error: `Could not fetch GIF (remote host returned HTTP ${res.status}).` };
+  }
+
+  const readRes = await readResponseWithByteCap(res, MAX_GIF_BYTES);
+  if (!readRes.ok) {
+    if (readRes.status === 413) {
+      return { ok: false, status: 413, error: 'Remote GIF exceeds the 8 MB size limit.' };
+    }
+    return readRes;
+  }
+
+  const bytes = readRes.bytes;
+  const mimeType = detectAnimatedMime(bytes, res.headers.get('content-type'));
+  if (!mimeType) {
+    return { ok: false, status: 400, error: 'That link did not return a valid GIF or WebP image file.' };
+  }
+
+  return { ok: true, bytes, mimeType, finalUrl };
 }
 
 // ---------------------------------------------------------------------------

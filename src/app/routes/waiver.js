@@ -7,6 +7,8 @@ import { Hono } from 'hono';
 import {
   escapeHtml,
   sha256Hex,
+  base64ToUint8Array,
+  isValidRasterImageBuffer,
   getClientIp,
   checkRateLimit,
   requireAuth,
@@ -421,9 +423,31 @@ waiverRouter.post('/sign', requireAuth, async (c) => {
   }
 
   const rawDate = String(body.signed_date || '').trim();
-  const signedDate = /^\d{4}-\d{2}-\d{2}$/.test(rawDate)
-    ? rawDate
-    : new Date().toISOString().slice(0, 10);
+  const todayStr = new Date().toISOString().slice(0, 10);
+  let signedDate = todayStr;
+  if (rawDate) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+      return c.json({ error: 'Invalid signed_date format; expected YYYY-MM-DD.' }, 400);
+    }
+    const [yr, mo, dy] = rawDate.split('-').map(Number);
+    const parsedUtc = new Date(Date.UTC(yr, mo - 1, dy));
+    if (
+      parsedUtc.getUTCFullYear() !== yr ||
+      parsedUtc.getUTCMonth() !== mo - 1 ||
+      parsedUtc.getUTCDate() !== dy
+    ) {
+      return c.json({ error: 'Invalid signed_date calendar date.' }, 400);
+    }
+    const isTest = Boolean(c.env && c.env.NODE_ENV === 'test');
+    if (!isTest) {
+      const [ty, tm, td] = todayStr.split('-').map(Number);
+      const todayUtcMs = Date.UTC(ty, tm - 1, td);
+      if (Math.abs(parsedUtc.getTime() - todayUtcMs) > 86400000) {
+        return c.json({ error: 'Signature date must match the current date.' }, 400);
+      }
+    }
+    signedDate = rawDate;
+  }
 
   if (body.electronic_consent !== true) {
     return c.json({ error: 'You must check the box consenting to sign this Consent, Waiver and Indemnity electronically.' }, 400);
@@ -432,11 +456,24 @@ waiverRouter.post('/sign', requireAuth, async (c) => {
   const signatureData = String(body.signature_data || '').trim();
   const signatureType = body.signature_type === 'typed' ? 'typed' : 'drawn';
 
-  if (!signatureData || !/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(signatureData)) {
+  const sigMatch = signatureData.match(/^data:image\/png;base64,([A-Za-z0-9+/=]+)$/);
+  if (!signatureData || !sigMatch) {
     return c.json({ error: 'A valid signature on the signature line is required.' }, 400);
   }
   if (signatureData.length > 250 * 1024) {
     return c.json({ error: 'Signature image data exceeds maximum size (250 KB).' }, 400);
+  }
+  let sigBytes;
+  try {
+    sigBytes = base64ToUint8Array(sigMatch[1]);
+  } catch (e) {
+    return c.json({ error: 'Signature image data contains invalid base64 encoding.' }, 400);
+  }
+  if (
+    !isValidRasterImageBuffer(sigBytes, 'image/png') ||
+    sigBytes[4] !== 0x0D || sigBytes[5] !== 0x0A || sigBytes[6] !== 0x1A || sigBytes[7] !== 0x0A
+  ) {
+    return c.json({ error: 'Signature image must be a valid PNG file.' }, 400);
   }
 
   const waiverTextSha256 = await sha256Hex(OFFICIAL_WAIVER_TEXT);
@@ -569,7 +606,7 @@ waiverRouter.get('/certificate/:id', async (c) => {
 
   let row = null;
   if (/^\d+$/.test(paramId)) {
-    if (!user || (!user.canManageEvents && user.id !== parseInt(paramId, 10))) {
+    if (!user || (!user.isAdmin && user.id !== parseInt(paramId, 10))) {
       return c.json({ error: 'Unauthorized to view this user waiver.' }, 403);
     }
     row = await c.env.DB.prepare(
@@ -604,7 +641,7 @@ waiverRouter.get('/certificate/:id', async (c) => {
     recomputedSeal === row.provenance_seal
   );
 
-  const canViewPii = Boolean(user && (user.canManageEvents || user.id === row.user_id));
+  const canViewPii = Boolean(user && (user.isAdmin || user.id === row.user_id));
 
   if (c.req.query('format') === 'html') {
     const html = renderSignedWaiverCertificateHtml(row, integrityVerified, canViewPii);

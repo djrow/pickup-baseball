@@ -19,7 +19,8 @@ import {
   getTaskTier,
   getDutyType,
   getDutyTier1Cap,
-  getUserRollingShifts
+  getUserRollingShifts,
+  canUserAccessEvent
 } from '../../policy.js';
 import { sendRsvpConfirmation, sendWaitlistConfirmation } from '../../mailer.js';
 import {
@@ -115,12 +116,6 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
         }
         email = rawEmail;
         hasEmail = true;
-
-        const existingUser = await db.prepare('SELECT id FROM users WHERE email = ?').bind(email).first();
-        if (existingUser) {
-          userId = existingUser.id;
-          isGuest = 0;
-        }
       } else {
         email = '';
         hasEmail = false;
@@ -128,14 +123,14 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
     }
 
     if (hasEmail) {
-      const banRecord = await db.prepare('SELECT id FROM banned_emails WHERE email = ?').bind(email).first();
+      const banRecord = await db.prepare('SELECT id FROM banned_emails WHERE LOWER(email) = LOWER(?)').bind(email).first();
       if (banRecord) {
         return c.json({ error: 'This email address has been restricted from registering.' }, 403);
       }
     }
 
     const allowedList = parseAllowedEmails(event.allowed_emails);
-    if (allowedList.length > 0 && status === 'attending') {
+    if (allowedList.length > 0) {
       if (!(user && user.canManageEvents)) {
         if (!hasEmail) {
           return c.json({ error: 'RSVP for this invite-only game requires signing in or entering an invited email address.' }, 403);
@@ -147,7 +142,7 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
     }
 
     const cleanGear = String(gear_bringing || '').trim().slice(0, 300);
-    const mgmtToken = management_token || generateToken();
+    const freshToken = generateToken();
     let existingAttendee = null;
     if (!user && management_token) {
       existingAttendee = await db.prepare('SELECT * FROM attendees WHERE event_id = ? AND management_token = ?').bind(eventId, management_token).first();
@@ -221,7 +216,7 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
               if ((attendeeUser.hero_credits || 0) < 1) {
                 return c.json({ error: `Tier 1 fair-share cap reached (${cap} shifts) and you do not have any Backup Hero Credits available.` }, 400);
               }
-              creditsNeeded = 1;
+              creditsNeeded += 1;
             }
           }
         }
@@ -231,15 +226,26 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
       }
     }
 
-    const activeToken = existingAttendee ? (existingAttendee.management_token || mgmtToken) : mgmtToken;
+    const activeToken = existingAttendee ? (existingAttendee.management_token || freshToken) : freshToken;
     const storedEmail = hasEmail
       ? email
       : (existingAttendee ? existingAttendee.email : `guest-${activeToken}${GUEST_NO_EMAIL_SUFFIX}`);
 
+    if (!hasEmail && storedEmail) {
+      const storedBanRecord = await db.prepare('SELECT id FROM banned_emails WHERE LOWER(email) = LOWER(?)').bind(storedEmail).first();
+      if (storedBanRecord) {
+        return c.json({ error: 'This email address has been restricted from registering.' }, 403);
+      }
+    }
+
     let attendeeId;
     if (existingAttendee) {
-      if (!user && existingAttendee.management_token && management_token !== existingAttendee.management_token) {
+      if (!user && (!existingAttendee.management_token || management_token !== existingAttendee.management_token)) {
         return c.json({ error: 'Invalid or missing management token for this RSVP. Please use your confirmation link or sign in.' }, 403);
+      }
+      if (!user) {
+        userId = existingAttendee.user_id;
+        isGuest = existingAttendee.is_guest;
       }
       if (hasEmail && existingAttendee.email !== storedEmail) {
         const collidingAttendee = await db.prepare('SELECT id FROM attendees WHERE event_id = ? AND email = ? AND id != ?').bind(eventId, storedEmail, existingAttendee.id).first();
@@ -257,18 +263,26 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
       const ins = await db.prepare(`
         INSERT INTO attendees (event_id, user_id, name, email, is_guest, status, gear_bringing, players_count, spectators_count, additional_guests, guest_names, management_token)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).bind(eventId, userId, name, storedEmail, isGuest, finalStatus, cleanGear, playersCount, spectatorsCount, additionalGuests, cleanGuestNames, mgmtToken).run();
+      `).bind(eventId, userId, name, storedEmail, isGuest, finalStatus, cleanGear, playersCount, spectatorsCount, additionalGuests, cleanGuestNames, freshToken).run();
       attendeeId = ins.meta.last_row_id;
     }
 
     const assignedDutyNames = [];
     let heroCreditEarned = false;
     let heroCreditRedeemed = false;
+    let creditsRedeemedCount = 0;
     const hoursUntilEvent = (new Date(event.event_date).getTime() - Date.now()) / (3600 * 1000);
     const isUrgentWindow = hoursUntilEvent > 0 && hoursUntilEvent < 48;
 
-    const { results: pRows } = await db.prepare('SELECT duty_id FROM duty_assignments WHERE attendee_id = ?').bind(attendeeId).all();
+    const { results: pRows } = await db.prepare(`
+      SELECT da.duty_id, ed.title
+      FROM duty_assignments da
+      JOIN event_duties ed ON ed.id = da.duty_id
+      WHERE da.attendee_id = ?
+    `).bind(attendeeId).all();
     const prevDuties = (pRows || []).map(r => r.duty_id);
+    const prevHadPaidDuty = (pRows || []).some(r => getDutyType(r.title).isPaid);
+    let newHasPaidDuty = false;
 
     if (finalStatus === 'attending' && Array.isArray(duty_ids)) {
       const uniqueDutyIds = [...new Set(duty_ids.map((d) => parseInt(d, 10)).filter((n) => !isNaN(n) && n > 0))];
@@ -295,24 +309,34 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
           assignedDutyNames.push(duty.title);
 
           const dType = getDutyType(duty.title);
-          if (dType.isPaid && user && user.id) {
-            if (tierInfo.tier === 'tier1' && redeem_hero_credit && !heroCreditRedeemed && !prevDuties.includes(dId)) {
-              const cap = await getDutyTier1Cap(db, dType.type);
-              const shifts = await getUserRollingShifts(db, user.id, dType.type, event.event_date, eventId);
-              if (shifts >= cap) {
-                batchOps.push(db.prepare('UPDATE users SET hero_credits = hero_credits - 1 WHERE id = ? AND hero_credits >= 1').bind(user.id));
-                heroCreditRedeemed = true;
+          if (dType.isPaid) {
+            newHasPaidDuty = true;
+            if (user && user.id) {
+              if (tierInfo.tier === 'tier1' && redeem_hero_credit && !prevDuties.includes(dId)) {
+                const cap = await getDutyTier1Cap(db, dType.type);
+                const shifts = await getUserRollingShifts(db, user.id, dType.type, event.event_date, eventId);
+                if (shifts >= cap) {
+                  batchOps.push(db.prepare('UPDATE users SET hero_credits = hero_credits - 1 WHERE id = ? AND hero_credits >= 1').bind(user.id));
+                  heroCreditRedeemed = true;
+                  creditsRedeemedCount += 1;
+                }
               }
-            }
-            if (isUrgentWindow && !prevDuties.includes(dId) && !heroCreditEarned) {
-              batchOps.push(db.prepare('UPDATE users SET hero_credits = hero_credits + 1 WHERE id = ?').bind(user.id));
-              heroCreditEarned = true;
+              if (isUrgentWindow && !prevDuties.includes(dId) && !heroCreditEarned) {
+                batchOps.push(db.prepare('UPDATE users SET hero_credits = hero_credits + 1 WHERE id = ?').bind(user.id));
+                heroCreditEarned = true;
+              }
             }
           }
         }
       }
+      if (prevHadPaidDuty && !newHasPaidDuty && isUrgentWindow && wasAttending && user && user.id) {
+        batchOps.push(db.prepare('UPDATE users SET hero_credits = CASE WHEN COALESCE(hero_credits, 0) > 0 THEN hero_credits - 1 ELSE 0 END WHERE id = ?').bind(user.id));
+      }
       await db.batch(batchOps);
     } else if (finalStatus !== 'attending') {
+      if (prevHadPaidDuty && isUrgentWindow && wasAttending && user && user.id) {
+        await db.prepare('UPDATE users SET hero_credits = CASE WHEN COALESCE(hero_credits, 0) > 0 THEN hero_credits - 1 ELSE 0 END WHERE id = ?').bind(user.id).run();
+      }
       await db.prepare('DELETE FROM duty_assignments WHERE attendee_id = ?').bind(attendeeId).run();
       await db.prepare('DELETE FROM batting_practice_signups WHERE event_id = ? AND (attendee_id = ? OR (user_id IS NOT NULL AND user_id = ?))').bind(eventId, attendeeId, userId).run();
     }
@@ -379,7 +403,7 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
         confirmMsg = `RSVP ${wasAttending ? 'updated' : 'confirmed'} (${spectatorsCount} ${label})!${emailSuffix}`;
       }
       if (heroCreditEarned) confirmMsg += ' 🛡️ Short-notice urgent shift cover (<48 hrs): +1 Backup Hero Credit awarded!';
-      if (heroCreditRedeemed) confirmMsg += ' 🛡️ 1 Backup Hero Credit redeemed for Tier 1 early access.';
+      if (heroCreditRedeemed) confirmMsg += creditsRedeemedCount > 1 ? ` 🛡️ ${creditsRedeemedCount} Backup Hero Credits redeemed for Tier 1 early access.` : ' 🛡️ 1 Backup Hero Credit redeemed for Tier 1 early access.';
 
       if (bp_signup && playersCount > 0) {
         try {
@@ -388,14 +412,16 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
             const { results: taken } = await db.prepare('SELECT slot_number FROM batting_practice_signups WHERE event_id = ?').bind(eventId).all();
             const takenSet = new Set((taken || []).map(r => r.slot_number));
             let targetSlot = bp_slot ? parseInt(bp_slot, 10) : 1;
-            if (isNaN(targetSlot) || targetSlot < 1 || takenSet.has(targetSlot)) {
+            if (isNaN(targetSlot) || targetSlot < 1 || targetSlot > 200 || takenSet.has(targetSlot)) {
               targetSlot = 1;
-              while (takenSet.has(targetSlot)) targetSlot++;
+              while (takenSet.has(targetSlot) && targetSlot <= 200) targetSlot++;
             }
-            await db.prepare('INSERT INTO batting_practice_signups (event_id, user_id, attendee_id, slot_number, player_name, notes) VALUES (?, ?, ?, ?, ?, ?)').bind(
-              eventId, userId, attendeeId, targetSlot, name, ''
-            ).run();
-            confirmMsg += ` ⚾ Reserved Batting Practice slot #${targetSlot}!`;
+            if (targetSlot <= 200) {
+              await db.prepare('INSERT INTO batting_practice_signups (event_id, user_id, attendee_id, slot_number, player_name, notes) VALUES (?, ?, ?, ?, ?, ?)').bind(
+                eventId, userId, attendeeId, targetSlot, name, ''
+              ).run();
+              confirmMsg += ` ⚾ Reserved Batting Practice slot #${targetSlot}!`;
+            }
           }
         } catch (bpErr) {
           console.warn('[BP-RSVP] Auto-signup error:', bpErr);
@@ -438,12 +464,23 @@ eventsRsvpsRouter.post('/:id/comments', async (c) => {
       return c.json({ error: 'Too many comments posted recently. Please wait a few minutes.' }, 429);
     }
 
-    const event = await db.prepare('SELECT id FROM events WHERE id = ?').bind(eventId).first();
+    const event = await db.prepare('SELECT id, allowed_emails FROM events WHERE id = ?').bind(eventId).first();
     if (!event) return c.json({ error: 'Event not found.' }, 404);
+    if (!canUserAccessEvent(user, event)) {
+      return c.json({ error: user ? 'This event is restricted to invited players.' : 'Authentication required for private events.' }, user ? 403 : 401);
+    }
 
-    const { content, author_name, author_email } = await c.req.json();
-    if (!content || !String(content).trim()) {
+    const { content, author_name, author_email, cf_turnstile_response, turnstile_token } = await c.req.json();
+    const cleanComment = String(content || '').trim();
+    if (!cleanComment) {
       return c.json({ error: 'Comment message cannot be empty.' }, 400);
+    }
+    if (cleanComment.length > 2000) {
+      return c.json({ error: 'Comment message must not exceed 2000 characters.' }, 400);
+    }
+
+    if (!user && !(await verifyTurnstileIfConfigured(c.env, cf_turnstile_response || turnstile_token, clientIp))) {
+      return c.json({ error: 'Bot verification failed. Please refresh and try again.' }, 403);
     }
 
     const requireLogin = await getRequireLoginSetting(db, c.env);
@@ -465,7 +502,7 @@ eventsRsvpsRouter.post('/:id/comments', async (c) => {
     }
 
     if (email) {
-      const banRecord = await db.prepare('SELECT id FROM banned_emails WHERE email = ?').bind(email).first();
+      const banRecord = await db.prepare('SELECT id FROM banned_emails WHERE LOWER(email) = LOWER(?)').bind(email).first();
       if (banRecord) return c.json({ error: 'This email address has been restricted.' }, 403);
     }
 

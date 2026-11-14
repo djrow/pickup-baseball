@@ -767,7 +767,13 @@
     });
   }
 
+  function clearMemoryKeys() {
+    memoryKeyStore = {};
+    cachedKeyDbPromise = null;
+  }
+
   var ClubhouseCrypto = {
+    clearMemoryKeys: clearMemoryKeys,
     stripJpegMetadata: stripJpegMetadata,
     arrayBufferToBase64: arrayBufferToBase64,
     base64ToUint8Array: base64ToUint8Array,

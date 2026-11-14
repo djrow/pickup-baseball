@@ -321,7 +321,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '132',
+  CLIENT_VERSION: '134',
 
   // Current user cache
   currentUser: null,
@@ -1053,7 +1053,12 @@ const API = {
   getCachedUser() {
     try {
       const raw = localStorage.getItem('pickup_cached_user');
-      return raw ? JSON.parse(raw) : null;
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object' || !parsed.id || typeof parsed.email !== 'string') {
+        return null;
+      }
+      return parsed;
     } catch (e) {
       return null;
     }
@@ -1198,6 +1203,12 @@ const API = {
   async logout() {
     try {
       API.clearDataCaches(true);
+      try {
+        if (typeof sessionStorage !== 'undefined') sessionStorage.clear();
+      } catch (e) {}
+      if (typeof window !== 'undefined' && window.ClubhouseCrypto && typeof window.ClubhouseCrypto.clearMemoryKeys === 'function') {
+        window.ClubhouseCrypto.clearMemoryKeys();
+      }
       await Promise.all([
         API.clearClubhouseIndexedDb(),
         fetch('/api/auth/logout', { method: 'POST' })
@@ -1810,8 +1821,10 @@ const API = {
     const calToken = opts.calendarToken || (this.currentUser && (this.currentUser.calendarToken || this.currentUser.calendar_token)) || '';
     const baseFeedPath = isSingleGame ? ('/api/events/' + singleEvent.id + '/calendar.ics') : '/api/events/calendar.ics';
     const feedPath = calToken ? (baseFeedPath + '?cal_token=' + encodeURIComponent(calToken)) : baseFeedPath;
-    const feedHttpUrl = opts.feedHttpUrl || (origin + feedPath);
-    const webcalUrl = opts.webcalUrl || ('webcal://' + host + feedPath);
+    const rawFeedHttpUrl = opts.feedHttpUrl ? String(opts.feedHttpUrl).trim() : '';
+    const rawWebcalUrl = opts.webcalUrl ? String(opts.webcalUrl).trim() : '';
+    const feedHttpUrl = /^https?:\/\//i.test(rawFeedHttpUrl) ? rawFeedHttpUrl : (origin + feedPath);
+    const webcalUrl = /^webcal:\/\//i.test(rawWebcalUrl) ? rawWebcalUrl : ('webcal://' + host + feedPath);
     const googleSubscribeUrl = 'https://calendar.google.com/calendar/r?cid=' + encodeURIComponent(webcalUrl);
     const googleAddOnceUrl = isSingleGame ? this.getGoogleCalendarUrl(singleEvent) : '';
 

@@ -848,7 +848,7 @@
       } else if (mime.indexOf('audio/') === 0) {
         html += '<audio controls preload="metadata" data-e2ee-att-id="' + escapeHtml(att.id) + '"></audio>';
       } else {
-        html += '<a href="#decrypting" data-e2ee-att-id="' + escapeHtml(att.id) + '" download="' + escapeHtml(att.file_name) + '" style="color:var(--ch-accent);">🔒 ' + escapeHtml(att.file_name) + ' (Decrypting...)</a>';
+        html += '<a href="#decrypting" data-e2ee-att-id="' + escapeHtml(att.id) + '" download="' + escapeHtml(att.file_name) + '" rel="noopener noreferrer" style="color:var(--ch-accent);">🔒 ' + escapeHtml(att.file_name) + ' (Decrypting...)</a>';
       }
     } else if (mime.indexOf('image/') === 0) {
       html += '<img src="' + escapeHtml(streamUrl) + '" alt="' + escapeHtml(att.file_name) + '" loading="lazy" />';
@@ -857,7 +857,7 @@
     } else if (mime.indexOf('audio/') === 0) {
       html += '<audio controls preload="metadata" src="' + escapeHtml(streamUrl) + '"></audio>';
     } else {
-      html += '<a href="' + escapeHtml(streamUrl) + '" target="_blank" rel="noopener" style="color:var(--ch-accent);">📄 ' + escapeHtml(att.file_name) + '</a>';
+      html += '<a href="' + escapeHtml(streamUrl) + '" target="_blank" rel="noopener noreferrer" download="' + escapeHtml(att.file_name) + '" style="color:var(--ch-accent);">📄 ' + escapeHtml(att.file_name) + '</a>';
     }
 
     html += '<div class="ch-attachment-footer">';
@@ -2869,6 +2869,15 @@
       }
       loadUpcomingBaseballCard();
     });
+
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('storage', function (ev) {
+        if (ev && ev.key === 'pickup_cached_user' && !ev.newValue && Store.state.user) {
+          Store.clearLocalSessionData();
+          clearSignedOutUi();
+        }
+      });
+    }
   }
 
   if (typeof document !== 'undefined') {

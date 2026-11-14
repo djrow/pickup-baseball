@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { requireOrganizer, sanitizeHttpUrl } from '../security.js';
+import { requireOrganizer, sanitizeHttpUrl, getClientIp, checkRateLimit } from '../security.js';
 import { canUserAccessEvent } from '../policy.js';
 import { parseMediaType } from '../feeds.js';
 
@@ -54,13 +54,24 @@ postsRouter.get('/:id', async (c) => {
 postsRouter.post('/', requireOrganizer, async (c) => {
   const user = c.get('user');
   try {
+    const postLimit = await checkRateLimit(c.env.DB, 'posts_' + getClientIp(c), 20, 3600, c.env);
+    if (!postLimit.allowed) {
+      return c.json({ error: 'Too many community posts submitted. Please try again later.' }, 429);
+    }
+
     const { title, content, summary, media_url, media_type, event_id } = await c.req.json();
     if (!title || !String(title).trim()) return c.json({ error: 'Title is required.' }, 400);
     if (!content || !String(content).trim()) return c.json({ error: 'Story content is required.' }, 400);
 
     const cleanTitle = String(title).trim();
     const cleanContent = String(content).trim();
+    if (cleanTitle.length > 200) return c.json({ error: 'Title must not exceed 200 characters.' }, 400);
+    if (cleanContent.length > 10000) return c.json({ error: 'Story content must not exceed 10,000 characters.' }, 400);
+
     let cleanMediaUrl = media_url ? String(media_url).trim() : null;
+    if (cleanMediaUrl && cleanMediaUrl.length > 2048) {
+      return c.json({ error: 'Media URL must not exceed 2048 characters.' }, 400);
+    }
     if (cleanMediaUrl) {
       if (cleanMediaUrl.startsWith('/') && !cleanMediaUrl.startsWith('//') && !cleanMediaUrl.startsWith('/\\')) {
         // Allow same-origin relative media URLs
@@ -116,8 +127,13 @@ postsRouter.put('/:id', requireOrganizer, async (c) => {
     const cleanContent = content !== undefined ? String(content).trim() : existing.content;
     if (!cleanTitle) return c.json({ error: 'Title is required.' }, 400);
     if (!cleanContent) return c.json({ error: 'Story content is required.' }, 400);
+    if (cleanTitle.length > 200) return c.json({ error: 'Title must not exceed 200 characters.' }, 400);
+    if (cleanContent.length > 10000) return c.json({ error: 'Story content must not exceed 10,000 characters.' }, 400);
 
     let cleanMediaUrl = media_url !== undefined ? (media_url ? String(media_url).trim() : null) : existing.media_url;
+    if (cleanMediaUrl && cleanMediaUrl.length > 2048) {
+      return c.json({ error: 'Media URL must not exceed 2048 characters.' }, 400);
+    }
     if (cleanMediaUrl) {
       if (cleanMediaUrl.startsWith('/') && !cleanMediaUrl.startsWith('//') && !cleanMediaUrl.startsWith('/\\')) {
         // Allow same-origin relative media URLs

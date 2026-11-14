@@ -32,6 +32,10 @@ export function getYouTubeId(url) {
   return match ? match[1] : null;
 }
 
+function escapeCdata(str) {
+  return String(str || '').replace(/]]>/g, ']]]]><![CDATA[>');
+}
+
 function escapeXml(str) {
   return String(str || '')
     .replace(/&/g, '&amp;')
@@ -98,12 +102,12 @@ export function buildRssFeedXml(posts, origin = 'https://www.pickupbaseballfound
 
     itemsXml += `
     <item>
-      <title><![CDATA[${post.title}]]></title>
+      <title><![CDATA[${escapeCdata(post.title)}]]></title>
       <link>${postUrl}</link>
       <guid isPermaLink="false">${guid}</guid>
       <pubDate>${pubDate}</pubDate>
       <author>games@pickupbaseballfoundation.org (${escapeXml(post.author_name || 'Pickup Baseball Foundation')})</author>
-      <description><![CDATA[${richHtmlDesc}]]></description>
+      <description><![CDATA[${escapeCdata(richHtmlDesc)}]]></description>
       ${mediaTags}
     </item>`;
   }

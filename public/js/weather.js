@@ -1051,6 +1051,9 @@
 
     var r = forecastResult;
     var fieldName = options && options.locationName ? options.locationName : (r.locationName || 'Bushrod Park Field');
+    var escW = (window.API && window.API.escapeHtml) ? window.API.escapeHtml : function(s) {
+      return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    };
 
     // Build hourly timeline (extending through 6:00 PM on event day)
     var timelineHtml = '';
@@ -1123,11 +1126,11 @@
         <div style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border);">
           <div class="hourly-drainage-header">
             <span style="font-size: 0.8rem; font-weight: 700; color: var(--secondary);">
-              📊 Hourly Rainfall vs. Expected Surface Water (${timelineRangeLabel})
+              📊 Hourly Rainfall vs. Expected Surface Water (${escW(timelineRangeLabel)})
             </span>
             <div class="hourly-drainage-summary-chips">
               <span class="hourly-metric-chip rain">💧 Peak Rain: ${(Number(r.maxHourlyRain) || 0).toFixed(2)}"/hr</span>
-              <span class="hourly-metric-chip surface">🌊 Noon Warmup Water: ${r.effectiveMoistureFormatted}</span>
+              <span class="hourly-metric-chip surface">🌊 Noon Warmup Water: ${escW(r.effectiveMoistureFormatted)}</span>
             </div>
           </div>
           <div class="hourly-drainage-legend">
@@ -1173,10 +1176,6 @@
       `;
     }
 
-    var escW = (window.API && window.API.escapeHtml) ? window.API.escapeHtml : function(s) {
-      return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-    };
-
     container.innerHTML = `
       <div class="card smart-rainout-card" style="border-top: 4px solid ${escW(r.statusColor)}; margin-bottom: 14px; box-shadow: var(--shadow-sm);">
         <!-- Top Status Bar (Badge + Title + Prognosis + Temp chip aligned cleanly) -->
@@ -1211,31 +1210,31 @@
         <div class="weather-kpi-grid">
           <div class="weather-kpi-tile">
             <div class="weather-kpi-label">5-Day Rain</div>
-            <div class="weather-kpi-val">🌧️ ${r.rainfall5DayFormatted}</div>
+            <div class="weather-kpi-val">🌧️ ${escW(r.rainfall5DayFormatted)}</div>
             <div class="weather-kpi-sub">Game &amp; prior 4 days</div>
           </div>
 
           <div class="weather-kpi-tile">
             <div class="weather-kpi-label">24h Rain Total</div>
-            <div class="weather-kpi-val">🌧️ ${r.totalRain24hFormatted}</div>
+            <div class="weather-kpi-val">🌧️ ${escW(r.totalRain24hFormatted)}</div>
             <div class="weather-kpi-sub">Sat 12p – Sun 12p</div>
           </div>
 
           <div class="weather-kpi-tile">
             <div class="weather-kpi-label">Drying Clearance</div>
-            <div class="weather-kpi-val">⏱️ ${r.hoursSinceRain >= 24 ? '24h+ Dry' : r.hoursSinceRain + 'h Dry'}</div>
-            <div class="weather-kpi-sub">${r.rainDryingNote}</div>
+            <div class="weather-kpi-val">⏱️ ${r.hoursSinceRain >= 24 ? '24h+ Dry' : escW(r.hoursSinceRain) + 'h Dry'}</div>
+            <div class="weather-kpi-sub">${escW(r.rainDryingNote)}</div>
           </div>
 
           <div class="weather-kpi-tile">
             <div class="weather-kpi-label">Surface Moisture</div>
-            <div class="weather-kpi-val" style="color: ${r.statusColor};">🌊 ${r.effectiveMoistureFormatted}</div>
+            <div class="weather-kpi-val" style="color: ${escW(r.statusColor)};">🌊 ${escW(r.effectiveMoistureFormatted)}</div>
             <div class="weather-kpi-sub">Exponential drainage</div>
           </div>
 
           <div class="weather-kpi-tile">
             <div class="weather-kpi-label">Recommendation</div>
-            <div class="weather-kpi-rec">${r.recommendation}</div>
+            <div class="weather-kpi-rec">${escW(r.recommendation)}</div>
           </div>
         </div>
 
@@ -1244,10 +1243,10 @@
           <div style="margin-top: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 7px 10px;">
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; margin-bottom: 4px;">
               <div style="font-size: 0.76rem; font-weight: 700; color: var(--secondary); display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                <span>🌧️ <strong>5-Day Rainfall Prediction: ${r.rainfall5DayFormatted}</strong></span>
+                <span>🌧️ <strong>5-Day Rainfall Prediction: ${escW(r.rainfall5DayFormatted)}</strong></span>
                 ${r.todayForecast ? `
                   <span class="badge" style="font-size: 0.68rem; padding: 1px 7px; font-weight: 700; background: rgba(0, 56, 49, 0.09); color: var(--secondary); border: 1px solid var(--secondary); border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
-                    📍 Today's Rain: <strong>${r.todayForecast.rainFormatted}</strong> (${r.todayForecast.dayName || 'Today'})
+                    📍 Today's Rain: <strong>${escW(r.todayForecast.rainFormatted)}</strong> (${escW(r.todayForecast.dayName || 'Today')})
                   </span>
                 ` : ''}
               </div>

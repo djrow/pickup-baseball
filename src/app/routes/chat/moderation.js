@@ -145,8 +145,7 @@ chatModerationRouter.get('/moderation/reports', requireModerator, async (c) => {
       `SELECT * FROM channels WHERE id IN (${ph})`
     ).bind(...channelIds).all();
     for (const ch of (chRows || [])) {
-      const isPrivateOrDm = ch.channel_type === 'dm' || ch.channel_type === 'group_dm' || isPrivateEncryptedBoard(ch);
-      const allowed = isPrivateOrDm ? await canUserAccessChannel(chatDb, user, ch, 'read') : true;
+      const allowed = await canUserAccessChannel(chatDb, user, ch, 'read');
       channelAccessMap.set(ch.id, allowed);
     }
   }

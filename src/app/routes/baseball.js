@@ -6,8 +6,9 @@
 
 import { Hono } from 'hono';
 import { requireAuth, requireOrganizer, generateToken } from '../security.js';
-import { parseAllowedEmails, canUserAccessEvent } from '../policy.js';
+import { parseAllowedEmails, canUserAccessEvent, getDutyType } from '../policy.js';
 import { canUserAccessChannel } from './chat.js';
+import { promoteNextWaitlistedPlayer } from './events/helpers.js';
 
 export const baseballRouter = new Hono();
 
@@ -176,6 +177,7 @@ baseballRouter.post('/events/:eventId/quick-rsvp', requireAuth, async (c) => {
   const rawSpectators = parseInt(body.spectators_count, 10);
   const playersCount = targetStatus === 'declined' ? 0 : Math.max(1, Math.min(25, isNaN(rawPlayers) ? 1 : rawPlayers));
   const spectatorsCount = targetStatus === 'declined' ? 0 : Math.max(0, Math.min(25, isNaN(rawSpectators) ? 0 : rawSpectators));
+  const additionalGuests = targetStatus === 'declined' ? 0 : Math.max(0, playersCount - 1);
   const gearBringing = body.gear_bringing ? String(body.gear_bringing).trim().slice(0, 300) : null;
   const notes = body.notes ? String(body.notes).trim().slice(0, 500) : null;
 
@@ -185,43 +187,86 @@ baseballRouter.post('/events/:eventId/quick-rsvp', requireAuth, async (c) => {
     LIMIT 1
   `).bind(eventId, user.id, user.email).first();
 
+  let finalStatus = targetStatus;
+  if (targetStatus === 'attending' && playersCount > 0 && event.max_players && event.max_players > 0) {
+    const activeRow = existing
+      ? await baseballDb.prepare(`
+          SELECT COALESCE(SUM(COALESCE(players_count, 1 + COALESCE(additional_guests, 0))), 0) as total
+          FROM attendees WHERE event_id = ? AND status = 'attending' AND id != ?
+        `).bind(eventId, existing.id).first()
+      : await baseballDb.prepare(`
+          SELECT COALESCE(SUM(COALESCE(players_count, 1 + COALESCE(additional_guests, 0))), 0) as total
+          FROM attendees WHERE event_id = ? AND status = 'attending'
+        `).bind(eventId).first();
+    if ((activeRow ? activeRow.total : 0) + playersCount > event.max_players) {
+      finalStatus = 'waitlist';
+    }
+  }
+
+  const wasAttending = existing && existing.status === 'attending';
+  const prevPlayersCount = existing ? Number(existing.players_count || (1 + Number(existing.additional_guests || 0))) : 0;
+
   if (existing) {
+    if (finalStatus !== 'attending') {
+      const { results: prevDutyRows } = await baseballDb.prepare(`
+        SELECT ed.title
+        FROM duty_assignments da
+        JOIN event_duties ed ON ed.id = da.duty_id
+        WHERE da.attendee_id = ?
+      `).bind(existing.id).all();
+      const hadPaidDuty = (prevDutyRows || []).some((row) => getDutyType(row.title).isPaid);
+      const hoursUntilEvent = (new Date(event.event_date).getTime() - Date.now()) / (3600 * 1000);
+      const isUrgentWindow = hoursUntilEvent > 0 && hoursUntilEvent < 48;
+      if (hadPaidDuty && isUrgentWindow && wasAttending) {
+        await baseballDb.prepare(
+          'UPDATE users SET hero_credits = CASE WHEN COALESCE(hero_credits, 0) > 0 THEN hero_credits - 1 ELSE 0 END WHERE id = ?'
+        ).bind(user.id).run();
+      }
+      await baseballDb.prepare('DELETE FROM duty_assignments WHERE attendee_id = ?').bind(existing.id).run();
+      await baseballDb.prepare(
+        'DELETE FROM batting_practice_signups WHERE event_id = ? AND (attendee_id = ? OR user_id = ?)'
+      ).bind(eventId, existing.id, user.id).run();
+    }
+
     await baseballDb.prepare(`
       UPDATE attendees
       SET user_id = ?, name = ?, status = ?, players_count = ?, spectators_count = ?,
-          gear_bringing = COALESCE(?, gear_bringing), notes = COALESCE(?, notes)
+          additional_guests = ?, gear_bringing = COALESCE(?, gear_bringing), notes = COALESCE(?, notes)
       WHERE id = ?
     `).bind(
       user.id,
       user.name,
-      targetStatus,
+      finalStatus,
       playersCount,
       spectatorsCount,
+      additionalGuests,
       gearBringing,
       notes,
       existing.id
     ).run();
 
-    if (targetStatus === 'declined') {
-      await baseballDb.prepare('DELETE FROM duty_assignments WHERE attendee_id = ?').bind(existing.id).run();
+    if (wasAttending && (finalStatus !== 'attending' || prevPlayersCount > playersCount)) {
+      const origin = new URL(c.req.url).origin;
+      await promoteNextWaitlistedPlayer(c, origin, eventId);
     }
   } else {
     const mgmtToken = generateToken();
     await baseballDb.prepare(`
       INSERT INTO attendees (
         event_id, user_id, name, email, is_guest, status,
-        gear_bringing, notes, players_count, spectators_count, management_token
-      ) VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)
+        gear_bringing, notes, players_count, spectators_count, additional_guests, management_token
+      ) VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       eventId,
       user.id,
       user.name,
       user.email,
-      targetStatus,
+      finalStatus,
       gearBringing,
       notes,
       playersCount,
       spectatorsCount,
+      additionalGuests,
       mgmtToken
     ).run();
   }
@@ -230,8 +275,9 @@ baseballRouter.post('/events/:eventId/quick-rsvp', requireAuth, async (c) => {
     success: true,
     event_id: eventId,
     user_id: user.id,
-    status: targetStatus,
-    playingSunday: targetStatus === 'attending'
+    status: finalStatus,
+    playingSunday: finalStatus === 'attending',
+    waitlisted: finalStatus === 'waitlist'
   });
 });
 
@@ -369,6 +415,9 @@ baseballRouter.post('/events/:eventId/sync-channel', requireOrganizer, async (c)
   if (!event) {
     return c.json({ error: 'Event not found.' }, 404);
   }
+  if (!canUserAccessEvent(user, event)) {
+    return c.json({ error: 'This event is restricted to invited players.' }, 403);
+  }
 
   let channel = await chatDb.prepare(
     'SELECT * FROM channels WHERE linked_event_id = ? LIMIT 1'
@@ -385,14 +434,21 @@ baseballRouter.post('/events/:eventId/sync-channel', requireOrganizer, async (c)
     const name = `#${slug}`;
     const topic = `${event.title} • ${event.location} (${rawDate})`;
 
-    const insRes = await chatDb.prepare(`
-      INSERT INTO channels (
-        slug, name, category, channel_type, topic,
-        min_role_read, min_role_write, is_encrypted, linked_event_id, sort_order, created_by
-      ) VALUES (?, ?, 'Text Channels', 'text', ?, 'player', 'player', 1, ?, 3, ?)
-    `).bind(slug, name, topic, eventId, user.id).run();
+    try {
+      const insRes = await chatDb.prepare(`
+        INSERT INTO channels (
+          slug, name, category, channel_type, topic,
+          min_role_read, min_role_write, is_encrypted, linked_event_id, sort_order, created_by
+        ) VALUES (?, ?, 'Text Channels', 'text', ?, 'player', 'player', 1, ?, 3, ?)
+      `).bind(slug, name, topic, eventId, user.id).run();
 
-    channel = await chatDb.prepare('SELECT * FROM channels WHERE id = ?').bind(insRes.meta.last_row_id).first();
+      channel = await chatDb.prepare('SELECT * FROM channels WHERE id = ?').bind(insRes.meta.last_row_id).first();
+    } catch (insertErr) {
+      channel = await chatDb.prepare(
+        'SELECT * FROM channels WHERE linked_event_id = ? OR slug = ? LIMIT 1'
+      ).bind(eventId, slug).first();
+      if (!channel) throw insertErr;
+    }
   }
 
   // Post a game_embed announcement message into #announcements

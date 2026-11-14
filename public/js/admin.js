@@ -767,11 +767,11 @@ function renderAdminGamesList(query) {
         const wRow = document.getElementById('admin-game-weather-' + ev.id);
         const wBtn = document.getElementById('btn-admin-weather-' + ev.id);
         if (wRow) {
-          wRow.innerHTML = '<span class="badge ' + fc.badgeClass + '" style="font-size: 0.72rem; padding: 1px 6px; font-weight: 700;">' + fc.emoji + ' ' + fc.temperature + '°F &bull; ' + API.escapeHtml(fc.condition) + ' (' + API.escapeHtml(fc.statusLabel) + ')</span>';
+          wRow.innerHTML = '<span class="badge ' + API.escapeHtml(fc.badgeClass) + '" style="font-size: 0.72rem; padding: 1px 6px; font-weight: 700;">' + API.escapeHtml(fc.emoji) + ' ' + API.escapeHtml(fc.temperature) + '°F &bull; ' + API.escapeHtml(fc.condition) + ' (' + API.escapeHtml(fc.statusLabel) + ')</span>';
           wRow.style.display = 'inline-block';
         }
         if (wBtn) {
-          wBtn.innerHTML = fc.emoji + ' ' + fc.temperature + '°F &bull; ' + fc.totalRain24hFormatted + ' Rain';
+          wBtn.innerHTML = API.escapeHtml(fc.emoji) + ' ' + API.escapeHtml(fc.temperature) + '°F &bull; ' + API.escapeHtml(fc.totalRain24hFormatted) + ' Rain';
         }
       }).catch(function() {});
     });

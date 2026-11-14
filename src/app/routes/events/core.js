@@ -11,7 +11,8 @@ import {
   requireOrganizer,
   requireAdmin,
   resolveUserByCalendarToken,
-  constantTimeEqual
+  constantTimeEqual,
+  checkRateLimit
 } from '../../security.js';
 import { getDefaultDuties, getRequireLoginSetting } from '../../schema.js';
 import {
@@ -104,6 +105,11 @@ eventsCoreRouter.get('/', async (c) => {
 
 eventsCoreRouter.get('/admin/backup-db', requireAdmin, async (c) => {
   try {
+    const user = c.get('user');
+    const backupLimit = await checkRateLimit(c.env.DB, `admin_backup_${user ? user.id : 'anon'}`, 5, 3600, c.env);
+    if (!backupLimit.allowed) {
+      return c.json({ error: 'Too many database backup requests. Please wait before exporting again.' }, 429);
+    }
     const dbParam = (c.req.query('db') || 'baseball').toLowerCase();
     const timestamp = new Date().toISOString();
     const dateStr = timestamp.slice(0, 10);
@@ -310,6 +316,9 @@ eventsCoreRouter.all('/reminders/check', async (c) => {
 
   if (!hasValidSecret && !isAuthorizedManager) {
     return c.json({ error: user ? 'Organizer or administrator privileges required.' : 'Authentication required.' }, user ? 403 : 401);
+  }
+  if (c.req.method !== 'POST') {
+    return c.json({ error: 'Method not allowed. Use POST to trigger reminder dispatch.' }, 405);
   }
 
   try {
@@ -684,6 +693,9 @@ eventsCoreRouter.post('/', requireOrganizer, async (c) => {
     if (use_default_duties || !custom_duties || custom_duties.length === 0) {
       dutiesToInsert = await getDefaultDuties(c.env.DB);
     } else if (Array.isArray(custom_duties)) {
+      if (custom_duties.length > 25) {
+        return c.json({ error: 'Cannot create more than 25 volunteer tasks per event.' }, 400);
+      }
       for (const d of custom_duties) {
         if (!d || !d.title || !String(d.title).trim()) {
           return c.json({ error: 'All custom duties must have a non-empty title.' }, 400);
@@ -719,7 +731,7 @@ eventsCoreRouter.post('/', requireOrganizer, async (c) => {
           eventId,
           String(d.title).trim().slice(0, 120),
           String(d.description || '').trim().slice(0, 300),
-          parseInt(d.slots_needed || 1, 10),
+          Math.min(50, Math.max(1, parseInt(d.slots_needed || 1, 10) || 1)),
           d.sort_order !== undefined ? parseInt(d.sort_order, 10) : idx
         )
       ));
@@ -751,6 +763,9 @@ eventsCoreRouter.put('/:id', requireOrganizer, async (c) => {
     }
     if (event_date !== undefined && event_date !== null && isNaN(new Date(event_date).getTime())) {
       return c.json({ error: 'A valid event date/time is required.' }, 400);
+    }
+    if (status !== undefined && status !== null && !['active', 'rainout', 'cancelled', 'completed'].includes(String(status))) {
+      return c.json({ error: 'Invalid event status.' }, 400);
     }
 
     let safeLocUrl = null;

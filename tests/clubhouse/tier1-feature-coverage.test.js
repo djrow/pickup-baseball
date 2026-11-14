@@ -335,6 +335,10 @@ async function runTier1(t, ctx) {
         'Origin': baseUrl
       });
       assert.equal(sameOriginRes.status, 200);
+      const createdEventId = sameOriginRes.data && (sameOriginRes.data.eventId || sameOriginRes.data.id || (sameOriginRes.data.event && sameOriginRes.data.event.id));
+      if (createdEventId) {
+        await apiReq('DELETE', `/api/events/${createdEventId}`, adminCookie, null, { 'Origin': baseUrl });
+      }
     });
   });
 

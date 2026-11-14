@@ -161,22 +161,27 @@ voiceRouter.post('/:channelId/leave', requireAuth, async (c) => {
   if (!channel) {
     return c.json({ error: 'Voice channel not found.' }, 404);
   }
+  if (!(await canUserAccessChannel(chatDb, user, channel, 'read'))) {
+    return c.json({ error: 'Access denied.' }, 403);
+  }
 
   const nowSec = Math.floor(Date.now() / 1000);
 
-  await chatDb.prepare(
+  const delRes = await chatDb.prepare(
     'DELETE FROM voice_participants WHERE channel_id = ? AND user_id = ?'
   ).bind(channel.id, user.id).run();
 
-  await chatDb.prepare(`
-    INSERT INTO sync_events (channel_id, event_type, target_id, payload_json, created_at)
-    VALUES (?, 'voice_update', ?, ?, ?)
-  `).bind(
-    channel.id,
-    user.id,
-    JSON.stringify({ action: 'leave', channel_id: channel.id, user_id: user.id }),
-    nowSec
-  ).run();
+  if (delRes && delRes.meta && delRes.meta.changes > 0) {
+    await chatDb.prepare(`
+      INSERT INTO sync_events (channel_id, event_type, target_id, payload_json, created_at)
+      VALUES (?, 'voice_update', ?, ?, ?)
+    `).bind(
+      channel.id,
+      user.id,
+      JSON.stringify({ action: 'leave', channel_id: channel.id, user_id: user.id }),
+      nowSec
+    ).run();
+  }
 
   return c.json({
     success: true,
@@ -200,6 +205,23 @@ rtcRouter.post('/signal', requireAuth, async (c) => {
   const baseballDb = c.env && (c.env.BASEBALL_DB || c.env.DB);
 
   if (!chatDb) return c.json({ error: 'Chat database unavailable.' }, 500);
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  const sigRateKey = `user_${user.id}_rtc_sig`;
+  const sigCutoff = nowSec - 60;
+  try {
+    await chatDb.prepare(`
+      INSERT INTO chat_rate_limits (key, count, window_start)
+      VALUES (?, 1, ?)
+      ON CONFLICT(key) DO UPDATE SET
+        count = CASE WHEN chat_rate_limits.window_start <= ? THEN 1 ELSE chat_rate_limits.count + 1 END,
+        window_start = CASE WHEN chat_rate_limits.window_start <= ? THEN ? ELSE chat_rate_limits.window_start END
+    `).bind(sigRateKey, nowSec, sigCutoff, sigCutoff, nowSec).run();
+    const sigRateRow = await chatDb.prepare('SELECT count FROM chat_rate_limits WHERE key = ?').bind(sigRateKey).first();
+    if (sigRateRow && sigRateRow.count > 120) {
+      return c.json({ error: 'Too many signaling requests. Please wait a moment.' }, 429);
+    }
+  } catch (e) {}
 
   const body = await c.req.json().catch(() => ({}));
   const channelParam = body.channel_id;
@@ -258,7 +280,15 @@ rtcRouter.post('/signal', requireAuth, async (c) => {
     }
   }
 
-  const nowSec = Math.floor(Date.now() / 1000);
+  // Check if recipient personally muted sender
+  try {
+    const muteRow = await chatDb.prepare(
+      'SELECT 1 FROM user_mutes WHERE muter_user_id = ? AND muted_user_id = ? LIMIT 1'
+    ).bind(recipientUserId, user.id).first();
+    if (muteRow) {
+      return c.json({ error: 'Recipient is not accepting signals from you.' }, 403);
+    }
+  } catch (e) {}
 
   // Prune expired signals (>60s) at most once every 60 seconds per isolate
   if (nowSec - lastSignalPruneSec >= 60) {

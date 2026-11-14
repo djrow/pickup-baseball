@@ -4,12 +4,13 @@
  */
 
 import { Hono } from 'hono';
-import { requireAuth, canAccessChannel } from '../security.js';
+import { requireAuth, canAccessChannel, rejectIfChatMuted, rejectIfClubhouseOptedOut } from '../security.js';
 import { resolveChannel, canUserAccessChannel, isPrivateEncryptedBoard } from './chat.js';
 
 export const keysRouter = new Hono();
 
-const MAX_VAULT_CIPHERTEXT_CHARS = 32768;
+const MAX_VAULT_CIPHERTEXT_CHARS = 16384;
+const MAX_VAULT_META_CHARS = 256;
 const MAX_WRAPPED_KEY_CHARS = 8192;
 
 function formatIdentityRow(row, includePrivateVault) {
@@ -76,8 +77,8 @@ function validateAndSerializeJwk(jwk, name) {
     throw new Error(`Invalid ${name} type`);
   }
 
-  if (!parsed || typeof parsed !== 'object' || !parsed.kty) {
-    throw new Error(`Malformed ${name} structure`);
+  if (!parsed || typeof parsed !== 'object' || parsed.kty !== 'EC' || parsed.crv !== 'P-256') {
+    throw new Error(`Malformed ${name} structure: EC P-256 JWK required`);
   }
 
   return JSON.stringify(parsed);
@@ -109,9 +110,9 @@ keysRouter.put('/identity', requireAuth, async (c) => {
       return c.json({ error: `Malformed JWK payload: ${jwkErr.message}` }, 400);
     }
 
-    const encryptedVault = body.encrypted_private_vault || null;
-    const vaultSalt = body.vault_salt || null;
-    const vaultIv = body.vault_iv || null;
+    const encryptedVault = body.encrypted_private_vault ? String(body.encrypted_private_vault) : null;
+    const vaultSalt = body.vault_salt ? String(body.vault_salt) : null;
+    const vaultIv = body.vault_iv ? String(body.vault_iv) : null;
 
     if (encryptedVault && (!vaultSalt || !vaultIv)) {
       return c.json({
@@ -119,8 +120,11 @@ keysRouter.put('/identity', requireAuth, async (c) => {
       }, 400);
     }
 
-    if (encryptedVault && String(encryptedVault).length > MAX_VAULT_CIPHERTEXT_CHARS) {
-      return c.json({ error: 'encrypted_private_vault exceeds maximum allowed size (32 KB).' }, 400);
+    if (encryptedVault && encryptedVault.length > MAX_VAULT_CIPHERTEXT_CHARS) {
+      return c.json({ error: 'encrypted_private_vault exceeds maximum allowed size (16 KB).' }, 400);
+    }
+    if ((vaultSalt && vaultSalt.length > MAX_VAULT_META_CHARS) || (vaultIv && vaultIv.length > MAX_VAULT_META_CHARS)) {
+      return c.json({ error: 'vault_salt and vault_iv must not exceed 256 characters.' }, 400);
     }
 
     const privacyRelayMode = body.privacy_relay_mode ? 1 : 0;
@@ -277,6 +281,11 @@ keysRouter.get('/identity/:id', requireAuth, async (c) => {
  */
 keysRouter.post('/channel/:channelId/share', requireAuth, async (c) => {
   const user = c.get('user');
+  const optResp = rejectIfClubhouseOptedOut(c, user);
+  if (optResp) return optResp;
+  const mutedResp = rejectIfChatMuted(c, user);
+  if (mutedResp) return mutedResp;
+
   const chatDb = c.env && c.env.CHAT_DB;
   if (!chatDb) {
     return c.json({ error: 'Chat database unavailable.' }, 500);
@@ -310,6 +319,20 @@ keysRouter.post('/channel/:channelId/share', requireAuth, async (c) => {
     if (!defaultEpoch || isNaN(defaultEpoch) || defaultEpoch < 1) {
       return c.json({ error: 'Invalid key_epoch.' }, 400);
     }
+
+    const canForceRotate = Boolean(user.isAdmin || user.isModerator || channel.created_by === user.id);
+    const maxEpochRow = await chatDb.prepare(
+      'SELECT MAX(key_epoch) as max_epoch FROM channel_key_shares WHERE channel_id = ?'
+    ).bind(channel.id).first();
+    const currentMaxEpoch = (maxEpochRow && maxEpochRow.max_epoch) ? Number(maxEpochRow.max_epoch) : 0;
+    const existingEpochShare = await chatDb.prepare(
+      'SELECT 1 FROM channel_key_shares WHERE channel_id = ? AND key_epoch = ? LIMIT 1'
+    ).bind(channel.id, defaultEpoch).first();
+
+    if (defaultEpoch > currentMaxEpoch && currentMaxEpoch > 0 && !canForceRotate) {
+      return c.json({ error: 'Only the channel creator, moderator, or admin can rotate to a new key epoch.' }, 403);
+    }
+
     let validMembers = null;
     if (isKeyShared) {
       const { results: memberRows } = await chatDb.prepare(
@@ -318,25 +341,25 @@ keysRouter.post('/channel/:channelId/share', requireAuth, async (c) => {
       validMembers = new Set((memberRows || []).map((r) => Number(r.user_id)));
       if (channel.created_by) validMembers.add(Number(channel.created_by));
 
-      const canForceRotate = Boolean(user.isAdmin || user.isModerator || channel.created_by === user.id);
-      if (!body.force_rotate || !canForceRotate) {
-        const existingEpochShare = await chatDb.prepare(
-          'SELECT 1 FROM channel_key_shares WHERE channel_id = ? AND key_epoch = ? LIMIT 1'
-        ).bind(channel.id, defaultEpoch).first();
-        if (existingEpochShare) {
-          if (body.force_rotate && !canForceRotate) {
-            return c.json({ error: 'Only channel owners, moderators, or admins can force key rotation.' }, 403);
-          }
-          return c.json({ success: true, alreadyInitialized: true, count: 0 });
+      if ((!body.force_rotate || !canForceRotate) && existingEpochShare) {
+        if (body.force_rotate && !canForceRotate) {
+          return c.json({ error: 'Only channel owners, moderators, or admins can force key rotation.' }, 403);
         }
+        return c.json({ success: true, alreadyInitialized: true, key_epoch: defaultEpoch, keyEpoch: defaultEpoch, count: 0 });
       }
+    } else if (!canForceRotate && existingEpochShare) {
+      return c.json({ error: 'Channel key epoch already initialized.' }, 403);
     }
 
     const batchStatements = [];
 
     for (const share of body.shares) {
       const recipientUserId = parseInt(share.recipient_user_id !== undefined ? share.recipient_user_id : share.recipientUserId, 10);
-      const keyEpoch = parseInt(share.key_epoch !== undefined ? share.key_epoch : (share.keyEpoch !== undefined ? share.keyEpoch : defaultEpoch), 10);
+      const rawShareEpoch = share.key_epoch !== undefined ? share.key_epoch : share.keyEpoch;
+      if (rawShareEpoch !== undefined && parseInt(rawShareEpoch, 10) !== defaultEpoch) {
+        return c.json({ error: 'All key shares in a batch must match key_epoch.' }, 400);
+      }
+      const keyEpoch = defaultEpoch;
       const wrappedKey = share.wrapped_key_base64 || share.wrappedKeyBase64;
       const wrapIv = share.wrap_iv || share.wrapIv;
       let ephemeralPub = share.sender_ephemeral_pub_jwk || share.senderEphemeralPubJwk || null;
@@ -362,6 +385,9 @@ keysRouter.post('/channel/:channelId/share', requireAuth, async (c) => {
 
       if (ephemeralPub && typeof ephemeralPub === 'object') {
         ephemeralPub = JSON.stringify(ephemeralPub);
+      }
+      if (ephemeralPub && String(ephemeralPub).length > 2048) {
+        return c.json({ error: 'sender_ephemeral_pub_jwk exceeds maximum allowed size (2 KB).' }, 400);
       }
 
       batchStatements.push(

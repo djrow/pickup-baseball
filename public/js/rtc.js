@@ -217,10 +217,13 @@
    * Process incoming rtc_signals delivered by Delta Sync.
    */
   function handleIncomingSignals(signals) {
-    if (!Array.isArray(signals)) return;
+    if (!rtcState.activeChannelId) return;
+    if (!Array.isArray(signals) || signals.length === 0) return;
     for (var i = 0; i < signals.length; i++) {
       (function (sig) {
+        if (sig.channel_id && Number(sig.channel_id) !== Number(rtcState.activeChannelId)) return;
         var senderId = Number(sig.sender_user_id);
+        if (!senderId || senderId === Number(rtcState.currentUserId)) return;
         var payload = {};
         try {
           payload = typeof sig.payload_json === 'string' ? JSON.parse(sig.payload_json) : (sig.payload_json || {});

@@ -1,5 +1,17 @@
 import { Hono } from 'hono';
-import { requireAuth, requireOrganizer, requireAdmin, getClientIp, checkRateLimit, isValidRasterImageBuffer, generateToken, rejectIfChatMuted, isPrivateIpOrHost } from '../security.js';
+import {
+  requireAuth,
+  requireOrganizer,
+  requireAdmin,
+  getClientIp,
+  checkRateLimit,
+  isValidRasterImageBuffer,
+  generateToken,
+  rejectIfChatMuted,
+  isPrivateIpOrHost,
+  safeFetchExternalUrl,
+  readResponseWithByteCap
+} from '../security.js';
 import { arrayBufferToBase64, base64ToUint8Array, stripJpegMetadata } from '../security.js';
 import {
   isGDriveConfigured,
@@ -196,30 +208,22 @@ mediaRouter.get('/:id/file', async (c) => {
         });
       }
 
-      let currentUrl = check.url;
-      let upstreamRes = null;
-      for (let hop = 0; hop < 3; hop++) {
-        upstreamRes = await fetch(currentUrl, {
-          redirect: 'manual',
+      const fetched = await safeFetchExternalUrl(
+        check.url,
+        {
+          isTestEnv,
+          validator: (u) => validateExternalHttpUrl(u, isTestEnv),
           headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) PickupBaseball/1.0'
           }
-        });
-        if (upstreamRes.status >= 300 && upstreamRes.status < 400) {
-          const loc = upstreamRes.headers.get('location');
-          if (!loc || hop === 2) {
-            return c.text('Upstream redirects are disallowed', 400);
-          }
-          const resolvedUrl = new URL(loc, currentUrl).href;
-          const hopCheck = validateExternalHttpUrl(resolvedUrl, isTestEnv);
-          if (!hopCheck.ok) {
-            return c.text(hopCheck.error, hopCheck.status);
-          }
-          currentUrl = hopCheck.url;
-          continue;
-        }
-        break;
+        },
+        2,
+        8000
+      );
+      if (!fetched.ok) {
+        return c.text(fetched.error, fetched.status || 400);
       }
+      const upstreamRes = fetched.res;
       if (!upstreamRes || !upstreamRes.ok) {
         return c.text('Upstream file unavailable', upstreamRes ? upstreamRes.status : 502);
       }
@@ -374,39 +378,36 @@ mediaRouter.post('/', async (c) => {
           return c.json({ error: imgUrlCheck.error }, imgUrlCheck.status);
         }
 
-        let fetchRes;
-        try {
-          fetchRes = await fetch(imgUrlCheck.url, {
-            redirect: 'manual',
+        const fetched = await safeFetchExternalUrl(
+          imgUrlCheck.url,
+          {
+            isTestEnv,
+            validator: (u) => validateExternalHttpUrl(u, isTestEnv),
             headers: {
               'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
               'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8'
             }
-          });
-        } catch (fetchErr) {
-          console.error('[Media] Error copying remote image:', fetchErr);
-          return c.json({ error: 'Could not connect to external image server: ' + fetchErr.message }, 400);
+          },
+          3,
+          8000
+        );
+        if (!fetched.ok) {
+          return c.json({ error: fetched.error }, fetched.status || 400);
         }
-
-        if (fetchRes.status >= 300 && fetchRes.status < 400) {
-          return c.json({ error: 'External image redirects are disallowed for security.' }, 400);
-        }
+        const fetchRes = fetched.res;
 
         if (!fetchRes.ok) {
           return c.json({ error: 'External image server returned status ' + fetchRes.status }, 400);
         }
 
-        const headerLen = parseInt(fetchRes.headers.get('content-length') || '0', 10);
-        if (!isNaN(headerLen) && headerLen > MAX_LOCAL_D1_MEDIA_BYTES) {
-          return c.json({ error: 'Remote image exceeds 10MB local database storage limit.' }, 400);
-        }
-
         const rawContentType = (fetchRes.headers.get('content-type') || '').toLowerCase();
-        const arrayBuf = await fetchRes.arrayBuffer();
-
-        if (arrayBuf.byteLength > MAX_LOCAL_D1_MEDIA_BYTES) {
-          return c.json({ error: 'Remote image exceeds 10MB local database storage limit.' }, 400);
+        const capped = await readResponseWithByteCap(fetchRes, MAX_LOCAL_D1_MEDIA_BYTES);
+        if (!capped.ok) {
+          return c.json({
+            error: capped.status === 413 ? 'Remote image exceeds 10MB local database storage limit.' : capped.error
+          }, 400);
         }
+        const arrayBuf = capped.buffer;
 
         const candidateMime = rawContentType.includes('image/') ? rawContentType.split(';')[0].trim() : 'image/jpeg';
         if (!ALLOWED_MIME.includes(candidateMime)) {
@@ -517,6 +518,7 @@ mediaRouter.post('/', async (c) => {
           const asRes = await fetch(appscriptUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            signal: typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(15000) : undefined,
             body: JSON.stringify({
               action: 'upload',
               base64: storedFileData,
@@ -840,15 +842,28 @@ attachmentsRouter.post('/init', requireAuth, async (c) => {
 
   const body = await c.req.json().catch(() => ({}));
   const channelParam = body.channel_id;
-  const fileName = String(body.file_name || '').trim();
+  const fileName = String(body.file_name || '').replace(/[\x00-\x1F\x7F]/g, '').trim();
   const mimeType = String(body.mime_type || '').trim().toLowerCase();
   const fileSize = parseInt(body.file_size, 10);
   const isEncrypted = body.is_encrypted ? 1 : 0;
   const iv = body.iv ? String(body.iv) : null;
+  const sha256Original = body.sha256_original ? String(body.sha256_original).trim() : null;
   const thumbnailBase64 = body.thumbnail_base64 ? String(body.thumbnail_base64) : null;
 
   if (!fileName || !mimeType || isNaN(fileSize) || fileSize <= 0) {
     return c.json({ error: 'Valid file_name, mime_type, and positive file_size are required.' }, 400);
+  }
+  if (fileName.length > 255 || mimeType.length > 128) {
+    return c.json({ error: 'file_name or mime_type exceeds maximum allowed length.' }, 400);
+  }
+  if (iv && iv.length > 512) {
+    return c.json({ error: 'iv exceeds maximum allowed length.' }, 400);
+  }
+  if (sha256Original && sha256Original.length > 128) {
+    return c.json({ error: 'sha256_original exceeds maximum allowed length.' }, 400);
+  }
+  if (thumbnailBase64 && thumbnailBase64.length > 150000) {
+    return c.json({ error: 'thumbnail_base64 exceeds maximum allowed length.' }, 400);
   }
 
   if (!ALLOWED_ATTACHMENT_MIME_TYPES.has(mimeType)) {
@@ -1037,8 +1052,26 @@ attachmentsRouter.post('/:id/complete', requireAuth, async (c) => {
   if (requestedDriveId && attachment.storage_provider !== 'gdrive') {
     return c.json({ error: 'Cannot bind external Google Drive file ID to a local attachment.' }, 403);
   }
+  if (requestedDriveId && !/^[\w-]{6,128}$/.test(String(requestedDriveId))) {
+    return c.json({ error: 'Invalid Google Drive file ID.' }, 400);
+  }
   if (requestedDriveId && attachment.drive_file_id && requestedDriveId !== attachment.drive_file_id) {
     return c.json({ error: 'Mismatched Google Drive file ID.' }, 403);
+  }
+  if (requestedDriveId) {
+    const dupAtt = await chatDb.prepare(
+      'SELECT id FROM chat_attachments WHERE drive_file_id = ? AND id != ? LIMIT 1'
+    ).bind(requestedDriveId, id).first();
+    const dupGif = await chatDb.prepare(
+      'SELECT id FROM clubhouse_gifs WHERE drive_file_id = ? LIMIT 1'
+    ).bind(requestedDriveId).first();
+    const baseballDb = c.env && (c.env.BASEBALL_DB || c.env.DB);
+    const dupWaiver = baseballDb
+      ? await baseballDb.prepare('SELECT id FROM waivers WHERE gdrive_file_id = ? LIMIT 1').bind(requestedDriveId).first()
+      : null;
+    if (dupAtt || dupGif || dupWaiver) {
+      return c.json({ error: 'Google Drive file ID is already bound to another resource.' }, 403);
+    }
   }
   const driveFileId = attachment.drive_file_id || (attachment.storage_provider === 'gdrive' ? requestedDriveId : null);
   let verifiedSize = attachment.file_size;
@@ -1109,7 +1142,7 @@ attachmentsRouter.get('/:id/stream', async (c) => {
       return c.json({ error: 'Authentication required.' }, 401);
     }
     const channel = await resolveChannel(chatDb, attachment.channel_id);
-    if (channel && !(await canUserAccessChannel(chatDb, user, channel, 'read'))) {
+    if (!channel || !(await canUserAccessChannel(chatDb, user, channel, 'read'))) {
       return c.json({ error: 'Access denied.' }, 403);
     }
   }
@@ -1132,7 +1165,8 @@ attachmentsRouter.get('/:id/stream', async (c) => {
     return c.json({ error: 'Invalid attachment binary payload.' }, 400);
   }
   const mimeType = attachment.mime_type || 'application/octet-stream';
-  return serveByteRangeResponse(bytes, mimeType, rangeHeader);
+  const localCacheControl = attachment.promoted_media_id ? 'public, max-age=31536000, immutable' : 'private, max-age=3600';
+  return serveByteRangeResponse(bytes, mimeType, rangeHeader, localCacheControl);
 });
 
 // ---------------------------------------------------------------------------

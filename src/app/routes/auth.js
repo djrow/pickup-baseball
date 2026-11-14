@@ -15,7 +15,9 @@ import {
   isValidRasterImageBuffer,
   getClientIp,
   checkRateLimit,
+  constantTimeEqual,
   verifyTurnstileIfConfigured,
+  safeFetchExternalUrl,
   requireAuth,
   requireAdmin,
   ensureUserCalendarToken,
@@ -140,6 +142,11 @@ authRouter.post('/verify-code', async (c) => {
       return c.json({ error: 'Too many verification attempts. Please wait 10 minutes before trying again.' }, 429);
     }
 
+    const emailLimit = await checkRateLimit(c.env.DB, `verify_code_email:${cleanEmail}`, 10, 600, c.env);
+    if (!emailLimit.allowed) {
+      return c.json({ error: 'Too many verification attempts for this email. Please wait 10 minutes before trying again.' }, 429);
+    }
+
     const banRecord = await c.env.DB.prepare('SELECT id FROM banned_emails WHERE email = ?').bind(cleanEmail).first();
     if (banRecord) {
       return c.json({ error: 'This email address has been restricted from accessing this service.' }, 403);
@@ -155,18 +162,31 @@ authRouter.post('/verify-code', async (c) => {
       return c.json({ error: 'Invalid or expired code. Please request a new code.' }, 400);
     }
 
+    const isTest = Boolean(c.env && c.env.NODE_ENV === 'test');
     const codeHash = await sha256Hex(cleanCode);
-    if (latestActive.code !== codeHash && latestActive.code !== cleanCode) {
-      const newAttempts = (latestActive.attempts || 0) + 1;
+    const codeMatches = constantTimeEqual(latestActive.code, codeHash)
+      || (isTest && constantTimeEqual(latestActive.code, cleanCode));
+    if (!codeMatches) {
+      await c.env.DB.prepare(`
+        UPDATE auth_codes
+        SET attempts = COALESCE(attempts, 0) + 1,
+            used_at = CASE WHEN COALESCE(attempts, 0) + 1 >= ? THEN CURRENT_TIMESTAMP ELSE used_at END
+        WHERE id = ? AND used_at IS NULL
+      `).bind(MAX_CODE_VERIFY_ATTEMPTS, latestActive.id).run();
+      const updatedRow = await c.env.DB.prepare('SELECT attempts FROM auth_codes WHERE id = ?').bind(latestActive.id).first();
+      const newAttempts = updatedRow ? Number(updatedRow.attempts || 0) : ((latestActive.attempts || 0) + 1);
       if (newAttempts >= MAX_CODE_VERIFY_ATTEMPTS) {
-        await c.env.DB.prepare('UPDATE auth_codes SET attempts = ?, used_at = CURRENT_TIMESTAMP WHERE id = ?').bind(newAttempts, latestActive.id).run();
         return c.json({ error: 'Too many failed attempts. This code has been invalidated—please request a new code.' }, 400);
       }
-      await c.env.DB.prepare('UPDATE auth_codes SET attempts = ? WHERE id = ?').bind(newAttempts, latestActive.id).run();
       return c.json({ error: `Invalid verification code (${MAX_CODE_VERIFY_ATTEMPTS - newAttempts} attempt(s) remaining).` }, 400);
     }
 
-    await c.env.DB.prepare('UPDATE auth_codes SET used_at = CURRENT_TIMESTAMP WHERE id = ?').bind(latestActive.id).run();
+    const consumeRes = await c.env.DB.prepare(
+      'UPDATE auth_codes SET used_at = CURRENT_TIMESTAMP WHERE id = ? AND used_at IS NULL AND COALESCE(attempts, 0) < ?'
+    ).bind(latestActive.id, MAX_CODE_VERIFY_ATTEMPTS).run();
+    if (!consumeRes || !consumeRes.meta || consumeRes.meta.changes === 0) {
+      return c.json({ error: 'Invalid or expired code. Please request a new code.' }, 400);
+    }
     const user = await upsertUserAndCreateSession(c, cleanEmail, latestActive.name);
 
     return c.json({
@@ -192,11 +212,23 @@ authRouter.get('/verify-magic', async (c) => {
       return c.text('Invalid or missing magic link token.', 400);
     }
 
+    const clientIp = getClientIp(c);
+    const ipLimit = await checkRateLimit(c.env.DB, `verify_magic_ip:${clientIp}`, 15, 600, c.env);
+    if (!ipLimit.allowed) {
+      return c.text('Too many sign-in link attempts. Please wait 10 minutes before trying again.', 429);
+    }
+
+    const isTest = Boolean(c.env && c.env.NODE_ENV === 'test');
     const tokenHash = await sha256Hex(token);
-    const authRecord = await c.env.DB.prepare(`
-      SELECT * FROM auth_codes
-      WHERE (token = ? OR token = ?) AND used_at IS NULL AND datetime(expires_at) > datetime('now')
-    `).bind(tokenHash, token).first();
+    const authRecord = isTest
+      ? await c.env.DB.prepare(`
+          SELECT * FROM auth_codes
+          WHERE (token = ? OR token = ?) AND used_at IS NULL AND datetime(expires_at) > datetime('now')
+        `).bind(tokenHash, token).first()
+      : await c.env.DB.prepare(`
+          SELECT * FROM auth_codes
+          WHERE token = ? AND used_at IS NULL AND datetime(expires_at) > datetime('now')
+        `).bind(tokenHash).first();
 
     if (!authRecord) {
       return c.text('This sign-in link is invalid or has expired. Please request a new one on the login page.', 400);
@@ -208,7 +240,12 @@ authRouter.get('/verify-magic', async (c) => {
       return c.text('This email address has been restricted from accessing this service.', 403);
     }
 
-    await c.env.DB.prepare('UPDATE auth_codes SET used_at = CURRENT_TIMESTAMP WHERE id = ?').bind(authRecord.id).run();
+    const consumeRes = await c.env.DB.prepare(
+      'UPDATE auth_codes SET used_at = CURRENT_TIMESTAMP WHERE id = ? AND used_at IS NULL'
+    ).bind(authRecord.id).run();
+    if (!consumeRes || !consumeRes.meta || consumeRes.meta.changes === 0) {
+      return c.text('This sign-in link has already been used or has expired. Please request a new one on the login page.', 400);
+    }
     await upsertUserAndCreateSession(c, cleanEmail, authRecord.name);
 
     return c.redirect(getSafeRelativeRedirect(redirect));
@@ -546,7 +583,7 @@ authRouter.delete('/users/:id', requireAdmin, async (c) => {
       await c.env.CHAT_DB.batch([
         c.env.CHAT_DB.prepare('DELETE FROM user_crypto_keys WHERE user_id = ?').bind(targetId),
         c.env.CHAT_DB.prepare('DELETE FROM channel_members WHERE user_id = ?').bind(targetId),
-        c.env.CHAT_DB.prepare('DELETE FROM channel_keys WHERE recipient_user_id = ? OR sender_user_id = ?').bind(targetId, targetId),
+        c.env.CHAT_DB.prepare('DELETE FROM channel_key_shares WHERE recipient_user_id = ? OR sender_user_id = ?').bind(targetId, targetId),
         c.env.CHAT_DB.prepare('DELETE FROM voice_participants WHERE user_id = ?').bind(targetId),
         c.env.CHAT_DB.prepare('DELETE FROM rtc_signals WHERE sender_user_id = ? OR recipient_user_id = ?').bind(targetId, targetId),
         c.env.CHAT_DB.prepare('DELETE FROM user_mutes WHERE muter_user_id = ? OR muted_user_id = ?').bind(targetId, targetId)
@@ -709,13 +746,24 @@ export async function testAppscriptHandler(c) {
       return c.json({ success: false, error: 'Invalid Google Apps Script URL. Expected format: https://script.google.com/macros/s/.../exec' }, 400);
     }
 
-    const res = await fetch(targetUrl, {
-      method: 'GET',
-      redirect: 'follow',
-      headers: {
-        'Accept': 'application/json'
-      }
-    });
+    const fetched = await safeFetchExternalUrl(
+      targetUrl,
+      {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json'
+        }
+      },
+      3,
+      8000
+    );
+    if (!fetched.ok) {
+      return c.json({
+        success: false,
+        error: fetched.error || 'Could not connect to Google Apps Script.'
+      }, 400);
+    }
+    const res = fetched.res;
 
     if (res.status === 403) {
       return c.json({

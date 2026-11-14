@@ -623,3 +623,124 @@ export function validateExternalGifUrl(rawUrl, options = {}) {
   parsed.hash = '';
   return { ok: true, url: parsed.toString() };
 }
+
+export async function safeFetchExternalUrl(urlStr, options = {}, maxRedirects = 3, timeoutMs = 8000) {
+  const {
+    isTestEnv = false,
+    validator = null,
+    headers = undefined,
+    method = 'GET',
+    body = undefined
+  } = options || {};
+  const validateFn = typeof validator === 'function'
+    ? validator
+    : (u) => validateExternalGifUrl(u, { isTestEnv: Boolean(isTestEnv) });
+
+  const initialCheck = validateFn(urlStr);
+  if (!initialCheck.ok) {
+    return initialCheck;
+  }
+  let currentUrl = initialCheck.url;
+
+  for (let hop = 0; hop <= maxRedirects; hop++) {
+    let res;
+    try {
+      res = await fetch(currentUrl, {
+        method,
+        headers,
+        body,
+        redirect: 'manual',
+        signal: typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
+          ? AbortSignal.timeout(timeoutMs)
+          : undefined
+      });
+    } catch (err) {
+      return { ok: false, status: 422, error: 'Could not connect to the remote host (timeout or network error).' };
+    }
+
+    if (res.status >= 300 && res.status < 400) {
+      if (hop >= maxRedirects) {
+        return { ok: false, status: 400, error: 'Too many redirects while fetching remote URL.' };
+      }
+      const loc = res.headers.get('location');
+      if (!loc) {
+        return { ok: false, status: 400, error: 'Remote redirect was missing a Location header.' };
+      }
+      let nextRaw;
+      try {
+        nextRaw = new URL(loc, currentUrl).toString();
+      } catch (e) {
+        return { ok: false, status: 400, error: 'Invalid redirect URL from remote host.' };
+      }
+      const hopCheck = validateFn(nextRaw);
+      if (!hopCheck.ok) {
+        return hopCheck;
+      }
+      currentUrl = hopCheck.url;
+      continue;
+    }
+
+    return { ok: true, res, finalUrl: currentUrl };
+  }
+
+  return { ok: false, status: 400, error: 'Too many redirects while fetching remote URL.' };
+}
+
+export async function readResponseWithByteCap(res, maxBytes) {
+  if (!res) {
+    return { ok: false, status: 422, error: 'Missing remote response.' };
+  }
+  const declaredLen = parseInt((res.headers && res.headers.get('content-length')) || '0', 10);
+  if (!isNaN(declaredLen) && declaredLen > maxBytes) {
+    try { if (res.body && typeof res.body.cancel === 'function') await res.body.cancel(); } catch (e) {}
+    return { ok: false, status: 413, error: 'Remote file exceeds the maximum allowed size limit.' };
+  }
+
+  if (res.body && typeof res.body.getReader === 'function') {
+    const reader = res.body.getReader();
+    const chunks = [];
+    let totalBytes = 0;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value && value.byteLength) {
+          totalBytes += value.byteLength;
+          if (totalBytes > maxBytes) {
+            try { await reader.cancel(); } catch (e) {}
+            return { ok: false, status: 413, error: 'Remote file exceeds the maximum allowed size limit.' };
+          }
+          chunks.push(value);
+        }
+      }
+    } catch (err) {
+      try { await reader.cancel(); } catch (e) {}
+      return { ok: false, status: 422, error: 'Failed while downloading data from the remote host.' };
+    }
+    if (totalBytes === 0) {
+      return { ok: false, status: 400, error: 'Remote response was empty.' };
+    }
+    const merged = new Uint8Array(totalBytes);
+    let offset = 0;
+    for (const chunk of chunks) {
+      merged.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return { ok: true, bytes: merged, buffer: merged.buffer };
+  }
+
+  let buf;
+  try {
+    buf = await res.arrayBuffer();
+  } catch (err) {
+    return { ok: false, status: 422, error: 'Failed while downloading data from the remote host.' };
+  }
+  if (!buf || buf.byteLength === 0) {
+    return { ok: false, status: 400, error: 'Remote response was empty.' };
+  }
+  if (buf.byteLength > maxBytes) {
+    return { ok: false, status: 413, error: 'Remote file exceeds the maximum allowed size limit.' };
+  }
+  const bytes = new Uint8Array(buf);
+  return { ok: true, bytes, buffer: buf };
+}
