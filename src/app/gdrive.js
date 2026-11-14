@@ -80,7 +80,7 @@ export async function getGDriveAccessToken(env) {
 /**
  * Initiate a single-use Google Drive v3 Resumable Upload Session
  */
-export async function initGDriveResumableSession(env, { fileName, mimeType, fileSize, origin }) {
+export async function initGDriveResumableSession(env, { fileName, mimeType, fileSize, origin, appProperties }) {
   const token = await getGDriveAccessToken(env);
   const apiBase = getGDriveApiBase(env);
   const e = env || process.env || {};
@@ -89,6 +89,9 @@ export async function initGDriveResumableSession(env, { fileName, mimeType, file
     name: fileName,
     mimeType: mimeType || 'application/octet-stream'
   };
+  if (appProperties && typeof appProperties === 'object') {
+    metadata.appProperties = appProperties;
+  }
   const rootFolderId = e.GDRIVE_ROOT_FOLDER_ID || e.GDRIVE_FOLDER_ID;
   if (rootFolderId) {
     metadata.parents = [rootFolderId];
@@ -189,7 +192,7 @@ export async function getGDriveFileMetadata(env, driveFileId) {
   const apiBase = getGDriveApiBase(env);
 
   const res = await fetch(
-    `${apiBase}/drive/v3/files/${encodeURIComponent(driveFileId)}?fields=id,name,mimeType,size,createdTime`,
+    `${apiBase}/drive/v3/files/${encodeURIComponent(driveFileId)}?fields=id,name,mimeType,size,createdTime,parents,appProperties`,
     {
       method: 'GET',
       headers: {
@@ -208,7 +211,9 @@ export async function getGDriveFileMetadata(env, driveFileId) {
     name: data.name,
     mimeType: data.mimeType,
     size: Number(data.size || 0),
-    createdTime: data.createdTime || null
+    createdTime: data.createdTime || null,
+    parents: Array.isArray(data.parents) ? data.parents : [],
+    appProperties: (data.appProperties && typeof data.appProperties === 'object') ? data.appProperties : {}
   };
 }
 
@@ -341,7 +346,8 @@ export async function streamGDriveFile(env, driveFileId, rangeHeader, fallbackMi
     'Content-Type': upstreamRes.headers.get('content-type') || fallbackMimeType,
     'Accept-Ranges': 'bytes',
     'Cache-Control': cacheControl,
-    'X-Content-Type-Options': 'nosniff'
+    'X-Content-Type-Options': 'nosniff',
+    'Content-Security-Policy': "default-src 'none'; sandbox"
   };
 
   const contentRange = upstreamRes.headers.get('content-range');

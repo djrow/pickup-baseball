@@ -1,5 +1,5 @@
 // Service Worker for Pickup Baseball Foundation PWA
-const CACHE_NAME = 'pbf-cache-v136';
+const CACHE_NAME = 'pbf-cache-v138';
 
 // Core app shell & pages precached on install; i18n bundles (~312 KB) are cached on demand
 const STATIC_ASSETS = [
@@ -102,17 +102,22 @@ self.addEventListener('fetch', (event) => {
 
   // 2. HTML Page Navigation: Network First with Cache Fallback
   if (req.mode === 'navigate') {
+    const hasSensitiveParams =
+      url.searchParams.has('token') ||
+      url.searchParams.has('takedown') ||
+      url.searchParams.has('code');
+    const normalizedNavKey = new Request(url.origin + url.pathname);
     event.respondWith(
       fetch(req)
         .then((networkRes) => {
-          if (networkRes && networkRes.status === 200) {
+          if (!hasSensitiveParams && networkRes && networkRes.status === 200) {
             const clone = networkRes.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
+            caches.open(CACHE_NAME).then((cache) => cache.put(normalizedNavKey, clone));
           }
           return networkRes;
         })
         .catch(() => {
-          return caches.match(req).then((cached) => {
+          return caches.match(normalizedNavKey).then((cached) => {
             return cached || caches.match('/index.html');
           });
         })

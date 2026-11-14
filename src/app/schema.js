@@ -100,6 +100,7 @@ export const CREATE_TABLES_SQL = [
     additional_guests INTEGER DEFAULT 0,
     guest_names TEXT,
     management_token TEXT UNIQUE,
+    urgent_credit_awarded INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(event_id, email)
   )`,
@@ -241,6 +242,7 @@ export const ALTER_STATEMENTS = [
   'ALTER TABLE attendees ADD COLUMN guest_names TEXT',
   'ALTER TABLE attendees ADD COLUMN players_count INTEGER DEFAULT NULL',
   'ALTER TABLE attendees ADD COLUMN spectators_count INTEGER DEFAULT 0',
+  'ALTER TABLE attendees ADD COLUMN urgent_credit_awarded INTEGER DEFAULT 0',
   'ALTER TABLE users ADD COLUMN bio TEXT',
   'ALTER TABLE users ADD COLUMN avatar_url TEXT',
   'ALTER TABLE media_items ADD COLUMN is_approved INTEGER DEFAULT 0',

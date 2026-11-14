@@ -80,15 +80,19 @@ export function getSafeRelativeRedirect(redirectParam) {
     return '/index.html?logged_in=1';
   }
   const trimmed = redirectParam.trim();
+  if (!trimmed || /[\x00-\x1f\x7f\\]/.test(trimmed) || trimmed.startsWith('//')) {
+    return '/index.html?logged_in=1';
+  }
   try {
     const parsed = new URL(trimmed, 'https://www.pickupbaseballfoundation.org');
-    if (parsed.origin === 'https://www.pickupbaseballfoundation.org' && parsed.pathname.startsWith('/') && !parsed.pathname.startsWith('//')) {
+    if (
+      parsed.origin === 'https://www.pickupbaseballfoundation.org' &&
+      parsed.pathname.startsWith('/') &&
+      !parsed.pathname.startsWith('//')
+    ) {
       return parsed.pathname + parsed.search + parsed.hash;
     }
   } catch (e) {}
-  if (trimmed.startsWith('/') && !trimmed.startsWith('//') && !trimmed.startsWith('/\\')) {
-    return trimmed;
-  }
   return '/index.html?logged_in=1';
 }
 
@@ -165,12 +169,18 @@ export function isValidRasterImageBuffer(buffer, mime) {
 }
 
 export function getClientIp(c) {
-  return (
-    c.req.header('CF-Connecting-IP') ||
-    (c.req.header('X-Forwarded-For') || '').split(',')[0].trim() ||
-    c.req.header('X-Real-IP') ||
-    'unknown'
-  );
+  const cfIp = (c.req.header('CF-Connecting-IP') || '').trim();
+  if (cfIp) return cfIp;
+  const realIp = (c.req.header('X-Real-IP') || '').trim();
+  if (realIp) return realIp;
+  const xffParts = (c.req.header('X-Forwarded-For') || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (xffParts.length > 0) {
+    return xffParts[xffParts.length - 1];
+  }
+  return 'unknown';
 }
 
 export function getSafePublicOrigin(c) {
@@ -508,7 +518,7 @@ export function canAccessChannel(user, channel, mode = 'read') {
     userRank = 1;
   }
 
-  const requiredRank = ROLE_RANKS[minRole] || 1;
+  const requiredRank = Object.prototype.hasOwnProperty.call(ROLE_RANKS, minRole) ? ROLE_RANKS[minRole] : 999;
   return userRank >= requiredRank;
 }
 
@@ -595,26 +605,31 @@ export function isPrivateIpOrHost(hostname, isTestEnv = false) {
     if ([o1, o2, o3, o4].some((n) => n < 0 || n > 255)) return true;
     if (o1 === 127 || o1 === 10 || o1 === 0 || o1 >= 224) return true;
     if (o1 === 192 && o2 === 168) return true;
+    if (o1 === 192 && o2 === 0 && o3 === 0) return true;
     if (o1 === 172 && o2 >= 16 && o2 <= 31) return true;
     if (o1 === 169 && o2 === 254) return true;
     if (o1 === 100 && o2 >= 64 && o2 <= 127) return true;
+    if (o1 === 198 && (o2 === 18 || o2 === 19)) return true;
   }
 
   if (/^\d+$/.test(h) || /^0x[0-9a-f]+$/i.test(h)) return true;
 
-  if (h.startsWith('[') && h.endsWith(']')) {
-    const inner = h.slice(1, -1).toLowerCase();
+  const ipv6Raw = (h.startsWith('[') && h.endsWith(']')) ? h.slice(1, -1).toLowerCase() : h.toLowerCase();
+  if (ipv6Raw.includes(':')) {
     if (
-      inner === '::1' ||
-      inner === '::' ||
-      inner === '0:0:0:0:0:0:0:1' ||
-      inner === '0:0:0:0:0:0:0:0' ||
-      /^fe[89ab][0-9a-f]:/i.test(inner) ||
-      /^f[cd][0-9a-f]{2}:/i.test(inner) ||
-      /^ff[0-9a-f]{2}:/i.test(inner) ||
-      inner.includes('::ffff:') ||
-      /^::[0-9a-f]{1,4}(?::[0-9a-f]{1,4})?$/i.test(inner) ||
-      inner.includes('.')
+      ipv6Raw === '::1' ||
+      ipv6Raw === '::' ||
+      ipv6Raw === '0:0:0:0:0:0:0:1' ||
+      ipv6Raw === '0:0:0:0:0:0:0:0' ||
+      /^fe[89abcdef][0-9a-f]:/i.test(ipv6Raw) ||
+      /^f[cd][0-9a-f]{2}:/i.test(ipv6Raw) ||
+      /^ff[0-9a-f]{2}:/i.test(ipv6Raw) ||
+      /^64:ff9b:/i.test(ipv6Raw) ||
+      /^2002:/i.test(ipv6Raw) ||
+      /^0?100::/i.test(ipv6Raw) ||
+      ipv6Raw.includes('::ffff:') ||
+      /^::[0-9a-f]{1,4}(?::[0-9a-f]{1,4})?$/i.test(ipv6Raw) ||
+      ipv6Raw.includes('.')
     ) {
       return true;
     }
@@ -678,6 +693,19 @@ export async function safeFetchExternalUrl(urlStr, options = {}, maxRedirects = 
   let currentUrl = initialCheck.url;
 
   for (let hop = 0; hop <= maxRedirects; hop++) {
+    if (!isTestEnv && typeof process !== 'undefined' && process.versions && process.versions.node) {
+      try {
+        const hostName = new URL(currentUrl).hostname.replace(/^\[|\]$/g, '');
+        if (hostName && !/^\d+\.\d+\.\d+\.\d+$/.test(hostName) && !hostName.includes(':')) {
+          const dns = await import('node:dns/promises');
+          const resolved = await dns.lookup(hostName, { all: true });
+          if (Array.isArray(resolved) && resolved.some((entry) => entry && isPrivateIpOrHost(entry.address, false))) {
+            return { ok: false, status: 403, error: 'Resolved host IP points to a restricted private or local network.' };
+          }
+        }
+      } catch (dnsErr) {}
+    }
+
     let res;
     try {
       res = await fetch(currentUrl, {

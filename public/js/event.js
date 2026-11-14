@@ -14,15 +14,24 @@ let eventData = null;
 
 async function initEvent() {
   const params = new URLSearchParams(window.location.search);
-  eventId = params.get('id');
+  const rawEventId = params.get('id');
+  eventId = (rawEventId && /^\d+$/.test(rawEventId.trim())) ? rawEventId.trim() : null;
   let storedGuestToken = '';
   try {
     storedGuestToken = eventId ? (localStorage.getItem('guest_token_' + eventId) || '') : '';
   } catch (e) {}
   guestToken = params.get('token') || storedGuestToken || '';
 
+  if (params.has('token') && typeof window.history !== 'undefined' && typeof window.history.replaceState === 'function') {
+    try {
+      const cleanUrl = new URL(window.location.href);
+      cleanUrl.searchParams.delete('token');
+      window.history.replaceState({}, document.title, cleanUrl.pathname + cleanUrl.search + cleanUrl.hash);
+    } catch (e) {}
+  }
+
   if (!eventId) {
-    showError('No event ID specified in URL.');
+    showError('Invalid or missing event ID in URL.');
     return;
   }
 

@@ -56,11 +56,23 @@
   }
 
   function getIceConfiguration(privacyRelayMode) {
+    var servers = Array.isArray(rtcState.customIceServers) && rtcState.customIceServers.length > 0
+      ? rtcState.customIceServers.slice()
+      : DEFAULT_ICE_SERVERS.slice();
     var cfg = {
-      iceServers: DEFAULT_ICE_SERVERS.slice()
+      iceServers: servers
     };
     if (privacyRelayMode) {
-      cfg.iceTransportPolicy = 'relay';
+      var hasTurn = servers.some(function (s) {
+        var u = s && s.urls ? (Array.isArray(s.urls) ? s.urls.join(',') : String(s.urls)) : '';
+        return /^turns?:/i.test(u) || /turns?:/i.test(u);
+      });
+      if (hasTurn) {
+        cfg.iceTransportPolicy = 'relay';
+      } else {
+        console.warn('[ClubhouseRTC] Privacy Relay Mode requested, but no TURN relay server is configured.');
+        emitRtc('privacy_relay_unavailable', {});
+      }
     }
     return cfg;
   }
@@ -96,9 +108,18 @@
           if (!rtcState.typingUsersByChannel[chId]) {
             rtcState.typingUsersByChannel[chId] = {};
           }
+          var memberDisplayName = 'Player';
+          if (root.ClubhouseStore && root.ClubhouseStore.state && Array.isArray(root.ClubhouseStore.state.members)) {
+            for (var m = 0; m < root.ClubhouseStore.state.members.length; m++) {
+              if (Number(root.ClubhouseStore.state.members[m].id) === Number(peerUserId)) {
+                memberDisplayName = root.ClubhouseStore.state.members[m].display_name || root.ClubhouseStore.state.members[m].name || 'Player';
+                break;
+              }
+            }
+          }
           rtcState.typingUsersByChannel[chId][peerUserId] = {
             userId: peerUserId,
-            userName: msg.userName || 'Player',
+            userName: memberDisplayName,
             expiresAt: Date.now() + 4000
           };
           var timerKey = chId + ':' + String(peerUserId);
@@ -231,16 +252,18 @@
           return;
         }
 
+        if (root.ClubhouseStore && root.ClubhouseStore.state && Array.isArray(root.ClubhouseStore.state.voiceParticipants)) {
+          var activeInChannel = root.ClubhouseStore.state.voiceParticipants.some(function (p) {
+            return Number(p.user_id) === senderId && Number(p.channel_id) === Number(rtcState.activeChannelId);
+          });
+          if (!activeInChannel) return;
+        }
+
         if (sig.signal_type === 'offer') {
-          if (root.ClubhouseStore && root.ClubhouseStore.state && Array.isArray(root.ClubhouseStore.state.voiceParticipants)) {
-            var activeInChannel = root.ClubhouseStore.state.voiceParticipants.some(function (p) {
-              return Number(p.user_id) === senderId && Number(p.channel_id) === Number(rtcState.activeChannelId);
-            });
-            if (!activeInChannel) return;
-          }
+          if (payload.type !== 'offer' || typeof payload.sdp !== 'string' || !payload.sdp) return;
           var pc = getOrCreatePeerConnection(senderId, false);
           if (!pc) return;
-          pc.setRemoteDescription(new RTCSessionDescription(payload)).then(function () {
+          pc.setRemoteDescription(new RTCSessionDescription({ type: payload.type, sdp: payload.sdp })).then(function () {
             return pc.createAnswer();
           }).then(function (answer) {
             return pc.setLocalDescription(answer).then(function () {
@@ -253,9 +276,10 @@
             console.warn('[ClubhouseRTC] Answer error:', err);
           });
         } else if (sig.signal_type === 'answer') {
+          if (payload.type !== 'answer' || typeof payload.sdp !== 'string' || !payload.sdp) return;
           var existingPc = rtcState.peerConnections[senderId];
           if (existingPc && existingPc.signalingState !== 'stable') {
-            existingPc.setRemoteDescription(new RTCSessionDescription(payload)).catch(function () {});
+            existingPc.setRemoteDescription(new RTCSessionDescription({ type: payload.type, sdp: payload.sdp })).catch(function () {});
           }
         } else if (sig.signal_type === 'ice-candidate' && payload.candidate) {
           var targetPc = rtcState.peerConnections[senderId];

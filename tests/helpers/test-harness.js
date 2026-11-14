@@ -233,6 +233,7 @@ async function createClubhouseTestContext(options = {}) {
 
   // Apply default security headers
   app.use((req, res, next) => {
+    res.setHeader('Connection', 'close');
     res.setHeader('X-App-Version', CURRENT_APP_VERSION);
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
@@ -263,6 +264,7 @@ async function createClubhouseTestContext(options = {}) {
 
   await new Promise((resolve) => {
     server = app.listen(0, '127.0.0.1', () => {
+      server.unref();
       const port = server.address().port;
       baseUrl = `http://127.0.0.1:${port}`;
       resolve();
@@ -341,7 +343,13 @@ async function createClubhouseTestContext(options = {}) {
    */
   async function cleanup() {
     if (server) {
-      await new Promise((resolve) => server.close(resolve));
+      if (typeof server.closeAllConnections === 'function') {
+        server.closeAllConnections();
+      }
+      await Promise.race([
+        new Promise((resolve) => server.close(resolve)),
+        new Promise((resolve) => setTimeout(resolve, 1500).unref())
+      ]);
     }
 
     // Windows safety: close database handles BEFORE unlinking

@@ -1007,11 +1007,29 @@
     });
   }
 
+  function getSafeMessageDisplayContent(msg) {
+    if (!msg) return '';
+    var ch = null;
+    for (var i = 0; i < Store.state.channels.length; i++) {
+      if (Number(Store.state.channels[i].id) === Number(msg.channel_id || uiState.activeChannelId)) {
+        ch = Store.state.channels[i];
+        break;
+      }
+    }
+    if (ch && Store.requiresE2eeChannel && Store.requiresE2eeChannel(ch)) {
+      if (msg.is_e2ee_decrypted || msg.is_e2ee_locked) {
+        return msg.decrypted_content || '';
+      }
+      return '🔒 Encrypted message — unlock your E2EE Key Vault to decrypt.';
+    }
+    return msg.decrypted_content || msg.content || '';
+  }
+
   function buildMessageCardHtml(msg, currentUser, isMod) {
     var html = '';
     var isHiddenByMod = Boolean(msg.is_hidden || msg.hidden_at);
     var isMutedAuthor = Boolean(msg.author_id && Store.isUserMutedByMe(msg.author_id) && !uiState.revealedMutedMsgIds[msg.id]);
-    var displayContent = msg.decrypted_content || msg.content || '';
+    var displayContent = getSafeMessageDisplayContent(msg);
     var initial = (msg.author_name || 'P').charAt(0).toUpperCase();
     var attachments = (!isHiddenByMod && Array.isArray(msg.attachments)) ? msg.attachments : [];
     var reactions = (!isHiddenByMod) ? groupReactions(msg.reactions) : [];
@@ -1204,7 +1222,7 @@
     var previewEl = el('ch-thread-root-preview');
     if (previewEl && uiState.activeThreadRoot) {
       previewEl.innerHTML = '<strong>' + escapeHtml(uiState.activeThreadRoot.author_name || 'Player') + ':</strong> ' +
-        renderMessageTextWithGifs(uiState.activeThreadRoot.decrypted_content || uiState.activeThreadRoot.content || '');
+        renderMessageTextWithGifs(getSafeMessageDisplayContent(uiState.activeThreadRoot));
     }
 
     loadThreadReplies(parentMessageId);
@@ -1237,7 +1255,7 @@
         if (r.is_hidden || r.hidden_at) {
           html += '<div class="ch-msg-hidden-notice" style="margin-top:4px;">⚠️ Hidden by ' + escapeHtml(r.hidden_by_name || 'Moderator') + (r.hidden_reason ? ': ' + escapeHtml(r.hidden_reason) : '') + '</div>';
         } else {
-          html += '<div style="font-size:13px;margin-top:3px;">' + renderMessageTextWithGifs(r.decrypted_content || r.content) + '</div>';
+          html += '<div style="font-size:13px;margin-top:3px;">' + renderMessageTextWithGifs(getSafeMessageDisplayContent(r)) + '</div>';
         }
         html += '</div>';
       }

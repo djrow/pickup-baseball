@@ -321,7 +321,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '136',
+  CLIENT_VERSION: '138',
 
   // Current user cache
   currentUser: null,
@@ -460,8 +460,8 @@ const API = {
     const meta = this.getLangMeta(lang);
     document.documentElement.lang = lang;
     document.documentElement.dir = meta.rtl ? 'rtl' : 'ltr';
-    document.documentElement.style.setProperty('--privacy-more', `"${this.t('privacy.read_details')}"`);
-    document.documentElement.style.setProperty('--privacy-hide', `"${this.t('privacy.hide')}"`);
+    document.documentElement.style.setProperty('--privacy-more', JSON.stringify(String(this.t('privacy.read_details') || '')));
+    document.documentElement.style.setProperty('--privacy-hide', JSON.stringify(String(this.t('privacy.hide') || '')));
 
     root.querySelectorAll('[data-i18n]').forEach(el => {
       const key = el.getAttribute('data-i18n');
@@ -730,7 +730,7 @@ const API = {
             <span data-i18n="footer.about_site">${this.escapeHtml(this.t('footer.about_site', 'Built with Google Gemini in October 2026 for simplicity and durability. Free & open-source'))}</span> on <a href="https://github.com/djrow/pickup-baseball" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">GitHub</a> • <a href="https://github.com/djrow/pickup-baseball/blob/trunk/HANDBOOK.md" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;" data-i18n="footer.handbook">${this.escapeHtml(this.t('footer.handbook', 'Handbook & Field Rules'))}</a> • <a href="/waiver.html" style="color: inherit; text-decoration: underline;">Player Waiver</a>.
           </p>
           <p style="margin-top: 6px; font-size: 0.75rem; color: #64748b; line-height: 1.4;">
-            <span data-i18n="footer.copyright">© 2026 Pickup Baseball Foundation. Licensed under Apache License 2.0.</span> • <a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">Apache License 2.0</a>
+            <span data-i18n="footer.copyright">© 2026 Pickup Baseball Foundation. Licensed under Apache License 2.0.</span> • <a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">Apache License 2.0</a> • <span id="footer-app-version" class="footer-app-version" title="Loaded web app version">v${this.escapeHtml(this.CLIENT_VERSION)}</span>
           </p>
         </div>
       `;
@@ -1075,6 +1075,13 @@ const API = {
   },
 
   clearClubhouseIndexedDb() {
+    if (typeof BroadcastChannel !== 'undefined') {
+      try {
+        const ch = new BroadcastChannel('pickup_clubhouse_clear');
+        ch.postMessage({ type: 'clear' });
+        ch.close();
+      } catch (e) {}
+    }
     if (typeof indexedDB === 'undefined') return Promise.resolve();
     const deleteDb = (dbName) => new Promise((resolve) => {
       let settled = false;
@@ -1104,6 +1111,7 @@ const API = {
     try {
       localStorage.removeItem('pickup_cached_user');
       localStorage.removeItem('pickup_ch_collapsed_cats');
+      localStorage.removeItem('pbf_my_media_submissions');
       const keysToRemove = [];
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
@@ -1111,6 +1119,7 @@ const API = {
           k &&
           (k.startsWith('pickup_cached_event') ||
             k.startsWith('pbf_weather_v') ||
+            k.startsWith('guest_token_') ||
             (k.startsWith('pickup_i18n_v') && !k.startsWith('pickup_i18n_v' + this.CLIENT_VERSION + '_')))
         ) {
           keysToRemove.push(k);
@@ -1209,6 +1218,9 @@ const API = {
       if (typeof window !== 'undefined' && window.ClubhouseCrypto && typeof window.ClubhouseCrypto.clearMemoryKeys === 'function') {
         window.ClubhouseCrypto.clearMemoryKeys();
       }
+      if (typeof caches !== 'undefined' && typeof caches.keys === 'function') {
+        caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k)))).catch(() => {});
+      }
       await Promise.all([
         API.clearClubhouseIndexedDb(),
         fetch('/api/auth/logout', { method: 'POST' })
@@ -1290,7 +1302,8 @@ const API = {
   },
 
   async getEvent(id, token = '') {
-    const url = '/api/events/' + id + (token ? '?token=' + encodeURIComponent(token) : '');
+    const safeId = encodeURIComponent(id);
+    const url = '/api/events/' + safeId + (token ? '?token=' + encodeURIComponent(token) : '');
     const data = await this.request('GET', url);
     if (data && data.user !== undefined) {
       API.currentUser = data.user || null;
@@ -1300,74 +1313,74 @@ const API = {
   },
 
   async postRsvp(id, payload) {
-    return this.request('POST', '/api/events/' + id + '/rsvp', payload, {
+    return this.request('POST', '/api/events/' + encodeURIComponent(id) + '/rsvp', payload, {
       invalidateKeys: ['pickup_cached_event_' + id, 'pickup_cached_events_upcoming', 'pickup_cached_events_all']
     });
   },
 
   async postComment(id, payload) {
-    return this.request('POST', '/api/events/' + id + '/comments', payload, {
+    return this.request('POST', '/api/events/' + encodeURIComponent(id) + '/comments', payload, {
       invalidateKeys: ['pickup_cached_event_' + id]
     });
   },
 
   async deleteComment(eventId, commentId) {
-    return this.request('DELETE', '/api/events/' + eventId + '/comments/' + commentId, null, {
+    return this.request('DELETE', '/api/events/' + encodeURIComponent(eventId) + '/comments/' + encodeURIComponent(commentId), null, {
       invalidateKeys: ['pickup_cached_event_' + eventId]
     });
   },
 
   async removeAttendee(eventId, attendeeId) {
-    return this.request('DELETE', '/api/events/' + eventId + '/attendees/' + attendeeId, null, {
+    return this.request('DELETE', '/api/events/' + encodeURIComponent(eventId) + '/attendees/' + encodeURIComponent(attendeeId), null, {
       invalidateKeys: ['pickup_cached_event_' + eventId, 'pickup_cached_events_upcoming', 'pickup_cached_events_all']
     });
   },
 
   async callRainout(id, payload) {
-    return this.request('POST', '/api/events/' + id + '/rainout', payload || {}, {
+    return this.request('POST', '/api/events/' + encodeURIComponent(id) + '/rainout', payload || {}, {
       invalidateKeys: ['pickup_cached_event_' + id, 'pickup_cached_events_upcoming', 'pickup_cached_events_all']
     });
   },
 
   async reopenEvent(id, payload) {
-    return this.request('POST', '/api/events/' + id + '/reopen', payload || {}, {
+    return this.request('POST', '/api/events/' + encodeURIComponent(id) + '/reopen', payload || {}, {
       invalidateKeys: ['pickup_cached_event_' + id, 'pickup_cached_events_upcoming', 'pickup_cached_events_all']
     });
   },
 
   async sendRainoutEmail(id, payload) {
-    return this.request('POST', '/api/events/' + id + '/send-rainout-email', payload || {});
+    return this.request('POST', '/api/events/' + encodeURIComponent(id) + '/send-rainout-email', payload || {});
   },
 
   async sendReminders(id) {
-    return this.request('POST', '/api/events/' + id + '/send-reminders');
+    return this.request('POST', '/api/events/' + encodeURIComponent(id) + '/send-reminders');
   },
 
   async getBpOrder(eventId, token = '') {
-    const url = '/api/events/' + eventId + '/bp-order' + (token ? '?token=' + encodeURIComponent(token) : '');
+    const url = '/api/events/' + encodeURIComponent(eventId) + '/bp-order' + (token ? '?token=' + encodeURIComponent(token) : '');
     return this.request('GET', url);
   },
 
   async postBpSignup(eventId, payload) {
-    return this.request('POST', '/api/events/' + eventId + '/bp-order', payload, {
+    return this.request('POST', '/api/events/' + encodeURIComponent(eventId) + '/bp-order', payload, {
       invalidateKeys: ['pickup_cached_event_' + eventId]
     });
   },
 
   async updateBpSignup(eventId, signupId, payload) {
-    return this.request('PUT', '/api/events/' + eventId + '/bp-order/' + signupId, payload, {
+    return this.request('PUT', '/api/events/' + encodeURIComponent(eventId) + '/bp-order/' + encodeURIComponent(signupId), payload, {
       invalidateKeys: ['pickup_cached_event_' + eventId]
     });
   },
 
   async deleteBpSignup(eventId, signupId, payload) {
-    return this.request('DELETE', '/api/events/' + eventId + '/bp-order/' + signupId, payload || {}, {
+    return this.request('DELETE', '/api/events/' + encodeURIComponent(eventId) + '/bp-order/' + encodeURIComponent(signupId), payload || {}, {
       invalidateKeys: ['pickup_cached_event_' + eventId]
     });
   },
 
   async clearBpOrder(eventId) {
-    return this.request('POST', '/api/events/' + eventId + '/bp-order/clear', {}, {
+    return this.request('POST', '/api/events/' + encodeURIComponent(eventId) + '/bp-order/clear', {}, {
       invalidateKeys: ['pickup_cached_event_' + eventId]
     });
   },
@@ -1413,7 +1426,7 @@ const API = {
   },
 
   async updateEvent(id, payload) {
-    return this.request('PUT', '/api/events/' + id, payload, {
+    return this.request('PUT', '/api/events/' + encodeURIComponent(id), payload, {
       invalidateOnSuccess: true,
       invalidateKeys: [
         'pickup_cached_event_' + id,
@@ -1425,7 +1438,7 @@ const API = {
   },
 
   async deleteEvent(id) {
-    return this.request('DELETE', '/api/events/' + id, null, {
+    return this.request('DELETE', '/api/events/' + encodeURIComponent(id), null, {
       invalidateOnSuccess: true,
       invalidateKeys: [
         'pickup_cached_event_' + id,
@@ -1437,19 +1450,19 @@ const API = {
   },
 
   async addDuty(eventId, payload) {
-    return this.request('POST', '/api/events/' + eventId + '/duties', payload, {
+    return this.request('POST', '/api/events/' + encodeURIComponent(eventId) + '/duties', payload, {
       invalidateKeys: ['pickup_cached_event_' + eventId]
     });
   },
 
   async updateDuty(eventId, dutyId, payload) {
-    return this.request('PUT', '/api/events/' + eventId + '/duties/' + dutyId, payload, {
+    return this.request('PUT', '/api/events/' + encodeURIComponent(eventId) + '/duties/' + encodeURIComponent(dutyId), payload, {
       invalidateKeys: ['pickup_cached_event_' + eventId]
     });
   },
 
   async deleteDuty(eventId, dutyId) {
-    return this.request('DELETE', '/api/events/' + eventId + '/duties/' + dutyId, null, {
+    return this.request('DELETE', '/api/events/' + encodeURIComponent(eventId) + '/duties/' + encodeURIComponent(dutyId), null, {
       invalidateKeys: ['pickup_cached_event_' + eventId]
     });
   },
@@ -1463,19 +1476,19 @@ const API = {
   },
 
   async updateUserRole(userId, role) {
-    return this.request('PUT', '/api/auth/users/' + userId + '/role', { role: role });
+    return this.request('PUT', '/api/auth/users/' + encodeURIComponent(userId) + '/role', { role: role });
   },
 
   async updateUserBadges(userId, badges) {
-    return this.request('PUT', '/api/auth/users/' + userId + '/badges', badges);
+    return this.request('PUT', '/api/auth/users/' + encodeURIComponent(userId) + '/badges', badges);
   },
 
   async updateUserModerator(userId, isModerator) {
-    return this.request('PUT', '/api/auth/users/' + userId + '/moderator', { is_moderator: Boolean(isModerator) });
+    return this.request('PUT', '/api/auth/users/' + encodeURIComponent(userId) + '/moderator', { is_moderator: Boolean(isModerator) });
   },
 
   async muteUserModeration(userId, muted, reason) {
-    return this.request('PUT', '/api/moderation/users/' + userId + '/mute', {
+    return this.request('PUT', '/api/moderation/users/' + encodeURIComponent(userId) + '/mute', {
       muted: Boolean(muted),
       reason: reason || ''
     });
@@ -1490,11 +1503,11 @@ const API = {
   },
 
   async updateUserWaiverStatus(userId, waiverStatus) {
-    return this.request('PUT', '/api/waiver/admin/users/' + userId, { waiver_status: waiverStatus });
+    return this.request('PUT', '/api/waiver/admin/users/' + encodeURIComponent(userId), { waiver_status: waiverStatus });
   },
 
   async deleteUser(userId, ban = false, reason = '') {
-    return this.request('DELETE', '/api/auth/users/' + userId + '?ban=' + (ban ? 'true' : 'false') + '&reason=' + encodeURIComponent(reason));
+    return this.request('DELETE', '/api/auth/users/' + encodeURIComponent(userId) + '?ban=' + (ban ? 'true' : 'false') + '&reason=' + encodeURIComponent(reason));
   },
 
   async getBannedEmails() {
@@ -1506,7 +1519,7 @@ const API = {
   },
 
   async unbanEmail(id) {
-    return this.request('DELETE', '/api/auth/banned-emails/' + id);
+    return this.request('DELETE', '/api/auth/banned-emails/' + encodeURIComponent(id));
   },
 
   async getSettings() {
@@ -1964,11 +1977,11 @@ const API = {
             ${this.escapeHtml(user.name)}
           </span>
         </a>
-        ${user.canManageEvents ? `<a href="/admin.html" class="btn btn-outline btn-sm">${user.isAdmin ? this.t('nav.admin') : this.t('nav.org')}</a>` : ''}
+        ${user.canManageEvents ? `<a href="/admin.html" class="btn btn-outline btn-sm">${this.escapeHtml(user.isAdmin ? this.t('nav.admin') : this.t('nav.org'))}</a>` : ''}
       `;
     } else {
       authHtml = `
-        <a href="/login.html" class="btn-login"><span class="btn-login-icon">⚾ </span><span>${this.t('nav.login')}</span></a>
+        <a href="/login.html" class="btn-login"><span class="btn-login-icon">⚾ </span><span>${this.escapeHtml(this.t('nav.login'))}</span></a>
       `;
     }
 
@@ -1977,9 +1990,9 @@ const API = {
     const isGalleryPage = typeof window !== 'undefined' && (window.location.pathname.endsWith('gallery.html') || window.location.pathname === '/gallery');
     const isClubhousePage = typeof window !== 'undefined' && (window.location.pathname.endsWith('clubhouse.html') || window.location.pathname === '/clubhouse');
     // nav.art community art merged into nav.gallery (/art.html redirects to /gallery.html#community-art-section; nav-link-art alias)
-    const clubhouseLinkHtml = `<a href="/clubhouse.html" class="nav-link-clubhouse${isClubhousePage ? ' active' : ''}" title="${this.t('nav.clubhouse_title', 'Clubhouse Chat & Voice Dugout')}"><span>💬</span> <span>${this.t('nav.clubhouse', 'Clubhouse')}</span></a>`;
-    const galleryLinkHtml = `<a href="/gallery.html" class="nav-link-gallery${isGalleryPage || isArtPage ? ' active' : ''}" title="${this.t('nav.gallery_title', 'Photo, Video & Art Gallery')}"><span class="nav-gallery-icon">📸</span> <span>${this.t('nav.gallery', 'Gallery & Art')}</span></a>`;
-    const donateLinkHtml = `<a href="/donate.html" class="nav-link-donate${isDonatePage ? ' active' : ''}">${this.t('nav.donate')}</a>`;
+    const clubhouseLinkHtml = `<a href="/clubhouse.html" class="nav-link-clubhouse${isClubhousePage ? ' active' : ''}" title="${this.escapeHtml(this.t('nav.clubhouse_title', 'Clubhouse Chat & Voice Dugout'))}"><span>💬</span> <span>${this.escapeHtml(this.t('nav.clubhouse', 'Clubhouse'))}</span></a>`;
+    const galleryLinkHtml = `<a href="/gallery.html" class="nav-link-gallery${isGalleryPage || isArtPage ? ' active' : ''}" title="${this.escapeHtml(this.t('nav.gallery_title', 'Photo, Video & Art Gallery'))}"><span class="nav-gallery-icon">📸</span> <span>${this.escapeHtml(this.t('nav.gallery', 'Gallery & Art'))}</span></a>`;
+    const donateLinkHtml = `<a href="/donate.html" class="nav-link-donate${isDonatePage ? ' active' : ''}">${this.escapeHtml(this.t('nav.donate'))}</a>`;
 
     navContainer.innerHTML = `
       <div class="nav-wrap">

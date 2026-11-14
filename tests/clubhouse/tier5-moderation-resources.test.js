@@ -1065,37 +1065,40 @@ module.exports = async function runTier5(t, ctx) {
     const mockGifServer = http.createServer((req, res) => {
       remoteFetchCount += 1;
       if (req.url === '/not-a-gif.gif') {
-        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.writeHead(200, { 'Content-Type': 'text/html', 'Connection': 'close' });
         res.end('<html><body>not a gif</body></html>');
         return;
       }
       if (req.url === '/private-dm.gif') {
-        res.writeHead(200, { 'Content-Type': 'image/gif', 'Content-Length': String(privateGif.length) });
+        res.writeHead(200, { 'Content-Type': 'image/gif', 'Content-Length': String(privateGif.length), 'Connection': 'close' });
         res.end(privateGif);
         return;
       }
       if (req.url === '/rally-gdrive.gif') {
-        res.writeHead(200, { 'Content-Type': 'image/gif', 'Content-Length': String(rallyGif.length) });
+        res.writeHead(200, { 'Content-Type': 'image/gif', 'Content-Length': String(rallyGif.length), 'Connection': 'close' });
         res.end(rallyGif);
         return;
       }
       if (req.url === '/large-gdrive-fail.gif') {
         const bigGif = Buffer.concat([rallyGif, Buffer.alloc(2 * 1024 * 1024 + 4096, 0x20)]);
-        res.writeHead(200, { 'Content-Type': 'image/gif', 'Content-Length': String(bigGif.length) });
+        res.writeHead(200, { 'Content-Type': 'image/gif', 'Content-Length': String(bigGif.length), 'Connection': 'close' });
         res.end(bigGif);
         return;
       }
       if (req.url === '/small-gdrive-fallback.gif') {
         const smallGif = Buffer.concat([sampleGif, Buffer.from('small-fallback-salt')]);
-        res.writeHead(200, { 'Content-Type': 'image/gif', 'Content-Length': String(smallGif.length) });
+        res.writeHead(200, { 'Content-Type': 'image/gif', 'Content-Length': String(smallGif.length), 'Connection': 'close' });
         res.end(smallGif);
         return;
       }
-      res.writeHead(200, { 'Content-Type': 'image/gif', 'Content-Length': String(sampleGif.length) });
+      res.writeHead(200, { 'Content-Type': 'image/gif', 'Content-Length': String(sampleGif.length), 'Connection': 'close' });
       res.end(sampleGif);
     });
 
-    await new Promise((resolve) => mockGifServer.listen(0, '127.0.0.1', resolve));
+    await new Promise((resolve) => mockGifServer.listen(0, '127.0.0.1', () => {
+      mockGifServer.unref();
+      resolve();
+    }));
     const port = mockGifServer.address().port;
 
     try {
@@ -1175,6 +1178,7 @@ module.exports = async function runTier5(t, ctx) {
         );
         assert.equal(gdStreamRes.status, 200);
         assert.equal(gdStreamRes.headers.get('content-type'), 'image/gif');
+        await gdStreamRes.arrayBuffer();
 
         // Re-importing the exact same URL deduplicates with zero external fetch
         const fetchesBeforeUrlDedup = remoteFetchCount;
@@ -1275,6 +1279,9 @@ module.exports = async function runTier5(t, ctx) {
         await mockDrive.close();
       }
     } finally {
+      if (typeof mockGifServer.closeAllConnections === 'function') {
+        mockGifServer.closeAllConnections();
+      }
       await new Promise((resolve) => mockGifServer.close(resolve));
     }
 

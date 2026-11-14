@@ -8,7 +8,10 @@ import {
   checkRateLimit,
   isValidRasterImageBuffer,
   generateToken,
+  constantTimeEqual,
+  verifyTurnstileIfConfigured,
   rejectIfChatMuted,
+  rejectIfClubhouseOptedOut,
   isPrivateIpOrHost,
   safeFetchExternalUrl,
   readResponseWithByteCap
@@ -32,18 +35,36 @@ const MAX_MEDIA_BYTES = 50 * 1024 * 1024;
 const MAX_LOCAL_D1_MEDIA_BYTES = 10 * 1024 * 1024;
 
 function validateExternalHttpUrl(rawUrl, isTestEnv = false) {
+  const str = String(rawUrl || '').trim();
+  if (!str || str.length > 2048) {
+    return { ok: false, status: 400, error: 'Please provide a valid URL (max 2048 characters).' };
+  }
   let parsed;
   try {
-    parsed = new URL(String(rawUrl || '').trim());
+    parsed = new URL(str);
   } catch (e) {
     return { ok: false, status: 400, error: 'Invalid URL provided.' };
   }
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    return { ok: false, status: 400, error: 'Only HTTP and HTTPS links are supported.' };
+  if (parsed.hostname.endsWith('.')) {
+    return { ok: false, status: 400, error: 'Trailing dots in remote hostnames are not allowed.' };
+  }
+  const allowHttpInTest = isTestEnv && (parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost');
+  if (parsed.protocol !== 'https:' && !(allowHttpInTest && parsed.protocol === 'http:')) {
+    return { ok: false, status: 400, error: 'Only HTTPS links are allowed for external media.' };
+  }
+  if (parsed.username || parsed.password) {
+    return { ok: false, status: 400, error: 'URLs containing embedded credentials are not allowed.' };
+  }
+  if (!isTestEnv && parsed.port && parsed.port !== '443') {
+    return { ok: false, status: 400, error: 'Non-standard ports are not allowed for external media links.' };
   }
   if (isPrivateIpOrHost(parsed.hostname, isTestEnv)) {
     return { ok: false, status: 403, error: 'Private or local addresses cannot be fetched.' };
   }
+  if (!isTestEnv && !parsed.hostname.includes('.')) {
+    return { ok: false, status: 400, error: 'External media URL must use a public domain name.' };
+  }
+  parsed.hash = '';
   return { ok: true, url: parsed.href };
 }
 
@@ -229,14 +250,14 @@ mediaRouter.get('/:id/file', async (c) => {
         return c.text('Upstream file unavailable', upstreamRes ? upstreamRes.status : 502);
       }
 
-      const contentLen = parseInt(upstreamRes.headers.get('content-length') || '0', 10);
-      if (!isNaN(contentLen) && contentLen > MAX_MEDIA_BYTES) {
-        return c.text('Upstream file exceeds maximum size limit', 413);
+      const capped = await readResponseWithByteCap(upstreamRes, MAX_MEDIA_BYTES);
+      if (!capped.ok) {
+        return c.text(capped.error || 'Upstream file exceeds maximum size limit', capped.status || 413);
       }
 
       const contentType = upstreamRes.headers.get('content-type') || row.mime_type || 'image/jpeg';
 
-      return new Response(upstreamRes.body, {
+      return new Response(capped.buffer, {
         status: 200,
         headers: {
           'Content-Type': contentType,
@@ -313,7 +334,11 @@ mediaRouter.post('/', async (c) => {
     }
 
     const body = await c.req.json();
-    const { title, caption, date_taken, album, contributor_name, event_id, url, file_data, mime_type, file_name } = body;
+    const { title, caption, date_taken, album, contributor_name, event_id, url, file_data, mime_type, file_name, cf_turnstile_response } = body;
+
+    if (!user && !(await verifyTurnstileIfConfigured(c.env, cf_turnstile_response, clientIp))) {
+      return c.json({ error: 'Bot verification failed. Please refresh and try again.' }, 403);
+    }
 
     // Validate approximate date (required by user specification)
     let cleanDate = date_taken ? String(date_taken).trim() : '';
@@ -321,12 +346,12 @@ mediaRouter.post('/', async (c) => {
       cleanDate = new Date().toISOString().slice(0, 10);
     }
 
-    const cleanAlbum = album && String(album).trim() ? String(album).trim() : 'Community Moments';
-    const cleanTitle = title && String(title).trim() ? String(title).trim() : 'Community Submission';
-    const cleanCaption = caption && String(caption).trim() ? String(caption).trim() : '';
-    const cleanContributor = contributor_name && String(contributor_name).trim()
+    const cleanAlbum = (album && String(album).trim() ? String(album).trim() : 'Community Moments').slice(0, 120);
+    const cleanTitle = (title && String(title).trim() ? String(title).trim() : 'Community Submission').slice(0, 200);
+    const cleanCaption = (caption && String(caption).trim() ? String(caption).trim() : '').slice(0, 2000);
+    const cleanContributor = (contributor_name && String(contributor_name).trim()
       ? String(contributor_name).trim()
-      : (user && user.name ? user.name : 'Community Player');
+      : (user && user.name ? user.name : 'Community Player')).slice(0, 120);
     const cleanEventId = event_id ? parseInt(event_id, 10) : null;
     const isTestEnv = Boolean(c.env && (c.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'test'));
 
@@ -448,14 +473,19 @@ mediaRouter.post('/', async (c) => {
         }
       }
 
+      const maxB64UploadBytes = user ? MAX_MEDIA_BYTES : MAX_LOCAL_D1_MEDIA_BYTES;
+      if (cleanB64.length > Math.ceil(maxB64UploadBytes * 1.4) + 128) {
+        return c.json({ error: user ? 'Uploaded file exceeds 50MB limit.' : 'Anonymous uploads are limited to 10MB.' }, 413);
+      }
+
       let bytes;
       try {
         bytes = base64ToUint8Array(cleanB64);
       } catch (b64Err) {
         return c.json({ error: 'Invalid base64 media payload.' }, 400);
       }
-      if (bytes.byteLength > MAX_MEDIA_BYTES) {
-        return c.json({ error: 'Uploaded file exceeds 50MB limit.' }, 400);
+      if (bytes.byteLength > maxB64UploadBytes) {
+        return c.json({ error: user ? 'Uploaded file exceeds 50MB limit.' : 'Anonymous uploads are limited to 10MB.' }, 400);
       }
 
       if (!ALLOWED_MIME.includes(storedMimeType)) {
@@ -723,7 +753,9 @@ async function handleMediaDelete(c) {
     const id = parseInt(c.req.param('id'), 10);
     if (!id || isNaN(id)) return c.json({ error: 'Invalid ID' }, 400);
 
-    const existing = await c.env.DB.prepare('SELECT id, file_url, original_url, contributor_id, delete_token FROM media_items WHERE id = ?').bind(id).first();
+    const existing = await c.env.DB.prepare(
+      'SELECT id, file_url, original_url, contributor_id, delete_token, file_size FROM media_items WHERE id = ?'
+    ).bind(id).first();
     if (!existing) return c.json({ error: 'Media item not found' }, 404);
 
     const user = c.get('user');
@@ -741,7 +773,7 @@ async function handleMediaDelete(c) {
       } catch (e) {}
     }
     const providedToken = String(tokenHeader || tokenQuery || tokenBody || '').trim();
-    const isOwnerToken = Boolean(existing.delete_token && providedToken && existing.delete_token === providedToken);
+    const isOwnerToken = Boolean(existing.delete_token && providedToken && constantTimeEqual(existing.delete_token, providedToken));
 
     if (!isManager && !isOwnerUser && !isOwnerToken) {
       return c.json({ error: 'Access denied: You do not have permission to take down this submission.' }, 403);
@@ -870,8 +902,6 @@ function hasInvalidOrSpoofedMagicBytes(bytes, mimeType, isEncrypted) {
 // ---------------------------------------------------------------------------
 attachmentsRouter.post('/init', requireAuth, async (c) => {
   const user = c.get('user');
-  const mutedResp = rejectIfChatMuted(c, user);
-  if (mutedResp) return mutedResp;
   const chatDb = c.env && c.env.CHAT_DB;
   if (!chatDb) return c.json({ error: 'Chat database unavailable.' }, 500);
 
@@ -909,6 +939,16 @@ attachmentsRouter.post('/init', requireAuth, async (c) => {
     return c.json({ error: 'File size exceeds maximum limit of 500 MB.' }, 400);
   }
 
+  const useGDrive = isGDriveConfigured(c.env);
+  if (!useGDrive && fileSize > MAX_LOCAL_D1_ATTACHMENT_BYTES) {
+    return c.json({ error: 'Files over 10 MB require Google Drive storage, which is currently unavailable.' }, 400);
+  }
+
+  const optResp = rejectIfClubhouseOptedOut(c, user);
+  if (optResp) return optResp;
+  const mutedResp = rejectIfChatMuted(c, user);
+  if (mutedResp) return mutedResp;
+
   const channel = await resolveChannel(chatDb, channelParam || 'general');
   if (!channel) {
     return c.json({ error: 'Target channel not found.' }, 404);
@@ -919,7 +959,6 @@ attachmentsRouter.post('/init', requireAuth, async (c) => {
   }
 
   const attachmentId = `att_${generateToken().slice(0, 24)}`;
-  const useGDrive = isGDriveConfigured(c.env);
 
   if (useGDrive) {
     try {
@@ -928,7 +967,11 @@ attachmentsRouter.post('/init', requireAuth, async (c) => {
         fileName,
         mimeType,
         fileSize,
-        origin
+        origin,
+        appProperties: {
+          pbf_attachment_id: attachmentId,
+          pbf_channel_id: String(channel.id)
+        }
       });
 
       await chatDb.prepare(`
@@ -1127,12 +1170,33 @@ attachmentsRouter.post('/:id/complete', requireAuth, async (c) => {
   let verifiedSize = attachment.file_size;
 
   if (attachment.storage_provider === 'gdrive' && driveFileId && isGDriveConfigured(c.env)) {
+    let meta = null;
     try {
-      const meta = await getGDriveFileMetadata(c.env, driveFileId);
-      if (meta && meta.size > 0) {
-        verifiedSize = meta.size;
+      meta = await getGDriveFileMetadata(c.env, driveFileId);
+    } catch (e) {
+      return c.json({ error: 'Failed to verify uploaded Google Drive file metadata.' }, 400);
+    }
+    if (!meta || !meta.id) {
+      return c.json({ error: 'Uploaded Google Drive file could not be verified.' }, 400);
+    }
+    const propAttId = meta.appProperties && meta.appProperties.pbf_attachment_id;
+    if (propAttId !== id) {
+      if (!attachment.drive_file_id || (propAttId && propAttId !== id)) {
+        return c.json({ error: 'Google Drive file does not belong to this upload session.' }, 403);
       }
-    } catch (e) {}
+    }
+    if (meta.size <= 0 || meta.size > MAX_GDRIVE_ATTACHMENT_BYTES) {
+      return c.json({ error: 'Uploaded Google Drive file size is invalid or exceeds 500 MB.' }, 400);
+    }
+    const metaMime = String(meta.mimeType || '').split(';')[0].trim().toLowerCase();
+    if (
+      metaMime &&
+      !ALLOWED_ATTACHMENT_MIME_TYPES.has(metaMime) &&
+      !(attachment.is_encrypted && metaMime === 'application/octet-stream')
+    ) {
+      return c.json({ error: 'Uploaded Google Drive file MIME type is not permitted.' }, 400);
+    }
+    verifiedSize = meta.size;
   }
 
   await chatDb.prepare(`
@@ -1191,6 +1255,8 @@ attachmentsRouter.get('/:id/stream', async (c) => {
     if (!user) {
       return c.json({ error: 'Authentication required.' }, 401);
     }
+    const optResp = rejectIfClubhouseOptedOut(c, user);
+    if (optResp) return optResp;
     const channel = await resolveChannel(chatDb, attachment.channel_id);
     if (!channel || !(await canUserAccessChannel(chatDb, user, channel, 'read'))) {
       return c.json({ error: 'Access denied.' }, 403);

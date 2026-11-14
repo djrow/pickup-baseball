@@ -27,10 +27,11 @@
   var memoryKeyStore = {};
 
   function getRandomBytes(length) {
-    var arr = new Uint8Array(length);
-    if (root.crypto && typeof root.crypto.getRandomValues === 'function') {
-      root.crypto.getRandomValues(arr);
+    if (!root.crypto || typeof root.crypto.getRandomValues !== 'function') {
+      throw new Error('Cryptographically secure randomness is unavailable in this environment.');
     }
+    var arr = new Uint8Array(length);
+    root.crypto.getRandomValues(arr);
     return arr;
   }
 
@@ -102,6 +103,30 @@
    * Open IndexedDB keystore (falls back to in-memory map in headless/private environments).
    */
   var cachedKeyDbPromise = null;
+  var openKeyDbInstance = null;
+
+  function closeKeyDbHandle() {
+    if (openKeyDbInstance) {
+      try { openKeyDbInstance.close(); } catch (e) {}
+      openKeyDbInstance = null;
+    }
+    cachedKeyDbPromise = null;
+  }
+
+  if (typeof window !== 'undefined' && typeof BroadcastChannel !== 'undefined') {
+    try {
+      var keyClearChannel = new BroadcastChannel('pickup_clubhouse_clear');
+      if (typeof keyClearChannel.unref === 'function') {
+        keyClearChannel.unref();
+      }
+      keyClearChannel.addEventListener('message', function (ev) {
+        if (ev && ev.data && ev.data.type === 'clear') {
+          memoryKeyStore = {};
+          closeKeyDbHandle();
+        }
+      });
+    } catch (e) {}
+  }
 
   function openKeyDb() {
     if (cachedKeyDbPromise) return cachedKeyDbPromise;
@@ -120,11 +145,14 @@
         };
         req.onsuccess = function (ev) {
           var db = ev.target.result;
+          openKeyDbInstance = db;
           db.onversionchange = function () {
             try { db.close(); } catch (e) {}
+            if (openKeyDbInstance === db) openKeyDbInstance = null;
             cachedKeyDbPromise = null;
           };
           db.onclose = function () {
+            if (openKeyDbInstance === db) openKeyDbInstance = null;
             cachedKeyDbPromise = null;
           };
           resolve(db);
@@ -443,33 +471,6 @@
   }
 
   /**
-   * Deterministic fallback channel key derivation so E2EE channels work seamlessly in browser sessions
-   * even before all community members have completed pairwise key-share exchanges.
-   */
-  function deriveFallbackChannelKey(channelId, keyEpoch) {
-    var epoch = keyEpoch || 1;
-    var cacheKey = 'fallback_channel_key_' + String(channelId) + '_epoch_' + String(epoch);
-    return idbGet(cacheKey).then(function (cached) {
-      if (cached) return cached;
-      var enc = new TextEncoder();
-      var seed = enc.encode('pickup_baseball_clubhouse_e2ee_v1_ch_' + String(channelId) + '_ep_' + String(epoch));
-      return subtle.digest('SHA-256', seed).then(function (hashBuf) {
-        return subtle.importKey(
-          'raw',
-          hashBuf,
-          { name: 'AES-GCM', length: 256 },
-          false,
-          ['encrypt', 'decrypt']
-        );
-      }).then(function (cryptoKey) {
-        return idbPut(cacheKey, cryptoKey).then(function () {
-          return cryptoKey;
-        });
-      });
-    });
-  }
-
-  /**
    * Encrypt a UTF-8 message string with AES-GCM-256.
    */
   function encryptPayload(channelKey, plaintext) {
@@ -769,7 +770,7 @@
 
   function clearMemoryKeys() {
     memoryKeyStore = {};
-    cachedKeyDbPromise = null;
+    closeKeyDbHandle();
   }
 
   var ClubhouseCrypto = {
@@ -785,7 +786,6 @@
     deriveEcdhSharedKey: deriveEcdhSharedKey,
     wrapChannelKey: wrapChannelKey,
     unwrapChannelKey: unwrapChannelKey,
-    deriveFallbackChannelKey: deriveFallbackChannelKey,
     encryptPayload: encryptPayload,
     decryptPayload: decryptPayload,
     encryptBinaryBuffer: encryptBinaryBuffer,

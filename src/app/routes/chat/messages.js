@@ -213,7 +213,8 @@ chatMessagesRouter.post('/channels/:id/messages', requireAuth, async (c) => {
     return c.json({ error: 'Direct messages and private boards must be end-to-end encrypted (missing encryption_iv).' }, 400);
   }
   const keyEpoch = body.key_epoch ? parseInt(body.key_epoch, 10) : 1;
-  const messageType = body.message_type || 'text';
+  const allowedMessageTypes = new Set(['text', 'system', 'poll', 'image', 'video', 'file']);
+  const messageType = allowedMessageTypes.has(String(body.message_type || 'text')) ? String(body.message_type || 'text') : 'text';
   const metadataJson = body.metadata_json
     ? (typeof body.metadata_json === 'string' ? body.metadata_json : JSON.stringify(body.metadata_json))
     : null;
@@ -370,8 +371,8 @@ chatMessagesRouter.patch('/messages/:id', requireAuth, async (c) => {
   if ((isDmMsg || isPrivateMsg) && !rawEditIv) {
     return c.json({ error: 'Direct message and private board edits must remain end-to-end encrypted (missing encryption_iv).' }, 400);
   }
-  if (rawEditIv && String(rawEditIv).length > 512) {
-    return c.json({ error: 'encryption_iv exceeds maximum allowed size.' }, 400);
+  if (rawEditIv && String(rawEditIv).length > 128) {
+    return c.json({ error: 'encryption_iv exceeds maximum allowed size (128 chars).' }, 400);
   }
   const newIv = rawEditIv !== undefined ? rawEditIv : existing.iv;
   const nowIso = new Date().toISOString();
@@ -681,6 +682,20 @@ chatMessagesRouter.post('/messages/:id/unhide', requireModerator, async (c) => {
   const msgChannel = await resolveChannel(chatDb, existing.channel_id);
   if (!msgChannel || !(await canUserAccessChannel(chatDb, user, msgChannel, 'read'))) {
     return c.json({ error: 'Access denied: insufficient permissions to moderate this board.' }, 403);
+  }
+  if (!user.isAdmin) {
+    if (existing.author_role === 'admin' || msgChannel.min_role_write === 'admin') {
+      return c.json({ error: 'Access denied: only administrators may unhide administrator messages or admin-board notices.' }, 403);
+    }
+    const isDmMsg = msgChannel.channel_type === 'dm' || msgChannel.channel_type === 'group_dm';
+    if (isDmMsg) {
+      const openReport = await chatDb.prepare(
+        "SELECT 1 FROM chat_reports WHERE target_message_id = ? LIMIT 1"
+      ).bind(msgId).first();
+      if (!openReport) {
+        return c.json({ error: 'Access denied: DM messages can only be moderated by an administrator or pursuant to a report.' }, 403);
+      }
+    }
   }
   if (!existing.hidden_at) {
     return c.json({ error: 'Message is not hidden.' }, 400);

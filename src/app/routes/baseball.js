@@ -5,9 +5,10 @@
  */
 
 import { Hono } from 'hono';
-import { requireAuth, requireOrganizer, generateToken, getSafePublicOrigin } from '../security.js';
+import { requireAuth, requireOrganizer, generateToken, getSafePublicOrigin, checkRateLimit, getClientIp } from '../security.js';
 import { parseAllowedEmails, canUserAccessEvent, getDutyType } from '../policy.js';
 import { canUserAccessChannel } from './chat.js';
+import { chunkArray } from './chat/helpers.js';
 import { promoteNextWaitlistedPlayer } from './events/helpers.js';
 
 export const baseballRouter = new Hono();
@@ -153,6 +154,11 @@ baseballRouter.post('/events/:eventId/quick-rsvp', requireAuth, async (c) => {
   const baseballDb = c.env && (c.env.BASEBALL_DB || c.env.DB);
   if (!baseballDb) return c.json({ error: 'Baseball database unavailable.' }, 500);
 
+  const rl = await checkRateLimit(baseballDb, `quick_rsvp:${user.id}:${getClientIp(c)}`, 30, 60, c.env);
+  if (!rl.allowed) {
+    return c.json({ error: 'Too many RSVP updates. Please wait a moment.' }, 429);
+  }
+
   const eventId = parseInt(c.req.param('eventId'), 10);
   if (!eventId || isNaN(eventId)) {
     return c.json({ error: 'Invalid event ID.' }, 400);
@@ -289,6 +295,11 @@ baseballRouter.post('/events/:eventId/quick-bp', requireAuth, async (c) => {
   const baseballDb = c.env && (c.env.BASEBALL_DB || c.env.DB);
   if (!baseballDb) return c.json({ error: 'Baseball database unavailable.' }, 500);
 
+  const rl = await checkRateLimit(baseballDb, `quick_bp:${user.id}:${getClientIp(c)}`, 30, 60, c.env);
+  if (!rl.allowed) {
+    return c.json({ error: 'Too many batting practice updates. Please wait a moment.' }, 429);
+  }
+
   const eventId = parseInt(c.req.param('eventId'), 10);
   if (!eventId || isNaN(eventId)) {
     return c.json({ error: 'Invalid event ID.' }, 400);
@@ -354,7 +365,7 @@ baseballRouter.post('/events/:eventId/quick-bp', requireAuth, async (c) => {
     }, 409);
   }
 
-  const notes = body.notes ? String(body.notes).trim() : null;
+  const notes = body.notes ? String(body.notes).trim().slice(0, 500) : null;
 
   // Check if user already holds a slot for this event
   const userExisting = await baseballDb.prepare(
@@ -426,6 +437,23 @@ baseballRouter.post('/events/:eventId/sync-channel', requireOrganizer, async (c)
     "SELECT * FROM channels WHERE linked_event_id = ? AND channel_type NOT IN ('dm', 'group_dm') LIMIT 1"
   ).bind(eventId).first();
 
+  const resolveInvitedMemberIds = async () => {
+    const invitedIds = new Set([user.id]);
+    const chunks = chunkArray(invitedEmails, 80);
+    for (const chunk of chunks) {
+      const normalized = chunk.map((e) => String(e).trim().toLowerCase()).filter(Boolean);
+      if (normalized.length === 0) continue;
+      const placeholders = normalized.map(() => '?').join(', ');
+      const { results: userRows } = await baseballDb.prepare(
+        `SELECT id FROM users WHERE LOWER(email) IN (${placeholders})`
+      ).bind(...normalized).all();
+      for (const u of (userRows || [])) {
+        invitedIds.add(u.id);
+      }
+    }
+    return Array.from(invitedIds);
+  };
+
   if (!channel) {
     const rawDate = String(event.event_date || '').slice(0, 10) || `game-${eventId}`;
     let slug = `sunday-${rawDate}`.toLowerCase().replace(/[^a-z0-9-]+/g, '-');
@@ -455,12 +483,7 @@ baseballRouter.post('/events/:eventId/sync-channel', requireOrganizer, async (c)
 
       const createdChId = insRes.meta.last_row_id;
       if (isInviteRestricted) {
-        const { results: userRows } = await baseballDb.prepare('SELECT id, email FROM users').all();
-        const emailSet = new Set(invitedEmails);
-        const invitedIds = Array.from(new Set([
-          user.id,
-          ...(userRows || []).filter((u) => emailSet.has(String(u.email || '').trim().toLowerCase())).map((u) => u.id)
-        ]));
+        const invitedIds = await resolveInvitedMemberIds();
         if (invitedIds.length > 0) {
           await chatDb.batch(invitedIds.map((uid) =>
             chatDb.prepare(
@@ -476,6 +499,15 @@ baseballRouter.post('/events/:eventId/sync-channel', requireOrganizer, async (c)
         "SELECT * FROM channels WHERE (linked_event_id = ? OR slug = ?) AND channel_type NOT IN ('dm', 'group_dm') LIMIT 1"
       ).bind(eventId, slug).first();
       if (!channel) throw insertErr;
+    }
+  } else if (isInviteRestricted && channel.is_private) {
+    const invitedIds = await resolveInvitedMemberIds();
+    if (invitedIds.length > 0) {
+      await chatDb.batch(invitedIds.map((uid) =>
+        chatDb.prepare(
+          'INSERT INTO channel_members (channel_id, user_id, role) VALUES (?, ?, ?) ON CONFLICT(channel_id, user_id) DO NOTHING'
+        ).bind(channel.id, uid, uid === user.id ? 'owner' : 'member')
+      ));
     }
   }
 

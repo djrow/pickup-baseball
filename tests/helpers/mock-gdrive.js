@@ -238,13 +238,20 @@ function createMockGDriveServer() {
   return new Promise((resolve) => {
     const server = http.createServer(app);
     server.listen(0, '127.0.0.1', () => {
+      server.unref();
       const port = server.address().port;
       const baseUrl = `http://127.0.0.1:${port}`;
       resolve({
         service,
         baseUrl,
         server,
-        close: () => new Promise((r) => server.close(r))
+        close: () => Promise.race([
+          new Promise((r) => {
+            if (typeof server.closeAllConnections === 'function') server.closeAllConnections();
+            server.close(r);
+          }),
+          new Promise((r) => setTimeout(r, 1500).unref())
+        ])
       });
     });
   });

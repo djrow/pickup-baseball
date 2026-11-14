@@ -163,7 +163,7 @@ app.get('/users/:id/avatar', serveUserAvatar);
 app.get('/settings', getSettingsHandler);
 app.put('/settings', requireAdmin, putSettingsHandler);
 app.post('/settings/test-appscript', requireAdmin, testAppscriptHandler);
-app.get('/feed.xml', (c) => renderFeedXmlResponse(c.env && c.env.DB, c.req.url));
+app.get('/feed.xml', (c) => renderFeedXmlResponse(c.env && (c.env.BASEBALL_DB || c.env.DB), c.req.url, c.env));
 
 app.route('/auth', authRouter);
 app.route('/events', eventsRouter);

@@ -27,9 +27,36 @@ voiceRouter.post('/:channelId/join', requireAuth, async (c) => {
   if (!channel) {
     return c.json({ error: 'Voice channel not found.' }, 404);
   }
+  if (channel.channel_type !== 'voice' && channel.channel_type !== 'dm' && channel.channel_type !== 'group_dm') {
+    return c.json({ error: 'This channel does not support voice or WebRTC calls.' }, 400);
+  }
 
   if (!(await canUserAccessChannel(chatDb, user, channel, 'read'))) {
     return c.json({ error: 'Access denied: insufficient permissions to join this voice room.' }, 403);
+  }
+
+  const nowSecJoin = Math.floor(Date.now() / 1000);
+  const joinRateKey = `user_${user.id}_voice_join`;
+  const joinCutoff = nowSecJoin - 60;
+  try {
+    await chatDb.prepare(`
+      INSERT INTO chat_rate_limits (key, count, window_start)
+      VALUES (?, 1, ?)
+      ON CONFLICT(key) DO UPDATE SET
+        count = CASE WHEN chat_rate_limits.window_start <= ? THEN 1 ELSE chat_rate_limits.count + 1 END,
+        window_start = CASE WHEN chat_rate_limits.window_start <= ? THEN ? ELSE chat_rate_limits.window_start END
+    `).bind(joinRateKey, nowSecJoin, joinCutoff, joinCutoff, nowSecJoin).run();
+    const joinRateRow = await chatDb.prepare('SELECT count FROM chat_rate_limits WHERE key = ?').bind(joinRateKey).first();
+    if (joinRateRow && joinRateRow.count > 30) {
+      return c.json({ error: 'Too many voice join requests. Please wait a moment.' }, 429);
+    }
+  } catch (e) {}
+
+  const vpCountRow = await chatDb.prepare(
+    'SELECT COUNT(*) as total FROM voice_participants WHERE channel_id = ? AND user_id != ? AND heartbeat_at > ?'
+  ).bind(channel.id, user.id, nowSecJoin - 25).first();
+  if (vpCountRow && vpCountRow.total >= 24) {
+    return c.json({ error: 'This voice room has reached its maximum capacity (24 participants).' }, 429);
   }
 
   const body = await c.req.json().catch(() => ({}));
@@ -93,6 +120,9 @@ voiceRouter.post('/:channelId/state', requireAuth, async (c) => {
   const channel = await resolveChannel(chatDb, c.req.param('channelId'));
   if (!channel) {
     return c.json({ error: 'Voice channel not found.' }, 404);
+  }
+  if (channel.channel_type !== 'voice' && channel.channel_type !== 'dm' && channel.channel_type !== 'group_dm') {
+    return c.json({ error: 'This channel does not support voice or WebRTC calls.' }, 400);
   }
 
   if (!(await canUserAccessChannel(chatDb, user, channel, 'read'))) {
@@ -235,7 +265,22 @@ rtcRouter.post('/signal', requireAuth, async (c) => {
     return c.json({ error: 'channel_id, recipient_user_id, signal_type, and payload_json are required.' }, 400);
   }
 
-  if (!ALLOWED_SIGNAL_TYPES.has(signalType.toLowerCase())) {
+  const channel = await resolveChannel(chatDb, channelParam);
+  if (!channel) {
+    return c.json({ error: 'Target channel not found.' }, 404);
+  }
+
+  // Verify sender has permission to access this room before disclosing channel type or validating payload details
+  if (!(await canUserAccessChannel(chatDb, user, channel, 'read'))) {
+    return c.json({ error: 'Access denied: insufficient permissions for this voice/signaling room.' }, 403);
+  }
+
+  if (recipientUserId === user.id) {
+    return c.json({ error: 'Cannot send WebRTC signals to yourself.' }, 400);
+  }
+
+  const sigLower = signalType.toLowerCase();
+  if (!ALLOWED_SIGNAL_TYPES.has(sigLower)) {
     return c.json({ error: 'Unsupported WebRTC signal_type.' }, 400);
   }
 
@@ -243,20 +288,33 @@ rtcRouter.post('/signal', requireAuth, async (c) => {
     return c.json({ error: 'Signal payload exceeds maximum allowed size (64 KB).' }, 400);
   }
 
-  const channel = await resolveChannel(chatDb, channelParam);
-  if (!channel) {
-    return c.json({ error: 'Target channel not found.' }, 404);
+  let parsedPayload = null;
+  try {
+    parsedPayload = JSON.parse(payloadJson);
+  } catch (e) {
+    return c.json({ error: 'Invalid signal payload JSON.' }, 400);
+  }
+  if (!parsedPayload || typeof parsedPayload !== 'object') {
+    return c.json({ error: 'Signal payload must be a JSON object.' }, 400);
+  }
+  if (sigLower === 'offer' || sigLower === 'answer' || sigLower === 'renegotiate') {
+    if (typeof parsedPayload.type !== 'string' || typeof parsedPayload.sdp !== 'string' || !parsedPayload.sdp) {
+      return c.json({ error: 'Invalid SDP payload structure.' }, 400);
+    }
+  } else if (sigLower === 'ice-candidate' || sigLower === 'candidate') {
+    if (!parsedPayload.candidate) {
+      return c.json({ error: 'Invalid ICE candidate payload structure.' }, 400);
+    }
   }
 
-  // Verify sender has permission to access this room
-  if (!(await canUserAccessChannel(chatDb, user, channel, 'read'))) {
-    return c.json({ error: 'Access denied: insufficient permissions for this voice/signaling room.' }, 403);
+  if (channel.channel_type !== 'voice' && channel.channel_type !== 'dm' && channel.channel_type !== 'group_dm') {
+    return c.json({ error: 'This channel does not support WebRTC signaling.' }, 400);
   }
 
   // Verify recipient user exists in BASEBALL_DB and can access this channel
   if (baseballDb) {
     const recipientUser = await baseballDb.prepare(`
-      SELECT u.id, u.email, u.role, u.is_admin, u.is_moderator, COALESCE(u.clubhouse_opted_in, 1) as clubhouse_opted_in,
+      SELECT u.id, u.email, u.role, u.is_admin, u.is_moderator, COALESCE(u.clubhouse_opted_in, 0) as clubhouse_opted_in,
              EXISTS(SELECT 1 FROM banned_emails b WHERE LOWER(b.email) = LOWER(u.email)) as is_banned,
              CASE WHEN COALESCE(u.role, 'player') = 'facilitator' THEN 1 ELSE EXISTS(
                SELECT 1 FROM duty_assignments da

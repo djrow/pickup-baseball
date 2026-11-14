@@ -53,6 +53,7 @@ const PUBLIC_DIR = path.join(ROOT_DIR, 'public');
 // Build Express test application wrapping the unified Hono app
 const app = express();
 app.use((req, res, next) => {
+  res.setHeader('Connection', 'close');
   res.setHeader('X-App-Version', CURRENT_APP_VERSION);
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
@@ -172,6 +173,7 @@ const ctx = {
 test.before(async () => {
   await new Promise((resolve) => {
     server = app.listen(0, '127.0.0.1', () => {
+      server.unref();
       const port = server.address().port;
       ctx.baseUrl = `http://127.0.0.1:${port}`;
       resolve();
@@ -208,7 +210,13 @@ test.before(async () => {
 
 test.after(async () => {
   if (server) {
-    await new Promise((resolve) => server.close(resolve));
+    if (typeof server.closeAllConnections === 'function') {
+      server.closeAllConnections();
+    }
+    await Promise.race([
+      new Promise((resolve) => server.close(resolve)),
+      new Promise((resolve) => setTimeout(resolve, 1500).unref())
+    ]);
   }
   db.close();
   if (chatDb && typeof chatDb.close === 'function') {
@@ -224,6 +232,19 @@ test.after(async () => {
     if (fs.existsSync(testChatDbPath + '-shm')) fs.unlinkSync(testChatDbPath + '-shm');
     if (fs.existsSync(testDataDir)) fs.rmSync(testDataDir, { recursive: true, force: true });
   } catch (e) {}
+
+  if (typeof process._getActiveHandles === 'function') {
+    for (const h of process._getActiveHandles()) {
+      if (!h || h === process.stdout || h === process.stderr || h === process.stdin) continue;
+      const name = h.constructor && h.constructor.name;
+      if (name === 'Socket' || name === 'Server') {
+        try {
+          if (typeof h.unref === 'function') h.unref();
+          if (name === 'Socket' && typeof h.destroy === 'function') h.destroy();
+        } catch (e) {}
+      }
+    }
+  }
 });
 
 // ---------------------------------------------------------------------------

@@ -101,7 +101,12 @@ function getFullRequestUrl(req, trustProxy = false) {
   const rawProto = trustProxy ? (req.headers['x-forwarded-proto'] || req.protocol || 'http') : (req.protocol || 'http');
   const proto = rawProto === 'https' ? 'https' : 'http';
   const rawHost = String(req.headers.host || '127.0.0.1').trim();
-  const safeHost = /^[a-z0-9.\-:\[\]]+$/i.test(rawHost) ? rawHost : '127.0.0.1';
+  let safeHost = '127.0.0.1';
+  if (/^[a-z0-9.\-:\[\]]+$/i.test(rawHost)) {
+    try {
+      safeHost = new URL(`${proto}://${rawHost}`).host || '127.0.0.1';
+    } catch (e) {}
+  }
   return `${proto}://${safeHost}${req.originalUrl || req.url}`;
 }
 
@@ -131,6 +136,7 @@ function createNodeHttpBridge(honoApp, envOrFactory) {
     try {
       const env = typeof envOrFactory === 'function' ? envOrFactory() : envOrFactory;
       const trustProxy = (process.env.TRUST_PROXY === '1') || Boolean(env && env.TRUST_PROXY === '1');
+      const trustCfHeaders = (process.env.TRUST_CF_HEADERS === '1') || Boolean(env && env.TRUST_CF_HEADERS === '1');
       const fullUrl = getFullRequestUrl(req, trustProxy);
       const headers = new Headers();
       for (const [k, v] of Object.entries(req.headers)) {
@@ -138,8 +144,10 @@ function createNodeHttpBridge(honoApp, envOrFactory) {
         headers.set(k, Array.isArray(v) ? v.join(', ') : String(v));
       }
 
-      if (!trustProxy) {
+      if (!trustProxy || !trustCfHeaders) {
         headers.delete('cf-connecting-ip');
+      }
+      if (!trustProxy) {
         headers.delete('x-forwarded-for');
         headers.delete('x-forwarded-proto');
         headers.delete('x-forwarded-host');

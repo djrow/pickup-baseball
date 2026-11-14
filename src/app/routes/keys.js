@@ -113,6 +113,8 @@ function validateAndSerializeJwk(jwk, name) {
  */
 keysRouter.put('/identity', requireAuth, async (c) => {
   const user = c.get('user');
+  const optResp = rejectIfClubhouseOptedOut(c, user);
+  if (optResp) return optResp;
   const chatDb = c.env && c.env.CHAT_DB;
   if (!chatDb) {
     return c.json({ error: 'Chat database unavailable.' }, 500);
@@ -201,6 +203,9 @@ keysRouter.put('/identity', requireAuth, async (c) => {
  * Strictly excludes private vault fields
  */
 keysRouter.get('/users', requireAuth, async (c) => {
+  const user = c.get('user');
+  const optResp = rejectIfClubhouseOptedOut(c, user);
+  if (optResp) return optResp;
   const chatDb = c.env && c.env.CHAT_DB;
   if (!chatDb) {
     return c.json({ error: 'Chat database unavailable.' }, 500);
@@ -211,7 +216,7 @@ keysRouter.get('/users', requireAuth, async (c) => {
     let results = [];
 
     if (idsParam) {
-      const ids = idsParam.split(',').map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n) && n > 0).slice(0, 200);
+      const ids = idsParam.split(',').map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n) && n > 0).slice(0, 80);
       if (ids.length === 0) {
         return c.json({ users: [] });
       }
@@ -220,12 +225,14 @@ keysRouter.get('/users', requireAuth, async (c) => {
         SELECT user_id, ecdh_public_key_jwk, ecdsa_public_key_jwk, privacy_relay_mode, status_text
         FROM user_crypto_keys
         WHERE user_id IN (${placeholders})
+          AND user_id NOT IN (SELECT user_id FROM clubhouse_opted_out)
       `).bind(...ids).all();
       results = queryRes.results || [];
     } else {
       const queryRes = await chatDb.prepare(`
         SELECT user_id, ecdh_public_key_jwk, ecdsa_public_key_jwk, privacy_relay_mode, status_text
         FROM user_crypto_keys
+        WHERE user_id NOT IN (SELECT user_id FROM clubhouse_opted_out)
         ORDER BY user_id ASC
         LIMIT 500
       `).all();
@@ -264,6 +271,8 @@ keysRouter.get('/vault', requireAuth, handleGetSelfIdentity);
  */
 keysRouter.get('/identity/:id', requireAuth, async (c) => {
   const user = c.get('user');
+  const optResp = rejectIfClubhouseOptedOut(c, user);
+  if (optResp) return optResp;
   const chatDb = c.env && c.env.CHAT_DB;
   if (!chatDb) {
     return c.json({ error: 'Chat database unavailable.' }, 500);
@@ -324,7 +333,7 @@ keysRouter.post('/channel/:channelId/share', requireAuth, async (c) => {
   const isKeyShared = isDm || isPrivateBoard;
   const hasChannelAccess = isKeyShared
     ? await canUserAccessChannel(chatDb, user, channel, 'write')
-    : (canAccessChannel(user, channel, 'write') || await canUserAccessChannel(chatDb, user, channel, 'write'));
+    : (canAccessChannel(user, channel.min_role_write || 'player') || await canUserAccessChannel(chatDb, user, channel, 'write'));
   if (!hasChannelAccess) {
     return c.json({ error: 'Access denied: insufficient permissions for this channel.' }, 403);
   }
@@ -348,9 +357,11 @@ keysRouter.post('/channel/:channelId/share', requireAuth, async (c) => {
       'SELECT MAX(key_epoch) as max_epoch FROM channel_key_shares WHERE channel_id = ?'
     ).bind(channel.id).first();
     const currentMaxEpoch = (maxEpochRow && maxEpochRow.max_epoch) ? Number(maxEpochRow.max_epoch) : 0;
-    const existingEpochShare = await chatDb.prepare(
-      'SELECT 1 FROM channel_key_shares WHERE channel_id = ? AND key_epoch = ? LIMIT 1'
-    ).bind(channel.id, defaultEpoch).first();
+    const { results: existingEpochRecipientRows } = await chatDb.prepare(
+      'SELECT recipient_user_id FROM channel_key_shares WHERE channel_id = ? AND key_epoch = ?'
+    ).bind(channel.id, defaultEpoch).all();
+    const existingEpochRecipients = new Set((existingEpochRecipientRows || []).map((r) => Number(r.recipient_user_id)));
+    const existingEpochShare = existingEpochRecipients.size > 0;
 
     if (currentMaxEpoch === 0 && defaultEpoch !== 1) {
       return c.json({ error: 'Initial channel key_epoch must be 1.' }, 400);
@@ -364,6 +375,12 @@ keysRouter.post('/channel/:channelId/share', requireAuth, async (c) => {
     if (defaultEpoch > currentMaxEpoch + 10) {
       return c.json({ error: 'Invalid key_epoch jump.' }, 400);
     }
+    if (body.force_rotate && !canForceRotate) {
+      return c.json({ error: 'Only channel owners, moderators, or admins can force key rotation.' }, 403);
+    }
+    if (body.force_rotate && currentMaxEpoch > 0 && defaultEpoch <= currentMaxEpoch) {
+      return c.json({ error: 'Forced key rotation must advance key_epoch above the current epoch.' }, 400);
+    }
 
     let validMembers = null;
     if (isKeyShared) {
@@ -372,15 +389,29 @@ keysRouter.post('/channel/:channelId/share', requireAuth, async (c) => {
       ).bind(channel.id).all();
       validMembers = new Set((memberRows || []).map((r) => Number(r.user_id)));
       if (channel.created_by) validMembers.add(Number(channel.created_by));
-
-      if ((!body.force_rotate || !canForceRotate) && existingEpochShare) {
-        if (body.force_rotate && !canForceRotate) {
-          return c.json({ error: 'Only channel owners, moderators, or admins can force key rotation.' }, 403);
-        }
-        return c.json({ success: true, alreadyInitialized: true, key_epoch: defaultEpoch, keyEpoch: defaultEpoch, count: 0 });
-      }
     } else if (!canForceRotate && existingEpochShare) {
       return c.json({ error: 'Channel key epoch already initialized.' }, 403);
+    }
+
+    const db = c.env && (c.env.BASEBALL_DB || c.env.DB);
+    const recipientIds = [...new Set(
+      body.shares
+        .map((s) => parseInt(s.recipient_user_id !== undefined ? s.recipient_user_id : s.recipientUserId, 10))
+        .filter((n) => !isNaN(n) && n > 0)
+    )];
+    let validUserSet = null;
+    if (db && recipientIds.length > 0) {
+      const placeholders = recipientIds.slice(0, 80).map(() => '?').join(',');
+      const { results: userRows } = await db.prepare(`
+        SELECT u.id, COALESCE(u.clubhouse_opted_in, 0) as clubhouse_opted_in, u.role, u.is_admin,
+               EXISTS(SELECT 1 FROM banned_emails b WHERE LOWER(b.email) = LOWER(u.email)) as is_banned
+        FROM users u WHERE u.id IN (${placeholders})
+      `).bind(...recipientIds.slice(0, 80)).all();
+      validUserSet = new Set(
+        (userRows || [])
+          .filter((u) => !u.is_banned && Number(u.clubhouse_opted_in || 0) === 1 && canAccessChannel(u, channel.min_role_read || 'player'))
+          .map((u) => Number(u.id))
+      );
     }
 
     const batchStatements = [];
@@ -410,16 +441,23 @@ keysRouter.post('/channel/:channelId/share', requireAuth, async (c) => {
           error: 'Recipient is not a member of this encrypted conversation or private board.'
         }, 403);
       }
+      if (!isKeyShared && validUserSet && !validUserSet.has(Number(recipientUserId))) {
+        return c.json({ error: 'Recipient does not have access to this board or is ineligible for key shares.' }, 403);
+      }
+      if (existingEpochRecipients.has(Number(recipientUserId))) {
+        continue;
+      }
 
       if (String(wrappedKey).length > MAX_WRAPPED_KEY_CHARS) {
         return c.json({ error: 'wrapped_key_base64 exceeds maximum allowed size (8 KB).' }, 400);
       }
 
-      if (ephemeralPub && typeof ephemeralPub === 'object') {
-        ephemeralPub = JSON.stringify(ephemeralPub);
-      }
-      if (ephemeralPub && String(ephemeralPub).length > 2048) {
-        return c.json({ error: 'sender_ephemeral_pub_jwk exceeds maximum allowed size (2 KB).' }, 400);
+      if (ephemeralPub) {
+        try {
+          ephemeralPub = validateAndSerializeJwk(ephemeralPub, 'sender_ephemeral_pub_jwk');
+        } catch (jwkErr) {
+          return c.json({ error: jwkErr.message }, 400);
+        }
       }
 
       batchStatements.push(
@@ -434,12 +472,7 @@ keysRouter.post('/channel/:channelId/share', requireAuth, async (c) => {
             sender_ephemeral_pub_jwk,
             created_at
           ) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-          ON CONFLICT(channel_id, key_epoch, recipient_user_id) DO UPDATE SET
-            sender_user_id = excluded.sender_user_id,
-            wrapped_key_base64 = excluded.wrapped_key_base64,
-            wrap_iv = excluded.wrap_iv,
-            sender_ephemeral_pub_jwk = excluded.sender_ephemeral_pub_jwk,
-            created_at = CURRENT_TIMESTAMP
+          ON CONFLICT(channel_id, key_epoch, recipient_user_id) DO NOTHING
         `).bind(
           channel.id,
           keyEpoch,
@@ -450,6 +483,16 @@ keysRouter.post('/channel/:channelId/share', requireAuth, async (c) => {
           ephemeralPub
         )
       );
+    }
+
+    if (batchStatements.length === 0) {
+      return c.json({
+        success: true,
+        alreadyInitialized: true,
+        key_epoch: defaultEpoch,
+        keyEpoch: defaultEpoch,
+        count: 0
+      });
     }
 
     await chatDb.batch(batchStatements);
@@ -470,6 +513,8 @@ keysRouter.post('/channel/:channelId/share', requireAuth, async (c) => {
  */
 keysRouter.get('/channel/:channelId', requireAuth, async (c) => {
   const user = c.get('user');
+  const optResp = rejectIfClubhouseOptedOut(c, user);
+  if (optResp) return optResp;
   const chatDb = c.env && c.env.CHAT_DB;
   if (!chatDb) {
     return c.json({ error: 'Chat database unavailable.' }, 500);
@@ -485,7 +530,7 @@ keysRouter.get('/channel/:channelId', requireAuth, async (c) => {
   const isKeyShared = isDm || isPrivateBoard;
   const hasChannelAccess = isKeyShared
     ? await canUserAccessChannel(chatDb, user, channel, 'read')
-    : (canAccessChannel(user, channel, 'read') || await canUserAccessChannel(chatDb, user, channel, 'read'));
+    : (canAccessChannel(user, channel.min_role_read || 'player') || await canUserAccessChannel(chatDb, user, channel, 'read'));
   if (!hasChannelAccess) {
     return c.json({ error: 'Access denied: insufficient permissions for this channel.' }, 403);
   }

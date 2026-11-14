@@ -182,7 +182,7 @@ eventsBpDutiesRouter.post('/:id/bp-order', async (c) => {
 
     const requireLogin = await getRequireLoginSetting(db, c.env);
     if (requireLogin && !user && !attendeeId) {
-      return c.json({ error: 'Please sign in to sign up for batting practice.' }, 401);
+      return c.json({ error: 'Please sign in or RSVP first to claim a Batting Practice slot.' }, 401);
     }
 
     const { results: existingSlots } = await db.prepare('SELECT id, slot_number, user_id, attendee_id, player_name FROM batting_practice_signups WHERE event_id = ?').bind(eventId).all();

@@ -158,6 +158,13 @@
       var urlParams = new URLSearchParams(window.location.search);
       var takedownId = urlParams.get('takedown');
       var takedownToken = urlParams.get('token');
+      if (urlParams.has('token') && typeof window.history !== 'undefined' && typeof window.history.replaceState === 'function') {
+        try {
+          var cleanGalleryUrl = new URL(window.location.href);
+          cleanGalleryUrl.searchParams.delete('token');
+          window.history.replaceState({}, document.title, cleanGalleryUrl.pathname + cleanGalleryUrl.search + cleanGalleryUrl.hash);
+        } catch (e) {}
+      }
       if (takedownId) {
         if (takedownToken) {
           saveMySubmission({ id: parseInt(takedownId, 10), token: takedownToken });
@@ -404,8 +411,15 @@
       return;
     }
 
-    // Find the first photo card belonging to this album
-    var targetCard = photoTrack.querySelector('.photo-card[data-album-slug="' + slug + '"]');
+    // Find the first photo card belonging to this album safely without selector interpolation
+    var targetCard = null;
+    var cards = photoTrack.querySelectorAll('.photo-card');
+    for (var ci = 0; ci < cards.length; ci++) {
+      if (cards[ci].getAttribute('data-album-slug') === String(slug)) {
+        targetCard = cards[ci];
+        break;
+      }
+    }
     if (targetCard) {
       // Calculate scroll offset within horizontal track
       var targetOffsetLeft = targetCard.offsetLeft - photoTrack.offsetLeft;

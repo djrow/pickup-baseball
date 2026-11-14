@@ -132,12 +132,18 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
 
     const allowedList = parseAllowedEmails(event.allowed_emails);
     if (allowedList.length > 0) {
-      if (!(user && user.canManageEvents)) {
+      if (!user || !user.canManageEvents) {
         if (!hasEmail) {
           return c.json({ error: 'RSVP for this invite-only game requires signing in or entering an invited email address.' }, 403);
         }
         if (!allowedList.includes(email.toLowerCase())) {
           return c.json({ error: 'RSVP for this game is restricted to invited player accounts. Your email is not on the allowed list.' }, 403);
+        }
+        if (!user) {
+          const registeredUser = await db.prepare('SELECT id FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1').bind(email).first();
+          if (registeredUser) {
+            return c.json({ error: 'This invited email belongs to a registered account. Please sign in to RSVP.' }, 401);
+          }
         }
       }
     }
@@ -252,6 +258,9 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
       if (!user && (!existingAttendee.management_token || management_token !== existingAttendee.management_token)) {
         return c.json({ error: 'Invalid or missing management token for this RSVP. Please use your confirmation link or sign in.' }, 403);
       }
+      if (!user && existingAttendee.user_id) {
+        return c.json({ error: 'This RSVP is linked to a registered account. Please sign in to modify it.' }, 401);
+      }
       if (!user) {
         userId = existingAttendee.user_id;
         isGuest = existingAttendee.is_guest;
@@ -274,6 +283,17 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(eventId, userId, name, storedEmail, isGuest, finalStatus, cleanGear, playersCount, spectatorsCount, additionalGuests, cleanGuestNames, freshToken).run();
       attendeeId = ins.meta.last_row_id;
+    }
+
+    if (finalStatus === 'attending' && playersCount > 0 && event.max_players && event.max_players > 0 && !wasAttending) {
+      const postCapRow = await db.prepare(`
+        SELECT COALESCE(SUM(COALESCE(players_count, 1 + COALESCE(additional_guests, 0))), 0) as total
+        FROM attendees WHERE event_id = ? AND status = 'attending'
+      `).bind(eventId).first();
+      if ((postCapRow ? postCapRow.total : 0) > event.max_players) {
+        await db.prepare("UPDATE attendees SET status = 'waitlist' WHERE id = ?").bind(attendeeId).run();
+        finalStatus = 'waitlist';
+      }
     }
 
     const assignedDutyNames = [];
@@ -308,45 +328,94 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
       `).bind(attendeeId, eventId).all();
 
       const dutyById = new Map((eventDuties || []).map((d) => [Number(d.id), d]));
-      const batchOps = [db.prepare('DELETE FROM duty_assignments WHERE attendee_id = ?').bind(attendeeId)];
+      const dutiesToAssign = [];
+      let creditsRequired = 0;
 
       for (const dId of uniqueDutyIds) {
         const duty = dutyById.get(dId);
         if (!duty) continue;
-
         if ((duty.taken_count || 0) < duty.slots_needed) {
-          batchOps.push(db.prepare('INSERT OR IGNORE INTO duty_assignments (duty_id, attendee_id) VALUES (?, ?)').bind(dId, attendeeId));
-          assignedDutyNames.push(duty.title);
-
+          let needsCredit = false;
           const dType = getDutyType(duty.title);
-          if (dType.isPaid) {
-            newHasPaidDuty = true;
-            if (user && user.id) {
-              if (tierInfo.tier === 'tier1' && redeem_hero_credit && !prevDuties.includes(dId)) {
-                const cap = await getDutyTier1Cap(db, dType.type);
-                const shifts = await getUserRollingShifts(db, user.id, dType.type, event.event_date, eventId);
-                if (shifts >= cap) {
-                  batchOps.push(db.prepare('UPDATE users SET hero_credits = hero_credits - 1 WHERE id = ? AND hero_credits >= 1').bind(user.id));
-                  heroCreditRedeemed = true;
-                  creditsRedeemedCount += 1;
-                }
-              }
-              // Award urgent cover credit only on net transition from 0 paid duties -> >=1 paid duty on this event
-              if (isUrgentWindow && !prevHadPaidDuty && !heroCreditEarned) {
-                batchOps.push(db.prepare('UPDATE users SET hero_credits = hero_credits + 1 WHERE id = ?').bind(user.id));
-                heroCreditEarned = true;
-              }
+          if (dType.isPaid && user && user.id && tierInfo.tier === 'tier1' && redeem_hero_credit && !prevDuties.includes(dId)) {
+            const cap = await getDutyTier1Cap(db, dType.type);
+            const shifts = await getUserRollingShifts(db, user.id, dType.type, event.event_date, eventId);
+            if (shifts >= cap) {
+              needsCredit = true;
+              creditsRequired += 1;
             }
+          }
+          dutiesToAssign.push({ duty, dId, dType, needsCredit });
+        }
+      }
+
+      if (creditsRequired > 0 && user && user.id) {
+        const decRes = await db.prepare(
+          'UPDATE users SET hero_credits = hero_credits - ? WHERE id = ? AND hero_credits >= ?'
+        ).bind(creditsRequired, user.id, creditsRequired).run();
+        if (!decRes.meta || decRes.meta.changes !== 1) {
+          return c.json({ error: `Insufficient Backup Hero Credits. You need ${creditsRequired} credit(s).` }, 400);
+        }
+      }
+
+      await db.prepare('DELETE FROM duty_assignments WHERE attendee_id = ?').bind(attendeeId).run();
+      let creditsConsumed = 0;
+
+      for (const item of dutiesToAssign) {
+        const insDuty = await db.prepare(`
+          INSERT OR IGNORE INTO duty_assignments (duty_id, attendee_id)
+          SELECT ?, ?
+          WHERE (
+            SELECT COUNT(*) FROM duty_assignments da
+            JOIN attendees a ON da.attendee_id = a.id
+            WHERE da.duty_id = ? AND a.status = 'attending' AND a.id != ?
+          ) < (SELECT slots_needed FROM event_duties WHERE id = ?)
+        `).bind(item.dId, attendeeId, item.dId, attendeeId, item.dId).run();
+
+        if (insDuty.meta && insDuty.meta.changes === 1) {
+          assignedDutyNames.push(item.duty.title);
+          if (item.dType.isPaid) {
+            newHasPaidDuty = true;
+          }
+          if (item.needsCredit) {
+            heroCreditRedeemed = true;
+            creditsRedeemedCount += 1;
+            creditsConsumed += 1;
           }
         }
       }
-      if (prevHadPaidDuty && !newHasPaidDuty && isUrgentWindow && wasAttending && creditUserId) {
-        batchOps.push(db.prepare('UPDATE users SET hero_credits = CASE WHEN COALESCE(hero_credits, 0) > 0 THEN hero_credits - 1 ELSE 0 END WHERE id = ?').bind(creditUserId));
+
+      const unusedCredits = creditsRequired - creditsConsumed;
+      if (unusedCredits > 0 && user && user.id) {
+        await db.prepare('UPDATE users SET hero_credits = hero_credits + ? WHERE id = ?').bind(unusedCredits, user.id).run();
       }
-      await db.batch(batchOps);
+
+      if (isUrgentWindow && !prevHadPaidDuty && newHasPaidDuty && user && user.id) {
+        const awardFlagRes = await db.prepare(
+          'UPDATE attendees SET urgent_credit_awarded = 1 WHERE id = ? AND COALESCE(urgent_credit_awarded, 0) = 0'
+        ).bind(attendeeId).run();
+        if (awardFlagRes.meta && awardFlagRes.meta.changes === 1) {
+          await db.prepare('UPDATE users SET hero_credits = hero_credits + 1 WHERE id = ?').bind(user.id).run();
+          heroCreditEarned = true;
+        }
+      }
+
+      if (prevHadPaidDuty && !newHasPaidDuty && isUrgentWindow && wasAttending && creditUserId) {
+        const unclaimRes = await db.prepare(
+          'UPDATE attendees SET urgent_credit_awarded = 0 WHERE id = ? AND COALESCE(urgent_credit_awarded, 0) = 1'
+        ).bind(attendeeId).run();
+        if (unclaimRes.meta && unclaimRes.meta.changes === 1) {
+          await db.prepare('UPDATE users SET hero_credits = COALESCE(hero_credits, 0) - 1 WHERE id = ?').bind(creditUserId).run();
+        }
+      }
     } else if (finalStatus !== 'attending') {
       if (prevHadPaidDuty && isUrgentWindow && wasAttending && creditUserId) {
-        await db.prepare('UPDATE users SET hero_credits = CASE WHEN COALESCE(hero_credits, 0) > 0 THEN hero_credits - 1 ELSE 0 END WHERE id = ?').bind(creditUserId).run();
+        const unclaimRes = await db.prepare(
+          'UPDATE attendees SET urgent_credit_awarded = 0 WHERE id = ? AND COALESCE(urgent_credit_awarded, 0) = 1'
+        ).bind(attendeeId).run();
+        if (unclaimRes.meta && unclaimRes.meta.changes === 1) {
+          await db.prepare('UPDATE users SET hero_credits = COALESCE(hero_credits, 0) - 1 WHERE id = ?').bind(creditUserId).run();
+        }
       }
       await db.prepare('DELETE FROM duty_assignments WHERE attendee_id = ?').bind(attendeeId).run();
       await db.prepare('DELETE FROM batting_practice_signups WHERE event_id = ? AND (attendee_id = ? OR (user_id IS NOT NULL AND user_id = ?))').bind(eventId, attendeeId, userId).run();

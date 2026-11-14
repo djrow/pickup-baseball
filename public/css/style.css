@@ -1352,6 +1352,19 @@ footer.site-footer strong {
   color: var(--as-green);
 }
 
+.footer-app-version {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
 /* Theme Toggle Button & Dark Mode Overrides */
 .lang-select {
   width: auto;

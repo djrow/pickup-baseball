@@ -4,7 +4,7 @@
 
 import { CURRENT_APP_VERSION } from './version.js';
 import { parseAllowedEmails, canUserAccessEvent } from './policy.js';
-import { sanitizeHttpUrl } from './security.js';
+import { sanitizeHttpUrl, getSafePublicOrigin } from './security.js';
 
 function getSafeFeedMediaUrl(rawUrl, origin) {
   if (!rawUrl) return '';
@@ -134,7 +134,7 @@ export function buildRssFeedXml(posts, origin = 'https://www.pickupbaseballfound
 `;
 }
 
-export async function renderFeedXmlResponse(db, requestUrl) {
+export async function renderFeedXmlResponse(db, requestUrl, env = null) {
   try {
     let posts = [];
     if (db) {
@@ -151,7 +151,8 @@ export async function renderFeedXmlResponse(db, requestUrl) {
         posts = [];
       }
     }
-    const origin = new URL(requestUrl).origin || 'https://www.pickupbaseballfoundation.org';
+    const runtimeEnv = env || (typeof process !== 'undefined' && process.env ? process.env : undefined);
+    const origin = getSafePublicOrigin({ req: { url: requestUrl }, env: runtimeEnv });
     const xml = buildRssFeedXml(posts, origin);
     return new Response(xml, {
       status: 200,
@@ -160,13 +161,18 @@ export async function renderFeedXmlResponse(db, requestUrl) {
         'Cache-Control': 'public, max-age=60, s-maxage=300, stale-while-revalidate=600',
         'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
         'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY',
+        'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'",
         'X-App-Version': CURRENT_APP_VERSION
       }
     });
   } catch (err) {
-    return new Response('Failed to generate RSS feed: ' + (err && err.message ? err.message : String(err)), {
+    return new Response('Failed to generate RSS feed.', {
       status: 500,
-      headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'X-Content-Type-Options': 'nosniff'
+      }
     });
   }
 }
@@ -176,7 +182,7 @@ function escapeIcsText(str) {
     .replace(/\\/g, '\\\\')
     .replace(/;/g, '\\;')
     .replace(/,/g, '\\,')
-    .replace(/\r?\n/g, '\\n');
+    .replace(/\r\n|\r|\n/g, '\\n');
 }
 
 function formatIcsUtcDate(d) {
