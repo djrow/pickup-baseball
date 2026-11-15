@@ -26,6 +26,80 @@
     return toastContainer;
   }
 
+  function copyTextFallback(text) {
+    if (typeof document === 'undefined' || !document.body) return false;
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.top = '-9999px';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    var ok = false;
+    try {
+      ok = document.execCommand('copy');
+    } catch (err) {
+      // Clipboard execCommand may be unavailable in restricted or headless contexts.
+      ok = false;
+    }
+    if (ta.parentNode) ta.parentNode.removeChild(ta);
+    return ok;
+  }
+
+  function buildFallbackDiagnosticsText(extraDiagnostic) {
+    var payload = {
+      appVersion: (typeof window !== 'undefined' && window.API && window.API.CLIENT_VERSION) ? window.API.CLIENT_VERSION : '',
+      diagnostics: extraDiagnostic ? [extraDiagnostic] : []
+    };
+    try {
+      return JSON.stringify(payload, null, 2);
+    } catch (err) {
+      // Fallback to empty JSON string if serialization fails unexpectedly.
+      return '{}';
+    }
+  }
+
+  function copyDiagnosticDetails(extraDiagnostic, btnEl) {
+    var api = (typeof window !== 'undefined' && window.API) ? window.API : null;
+    var payloadText = (api && typeof api.formatDiagnosticsText === 'function')
+      ? api.formatDiagnosticsText(extraDiagnostic)
+      : buildFallbackDiagnosticsText(extraDiagnostic);
+    var defaultLabel = translateText('dialog.copy_diagnostics', 'Copy Diagnostic Details');
+    var copiedLabel = translateText('dialog.copied_diagnostics', '\u2713 Copied Details');
+    function showCopiedState() {
+      if (!btnEl) return;
+      btnEl.textContent = copiedLabel;
+      setTimeout(function () {
+        btnEl.textContent = defaultLabel;
+      }, 2000);
+    }
+    if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      navigator.clipboard.writeText(payloadText).then(function () {
+        showCopiedState();
+      }, function () {
+        if (copyTextFallback(payloadText)) {
+          showCopiedState();
+        }
+      });
+      return;
+    }
+    if (copyTextFallback(payloadText)) {
+      showCopiedState();
+    }
+  }
+
+  function createDiagCopyButton(className, extraDiagnostic) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = className;
+    btn.textContent = translateText('dialog.copy_diagnostics', 'Copy Diagnostic Details');
+    btn.addEventListener('click', function () {
+      copyDiagnosticDetails(extraDiagnostic, btn);
+    });
+    return btn;
+  }
+
   function toast(message, opts) {
     var options = opts || {};
     var text = String(message || '');
@@ -38,10 +112,20 @@
     el.className = 'pbf-toast pbf-toast-' + variant;
     el.setAttribute('role', variant === 'error' ? 'alert' : 'status');
 
+    var contentWrap = document.createElement('div');
+    contentWrap.className = 'pbf-toast-content';
+
     var msgSpan = document.createElement('span');
     msgSpan.className = 'pbf-toast-msg';
     msgSpan.textContent = text;
-    el.appendChild(msgSpan);
+    contentWrap.appendChild(msgSpan);
+
+    if (variant === 'error' && options.hideDiagnostics !== true) {
+      var diagBtn = createDiagCopyButton('pbf-toast-diag-btn', options.diagnostic || null);
+      contentWrap.appendChild(diagBtn);
+    }
+
+    el.appendChild(contentWrap);
 
     var closeBtn = document.createElement('button');
     closeBtn.type = 'button';
@@ -57,7 +141,7 @@
     closeBtn.addEventListener('click', dismiss);
     container.appendChild(el);
 
-    var duration = typeof options.durationMs === 'number' ? options.durationMs : (variant === 'error' ? 6000 : 4200);
+    var duration = typeof options.durationMs === 'number' ? options.durationMs : (variant === 'error' ? 8000 : 4200);
     if (duration > 0) {
       setTimeout(dismiss, duration);
     }
@@ -163,12 +247,17 @@
 
   function showAlert(message, opts) {
     var options = opts || {};
+    var includeDiagnostics = (options.type === 'error' || options.showDiagnostics === true || Boolean(options.diagnostic)) && options.hideDiagnostics !== true;
     return openModal({
       alertOnly: true,
       title: options.title || translateText('dialog.notice', 'Notice'),
       message: message,
       defaultCancelValue: undefined,
       buildFooter: function (footer, finish) {
+        if (includeDiagnostics) {
+          var diagBtn = createDiagCopyButton('pbf-dialog-btn pbf-dialog-btn-secondary pbf-dialog-diag-btn', options.diagnostic || null);
+          footer.appendChild(diagBtn);
+        }
         var okBtn = document.createElement('button');
         okBtn.type = 'button';
         okBtn.className = 'pbf-dialog-btn pbf-dialog-btn-primary';
@@ -177,6 +266,12 @@
         footer.appendChild(okBtn);
       }
     });
+  }
+
+  function showError(message, opts) {
+    var options = Object.assign({}, opts || {}, { type: 'error' });
+    if (!options.title) options.title = translateText('dialog.error_title', 'Error');
+    return showAlert(message, options);
   }
 
   function showConfirm(message, opts) {
@@ -400,6 +495,7 @@
   var apiObj = {
     toast: toast,
     alert: showAlert,
+    error: showError,
     confirm: showConfirm,
     confirmWithCheckbox: showConfirmWithCheckbox,
     prompt: showPrompt,

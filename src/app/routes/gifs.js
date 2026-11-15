@@ -18,6 +18,7 @@ import {
   deleteGDriveFile,
   serveByteRangeResponse
 } from '../gdrive.js';
+import { ERROR_CODES, jsonError } from '../errors.js';
 
 export const gifsRouter = /** @type {AppHono} */ (new Hono());
 
@@ -170,22 +171,22 @@ gifsRouter.post('/import-url', requireAuth, async (c) => {
 
   const chatDb = c.env && c.env.CHAT_DB;
   const baseballDb = (c.env && (c.env.BASEBALL_DB || c.env.DB)) || null;
-  if (!chatDb) return c.json({ error: 'Chat database unavailable.' }, 500);
+  if (!chatDb) return jsonError(c, 500, ERROR_CODES.STORAGE_ERROR, 'Chat database unavailable.');
 
   const isTestEnv = Boolean(c.env && c.env.NODE_ENV === 'test');
   const rateCheck = await checkRateLimit(baseballDb, `gif_import:${user.id}`, 15, 3600, c.env);
   if (!rateCheck.allowed) {
-    return c.json({ error: 'GIF import rate limit reached (max 15/hour). Try picking an existing GIF!' }, 429);
+    return jsonError(c, 429, ERROR_CODES.RATE_LIMITED, 'GIF import rate limit reached (max 15/hour). Try picking an existing GIF!');
   }
 
   const body = await c.req.json().catch(() => ({}));
   const urlCheck = validateExternalGifUrl(body.url, { isTestEnv });
   if (!urlCheck.ok) {
-    return c.json({ error: urlCheck.error }, /** @type {any} */ (urlCheck.status || 400));
+    return jsonError(c, urlCheck.status || 400, urlCheck.status === 403 ? ERROR_CODES.FORBIDDEN : ERROR_CODES.VALIDATION_ERROR, urlCheck.error);
   }
 
   if (!isGDriveConfigured(c.env)) {
-    return c.json({ error: 'Google Drive storage is not configured for Clubhouse GIFs.' }, 500);
+    return jsonError(c, 500, ERROR_CODES.STORAGE_ERROR, 'Google Drive storage is not configured for Clubhouse GIFs.');
   }
 
   const normalizedUrl = urlCheck.url;
@@ -243,16 +244,11 @@ gifsRouter.post('/import-url', requireAuth, async (c) => {
       bytes
     });
   } catch (err) {
-    console.warn('[GIFs] Google Drive upload failed:', err && err.message ? err.message : err);
-    return c.json({
-      error: `Google Drive upload failed (${formatDriveErrorReason(err)}).`
-    }, 500);
+    return jsonError(c, 500, ERROR_CODES.STORAGE_ERROR, `Google Drive upload failed (${formatDriveErrorReason(err)}).`);
   }
 
   if (!driveFileId) {
-    return c.json({
-      error: 'Google Drive upload did not return a file ID.'
-    }, 500);
+    return jsonError(c, 500, ERROR_CODES.STORAGE_ERROR, 'Google Drive upload did not return a file ID.');
   }
 
   try {
@@ -303,11 +299,10 @@ gifsRouter.post('/import-url', requireAuth, async (c) => {
       gif: meta
     }, 201);
   } catch (err) {
-    console.error('[GIFs] Failed to persist imported GIF metadata:', err && err.message ? err.message : err);
     if (driveFileId) {
       await deleteGDriveFile(c.env, driveFileId).catch(() => {});
     }
-    return c.json({ error: 'Could not save imported GIF metadata.' }, 500);
+    return jsonError(c, 500, ERROR_CODES.STORAGE_ERROR, 'Could not save imported GIF metadata.');
   }
 });
 

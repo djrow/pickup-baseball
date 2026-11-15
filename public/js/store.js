@@ -341,6 +341,22 @@
     }
     return fetch(url, opts).then(function (res) {
       if (timeoutHandle) clearTimeout(timeoutHandle);
+      function recordStoreFailure(data) {
+        if (res.ok) return;
+        if (typeof window !== 'undefined' && window.API && typeof window.API.recordDiagnostic === 'function') {
+          var hdrGet = (res.headers && typeof res.headers.get === 'function') ? function (name) { return res.headers.get(name); } : function () { return ''; };
+          var reqId = hdrGet('X-Request-Id') || (data && data.requestId) || '';
+          var appVer = hdrGet('X-App-Version') || '';
+          window.API.recordDiagnostic({
+            route: url,
+            method: opts.method || 'GET',
+            status: res.status,
+            code: (data && data.code) || '',
+            requestId: reqId,
+            appVersion: appVer
+          });
+        }
+      }
       if (typeof res.text === 'function') {
         return res.text().then(function (text) {
           var data = {};
@@ -349,9 +365,11 @@
             try {
               data = JSON.parse(text) || {};
             } catch (e) {
+              // Non-JSON response body; preserve truncated raw text for caller inspection.
               rawText = String(text).slice(0, 300);
             }
           }
+          recordStoreFailure(data);
           return {
             ok: res.ok,
             status: res.status,
@@ -362,6 +380,7 @@
         });
       }
       return res.json().catch(function () { return {}; }).then(function (data) {
+        recordStoreFailure(data);
         return {
           ok: res.ok,
           status: res.status,
@@ -372,6 +391,15 @@
       });
     }, function (err) {
       if (timeoutHandle) clearTimeout(timeoutHandle);
+      if (typeof window !== 'undefined' && window.API && typeof window.API.recordDiagnostic === 'function') {
+        window.API.recordDiagnostic({
+          route: url,
+          method: opts.method || 'GET',
+          status: 0,
+          code: (err && err.name === 'AbortError') ? 'REQUEST_TIMEOUT' : 'NETWORK_ERROR',
+          requestId: ''
+        });
+      }
       throw err;
     });
   }
