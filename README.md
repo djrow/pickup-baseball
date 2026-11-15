@@ -5,12 +5,12 @@ A fast, durable, and zero-cost web application built for the **[Pickup Baseball 
 > 📘 **User Guide & Manual Maintenance Handbook:** Read **[`HANDBOOK.md`](HANDBOOK.md)** for a complete walkthrough of how to use the web app (players, spectators, volunteers, organizers, and admins) plus step-by-step recipes for making manual changes to the code yourself.
 
 Designed with a **10+ year longevity philosophy**:
-- **Zero Frontend Build Steps**: Pure HTML5, semantic CSS3, and standard Vanilla JavaScript (`public/`). No bundlers, Webpack, Vite, or framework churn that breaks over time.
-- **100% Free-Tier Serverless Edge Stack**: Hosted on **Cloudflare Pages** (static assets + global CDN), **Cloudflare Pages Functions / Workers** (`functions/api/[[route]].js` powered by Hono), **Cloudflare D1** (serverless SQLite in the cloud), and **Resend** (transactional email).
-- **Passwordless Email Authentication**: Players sign in with a 6-digit verification code or 1-click magic link sent to their email (SHA-256 hashed in D1, 10-minute expiration, 5-attempt lockout, and 90-day `HttpOnly; Secure; SameSite=Lax` session cookies).
-- **Defense-in-Depth Security**: Parameterized D1 prepared statements, server-side + Cloudflare WAF rate limiting, CSRF `Origin` checks, strict CSP/HSTS headers (`public/_headers`), automatic client- and server-side EXIF/GPS metadata stripping on profile photos, and configurable guest access controls.
-- **Progressive Web App (PWA) & Offline Shell**: Installable on Android, iOS, and Desktop with offline app shell caching, `{ ignoreSearch: true }` cache matching, and instant `0ms` stale-while-revalidate local caching.
-- **15 California Languages & RTL Support**: Zero-dependency internationalization supporting English, Spanish, Chinese, Tagalog, Vietnamese, Korean, Arabic, Russian, Persian/Farsi, Japanese, Punjabi, Armenian, Portuguese, Hindi, and French with dynamic right-to-left layout support.
+- **Zero Frontend Build Steps**: Pure HTML5, semantic CSS3, and standard Vanilla ES6 JavaScript (`public/`). No bundlers, Webpack, Vite, or framework churn that breaks over time.
+- **100% Free-Tier Serverless Edge & Dual Local Runtime**: Unified **Hono** API (`src/app/`) running identically on **Cloudflare Pages Functions** (`functions/api/[[route]].js`) + **Dual Cloudflare D1** databases (`BASEBALL_DB` + `CHAT_DB`) and local **Node.js + Express 5 + `better-sqlite3`** (`src/server.js`, `src/d1-sqlite.js`), with **Resend** (transactional email) and optional **Google Drive** storage pooling (`src/app/gdrive.js`) for heavy gallery photos/videos, chat attachments, and GIF imports.
+- **Passwordless Email Authentication**: Players sign in with a 6-digit verification code or 1-click magic link sent to their email (SHA-256 hashed in D1, 10-minute expiration, 5-attempt lockout, per-user active session cap of 5, optional 4-hour temporary shared-device sessions, and *"Sign out all other devices"*).
+- **Defense-in-Depth Security**: Parameterized D1 prepared statements, server-side + Cloudflare WAF rate limiting, Cloudflare Turnstile verification, `Origin`/`Referer`/`Sec-Fetch-Site` CSRF checks, strict CSP/HSTS headers (`public/_headers`), DNS/IPv4/IPv6 SSRF guards, client- and server-side EXIF/GPS metadata stripping on raster uploads, Web Crypto ECDH P-256 + AES-GCM-256 E2EE for Clubhouse DMs/private boards, and a 12-check static/live security scanner (`npm run security:scan`).
+- **Progressive Web App (PWA) & Offline Shell**: Installable on Android, iOS, and Desktop with offline app shell caching, `{ ignoreSearch: true }` cache matching, instant `0ms` stale-while-revalidate local caching, and a footer app version badge (`#footer-app-version`, currently `v143`).
+- **15 California Languages & RTL Support**: Zero-dependency internationalization supporting English, Spanish, Chinese, Tagalog, Vietnamese, Korean, Arabic, Russian, Persian/Farsi, Japanese, Punjabi, Armenian, Portuguese, Hindi, and French with dynamic right-to-left layout support (303 keys per bundle).
 - **12 MLB Market Color Themes**: Comprehensive theme system featuring 12 Major League Baseball team palettes, an inline footer theme picker beside the foundation motto, and rigorous contrast-ratio tuning.
 
 ---
@@ -61,7 +61,8 @@ Designed with a **10+ year longevity philosophy**:
    - **Privacy Shield for Player Rosters**: Unauthenticated visitors see a privacy notice protecting player identities until an RSVP is submitted or an organizer signs in.
    - Dedicated **[Past Games Archive](https://www.pickupbaseballfoundation.org/archive.html)** with Sunday turnout recording.
 
-6. **Weather & Rainout Incident Broadcasts**:
+6. **Smart Rainout Assistant, 10-Day Forecast & Rainout Broadcasts**:
+   - **Zero-Host Client Weather Engine (`public/js/weather.js`):** Queries Open-Meteo directly from the browser for a **10-day forecast** (temperature & emoji pills per game card resolved to each diamond's location), a **5-day rainfall breakdown**, and a **24-hour surface drainage simulation** ($\tau = 8.0\text{h}$ soil decay) classifying fields from 🟢 Playable to 🔴 Waterlogged.
    - 1-Click **"🌧️ Call Rainout"** workflow with custom field conditions and makeup notes.
    - Automated cancellation email blast via Resend to all confirmed attendees and volunteers, explicitly releasing gear and task commitments.
    - Prominent sky-blue rainout banner and 1-click **"☀️ Reopen Game"** tool if fields dry up.
@@ -112,9 +113,9 @@ Designed with a **10+ year longevity philosophy**:
     - One-click **📥 Backup Database (.sql)** download directly from the Admin Dashboard.
     - User account removal, email ban list (`banned_emails`), guest RSVP policy toggle, and one-click roster/comment moderation.
 
-13. **Comprehensive Zero-Dependency Acceptance Test Suite**:
-    - 57-test automated end-to-end verification suite in `scripts/verify-all.js` using native Node.js v22 test runner (`node:test`, `node:assert/strict`, `fetch`) with zero third-party test dependencies.
-    - Rigorously validates magic link authentication, 4-tier RBAC permission boundaries, group RSVPs (players, spectators, and off-field volunteers), group task ownership, RSVP whitelists, waitlist queue promotions, rainout incident notifications, rolling calendar horizons, live cloud `.ics` feeds, RSS 2.0 Media feed, multimedia embeds, 15-language i18n coverage, and version negotiation.
+13. **223-Test Acceptance Suite & Automated Security Scanner**:
+    - 223 automated end-to-end tests launched via `npm test` (`scripts/verify-all.js` + `tests/core/*.test.js` + `tests/clubhouse/tier1–5`) using native Node.js test runner (`node:test`, `node:assert/strict`) with zero third-party test dependencies.
+    - 12-check automated security & parity scanner (`npm run security:scan` and `npm run security:scan:live` via `scripts/security-scan.js`) validating HTML CSP compliance, `_headers`, client ES6 syntax & sinks, SQL parameterization, mutating route auth guards, `SECURITY.md` / `security.txt`, secret hygiene, `npm audit`, 32-asset PWA parity, and 303-key i18n parity across all 14 language bundles.
 
 14. **RSS 2.0 & Media RSS Feed with Zero-Host Multimedia Interpretation**:
     - Standard **RSS 2.0 + Media RSS** feed endpoint (`/feed.xml` and `/api/feed.xml`) equipped with autodiscovery `<link rel="alternate" type="application/rss+xml" href="/feed.xml">` and RFC 822 timestamps.
@@ -125,49 +126,78 @@ Designed with a **10+ year longevity philosophy**:
       - **Video & Audio**: Rendered with native HTML5 `<video controls playsinline>` and `<audio controls>`.
     - Real-time live multimedia preview and post management on `public/admin.html`.
 
-15. **User & Maintenance Handbook, Development Narrative, & Open Source**:
-    - Practical guide to using every feature and making manual code edits by hand in **[`HANDBOOK.md`](HANDBOOK.md)**.
-    - Complete chronicle of all architectural decisions, edge migrations, and technical phases in **[`DEVELOPMENT_NARRATIVE.md`](DEVELOPMENT_NARRATIVE.md)**.
-    - Direct GitHub repository link in the site footer beside *"Free & open-source"*.
+15. **Clubhouse Chat, E2EE Messaging & WebRTC Voice Dugout (`public/clubhouse.html`)**:
+    - Dedicated dual-database (`CHAT_DB`) community hub with `#announcements`, `#general`, per-game `#game-*` synced channels, private encrypted boards, and Direct Messages (DMs) using Web Crypto ECDH P-256 + AES-GCM-256 (`public/js/crypto.js`) and DM Safety Numbers.
+    - Low-overhead adaptive delta sync (`4s` active / `8s` idle in `public/js/store.js`), Google Drive-backed GIFs & file attachments (`/api/gifs`, `/api/attachments`), WebRTC voice room signaling (`public/js/rtc.js`, `/api/voice`, `/api/rtc`), opt-in privacy lifecycle, and moderator/mute controls (`is_moderator`).
+
+16. **Community Photo & Video Gallery (`public/gallery.html`), Digital Waivers (`public/waiver.html`) & About Us (`public/about.html`)**:
+    - **Photo, Video & Art Gallery (`gallery.html`):** Community gallery with Google Drive resumable upload pooling, moderation approval queue, and integrated Community Art Studio canvases (Pixel Diamond, Dugout Wall, Chalkboard).
+    - **Digital Liability Waiver (`waiver.html`):** ESIGN/UETA-compliant digital & paper waiver signing with SHA-256 provenance-sealed certificates.
+    - **Streamlined `☰ Menu`, `About Us` & Footer Version (`v143`):** Unified header `☰ Menu` dropdown linking to Clubhouse, Gallery & Art, About Us (`public/about.html`), Donate, and Admin; footer displays live loaded version (`#footer-app-version`) alongside live security posture badges (`SSL Labs A+`, `HTTP Observatory A+`, `Security Headers A+`, `CodeQL & Policy`, `security.txt`).
+
+17. **User & Maintenance Handbook, Development Narrative, & Open Source**:
+    - Practical guide to using every feature and making manual code edits in **[`HANDBOOK.md`](HANDBOOK.md)**, complete chronological history in **[`DEVELOPMENT_NARRATIVE.md`](DEVELOPMENT_NARRATIVE.md)**, and coordinated disclosure policy in **[`SECURITY.md`](SECURITY.md)**.
+    - Direct GitHub repository link and loaded version badge in the site footer.
 
 ---
 
 ## 🏗️ Project Structure
 
 ```text
-├── public/                     # Static frontend served by Cloudflare Pages CDN
-│   ├── index.html              # Homepage, hero schedule, & privacy promise
-│   ├── event.html              # Game details, RSVP form, task board, & discussion
-│   ├── archive.html            # Past games archive & historic turnout records
-│   ├── login.html              # Passwordless email sign-in / registration
-│   ├── profile.html            # Player profile, bio, & avatar uploader
-│   ├── admin.html              # Organizer & Admin dashboard
-│   ├── donate.html             # Charity donation options & IRS receipt notice
-│   ├── 404.html                # Custom 404 page
-│   ├── manifest.webmanifest    # PWA installable web app manifest
-│   ├── sw.js                   # Service Worker for offline shell caching
-│   ├── _headers                # Cloudflare Pages security headers (CSP, HSTS, etc.)
-│   ├── _redirects              # Enforces canonical custom domain over *.pages.dev
-│   ├── _routes.json            # Routes /api/* and /health to Cloudflare Pages Functions
-│   ├── css/style.css           # Core stylesheet with 12 MLB market color palettes
-│   ├── i18n/                   # Translation dictionaries (15 languages: en, es, zh, tl, vi, ko, ar, ru, fa, ja, pa, hy, pt, hi, fr)
-│   ├── icons/                  # Favicons and PWA application icons
-│   ├── js/                     # Vanilla JS modules
-│   │   ├── api.js              # REST client, i18n engine, themes, & auth
-│   │   ├── app.js              # Homepage schedules & game listing
-│   │   ├── event.js            # Game roster, task board, & discussion logic
-│   │   ├── archive.js          # Past games listing & turnout recording
-│   │   ├── admin.js            # Admin dashboard logic & database backups
-│   │   └── account-dashboard.js# Organizer panels & role-based dashboard views
-│   └── logo.svg                # Vector home-plate shield logo
-├── functions/
-│   ├── api/[[route]].js        # Hono REST API running on Cloudflare Pages Functions / Workers
-│   └── health.js               # Health check endpoint (/health)
-├── scripts/
-├── HANDBOOK.md                 # User guide & step-by-step manual code maintenance handbook
-├── DEVELOPMENT_NARRATIVE.md    # Comprehensive chronicle of all development phases
-├── d1_schema.sql               # Cloudflare D1 SQLite database schema (DDL + default duties)
-└── wrangler.toml               # Cloudflare Pages, environment vars, & D1 binding configuration
+├── public/                        # Static frontend served by Cloudflare Pages CDN
+│   ├── index.html                 # Homepage, Sunday schedule calendar, & privacy promise
+│   ├── event.html                 # Game details, Group RSVP, tasks, BP, weather, & discussion
+│   ├── clubhouse.html             # Clubhouse realtime chat, E2EE DMs/boards & voice rooms
+│   ├── gallery.html               # Community photo, video & art gallery (Drive-backed)
+│   ├── art.html                   # Legacy Community Art Studio path (relocates to gallery.html)
+│   ├── archive.html               # Past games archive & historic turnout records
+│   ├── waiver.html                # Digital liability waiver & cryptographic certificates
+│   ├── about.html                 # Organization mission & quick links
+│   ├── donate.html                # Charity donation options & IRS receipt notice
+│   ├── login.html                 # Passwordless email sign-in / registration
+│   ├── profile.html               # Player profile, bio, avatar uploader, & session controls
+│   ├── admin.html                 # Organizer & Admin dashboard (users, security, tasks, DB backups)
+│   ├── 404.html                   # Custom 404 page
+│   ├── .well-known/security.txt   # RFC 9116 vulnerability disclosure metadata
+│   ├── manifest.webmanifest       # PWA installable web app manifest
+│   ├── sw.js                      # Service Worker for offline shell caching (v143)
+│   ├── _headers                   # Cloudflare Pages security headers (CSP, HSTS, etc.)
+│   ├── _redirects                 # Enforces canonical custom domain over *.pages.dev & /handbook
+│   ├── _routes.json               # Routes /api/*, /feed.xml, and /health to Pages Functions
+│   ├── css/                       # Stylesheets (style.css, themes.css, clubhouse.css)
+│   ├── gifs/                      # Starter baseball GIF catalog & assets
+│   ├── i18n/                      # Translation dictionaries (14 non-English languages)
+│   ├── icons/                     # Favicons and PWA application icons
+│   ├── js/                        # Vanilla ES6 JS modules (api.js, weather.js, clubhouse.js,
+│   │                              #   crypto.js, store.js, rtc.js, event.js, gallery.js,
+│   │                              #   admin.js, app.js, archive.js, art.js, login.js,
+│   │                              #   profile.js, waiver.js, nav-init.js)
+│   └── logo.svg                   # Vector home-plate shield logo
+├── src/
+│   ├── app/                       # Unified ES-module Hono API (shared by Pages & Node)
+│   │   ├── index.js               # Security headers, CSRF, WAF, session middleware & router mounts
+│   │   ├── security.js            # Sessions, RBAC, rate limits, SSRF & metadata helpers
+│   │   ├── schema.js              # Dual-D1 DDL, migrations & default tasks/channels
+│   │   ├── gdrive.js              # Google Drive OAuth2 upload & byte-range streaming pool
+│   │   ├── mailer.js              # Resend transactional email dispatch
+│   │   ├── feeds.js / policy.js / version.js
+│   │   └── routes/                # auth, baseball, gifs, keys, media, posts, rtc, waiver,
+│   │                              #   events/{core,rsvps,bp-duties,helpers},
+│   │                              #   chat/{sync,channels,messages,moderation,helpers}
+│   ├── server.js / d1-sqlite.js / db.js / auth.js / seed.js  # Local Node + Express + SQLite runner
+├── functions/                     # Thin Cloudflare Pages Functions entrypoints importing src/app/
+│   ├── api/[[route]].js           # Delegates /api/* to unified Hono app
+│   ├── feed.xml.js                # RSS 2.0 + Media RSS feed endpoint
+│   └── health.js                  # Health check endpoint (/health)
+├── tests/                         # Native node:test E2E suites (core/*, clubhouse/tier1–5, helpers/*)
+├── scripts/                       # verify-all.js, security-scan.js, bump-version.js, ship.ps1, etc.
+├── HANDBOOK.md                    # User guide & manual maintenance handbook
+├── PROJECT.md                     # Architecture overview & milestones
+├── SECURITY.md                    # Vulnerability disclosure policy & built-in controls
+├── AGENTS.md                      # Codebase map & engineering invariants
+├── DEVELOPMENT_NARRATIVE.md       # Chronological development narrative
+├── d1_schema.sql                  # Cloudflare D1 SQLite schema snapshot
+└── wrangler.toml                  # Cloudflare Pages, env vars & dual D1 bindings (`BASEBALL_DB`, `CHAT_DB`)
 ```
 
 ---
@@ -191,32 +221,43 @@ You can run this entire stack **100% free** using a free **[Cloudflare](https://
 
 ---
 
-### Step 1: Set Up Cloudflare D1 (Serverless SQLite Database)
+### Step 1: Set Up Dual Cloudflare D1 Databases (Serverless SQLite)
 
-Cloudflare D1 provides a serverless SQLite database at the edge (free tier includes 5 GB storage and 5 million rows read/day).
+Cloudflare D1 provides serverless SQLite at the edge using two isolated databases (`BASEBALL_DB` with legacy `DB` alias for core schedules/users/waivers/media, and `CHAT_DB` for Clubhouse chat, E2EE keys, WebRTC voice presence, and GIF metadata).
 
-1. **Create the D1 database**:
+1. **Create both D1 databases**:
    ```bash
    npx wrangler d1 create pickup-baseball-db --location=wnam
+   npx wrangler d1 create pickup-chat-db --location=wnam
    ```
    *(Valid locations include `wnam` for Western North America, `enam` for Eastern North America, `weur` for Western Europe, etc.)*
 
-2. **Copy the `database_id` into `wrangler.toml`**:
-   Update the `[[d1_databases]]` section of `wrangler.toml` with the `database_id` returned by the command above:
+2. **Copy both `database_id` values into `wrangler.toml`**:
+   Update the `[[d1_databases]]` sections of `wrangler.toml` with the IDs returned above:
    ```toml
+   [[d1_databases]]
+   binding = "BASEBALL_DB"
+   database_name = "pickup-baseball-db"
+   database_id = "YOUR-BASEBALL-DATABASE-ID"
+
+   [[d1_databases]]
+   binding = "CHAT_DB"
+   database_name = "pickup-chat-db"
+   database_id = "YOUR-CHAT-DATABASE-ID"
+
    [[d1_databases]]
    binding = "DB"
    database_name = "pickup-baseball-db"
-   database_id = "YOUR-DATABASE-ID-HERE"
+   database_id = "YOUR-BASEBALL-DATABASE-ID"
    ```
 
-3. **Initialize the database schema (Remote & Local)**:
-   Apply `d1_schema.sql` to create all tables (`users`, `sessions`, `auth_codes`, `events`, `event_duties`, `attendees`, `duty_assignments`, `comments`, `default_duties`, `banned_emails`, `app_settings`, `rate_limits`) and seed the 4 default duties:
+3. **Initialize the schemas (Remote & Local)**:
+   Apply `d1_schema.sql` for the initial core schema, and note that `src/app/schema.js` (`ensureD1Schema` + `ensureChatD1Schema`) also applies idempotent table and column migrations automatically at runtime:
    ```bash
-   # Apply to the live remote D1 database in Cloudflare:
+   # Apply base schema to the live remote D1 database in Cloudflare:
    npx wrangler d1 execute pickup-baseball-db --remote --file=d1_schema.sql
 
-   # Apply to your local development D1 database:
+   # Apply base schema to your local development D1 database:
    npx wrangler d1 execute pickup-baseball-db --local --file=d1_schema.sql
    ```
 
@@ -263,22 +304,23 @@ Resend's free tier provides **3,000 emails/month** (100/day) over HTTPS REST API
 
 ### Step 4: Set Up Cloudflare Pages & Pages Functions / Workers
 
-Cloudflare Pages hosts both the static files in `public/` and the serverless Hono API in `functions/api/[[route]].js`.
+Cloudflare Pages hosts both the static files in `public/` and the thin serverless adapter in `functions/` that delegates to the unified Hono API in `src/app/`.
 
 - **How the Worker Routing Works**:
-  - `public/_routes.json` instructs Cloudflare Pages to serve all static HTML/CSS/JS files directly from the CDN edge (0 Worker invocations) and only invoke the Pages Function Worker for `/api/*` and `/health`.
-  - The Cloudflare Pages Functions edge API is maintained directly in `functions/api/[[route]].js` with zero duplicate wrapper scripts.
+  - `public/_routes.json` instructs Cloudflare Pages to serve all static HTML/CSS/JS files directly from the CDN edge (0 Worker invocations) and only invoke Pages Functions for `/api/*`, `/feed.xml`, and `/health`.
+  - `functions/api/[[route]].js` imports `src/app/index.js`, so production Workers and local Node development share a single unified codebase.
 
 1. **Create the Cloudflare Pages Project**:
    ```bash
    npx wrangler pages project create pickup-baseball --production-branch trunk
    ```
 
-2. **Save Your `RESEND_API_KEY` as an Encrypted Cloudflare Secret**:
+2. **Save Secrets as Encrypted Cloudflare Secrets**:
    ```bash
    npx wrangler pages secret put RESEND_API_KEY --project-name pickup-baseball
+   # Optional: Turnstile secret (TURNSTILE_SECRET_KEY) and Google Drive media pool (or run `npm run setup:gdrive`)
    ```
-   *(Paste your `re_...` key when prompted. This encrypts and attaches the secret to your production Worker without ever storing it in `wrangler.toml` or Git.)*
+   *(Paste your `re_...` key when prompted. This encrypts and attaches secrets to your production Worker without ever storing them in `wrangler.toml` or Git.)*
 
 3. **Deploy to Cloudflare Pages**:
    ```bash
@@ -305,26 +347,45 @@ Cloudflare Pages hosts both the static files in `public/` and the serverless Hon
 
 ---
 
-## 💻 Local Development Commands
+## 💻 Local Development & Release Commands
 
 ```bash
-# Start local Cloudflare Pages + D1 dev server at http://localhost:8788
+# Start local Node.js + Express + SQLite dev server at http://localhost:3000
 npm run dev
 
-# Run comprehensive 55-test automated acceptance verification suite
+# Start local Cloudflare Pages + D1 dev server at http://localhost:8788
+npm run pages:dev
+
+# Run the full 223-test automated E2E verification suite (core + Clubhouse tiers 1–5)
 npm test
+
+# Run the 12-check static security, CSP, SQL, route-guard & parity scan
+npm run security:scan
+
+# Atomically bump version numbers across version.js, sw.js, api.js, and HTML ?v= tags
+npm run bump
 
 # Deploy static assets and Worker functions to production
 npm run deploy
+
+# Check live production security headers and public endpoints after deploy
+npm run security:scan:live
 ```
+
+*(On Windows, `.\scripts\ship.ps1` orchestrates the full release pipeline: branch guard → `npm run bump` → `npm test` → `npm run security:scan` → commit & tag → `npm run deploy` → git push → `npm run security:scan:live`.)*
 
 ---
 
 ## 💾 Database Backups
 
-Signed-in administrators can download a complete `.sql` backup of the live Cloudflare D1 database at any time by clicking **📥 Backup Database (.sql)** on the **[Admin Dashboard](https://www.pickupbaseballfoundation.org/admin.html)** (`/api/events/admin/backup-db`).
+Signed-in administrators can download a `.sql` backup of the live core Cloudflare D1 database at any time by clicking **📥 Backup Database (.sql)** on the **[Admin Dashboard](https://www.pickupbaseballfoundation.org/admin.html)** (`/api/events/admin/backup-db`), or export either Cloudflare D1 database via Wrangler:
 
-*(Note: `.db` and `.sql` backup files are excluded via `.gitignore` so player email addresses are never committed to Git.)*
+```bash
+npm run d1:backup
+npm run d1:backup:chat
+```
+
+*(Note: `.db`, `.sqlite*`, and `.sql` backup files are excluded via `.gitignore` so player email addresses are never committed to Git.)*
 
 ---
 

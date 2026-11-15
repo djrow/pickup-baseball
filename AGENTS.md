@@ -16,8 +16,8 @@ Mounted under `/api` in `src/app/index.js`:
   - `src/app/feeds.js` — Media RSS 2.0 XML feed (`/feed.xml` & `/api/feed.xml`).
   - `src/app/version.js` — `CURRENT_APP_VERSION` (stamped by `scripts/bump-version.js`).
 - **Routers (`src/app/routes/`):**
-  - `/auth` → `auth.js` (6-digit codes, magic links, profile, avatars, user RBAC/bans, settings, clubhouse opt-in)
-  - `/events` → `events.js` (games, `.ics` calendars, RSVPs/waitlist, volunteer tasks, comments, BP order, rainout/reopen, DB SQL backup)
+  - `/auth` → `auth.js` (6-digit codes, magic links, shared-device 4h sessions, profile, avatars, user RBAC/bans, settings, clubhouse opt-in)
+  - `/events` → `events.js` aggregator mounting `events/core.js` (games, `.ics` calendars, reminders, rainout/reopen, DB SQL backup), `events/rsvps.js` (RSVPs/waitlist, moderation, comments), `events/bp-duties.js` (BP order, default/event volunteer tasks), and `events/helpers.js`
   - `/posts` → `posts.js` (community highlights)
   - `/media`, `/attachments` → `media.js` (gallery uploads/links, moderation approval, chat attachments)
   - `/gifs` → `gifs.js` (starter catalog + Drive-backed GIF URL imports & streaming)
@@ -25,7 +25,7 @@ Mounted under `/api` in `src/app/index.js`:
   - `/voice`, `/rtc` → `rtc.js` (voice channel presence & WebRTC signaling)
   - `/baseball` → `baseball.js` (Clubhouse embedded upcoming games, quick RSVP, quick BP, `#game-*` sync)
   - `/waiver` → `waiver.js` (digital liability waiver signing & provenance-sealed certificates)
-  - `/` → `chat.js` (`/bootstrap`, `/sync`, `/public/channels`, `/channels`, `/messages`, reactions, reports, moderation, personal mutes)
+  - `/` → `chat.js` aggregator mounting `chat/sync.js` (`/bootstrap`, `/sync`, `/public/channels`), `chat/channels.js` (`/channels`, membership, read watermarks), `chat/messages.js` (`/messages`, reactions, attachments), `chat/moderation.js` (reports, mutes, bans, moderator actions), and `chat/helpers.js`
 
 ### Dual Databases (`wrangler.toml` / `src/db.js`)
 - **`BASEBALL_DB` (`DB` alias):** `users`, `sessions`, `auth_codes`, `events`, `event_duties`, `attendees`, `duty_assignments`, `comments`, `default_duties`, `posts`, `media_items`, `banned_emails`, `app_settings`, `rate_limits`, `batting_practice_signups`, `waivers`.
@@ -40,13 +40,13 @@ Vanilla **ES6** scripts (IIFEs attaching to `window`, loaded via ordered `<scrip
   - `admin.html` → `api.js`, `weather.js`, `admin.js`
   - `clubhouse.html` → `crypto.js`, `store.js`, `rtc.js`, `clubhouse.js` (plus `clubhouse.css`)
   - `gallery.html` → `api.js`, `gallery.js`
-  - `art.html` → `api.js`, `art.js`
+  - `art.html` → `api.js`, `art.js` (legacy path with relocation banner pointing to `gallery.html`)
   - `archive.html` → `api.js`, `archive.js`
   - `login.html` → `api.js`, `login.js`
   - `profile.html` → `api.js`, `profile.js`
   - `waiver.html` → `api.js`, `waiver.js`
-  - `donate.html`, `404.html` → `api.js`, `nav-init.js`
-- **Translations & PWA:** `public/i18n/*.json` (14 non-English locales), `public/sw.js` (precache list), `public/_headers`.
+  - `about.html`, `donate.html`, `404.html` → `api.js`, `nav-init.js`
+- **Stylesheets, Translations & PWA:** `public/css/style.css`, `public/css/themes.css`, `public/css/clubhouse.css`, `public/i18n/*.json` (14 non-English locales), `public/sw.js` (precache list), `public/_headers`.
 
 ## 2. Hard Invariants (Must Never Break)
 1. **Strict CSP (`public/_headers`, `src/server.js`):** Never add inline `<script>` tags, `javascript:` URLs, `eval()`, `new Function()`, or inline HTML event handlers (`onclick=`, `onchange=`, etc.). Bind events in `.js` files.
@@ -58,6 +58,6 @@ Vanilla **ES6** scripts (IIFEs attaching to `window`, loaded via ordered `<scrip
 
 ## 3. Verification Commands
 Always run after changes:
-- `npm test` (`node scripts/verify-all.js`) — full E2E suite (auth, RBAC, events, weather, gallery, waivers, Clubhouse tiers 1–5).
-- `npm run security:scan` (`node scripts/security-scan.js`) — static CSP, HTML, JS sink/syntax, SQL parameterization, route guard, asset, and secret hygiene checks.
-- `npm run bump` (`node scripts/bump-version.js`) — bumps `CURRENT_APP_VERSION`, `sw.js` `CACHE_NAME`, `api.js` `CLIENT_VERSION`, and HTML `?v=` tags before deploy.
+- `npm test` (`node scripts/verify-all.js`) — full E2E suite (223 tests across `tests/core/` and `tests/clubhouse/` Tiers 1–5).
+- `npm run security:scan` (`node scripts/security-scan.js`) — static CSP, HTML, JS sink/syntax, SQL parameterization, route guard, asset, i18n, and secret hygiene checks (`npm run security:scan:live` checks production headers & endpoints).
+- `npm run bump` (`node scripts/bump-version.js`) — bumps `CURRENT_APP_VERSION`, `sw.js` `CACHE_NAME`, `api.js` `CLIENT_VERSION`, and HTML `?v=` tags before deploy (`scripts/ship.ps1` automates bump, test, scan, commit, tag, deploy, and live scan).

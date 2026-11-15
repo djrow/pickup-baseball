@@ -37,10 +37,18 @@
 - **[28. Phase 27: Live Cloud Calendar Sync Indicator, Auto-Refresh & Live .ics Subscription Feed](#28-phase-27-live-cloud-calendar-sync-indicator-auto-refresh--live-ics-subscription-feed)** — Real-time cloud verification pill, visibility/network auto-refresh, live RFC 5545 calendar stream.
 - **[29. Phase 28: RSS 2.0 & Media RSS Community Feed, Zero-Host Multimedia Interpretation & Edge Highlights](#29-phase-28-rss-20--media-rss-community-feed-zero-host-multimedia-interpretation--edge-highlights)** — Standard RSS 2.0 + Media RSS feed, zero-storage Cloudflare external links, rich in-app YouTube/image/video interpretation, live preview.
 - **[30. Phase 29: Complete 15-Language i18n Translation for Calendar Demarcation Legend, Live Sync, and Footer Webapp Build Attribution](#30-phase-29-complete-15-language-i18n-translation-for-calendar-demarcation-legend-live-sync-and-footer-webapp-build-attribution)** — Full translation of calendar demarcation legend, live sync states, feed, and footer build statement across all 14 California language dictionaries with cache busting.
-- **[37. Phase 36: Creative Commons BY-NC 4.0 Copyright & Licensing Integration](#37-phase-36-creative-commons-by-nc-40-copyright--licensing-integration)** — Universal CC BY-NC 4.0 copyright notices, LICENSE file, and 15-language translation.
+- **[31. Phase 30–35: Admin Search, Header & Calendar Cleanup, Credential Guide & Sunday Field Rules](#31-phase-30-compact-scrollable-user-accounts-table-with-real-time-substring-search-filter)** — Compact user search table, top bar/calendar tightening, Google Calendar date fix, consolidated admin security section, cross-browser login guide, and Sunday rules of play.
+- **[37. Phase 36: Creative Commons BY-NC 4.0 Copyright & Licensing Integration](#37-phase-36-creative-commons-by-nc-40-copyright--licensing-integration)** — Initial CC BY-NC 4.0 copyright notices & `LICENSE` (later superseded by Apache-2.0 in Phase 47).
 - **[38. Phase 37: Consolidation of Facilitator into Organizer Role & Field Turnout Recording UI](#38-phase-37-consolidation-of-facilitator-into-organizer-role--field-turnout-recording-ui)** — Migrated legacy facilitator user roles to Organizer, rejected obsolete role assignments, and added 1-click field turnout recording controls across Admin and Archive pages.
 - **[39. Phase 38: Client-Side Weather Engine, Temperature/Emoji Game Cards & Smart Rainout Assistant](#39-phase-38-client-side-weather-engine-temperatureemoji-game-cards--smart-rainout-assistant)** — Integrated zero-host Open-Meteo weather API, game card temperature & emoji pills, authentic 12 PM – 4 PM Sunday routine, and 24-hour rainfall surface accumulation & exponential soil drainage heuristic.
-- **[40. Future Roadmap Notes](#40-future-roadmap-notes)** — Full-stack Rust / WebAssembly edge migration architecture.
+- **[40. Phases 39–42: CSP Open-Meteo Allowlist, Homepage Routine & Top Bar Streamlining (`v41`–`v45`)](#40-phase-39-csp-connect-src-whitelist--10-day-forecast-horizon-alignment)** — Whitelisted Open-Meteo in CSP, relocated Sunday routine above calendar, and simplified top header controls.
+- **[44. Phase 43: Unified Hono Backend Architecture (`src/app/`) & Dual Cloudflare D1 Databases](#44-phase-43-unified-hono-backend-architecture-srcapp--dual-cloudflare-d1-databases)** — Consolidated duplicate Cloudflare/Node backends into a single ES-module Hono API sharing local SQLite (`d1-sqlite.js`) and Edge D1 (`BASEBALL_DB` + `CHAT_DB`).
+- **[45. Phase 44: Clubhouse Realtime Chat, E2EE Messaging, WebRTC Voice & Drive GIF/Media Integration](#45-phase-44-clubhouse-realtime-chat-e2ee-messaging-webrtc-voice--drive-gifmedia-integration)** — Launched `clubhouse.html`, ECDH P-256 + AES-GCM-256 encrypted DMs/private boards, WebRTC voice rooms, adaptive 4s/8s delta sync, Drive-backed GIFs & attachments, opt-in lifecycle, and moderation tools.
+- **[46. Phase 45: Community Photo & Video Gallery, Integrated Art Studio & Provenance-Sealed Digital Waivers](#46-phase-45-community-photo--video-gallery-integrated-art-studio--provenance-sealed-digital-waivers)** — Added Google Drive-pooled gallery (`gallery.html`), merged Community Art Studio canvases into the gallery, and launched ESIGN/UETA digital liability waivers (`waiver.html`).
+- **[47. Phase 46: Apache-2.0 License, Footer Security Badges, Version Bumper & Release Pipeline (`v109`–`v128`)](#47-phase-46-apache-20-license-footer-security-badges-version-bumper--release-pipeline-v109v128)** — Transitioned license to Apache-2.0, added footer security posture badges & tokenized `.ics` subscriptions, automated `scripts/bump-version.js`, and integrated `scripts/security-scan.js` into `scripts/ship.ps1`.
+- **[48. Phase 47: Codebase Modularization, Weather/Card Fixes & 223-Test Suite (`v130`–`v132`)](#48-phase-47-codebase-modularization-weathercard-fixes--223-test-suite-v130v132)** — Split `routes/events.js`, `routes/chat.js`, and `scripts/verify-all.js` into focused `routes/events/*`, `routes/chat/*`, `tests/core/*`, and `tests/clubhouse/` modules.
+- **[49. Phase 48: Consolidated `☰ Menu`, `About Us` Page, Footer Version Badge & Security Hardening (`v134`–`v143`)](#49-phase-48-consolidated--menu-about-us-page-footer-version-badge--security-hardening-v134v143)** — Organized header actions into `☰ Menu`, launched `about.html` (`v142`), added live `#footer-app-version` badge, and completed security remediations (`v134`–`v143`).
+- **[50. Future Roadmap Notes](#50-future-roadmap-notes)** — Full-stack Rust / WebAssembly edge migration & workload-driven scaling strategy.
 
 ---
 
@@ -698,16 +706,61 @@ Resolved browser security blocking and standardized 10-day weather forecast copy
 
 ## 43. Phase 42: Top Bar Header Navigation Streamlining
 - **Removed Handbook Link from Top Bar (`nav-link-handbook`):**
-  - Removed the `📖 Handbook` link from the header top bar across all 8 HTML files and `api.js` `updateAuthNav()`.
-  - Streamlines top bar navigation to `Donate`, `Language selector`, and `Log In` / `Profile`.
+  - Removed the `📖 Handbook` link from the header top bar across all HTML files and `api.js`.
   - Handbook remains accessible in the site footer (`footer.handbook`) and repository documentation.
 - **Test Suite & Version Bump:**
-  - Updated `scripts/verify-all.js` `T9.16` to verify that `nav-link-handbook` is absent from top bar rendering.
-  - Bumped version to `v45` across `CURRENT_APP_VERSION`, `CLIENT_VERSION`, Service Worker cache (`pbf-cache-v45`), and all 8 HTML files (`?v=45`).
+  - Bumped version to `v45` across `CLIENT_VERSION`, `CURRENT_APP_VERSION`, Service Worker cache (`pbf-cache-v45`), and HTML files (`?v=45`).
 
 ---
 
-## 44. Future Roadmap Notes
+## 44. Phase 43: Unified Hono Backend Architecture (`src/app/`) & Dual Cloudflare D1 Databases
+- **Single-Codebase Convergence:** Replaced the earlier pattern of maintaining duplicate backend route logic across `functions/api/[[route]].js` and `src/` with a single unified ES-module Hono application in `src/app/` (`src/app/index.js`, `security.js`, `schema.js`, `mailer.js`, `feeds.js`, `policy.js`, `gdrive.js`, `version.js`, and modular `src/app/routes/*`).
+- **Dual Execution Runtimes:** `functions/api/[[route]].js` acts as a thin Cloudflare Pages adapter importing `src/app/index.js`, while local Node.js (`src/server.js`) adapts `better-sqlite3` via `src/d1-sqlite.js` so `npm run dev` and `npm test` execute the exact same Hono handlers as production.
+- **Dual Database Split:** Separated core platform tables into `BASEBALL_DB` (`pickup-baseball-db`) and Clubhouse chat, crypto key, WebRTC, moderation, and GIF metadata tables into `CHAT_DB` (`pickup-chat-db`), configured in `wrangler.toml` and auto-migrated by `src/app/schema.js`.
+
+---
+
+## 45. Phase 44: Clubhouse Realtime Chat, E2EE Messaging, WebRTC Voice & Drive GIF/Media Integration
+- **Clubhouse Workspace (`public/clubhouse.html`, `public/css/clubhouse.css`, `public/js/{clubhouse,store,crypto,rtc}.js`):**
+  - Built multi-channel text & voice rooms (`#announcements` public read-only view for logged-out visitors, `#general`, synced `#game-*` game threads, private boards, and Direct Messages).
+  - Implemented client-side **Web Crypto ECDH P-256 + AES-GCM-256** end-to-end encryption (`public/js/crypto.js`) for DMs and private boards (`src/app/routes/keys.js`) with DM Safety Number verification.
+  - Added **WebRTC voice channels** and signaling (`/api/voice`, `/api/rtc`, `public/js/rtc.js`), **Batting Practice** quick signups (`/api/baseball`), and **adaptive 4s/8s delta polling** (`public/js/store.js`).
+  - Integrated Google Drive OAuth2 resumable upload pooling & byte-range streaming (`src/app/gdrive.js`, `/api/attachments`, `/api/gifs`) so GIFs and heavy media never bloat Cloudflare D1, enforced moderation/mute/report workflows (`is_moderator`), and isolated opted-out users cleanly (`v112`–`v118`).
+
+---
+
+## 46. Phase 45: Community Photo & Video Gallery, Integrated Art Studio & Provenance-Sealed Digital Waivers
+- **Photo, Video & Art Gallery (`public/gallery.html`, `public/js/gallery.js`, `src/app/routes/media.js`):**
+  - Built Google Drive-backed community photo & video uploads with organizer/admin moderation approval queues and integrated the legacy Community Art Studio canvases (Pixel Diamond, Dugout Wall, Chalkboard; `public/art.html` displays a relocation banner to `gallery.html`).
+- **Digital Liability Waiver (`public/waiver.html`, `public/js/waiver.js`, `src/app/routes/waiver.js`):**
+  - Implemented annual ESIGN/UETA-compliant digital liability waiver signing (`Form 41335\14760738.1`) with SHA-256 cryptographic provenance certificates and admin paper/digital waiver management.
+
+---
+
+## 47. Phase 46: Apache-2.0 License, Footer Security Badges, Version Bumper & Release Pipeline (`v109`–`v128`)
+- **Apache License 2.0 & Security Posture Visibility (`v109`–`v111`, `v123`):** Transitioned licensing to **Apache-2.0** (`LICENSE`, `package.json`, `api.js` footer, docs) and added footer security posture badges (`SSL Labs A+`, `HTTP Observatory A+`, `Security Headers A+`, `CodeQL & Policy`, `security.txt`).
+- **Tokenized `.ics` Subscriptions & PII Shrouding (`v124`, `v126`):** Strengthened roster privacy helpers (`src/app/policy.js`) and personalized calendar feed tokens (`calendar_token`).
+- **Tooling & Release Automation (`v125`, `v128`):** Added `scripts/bump-version.js` (`npm run bump`), `scripts/security-scan.js` (`npm run security:scan` & `security:scan:live`), and the end-to-end `scripts/ship.ps1` deployment pipeline.
+
+---
+
+## 48. Phase 47: Codebase Modularization, Weather/Card Fixes & 223-Test Suite (`v130`–`v132`)
+- **Router & Test Modularization (`v131`):** Split oversized monolithic modules into clean single-responsibility submodules:
+  - `src/app/routes/events.js` → `events/{core,rsvps,bp-duties,helpers}.js`
+  - `src/app/routes/chat.js` → `chat/{sync,channels,messages,moderation,helpers}.js`
+  - `scripts/verify-all.js` → slim entrypoint running `tests/core/*.test.js` and `tests/clubhouse/tier1–5` (223 tests total, verified clean without hanging handles).
+- **Weather & Calendar Refinements (`v130`–`v132`):** Improved Open-Meteo weather card handling, 5-day rainfall & 24-hour drainage views, CSS palette separation (`public/css/themes.css`), and 15-language translation parity.
+
+---
+
+## 49. Phase 48: Consolidated `☰ Menu`, `About Us` Page, Footer Version Badge & Security Hardening (`v134`–`v143`)
+- **Top Bar `☰ Menu` & `About Us` (`v142`):** Consolidated secondary header links into a keyboard-accessible **`☰ Menu`** dropdown (`Clubhouse`, `Gallery & Art`, `About Us`, `Donate`, plus `Admin` / `Org`) and launched [`public/about.html`](public/about.html) across all 13 HTML pages and 15 languages.
+- **Footer Loaded Version Badge:** Added `#footer-app-version` (`v<CLIENT_VERSION>`) next to the license link in `API.renderFooter()` so users can confirm the exact client build loaded on any device.
+- **Comprehensive Security Audit Remediations (`v134`–`v143`):** Executed five iterative security hardening releases across auth (`shared_device` 4h sessions, 5-session cap, `logout-other-devices`), CSRF (`Sec-Fetch-Site` + `Origin`/`Referer`), SSRF (DNS/IPv4/IPv6 private-IP guards), E2EE key rotation/epoch guards, signed media streaming authorization, RTC prototype-pollution checks, and tightened 12-check verification in `scripts/security-scan.js`.
+
+---
+
+## 50. Future Roadmap Notes
 - **Pinned Full-Stack Rust / WebAssembly Migration:** Evaluated a future 4-phase rewrite of the Cloudflare Pages Functions backend (and optional frontend interactivity) to Rust (`workers-rs` compiling to WebAssembly) for compile-time type safety, zero-dependency binary durability, and strict edge memory safety—kept as a guiding north star when designing new features and data models.
 - **Workload-Driven Free-Tier Stack Migration Strategy (Clubhouse & Core App):** Re-evaluate hosting and real-time infrastructure against actual community usage rather than premature rewrites:
   - **Current Baseline (Cloudflare Pages + D1 + Google Drive + 4s/8s Adaptive Delta Sync):** `public/js/store.js` polls at `4000` ms (`VISIBLE_ACTIVE_SYNC_MS`) during active conversation or voice huddles (any activity within 60s) and backs off to `8000` ms (`VISIBLE_IDLE_SYNC_MS`) when visible tabs are idle (with zero idle polling when hidden outside voice rooms) to roughly double idle free-tier capacity (~222 idle visible Clubhouse user-hours/day within Cloudflare's 100k requests/day Workers limit) while keeping auth/DB unified and media on the PBF Shared Drive pool.

@@ -21,6 +21,7 @@ The entire app was built with **zero frontend build tools** (plain HTML, CSS, an
      - [Submitting a Group RSVP (Players, Spectators & Volunteer Tasks)](#%EF%B8%8F-submitting-a-group-rsvp-players-spectators--volunteer-tasks)
      - [Waitlists & Automatic Promotion](#-waitlists--automatic-promotion)
      - [Discussion Board, Profile, Languages & Themes](#-discussion-board-profile-languages--themes)
+     - [Top Bar Menu, Clubhouse, Gallery, Digital Waiver & Footer Version](#-top-bar-menu-clubhouse-gallery-digital-waiver--footer-version)
   2. [For Organizers & Administrators](#2-for-organizers--administrators)
      - [Limited Roster Size & Automatic Waitlist Behavior](#-limited-roster-size--automatic-waitlist-behavior)
      - [Restricting RSVPs to Invited Emails](#-restricting-rsvps-to-invited-emails-optional)
@@ -68,7 +69,9 @@ The entire app was built with **zero frontend build tools** (plain HTML, CSS, an
 - Enter your email address (and name if it's your first time).
 - Check your inbox for an email from `games@pickupbaseballfoundation.org`:
   - Either type the **6-digit code** into the login page, **or** click the **1-click magic sign-in link** in the email.
-- Once signed in, your browser stays signed in for **90 days**. You can log out anytime from your **Profile** page (`/profile.html`).
+- Once signed in, your browser stays signed in for **90 days** (capped at 5 active device sessions per account).
+  - Using a public or shared computer? Check **"Shared / public computer (4-hour temporary session)"** so the login cookie expires automatically in 4 hours.
+  - You can log out anytime—or click **"Sign out all other devices"**—from `/profile.html` (or `/login.html`).
 
 ### 💾 Saving Your Email Address & Login Credentials in Your Browser
 <a id="saving-login-credentials"></a>
@@ -549,15 +552,22 @@ On any game page (`/event.html?id=...`), one person or household account can RSV
 
 ### 💬 Discussion Board, Profile, Languages & Themes
 - **Game Discussion Board:** Bottom of every game page — post carpool notes, gear questions, weather updates, or post-game highlights.
-- **Player Profile (`/profile.html`):** Update your display name, short baseball bio, or upload a profile photo (automatically resized to 256×256 and stripped of GPS/EXIF camera metadata for privacy).
-- **Language Selector:** Top navigation bar — switch among **15 languages** (including right-to-left layout for Arabic and Persian).
+- **Player Profile (`/profile.html`):** Update your display name, short baseball bio, Clubhouse opt-in preference, upload a profile photo (automatically resized to 256×256 and stripped of GPS/EXIF camera metadata for privacy), or revoke sessions on other devices.
+- **Language Selector:** Bottom footer (`🌐` selector) — switch among **15 languages** (including right-to-left layout for Arabic and Persian).
 - **Theme & Colors:** Bottom footer (`🎨 Theme & Colors`) — choose Light or Dark mode and pick from **12 MLB team color palettes**.
+
+### 🧭 Top Bar Menu, Clubhouse, Gallery, Digital Waiver & Footer Version
+- **Top Bar `☰ Menu` & `About Us` (`/about.html`):** Click **`☰ Menu`** in the top-right header to reach **Clubhouse**, **Gallery & Art**, **About Us** (foundation mission & contact), and **Donate** (plus **Organizer / Admin** tools when authorized).
+- **💬 Clubhouse (`/clubhouse.html`):** Community dugout with `#announcements` (public read-only for visitors), `#general`, per-game synced `#game-*` channels, encrypted Direct Messages and private boards (Web Crypto ECDH P-256 + AES-GCM-256 with Safety Number verification), WebRTC voice channels, and baseball GIFs/attachments.
+- **📸 Gallery & Art (`/gallery.html`):** View and submit community game photos and videos (uploaded to the foundation's Google Drive pool and reviewed by moderators), plus access the interactive Community Art Studio canvases (Pixel Diamond, Dugout Wall, Chalkboard).
+- **📝 Player Liability Waiver (`/waiver.html`):** Sign the annual Pickup Baseball Foundation liability waiver online and view your timestamped, SHA-256 provenance-sealed certificate. *(Direct link also lives in the footer.)*
+- **Loaded Version Badge:** Every page footer displays the currently loaded build number (for example, `v143`) next to the license notice, so you can verify immediately whether a device is running the latest release or tap **`✨ Update Available`** if a newer build is waiting.
 
 ---
 
 ## 2. For Organizers & Administrators
 
-Accounts granted the **`Organizer`** or **`Admin`** role see an **`🛡️ Org`** (or **`👑 Admin`**) button in the top navigation bar (`/admin.html`) plus organizer tools directly on each game page, the past games archive (`/archive.html`), and the admin dashboard. Organizers handle all game-day planning, publishing games, managing lineups and rosters, broadcasting rainouts, and recording field attendance turnouts.
+Accounts granted the **`Organizer`** or **`Admin`** role see **`🛡️ Org`** (or **`👑 Admin`**) inside the top-right **`☰ Menu`** (`/admin.html`) plus organizer tools directly on each game page, the past games archive (`/archive.html`), the gallery (`/gallery.html`), Clubhouse moderation, and the admin dashboard. Organizers handle all game-day planning, publishing games, managing lineups and rosters, broadcasting rainouts, and recording field attendance turnouts.
 
 > [!NOTE]
 > On-field game day coordination—such as setting batting orders and balancing squads at home plate—is supported by the **Game Facilitator** volunteer task (a volunteer slot open to all game attendees). Account-level administration and permissions are managed using the **`Organizer`** role.
@@ -748,57 +758,69 @@ Accounts with the **`Admin`** role have full access to `/admin.html` system cont
 
 ## 4. How the Codebase Is Organized
 
-There is **no build step** for the website. The files inside `public/` are served verbatim to browsers.
+There is **no build step** for the website. The files inside `public/` are served verbatim to browsers, and a **single unified Hono API (`src/app/`)** runs identically in production (Cloudflare Pages Functions + D1) and locally (Node.js + Express + `better-sqlite3`).
 
 ```text
 pickup-baseball/
 ├── public/                        # FRONTEND (Served directly by Cloudflare Pages CDN)
-│   ├── index.html                 # Homepage: hero banner, privacy promise, rolling calendar
-│   ├── event.html                 # Single game page: Group RSVP, tasks, roster, comments
+│   ├── index.html                 # Homepage: hero banner, routine, privacy promise, calendar
+│   ├── event.html                 # Single game page: Group RSVP, tasks, BP, weather, roster, comments
+│   ├── clubhouse.html             # Clubhouse realtime chat, E2EE DMs/boards & WebRTC voice rooms
+│   ├── gallery.html               # Community photo, video & art gallery
+│   ├── art.html                   # Legacy Community Art Studio path (links to gallery.html)
 │   ├── archive.html               # Past games archive & actual turnout history
-│   ├── admin.html                 # Organizer & Admin dashboard
-│   ├── login.html                 # Passwordless 6-digit code / magic link sign-in
-│   ├── profile.html               # Player profile, bio, avatar upload, & logout button
+│   ├── waiver.html                # Digital liability waiver & cryptographic certificates
+│   ├── about.html                 # Foundation mission, contact & quick links
 │   ├── donate.html                # Donation links & tax-receipt information
+│   ├── admin.html                 # Organizer & Admin dashboard (users, security, tasks, DB backups)
+│   ├── login.html                 # Passwordless 6-digit code / magic link sign-in
+│   ├── profile.html               # Player profile, bio, avatar upload, & session controls
 │   ├── 404.html                   # Custom 404 Not Found page
 │   ├── sw.js                      # Offline PWA Service Worker & static cache list
-│   ├── _headers                   # HTTP security headers (Content-Security-Policy, HSTS)
-│   ├── _redirects                 # Redirects *.pages.dev & apex domain to www.
-│   ├── _routes.json               # Tells Cloudflare to route /api/* to the Worker
-│   ├── css/style.css              # All site styles + 12 MLB color themes + dark mode
+│   ├── _headers                   # HTTP security headers (CSP, HSTS, Cache-Control)
+│   ├── _redirects                 # Redirects *.pages.dev, /handbook, & /rules
+│   ├── _routes.json               # Routes /api/*, /feed.xml, & /health to Pages Functions
+│   ├── css/
+│   │   ├── style.css              # Core layout, components, default Bay Area theme & dark mode
+│   │   ├── themes.css             # 11 additional MLB team color palettes (light & dark)
+│   │   └── clubhouse.css          # Clubhouse workspace styling
 │   ├── i18n/*.json                # Translation dictionaries for 14 non-English languages
-│   └── js/
-│       ├── api.js                 # Shared API client, English text (EN_DICT), nav, footer, themes
-│       ├── app.js                 # Homepage calendar, cloud sync pill, & .ics subscribe panel
-│       ├── event.js               # Event page logic: steppers, tasks, roster, rainout, comments
-│       ├── archive.js             # Past games archive page logic
-│       ├── admin.js               # Admin dashboard & Default Tasks editor
-│       └── account-dashboard.js   # Shared event creation & whitelist UI controls
+│   └── js/                        # Vanilla ES6 client modules (api.js, weather.js, clubhouse.js,
+│                                  #   crypto.js, store.js, rtc.js, event.js, gallery.js, admin.js,
+│                                  #   app.js, archive.js, art.js, login.js, profile.js, waiver.js,
+│                                  #   nav-init.js)
 │
-├── functions/
-│   └── api/[[route]].js           # PRODUCTION BACKEND (Cloudflare Pages Function / Hono + D1)
+├── src/
+│   ├── app/                       # UNIFIED HONO API (Shared by Cloudflare Workers & Node.js)
+│   │   ├── index.js               # Global security headers, CSRF, WAF, session lookup & mounts
+│   │   ├── schema.js              # Dual-D1 schema, migrations, & DEFAULT_BASEBALL_DUTIES
+│   │   ├── security.js            # Sessions, RBAC middleware, rate limits, SSRF & EXIF helpers
+│   │   ├── gdrive.js              # Google Drive OAuth2 storage pool & range streaming
+│   │   ├── mailer.js              # Resend transactional email templates
+│   │   ├── feeds.js / policy.js / version.js
+│   │   └── routes/                # auth, baseball, gifs, keys, media, posts, rtc, waiver,
+│   │                              #   events/{core,rsvps,bp-duties,helpers},
+│   │                              #   chat/{sync,channels,messages,moderation,helpers}
+│   └── server.js / d1-sqlite.js / db.js / auth.js / seed.js  # Local Node runner (`npm run dev`)
 │
-├── src/                           # LOCAL NODE/EXPRESS BACKEND (Used by `npm run dev` & `npm test`)
-│   ├── server.js                  # Express app entry point (http://localhost:3000)
-│   ├── db.js                      # Local SQLite schema & migrations (better-sqlite3)
-│   ├── auth.js                    # Local session & RBAC middleware
-│   ├── mailer.js                  # Local email templates (prints emails to console in dev)
-│   ├── reminders.js               # 24-hour reminder processor
-│   └── routes/
-│       ├── auth.js                # Local /api/auth/* routes
-│       └── events.js              # Local /api/events/* routes
+├── functions/                     # THIN CLOUDFLARE PAGES ENTRYPOINTS (imports src/app/)
+│   ├── api/[[route]].js           # Delegates /api/* to src/app/index.js
+│   ├── feed.xml.js                # RSS 2.0 + Media RSS feed endpoint
+│   └── health.js                  # Edge health check (/health)
 │
+├── tests/                         # Native node:test suites (core/*, clubhouse/tier1–5, helpers/*)
 ├── scripts/
-│   └── verify-all.js              # Automated 55-test verification suite (`npm test`)
-├── d1_schema.sql                  # Master SQLite / Cloudflare D1 table definitions
-└── wrangler.toml                  # Cloudflare Pages project config, public env vars, & D1 binding
+│   ├── verify-all.js              # Automated 223-test E2E suite (`npm test`)
+│   ├── security-scan.js           # 12-check static/live security & parity scanner
+│   ├── bump-version.js            # Atomic version/cache-bust bumper (`npm run bump`)
+│   └── ship.ps1                   # Automated Windows release workflow script
+├── d1_schema.sql                  # Core SQLite / Cloudflare D1 table definitions
+└── wrangler.toml                  # Cloudflare Pages project config, env vars, & D1 bindings
 ```
 
-> ### ⚠️ Important Rule: The Two Backend Copies
-> - **`functions/api/[[route]].js`** is what runs **live in the cloud** on Cloudflare Workers + D1.
-> - **`src/`** is a local Node.js/Express mirror used for fast offline development (`npm run dev`) and the automated test suite (`npm test`).
-> - **If you only edit HTML, CSS, or `public/js/*.js`:** You do **not** need to touch either backend.
-> - **If you change an API endpoint or database query:** Make the same change in **both** `functions/api/[[route]].js` and `src/` so `npm test` verifies the exact logic running in production.
+> ### 💡 Single Unified Backend Architecture
+> - **One API Codebase (`src/app/`):** You no longer have to duplicate changes across separate Cloudflare and Node backend files. Both `functions/api/[[route]].js` (production Cloudflare Pages + D1) and `src/server.js` (local `npm run dev` + `npm test` via `src/d1-sqlite.js`) execute the exact same Hono routers in `src/app/`.
+> - **Schema & Migrations (`src/app/schema.js`):** Database tables and idempotent `ALTER TABLE` statements for both `BASEBALL_DB` and `CHAT_DB` live in `src/app/schema.js` (keep `d1_schema.sql` aligned for fresh D1 initializations).
 
 ---
 
@@ -817,15 +839,20 @@ pickup-baseball/
 
 ### Making & Publishing a Change
 1. **Preview Locally (Optional):**
-   - Run `npm run dev` and open `http://localhost:3000` (uses a local SQLite file in `data/`, printing login codes and emails directly to your terminal!).
-   - *Or* run `npm run pages:dev` to emulate the Cloudflare Pages Worker locally at `http://localhost:8788`.
+   - Run `npm run dev` and open `http://localhost:3000` (uses local SQLite in `data/`, printing login codes and emails directly to your terminal!).
+   - *Or* run `npm run pages:dev` to emulate Cloudflare Pages + Workers locally at `http://localhost:8788`.
 2. **Edit the Files & Bump the Cache Version:**
-   - Make your edits (see [Section 7 Cookbook](#7-cookbook-step-by-step-recipes-for-common-edits)) and increment the version number by `+1` (see [Section 6 Checklist](#6-version-bumping-checklist-clearing-browser--phone-caches)).
-3. **Run the Automated Test Suite:**
+   - Make your edits (see [Section 7 Cookbook](#7-cookbook-step-by-step-recipes-for-common-edits)), then run:
+     ```bash
+     npm run bump
+     ```
+     *(Atomically increments the version number across backend, Service Worker, client config, and all 13 HTML files.)*
+3. **Run the Automated Test Suite & Security Scan:**
    ```bash
    npm test
+   npm run security:scan
    ```
-   Confirm it ends with `# fail 0`. (Note: some tests assert specific UI headings or element IDs—if you intentionally renamed a heading that a test checks in `scripts/verify-all.js`, update that test's expected text too.)
+   Confirm `npm test` ends with `# fail 0` (223 tests) and `npm run security:scan` ends with `12 passed, 0 warnings, 0 failed.` (Note: if you intentionally renamed a heading or doc section asserted by `tests/core/*.test.js`, update the test expectation too.)
 4. **Save to GitHub & Deploy to Cloudflare:**
    ```bash
    git add -A
@@ -833,7 +860,8 @@ pickup-baseball/
    git push origin trunk
    npm run deploy
    ```
-   Verify the live site updated by visiting `https://www.pickupbaseballfoundation.org/api/version` in your browser—it should show your new version number!
+   *(On Windows PowerShell, `.\scripts\ship.ps1 -Message "..."` automates Steps 2–4 plus `npm run security:scan:live`.)*
+   Verify the live site updated by visiting `https://www.pickupbaseballfoundation.org/api/version` or checking the footer version pill (`v143`, etc.)!
 
 ---
 
@@ -841,18 +869,19 @@ pickup-baseball/
 
 Because the site is an installable Progressive Web App (PWA) with an offline Service Worker, phones and browsers aggressively cache CSS and JavaScript files.
 
-Whenever you deploy a frontend or API change, **increment the version integer by 1** (for example, from `31` to `32`) in these places:
+Whenever you deploy a frontend or API change, run:
 
-1. **`public/js/api.js`** — `CLIENT_VERSION: '32'`
-2. **`functions/api/[[route]].js`** — `const CURRENT_APP_VERSION = '32';`
-3. **`src/server.js`** — `const CURRENT_APP_VERSION = '32';`
-4. **`scripts/verify-all.js`** — `const CURRENT_APP_VERSION = '32';`
-5. **`public/sw.js`** — `const CACHE_NAME = 'pbf-cache-v32';`
-6. **All 8 HTML files in `public/`** (`index.html`, `event.html`, `archive.html`, `admin.html`, `login.html`, `profile.html`, `donate.html`, `404.html`) — update `?v=31` to `?v=32` on `<link rel="stylesheet" href="/css/style.css?v=32">` and `<script src="/js/...?v=32"></script>`.
+```bash
+npm run bump
+```
 
-*Tip: You can do a project-wide Find & Replace of `?v=31` → `?v=32` for the HTML files in any editor like VS Code.*
+`scripts/bump-version.js` atomically increments the version integer by `+1` across every required file:
+1. **`src/app/version.js`** — `export const CURRENT_APP_VERSION = '...';` (transmitted via `/api/version` and the `X-App-Version` HTTP header)
+2. **`public/sw.js`** — `const CACHE_NAME = 'pbf-cache-v...';`
+3. **`public/js/api.js`** — `CLIENT_VERSION: '...'` (rendered in `#footer-app-version` in the footer)
+4. **All 13 HTML files in `public/*.html`** — updates `?v=<N>` query strings on `/css/...` and `/js/...` links.
 
-When `CURRENT_APP_VERSION` on the server increases, any player who still has an older tab or installed PWA open will automatically get the **"Update Available — Click to Refresh"** button in the footer.
+When `CURRENT_APP_VERSION` on the server increases, any player with an older tab or installed PWA open automatically sees the **`✨ Update Available`** button in the footer.
 
 ---
 
@@ -867,8 +896,8 @@ When `CURRENT_APP_VERSION` on the server increases, any player who still has an 
 **How to change text cleanly:**
 1. Find the element in `public/*.html` and update its text.
 2. Check if it has a `data-i18n="..."` (or `data-i18n-html="..."` / `data-i18n-placeholder="..."`) attribute.
-3. If it does, open **`public/js/api.js`**, find that key inside `EN_DICT` near the top of the file, and update its English string to match.
-   - *(Optional)* Update the corresponding key in `public/i18n/*.json` if you want non-English translations updated too, or rename the `data-i18n` key (e.g., `hero.title_v2`) so stale translations in `public/i18n/*.json` don't override it.
+3. If it does, open **`public/js/api.js`**, find that key inside `EN_DICT`, and update its English string to match.
+   - Because `npm run security:scan` checks that all 14 `public/i18n/*.json` bundles match every key in `EN_DICT`, update or add any new keys across `public/i18n/*.json` as well.
 4. **Editing the Site Footer:** The footer on all pages is generated centrally inside `renderFooter()` in **`public/js/api.js`** (search for `renderFooter()`). Edit both `EN_DICT` and the fallback string inside `renderFooter()`.
 
 ---
@@ -882,74 +911,70 @@ When `CURRENT_APP_VERSION` on the server increases, any player who still has an 
 
 ### Recipe C: Changing Default Field Location or Default Volunteer Tasks
 - **Default Volunteer Tasks (No Code Needed!):** Sign in as an **Admin**, go to `/admin.html`, edit the **Default Volunteer Tasks Template**, and click Save.
-  - *(To change the hardcoded fallback defaults in code, edit `DEFAULT_BASEBALL_DUTIES` in both `functions/api/[[route]].js` and `src/db.js`.)*
+  - *(To change the hardcoded fallback defaults in code, edit `DEFAULT_BASEBALL_DUTIES` in **`src/app/schema.js`**.)*
 - **Default Field Location / Quick-Schedule Defaults:**
   - Calendar subtitle text: `calendar.subtitle` in `public/index.html` and `EN_DICT` in `public/js/api.js`.
-  - "Post Next Sunday @ Noon" preset values: search for `Bushrod Park` in `public/js/account-dashboard.js` and `public/js/admin.js`.
+  - "Post Next Sunday @ Noon" preset values: search for `Bushrod Park` in **`public/js/admin.js`**.
 
 ---
 
 ### Recipe D: Changing Colors, Fonts, or Adding a Team Color Theme
-1. Open **`public/css/style.css`**:
-   - The default **Bay Area Heritage** colors live in `:root` at the top of `public/css/style.css` (`--primary`, `--secondary`, `--giants-orange`, `--as-green`, etc.).
-   - Each additional MLB team theme overrides those CSS variables under `[data-color-theme="team-id"]` (and `[data-theme-mode="dark"][data-color-theme="team-id"]`).
-2. To add a new theme to the footer picker, add an entry to the `COLOR_THEMES` array in **`public/js/api.js`**, then add its `[data-color-theme="your-theme-id"]` CSS variable block in **`public/css/style.css`**.
+1. **Default Bay Area Heritage & Dark Mode tokens:** Open **`public/css/style.css`** (`:root` and `[data-theme="dark"]`).
+2. **Other 11 MLB Team Themes:** Open **`public/css/themes.css`** (`[data-color-theme="team-id"]` and `[data-color-theme="team-id"][data-theme="dark"]`).
+3. To add a new theme to the footer picker, add an entry to the `COLOR_THEMES` array in **`public/js/api.js`**, then add its `[data-color-theme="your-theme-id"]` CSS variable block in **`public/css/themes.css`**.
 
 ---
 
 ### Recipe E: Adding a New Column to the Database (Zero-Downtime)
-If you ever need to store a new field on `events`, `attendees`, or `users`:
-1. Add the column to `CREATE TABLE` in **`d1_schema.sql`** (for fresh setups).
-2. Add the column to `CREATE TABLE` **and** an `ALTER TABLE ... ADD COLUMN ...` inside `try { ... } catch (e) {}` in **`src/db.js`** (for local dev & `npm test`).
-3. Add `'ALTER TABLE ... ADD COLUMN ...'` to the `alterStatements` array inside **`ensureD1Schema(db)`** at the very top of **`functions/api/[[route]].js`**.
-   - *Why this works so well:* As soon as you run `npm run deploy`, the very first request to the Cloudflare Worker automatically runs `ensureD1Schema(db)`, safely adding the new column to the live cloud D1 database without losing a single row of data!
+If you ever need to store a new field in `BASEBALL_DB` or `CHAT_DB`:
+1. Add the column to `CREATE_TABLES_SQL` (or `CREATE_CHAT_TABLES_SQL`) and append an `'ALTER TABLE ... ADD COLUMN ...'` statement to `ALTER_STATEMENTS` (or `CHAT_ALTER_STATEMENTS`) inside **`src/app/schema.js`**.
+2. Also update **`d1_schema.sql`** so fresh core D1 setups match cleanly.
+   - *Why this works so well:* Both `npm test` and production Cloudflare Workers invoke `ensureD1Schema` / `ensureChatD1Schema` automatically, safely adding new columns to existing D1 databases without losing a single row!
 
 ---
 
-### Recipe F: Changing Admin Email, Sender Address, or Email API Key
+### Recipe F: Changing Admin Email, Sender Address, or API Secrets
 - **Public settings (`ADMIN_EMAIL`, `ADMIN_NAME`, `FROM_EMAIL`, `REPLY_TO_EMAIL`, `APP_NAME`):**
   Edit **`wrangler.toml`** under `[vars]`, then run `npm run deploy`.
-- **Resend API Key (`RESEND_API_KEY`):**
-  Never put secret API keys in `wrangler.toml` or Git. Rotate or update the key securely via terminal:
+- **Encrypted Secrets (`RESEND_API_KEY`, `TURNSTILE_SECRET_KEY`, `GDRIVE_*`):**
+  Never put secret API keys in `wrangler.toml`, `scripts/`, or Git. Rotate or update keys securely via terminal:
   ```bash
   npx wrangler pages secret put RESEND_API_KEY --project-name pickup-baseball
+  # Or configure Google Drive OAuth secrets interactively:
+  npm run setup:gdrive
   ```
-  Paste the new `re_...` key when prompted, then run `npm run deploy`.
+  Paste the new key when prompted, then run `npm run deploy`.
 
 ---
 
 ### Recipe G: Managing the Community Highlights & RSS 2.0 Media Feed
 - **How it works behind the scenes:**
   - Database table `posts` in Cloudflare D1 stores headlines, text content, author, created date, and external media URLs (`media_url`, `media_type`).
-  - Edge endpoint `/feed.xml` and `/api/feed.xml` reads the latest posts and renders a standard **RSS 2.0** XML document with Yahoo **Media RSS** (`xmlns:media="http://search.yahoo.com/mrss/"`) tags and Atom self-links.
+  - Edge endpoint `/feed.xml` (`functions/feed.xml.js`) and `/api/feed.xml` (`src/app/feeds.js`) render standard **RSS 2.0** XML with Yahoo **Media RSS** (`xmlns:media="http://search.yahoo.com/mrss/"`) tags and Atom self-links.
   - Homepage (`index.html`) fetches `GET /api/posts` and renders rich media cards with responsive 16:9 YouTube iframes (`youtube-nocookie.com`), photo zoom cards, and native HTML5 video/audio elements.
 - **Adding or modifying supported external media embed rules:**
-  - URL detection helper is defined in `public/js/api.js` under `API.parseMediaType(url)` and on the backend in `src/routes/posts.js` and `functions/api/[[route]].js`.
-  - Content Security Policy (CSP) headers in `public/_headers` control which external iframe origins can load:
-    - If adding a new embed service (e.g., Vimeo), add its embed domain to `frame-src` in `public/_headers`.
-  - Always keep `media-src 'self' https: data:` in `public/_headers` so audio/video tags can stream from external CDNs.
+  - URL detection helpers live in **`public/js/api.js`** (`API.parseMediaType(url)`) and **`src/app/routes/posts.js`**.
+  - Content Security Policy (CSP) headers in **`public/_headers`** and **`src/server.js`** control which external iframe origins can load (e.g., `frame-src` / `connect-src`).
+  - Always keep `media-src 'self' https: data: blob:` in **`public/_headers`** so audio/video tags and Drive streams work reliably.
 
 ---
 
 ## 8. House Rules & Safety Guardrails
 
-Follow these four habits to keep the site fast, secure, and working on older phones for years to come:
+Follow these habits (automatically enforced by `npm run security:scan`) to keep the site fast, secure, and working across older phones:
 
 1. **Keep Frontend JavaScript ES6-Compatible (`public/js/*.js`):**
-   - Avoid newer JS operators like optional chaining (`obj?.prop`) and nullish coalescing (`a ?? b`) in `public/js/*.js`. Write `obj && obj.prop` instead so older iPhones, iPads, and budget Android browsers never fail with a syntax error.
-   - Quick syntax check command before deploying:
-     ```bash
-     node --check public/js/api.js
-     node --check public/js/app.js
-     node --check public/js/event.js
-     node --check "functions/api/[[route]].js"
-     ```
-2. **Always Escape User Input in HTML (`API.escapeHtml`):**
+   - Avoid newer JS operators like optional chaining (`obj?.prop`), nullish coalescing (`a ?? b`), or ES module `import`/`export` syntax in `public/js/*.js`. Write `obj && obj.prop` instead so older browsers and static checks pass cleanly.
+2. **Strict CSP (No Inline Scripts or Handlers):**
+   - Never add inline `<script>` blocks, `javascript:` URLs, `eval()`, `new Function()`, or inline HTML `onclick=`/`onchange=` attributes. Bind listeners in `.js` files.
+3. **Always Escape User Input in HTML (`API.escapeHtml` / `esc`):**
    - Whenever inserting a player's name, bio, gear note, or comment into `.innerHTML`, wrap it in `${API.escapeHtml(value)}` to prevent Cross-Site Scripting (XSS).
-3. **Always Use Parameterized SQL Queries (`?`):**
-   - In `functions/api/[[route]].js`, always use `db.prepare('SELECT * FROM events WHERE id = ?').bind(eventId)` — never build SQL strings with `${eventId}`.
-4. **Keep Inputs at `16px` Minimum Font Size on Mobile:**
-   - iOS Safari automatically zooms the screen awkwardly if an `<input>` or `<textarea>` has `font-size` smaller than `16px`. Keep form controls at `16px` (`1rem`).
+4. **Always Use Parameterized SQL Queries (`?`):**
+   - Always use `db.prepare('SELECT * FROM events WHERE id = ?').bind(eventId)` — never interpolate variables into SQL strings.
+5. **Never Store Heavy Media Binaries in D1:**
+   - Keep `clubhouse_gifs.local_data_base64` unused for GIFs and store heavy gallery/chat media in the Google Drive pool (`src/app/gdrive.js`).
+6. **Verify Before Deploying:**
+   - Always run `npm test` and `npm run security:scan`, and keep inputs at `16px` (`1rem`) minimum font size on mobile to avoid iOS Safari auto-zoom.
 
 ---
 
@@ -957,9 +982,10 @@ Follow these four habits to keep the site fast, secure, and working on older pho
 
 | Symptom | Cause | Fix |
 | :--- | :--- | :--- |
-| **Edited HTML text reverts back immediately when page loads** | Element has a `data-i18n="..."` key overriding it from `public/js/api.js`. | Update the matching key in `EN_DICT` at the top of `public/js/api.js` (see [Recipe A](#recipe-a-changing-page-text-headings-or-footer-copy)). |
-| **Browser or phone still shows old CSS or JS after deploy** | Browser or Service Worker is serving cached version. | Bump version numbers ([Section 6](#6-version-bumping-checklist-clearing-browser--phone-caches)) and redeploy, or hard-refresh (`Ctrl+Shift+R` / `Cmd+Shift+R`). |
-| **`/api/...` route returns 404 or matches `/events/:id` by mistake** | Dynamic `:id` route was registered above a named static sub-route. | Place static sub-routes (like `/events/calendar.ics` or `/events/default-duties`) **above** `/events/:id` in `functions/api/[[route]].js` and `src/routes/events.js`. |
-| **Login or RSVP emails aren't arriving** | Resend API key expired or domain DNS record changed. | Check **resend.com → Logs & Domains** to confirm `pickupbaseballfoundation.org` is verified, and re-set `RESEND_API_KEY` if needed ([Recipe F](#recipe-f-changing-admin-email-sender-address-or-email-api-key)). |
+| **Edited HTML text reverts back immediately when page loads** | Element has a `data-i18n="..."` key overriding it from `public/js/api.js`. | Update the matching key in `EN_DICT` in `public/js/api.js` and all `public/i18n/*.json` bundles (see [Recipe A](#recipe-a-changing-page-text-headings-or-footer-copy)). |
+| **Browser or phone still shows old CSS or JS after deploy** | Browser or Service Worker is serving cached version. | Run `npm run bump` ([Section 6](#6-version-bumping-checklist-clearing-browser--phone-caches)) and redeploy, or tap `✨ Update Available` in the footer / hard-refresh (`Ctrl+Shift+R`). |
+| **`/api/...` route returns 404 or matches `/:id` by mistake** | Dynamic `:id` router/handler was registered above a named static sub-route. | Ensure static sub-routes mount **before** `/:id` handlers in `src/app/routes/events.js` (or `src/app/routes/events/core.js`) and `src/app/routes/chat.js`. |
+| **Security scan fails on `i18n` or `PWA Asset & Version Parity`** | New key missing from `public/i18n/*.json` or new HTML/CSS/JS file omitted from `public/sw.js` `STATIC_ASSETS`. | Sync keys across all 14 `public/i18n/*.json` files or add the new file to `STATIC_ASSETS` in `public/sw.js` and run `npm run bump`. |
+| **Login or RSVP emails aren't arriving** | Resend API key expired or domain DNS record changed. | Check **resend.com → Logs & Domains** to confirm `pickupbaseballfoundation.org` is verified, and re-set `RESEND_API_KEY` if needed ([Recipe F](#recipe-f-changing-admin-email-sender-address-or-api-secrets)). |
 | **Need to roll back a bad deployment immediately** | Bug introduced in latest deploy. | Run `git revert HEAD && npm run deploy`, **or** open **Cloudflare Dashboard → Workers & Pages → `pickup-baseball` → Deployments** and click **Rollback** on the previous working deployment in 1 click. |
-| **Need to restore data from a `.sql` backup file** | Accidental deletion of an event or table rows. | Sign in to `/admin.html` regularly to download `baseball_backup_YYYY-MM-DD.sql` snapshots. Individual `INSERT` statements from that plain-text `.sql` file can be executed directly in **Cloudflare Dashboard → Storage & Databases → D1 → `pickup-baseball-db` → Console** or via `npx wrangler d1 execute pickup-baseball-db --remote --file=your_restore.sql`. |
+| **Need to restore data from a `.sql` backup file** | Accidental deletion of an event or table rows. | Sign in to `/admin.html` regularly to download `baseball_backup_YYYY-MM-DD.sql` snapshots (or use `npm run d1:backup` / `npm run d1:backup:chat`). Execute `INSERT` statements in **Cloudflare Dashboard → Storage & Databases → D1** or via `npx wrangler d1 execute pickup-baseball-db --remote --file=your_restore.sql`. |
