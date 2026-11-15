@@ -327,13 +327,37 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
     }
 
     if (finalStatus === 'attending' && playersCount > 0 && event.max_players && event.max_players > 0 && (!wasAttending || playersCount > prevPlayersCount)) {
-      const postCapRow = await db.prepare(`
-        SELECT COALESCE(SUM(COALESCE(players_count, 1 + COALESCE(additional_guests, 0))), 0) as total
-        FROM attendees WHERE event_id = ? AND status = 'attending'
-      `).bind(eventId).first();
-      if ((postCapRow ? postCapRow.total : 0) > event.max_players) {
-        await db.prepare("UPDATE attendees SET status = 'waitlist' WHERE id = ?").bind(attendeeId).run();
-        finalStatus = 'waitlist';
+      if (!existingAttendee) {
+        // Atomic post-insert tie-breaker using monotonic id prevents concurrent inserts from double-demoting each other
+        const demoteRes = await db.prepare(`
+          UPDATE attendees
+          SET status = 'waitlist'
+          WHERE id = ?
+            AND status = 'attending'
+            AND (
+              SELECT COALESCE(SUM(COALESCE(players_count, 1 + COALESCE(additional_guests, 0))), 0)
+              FROM attendees
+              WHERE event_id = ? AND status = 'attending' AND id <= ?
+            ) > ?
+        `).bind(attendeeId, eventId, attendeeId, event.max_players).run();
+        if (demoteRes.meta && demoteRes.meta.changes === 1) {
+          finalStatus = 'waitlist';
+        }
+      } else {
+        const demoteRes = await db.prepare(`
+          UPDATE attendees
+          SET status = 'waitlist'
+          WHERE id = ?
+            AND status = 'attending'
+            AND (
+              SELECT COALESCE(SUM(COALESCE(players_count, 1 + COALESCE(additional_guests, 0))), 0)
+              FROM attendees
+              WHERE event_id = ? AND status = 'attending'
+            ) > ?
+        `).bind(attendeeId, eventId, event.max_players).run();
+        if (demoteRes.meta && demoteRes.meta.changes === 1) {
+          finalStatus = 'waitlist';
+        }
       }
     }
 
