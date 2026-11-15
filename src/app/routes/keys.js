@@ -8,7 +8,7 @@ import { requireAuth, canAccessChannel, rejectIfChatMuted, rejectIfClubhouseOpte
 import { resolveChannel, canUserAccessChannel, isPrivateEncryptedBoard } from './chat.js';
 import { chunkArray } from './chat/helpers.js';
 
-export const keysRouter = new Hono();
+export const keysRouter = /** @type {AppHono} */ (new Hono());
 
 const MAX_VAULT_CIPHERTEXT_CHARS = 16384;
 const MAX_VAULT_META_CHARS = 256;

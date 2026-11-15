@@ -34,7 +34,7 @@ import {
 import { getRequireLoginSetting, getDisallowZeroLoginMediaSetting, pruneEphemeralBaseballRows } from '../schema.js';
 import { sendAuthCode } from '../mailer.js';
 
-export const authRouter = new Hono();
+export const authRouter = /** @type {AppHono} */ (new Hono());
 
 async function upsertUserAndCreateSession(c, cleanEmail, fallbackName, { sharedDevice = false } = {}) {
   const db = c.env.DB;
@@ -68,6 +68,7 @@ async function upsertUserAndCreateSession(c, cleanEmail, fallbackName, { sharedD
   ).bind(sessionId, user.id, expiresAt, isTemporary ? 1 : 0).run();
 
   const isHttps = new URL(c.req.url).protocol === 'https:';
+  /** @type {import('hono/utils/cookie').CookieOptions} */
   const cookieOpts = {
     httpOnly: true,
     sameSite: 'Lax',
@@ -198,7 +199,7 @@ authRouter.post('/verify-code', async (c) => {
         WHERE id = ? AND used_at IS NULL
       `).bind(MAX_CODE_VERIFY_ATTEMPTS, latestActive.id).run();
       const updatedRow = await c.env.DB.prepare('SELECT attempts FROM auth_codes WHERE id = ?').bind(latestActive.id).first();
-      const newAttempts = updatedRow ? Number(updatedRow.attempts || 0) : ((latestActive.attempts || 0) + 1);
+      const newAttempts = updatedRow ? Number(updatedRow.attempts || 0) : (Number(latestActive.attempts || 0) + 1);
       if (newAttempts >= MAX_CODE_VERIFY_ATTEMPTS) {
         return c.json({ error: 'Too many failed attempts. This code has been invalidated—please request a new code.' }, 400);
       }
@@ -262,7 +263,7 @@ authRouter.get('/verify-magic', async (c) => {
       return c.text('This sign-in link is invalid or has expired. Please request a new one on the login page.', 400);
     }
 
-    const cleanEmail = authRecord.email.trim().toLowerCase();
+    const cleanEmail = String(authRecord.email || '').trim().toLowerCase();
     const banRecord = await c.env.DB.prepare('SELECT id FROM banned_emails WHERE email = ?').bind(cleanEmail).first();
     if (banRecord) {
       return c.text('This email address has been restricted from accessing this service.', 403);
@@ -484,6 +485,7 @@ authRouter.put('/users/:id/role', requireAdmin, async (c) => {
     return c.json({ error: 'Invalid role. Must be admin, organizer, or player.' }, 400);
   }
 
+  /** @type {Record<string, any>|null} */
   const targetUser = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(targetId).first();
   if (!targetUser) {
     return c.json({ error: 'User not found.' }, 404);
@@ -598,6 +600,7 @@ authRouter.delete('/users/:id', requireAdmin, async (c) => {
     return c.json({ error: 'You cannot delete your own administrator account.' }, 400);
   }
 
+  /** @type {Record<string, any>|null} */
   const targetUser = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(targetId).first();
   if (!targetUser) {
     return c.json({ error: 'User not found.' }, 404);

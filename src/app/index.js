@@ -20,7 +20,7 @@ import { baseballRouter } from './routes/baseball.js';
 import { waiverRouter } from './routes/waiver.js';
 import { gifsRouter } from './routes/gifs.js';
 
-export const app = new Hono().basePath('/api');
+export const app = /** @type {AppHono} */ (new Hono()).basePath('/api');
 
 function applyApiSecurityHeaders(c) {
   c.header('X-App-Version', CURRENT_APP_VERSION);

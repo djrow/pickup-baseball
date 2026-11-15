@@ -3,7 +3,7 @@ import { requireOrganizer, sanitizeHttpUrl, getClientIp, checkRateLimit } from '
 import { canUserAccessEvent } from '../policy.js';
 import { parseMediaType } from '../feeds.js';
 
-export const postsRouter = new Hono();
+export const postsRouter = /** @type {AppHono} */ (new Hono());
 
 postsRouter.get('/', async (c) => {
   try {
@@ -121,6 +121,7 @@ postsRouter.put('/:id', requireOrganizer, async (c) => {
       return c.json({ error: 'Invalid post ID.' }, 400);
     }
 
+    /** @type {Record<string, any>|null} */
     const existing = await c.env.DB.prepare('SELECT * FROM posts WHERE id = ?').bind(postId).first();
     if (!existing) {
       return c.json({ error: 'Post not found.' }, 404);

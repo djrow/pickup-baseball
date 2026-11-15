@@ -16,7 +16,7 @@ import { eventsCoreRouter } from './events/core.js';
 
 export { sendRemindersForEventD1, processUpcomingEventRemindersD1 } from './events/helpers.js';
 
-export const eventsRouter = new Hono();
+export const eventsRouter = /** @type {AppHono} */ (new Hono());
 
 // Register static `/default-duties` and nested `/:id/...` subroutes before `eventsCoreRouter`'s `/:id` handler.
 eventsRouter.route('/', eventsBpDutiesRouter);

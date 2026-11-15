@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Lightweight Navigation Bar Bootstrapper for Static Pages (404, Donate)
  */

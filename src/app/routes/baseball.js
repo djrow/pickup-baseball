@@ -11,7 +11,7 @@ import { canUserAccessChannel } from './chat.js';
 import { chunkArray } from './chat/helpers.js';
 import { promoteNextWaitlistedPlayer } from './events/helpers.js';
 
-export const baseballRouter = new Hono();
+export const baseballRouter = /** @type {AppHono} */ (new Hono());
 
 // ---------------------------------------------------------------------------
 // GET /api/baseball/upcoming - Live Next Sunday Game, Roster, Duties & BP Order
@@ -105,8 +105,8 @@ baseballRouter.get('/upcoming', async (c) => {
     } catch (e) {}
   }
 
-  const totalPlayers = (attendees || []).reduce((sum, a) => sum + (a.players_count || 1), 0);
-  const totalSpectators = (attendees || []).reduce((sum, a) => sum + (a.spectators_count || 0), 0);
+  const totalPlayers = (attendees || []).reduce((sum, a) => sum + Number(a.players_count || 1), 0);
+  const totalSpectators = (attendees || []).reduce((sum, a) => sum + Number(a.spectators_count || 0), 0);
 
   const safeEvent = {
     id: event.id,
@@ -194,7 +194,7 @@ baseballRouter.post('/events/:eventId/quick-rsvp', requireAuth, async (c) => {
   `).bind(eventId, user.id, user.email).first();
 
   let finalStatus = targetStatus;
-  if (targetStatus === 'attending' && playersCount > 0 && event.max_players && event.max_players > 0) {
+  if (targetStatus === 'attending' && playersCount > 0 && event.max_players && Number(event.max_players) > 0) {
     const activeRow = existing
       ? await baseballDb.prepare(`
           SELECT COALESCE(SUM(COALESCE(players_count, 1 + COALESCE(additional_guests, 0))), 0) as total
@@ -204,7 +204,7 @@ baseballRouter.post('/events/:eventId/quick-rsvp', requireAuth, async (c) => {
           SELECT COALESCE(SUM(COALESCE(players_count, 1 + COALESCE(additional_guests, 0))), 0) as total
           FROM attendees WHERE event_id = ? AND status = 'attending'
         `).bind(eventId).first();
-    if ((activeRow ? activeRow.total : 0) + playersCount > event.max_players) {
+    if (Number(activeRow ? activeRow.total : 0) + playersCount > Number(event.max_players)) {
       finalStatus = 'waitlist';
     }
   }
@@ -224,8 +224,8 @@ baseballRouter.post('/events/:eventId/quick-rsvp', requireAuth, async (c) => {
         JOIN event_duties ed ON ed.id = da.duty_id
         WHERE da.attendee_id = ?
       `).bind(existing.id).all();
-      const hadPaidDuty = (prevDutyRows || []).some((row) => getDutyType(row.title).isPaid);
-      const hoursUntilEvent = (new Date(event.event_date).getTime() - Date.now()) / (3600 * 1000);
+      const hadPaidDuty = (prevDutyRows || []).some((row) => getDutyType(String(row.title || '')).isPaid);
+      const hoursUntilEvent = (new Date(String(event.event_date || '')).getTime() - Date.now()) / (3600 * 1000);
       const isUrgentWindow = hoursUntilEvent > 0 && hoursUntilEvent < 48;
       if (hadPaidDuty && isUrgentWindow && wasAttending) {
         const unclaimRes = await baseballDb.prepare(
@@ -263,12 +263,12 @@ baseballRouter.post('/events/:eventId/quick-rsvp', requireAuth, async (c) => {
       existing.id
     ).run();
 
-    if (finalStatus === 'attending' && playersCount > 0 && event.max_players && event.max_players > 0 && (!wasAttending || playersCount > prevPlayersCount)) {
+    if (finalStatus === 'attending' && playersCount > 0 && event.max_players && Number(event.max_players) > 0 && (!wasAttending || playersCount > prevPlayersCount)) {
       const postCapRow = await baseballDb.prepare(`
         SELECT COALESCE(SUM(COALESCE(players_count, 1 + COALESCE(additional_guests, 0))), 0) as total
         FROM attendees WHERE event_id = ? AND status = 'attending'
       `).bind(eventId).first();
-      if ((postCapRow ? postCapRow.total : 0) > event.max_players) {
+      if (Number(postCapRow ? postCapRow.total : 0) > Number(event.max_players)) {
         if (wasAttending) {
           await baseballDb.prepare(
             'UPDATE attendees SET players_count = ?, additional_guests = ? WHERE id = ?'
@@ -306,12 +306,12 @@ baseballRouter.post('/events/:eventId/quick-rsvp', requireAuth, async (c) => {
       mgmtToken
     ).run();
     const insertedId = ins && ins.meta ? ins.meta.last_row_id : null;
-    if (insertedId && finalStatus === 'attending' && playersCount > 0 && event.max_players && event.max_players > 0) {
+    if (insertedId && finalStatus === 'attending' && playersCount > 0 && event.max_players && Number(event.max_players) > 0) {
       const postCapRow = await baseballDb.prepare(`
         SELECT COALESCE(SUM(COALESCE(players_count, 1 + COALESCE(additional_guests, 0))), 0) as total
         FROM attendees WHERE event_id = ? AND status = 'attending'
       `).bind(eventId).first();
-      if ((postCapRow ? postCapRow.total : 0) > event.max_players) {
+      if (Number(postCapRow ? postCapRow.total : 0) > Number(event.max_players)) {
         await baseballDb.prepare("UPDATE attendees SET status = 'waitlist' WHERE id = ?").bind(insertedId).run();
         finalStatus = 'waitlist';
         await promoteNextWaitlistedPlayer(c, getSafePublicOrigin(c), eventId);
@@ -498,7 +498,7 @@ baseballRouter.post('/events/:eventId/sync-channel', requireOrganizer, async (c)
           AND NOT EXISTS (SELECT 1 FROM banned_emails b WHERE LOWER(b.email) = LOWER(u.email))
       `).bind(...normalized).all();
       for (const u of (userRows || [])) {
-        invitedIds.add(u.id);
+        invitedIds.add(Number(u.id));
       }
     }
     return Array.from(invitedIds);

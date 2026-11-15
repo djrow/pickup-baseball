@@ -17,7 +17,7 @@ import {
   hydrateMessages
 } from './helpers.js';
 
-export const chatSyncRouter = new Hono();
+export const chatSyncRouter = /** @type {AppHono} */ (new Hono());
 
 let lastSyncPruneSec = 0;
 
@@ -188,8 +188,8 @@ chatSyncRouter.get('/bootstrap', requireAuth, async (c) => {
   try {
     const maxMsgRow = await chatDb.prepare('SELECT MAX(id) as m FROM messages').first();
     const maxEvtRow = await chatDb.prepare('SELECT MAX(id) as m FROM sync_events').first();
-    if (maxMsgRow && maxMsgRow.m) last_message_id = maxMsgRow.m;
-    if (maxEvtRow && maxEvtRow.m) last_event_id = maxEvtRow.m;
+    if (maxMsgRow && maxMsgRow.m) last_message_id = Number(maxMsgRow.m);
+    if (maxEvtRow && maxEvtRow.m) last_event_id = Number(maxEvtRow.m);
   } catch (e) {}
 
   return c.json({

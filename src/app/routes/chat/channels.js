@@ -15,7 +15,7 @@ import {
   chunkArray
 } from './helpers.js';
 
-export const chatChannelsRouter = new Hono();
+export const chatChannelsRouter = /** @type {AppHono} */ (new Hono());
 
 const CHANNEL_ROLE_RANKS = { guest: 0, public: 0, invite: 0, player: 1, facilitator: 2, organizer: 3, admin: 4 };
 
@@ -118,7 +118,7 @@ chatChannelsRouter.post('/channels', requireAuth, async (c) => {
         window_start = CASE WHEN chat_rate_limits.window_start <= ? THEN ? ELSE chat_rate_limits.window_start END
     `).bind(chRateKey, nowSecCreate, chCutoff, chCutoff, nowSecCreate).run();
     const chRateRow = await chatDb.prepare('SELECT count FROM chat_rate_limits WHERE key = ?').bind(chRateKey).first();
-    if (chRateRow && chRateRow.count > 20) {
+    if (chRateRow && Number(chRateRow.count) > 20) {
       return c.json({ error: 'Too many channel creation requests. Please wait a minute.' }, 429);
     }
   } catch (e) {}

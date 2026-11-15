@@ -10,6 +10,7 @@
  * - tests/core/pwa-calendar.test.js      (T9.1–T9.18: PWA, Calendar, Invite List, RSS, i18n)
  * - tests/core/weather-gallery.test.js   (T9.19–T9.27: Weather, Fair-Share, Art, Gallery, Security, BP)
  * - tests/core/clubhouse-waiver.test.js  (Checks 8.2–8.5: Clubhouse UI, Waivers, Frugality, Parity)
+ * - tests/core/typecheck.test.js         (T10: Split TypeScript Configs & Client Facades)
  * - tests/clubhouse/index.js             (Clubhouse E2E Verification Suite, Tiers 1–5)
  */
 
@@ -259,4 +260,5 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
 });
 
 require('../tests/core/clubhouse-waiver.test.js')(ctx);
+require('../tests/core/typecheck.test.js')();
 require('../tests/clubhouse/index.js')();

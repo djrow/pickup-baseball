@@ -16,7 +16,7 @@ import {
   hydrateMessages
 } from './helpers.js';
 
-export const chatMessagesRouter = new Hono();
+export const chatMessagesRouter = /** @type {AppHono} */ (new Hono());
 
 async function formatMessagesResponse(c, user, chatDb, rows, channel) {
   const hydrated = await hydrateMessages(chatDb, rows || []);
@@ -179,8 +179,8 @@ chatMessagesRouter.post('/channels/:id/messages', requireAuth, async (c) => {
     'SELECT count, window_start FROM chat_rate_limits WHERE key = ?'
   ).bind(rateKey).first();
 
-  if (updatedRate && updatedRate.count > 30) {
-    const retryAfter = Math.max(1, 60 - (nowSec - updatedRate.window_start));
+  if (updatedRate && Number(updatedRate.count) > 30) {
+    const retryAfter = Math.max(1, 60 - (nowSec - Number(updatedRate.window_start || 0)));
     c.header('Retry-After', String(retryAfter));
     return c.json({
       error: 'Too many messages (rate limit exceeded: max 30 messages per 60 seconds). Please slow down.'
@@ -373,7 +373,7 @@ chatMessagesRouter.patch('/messages/:id', requireAuth, async (c) => {
     return c.json({ error: 'Moderated/hidden messages cannot be edited.' }, 403);
   }
 
-  const msgChannel = await resolveChannel(chatDb, existing.channel_id);
+  const msgChannel = await resolveChannel(chatDb, String(existing.channel_id || ''));
   if (!msgChannel || !(await canUserAccessChannel(chatDb, user, msgChannel, 'write'))) {
     return c.json({ error: 'Access denied: insufficient permissions to edit messages in this board.' }, 403);
   }
@@ -403,7 +403,7 @@ chatMessagesRouter.patch('/messages/:id', requireAuth, async (c) => {
     return c.json({ error: 'encryption_iv exceeds maximum allowed size (128 chars).' }, 400);
   }
   const newIv = rawEditIv !== undefined ? rawEditIv : existing.iv;
-  const editKeyEpoch = body.key_epoch !== undefined ? parseInt(body.key_epoch, 10) : (existing.key_epoch || 1);
+  const editKeyEpoch = body.key_epoch !== undefined ? parseInt(body.key_epoch, 10) : Number(existing.key_epoch || 1);
   if (isNaN(editKeyEpoch) || editKeyEpoch < 1) {
     return c.json({ error: 'Invalid key_epoch.' }, 400);
   }
@@ -464,7 +464,7 @@ chatMessagesRouter.delete('/messages/:id', requireAuth, async (c) => {
     return c.json({ error: 'Message not found.' }, 404);
   }
 
-  const msgChannel = await resolveChannel(chatDb, existing.channel_id);
+  const msgChannel = await resolveChannel(chatDb, String(existing.channel_id || ''));
   if (!msgChannel || !(await canUserAccessChannel(chatDb, user, msgChannel, 'read'))) {
     return c.json({ error: 'Access denied: insufficient permissions to moderate this board.' }, 403);
   }
@@ -532,7 +532,7 @@ chatMessagesRouter.post('/messages/:id/reactions', requireAuth, async (c) => {
     return c.json({ error: 'Message not found.' }, 404);
   }
 
-  const channel = await resolveChannel(chatDb, existingMsg.channel_id);
+  const channel = await resolveChannel(chatDb, String(existingMsg.channel_id || ''));
   if (!channel || !(await canUserAccessChannel(chatDb, user, channel, 'read'))) {
     return c.json({ error: 'Access denied.' }, 403);
   }
@@ -555,7 +555,7 @@ chatMessagesRouter.post('/messages/:id/reactions', requireAuth, async (c) => {
         window_start = CASE WHEN chat_rate_limits.window_start <= ? THEN ? ELSE chat_rate_limits.window_start END
     `).bind(rxRateKey, nowSec, rxCutoff, rxCutoff, nowSec).run();
     const rxRateRow = await chatDb.prepare('SELECT count FROM chat_rate_limits WHERE key = ?').bind(rxRateKey).first();
-    if (rxRateRow && rxRateRow.count > 60) {
+    if (rxRateRow && Number(rxRateRow.count) > 60) {
       return c.json({ error: 'Too many reaction updates. Please wait a moment.' }, 429);
     }
   } catch (e) {}
@@ -572,7 +572,7 @@ chatMessagesRouter.post('/messages/:id/reactions', requireAuth, async (c) => {
       const cntRow = await chatDb.prepare(
         'SELECT COUNT(DISTINCT emoji) as cnt FROM message_reactions WHERE message_id = ?'
       ).bind(msgId).first();
-      if (cntRow && cntRow.cnt >= 20) {
+      if (cntRow && Number(cntRow.cnt) >= 20) {
         return c.json({ error: 'Maximum number of distinct emoji reactions reached for this message.' }, 400);
       }
     }
@@ -638,7 +638,7 @@ async function hideMessageHandler(c) {
     return c.json({ error: 'Message not found.' }, 404);
   }
 
-  const msgChannel = await resolveChannel(chatDb, existing.channel_id);
+  const msgChannel = await resolveChannel(chatDb, String(existing.channel_id || ''));
   if (!msgChannel || !(await canUserAccessChannel(chatDb, user, msgChannel, 'read'))) {
     return c.json({ error: 'Access denied: insufficient permissions to moderate this board.' }, 403);
   }
@@ -729,7 +729,7 @@ chatMessagesRouter.post('/messages/:id/unhide', requireModerator, async (c) => {
     return c.json({ error: 'Message not found.' }, 404);
   }
 
-  const msgChannel = await resolveChannel(chatDb, existing.channel_id);
+  const msgChannel = await resolveChannel(chatDb, String(existing.channel_id || ''));
   if (!msgChannel || !(await canUserAccessChannel(chatDb, user, msgChannel, 'read'))) {
     return c.json({ error: 'Access denied: insufficient permissions to moderate this board.' }, 403);
   }

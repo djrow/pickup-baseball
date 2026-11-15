@@ -59,9 +59,9 @@ export function abbreviateMemberNames(records) {
 
 /**
  * Resolve a channel by numeric ID or slug (including voice/war-room aliases).
- * @param {object} chatDb
+ * @param {D1Database} chatDb
  * @param {string|number} channelParam
- * @returns {Promise<object|null>}
+ * @returns {Promise<Record<string, any>|null>}
  */
 export async function resolveChannel(chatDb, channelParam) {
   if (!chatDb || channelParam === undefined || channelParam === null) return null;
@@ -87,7 +87,7 @@ export async function resolveChannel(chatDb, channelParam) {
 
 /**
  * Returns true for invite-only / private message boards that enforce ECDH E2EE.
- * @param {object|null} channel
+ * @param {Record<string, any>|null|undefined} channel
  * @returns {boolean}
  */
 export function isPrivateEncryptedBoard(channel) {
@@ -101,7 +101,7 @@ export function isPrivateEncryptedBoard(channel) {
 
 /**
  * Returns true only for the single public read-only announcements board visible to logged-out visitors.
- * @param {object|null} channel
+ * @param {Record<string, any>|null|undefined} channel
  * @returns {boolean}
  */
 export function isPublicGuestChannel(channel) {
@@ -116,9 +116,9 @@ export function isPublicGuestChannel(channel) {
 
 /**
  * Check if a user can read or write a channel (including DM & private board membership checks).
- * @param {object} chatDb
- * @param {object} user
- * @param {object} channel
+ * @param {D1Database} chatDb
+ * @param {AppUser|Record<string, any>|null} user
+ * @param {Record<string, any>|null} channel
  * @param {'read'|'write'} [mode='read']
  * @returns {Promise<boolean>}
  */
@@ -142,10 +142,10 @@ export async function canUserAccessChannel(chatDb, user, channel, mode = 'read')
 
 /**
  * Get all channels accessible to the user (batched DM & private board membership lookup to avoid N+1 D1 queries).
- * @param {object} chatDb
- * @param {object} user
+ * @param {D1Database} chatDb
+ * @param {AppUser|Record<string, any>|null} user
  * @param {{includeHidden?: boolean}} [options]
- * @returns {Promise<Array<object>>}
+ * @returns {Promise<Array<Record<string, any>>>}
  */
 export async function getAccessibleChannels(chatDb, user, options = {}) {
   const { results: allChannels } = await chatDb.prepare(
@@ -169,6 +169,7 @@ export async function getAccessibleChannels(chatDb, user, options = {}) {
     }
   } catch (e) {}
 
+  /** @type {Array<Record<string, any>>} */
   const accessible = [];
   const keySharedChannelIds = [];
   for (const ch of (allChannels || [])) {
@@ -214,10 +215,10 @@ export async function getAccessibleChannels(chatDb, user, options = {}) {
 
 /**
  * Format message row with parsed badges, reactions, and attachments (strips moderated originals).
- * @param {object} msg
- * @param {Map<number, Array>} [reactionsByMsg]
- * @param {Map<number, Array>} [attachmentsByMsg]
- * @returns {object}
+ * @param {Record<string, any>} msg
+ * @param {Map<any, Array<any>>} [reactionsByMsg]
+ * @param {Map<any, Array<any>>} [attachmentsByMsg]
+ * @returns {Record<string, any>}
  */
 export function normalizeMessageRow(msg, reactionsByMsg = new Map(), attachmentsByMsg = new Map()) {
   if (!msg) return msg;
@@ -272,9 +273,9 @@ export function normalizeMessageRow(msg, reactionsByMsg = new Map(), attachments
 
 /**
  * Hydrate reactions and attachments for a batch of messages in 2 bulk queries.
- * @param {object} chatDb
- * @param {Array<object>} messages
- * @returns {Promise<Array<object>>}
+ * @param {D1Database} chatDb
+ * @param {Array<Record<string, any>>} messages
+ * @returns {Promise<Array<Record<string, any>>>}
  */
 export async function hydrateMessages(chatDb, messages) {
   if (!messages || messages.length === 0) return [];

@@ -7,8 +7,8 @@ import { Hono } from 'hono';
 import { requireAuth, rejectIfChatMuted, rejectIfClubhouseOptedOut } from '../security.js';
 import { resolveChannel, canUserAccessChannel } from './chat.js';
 
-export const voiceRouter = new Hono();
-export const rtcRouter = new Hono();
+export const voiceRouter = /** @type {AppHono} */ (new Hono());
+export const rtcRouter = /** @type {AppHono} */ (new Hono());
 let lastSignalPruneSec = 0;
 
 // ---------------------------------------------------------------------------
@@ -47,7 +47,7 @@ voiceRouter.post('/:channelId/join', requireAuth, async (c) => {
         window_start = CASE WHEN chat_rate_limits.window_start <= ? THEN ? ELSE chat_rate_limits.window_start END
     `).bind(joinRateKey, nowSecJoin, joinCutoff, joinCutoff, nowSecJoin).run();
     const joinRateRow = await chatDb.prepare('SELECT count FROM chat_rate_limits WHERE key = ?').bind(joinRateKey).first();
-    if (joinRateRow && joinRateRow.count > 30) {
+    if (joinRateRow && Number(joinRateRow.count) > 30) {
       return c.json({ error: 'Too many voice join requests. Please wait a moment.' }, 429);
     }
   } catch (e) {}
@@ -55,7 +55,7 @@ voiceRouter.post('/:channelId/join', requireAuth, async (c) => {
   const vpCountRow = await chatDb.prepare(
     'SELECT COUNT(*) as total FROM voice_participants WHERE channel_id = ? AND user_id != ? AND heartbeat_at > ?'
   ).bind(channel.id, user.id, nowSecJoin - 25).first();
-  if (vpCountRow && vpCountRow.total >= 24) {
+  if (vpCountRow && Number(vpCountRow.total) >= 24) {
     return c.json({ error: 'This voice room has reached its maximum capacity (24 participants).' }, 429);
   }
 
@@ -141,7 +141,7 @@ voiceRouter.post('/:channelId/state', requireAuth, async (c) => {
         window_start = CASE WHEN chat_rate_limits.window_start <= ? THEN ? ELSE chat_rate_limits.window_start END
     `).bind(stateRateKey, nowSecState, stateCutoff, stateCutoff, nowSecState).run();
     const stateRateRow = await chatDb.prepare('SELECT count FROM chat_rate_limits WHERE key = ?').bind(stateRateKey).first();
-    if (stateRateRow && stateRateRow.count > 60) {
+    if (stateRateRow && Number(stateRateRow.count) > 60) {
       return c.json({ error: 'Too many voice state requests. Please wait a moment.' }, 429);
     }
   } catch (e) {}
@@ -155,7 +155,7 @@ voiceRouter.post('/:channelId/state', requireAuth, async (c) => {
     const vpCountRow = await chatDb.prepare(
       'SELECT COUNT(*) as total FROM voice_participants WHERE channel_id = ? AND user_id != ? AND heartbeat_at > ?'
     ).bind(channel.id, user.id, nowSecState - 25).first();
-    if (vpCountRow && vpCountRow.total >= 24) {
+    if (vpCountRow && Number(vpCountRow.total) >= 24) {
       return c.json({ error: 'This voice room has reached its maximum capacity (24 participants).' }, 429);
     }
   }
@@ -274,7 +274,7 @@ rtcRouter.post('/signal', requireAuth, async (c) => {
         window_start = CASE WHEN chat_rate_limits.window_start <= ? THEN ? ELSE chat_rate_limits.window_start END
     `).bind(sigRateKey, nowSec, sigCutoff, sigCutoff, nowSec).run();
     const sigRateRow = await chatDb.prepare('SELECT count FROM chat_rate_limits WHERE key = ?').bind(sigRateKey).first();
-    if (sigRateRow && sigRateRow.count > 120) {
+    if (sigRateRow && Number(sigRateRow.count) > 120) {
       return c.json({ error: 'Too many signaling requests. Please wait a moment.' }, 429);
     }
   } catch (e) {}
@@ -361,7 +361,7 @@ rtcRouter.post('/signal', requireAuth, async (c) => {
     if (recipientUser.is_banned || Number(recipientUser.clubhouse_opted_in) === 0) {
       return c.json({ error: 'Recipient cannot receive Clubhouse signals.' }, 403);
     }
-    const rRole = (recipientUser.role || (recipientUser.is_admin === 1 ? 'admin' : 'player')).toLowerCase();
+    const rRole = String(recipientUser.role || (recipientUser.is_admin === 1 ? 'admin' : 'player')).toLowerCase();
     const recipientNorm = {
       id: recipientUser.id,
       email: recipientUser.email,

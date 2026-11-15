@@ -19,7 +19,7 @@ import {
   serveByteRangeResponse
 } from '../gdrive.js';
 
-export const gifsRouter = new Hono();
+export const gifsRouter = /** @type {AppHono} */ (new Hono());
 
 const MAX_GIF_BYTES = 8 * 1024 * 1024;       // 8 MB cap for remote GIF/WebP downloads
 
@@ -181,7 +181,7 @@ gifsRouter.post('/import-url', requireAuth, async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const urlCheck = validateExternalGifUrl(body.url, { isTestEnv });
   if (!urlCheck.ok) {
-    return c.json({ error: urlCheck.error }, urlCheck.status || 400);
+    return c.json({ error: urlCheck.error }, /** @type {any} */ (urlCheck.status || 400));
   }
 
   if (!isGDriveConfigured(c.env)) {
@@ -372,9 +372,9 @@ gifsRouter.get('/:id/stream', async (c) => {
   if (gif.storage_provider === 'gdrive' && gif.drive_file_id && isGDriveConfigured(c.env)) {
     return await streamGDriveFile(
       c.env,
-      gif.drive_file_id,
+      String(gif.drive_file_id),
       rangeHeader,
-      gif.mime_type || 'image/gif',
+      String(gif.mime_type || 'image/gif'),
       isPublic ? c.req.url : null,
       { useEdgeCache: isPublic, cacheControl }
     );
