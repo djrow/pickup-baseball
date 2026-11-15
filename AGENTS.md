@@ -62,3 +62,17 @@ Always run after changes:
 - `npm run test:browser` (`node scripts/browser-smoke.js`) — headless Chrome/Edge CDP smoke suite (DOM rendering, `PBFDialog`, `☰ Menu`, RTL/dark mode, responsive overflow, Clubhouse nav).
 - `npm run security:scan` (`node scripts/security-scan.js`) — static CSP, HTML, JS sink/syntax, SQL parameterization, route guard, asset, i18n, and secret hygiene checks (`npm run security:scan:live` checks production headers & endpoints).
 - `npm run bump` (`node scripts/bump-version.js`) — bumps `CURRENT_APP_VERSION`, `sw.js` `CACHE_NAME`, `api.js` `CLIENT_VERSION`, and HTML `?v=` tags before deploy (`scripts/ship.ps1` automates bump, test, scan, commit, tag, deploy, and live scan).
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues on `djrow/pickup-baseball` via `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five-role label mapping (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context layout (`GLOSSARY.md` and `docs/adr/`). See `docs/agents/domain.md`.
