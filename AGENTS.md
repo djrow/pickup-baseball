@@ -19,7 +19,7 @@ Mounted under `/api` in `src/app/index.js`:
   - `/auth` → `auth.js` (6-digit codes, magic links, shared-device 4h sessions, profile, avatars, user RBAC/bans, settings, clubhouse opt-in)
   - `/events` → `events.js` aggregator mounting `events/core.js` (games, `.ics` calendars, reminders, rainout/reopen, DB SQL backup), `events/rsvps.js` (RSVPs/waitlist, moderation, comments), `events/bp-duties.js` (BP order, default/event volunteer tasks), and `events/helpers.js`
   - `/posts` → `posts.js` (community highlights)
-  - `/media`, `/attachments` → `media.js` (gallery uploads/links, moderation approval, chat attachments)
+  - `/media`, `/attachments` → `media.js` (gallery uploads/links, moderation approval, chat attachments; helpers in `media-helpers.js`)
   - `/gifs` → `gifs.js` (starter catalog + Drive-backed GIF URL imports & streaming)
   - `/keys` → `keys.js` (Clubhouse E2EE identity & private board key shares)
   - `/voice`, `/rtc` → `rtc.js` (voice channel presence & WebRTC signaling)
@@ -33,7 +33,7 @@ Mounted under `/api` in `src/app/index.js`:
 
 ### Frontend (`public/`)
 Vanilla **ES6** scripts (IIFEs attaching to `window`, loaded via ordered `<script>` tags in `public/*.html`):
-- **Shared Core:** `api.js` (auth state, `apiFetch`, i18n, themes, footer/nav, subscribe panels, `escapeHtml`), `weather.js` (`window.WeatherService` — Open-Meteo 10-day forecast horizon, 5-day rainfall prediction, 24h drainage model), `nav-init.js`.
+- **Shared Core:** `api.js` (auth state, `apiFetch`, i18n, themes, footer/nav, subscribe panels, `escapeHtml`), `dialog.js` (`window.PBFDialog` non-blocking accessible modals & toasts), `weather.js` (`window.WeatherService` — Open-Meteo 10-day forecast horizon, 5-day rainfall prediction, 24h drainage model), `nav-init.js`.
 - **Pages (`public/*.html` → JS):**
   - `index.html` → `api.js`, `weather.js`, `app.js`
   - `event.html` → `api.js`, `weather.js`, `event.js`
@@ -59,5 +59,6 @@ Vanilla **ES6** scripts (IIFEs attaching to `window`, loaded via ordered `<scrip
 ## 3. Verification Commands
 Always run after changes:
 - `npm test` (`node scripts/verify-all.js`) — full E2E suite (223 tests across `tests/core/` and `tests/clubhouse/` Tiers 1–5).
+- `npm run test:browser` (`node scripts/browser-smoke.js`) — headless Chrome/Edge CDP smoke suite (DOM rendering, `PBFDialog`, `☰ Menu`, RTL/dark mode, responsive overflow, Clubhouse nav).
 - `npm run security:scan` (`node scripts/security-scan.js`) — static CSP, HTML, JS sink/syntax, SQL parameterization, route guard, asset, i18n, and secret hygiene checks (`npm run security:scan:live` checks production headers & endpoints).
 - `npm run bump` (`node scripts/bump-version.js`) — bumps `CURRENT_APP_VERSION`, `sw.js` `CACHE_NAME`, `api.js` `CLIENT_VERSION`, and HTML `?v=` tags before deploy (`scripts/ship.ps1` automates bump, test, scan, commit, tag, deploy, and live scan).

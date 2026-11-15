@@ -610,24 +610,36 @@ function renderComments() {
 }
 
 window.deleteDiscussionComment = async function(commentId) {
-  if (!confirm('Delete this comment from the discussion board?')) return;
+  const ok = window.PBFDialog
+    ? await window.PBFDialog.confirm('Delete this comment from the discussion board?', { danger: true })
+    : false;
+  if (!ok) return;
   try {
     const data = await API.deleteComment(eventId, commentId);
-    if (data.error) alert(data.error);
-    else await loadEventData();
+    if (data.error) {
+      if (window.PBFDialog) window.PBFDialog.toast(data.error, { type: 'error' });
+    } else {
+      await loadEventData();
+    }
   } catch (e) {
-    alert('Failed to delete comment.');
+    if (window.PBFDialog) window.PBFDialog.toast('Failed to delete comment.', { type: 'error' });
   }
 };
 
 window.removeRosterAttendee = async function(attendeeId) {
-  if (!confirm('Remove this group from the game roster?')) return;
+  const ok = window.PBFDialog
+    ? await window.PBFDialog.confirm('Remove this group from the game roster?', { danger: true })
+    : false;
+  if (!ok) return;
   try {
     const data = await API.removeAttendee(eventId, attendeeId);
-    if (data.error) alert(data.error);
-    else await loadEventData();
+    if (data.error) {
+      if (window.PBFDialog) window.PBFDialog.toast(data.error, { type: 'error' });
+    } else {
+      await loadEventData();
+    }
   } catch (e) {
-    alert('Failed to remove attendee.');
+    if (window.PBFDialog) window.PBFDialog.toast('Failed to remove attendee.', { type: 'error' });
   }
 };
 
@@ -1164,7 +1176,10 @@ function renderOrganizerRainoutPanel() {
         const note = document.getElementById('rainout-note-input').value.trim();
         const sendEmail = document.getElementById('rainout-send-email-check').checked;
 
-        if (!confirm(`Are you sure you want to call this game for rain?${sendEmail ? ` An email will be sent to ${attendeeCount} confirmed group(s).` : ''}`)) {
+        const ok = window.PBFDialog
+          ? await window.PBFDialog.confirm(`Are you sure you want to call this game for rain?${sendEmail ? ` An email will be sent to ${attendeeCount} confirmed group(s).` : ''}`, { danger: true, title: '🌧️ Call Rainout' })
+          : false;
+        if (!ok) {
           return;
         }
 
@@ -1173,14 +1188,14 @@ function renderOrganizerRainoutPanel() {
         try {
           const res = await API.callRainout(eventId, { note: note, sendEmail: sendEmail });
           if (res.error) {
-            alert(res.error);
+            if (window.PBFDialog) window.PBFDialog.toast(res.error, { type: 'error' });
             callBtn.disabled = false;
             callBtn.textContent = '🌧️ Call Rainout';
           } else {
             await loadEventData();
           }
         } catch (err) {
-          alert('Failed to call rainout.');
+          if (window.PBFDialog) window.PBFDialog.toast('Failed to call rainout.', { type: 'error' });
           callBtn.disabled = false;
           callBtn.textContent = '🌧️ Call Rainout';
         }
@@ -1237,21 +1252,24 @@ function renderOrganizerRainoutPanel() {
     const sendEmailBtn = document.getElementById('btn-send-rainout-email');
     if (sendEmailBtn) {
       sendEmailBtn.onclick = async function() {
-        if (!confirm(`Send rainout notification email to all ${attendeeCount} group(s)?`)) return;
+        const ok = window.PBFDialog
+          ? await window.PBFDialog.confirm(`Send rainout notification email to all ${attendeeCount} group(s)?`)
+          : false;
+        if (!ok) return;
         sendEmailBtn.disabled = true;
         sendEmailBtn.textContent = 'Sending Emails...';
         try {
           const res = await API.sendRainoutEmail(eventId, { note: ev.rainout_note });
           if (res.error) {
-            alert(res.error);
+            if (window.PBFDialog) window.PBFDialog.toast(res.error, { type: 'error' });
             sendEmailBtn.disabled = false;
             sendEmailBtn.textContent = '📧 Send Email to Attendees';
           } else {
-            alert('Rainout emails have been sent to attendees.');
+            if (window.PBFDialog) window.PBFDialog.toast('Rainout emails have been sent to attendees.', { type: 'success' });
             await loadEventData();
           }
         } catch (err) {
-          alert('Failed to send rainout email.');
+          if (window.PBFDialog) window.PBFDialog.toast('Failed to send rainout email.', { type: 'error' });
           sendEmailBtn.disabled = false;
           sendEmailBtn.textContent = '📧 Send Email to Attendees';
         }
@@ -1264,7 +1282,10 @@ function renderOrganizerRainoutPanel() {
         const note = document.getElementById('reopen-note-input').value.trim();
         const sendEmail = document.getElementById('reopen-send-email-check').checked;
 
-        if (!confirm(`Reopen this game and restore it as active?${sendEmail ? ` A "Game Back On" email will be sent to ${attendeeCount} confirmed group(s).` : ''}`)) {
+        const ok = window.PBFDialog
+          ? await window.PBFDialog.confirm(`Reopen this game and restore it as active?${sendEmail ? ` A "Game Back On" email will be sent to ${attendeeCount} confirmed group(s).` : ''}`)
+          : false;
+        if (!ok) {
           return;
         }
 
@@ -1273,14 +1294,14 @@ function renderOrganizerRainoutPanel() {
         try {
           const res = await API.reopenEvent(eventId, { note: note, sendEmail: sendEmail });
           if (res.error) {
-            alert(res.error);
+            if (window.PBFDialog) window.PBFDialog.toast(res.error, { type: 'error' });
             reopenBtn.disabled = false;
             reopenBtn.textContent = '⚾ Reopen Game (Back On)';
           } else {
             await loadEventData();
           }
         } catch (err) {
-          alert('Failed to reopen game.');
+          if (window.PBFDialog) window.PBFDialog.toast('Failed to reopen game.', { type: 'error' });
           reopenBtn.disabled = false;
           reopenBtn.textContent = '⚾ Reopen Game (Back On)';
         }
@@ -1622,13 +1643,13 @@ function setupCommentForm() {
       });
 
       if (res.error) {
-        alert(res.error);
+        if (window.PBFDialog) window.PBFDialog.toast(res.error, { type: 'error' });
       } else {
         document.getElementById('comment-content').value = '';
         await loadEventData();
       }
     } catch (err) {
-      alert('Error posting comment.');
+      if (window.PBFDialog) window.PBFDialog.toast('Error posting comment.', { type: 'error' });
     } finally {
       submitBtn.disabled = false;
       submitBtn.textContent = 'Post to Discussion';
@@ -1637,14 +1658,19 @@ function setupCommentForm() {
 }
 
 async function handleSendReminders() {
-  if (!confirm('Send 24-hour reminder emails now to all confirmed attendees?')) {
+  const ok = window.PBFDialog
+    ? await window.PBFDialog.confirm('Send 24-hour reminder emails now to all confirmed attendees?')
+    : false;
+  if (!ok) {
     return;
   }
   try {
     const data = await API.sendReminders(eventId);
-    alert(data.message || data.error);
+    if (window.PBFDialog) {
+      window.PBFDialog.toast(data.message || data.error, { type: data.error ? 'error' : 'success' });
+    }
   } catch (err) {
-    alert('Failed to send reminders.');
+    if (window.PBFDialog) window.PBFDialog.toast('Failed to send reminders.', { type: 'error' });
   }
 }
 
@@ -1981,7 +2007,10 @@ function closeBpModal() {
 window.closeBpModal = closeBpModal;
 
 async function handleDeleteBpSignup(signupId) {
-  if (!confirm('Withdraw from this batting practice slot?')) return;
+  const ok = window.PBFDialog
+    ? await window.PBFDialog.confirm('Withdraw from this batting practice slot?', { danger: true })
+    : false;
+  if (!ok) return;
   const alertEl = document.getElementById('bp-alert');
   try {
     const res = await API.deleteBpSignup(eventId, signupId, { management_token: guestToken });
@@ -2014,7 +2043,10 @@ function setupBpOrderUi() {
 
   if (clearBtn) {
     clearBtn.onclick = async function() {
-      if (!confirm('Are you sure you want to clear the entire batting practice order?')) return;
+      const ok = window.PBFDialog
+        ? await window.PBFDialog.confirm('Are you sure you want to clear the entire batting practice order?', { danger: true })
+        : false;
+      if (!ok) return;
       const alertEl = document.getElementById('bp-alert');
       try {
         const res = await API.clearBpOrder(eventId);

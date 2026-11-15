@@ -1,5 +1,5 @@
 // Service Worker for Pickup Baseball Foundation PWA
-const CACHE_NAME = 'pbf-cache-v144';
+const CACHE_NAME = 'pbf-cache-v146';
 
 // Core app shell & pages precached on install; i18n bundles (~312 KB) are cached on demand
 const STATIC_ASSETS = [
@@ -21,6 +21,7 @@ const STATIC_ASSETS = [
   '/css/themes.css',
   '/css/clubhouse.css',
   '/js/api.js',
+  '/js/dialog.js',
   '/js/crypto.js',
   '/js/store.js',
   '/js/rtc.js',
@@ -133,10 +134,12 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 3. Static Assets (CSS, JS, Images, i18n JSON): Stale-While-Revalidate
-  // ignoreSearch: true allows versioned queries (?v=4) to match precached shell assets
+  // 3. Static Assets (CSS, JS, Images, i18n JSON): Version-Aware Stale-While-Revalidate
+  // Versioned URLs (?v=N) require an exact cache match first so an older SW never serves stale JS/CSS across releases,
+  // falling back to { ignoreSearch: true } only if the network is unreachable offline.
+  const isVersionedAsset = url.searchParams.has('v');
   event.respondWith(
-    caches.match(req, { ignoreSearch: true }).then((cachedRes) => {
+    caches.match(req, isVersionedAsset ? undefined : { ignoreSearch: true }).then((cachedRes) => {
       const fetchPromise = fetch(req)
         .then((networkRes) => {
           if (isCacheableResponse(networkRes)) {
@@ -145,7 +148,11 @@ self.addEventListener('fetch', (event) => {
           }
           return networkRes;
         })
-        .catch(() => cachedRes || Response.error());
+        .catch(() => {
+          if (cachedRes) return cachedRes;
+          if (!isVersionedAsset) return Response.error();
+          return caches.match(req, { ignoreSearch: true }).then((fallback) => fallback || Response.error());
+        });
 
       return cachedRes || fetchPromise;
     })

@@ -395,8 +395,8 @@
         }).catch(function () {});
       }
     }).catch(function (err) {
-      if (typeof alert === 'function') {
-        alert((err && err.message) || 'Failed to update Clubhouse membership.');
+      if (typeof window !== 'undefined' && window.PBFDialog) {
+        window.PBFDialog.toast((err && err.message) || 'Failed to update Clubhouse membership.', { type: 'error' });
       }
     }).finally(function () {
       if (btnEl) btnEl.disabled = false;
@@ -941,10 +941,13 @@
           }
         }
         var currentText = targetMsg ? (targetMsg.decrypted_content || targetMsg.content || '') : '';
-        var nextText = typeof window.prompt === 'function' ? window.prompt('Edit message:', currentText) : null;
-        if (nextText !== null && nextText.trim() && nextText.trim() !== currentText) {
-          Store.editMessage(editId, nextText.trim(), Number(uiState.activeChannelId)).then(function () {
-            renderMessageStream();
+        if (typeof window !== 'undefined' && window.PBFDialog) {
+          window.PBFDialog.prompt('Edit message:', currentText, { title: '✏️ Edit Message', multiline: true }).then(function (nextText) {
+            if (nextText !== null && nextText.trim() && nextText.trim() !== currentText) {
+              Store.editMessage(editId, nextText.trim(), Number(uiState.activeChannelId)).then(function () {
+                renderMessageStream();
+              });
+            }
           });
         }
       } else if (target.hasAttribute('data-delete-msg')) {
@@ -2383,18 +2386,22 @@
         var editId = Number((el('board-edit-id') && el('board-edit-id').value) || 0);
         var statusEl = el('ch-board-status-msg');
         if (!editId) return;
-        if (typeof window.confirm === 'function' && !window.confirm('Delete this message board and all messages in it?')) {
-          return;
+        var doDelete = function () {
+          Store.deleteChannel(editId).then(function () {
+            closeBoardModal();
+            renderChannelSidebar();
+            if (Number(uiState.activeChannelId) === editId && Store.state.channels.length > 0) {
+              selectTextChannel(Store.state.channels[0].id);
+            }
+          }).catch(function (err) {
+            if (statusEl) statusEl.textContent = (err && err.message) || 'Unable to delete board.';
+          });
+        };
+        if (typeof window !== 'undefined' && window.PBFDialog) {
+          window.PBFDialog.confirm('Delete this message board and all messages in it?', { danger: true, title: '🗑️ Delete Board' }).then(function (ok) {
+            if (ok) doDelete();
+          });
         }
-        Store.deleteChannel(editId).then(function () {
-          closeBoardModal();
-          renderChannelSidebar();
-          if (Number(uiState.activeChannelId) === editId && Store.state.channels.length > 0) {
-            selectTextChannel(Store.state.channels[0].id);
-          }
-        }).catch(function (err) {
-          if (statusEl) statusEl.textContent = (err && err.message) || 'Unable to delete board.';
-        });
       });
     }
 
@@ -2925,6 +2932,8 @@
       });
     }
 
+    initQuickSiteNav();
+
     Store.bootstrap().then(function () {
       loadUpcomingBaseballCard();
     }).catch(function () {
@@ -2946,6 +2955,87 @@
         }
       });
     }
+  }
+
+  function initQuickSiteNav() {
+    if (typeof document === 'undefined') return;
+    var quickActions = document.querySelector('.ch-user-quick-actions');
+    if (!quickActions || el('ch-quick-nav-wrap')) return;
+
+    var wrap = document.createElement('div');
+    wrap.id = 'ch-quick-nav-wrap';
+    wrap.className = 'ch-quick-nav-wrap';
+    wrap.style.gridColumn = '1 / -1';
+
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.id = 'btn-ch-quick-nav';
+    btn.className = 'ch-user-quick-btn';
+    btn.style.width = '100%';
+    btn.setAttribute('aria-haspopup', 'true');
+    btn.setAttribute('aria-expanded', 'false');
+    btn.textContent = '🧭 More Pages ▾';
+
+    var menu = document.createElement('div');
+    menu.id = 'ch-quick-nav-menu';
+    menu.className = 'ch-quick-nav-menu';
+    menu.setAttribute('role', 'menu');
+
+    var links = [
+      { href: '/gallery.html', label: '📸 Photo & Video Gallery' },
+      { href: '/archive.html', label: '🏆 Season Archive' },
+      { href: '/waiver.html', label: '📝 Safety Waiver' },
+      { href: '/profile.html', label: '👤 Player Profile' },
+      { href: '/about.html', label: '⚾ About Us' },
+      { href: '/donate.html', label: '🧡 Donate' },
+      { href: '/admin.html', label: '⚙️ Organizer Admin', adminOnly: true }
+    ];
+
+    for (var i = 0; i < links.length; i++) {
+      var item = links[i];
+      var a = document.createElement('a');
+      a.href = item.href;
+      a.className = 'ch-quick-nav-item';
+      a.setAttribute('role', 'menuitem');
+      if (item.adminOnly) a.setAttribute('data-admin-only', 'true');
+      a.textContent = item.label;
+      menu.appendChild(a);
+    }
+
+    function updateVisibility() {
+      var u = Store && Store.state ? Store.state.user : null;
+      var showAdmin = Boolean(u && (u.role === 'admin' || u.role === 'organizer' || u.isAdmin));
+      var adminEls = menu.querySelectorAll('[data-admin-only="true"]');
+      for (var k = 0; k < adminEls.length; k++) {
+        adminEls[k].style.display = showAdmin ? '' : 'none';
+      }
+    }
+
+    function setOpen(open) {
+      if (open) updateVisibility();
+      menu.classList.toggle('is-open', open);
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      setOpen(!menu.classList.contains('is-open'));
+    });
+
+    document.addEventListener('click', function (e) {
+      if (!wrap.contains(e.target)) setOpen(false);
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && menu.classList.contains('is-open')) {
+        setOpen(false);
+        btn.focus();
+      }
+    });
+
+    wrap.appendChild(menu);
+    wrap.appendChild(btn);
+    quickActions.appendChild(wrap);
   }
 
   if (typeof document !== 'undefined') {

@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Photo &amp; Video Gallery | Pickup Baseball Foundation</title>
-  <link rel="stylesheet" href="/css/style.css?v=144">
-  <link rel="stylesheet" href="/css/themes.css?v=144">
+  <link rel="stylesheet" href="/css/style.css?v=146">
+  <link rel="stylesheet" href="/css/themes.css?v=146">
   <link rel="alternate" type="application/rss+xml" title="Sunday Pickup Baseball Highlights &amp; Updates" href="/feed.xml">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
@@ -55,9 +55,9 @@
 
     <!-- Quick Navigation Pills Row -->
     <div style="display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap;">
-      <a href="#photos-section" class="btn btn-outline btn-xs" style="font-weight: 700;">📷 Photos Reel</a>
-      <a href="#videos-section" class="btn btn-outline btn-xs" style="font-weight: 700;">🎬 Video Reel</a>
-      <a href="#submit-media-section" class="btn btn-outline btn-xs" style="font-weight: 700; color: var(--primary);">📥 Drop Photos / Links</a>
+      <a href="#photos-section" class="btn btn-outline btn-xs" style="font-weight: 700;">📷 <span data-i18n="gallery.photos_reel">Photos Reel</span></a>
+      <a href="#videos-section" class="btn btn-outline btn-xs" style="font-weight: 700;">🎬 <span data-i18n="gallery.videos_reel">Video Reel</span></a>
+      <a href="#submit-media-section" class="btn btn-outline btn-xs" style="font-weight: 700; color: var(--primary);" data-i18n="gallery.drop_links_btn">📥 Drop Photos / Links</a>
     </div>
 
     <!-- Admin Moderation Queue (Visible only to Organizers and Admins when submissions are pending) -->
@@ -66,7 +66,7 @@
         <div style="display: flex; align-items: center; gap: 10px;">
           <span style="font-size: 1.4rem;">🛡️</span>
           <div>
-            <h2 style="font-size: 1.15rem; color: var(--secondary); margin: 0;">Admin Moderation Queue</h2>
+            <h2 style="font-size: 1.15rem; color: var(--secondary); margin: 0;" data-i18n="gallery.mod_queue_title">Admin Moderation Queue</h2>
             <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0;">Review and approve community photos and videos before they appear in the live gallery.</p>
           </div>
         </div>
@@ -84,7 +84,7 @@
       <div class="carousel-header-wrap" style="margin-bottom: 12px;">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 8px;">
           <h2 style="font-size: 1.3rem; color: var(--secondary); margin: 0; display: flex; align-items: center; gap: 8px;">
-            <span>📷</span> <span>Community Photos Reel</span>
+            <span>📷</span> <span data-i18n="gallery.photos_reel">Community Photos Reel</span>
             <span class="badge badge-green" id="count-photos" style="font-size: 0.78rem;">0</span>
           </h2>
           <div style="font-size: 0.82rem; color: var(--text-muted);">
@@ -95,7 +95,7 @@
         <!-- Sticky Album Bookmarks Navigation List -->
         <div id="album-bookmarks-bar" class="album-bookmarks-scroll" role="navigation" aria-label="Photo Albums Bookmarks">
           <button type="button" class="album-bookmark-pill active" data-album="all">
-            <span>🌟 All Albums</span>
+            <span data-i18n="gallery.all_albums">🌟 All Albums</span>
           </button>
           <!-- Populated dynamically via JS -->
         </div>
@@ -165,7 +165,7 @@
       <div class="carousel-header-wrap" style="margin-bottom: 12px;">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
           <h2 style="font-size: 1.3rem; color: var(--secondary); margin: 0; display: flex; align-items: center; gap: 8px;">
-            <span>🎬</span> <span>Video Releases &amp; Highlights Reel</span>
+            <span>🎬</span> <span data-i18n="gallery.videos_reel">Video Releases &amp; Highlights Reel</span>
             <span class="badge badge-orange" id="count-videos" style="font-size: 0.78rem;">0</span>
           </h2>
           <span style="font-size: 0.82rem; color: var(--text-muted);" id="video-order-label">
@@ -430,7 +430,8 @@
   <!-- Site Footer -->
   <footer id="site-footer" class="site-footer"></footer>
 
-  <script src="/js/api.js?v=144"></script>
-  <script src="/js/gallery.js?v=144"></script>
+  <script src="/js/api.js?v=146"></script>
+  <script src="/js/dialog.js?v=146"></script>
+  <script src="/js/gallery.js?v=146"></script>
 </body>
 </html>

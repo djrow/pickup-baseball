@@ -7,7 +7,9 @@ let currentUser = null;
 document.addEventListener('DOMContentLoaded', async function() {
   currentUser = await API.getMe();
   if (!currentUser) {
-    alert('Please sign in to view and edit your profile.');
+    if (window.PBFDialog) {
+      await window.PBFDialog.alert(API.t('profile.signin_required', 'Please sign in to view and edit your profile.'));
+    }
     window.location.href = '/login.html';
     return;
   }
@@ -316,7 +318,10 @@ function setupAvatarUpload() {
   });
 
   removeBtn.addEventListener('click', async function() {
-    if (!confirm('Remove your profile picture?')) return;
+    const ok = window.PBFDialog
+      ? await window.PBFDialog.confirm(API.t('profile.confirm_remove_avatar', 'Remove your profile picture?'), { danger: true })
+      : false;
+    if (!ok) return;
     try {
       const res = await API.deleteAvatar();
       if (res.error) {

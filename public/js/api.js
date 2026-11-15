@@ -316,7 +316,37 @@ const EN_DICT = {
   "phrase.duty_facilitator": "Game Facilitator",
   "phrase.duty_facilitator_desc": "Help coordinate teams, batting order, and fair play throughout the game.",
   "phrase.duty_water_food": "Water / Food",
-  "phrase.duty_water_food_desc": "Bring drinking water, ice, and dugout snacks or fruit for players."
+  "phrase.duty_water_food_desc": "Bring drinking water, ice, and dugout snacks or fruit for players.",
+  "dialog.close": "Close notification",
+  "dialog.notice": "Notice",
+  "dialog.ok": "OK",
+  "dialog.confirm_title": "Please Confirm",
+  "dialog.cancel": "Cancel",
+  "dialog.confirm": "Confirm",
+  "dialog.input_title": "Enter Details",
+  "dialog.save": "Save",
+  "calendar.no_upcoming_export": "No upcoming games scheduled to export.",
+  "feed.delete_failed": "Failed to delete post.",
+  "archive.turnout_title": "Game Attendance",
+  "archive.invalid_attendance": "Please enter a valid attendance number.",
+  "archive.turnout_saved": "Attendance saved.",
+  "archive.save_failed": "Failed to save turnout.",
+  "archive.record_prompt": "Enter the number of players who attended and played in this game:",
+  "archive.edit_prompt": "Update actual headcount for this game:",
+  "profile.signin_required": "Please sign in to view and edit your profile.",
+  "profile.confirm_remove_avatar": "Remove your profile picture?",
+  "profile.waiver_card_title": "📝 Player Consent & Liability Waiver",
+  "waiver.back_to_games": "← Back to Game Schedule",
+  "waiver.print_blank": "🖨️ Print Paper Copy",
+  "waiver.title": "CONSENT, WAIVER AND INDEMNITY",
+  "waiver.sign_online_title": "🔏 Sign Online with Verified Email Provenance",
+  "waiver.sign_cta": "⚾ Sign In with Email to Sign Waiver →",
+  "waiver.execute_sig": "✍️ Execute Digital Signature",
+  "gallery.photos_reel": "Community Photos Reel",
+  "gallery.videos_reel": "Video Releases & Highlights Reel",
+  "gallery.drop_links_btn": "📥 Drop Photos / Links",
+  "gallery.mod_queue_title": "Admin Moderation Queue",
+  "gallery.all_albums": "🌟 All Albums"
 };
 
 const KNOWN_PHRASE_KEYS = {
@@ -342,7 +372,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '144',
+  CLIENT_VERSION: '146',
 
   // Current user cache
   currentUser: null,
@@ -1183,7 +1213,25 @@ const API = {
     if (Object.keys(headers).length > 0) {
       init.headers = headers;
     }
-    const res = await fetch(url, init);
+    const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+    const timeoutMs = typeof options.timeoutMs === 'number' ? options.timeoutMs : (isFormData ? 60000 : 15000);
+    let timeoutHandle = null;
+    if (timeoutMs > 0 && typeof AbortController !== 'undefined' && !init.signal) {
+      const controller = new AbortController();
+      init.signal = controller.signal;
+      timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
+    }
+    let res;
+    try {
+      res = await fetch(url, init);
+    } catch (err) {
+      if (timeoutHandle) clearTimeout(timeoutHandle);
+      if (err && err.name === 'AbortError') {
+        throw new Error('Request timed out. Please check your connection and try again.');
+      }
+      throw err;
+    }
+    if (timeoutHandle) clearTimeout(timeoutHandle);
     this.checkResponseVersion(res);
     let data = {};
     const contentType = (res.headers && res.headers.get && res.headers.get('content-type')) || '';
@@ -1807,7 +1855,9 @@ const API = {
   downloadEventsIcs(events, filename) {
     const upcoming = (events || []).filter(function(e) { return e && e.status !== 'cancelled'; });
     if (upcoming.length === 0) {
-      alert('No upcoming games scheduled to export.');
+      if (typeof window !== 'undefined' && window.PBFDialog) {
+        window.PBFDialog.toast(this.t('calendar.no_upcoming_export', 'No upcoming games scheduled to export.'), { type: 'info' });
+      }
       return;
     }
 

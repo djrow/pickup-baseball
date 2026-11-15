@@ -115,7 +115,7 @@ Designed with a **10+ year longevity philosophy**:
 
 13. **223-Test Acceptance Suite & Automated Security Scanner**:
     - 223 automated end-to-end tests launched via `npm test` (`scripts/verify-all.js` + `tests/core/*.test.js` + `tests/clubhouse/tier1–5`) using native Node.js test runner (`node:test`, `node:assert/strict`) with zero third-party test dependencies.
-    - 12-check automated security & parity scanner (`npm run security:scan` and `npm run security:scan:live` via `scripts/security-scan.js`) validating HTML CSP compliance, `_headers`, client ES6 syntax & sinks, SQL parameterization, mutating route auth guards, `SECURITY.md` / `security.txt`, secret hygiene, `npm audit`, 32-asset PWA parity, and 303-key i18n parity across all 14 language bundles.
+    - 12-check automated security & parity scanner (`npm run security:scan` and `npm run security:scan:live` via `scripts/security-scan.js`) validating HTML CSP compliance, `_headers`, client ES6 syntax & sinks, SQL parameterization, mutating route auth guards, `SECURITY.md` / `security.txt`, secret hygiene, `npm audit`, 33-asset PWA parity, and 333-key i18n parity across all 14 language bundles, plus a zero-dependency headless Chrome/Edge CDP browser smoke suite (`npm run test:browser`).
 
 14. **RSS 2.0 & Media RSS Feed with Zero-Host Multimedia Interpretation**:
     - Standard **RSS 2.0 + Media RSS** feed endpoint (`/feed.xml` and `/api/feed.xml`) equipped with autodiscovery `<link rel="alternate" type="application/rss+xml" href="/feed.xml">` and RFC 822 timestamps.
@@ -358,6 +358,9 @@ npm run pages:dev
 
 # Run the full 223-test automated E2E verification suite (core + Clubhouse tiers 1–5)
 npm test
+
+# Run the zero-dependency headless Chrome/Edge CDP browser smoke suite
+npm run test:browser
 
 # Run the 12-check static security, CSP, SQL, route-guard & parity scan
 npm run security:scan

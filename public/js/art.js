@@ -171,8 +171,11 @@
     // Reset button
     const resetBtn = document.getElementById('btn-reset-pixel-diamond');
     if (resetBtn) {
-      resetBtn.addEventListener('click', () => {
-        if (confirm('Reset the Community Diamond to the standard outfield & infield pattern?')) {
+      resetBtn.addEventListener('click', async () => {
+        const ok = window.PBFDialog
+          ? await window.PBFDialog.confirm('Reset the Community Diamond to the standard outfield & infield pattern?', { danger: true })
+          : false;
+        if (ok) {
           pixelGridData = generateDefaultDiamondGrid();
           renderPixelCanvas(ctx, canvas);
           localStorage.removeItem('pbf_pixel_diamond_grid');
@@ -195,8 +198,11 @@
     // Admin Force Reset button
     const adminResetBtn = document.getElementById('btn-admin-reset-diamond');
     if (adminResetBtn) {
-      adminResetBtn.addEventListener('click', () => {
-        if (confirm('Admin: Force reset the Community Diamond to the pristine baseball diamond template?')) {
+      adminResetBtn.addEventListener('click', async () => {
+        const ok = window.PBFDialog
+          ? await window.PBFDialog.confirm('Admin: Force reset the Community Diamond to the pristine baseball diamond template?', { danger: true })
+          : false;
+        if (ok) {
           pixelGridData = generateDefaultDiamondGrid();
           renderPixelCanvas(ctx, canvas);
           localStorage.removeItem('pbf_pixel_diamond_grid');
@@ -532,8 +538,11 @@
     // Clear button
     const clearBtn = document.getElementById('btn-clear-trunk');
     if (clearBtn) {
-      clearBtn.addEventListener('click', () => {
-        if (confirm('Peel your stickers off the dugout wall?')) {
+      clearBtn.addEventListener('click', async () => {
+        const ok = window.PBFDialog
+          ? await window.PBFDialog.confirm('Peel your stickers off the dugout wall?', { danger: true })
+          : false;
+        if (ok) {
           placedStickers = [];
           renderPlacedStickers(stage);
           localStorage.removeItem('pbf_trunk_stickers');
@@ -544,8 +553,11 @@
     // Admin Peel All Stickers button
     const adminClearBtn = document.getElementById('btn-admin-clear-trunk');
     if (adminClearBtn) {
-      adminClearBtn.addEventListener('click', () => {
-        if (confirm('Admin: Clear all stickers off the community dugout wall?')) {
+      adminClearBtn.addEventListener('click', async () => {
+        const ok = window.PBFDialog
+          ? await window.PBFDialog.confirm('Admin: Clear all stickers off the community dugout wall?', { danger: true })
+          : false;
+        if (ok) {
           placedStickers = [];
           renderPlacedStickers(stage);
           localStorage.removeItem('pbf_trunk_stickers');
@@ -594,11 +606,14 @@
     }).join('');
 
     stage.querySelectorAll('.placed-trunk-sticker').forEach(el => {
-      el.addEventListener('click', (e) => {
+      el.addEventListener('click', async (e) => {
         e.stopPropagation();
         const id = el.getAttribute('data-id');
         const msg = isAdmin ? 'Admin: Permanently peel this sticker off the dugout wall?' : 'Peel this sticker off the dugout wall?';
-        if (confirm(msg)) {
+        const ok = window.PBFDialog
+          ? await window.PBFDialog.confirm(msg, { danger: true })
+          : false;
+        if (ok) {
           placedStickers = placedStickers.filter(s => s.id !== id);
           renderPlacedStickers(stage);
           localStorage.setItem('pbf_trunk_stickers', JSON.stringify(placedStickers));
@@ -753,8 +768,11 @@
     // Wipe Board button
     const wipeBtn = document.getElementById('btn-wipe-chalk');
     if (wipeBtn) {
-      wipeBtn.addEventListener('click', () => {
-        if (confirm('Wipe the chalkboard clean with the felt eraser?')) {
+      wipeBtn.addEventListener('click', async () => {
+        const ok = window.PBFDialog
+          ? await window.PBFDialog.confirm('Wipe the chalkboard clean with the felt eraser?', { danger: true })
+          : false;
+        if (ok) {
           ctx.clearRect(0, 0, canvas.width, canvas.height);
           drawChalkDust(ctx, canvas);
           saveHistoryState(ctx, canvas);

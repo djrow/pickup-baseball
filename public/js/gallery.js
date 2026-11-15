@@ -308,7 +308,7 @@
           await API.approveMedia(id);
           await loadGalleryData();
         } catch (e) {
-          alert(e.message || 'Failed to approve media.');
+          if (window.PBFDialog) window.PBFDialog.toast(e.message || 'Failed to approve media.', { type: 'error' });
           btn.disabled = false;
           btn.textContent = '✓ Approve';
         }
@@ -318,14 +318,17 @@
     listContainer.querySelectorAll('.btn-reject-media').forEach(function(btn) {
       btn.addEventListener('click', async function() {
         var id = btn.getAttribute('data-media-id');
-        if (!confirm('Reject and permanently delete this pending submission?')) return;
+        var ok = window.PBFDialog
+          ? await window.PBFDialog.confirm('Reject and permanently delete this pending submission?', { danger: true })
+          : false;
+        if (!ok) return;
         btn.disabled = true;
         btn.textContent = 'Rejecting...';
         try {
           await API.deleteMedia(id);
           await loadGalleryData();
         } catch (e) {
-          alert(e.message || 'Failed to reject media.');
+          if (window.PBFDialog) window.PBFDialog.toast(e.message || 'Failed to reject media.', { type: 'error' });
           btn.disabled = false;
           btn.textContent = '✕ Reject';
         }
@@ -1067,7 +1070,7 @@
       callback(e.target.result, mime);
     };
     reader.onerror = function() {
-      alert('Could not read the selected file from your device.');
+      if (window.PBFDialog) window.PBFDialog.toast('Could not read the selected file from your device.', { type: 'error' });
     };
     reader.readAsDataURL(file);
   }
@@ -1077,13 +1080,17 @@
     if (!file) return;
 
     if (!isAllowedMediaType(file)) {
-      alert('Unsupported file format (' + (file.type || file.name) + ').\n\nPlease select web-compatible media:\n• Photos: JPG/JPEG, PNG, WebP, GIF, or AVIF (HEIC/TIFF files must be converted to JPG or PNG before submitting)\n• Videos: MP4 or WebM (MOV/AVI/MKV files are disallowed as they do not stream natively across web browsers).');
+      if (window.PBFDialog) {
+        window.PBFDialog.alert('Unsupported file format (' + (file.type || file.name) + ').\n\nPlease select web-compatible media:\n• Photos: JPG/JPEG, PNG, WebP, GIF, or AVIF (HEIC/TIFF files must be converted to JPG or PNG before submitting)\n• Videos: MP4 or WebM (MOV/AVI/MKV files are disallowed as they do not stream natively across web browsers).');
+      }
       return;
     }
 
     var maxBytes = 50 * 1024 * 1024; // 50MB max file size
     if (file.size > maxBytes) {
-      alert('Selected file is too large (' + (file.size / 1024 / 1024).toFixed(1) + 'MB). Please choose a photo or video under 50MB.');
+      if (window.PBFDialog) {
+        window.PBFDialog.alert('Selected file is too large (' + (file.size / 1024 / 1024).toFixed(1) + 'MB). Please choose a photo or video under 50MB.');
+      }
       return;
     }
 
@@ -1382,7 +1389,10 @@
       ? 'Are you sure you want to permanently remove this ' + typeLabel + ' from the display carousel?'
       : 'Are you sure you want to take down your submitted ' + typeLabel + '? It will be permanently removed from the website.';
 
-    if (!confirm(confirmMsg)) return;
+    var ok = window.PBFDialog
+      ? await window.PBFDialog.confirm(confirmMsg, { danger: true })
+      : false;
+    if (!ok) return;
 
     var token = getMediaDeleteToken(id);
 
@@ -1400,7 +1410,7 @@
         setTimeout(function() { alertBox.innerHTML = ''; }, 4000);
       }
     } catch (err) {
-      alert(err.message || 'Failed to remove ' + typeLabel + '.');
+      if (window.PBFDialog) window.PBFDialog.toast(err.message || 'Failed to remove ' + typeLabel + '.', { type: 'error' });
     }
   }
 

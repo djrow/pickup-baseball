@@ -678,6 +678,12 @@ export const CREATE_CHAT_TABLES_SQL = [
     opted_out_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`,
 
+  // 16. Schema metadata (avoids re-running DDL/PRAGMA batches on Worker cold starts)
+  `CREATE TABLE IF NOT EXISTS chat_meta (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  )`,
+
   // Indexes
   'CREATE INDEX IF NOT EXISTS idx_messages_channel_id ON messages(channel_id, id ASC)',
   'CREATE INDEX IF NOT EXISTS idx_messages_ch_del_id ON messages(channel_id, deleted_at, id ASC)',
@@ -712,9 +718,20 @@ export const CHAT_ALTER_STATEMENTS = [
 ];
 
 const migratedChatDbs = new WeakSet();
+const CHAT_SCHEMA_VERSION = '2026-11-14.1';
 
 export async function ensureChatD1Schema(chatDb, force = false) {
   if (!chatDb || (!force && migratedChatDbs.has(chatDb))) return;
+
+  if (!force && typeof chatDb.prepare === 'function') {
+    try {
+      const verRow = await chatDb.prepare("SELECT value FROM chat_meta WHERE key = 'schema_version'").first();
+      if (verRow && verRow.value === CHAT_SCHEMA_VERSION) {
+        migratedChatDbs.add(chatDb);
+        return;
+      }
+    } catch (e) {}
+  }
 
   if (typeof chatDb.prepare === 'function') {
     await runSchemaBatch(chatDb, CREATE_CHAT_TABLES_SQL);
@@ -781,7 +798,8 @@ export async function ensureChatD1Schema(chatDb, force = false) {
             ch.min_role_read, ch.min_role_write, ch.is_encrypted, ch.sort_order
           )
         ),
-        chatDb.prepare(topicSyncSql).bind(newHighlightsTopic, oldHighlightsTopic)
+        chatDb.prepare(topicSyncSql).bind(newHighlightsTopic, oldHighlightsTopic),
+        chatDb.prepare("INSERT OR REPLACE INTO chat_meta (key, value) VALUES ('schema_version', ?)").bind(CHAT_SCHEMA_VERSION)
       ]);
       migratedChatDbs.add(chatDb);
       return;
@@ -818,9 +836,66 @@ export async function ensureChatD1Schema(chatDb, force = false) {
         syncStmt.run(newHighlightsTopic, oldHighlightsTopic);
       }
     }
+    if (typeof chatDb.prepare === 'function') {
+      const metaStmt = chatDb.prepare("INSERT OR REPLACE INTO chat_meta (key, value) VALUES ('schema_version', ?)");
+      if (typeof metaStmt.bind === 'function') {
+        await metaStmt.bind(CHAT_SCHEMA_VERSION).run();
+      }
+    }
   } catch (e) {}
 
   migratedChatDbs.add(chatDb);
+}
+
+const lastBaseballPruneByDb = new WeakMap();
+const lastChatPruneByDb = new WeakMap();
+const PRUNE_INTERVAL_MS = 10 * 60 * 1000;
+
+/** Opportunistically prunes expired sessions, auth codes, and stale rate-limit windows at most once per 10 minutes per isolate. */
+export async function pruneEphemeralBaseballRows(db) {
+  if (!db || typeof db.prepare !== 'function') return;
+  const nowMs = Date.now();
+  const last = lastBaseballPruneByDb.get(db) || 0;
+  if (nowMs - last < PRUNE_INTERVAL_MS) return;
+  lastBaseballPruneByDb.set(db, nowMs);
+
+  const nowIso = new Date(nowMs).toISOString();
+  const rateCutoff = nowMs - 2 * 60 * 60 * 1000;
+  try {
+    const stmts = [
+      db.prepare('DELETE FROM sessions WHERE expires_at <= ?').bind(nowIso),
+      db.prepare('DELETE FROM auth_codes WHERE expires_at <= ?').bind(nowIso),
+      db.prepare('DELETE FROM rate_limits WHERE window_start <= ?').bind(rateCutoff)
+    ];
+    if (typeof db.batch === 'function') {
+      await db.batch(stmts);
+    } else {
+      for (const s of stmts) await s.run();
+    }
+  } catch (e) {}
+}
+
+/** Opportunistically prunes stale WebRTC signals, chat rate limits, and aged sync tombstones at most once per 10 minutes per isolate. */
+export async function pruneEphemeralChatRows(chatDb) {
+  if (!chatDb || typeof chatDb.prepare !== 'function') return;
+  const nowMs = Date.now();
+  const last = lastChatPruneByDb.get(chatDb) || 0;
+  if (nowMs - last < PRUNE_INTERVAL_MS) return;
+  lastChatPruneByDb.set(chatDb, nowMs);
+
+  const nowSec = Math.floor(nowMs / 1000);
+  try {
+    const stmts = [
+      chatDb.prepare('DELETE FROM rtc_signals WHERE created_at <= ?').bind(nowSec - 300),
+      chatDb.prepare('DELETE FROM chat_rate_limits WHERE window_start <= ?').bind(nowSec - 7200),
+      chatDb.prepare('DELETE FROM sync_events WHERE created_at <= ?').bind(nowSec - 7 * 86400)
+    ];
+    if (typeof chatDb.batch === 'function') {
+      await chatDb.batch(stmts);
+    } else {
+      for (const s of stmts) await s.run();
+    }
+  } catch (e) {}
 }
 
 export const ensureBaseballD1Schema = ensureD1Schema;

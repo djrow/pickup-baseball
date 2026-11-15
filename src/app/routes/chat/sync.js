@@ -7,6 +7,7 @@
 import { Hono } from 'hono';
 import { requireAuth, rejectIfClubhouseOptedOut } from '../../security.js';
 import { canUserAccessEvent } from '../../policy.js';
+import { pruneEphemeralChatRows } from '../../schema.js';
 import {
   abbreviateMemberNames,
   chunkArray,
@@ -310,6 +311,7 @@ chatSyncRouter.get('/sync', requireAuth, async (c) => {
       if (staleVp) {
         await chatDb.prepare('DELETE FROM voice_participants WHERE heartbeat_at <= ?').bind(nowSec - 25).run();
       }
+      await pruneEphemeralChatRows(chatDb);
     } catch (e) {}
   }
 

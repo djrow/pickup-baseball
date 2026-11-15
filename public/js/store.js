@@ -309,7 +309,17 @@
         opts.body = JSON.stringify(body);
       }
     }
+    var isBinary = body !== undefined && body !== null &&
+      (body instanceof ArrayBuffer || body instanceof Uint8Array || (typeof Blob !== 'undefined' && body instanceof Blob));
+    var timeoutMs = isBinary ? 60000 : 15000;
+    var timeoutHandle = null;
+    if (typeof AbortController !== 'undefined' && !opts.signal) {
+      var controller = new AbortController();
+      opts.signal = controller.signal;
+      timeoutHandle = setTimeout(function () { controller.abort(); }, timeoutMs);
+    }
     return fetch(url, opts).then(function (res) {
+      if (timeoutHandle) clearTimeout(timeoutHandle);
       if (typeof res.text === 'function') {
         return res.text().then(function (text) {
           var data = {};
@@ -339,6 +349,9 @@
           headers: res.headers
         };
       });
+    }, function (err) {
+      if (timeoutHandle) clearTimeout(timeoutHandle);
+      throw err;
     });
   }
 

@@ -31,7 +31,7 @@ import {
   regenerateUserCalendarToken,
   enforceUserSessionCap
 } from '../security.js';
-import { getRequireLoginSetting, getDisallowZeroLoginMediaSetting } from '../schema.js';
+import { getRequireLoginSetting, getDisallowZeroLoginMediaSetting, pruneEphemeralBaseballRows } from '../schema.js';
 import { sendAuthCode } from '../mailer.js';
 
 export const authRouter = new Hono();
@@ -57,6 +57,7 @@ async function upsertUserAndCreateSession(c, cleanEmail, fallbackName, { sharedD
 
   // Prune expired sessions and keep at most (MAX_SESSIONS_PER_USER - 1) prior active sessions
   await enforceUserSessionCap(db, user.id, Math.max(0, MAX_SESSIONS_PER_USER - 1));
+  await pruneEphemeralBaseballRows(db);
 
   const isTemporary = Boolean(sharedDevice);
   const durationSeconds = isTemporary ? TEMPORARY_SESSION_DURATION_SECONDS : SESSION_DURATION_SECONDS;

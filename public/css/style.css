@@ -5314,3 +5314,208 @@ footer.site-footer strong {
     grid-template-columns: 1fr;
   }
 }
+
+/* ==========================================================================
+   12. Accessible In-App Dialogs & Toasts (window.PBFDialog)
+   ========================================================================== */
+.pbf-toast-container {
+  position: fixed;
+  bottom: 4.75rem;
+  right: 1rem;
+  z-index: 9500;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: min(380px, calc(100vw - 2rem));
+  pointer-events: none;
+}
+
+.pbf-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.7rem 0.95rem;
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  color: var(--text-main);
+  border: 1.5px solid var(--border);
+  box-shadow: var(--shadow-lg);
+  font-size: 0.92rem;
+  line-height: 1.4;
+}
+
+.pbf-toast-success {
+  border-color: var(--as-green-border);
+  background: var(--as-green-subtle);
+}
+
+.pbf-toast-error {
+  border-color: rgba(220, 38, 38, 0.45);
+  background: var(--danger-light);
+  color: #7f1d1d;
+}
+
+[data-theme="dark"] .pbf-toast-error {
+  background: rgba(127, 29, 29, 0.9);
+  color: #fecaca;
+}
+
+.pbf-toast-msg {
+  flex: 1 1 auto;
+  word-break: break-word;
+}
+
+.pbf-toast-close {
+  flex: 0 0 auto;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 1.15rem;
+  line-height: 1;
+  padding: 0.15rem 0.35rem;
+  cursor: pointer;
+  opacity: 0.75;
+}
+
+.pbf-toast-close:hover {
+  opacity: 1;
+}
+
+.pbf-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9600;
+  background: rgba(8, 20, 17, 0.62);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.pbf-dialog-card {
+  width: 100%;
+  max-width: 440px;
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  background: var(--bg-card);
+  color: var(--text-main);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 1.2rem 1.25rem;
+}
+
+.pbf-dialog-header {
+  margin-bottom: 0.6rem;
+}
+
+.pbf-dialog-title {
+  margin: 0;
+  font-size: 1.12rem;
+  font-weight: 800;
+  color: var(--as-green);
+}
+
+.pbf-dialog-message {
+  margin: 0 0 0.85rem;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--text-main);
+  white-space: pre-line;
+}
+
+.pbf-dialog-field {
+  margin-bottom: 0.75rem;
+}
+
+.pbf-dialog-label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-bottom: 0.3rem;
+}
+
+.pbf-dialog-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.55rem 0.7rem;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text-main);
+  font: inherit;
+  font-size: 0.95rem;
+}
+
+.pbf-dialog-input:focus {
+  outline: none;
+  border-color: var(--border-focus);
+}
+
+.pbf-dialog-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.92rem;
+  cursor: pointer;
+  margin-bottom: 0.75rem;
+}
+
+.pbf-dialog-error {
+  color: var(--danger);
+  font-size: 0.85rem;
+  font-weight: 700;
+  min-height: 1.1em;
+  margin-bottom: 0.35rem;
+}
+
+.pbf-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+
+.pbf-dialog-btn {
+  padding: 0.5rem 0.95rem;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pbf-dialog-btn-secondary {
+  background: var(--bg-subtle);
+  color: var(--text-main);
+}
+
+.pbf-dialog-btn-primary {
+  background: var(--giants-orange);
+  border-color: var(--giants-orange);
+  color: #ffffff;
+}
+
+.pbf-dialog-btn-primary:hover {
+  background: var(--giants-orange-hover);
+}
+
+.pbf-dialog-btn-danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #ffffff;
+}
+
+@media (max-width: 600px) {
+  .pbf-toast-container {
+    bottom: 5.5rem;
+    right: 0.75rem;
+    left: 0.75rem;
+    max-width: none;
+  }
+}

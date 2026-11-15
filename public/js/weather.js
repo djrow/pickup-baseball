@@ -144,6 +144,20 @@
 
   var GEOCODE_CACHE = {};
 
+  async function fetchWithTimeout(url, timeoutMs) {
+    var ms = timeoutMs || 8000;
+    if (typeof AbortController === 'undefined') {
+      return fetch(url);
+    }
+    var controller = new AbortController();
+    var timer = setTimeout(function() { controller.abort(); }, ms);
+    try {
+      return await fetch(url, { signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   /**
    * Live geocode lookup using Open-Meteo Geocoding API (client-side, free, no key required)
    */
@@ -178,7 +192,7 @@
 
     try {
       var url = 'https://geocoding-api.open-meteo.com/v1/search?name=' + encodeURIComponent(query) + '&count=1&language=en&format=json';
-      var res = await fetch(url);
+      var res = await fetchWithTimeout(url, 8000);
       if (!res.ok) return null;
       var data = await res.json();
       if (data && data.results && data.results.length > 0) {
@@ -393,7 +407,7 @@
 
     var reqPromise = (async function() {
       try {
-        var res = await fetch(url);
+        var res = await fetchWithTimeout(url, 8000);
         if (!res.ok) {
           throw new Error('Open-Meteo request failed with HTTP ' + res.status);
         }

@@ -48,7 +48,9 @@ function applyRoleUI(user) {
 async function initAdmin() {
   const user = await API.getMe();
   if (!user || (!user.isAdmin && !user.canManageEvents)) {
-    alert('Access restricted to organizers and administrators. Please sign in with an authorized account.');
+    if (window.PBFDialog) {
+      await window.PBFDialog.alert('Access restricted to organizers and administrators. Please sign in with an authorized account.');
+    }
     window.location.href = '/login.html';
     return;
   }
@@ -188,7 +190,7 @@ function setupAdminBackupButton() {
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 5000);
     } catch (err) {
-      alert('Database backup failed: ' + (err.message || 'Unknown error'));
+      if (window.PBFDialog) window.PBFDialog.toast('Database backup failed: ' + (err.message || 'Unknown error'), { type: 'error' });
     } finally {
       btn.style.pointerEvents = '';
       btn.textContent = origText;
@@ -317,15 +319,21 @@ function setupTaskBuilder() {
     if (inputs.length > 0) inputs[inputs.length - 1].focus();
   });
 
-  resetBtn.addEventListener('click', function() {
-    if (confirm("Reset tasks to your organization's default tasks template?")) {
+  resetBtn.addEventListener('click', async function() {
+    const ok = window.PBFDialog
+      ? await window.PBFDialog.confirm("Reset tasks to your organization's default tasks template?")
+      : false;
+    if (ok) {
       builderDuties = cloneList(orgDefaultDuties);
       renderTaskBuilder();
     }
   });
 
-  clearBtn.addEventListener('click', function() {
-    if (confirm('Remove all tasks from this game? Players will only RSVP without volunteer task signups.')) {
+  clearBtn.addEventListener('click', async function() {
+    const ok = window.PBFDialog
+      ? await window.PBFDialog.confirm('Remove all tasks from this game? Players will only RSVP without volunteer task signups.', { danger: true })
+      : false;
+    if (ok) {
       builderDuties = [];
       renderTaskBuilder();
     }
@@ -335,10 +343,13 @@ function setupTaskBuilder() {
     saveAsDefaultsBtn.addEventListener('click', async function() {
       builderDuties = readEditableTaskRows('task-builder-list');
       if (builderDuties.some(function(d) { return !d.title.trim(); })) {
-        alert('Please give a title to all tasks before saving as defaults.');
+        if (window.PBFDialog) window.PBFDialog.toast('Please give a title to all tasks before saving as defaults.', { type: 'error' });
         return;
       }
-      if (confirm('Save these ' + builderDuties.length + " tasks as the organization's permanent default tasks template for all future games?")) {
+      const ok = window.PBFDialog
+        ? await window.PBFDialog.confirm('Save these ' + builderDuties.length + " tasks as the organization's permanent default tasks template for all future games?")
+        : false;
+      if (ok) {
         await saveDefaultsToBackend(builderDuties);
       }
     });
@@ -373,7 +384,7 @@ function setupDefaultTemplateEditor() {
   saveBtn.addEventListener('click', async function() {
     templateDuties = readEditableTaskRows('default-template-list');
     if (templateDuties.some(function(d) { return !d.title.trim(); })) {
-      alert('Please enter a task name for all items, or click the trash icon to remove empty rows.');
+      if (window.PBFDialog) window.PBFDialog.toast('Please enter a task name for all items, or click the trash icon to remove empty rows.', { type: 'error' });
       return;
     }
     saveBtn.disabled = true;
@@ -408,7 +419,9 @@ function setupQuickSundayButton() {
   btn.addEventListener('click', async function() {
     const nextSundayIso = API.getNextSundayNoonPacificIso();
     const dateFormatted = API.formatDate(nextSundayIso);
-    const location = prompt('Enter field location for this Sunday game:', 'Central Park - North Meadow Field #4');
+    const location = window.PBFDialog
+      ? await window.PBFDialog.prompt('Enter field location for this Sunday game:', 'Central Park - North Meadow Field #4', { title: '⚾ Quick Sunday Game' })
+      : null;
     if (!location) return;
 
     btn.disabled = true;
@@ -1036,64 +1049,74 @@ window.addDutyToEvent = async function(eventId) {
   const desc = document.getElementById('new-duty-desc-' + eventId).value.trim();
   const slots = parseInt(document.getElementById('new-duty-slots-' + eventId).value, 10) || 1;
   if (!title) {
-    alert('Please enter a task name.');
+    if (window.PBFDialog) window.PBFDialog.toast('Please enter a task name.', { type: 'error' });
     return;
   }
 
   try {
     const data = await API.addDuty(eventId, { title: title, description: desc, slots_needed: slots });
-    if (data.error) alert(data.error);
-    else {
+    if (data.error) {
+      if (window.PBFDialog) window.PBFDialog.toast(data.error, { type: 'error' });
+    } else {
       await renderTaskManagerContent(eventId);
       await loadAdminGames();
     }
   } catch (err) {
-    alert('Failed to add task.');
+    if (window.PBFDialog) window.PBFDialog.toast('Failed to add task.', { type: 'error' });
   }
 };
 
 window.editDutyInline = async function(eventId, dutyId, encodedTitle, encodedDesc, slots) {
-  const newTitle = prompt('Edit Task Name:', decodeURIComponent(encodedTitle));
-  if (newTitle === null) return;
-  const newDesc = prompt('Edit Task Details / Description:', decodeURIComponent(encodedDesc));
-  if (newDesc === null) return;
-  const newSlots = prompt('Volunteers Needed (Number):', slots);
-  if (newSlots === null) return;
+  if (!window.PBFDialog) return;
+  const result = await window.PBFDialog.form('Edit Task', [
+    { name: 'title', label: 'Task Name', type: 'text', value: decodeURIComponent(encodedTitle), required: true },
+    { name: 'description', label: 'Details / Description', type: 'textarea', value: decodeURIComponent(encodedDesc), rows: 2 },
+    { name: 'slots_needed', label: 'Volunteers Needed', type: 'number', value: slots || 1, min: 1 }
+  ]);
+  if (!result) return;
 
   try {
     const data = await API.updateDuty(eventId, dutyId, {
-      title: newTitle.trim(),
-      description: newDesc.trim(),
-      slots_needed: parseInt(newSlots, 10) || 1
+      title: String(result.title || '').trim(),
+      description: String(result.description || '').trim(),
+      slots_needed: parseInt(result.slots_needed, 10) || 1
     });
-    if (data.error) alert(data.error);
-    else {
+    if (data.error) {
+      window.PBFDialog.toast(data.error, { type: 'error' });
+    } else {
       await renderTaskManagerContent(eventId);
       await loadAdminGames();
     }
   } catch (err) {
-    alert('Failed to update task.');
+    window.PBFDialog.toast('Failed to update task.', { type: 'error' });
   }
 };
 
 window.deleteDutyInline = async function(eventId, dutyId) {
-  if (!confirm('Are you sure you want to delete this task? Any existing volunteer assignment for this task will be cleared.')) {
+  const ok = window.PBFDialog
+    ? await window.PBFDialog.confirm('Are you sure you want to delete this task? Any existing volunteer assignment for this task will be cleared.', { danger: true })
+    : false;
+  if (!ok) {
     return;
   }
   try {
     const data = await API.deleteDuty(eventId, dutyId);
-    if (data.error) alert(data.error);
-    else {
+    if (data.error) {
+      if (window.PBFDialog) window.PBFDialog.toast(data.error, { type: 'error' });
+    } else {
       await renderTaskManagerContent(eventId);
       await loadAdminGames();
     }
   } catch (err) {
-    alert('Failed to delete task.');
+    if (window.PBFDialog) window.PBFDialog.toast('Failed to delete task.', { type: 'error' });
   }
 };
 
 async function sendReminders(eventId) {
-  if (!confirm('Send reminder emails right now to all confirmed attendees for this event?')) return;
+  const ok = window.PBFDialog
+    ? await window.PBFDialog.confirm('Send reminder emails right now to all confirmed attendees for this event?')
+    : false;
+  if (!ok) return;
   try {
     const data = await API.sendReminders(eventId);
     showAlert(data.message || data.error, !data.success);
@@ -1103,7 +1126,10 @@ async function sendReminders(eventId) {
 }
 
 async function deleteGame(eventId) {
-  if (!confirm('Are you sure you want to delete this game? This cannot be undone.')) return;
+  const ok = window.PBFDialog
+    ? await window.PBFDialog.confirm('Are you sure you want to delete this game? This cannot be undone.', { danger: true })
+    : false;
+  if (!ok) return;
   try {
     const data = await API.deleteEvent(eventId);
     if (data.success) {
@@ -1285,8 +1311,14 @@ function setupAdminUserManagement(currentUser) {
       btn.addEventListener('click', async function(e) {
         const targetUserId = e.currentTarget.getAttribute('data-user-id');
         const targetUserEmail = e.currentTarget.getAttribute('data-user-email');
-        if (!confirm('Are you sure you want to permanently remove user account: ' + targetUserEmail + '?')) return;
-        const alsoBan = confirm('Would you also like to permanently BAN ' + targetUserEmail + ' from re-registering or signing in again?');
+        if (!window.PBFDialog) return;
+        const choice = await window.PBFDialog.confirmWithCheckbox(
+          'Are you sure you want to permanently remove user account: ' + targetUserEmail + '?',
+          'Also permanently BAN ' + targetUserEmail + ' from re-registering or signing in again',
+          { title: 'Remove User Account', confirmLabel: 'Remove User', danger: true }
+        );
+        if (!choice || !choice.confirmed) return;
+        const alsoBan = Boolean(choice.checked);
         setUserMgmtAlert('info', 'Removing ' + API.escapeHtml(targetUserEmail) + '...');
 
         try {
@@ -1334,8 +1366,10 @@ function setupAdminUserManagement(currentUser) {
             applyRoleUI(currentUser);
             await loadAdminGames();
             if (newRole === 'player') {
-              setTimeout(function() {
-                alert('Your role has been updated to Player. Redirecting to home page.');
+              setTimeout(async function() {
+                if (window.PBFDialog) {
+                  await window.PBFDialog.alert('Your role has been updated to Player. Redirecting to home page.');
+                }
                 window.location.href = '/index.html';
               }, 1500);
             }
@@ -1428,7 +1462,13 @@ function setupAdminUserManagement(currentUser) {
         const currentlyMuted = elBtn.getAttribute('data-muted') === '1';
         let reason = '';
         if (!currentlyMuted) {
-          reason = window.prompt('State reason to blanket-mute ' + targetUserName + ' in Clubhouse (baseball RSVPs are unaffected):', 'Moderator action');
+          reason = window.PBFDialog
+            ? await window.PBFDialog.prompt(
+              'State reason to blanket-mute ' + targetUserName + ' in Clubhouse (baseball RSVPs are unaffected):',
+              'Moderator action',
+              { title: '🔇 Mute in Clubhouse' }
+            )
+            : null;
           if (!reason || reason.trim().length < 3) return;
         }
         try {
@@ -1554,7 +1594,7 @@ function setupAdminSecurity() {
     testAppscriptBtn.addEventListener('click', async function() {
       const url = (appscriptInput ? appscriptInput.value : '').trim();
       if (!url) {
-        alert('Please enter your Google Apps Script Web App URL first.');
+        if (window.PBFDialog) window.PBFDialog.toast('Please enter your Google Apps Script Web App URL first.', { type: 'error' });
         return;
       }
       testAppscriptBtn.disabled = true;
@@ -1644,7 +1684,10 @@ function setupAdminSecurity() {
         btn.addEventListener('click', async function(e) {
           const banId = e.currentTarget.getAttribute('data-ban-id');
           const email = e.currentTarget.getAttribute('data-email');
-          if (!confirm('Unban ' + email + '?')) return;
+          const ok = window.PBFDialog
+            ? await window.PBFDialog.confirm('Unban ' + email + '?')
+            : false;
+          if (!ok) return;
           try {
             const unbanRes = await API.unbanEmail(banId);
             if (bannedAlert) bannedAlert.innerHTML = '<div class="alert alert-success" style="font-size: 0.85rem;">' + API.escapeHtml(unbanRes.message || 'Ban removed.') + '</div>';
@@ -1862,13 +1905,17 @@ async function loadAdminPosts() {
       btn.addEventListener('click', async function(e) {
         e.preventDefault();
         const postId = btn.getAttribute('data-post-id');
-        if (!postId || !confirm('Are you sure you want to permanently delete this highlight from the community feed and RSS?')) return;
+        if (!postId) return;
+        const ok = window.PBFDialog
+          ? await window.PBFDialog.confirm('Are you sure you want to permanently delete this highlight from the community feed and RSS?', { danger: true })
+          : false;
+        if (!ok) return;
         try {
           btn.disabled = true;
           await API.deletePost(postId);
           await loadAdminPosts();
         } catch (err) {
-          alert(err.message || 'Failed to delete highlight.');
+          if (window.PBFDialog) window.PBFDialog.toast(err.message || 'Failed to delete highlight.', { type: 'error' });
           btn.disabled = false;
         }
       });
@@ -2105,8 +2152,8 @@ async function setupMediaCarouselsAdmin() {
         } catch (err) {
           if (alertPanel) {
             alertPanel.innerHTML = `<div class="alert alert-error" style="padding: 8px 12px; margin-bottom: 8px;">Failed to save: ${API.escapeHtml(err.message || 'Error')}</div>`;
-          } else {
-            alert('Failed to update media: ' + (err.message || 'Error'));
+          } else if (window.PBFDialog) {
+            window.PBFDialog.toast('Failed to update media: ' + (err.message || 'Error'), { type: 'error' });
           }
           if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 Save'; }
         }
@@ -2129,7 +2176,7 @@ async function setupMediaCarouselsAdmin() {
           }
           renderMediaItems();
         } catch (err) {
-          alert('Failed to publish media: ' + (err.message || 'Error'));
+          if (window.PBFDialog) window.PBFDialog.toast('Failed to publish media: ' + (err.message || 'Error'), { type: 'error' });
           btn.disabled = false;
           btn.textContent = '✓ Publish';
         }
@@ -2152,7 +2199,7 @@ async function setupMediaCarouselsAdmin() {
           }
           renderMediaItems();
         } catch (err) {
-          alert('Failed to hide media: ' + (err.message || 'Error'));
+          if (window.PBFDialog) window.PBFDialog.toast('Failed to hide media: ' + (err.message || 'Error'), { type: 'error' });
           btn.disabled = false;
           btn.textContent = '🙈 Hide';
         }
@@ -2165,7 +2212,10 @@ async function setupMediaCarouselsAdmin() {
         const id = btn.getAttribute('data-id');
         const type = btn.getAttribute('data-type');
         const typeLabel = (type === 'video' || type === 'youtube') ? 'video' : 'photo';
-        if (!confirm(`Are you sure you want to permanently remove this ${typeLabel} from the display carousels?`)) return;
+        const ok = window.PBFDialog
+          ? await window.PBFDialog.confirm(`Are you sure you want to permanently remove this ${typeLabel} from the display carousels?`, { danger: true })
+          : false;
+        if (!ok) return;
 
         btn.disabled = true;
         btn.textContent = 'Removing...';
@@ -2178,7 +2228,7 @@ async function setupMediaCarouselsAdmin() {
             setTimeout(() => { alertEl.innerHTML = ''; }, 4000);
           }
         } catch (err) {
-          alert('Failed to delete media item: ' + (err.message || 'Error'));
+          if (window.PBFDialog) window.PBFDialog.toast('Failed to delete media item: ' + (err.message || 'Error'), { type: 'error' });
           btn.disabled = false;
           btn.textContent = '🗑️ Remove';
         }

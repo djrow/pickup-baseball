@@ -1315,3 +1315,228 @@ html, body.clubhouse-body {
   margin-top: 3px;
   padding: 0 2px;
 }
+
+/* ==========================================================================
+   Accessible In-App Dialogs & Toasts (window.PBFDialog)
+   ========================================================================== */
+.pbf-toast-container {
+  position: fixed;
+  bottom: 1.25rem;
+  right: 1.25rem;
+  z-index: 9500;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: min(380px, calc(100vw - 2rem));
+  pointer-events: none;
+}
+
+.pbf-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.7rem 0.95rem;
+  border-radius: 10px;
+  background: var(--ch-bg-elevated);
+  color: var(--ch-text-primary);
+  border: 1px solid var(--ch-border);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.pbf-toast-success {
+  border-color: rgba(46, 204, 113, 0.45);
+}
+
+.pbf-toast-error {
+  border-color: rgba(231, 76, 60, 0.55);
+  background: #3a1816;
+}
+
+.pbf-toast-msg {
+  flex: 1 1 auto;
+  word-break: break-word;
+}
+
+.pbf-toast-close {
+  flex: 0 0 auto;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 1.15rem;
+  line-height: 1;
+  padding: 0.1rem 0.35rem;
+  cursor: pointer;
+}
+
+.pbf-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9600;
+  background: rgba(4, 10, 8, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.pbf-dialog-card {
+  width: 100%;
+  max-width: 440px;
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  background: var(--ch-bg-sidebar);
+  color: var(--ch-text-primary);
+  border: 1px solid var(--ch-border);
+  border-radius: 12px;
+  box-shadow: 0 20px 44px rgba(0, 0, 0, 0.55);
+  padding: 1.15rem 1.25rem;
+}
+
+.pbf-dialog-header {
+  margin-bottom: 0.6rem;
+}
+
+.pbf-dialog-title {
+  margin: 0;
+  font-size: 1.08rem;
+  font-weight: 700;
+  color: var(--ch-text-primary);
+}
+
+.pbf-dialog-message {
+  margin: 0 0 0.85rem;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: var(--ch-text-secondary);
+  white-space: pre-line;
+}
+
+.pbf-dialog-field {
+  margin-bottom: 0.75rem;
+}
+
+.pbf-dialog-label {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ch-text-secondary);
+  margin-bottom: 0.3rem;
+}
+
+.pbf-dialog-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--ch-border);
+  border-radius: 8px;
+  background: var(--ch-bg-rail);
+  color: var(--ch-text-primary);
+  font: inherit;
+  font-size: 0.92rem;
+}
+
+.pbf-dialog-input:focus {
+  outline: none;
+  border-color: var(--ch-accent);
+}
+
+.pbf-dialog-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  margin-bottom: 0.75rem;
+}
+
+.pbf-dialog-error {
+  color: #ff8a7a;
+  font-size: 0.84rem;
+  font-weight: 600;
+  min-height: 1.1em;
+  margin-bottom: 0.35rem;
+}
+
+.pbf-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+
+.pbf-dialog-btn {
+  padding: 0.48rem 0.9rem;
+  border-radius: 8px;
+  border: 1px solid var(--ch-border);
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pbf-dialog-btn-secondary {
+  background: var(--ch-bg-elevated);
+  color: var(--ch-text-primary);
+}
+
+.pbf-dialog-btn-primary {
+  background: var(--ch-accent);
+  border-color: var(--ch-accent);
+  color: #ffffff;
+}
+
+.pbf-dialog-btn-primary:hover {
+  background: var(--ch-accent-hover);
+}
+
+.pbf-dialog-btn-danger {
+  background: var(--ch-danger);
+  border-color: var(--ch-danger);
+  color: #ffffff;
+}
+
+/* Dynamic quick-navigation dropdown inside Clubhouse user bar */
+.ch-quick-nav-wrap {
+  position: relative;
+}
+
+.ch-quick-nav-menu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  min-width: 170px;
+  background: var(--ch-bg-rail);
+  border: 1px solid var(--ch-border);
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.55);
+  padding: 0.35rem;
+  z-index: 40;
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ch-quick-nav-menu.is-open {
+  display: flex;
+}
+
+.ch-quick-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.65rem;
+  border-radius: 7px;
+  color: var(--ch-text-primary);
+  text-decoration: none;
+  font-size: 0.84rem;
+  font-weight: 500;
+}
+
+.ch-quick-nav-item:hover {
+  background: var(--ch-bg-hover);
+}

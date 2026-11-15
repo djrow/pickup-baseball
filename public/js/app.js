@@ -1012,7 +1012,10 @@ function renderFeedPosts(posts) {
         e.preventDefault();
         const postId = btn.getAttribute('data-post-id');
         if (!postId) return;
-        if (!confirm(API.t('feed.confirm_delete', 'Delete this highlight from the community feed and RSS?'))) {
+        const ok = window.PBFDialog
+          ? await window.PBFDialog.confirm(API.t('feed.confirm_delete', 'Delete this highlight from the community feed and RSS?'), { danger: true })
+          : false;
+        if (!ok) {
           return;
         }
         try {
@@ -1020,7 +1023,9 @@ function renderFeedPosts(posts) {
           await API.deletePost(postId);
           await loadCommunityFeed();
         } catch (err) {
-          alert(err.message || 'Failed to delete post.');
+          if (window.PBFDialog) {
+            window.PBFDialog.toast(err.message || API.t('feed.delete_failed', 'Failed to delete post.'), { type: 'error' });
+          }
           btn.disabled = false;
         }
       });

@@ -190,44 +190,37 @@ function renderArchiveList(events, container) {
   }
 }
 
-window.quickRecordArchiveTurnout = async function(eventId) {
-  const current = prompt('Enter the number of players who attended and played in this game:');
+async function promptArchiveTurnout(eventId, message, defaultValue) {
+  if (!window.PBFDialog) return;
+  const current = await window.PBFDialog.prompt(message, defaultValue !== undefined ? defaultValue : '', {
+    title: API.t('archive.turnout_title', 'Game Attendance'),
+    inputType: 'number'
+  });
   if (current === null) return;
-  const count = parseInt(current.trim(), 10);
+  const count = parseInt(String(current).trim(), 10);
   if (isNaN(count) || count < 0) {
-    alert('Please enter a valid attendance number.');
+    window.PBFDialog.toast(API.t('archive.invalid_attendance', 'Please enter a valid attendance number.'), { type: 'error' });
     return;
   }
   try {
     const res = await API.updateEvent(eventId, { actual_attendance: count });
     if (res && res.error) {
-      alert(res.error);
+      window.PBFDialog.toast(res.error, { type: 'error' });
     } else {
+      window.PBFDialog.toast(API.t('archive.turnout_saved', 'Attendance saved.'), { type: 'success' });
       await loadArchiveGames();
     }
   } catch (err) {
-    alert('Failed to save turnout.');
+    window.PBFDialog.toast(API.t('archive.save_failed', 'Failed to save turnout.'), { type: 'error' });
   }
+}
+
+window.quickRecordArchiveTurnout = function(eventId) {
+  return promptArchiveTurnout(eventId, API.t('archive.record_prompt', 'Enter the number of players who attended and played in this game:'), '');
 };
 
-window.quickEditArchiveTurnout = async function(eventId, currentCount) {
-  const current = prompt('Update actual headcount for this game:', currentCount);
-  if (current === null) return;
-  const count = parseInt(current.trim(), 10);
-  if (isNaN(count) || count < 0) {
-    alert('Please enter a valid attendance number.');
-    return;
-  }
-  try {
-    const res = await API.updateEvent(eventId, { actual_attendance: count });
-    if (res && res.error) {
-      alert(res.error);
-    } else {
-      await loadArchiveGames();
-    }
-  } catch (err) {
-    alert('Failed to save turnout.');
-  }
+window.quickEditArchiveTurnout = function(eventId, currentCount) {
+  return promptArchiveTurnout(eventId, API.t('archive.edit_prompt', 'Update actual headcount for this game:'), currentCount);
 };
 
 document.addEventListener('DOMContentLoaded', initArchive);
