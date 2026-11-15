@@ -278,6 +278,62 @@ async function main() {
     assert(confirmResult === true, 'PBFDialog.confirm resolves true on confirm click');
     record('PBFDialog.confirm + toast render cleanly with Escape/click focus handling');
 
+    // Error diagnostic ring buffer + "Copy Diagnostic Details" UI check
+    const diagSmoke = await cdp.evaluate(`(async () => {
+      let caught = null;
+      try {
+        await window.API.request('GET', '/api/nonexistent-browser-probe?token=secret_query', null, { throwOnError: true });
+      } catch (err) {
+        caught = { status: err.status, code: err.code, requestId: err.requestId };
+      }
+      const rawLog = sessionStorage.getItem('pbf_diagnostic_log') || '';
+      const entries = window.API.getDiagnostics();
+      const latest = entries[entries.length - 1] || null;
+
+      const toastEl = window.PBFDialog.toast('Browser smoke error toast', { type: 'error', durationMs: 0 });
+      const toastBtn = toastEl ? toastEl.querySelector('.pbf-toast-diag-btn') : null;
+      const toastOverflowOk = document.documentElement.scrollWidth <= window.innerWidth + 2;
+
+      window.__errDialogPromise = window.PBFDialog.error('Browser smoke error dialog');
+      const dialogBtn = document.querySelector('.pbf-dialog-diag-btn');
+      const dialogOverflowOk = document.documentElement.scrollWidth <= window.innerWidth + 2;
+
+      if (toastBtn) toastBtn.click();
+      if (dialogBtn) dialogBtn.click();
+      const okBtn = document.querySelector('.pbf-dialog-backdrop .pbf-dialog-btn-primary');
+      if (okBtn) okBtn.click();
+      await window.__errDialogPromise;
+      if (toastEl && toastEl.parentNode) toastEl.parentNode.removeChild(toastEl);
+
+      window.API.clearDiagnostics();
+      const clearedAfter = window.API.getDiagnostics().length;
+      const sessionCleared = sessionStorage.getItem('pbf_diagnostic_log');
+
+      return {
+        status: caught && caught.status,
+        hasRequestId: Boolean(caught && caught.requestId),
+        code: caught && caught.code,
+        latest,
+        rawHasSecretQuery: rawLog.includes('secret_query'),
+        toastBtnText: toastBtn ? toastBtn.textContent.trim() : '',
+        dialogBtnText: dialogBtn ? dialogBtn.textContent.trim() : '',
+        toastOverflowOk,
+        dialogOverflowOk,
+        clearedAfter,
+        sessionCleared
+      };
+    })()`);
+    assert(diagSmoke && diagSmoke.status === 404, '404 API error probe returns status 404');
+    assert(diagSmoke.hasRequestId, '404 API error response carries requestId');
+    assert(diagSmoke.code === 'NOT_FOUND', `404 API error code expected NOT_FOUND, got ${diagSmoke.code}`);
+    assert(diagSmoke.latest && diagSmoke.latest.route === '/api/nonexistent-browser-probe', 'diagnostic ring buffer strips query string from route');
+    assert(!diagSmoke.rawHasSecretQuery, 'sessionStorage diagnostic log strips query PII/tokens');
+    assert(diagSmoke.toastBtnText.includes('Copy Diagnostic Details'), 'error toast renders Copy Diagnostic Details button');
+    assert(diagSmoke.dialogBtnText.includes('Copy Diagnostic Details'), 'error dialog renders Copy Diagnostic Details button');
+    assert(diagSmoke.toastOverflowOk && diagSmoke.dialogOverflowOk, 'error toast and dialog render without horizontal overflow');
+    assert(diagSmoke.clearedAfter === 0 && diagSmoke.sessionCleared === null, 'clearDiagnostics empties memory and sessionStorage');
+    record('Error diagnostics ring buffer + "Copy Diagnostic Details" UI verified in browser');
+
     // Dark mode + Arabic RTL check + mobile viewport overflow
     await cdp.evaluate('localStorage.setItem("pickup_theme", "dark"); localStorage.setItem("pickup_lang", "ar");');
     await setViewport(cdp, 390, 844);

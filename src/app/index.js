@@ -8,6 +8,7 @@ import { getCookie } from 'hono/cookie';
 import { CURRENT_APP_VERSION } from './version.js';
 import { ensureD1Schema, ensureChatD1Schema, ensureClubhouseOptInBackfill } from './schema.js';
 import { SESSION_COOKIE_NAME, getUserFromSession, requireAdmin } from './security.js';
+import { ERROR_CODES, getRequestId, jsonError, logEvent, normalizeApiErrorResponse } from './errors.js';
 import { renderFeedXmlResponse } from './feeds.js';
 import { authRouter, serveUserAvatar, getSettingsHandler, putSettingsHandler, testAppscriptHandler } from './routes/auth.js';
 import { eventsRouter } from './routes/events.js';
@@ -40,21 +41,37 @@ function applyApiSecurityHeaders(c) {
   }
 }
 
-// Global security headers middleware (runs first, ensures every response has security headers)
+// Global security headers & error normalization middleware (runs first, ensures every response has security headers & X-Request-Id on errors)
 app.use('*', async (c, next) => {
   await next();
+  await normalizeApiErrorResponse(c);
   applyApiSecurityHeaders(c);
 });
 
 app.onError((err, c) => {
-  console.error('[API Error]', err);
+  const requestId = getRequestId(c);
+  const route = c && c.req ? c.req.path : '';
+  const method = c && c.req ? c.req.method : '';
+  logEvent('error', 'unhandled_api_error', {
+    requestId,
+    code: ERROR_CODES.INTERNAL_ERROR,
+    route,
+    method,
+    status: 500,
+    msg: err && err.message ? err.message : 'Unhandled API error'
+  });
+  if (c && typeof c.set === 'function') {
+    c.set('errorLogged', true);
+  }
+  const res = jsonError(c, 500, ERROR_CODES.INTERNAL_ERROR, 'Internal server error.', { _alreadyLogged: true });
   applyApiSecurityHeaders(c);
-  return c.json({ error: 'Internal server error.' }, 500);
+  return res;
 });
 
 app.notFound((c) => {
+  const res = jsonError(c, 404, ERROR_CODES.NOT_FOUND, 'Endpoint not found.');
   applyApiSecurityHeaders(c);
-  return c.json({ error: 'Endpoint not found.' }, 404);
+  return res;
 });
 
 app.use('*', async (c, next) => {
@@ -93,7 +110,7 @@ app.use('*', async (c, next) => {
         }
       });
     }
-    return c.json({ error: 'Direct origin/preview API access is disabled. Please use www.pickupbaseballfoundation.org.' }, 403);
+    return jsonError(c, 403, ERROR_CODES.FORBIDDEN, 'Direct origin/preview API access is disabled. Please use www.pickupbaseballfoundation.org.');
   }
 
   // CSRF Origin / Fetch-Metadata verification on state-changing requests
@@ -104,18 +121,18 @@ app.use('*', async (c, next) => {
     const secFetchSite = (c.req.header('Sec-Fetch-Site') || '').toLowerCase();
     const contentType = (c.req.header('Content-Type') || '').toLowerCase();
     if (secFetchSite && secFetchSite !== 'same-origin' && secFetchSite !== 'none') {
-      return c.json({ error: 'Cross-site request blocked (CSRF protection).' }, 403);
+      return jsonError(c, 403, ERROR_CODES.FORBIDDEN, 'Cross-site request blocked (CSRF protection).');
     }
     if (originHeader && originHeader !== reqOrigin) {
-      return c.json({ error: 'Cross-origin request blocked (CSRF protection).' }, 403);
+      return jsonError(c, 403, ERROR_CODES.FORBIDDEN, 'Cross-origin request blocked (CSRF protection).');
     }
     if (!originHeader && refererHeader) {
       try {
         if (new URL(refererHeader).origin !== reqOrigin) {
-          return c.json({ error: 'Cross-origin referer blocked (CSRF protection).' }, 403);
+          return jsonError(c, 403, ERROR_CODES.FORBIDDEN, 'Cross-origin referer blocked (CSRF protection).');
         }
       } catch (e) {
-        return c.json({ error: 'Invalid referer header.' }, 403);
+        return jsonError(c, 403, ERROR_CODES.FORBIDDEN, 'Invalid referer header.');
       }
     }
     if (!originHeader && !refererHeader && (
@@ -123,7 +140,7 @@ app.use('*', async (c, next) => {
       contentType.includes('multipart/form-data') ||
       contentType.startsWith('text/plain')
     )) {
-      return c.json({ error: 'Missing Origin or Referer header on form request (CSRF protection).' }, 403);
+      return jsonError(c, 403, ERROR_CODES.FORBIDDEN, 'Missing Origin or Referer header on form request (CSRF protection).');
     }
   }
 
@@ -138,7 +155,14 @@ app.use('*', async (c, next) => {
       const isLightweightSync = pathName === '/api/sync';
       c.set('user', await getUserFromSession(c.env.DB, sessionId, c.env.CHAT_DB, { lightweight: isLightweightSync }));
     } catch (e) {
-      console.error('[Auth Middleware] Session error:', e);
+      logEvent('warn', 'auth_session_lookup_failed', {
+        requestId: getRequestId(c),
+        code: ERROR_CODES.INTERNAL_ERROR,
+        route: pathName,
+        method: c.req.method,
+        status: 500,
+        msg: e && e.message ? e.message : 'Session lookup error'
+      });
       c.set('user', null);
     }
   } else {

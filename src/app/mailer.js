@@ -4,6 +4,7 @@
  */
 
 import { escapeHtml, sanitizeHttpUrl } from './security.js';
+import { ERROR_CODES, logEvent } from './errors.js';
 
 function formatEmailEventDate(dateStr) {
   return new Date(dateStr).toLocaleString('en-US', {
@@ -86,7 +87,11 @@ export async function dispatchEmail(env, { to, subject, text, html }) {
       }
       return { messageId: data.id };
     } catch (err) {
-      console.error('[Mailer:Resend] Delivery failed to ' + to + ':', err.message);
+      logEvent('error', 'mail_delivery_failed', {
+        code: ERROR_CODES.MAIL_ERROR,
+        email: to,
+        msg: err && err.message ? err.message : 'Resend delivery failed'
+      });
       throw err;
     }
   }

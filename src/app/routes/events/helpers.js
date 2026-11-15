@@ -9,6 +9,7 @@ import {
   sendEventReminder
 } from '../../mailer.js';
 import { getSafePublicOrigin } from '../../security.js';
+import { ERROR_CODES, logEvent } from '../../errors.js';
 
 /** SQL projection normalizing inline data-URI avatars to cached endpoint URLs. */
 export const AVATAR_EXPR = `CASE WHEN u.avatar_url LIKE 'data:%' THEN '/api/users/' || u.id || '/avatar?v=' || length(u.avatar_url) ELSE COALESCE(u.avatar_url, '') END`;
@@ -109,7 +110,11 @@ export async function promoteNextWaitlistedPlayer(c, origin, eventId) {
         name: nextWaitlisted.name,
         event,
         managementToken: nextWaitlisted.management_token
-      }).catch(err => console.error('[Waitlist] Failed to dispatch promotion email:', err)));
+      }).catch(err => logEvent('error', 'waitlist_promotion_email_failed', {
+        code: ERROR_CODES.MAIL_ERROR,
+        email: nextWaitlisted.email,
+        msg: err && err.message ? err.message : 'Waitlist promotion email failed'
+      })));
     }
   }
 
@@ -147,7 +152,11 @@ export async function sendRemindersForEventD1(db, env, origin, event) {
         managementToken: att.management_token
       });
     } catch (e) {
-      console.error('[Reminders] Error sending reminder to ' + att.email + ':', e);
+      logEvent('error', 'event_reminder_email_failed', {
+        code: ERROR_CODES.MAIL_ERROR,
+        email: att.email,
+        msg: e && e.message ? e.message : 'Event reminder email failed'
+      });
     }
   });
   await db.prepare('UPDATE events SET reminder_sent = 1 WHERE id = ?').bind(event.id).run();
@@ -201,7 +210,11 @@ export async function notifyConfirmedAttendees(c, event, note, emailFn) {
         managementToken: att.management_token
       });
     } catch (e) {
-      console.error('[EventNotice] Error sending email to ' + att.email + ':', e);
+      logEvent('error', 'event_notice_email_failed', {
+        code: ERROR_CODES.MAIL_ERROR,
+        email: att.email,
+        msg: e && e.message ? e.message : 'Event notice email failed'
+      });
     }
   });
 }

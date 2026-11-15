@@ -377,6 +377,11 @@ const API = {
   // Current user cache
   currentUser: null,
 
+  // Zero-PII client diagnostic ring buffer (bounded to 25 entries, cleared on logout)
+  MAX_DIAGNOSTIC_ENTRIES: 25,
+  DIAGNOSTIC_STORAGE_KEY: 'pbf_diagnostic_log',
+  _diagnosticBuffer: null,
+
   // Top 15 languages spoken in California
   SUPPORTED_LANGUAGES: [
     { code: 'en', label: 'English', short: 'EN', locale: 'en-US', rtl: false },
@@ -1235,6 +1240,129 @@ const API = {
     if (!skipIndexedDb) {
       this.clearClubhouseIndexedDb();
     }
+    this.clearDiagnostics();
+  },
+
+  _sanitizeDiagnosticRoute(rawUrl) {
+    const fallback = (typeof window !== 'undefined' && window.location && window.location.pathname) ? window.location.pathname : '/';
+    if (!rawUrl || typeof rawUrl !== 'string') return fallback;
+    let pathname = rawUrl.trim();
+    try {
+      const origin = (typeof window !== 'undefined' && window.location && window.location.origin) ? window.location.origin : 'https://www.pickupbaseballfoundation.org';
+      const parsed = new URL(pathname, origin);
+      pathname = parsed.pathname || '/';
+    } catch (e) {
+      const qIdx = pathname.indexOf('?');
+      if (qIdx !== -1) pathname = pathname.slice(0, qIdx);
+      const hIdx = pathname.indexOf('#');
+      if (hIdx !== -1) pathname = pathname.slice(0, hIdx);
+    }
+    pathname = pathname.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '[REDACTED]');
+    return pathname.slice(0, 160) || '/';
+  },
+
+  _statusToErrorCode(status) {
+    const s = Number(status) || 0;
+    if (s === 401) return 'AUTH_REQUIRED';
+    if (s === 403) return 'FORBIDDEN';
+    if (s === 404) return 'NOT_FOUND';
+    if (s === 409) return 'CONFLICT';
+    if (s === 429) return 'RATE_LIMITED';
+    if (s >= 500) return 'INTERNAL_ERROR';
+    if (s >= 400) return 'VALIDATION_ERROR';
+    return 'CLIENT_ERROR';
+  },
+
+  _sanitizeDiagnosticEntry(entry) {
+    const src = (entry && typeof entry === 'object') ? entry : {};
+    const statusNum = Number(src.status);
+    const safeStatus = isNaN(statusNum) ? 0 : statusNum;
+    const rawCode = src.code ? String(src.code).trim().slice(0, 48) : this._statusToErrorCode(safeStatus);
+    const appVer = src['X-App-Version'] ? String(src['X-App-Version']).trim().slice(0, 32) : (src.appVersion ? String(src.appVersion).trim().slice(0, 32) : this.CLIENT_VERSION);
+    return {
+      ts: src.ts ? String(src.ts).slice(0, 40) : new Date().toISOString(),
+      requestId: src.requestId ? String(src.requestId).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 32) : '',
+      route: this._sanitizeDiagnosticRoute(src.route),
+      method: src.method ? String(src.method).toUpperCase().slice(0, 12) : 'CLIENT',
+      status: safeStatus,
+      code: rawCode || 'CLIENT_ERROR',
+      'X-App-Version': appVer
+    };
+  },
+
+  _loadDiagnosticBuffer() {
+    if (Array.isArray(this._diagnosticBuffer)) {
+      return this._diagnosticBuffer;
+    }
+    let loaded = [];
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        const raw = sessionStorage.getItem(this.DIAGNOSTIC_STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            loaded = parsed.slice(-this.MAX_DIAGNOSTIC_ENTRIES).map((item) => this._sanitizeDiagnosticEntry(item));
+          }
+        }
+      }
+    } catch (e) {
+      // Ignore storage access or malformed JSON errors
+    }
+    this._diagnosticBuffer = loaded;
+    return this._diagnosticBuffer;
+  },
+
+  _persistDiagnosticBuffer(buf) {
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem(this.DIAGNOSTIC_STORAGE_KEY, JSON.stringify(buf));
+      }
+    } catch (e) {
+      // Ignore sessionStorage quota/private-mode restrictions
+    }
+  },
+
+  recordDiagnostic(entry) {
+    const buf = this._loadDiagnosticBuffer();
+    const sanitized = this._sanitizeDiagnosticEntry(entry);
+    buf.push(sanitized);
+    if (buf.length > this.MAX_DIAGNOSTIC_ENTRIES) {
+      this._diagnosticBuffer = buf.slice(-this.MAX_DIAGNOSTIC_ENTRIES);
+    }
+    this._persistDiagnosticBuffer(this._diagnosticBuffer);
+    return sanitized;
+  },
+
+  getDiagnostics() {
+    return this._loadDiagnosticBuffer().slice();
+  },
+
+  clearDiagnostics() {
+    this._diagnosticBuffer = [];
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem(this.DIAGNOSTIC_STORAGE_KEY);
+      }
+    } catch (e) {
+      // Ignore sessionStorage removal errors
+    }
+  },
+
+  formatDiagnosticsText(extraEntry) {
+    const list = this.getDiagnostics();
+    if (extraEntry && typeof extraEntry === 'object') {
+      list.push(this._sanitizeDiagnosticEntry(extraEntry));
+    }
+    const recent = list.slice(-this.MAX_DIAGNOSTIC_ENTRIES);
+    const pagePath = this._sanitizeDiagnosticRoute(
+      (typeof window !== 'undefined' && window.location && window.location.pathname) ? window.location.pathname : '/'
+    );
+    return JSON.stringify({
+      appVersion: this.CLIENT_VERSION,
+      page: pagePath,
+      generatedAt: new Date().toISOString(),
+      entries: recent
+    }, null, 2);
   },
 
   /**
@@ -1277,7 +1405,16 @@ const API = {
       res = await fetch(url, init);
     } catch (err) {
       if (timeoutHandle) clearTimeout(timeoutHandle);
-      if (err && err.name === 'AbortError') {
+      const isTimeout = Boolean(err && err.name === 'AbortError');
+      this.recordDiagnostic({
+        requestId: '',
+        route: url,
+        method: method,
+        status: 0,
+        code: isTimeout ? 'TIMEOUT_ERROR' : 'NETWORK_ERROR',
+        'X-App-Version': this.CLIENT_VERSION
+      });
+      if (isTimeout) {
         throw new Error('Request timed out. Please check your connection and try again.');
       }
       throw err;
@@ -1296,8 +1433,27 @@ const API = {
         data = { error: txt || (res.ok ? '' : 'Request failed.') };
       }
     }
-    if (options.throwOnError && !res.ok) {
-      throw new Error((data && data.error) ? data.error : (options.errorMsg || 'Request failed.'));
+    if (!res.ok) {
+      const headerReqId = (res.headers && res.headers.get && res.headers.get('x-request-id')) || '';
+      const headerAppVer = (res.headers && res.headers.get && res.headers.get('x-app-version')) || this.CLIENT_VERSION;
+      const reqId = headerReqId || (data && data.requestId) || '';
+      const errCode = (data && data.code) || this._statusToErrorCode(res.status);
+      this.recordDiagnostic({
+        requestId: reqId,
+        route: url,
+        method: method,
+        status: res.status,
+        code: errCode,
+        'X-App-Version': headerAppVer
+      });
+      if (options.throwOnError) {
+        const err = new Error((data && data.error) ? data.error : (options.errorMsg || 'Request failed.'));
+        err.status = res.status;
+        err.code = errCode;
+        err.requestId = reqId;
+        err.appVersion = headerAppVer;
+        throw err;
+      }
     }
     if (options.invalidateKeys && (!options.invalidateOnSuccess || (data && data.success))) {
       try {
@@ -1335,9 +1491,12 @@ const API = {
   async logout() {
     try {
       API.clearDataCaches(true);
+      API.clearDiagnostics();
       try {
         if (typeof sessionStorage !== 'undefined') sessionStorage.clear();
-      } catch (e) {}
+      } catch (e) {
+        // Ignore sessionStorage errors on restricted environments
+      }
       if (typeof window !== 'undefined' && window.ClubhouseCrypto && typeof window.ClubhouseCrypto.clearMemoryKeys === 'function') {
         window.ClubhouseCrypto.clearMemoryKeys();
       }
@@ -2432,6 +2591,33 @@ if (document.readyState === 'loading') {
 } else {
   API.initI18n();
   API.renderCookieNotice();
+}
+
+// Global unexpected client error & unhandled rejection listeners (zero-PII diagnostic ring buffer)
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+  window.addEventListener('error', (e) => {
+    if (e && e.target && e.target.tagName && !e.error && !e.message) return;
+    const errObj = (e && e.error) ? e.error : null;
+    API.recordDiagnostic({
+      requestId: (errObj && errObj.requestId) || '',
+      route: (window.location && window.location.pathname) || '/',
+      method: 'CLIENT',
+      status: (errObj && errObj.status) || 0,
+      code: (errObj && errObj.code) || 'CLIENT_ERROR',
+      'X-App-Version': API.CLIENT_VERSION
+    });
+  });
+  window.addEventListener('unhandledrejection', (e) => {
+    const reason = (e && e.reason) ? e.reason : null;
+    API.recordDiagnostic({
+      requestId: (reason && reason.requestId) || '',
+      route: (window.location && window.location.pathname) || '/',
+      method: 'CLIENT',
+      status: (reason && reason.status) || 0,
+      code: (reason && reason.code) || 'CLIENT_ERROR',
+      'X-App-Version': API.CLIENT_VERSION
+    });
+  });
 }
 
 // Register PWA Service Worker

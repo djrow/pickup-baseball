@@ -27,6 +27,7 @@ import {
 } from '../../policy.js';
 import { buildCalendarIcs } from '../../feeds.js';
 import { sendRainoutEmail, sendReopenEmail } from '../../mailer.js';
+import { ERROR_CODES, jsonError } from '../../errors.js';
 import {
   AVATAR_EXPR,
   isDeliverableEmail,
@@ -888,8 +889,7 @@ eventsCoreRouter.post('/:id/send-reminders', requireAdmin, async (c) => {
     await sendRemindersForEventD1(c.env.DB, c.env, getSafePublicOrigin(c), event);
     return c.json({ success: true, message: 'Reminders have been sent to all confirmed attendees.' });
   } catch (err) {
-    console.error('[Events] Error sending reminders manually:', err);
-    return c.json({ error: 'Failed to send reminders.' }, 500);
+    return jsonError(c, 500, ERROR_CODES.MAIL_ERROR, 'Failed to send reminders.');
   }
 });
 
@@ -968,7 +968,6 @@ eventsCoreRouter.post('/:id/send-rainout-email', requireOrganizer, async (c) => 
 
     return c.json({ success: true, message: 'Rainout email sent to confirmed attendees.' });
   } catch (err) {
-    console.error('[Events] Error sending rainout email:', err);
-    return c.json({ error: 'Failed to send rainout email.' }, 500);
+    return jsonError(c, 500, ERROR_CODES.MAIL_ERROR, 'Failed to send rainout email.');
   }
 });

@@ -13,6 +13,8 @@
  * @module app/security
  */
 
+import { ERROR_CODES, jsonError } from './errors.js';
+
 export const SESSION_COOKIE_NAME = 'baseball_session';
 export const SESSION_DURATION_SECONDS = 90 * 24 * 60 * 60; // 90 days
 export const TEMPORARY_SESSION_DURATION_SECONDS = 4 * 60 * 60; // 4 hours (shared/friend device)
@@ -577,7 +579,7 @@ export function canAccessChannel(user, channel, mode = 'read') {
 // Hono RBAC Middleware Guards
 export async function requireAuth(c, next) {
   if (!c.get('user')) {
-    return c.json({ error: 'Authentication required. Please sign in.' }, 401);
+    return jsonError(c, 401, ERROR_CODES.AUTH_REQUIRED, 'Authentication required. Please sign in.');
   }
   await next();
 }
@@ -585,10 +587,10 @@ export async function requireAuth(c, next) {
 export async function requireOrganizer(c, next) {
   const user = c.get('user');
   if (!user) {
-    return c.json({ error: 'Authentication required. Please sign in.' }, 401);
+    return jsonError(c, 401, ERROR_CODES.AUTH_REQUIRED, 'Authentication required. Please sign in.');
   }
   if (!user.canManageEvents) {
-    return c.json({ error: 'Access denied: Event Organizer or Administrator privileges required.' }, 403);
+    return jsonError(c, 403, ERROR_CODES.FORBIDDEN, 'Access denied: Event Organizer or Administrator privileges required.');
   }
   await next();
 }
@@ -596,10 +598,10 @@ export async function requireOrganizer(c, next) {
 export async function requireAdmin(c, next) {
   const user = c.get('user');
   if (!user) {
-    return c.json({ error: 'Authentication required. Please sign in.' }, 401);
+    return jsonError(c, 401, ERROR_CODES.AUTH_REQUIRED, 'Authentication required. Please sign in.');
   }
   if (!user.isAdmin) {
-    return c.json({ error: 'Access denied: Admin privileges required.' }, 403);
+    return jsonError(c, 403, ERROR_CODES.FORBIDDEN, 'Access denied: Admin privileges required.');
   }
   await next();
 }
@@ -607,10 +609,10 @@ export async function requireAdmin(c, next) {
 export async function requireModerator(c, next) {
   const user = c.get('user');
   if (!user) {
-    return c.json({ error: 'Authentication required. Please sign in.' }, 401);
+    return jsonError(c, 401, ERROR_CODES.AUTH_REQUIRED, 'Authentication required. Please sign in.');
   }
   if (!user.isAdmin && !user.canModerateChat && !user.isModerator) {
-    return c.json({ error: 'Access denied: Clubhouse Moderator or Admin privileges required.' }, 403);
+    return jsonError(c, 403, ERROR_CODES.FORBIDDEN, 'Access denied: Clubhouse Moderator or Admin privileges required.');
   }
   await next();
 }

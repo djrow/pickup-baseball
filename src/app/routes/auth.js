@@ -33,6 +33,7 @@ import {
 } from '../security.js';
 import { getRequireLoginSetting, getDisallowZeroLoginMediaSetting, pruneEphemeralBaseballRows } from '../schema.js';
 import { sendAuthCode } from '../mailer.js';
+import { ERROR_CODES, jsonError } from '../errors.js';
 
 export const authRouter = new Hono();
 
@@ -134,15 +135,18 @@ async function handleSendCode(c) {
     ]);
 
     const origin = getSafePublicOrigin(c);
-    await sendAuthCode(c.env, origin, { email, name: name || 'Player', code, token, sharedDevice });
+    try {
+      await sendAuthCode(c.env, origin, { email, name: name || 'Player', code, token, sharedDevice });
+    } catch (mailErr) {
+      return jsonError(c, 500, ERROR_CODES.MAIL_ERROR, 'Failed to dispatch verification code.');
+    }
 
     return c.json({
       success: true,
       message: `A 6-digit code has been sent to ${email}. It expires in 10 minutes.`
     });
   } catch (err) {
-    console.error('[Auth] Error sending code:', err);
-    return c.json({ error: 'Failed to dispatch verification code.' }, 500);
+    return jsonError(c, 500, ERROR_CODES.INTERNAL_ERROR, 'Failed to dispatch verification code.');
   }
 }
 
