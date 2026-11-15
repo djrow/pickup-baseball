@@ -7,7 +7,8 @@
   <link rel="shortcut icon" href="/favicon.ico" />
   <link rel="icon" type="image/svg+xml" href="/logo.svg" />
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png" />
-  <link rel="stylesheet" href="/css/clubhouse.css?v=148" />
+  <link rel="stylesheet" href="/css/clubhouse.css?v=149" />
+  <link rel="stylesheet" href="/css/themes.css?v=149" />
 </head>
 <body class="clubhouse-body">
   <div class="clubhouse-app" id="clubhouse-app">
@@ -51,6 +52,7 @@
         <div class="ch-user-quick-actions">
           <a href="/index.html" class="ch-user-quick-btn" id="btn-user-calendar" title="Sunday Game Schedule &amp; RSVPs">📅 Game Calendar</a>
           <button type="button" class="ch-user-quick-btn" id="btn-user-vault" title="E2EE Security Vault, Privacy Relay &amp; PBF Shared Drive Status">🔐 Security Vault</button>
+          <button type="button" class="ch-user-quick-btn" id="btn-user-theme" title="Change Appearance Theme &amp; Colors">🎨 Theme</button>
         </div>
       </footer>
     </aside>
@@ -69,6 +71,7 @@
         </div>
         <div class="ch-stage-actions">
           <input type="search" class="ch-search-input" id="ch-message-search" placeholder="Search channel..." aria-label="Search channel messages" />
+          <button type="button" class="ch-icon-btn" id="btn-header-theme" title="Theme &amp; Colors" aria-label="Theme &amp; Colors">🎨</button>
           <button type="button" class="ch-icon-btn" id="btn-new-channel" title="Create Channel (Organizers/Admins)">➕</button>
           <button type="button" class="ch-icon-btn ch-context-toggle-btn" id="btn-mobile-context" aria-label="Open Sunday Game, Thread, and Members panel" title="Sunday Game &amp; Threads">⚾</button>
         </div>
@@ -89,7 +92,7 @@
         <a href="/index.html" class="ch-rsvp-btn" style="text-decoration:none;white-space:nowrap;">Sunday Games →</a>
       </div>
 
-      <div class="ch-muted-banner hidden" id="ch-dm-e2ee-banner" role="status" style="background:rgba(16,185,129,0.12);border-color:rgba(16,185,129,0.35);color:#d1fae5;">
+      <div class="ch-muted-banner hidden" id="ch-dm-e2ee-banner" role="status" style="background:rgba(16,185,129,0.12);border-color:rgba(16,185,129,0.35);color:var(--ch-text-primary);">
         <span id="ch-dm-e2ee-banner-text">🔐 Set up or unlock your E2EE Key Vault to encrypt &amp; read Direct Messages.</span>
         <button type="button" class="ch-send-btn" id="btn-dm-open-vault" style="white-space:nowrap;">🔐 Open E2EE Vault</button>
       </div>
@@ -440,10 +443,28 @@
     </div>
   </div>
 
-  <script src="/js/dialog.js?v=148"></script>
-  <script src="/js/crypto.js?v=148"></script>
-  <script src="/js/store.js?v=148"></script>
-  <script src="/js/rtc.js?v=148"></script>
-  <script src="/js/clubhouse.js?v=148"></script>
+  <!-- ====================================================================
+       APPEARANCE THEME & MLB MARKET PALETTE MODAL
+       ==================================================================== -->
+  <div class="ch-modal-backdrop hidden" id="ch-theme-modal">
+    <div class="ch-modal ch-theme-modal" role="dialog" aria-modal="true" aria-labelledby="ch-theme-modal-title">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <h3 id="ch-theme-modal-title" style="margin:0;font-size:17px;">⚾ Baseball Colors &amp; Mode</h3>
+        <button type="button" class="ch-icon-btn" id="btn-close-theme-modal" aria-label="Close theme options">✕</button>
+      </div>
+      <div class="ch-theme-summary" id="ch-theme-summary"></div>
+      <div id="ch-theme-picker-body"></div>
+      <div style="display:flex;justify-content:flex-end;margin-top:14px;">
+        <button type="button" class="ch-send-btn" id="btn-done-theme-modal">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/api.js?v=149"></script>
+  <script src="/js/dialog.js?v=149"></script>
+  <script src="/js/crypto.js?v=149"></script>
+  <script src="/js/store.js?v=149"></script>
+  <script src="/js/rtc.js?v=149"></script>
+  <script src="/js/clubhouse.js?v=149"></script>
 </body>
 </html>

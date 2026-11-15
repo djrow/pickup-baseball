@@ -372,7 +372,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '148',
+  CLIENT_VERSION: '149',
 
   // Current user cache
   currentUser: null,
@@ -642,6 +642,8 @@ const API = {
     } catch (e) {}
     this.applyColorTheme(themeId);
     this.updateFooterThemeUi();
+    this.updateThemePickersUi();
+    this._dispatchThemeChange();
   },
 
   applyTheme(theme) {
@@ -661,6 +663,20 @@ const API = {
     } catch (e) {}
     this.applyTheme(this.getEffectiveTheme());
     this.updateFooterThemeUi();
+    this.updateThemePickersUi();
+    this._dispatchThemeChange();
+  },
+
+  _dispatchThemeChange() {
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof CustomEvent === 'function') {
+      window.dispatchEvent(new CustomEvent('pickup:themechange', {
+        detail: {
+          mode: this.getThemeMode(),
+          effectiveTheme: this.getEffectiveTheme(),
+          colorTheme: this.getColorTheme()
+        }
+      }));
+    }
   },
 
   toggleTheme() {
@@ -675,16 +691,31 @@ const API = {
     this.applyTheme(this.getEffectiveTheme());
     this.updateThemeColorMeta();
 
-    // 2. Listen to system preference changes if in system mode
+    // 2. Listen to system preference & cross-tab storage changes
     if (typeof window !== 'undefined' && window.matchMedia) {
       try {
         window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
           if (this.getThemeMode() === 'system') {
             this.applyTheme(this.getEffectiveTheme());
             this.updateFooterThemeUi();
+            this.updateThemePickersUi();
+            this._dispatchThemeChange();
           }
         });
       } catch (e) {}
+    }
+    if (typeof window !== 'undefined' && !this._themeStorageBound) {
+      this._themeStorageBound = true;
+      window.addEventListener('storage', (ev) => {
+        if (!ev) return;
+        if (ev.key === 'pickup_theme_mode' || ev.key === 'pickup_theme' || ev.key === 'pickup_color_theme') {
+          this.applyColorTheme(this.getColorTheme());
+          this.applyTheme(this.getEffectiveTheme());
+          this.updateFooterThemeUi();
+          this.updateThemePickersUi();
+          this._dispatchThemeChange();
+        }
+      });
     }
 
     // 3. Mount footer theme picker when DOM is interactive
@@ -698,6 +729,71 @@ const API = {
         mount();
       }
     }
+  },
+
+  updateThemePickersUi(rootEl) {
+    if (typeof document === 'undefined') return;
+    const currentMode = this.getThemeMode();
+    const currentColor = this.getColorTheme();
+    const scope = rootEl || document;
+
+    scope.querySelectorAll('.theme-mode-tab').forEach(tab => {
+      tab.classList.toggle('active', tab.dataset.mode === currentMode);
+    });
+
+    scope.querySelectorAll('.theme-palette-card').forEach(card => {
+      const isSelected = card.dataset.colorTheme === currentColor;
+      card.classList.toggle('selected', isSelected);
+      const check = card.querySelector('.palette-check');
+      if (check) check.textContent = isSelected ? '✓' : '';
+    });
+  },
+
+  populateThemePicker(containerEl) {
+    if (!containerEl) return;
+    const currentMode = this.getThemeMode();
+    const currentColor = this.getColorTheme();
+
+    containerEl.innerHTML = `
+      <div class="theme-mode-tabs" role="tablist">
+        <button type="button" class="theme-mode-tab ${currentMode === 'light' ? 'active' : ''}" data-mode="light">☀️ Light</button>
+        <button type="button" class="theme-mode-tab ${currentMode === 'dark' ? 'active' : ''}" data-mode="dark">🌙 Dark</button>
+        <button type="button" class="theme-mode-tab ${currentMode === 'system' ? 'active' : ''}" data-mode="system">💻 System</button>
+      </div>
+
+      <div class="theme-palette-heading" style="text-align: start; margin-top: 10px;">Select Market Palette</div>
+      <div class="footer-theme-palette-grid">
+        ${this.COLOR_THEMES.map(th => `
+          <button type="button" class="theme-palette-card ${th.id === currentColor ? 'selected' : ''}" data-color-theme="${th.id}">
+            <span class="palette-swatches">
+              <span class="swatch-preview" style="background: ${th.primaryColor};"></span>
+              <span class="swatch-preview" style="background: ${th.secondaryColor};"></span>
+            </span>
+            <span class="palette-info">
+              <span class="palette-name">${this.escapeHtml(th.name)}</span>
+              <span class="palette-sub">${this.escapeHtml(th.market)}</span>
+            </span>
+            <span class="palette-check">${th.id === currentColor ? '✓' : ''}</span>
+          </button>
+        `).join('')}
+      </div>
+    `;
+
+    containerEl.querySelectorAll('.theme-mode-tab').forEach(tab => {
+      tab.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.setThemeMode(tab.dataset.mode);
+      });
+    });
+
+    containerEl.querySelectorAll('.theme-palette-card').forEach(card => {
+      card.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.setColorTheme(card.dataset.colorTheme);
+      });
+    });
+
+    this.updateThemePickersUi(containerEl);
   },
 
   updateFooterThemeUi() {
@@ -819,39 +915,14 @@ const API = {
       panel.className = 'footer-theme-panel';
       panel.setAttribute('aria-hidden', 'true');
 
-      const currentMode = this.getThemeMode();
-      const currentColor = this.getColorTheme();
-
       panel.innerHTML = `
         <div class="footer-theme-header">
           <div class="footer-theme-title">
-            <span>⚾</span> <strong>Baseball Colors & Mode</strong>
+            <span>⚾</span> <strong>Baseball Colors &amp; Mode</strong>
           </div>
           <button type="button" id="footer-theme-close-btn" class="footer-theme-close" aria-label="Close theme options">✕</button>
         </div>
-
-        <div class="theme-mode-tabs" role="tablist">
-          <button type="button" class="theme-mode-tab ${currentMode === 'light' ? 'active' : ''}" data-mode="light">☀️ Light</button>
-          <button type="button" class="theme-mode-tab ${currentMode === 'dark' ? 'active' : ''}" data-mode="dark">🌙 Dark</button>
-          <button type="button" class="theme-mode-tab ${currentMode === 'system' ? 'active' : ''}" data-mode="system">💻 System</button>
-        </div>
-
-        <div class="theme-palette-heading" style="text-align: start; margin-top: 10px;">Select Market Palette</div>
-        <div class="footer-theme-palette-grid">
-          ${this.COLOR_THEMES.map(th => `
-            <button type="button" class="theme-palette-card ${th.id === currentColor ? 'selected' : ''}" data-color-theme="${th.id}">
-              <span class="palette-swatches">
-                <span class="swatch-preview" style="background: ${th.primaryColor};"></span>
-                <span class="swatch-preview" style="background: ${th.secondaryColor};"></span>
-              </span>
-              <span class="palette-info">
-                <span class="palette-name">${this.escapeHtml(th.name)}</span>
-                <span class="palette-sub">${this.escapeHtml(th.market)}</span>
-              </span>
-              <span class="palette-check">${th.id === currentColor ? '✓' : ''}</span>
-            </button>
-          `).join('')}
-        </div>
+        <div id="footer-theme-picker-body"></div>
       `;
 
       const slot = document.getElementById('footer-theme-panel-slot');
@@ -860,6 +931,8 @@ const API = {
       } else if (trigger.parentElement) {
         trigger.parentElement.insertAdjacentElement('afterend', panel);
       }
+      const bodyMount = panel.querySelector('#footer-theme-picker-body');
+      this.populateThemePicker(bodyMount);
     }
 
     if (!trigger.dataset.bound) {
@@ -886,28 +959,6 @@ const API = {
         trigger.setAttribute('aria-expanded', 'false');
       });
     }
-
-    panel.querySelectorAll('.theme-mode-tab').forEach(tab => {
-      if (!tab.dataset.bound) {
-        tab.dataset.bound = '1';
-        tab.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const mode = tab.dataset.mode;
-          this.setThemeMode(mode);
-        });
-      }
-    });
-
-    panel.querySelectorAll('.theme-palette-card').forEach(card => {
-      if (!card.dataset.bound) {
-        card.dataset.bound = '1';
-        card.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const colorTheme = card.dataset.colorTheme;
-          this.setColorTheme(colorTheme);
-        });
-      }
-    });
 
     if (!this._footerThemeGlobalBound) {
       this._footerThemeGlobalBound = true;

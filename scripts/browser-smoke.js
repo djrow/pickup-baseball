@@ -309,6 +309,43 @@ async function main() {
     assert(Array.isArray(chMenuLinks) && chMenuLinks.includes('/gallery.html') && chMenuLinks.includes('/waiver.html'), 'Clubhouse dynamic quick-nav exposes /gallery.html and /waiver.html');
     record('clubhouse.html renders dynamic quick-nav menu linking to Gallery & Waiver');
 
+    // 4. Clubhouse theme modal + MLB market palette check
+    await cdp.waitFor('document.getElementById("btn-user-theme") && document.getElementById("btn-header-theme")');
+    await cdp.evaluate('document.getElementById("btn-user-theme").click()');
+    await cdp.waitFor('!document.getElementById("ch-theme-modal").classList.contains("hidden") && document.querySelector("#ch-theme-picker-body .theme-palette-card[data-color-theme=\\"fenway-red\\"]")');
+    await cdp.evaluate('document.querySelector("#ch-theme-picker-body .theme-mode-tab[data-mode=\\"dark\\"]").click()');
+    await cdp.evaluate('document.querySelector("#ch-theme-picker-body .theme-palette-card[data-color-theme=\\"fenway-red\\"]").click()');
+    const darkPaletteState = await cdp.evaluate(`({
+      theme: document.documentElement.getAttribute("data-theme"),
+      colorTheme: document.documentElement.getAttribute("data-color-theme"),
+      storedMode: localStorage.getItem("pickup_theme_mode"),
+      storedColor: localStorage.getItem("pickup_color_theme"),
+      summaryText: document.getElementById("ch-theme-summary").textContent,
+      cardSelected: document.querySelector("#ch-theme-picker-body .theme-palette-card[data-color-theme=\\"fenway-red\\"]").classList.contains("selected"),
+      accentVar: getComputedStyle(document.documentElement).getPropertyValue("--ch-accent").trim()
+    })`);
+    assert(darkPaletteState.theme === 'dark', 'Clubhouse switches to dark mode');
+    assert(darkPaletteState.colorTheme === 'fenway-red', 'Clubhouse switches to fenway-red palette');
+    assert(darkPaletteState.storedMode === 'dark' && darkPaletteState.storedColor === 'fenway-red', 'Clubhouse persists theme choices to shared localStorage keys');
+    assert(darkPaletteState.summaryText.includes('Fenway'), 'Clubhouse theme summary updates with active palette');
+    assert(darkPaletteState.cardSelected === true, 'Selected palette card highlights cleanly');
+    assert(Boolean(darkPaletteState.accentVar), 'Clubhouse CSS accent variable resolves under fenway-red dark mode');
+
+    await cdp.evaluate('document.querySelector("#ch-theme-picker-body .theme-mode-tab[data-mode=\\"light\\"]").click()');
+    const lightCheck = await cdp.evaluate('({ attr: document.documentElement.getAttribute("data-theme"), storedMode: localStorage.getItem("pickup_theme_mode"), storedLegacy: localStorage.getItem("pickup_theme") })');
+    assert(lightCheck.attr === null && lightCheck.storedMode === 'light' && lightCheck.storedLegacy === 'light', 'Clubhouse switches cleanly back to light mode');
+
+    await cdp.evaluate('document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))');
+    const themeModalClosed = await cdp.evaluate('document.getElementById("ch-theme-modal").classList.contains("hidden")');
+    assert(themeModalClosed, 'Clubhouse theme modal closes on Escape');
+
+    await cdp.evaluate('document.getElementById("btn-header-theme").click()');
+    const headerModalOpened = await cdp.evaluate('!document.getElementById("ch-theme-modal").classList.contains("hidden")');
+    assert(headerModalOpened, 'Clubhouse header theme button opens theme modal');
+    await cdp.evaluate('document.getElementById("btn-done-theme-modal").click()');
+    await cdp.evaluate('localStorage.removeItem("pickup_theme_mode"); localStorage.removeItem("pickup_theme"); localStorage.removeItem("pickup_color_theme");');
+    record('clubhouse.html theme modal switches Light/Dark mode & MLB market palettes cleanly');
+
     assert(exceptions.length === 0, `Uncaught page exceptions detected:\n${exceptions.join('\n')}`);
     console.log(`\n✅ Browser Smoke Suite Passed: ${results.length}/${results.length} checks, 0 uncaught JS errors`);
   } finally {

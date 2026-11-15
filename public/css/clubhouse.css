@@ -1,25 +1,103 @@
 /**
- * Pickup Baseball Clubhouse — Discord-Style 4-Column Sandlot Dark Theme (WP-6)
- * Palette: Oakland Forest Green (#0b1916, #132a25, #1b3b34), Vibrant Orange (#fd5a1e), Warm Off-White (#f5f7f6)
+ * Pickup Baseball Clubhouse — Multi-Theme 4-Column Sandlot Layout (WP-6)
+ * Inherits Webapp Light / Dark Mode + 12 MLB Market Palettes from /css/themes.css
  */
 
 :root {
-  --ch-bg-rail: #07120f;
-  --ch-bg-sidebar: #0b1916;
-  --ch-bg-stage: #132a25;
-  --ch-bg-elevated: #1b3b34;
+  /* Bay Area Light defaults (matching /css/style.css; market themes override in /css/themes.css) */
+  --as-green: #003831;
+  --as-green-hover: #002823;
+  --as-green-subtle: #e6f0ed;
+  --as-green-border: #b8d7cf;
+  --giants-orange: #FD5A1E;
+  --giants-orange-hover: #e04a11;
+  --giants-orange-light: #fff2ed;
+  --giants-orange-border: #fed3c4;
+  --bg-page: #f5f8f7;
+  --bg-card: #ffffff;
+  --bg-subtle: #eaf1ee;
+  --bg-input: #e2ebe7;
+  --border: #d0ddd8;
+  --text-main: #0c1f1a;
+  --text-muted: #4b655d;
+
+  /* Clubhouse semantic tokens */
+  --ch-bg-rail: var(--bg-input, #e2ebe7);
+  --ch-bg-sidebar: var(--bg-subtle, #eaf1ee);
+  --ch-bg-stage: var(--bg-card, #ffffff);
+  --ch-bg-elevated: var(--bg-subtle, #eaf1ee);
+  --ch-bg-surface: rgba(0, 0, 0, 0.035);
+  --ch-bg-hover: rgba(0, 0, 0, 0.055);
+  --ch-bg-active: var(--giants-orange-light, rgba(253, 90, 30, 0.12));
+  --ch-border: var(--border, #d0ddd8);
+  --ch-text-primary: var(--text-main, #0c1f1a);
+  --ch-text-secondary: var(--text-muted, #4b655d);
+  --ch-text-muted: var(--text-muted, #4b655d);
+  --ch-accent: var(--giants-orange, #FD5A1E);
+  --ch-accent-hover: var(--giants-orange-hover, #e04a11);
+  --ch-on-accent: #ffffff;
+  --ch-green: #15803d;
+  --ch-gold: #9a6700;
+  --ch-danger: #c81e1e;
+  --ch-toast-err-bg: #fef2f2;
+  --ch-toast-err-text: #991b1b;
+  --ch-shadow-float: 0 12px 28px rgba(15, 23, 42, 0.22);
+  --ch-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+[data-theme="dark"] {
+  /* Bay Area Sandlot Dark defaults */
+  --as-green: #34d399;
+  --as-green-hover: #6ee7b7;
+  --as-green-subtle: rgba(16, 185, 129, 0.14);
+  --as-green-border: rgba(52, 211, 153, 0.32);
+  --giants-orange: #fd5a1e;
+  --giants-orange-hover: #ff713d;
+  --giants-orange-light: rgba(253, 90, 30, 0.16);
+  --giants-orange-border: rgba(253, 90, 30, 0.42);
+  --bg-page: #0b1916;
+  --bg-card: #132a25;
+  --bg-subtle: #1b3b34;
+  --bg-input: #07120f;
+  --border: rgba(255, 255, 255, 0.1);
+  --text-main: #f5f7f6;
+  --text-muted: #8ea8a1;
+
+  --ch-bg-rail: var(--bg-input, #07120f);
+  --ch-bg-sidebar: var(--bg-page, #0b1916);
+  --ch-bg-stage: var(--bg-card, #132a25);
+  --ch-bg-elevated: var(--bg-subtle, #1b3b34);
+  --ch-bg-surface: rgba(255, 255, 255, 0.04);
   --ch-bg-hover: rgba(255, 255, 255, 0.06);
-  --ch-bg-active: rgba(253, 90, 30, 0.16);
-  --ch-border: rgba(255, 255, 255, 0.1);
-  --ch-text-primary: #f5f7f6;
-  --ch-text-secondary: #b4c6c1;
-  --ch-text-muted: #7f9992;
-  --ch-accent: #fd5a1e;
-  --ch-accent-hover: #ff713d;
+  --ch-bg-active: var(--giants-orange-light, rgba(253, 90, 30, 0.16));
+  --ch-border: var(--border, rgba(255, 255, 255, 0.1));
+  --ch-text-primary: var(--text-main, #f5f7f6);
+  --ch-text-secondary: var(--text-muted, #b4c6c1);
+  --ch-text-muted: var(--text-muted, #7f9992);
+  --ch-accent: var(--giants-orange, #fd5a1e);
+  --ch-accent-hover: var(--giants-orange-hover, #ff713d);
+  --ch-on-accent: #ffffff;
   --ch-green: #2ecc71;
   --ch-gold: #f1c40f;
   --ch-danger: #e74c3c;
-  --ch-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --ch-toast-err-bg: #3a1816;
+  --ch-toast-err-text: var(--ch-text-primary);
+  --ch-shadow-float: 0 20px 44px rgba(0, 0, 0, 0.55);
+}
+
+/* High-contrast text on bright dark-mode team accent fills */
+[data-color-theme="dodger-blue"][data-theme="dark"],
+[data-color-theme="pinstripe-navy"][data-theme="dark"],
+[data-color-theme="wrigley-royal"][data-theme="dark"],
+[data-color-theme="seattle-mariners"][data-theme="dark"],
+[data-color-theme="pacific-teal"][data-theme="dark"],
+[data-color-theme="white-sox"][data-theme="dark"],
+[data-color-theme="milwaukee-brewers"][data-theme="dark"],
+[data-color-theme="camden-orange"][data-theme="dark"],
+[data-color-theme="friar-gold"][data-theme="dark"],
+[data-color-theme="sedona-red"][data-theme="dark"],
+[data-color-theme="powder-blue"][data-theme="dark"] {
+  --ch-on-accent: #07111a;
 }
 
 * {
@@ -130,7 +208,7 @@ html, body.clubhouse-body {
 
 .ch-channel-item.active {
   background-color: var(--ch-bg-active);
-  color: #ffffff;
+  color: var(--ch-text-primary);
   font-weight: 600;
 }
 
@@ -199,7 +277,7 @@ html, body.clubhouse-body {
 
 /* Bottom User Control Bar */
 .ch-user-bar {
-  background-color: #06100d;
+  background-color: var(--ch-bg-rail);
   border-top: 1px solid var(--ch-border);
   padding: 10px 12px;
   display: flex;
@@ -221,7 +299,7 @@ html, body.clubhouse-body {
   height: 34px;
   border-radius: 50%;
   background: var(--ch-accent);
-  color: #fff;
+  color: var(--ch-on-accent);
   font-weight: 700;
   font-size: 14px;
   display: flex;
@@ -254,13 +332,13 @@ html, body.clubhouse-body {
   grid-template-columns: repeat(4, 1fr);
   gap: 6px;
   padding-top: 6px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--ch-border);
 }
 
 .ch-voice-controls .ch-icon-btn {
   width: 100%;
   height: 30px;
-  background-color: rgba(255, 255, 255, 0.04);
+  background-color: var(--ch-bg-surface);
 }
 
 .ch-user-quick-actions {
@@ -277,7 +355,7 @@ html, body.clubhouse-body {
   padding: 5px 6px;
   border-radius: 6px;
   border: 1px solid var(--ch-border);
-  background-color: rgba(255, 255, 255, 0.04);
+  background-color: var(--ch-bg-surface);
   color: var(--ch-text-secondary);
   font-size: 11px;
   font-weight: 600;
@@ -290,9 +368,9 @@ html, body.clubhouse-body {
 }
 
 .ch-user-quick-btn:hover {
-  background-color: rgba(253, 90, 30, 0.16);
-  border-color: rgba(253, 90, 30, 0.45);
-  color: #ffffff;
+  background-color: var(--ch-bg-active);
+  border-color: var(--ch-accent);
+  color: var(--ch-text-primary);
 }
 
 .ch-icon-btn {
@@ -311,7 +389,7 @@ html, body.clubhouse-body {
 
 .ch-icon-btn:hover {
   background-color: var(--ch-bg-hover);
-  color: #ffffff;
+  color: var(--ch-text-primary);
 }
 
 .ch-icon-btn.active-danger {
@@ -397,7 +475,7 @@ html, body.clubhouse-body {
 
 /* Collapsible Voice / Video / Screen-Share Stage */
 .ch-media-stage {
-  background-color: #081512;
+  background-color: var(--ch-bg-rail);
   border-bottom: 1px solid var(--ch-border);
   padding: 12px 16px;
 }
@@ -451,7 +529,7 @@ html, body.clubhouse-body {
 }
 
 .ch-msg-card:hover {
-  background-color: rgba(255, 255, 255, 0.03);
+  background-color: var(--ch-bg-hover);
 }
 
 .ch-msg-avatar {
@@ -484,7 +562,7 @@ html, body.clubhouse-body {
 .ch-msg-author {
   font-weight: 700;
   font-size: 14px;
-  color: #ffffff;
+  color: var(--ch-text-primary);
 }
 
 .ch-badge {
@@ -498,9 +576,9 @@ html, body.clubhouse-body {
 }
 
 .ch-badge.role-admin {
-  background-color: rgba(253, 90, 30, 0.2);
-  color: #ff8559;
-  border-color: rgba(253, 90, 30, 0.4);
+  background-color: var(--ch-bg-active);
+  color: var(--ch-accent);
+  border-color: var(--ch-accent);
 }
 
 .ch-badge.role-organizer {
@@ -601,7 +679,7 @@ html, body.clubhouse-body {
 .ch-reaction-pill.active {
   border-color: var(--ch-accent);
   background-color: var(--ch-bg-active);
-  color: #ffffff;
+  color: var(--ch-text-primary);
 }
 
 .ch-thread-btn {
@@ -683,7 +761,7 @@ html, body.clubhouse-body {
 
 .ch-send-btn {
   background-color: var(--ch-accent);
-  color: #ffffff;
+  color: var(--ch-on-accent);
   border: none;
   border-radius: 6px;
   padding: 6px 14px;
@@ -729,9 +807,9 @@ html, body.clubhouse-body {
 }
 
 .ch-context-tab.active {
-  color: #ffffff;
+  color: var(--ch-text-primary);
   border-bottom-color: var(--ch-accent);
-  background-color: rgba(253, 90, 30, 0.08);
+  background-color: var(--ch-bg-active);
 }
 
 .ch-context-body {
@@ -780,13 +858,13 @@ html, body.clubhouse-body {
 
 .ch-rsvp-btn.attending.active {
   background-color: var(--ch-green);
-  color: #061b10;
+  color: #ffffff;
   border-color: var(--ch-green);
 }
 
 .ch-rsvp-btn.declined.active {
-  background-color: rgba(231, 76, 60, 0.25);
-  color: #ff9489;
+  background-color: rgba(220, 38, 38, 0.14);
+  color: var(--ch-danger);
   border-color: var(--ch-danger);
 }
 
@@ -813,14 +891,14 @@ html, body.clubhouse-body {
 }
 
 .ch-bp-slot.taken {
-  background-color: rgba(255, 255, 255, 0.05);
+  background-color: var(--ch-bg-surface);
   color: var(--ch-text-muted);
 }
 
 .ch-bp-slot.mine {
   background-color: var(--ch-bg-active);
   border-color: var(--ch-accent);
-  color: #ffffff;
+  color: var(--ch-text-primary);
   font-weight: 700;
 }
 
@@ -923,8 +1001,8 @@ html, body.clubhouse-body {
 }
 
 .ch-channel-edit-btn:hover {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.12);
+  color: var(--ch-text-primary);
+  background: var(--ch-bg-hover);
 }
 
 .ch-dm-hide-btn {
@@ -938,7 +1016,7 @@ html, body.clubhouse-body {
 }
 
 .ch-dm-hide-btn:hover {
-  color: #fca5a5;
+  color: var(--ch-danger);
   background: rgba(239, 68, 68, 0.18);
 }
 
@@ -960,7 +1038,7 @@ html, body.clubhouse-body {
   flex-wrap: wrap;
   padding: 6px 10px;
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--ch-bg-surface);
   border: 1px dashed var(--ch-border);
   font-size: 12px;
   color: var(--ch-text-muted);
@@ -974,7 +1052,7 @@ html, body.clubhouse-body {
 }
 
 .ch-mod-item {
-  background: rgba(0, 0, 0, 0.22);
+  background: var(--ch-bg-surface);
   border: 1px solid var(--ch-border);
   border-radius: 6px;
   padding: 8px;
@@ -1095,7 +1173,7 @@ html, body.clubhouse-body {
   gap: 6px;
   padding: 9px 12px;
   border-top: 1px solid var(--ch-border);
-  background-color: rgba(0, 0, 0, 0.14);
+  background-color: var(--ch-bg-surface);
   font-size: 11px;
   line-height: 1.4;
   color: var(--ch-text-secondary);
@@ -1103,7 +1181,7 @@ html, body.clubhouse-body {
 
 .ch-covenant-link {
   background: transparent;
-  border: 1px solid rgba(52, 211, 153, 0.35);
+  border: 1px solid var(--as-green-border, var(--ch-border));
   color: var(--ch-accent);
   border-radius: 5px;
   padding: 2px 8px;
@@ -1114,7 +1192,7 @@ html, body.clubhouse-body {
 }
 
 .ch-covenant-link:hover {
-  background-color: rgba(52, 211, 153, 0.14);
+  background-color: var(--as-green-subtle, var(--ch-bg-hover));
 }
 
 .ch-covenant-modal {
@@ -1162,7 +1240,7 @@ html, body.clubhouse-body {
   border: 1px solid var(--ch-border);
   border-radius: 10px;
   padding: 10px;
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--ch-shadow-float);
 }
 
 .ch-gif-picker.hidden {
@@ -1181,7 +1259,7 @@ html, body.clubhouse-body {
 .ch-gif-picker-title {
   font-size: 13px;
   font-weight: 700;
-  color: #ffffff;
+  color: var(--ch-text-primary);
 }
 
 .ch-gif-tabs {
@@ -1203,7 +1281,7 @@ html, body.clubhouse-body {
 .ch-gif-tab.active {
   background-color: var(--ch-accent);
   border-color: var(--ch-accent);
-  color: #06281c;
+  color: var(--ch-on-accent);
 }
 
 .ch-gif-controls {
@@ -1281,7 +1359,7 @@ html, body.clubhouse-body {
   height: 68px;
   object-fit: cover;
   border-radius: 4px;
-  background-color: #0b0e14;
+  background-color: var(--ch-bg-rail);
 }
 
 .ch-gif-card-label {
@@ -1295,7 +1373,7 @@ html, body.clubhouse-body {
 .ch-gif-embed {
   margin-top: 6px;
   display: inline-block;
-  background-color: rgba(0, 0, 0, 0.25);
+  background-color: var(--ch-bg-surface);
   border: 1px solid var(--ch-border);
   border-radius: 8px;
   padding: 4px;
@@ -1342,7 +1420,7 @@ html, body.clubhouse-body {
   background: var(--ch-bg-elevated);
   color: var(--ch-text-primary);
   border: 1px solid var(--ch-border);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--ch-shadow-float);
   font-size: 0.9rem;
   line-height: 1.4;
 }
@@ -1353,7 +1431,8 @@ html, body.clubhouse-body {
 
 .pbf-toast-error {
   border-color: rgba(231, 76, 60, 0.55);
-  background: #3a1816;
+  background: var(--ch-toast-err-bg);
+  color: var(--ch-toast-err-text);
 }
 
 .pbf-toast-msg {
@@ -1392,7 +1471,7 @@ html, body.clubhouse-body {
   color: var(--ch-text-primary);
   border: 1px solid var(--ch-border);
   border-radius: 12px;
-  box-shadow: 0 20px 44px rgba(0, 0, 0, 0.55);
+  box-shadow: var(--ch-shadow-float);
   padding: 1.15rem 1.25rem;
 }
 
@@ -1454,7 +1533,7 @@ html, body.clubhouse-body {
 }
 
 .pbf-dialog-error {
-  color: #ff8a7a;
+  color: var(--ch-danger);
   font-size: 0.84rem;
   font-weight: 600;
   min-height: 1.1em;
@@ -1487,7 +1566,7 @@ html, body.clubhouse-body {
 .pbf-dialog-btn-primary {
   background: var(--ch-accent);
   border-color: var(--ch-accent);
-  color: #ffffff;
+  color: var(--ch-on-accent);
 }
 
 .pbf-dialog-btn-primary:hover {
@@ -1513,7 +1592,7 @@ html, body.clubhouse-body {
   background: var(--ch-bg-rail);
   border: 1px solid var(--ch-border);
   border-radius: 10px;
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.55);
+  box-shadow: var(--ch-shadow-float);
   padding: 0.35rem;
   z-index: 40;
   display: none;
@@ -1539,4 +1618,218 @@ html, body.clubhouse-body {
 
 .ch-quick-nav-item:hover {
   background: var(--ch-bg-hover);
+}
+
+/* Appearance Theme Button & MLB Market Palette Modal */
+#btn-user-theme {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.ch-theme-swatches {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.ch-theme-swatch {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ch-bg-rail);
+  display: inline-block;
+}
+
+.ch-theme-swatch + .ch-theme-swatch {
+  margin-left: -4px;
+}
+
+.ch-theme-btn-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ch-theme-modal {
+  max-width: 560px;
+  width: calc(100% - 24px);
+}
+
+.ch-theme-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border-radius: 9px;
+  background: var(--ch-bg-rail);
+  border: 1px solid var(--ch-border);
+}
+
+.ch-theme-summary-swatches {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.ch-theme-summary-swatches .swatch-preview {
+  width: 18px;
+  height: 18px;
+}
+
+.ch-theme-summary-swatches .swatch-preview + .swatch-preview {
+  margin-left: -6px;
+}
+
+.ch-theme-summary-meta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ch-theme-summary-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ch-text-primary);
+}
+
+.ch-theme-summary-sub {
+  font-size: 12px;
+  color: var(--ch-text-muted);
+}
+
+#ch-theme-picker-body {
+  max-height: 62vh;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+#ch-theme-picker-body .theme-mode-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+#ch-theme-picker-body .theme-mode-tab {
+  flex: 1;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--ch-border);
+  background: var(--ch-bg-rail);
+  color: var(--ch-text-secondary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+#ch-theme-picker-body .theme-mode-tab:hover {
+  background: var(--ch-bg-hover);
+  color: var(--ch-text-primary);
+}
+
+#ch-theme-picker-body .theme-mode-tab.active {
+  background: var(--as-green, var(--ch-accent));
+  border-color: var(--as-green, var(--ch-accent));
+  color: #ffffff;
+}
+
+[data-theme="dark"] #ch-theme-picker-body .theme-mode-tab.active {
+  background: var(--ch-accent);
+  border-color: var(--ch-accent);
+  color: var(--ch-on-accent);
+}
+
+#ch-theme-picker-body .theme-palette-heading {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ch-text-muted);
+  margin: 12px 0 8px;
+}
+
+#ch-theme-picker-body .footer-theme-palette-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
+  gap: 8px;
+}
+
+#ch-theme-picker-body .theme-palette-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 9px;
+  border-radius: 9px;
+  border: 1.5px solid var(--ch-border);
+  background: var(--ch-bg-rail);
+  color: var(--ch-text-primary);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.1s ease;
+}
+
+#ch-theme-picker-body .theme-palette-card:hover {
+  border-color: var(--ch-accent);
+  background: var(--ch-bg-hover);
+}
+
+#ch-theme-picker-body .theme-palette-card.selected {
+  border-color: var(--ch-accent);
+  background: var(--ch-bg-active);
+}
+
+.palette-swatches {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.swatch-preview {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ch-bg-stage);
+  display: inline-block;
+}
+
+.swatch-preview + .swatch-preview {
+  margin-left: -4px;
+}
+
+.palette-info {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.palette-name {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ch-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette-sub {
+  font-size: 11px;
+  color: var(--ch-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette-check {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--ch-accent);
+  flex-shrink: 0;
 }

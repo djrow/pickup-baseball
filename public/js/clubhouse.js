@@ -2937,6 +2937,7 @@
       });
     }
 
+    initClubhouseTheme();
     initQuickSiteNav();
 
     Store.bootstrap().then(function () {
@@ -2962,6 +2963,138 @@
     }
   }
 
+  function initClubhouseTheme() {
+    if (typeof document === 'undefined') return;
+    var api = typeof window !== 'undefined' ? window.API : null;
+    if (!api || typeof api.populateThemePicker !== 'function') return;
+
+    var themeModal = el('ch-theme-modal');
+    var pickerBody = el('ch-theme-picker-body');
+    var summaryEl = el('ch-theme-summary');
+    var userBtn = el('btn-user-theme');
+    var headerBtn = el('btn-header-theme');
+    var closeBtn = el('btn-close-theme-modal');
+    var doneBtn = el('btn-done-theme-modal');
+    var pickerInitialized = false;
+
+    function findThemeMeta(themeId) {
+      var list = api.COLOR_THEMES || [];
+      for (var i = 0; i < list.length; i++) {
+        if (list[i] && list[i].id === themeId) return list[i];
+      }
+      return list[0] || { id: 'bay-area', name: 'Bay Area', market: 'Giants & A\'s', primaryColor: '#FD5A1E', secondaryColor: '#003831' };
+    }
+
+    function formatModeLabel(mode, effective) {
+      if (mode === 'system') {
+        return 'System (' + (effective === 'dark' ? 'Dark' : 'Light') + ')';
+      }
+      return effective === 'dark' ? 'Dark Mode' : 'Light Mode';
+    }
+
+    function updateThemeUi() {
+      var mode = typeof api.getThemeMode === 'function' ? api.getThemeMode() : 'system';
+      var effective = typeof api.getEffectiveTheme === 'function' ? api.getEffectiveTheme() : 'light';
+      var colorId = typeof api.getColorTheme === 'function' ? api.getColorTheme() : 'bay-area';
+      var meta = findThemeMeta(colorId);
+      var modeText = formatModeLabel(mode, effective);
+
+      if (pickerBody && pickerInitialized && typeof api.updateThemePickersUi === 'function') {
+        api.updateThemePickersUi(pickerBody);
+      }
+
+      if (summaryEl) {
+        summaryEl.innerHTML = '';
+        var swatches = document.createElement('div');
+        swatches.className = 'ch-theme-summary-swatches';
+        var s1 = document.createElement('span');
+        s1.className = 'swatch-preview';
+        s1.style.backgroundColor = meta.primaryColor || '#FD5A1E';
+        var s2 = document.createElement('span');
+        s2.className = 'swatch-preview';
+        s2.style.backgroundColor = meta.secondaryColor || '#003831';
+        swatches.appendChild(s1);
+        swatches.appendChild(s2);
+
+        var metaWrap = document.createElement('div');
+        metaWrap.className = 'ch-theme-summary-meta';
+        var titleEl = document.createElement('div');
+        titleEl.className = 'ch-theme-summary-title';
+        titleEl.textContent = (meta.name || 'Bay Area') + ' — ' + (meta.market || '');
+        var subEl = document.createElement('div');
+        subEl.className = 'ch-theme-summary-sub';
+        subEl.textContent = 'Active: ' + modeText + ' • Synced across site';
+        metaWrap.appendChild(titleEl);
+        metaWrap.appendChild(subEl);
+
+        summaryEl.appendChild(swatches);
+        summaryEl.appendChild(metaWrap);
+      }
+
+      if (userBtn) {
+        userBtn.innerHTML = '';
+        var btnSwatches = document.createElement('span');
+        btnSwatches.className = 'ch-theme-swatches';
+        var b1 = document.createElement('span');
+        b1.className = 'ch-theme-swatch';
+        b1.style.backgroundColor = meta.primaryColor || '#FD5A1E';
+        var b2 = document.createElement('span');
+        b2.className = 'ch-theme-swatch';
+        b2.style.backgroundColor = meta.secondaryColor || '#003831';
+        btnSwatches.appendChild(b1);
+        btnSwatches.appendChild(b2);
+
+        var lbl = document.createElement('span');
+        lbl.className = 'ch-theme-btn-label';
+        lbl.textContent = 'Theme';
+
+        userBtn.appendChild(btnSwatches);
+        userBtn.appendChild(lbl);
+        userBtn.title = 'Theme: ' + (meta.name || 'Bay Area') + ' (' + modeText + ')';
+      }
+
+      if (headerBtn) {
+        headerBtn.title = 'Theme: ' + (meta.name || 'Bay Area') + ' (' + modeText + ')';
+      }
+    }
+
+    function openThemeModal() {
+      if (!themeModal) return;
+      if (pickerBody && !pickerInitialized) {
+        api.populateThemePicker(pickerBody);
+        pickerInitialized = true;
+      }
+      updateThemeUi();
+      themeModal.classList.remove('hidden');
+    }
+
+    function closeThemeModal() {
+      if (themeModal) themeModal.classList.add('hidden');
+    }
+
+    if (userBtn) userBtn.addEventListener('click', openThemeModal);
+    if (headerBtn) headerBtn.addEventListener('click', openThemeModal);
+    if (closeBtn) closeBtn.addEventListener('click', closeThemeModal);
+    if (doneBtn) doneBtn.addEventListener('click', closeThemeModal);
+    if (themeModal) {
+      themeModal.addEventListener('click', function (ev) {
+        if (ev.target === themeModal) closeThemeModal();
+      });
+    }
+
+    document.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Escape' && themeModal && !themeModal.classList.contains('hidden')) {
+        closeThemeModal();
+      }
+    });
+
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('pickup:themechange', updateThemeUi);
+    }
+
+    updateThemeUi();
+  }
+
   function initQuickSiteNav() {
     if (typeof document === 'undefined') return;
     var quickActions = document.querySelector('.ch-user-quick-actions');
@@ -2970,7 +3103,6 @@
     var wrap = document.createElement('div');
     wrap.id = 'ch-quick-nav-wrap';
     wrap.className = 'ch-quick-nav-wrap';
-    wrap.style.gridColumn = '1 / -1';
 
     var btn = document.createElement('button');
     btn.type = 'button';
