@@ -8,6 +8,7 @@
 
 import { Hono } from 'hono';
 import { requireAuth, requireModerator, rejectIfChatMuted, rejectIfClubhouseOptedOut } from '../../security.js';
+import { logEvent } from '../../errors.js';
 import { resolveChannel, canUserAccessChannel, chunkArray, abbreviateMemberNames } from './helpers.js';
 
 export const chatModerationRouter = /** @type {AppHono} */ (new Hono());
@@ -46,10 +47,12 @@ chatModerationRouter.post('/reports', requireAuth, async (c) => {
     if (updatedRate && Number(updatedRate.count) > 10) {
       return c.json({ error: 'Too many reports submitted recently. Please wait before submitting more.' }, 429);
     }
-  } catch (e) {}
+  } catch (e) {
+    logEvent('warn', 'chat_report_rate_limit_failed', { err: e });
+  }
 
   let targetMessageId = null;
-  let targetUserId = null;
+  let targetUserId;
   let targetUserName = '';
   let channelId = null;
 
@@ -356,7 +359,9 @@ chatModerationRouter.put('/moderation/users/:id/mute', requireModerator, async (
         }),
         Math.floor(Date.now() / 1000)
       ).run();
-    } catch (e) {}
+    } catch (e) {
+      logEvent('warn', 'chat_mute_sync_event_failed', { targetId, err: e });
+    }
   }
 
   return c.json({

@@ -461,7 +461,7 @@ module.exports = function registerErrorTelemetryTests(ctx) {
             assert.fail(`${relPath}:${i + 1} must not contain nullish coalescing (??)`);
           }
         }
-        assert.doesNotThrow(() => new Function(src), `${relPath} must parse cleanly`);
+        assert.doesNotThrow(() => new vm.Script(src, { filename: relPath }), `${relPath} must parse cleanly`);
       }
     });
 

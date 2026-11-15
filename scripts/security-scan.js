@@ -12,6 +12,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const tls = require('node:tls');
+const vm = require('node:vm');
 const { execSync } = require('node:child_process');
 
 const ROOT = path.resolve(__dirname, '..');
@@ -164,7 +165,7 @@ function checkClientJsSafety() {
     });
 
     try {
-      new Function(src);
+      new vm.Script(src, { filename: rel(file) });
     } catch (err) {
       syntaxErrors.push(`${rel(file)}: ${err.message}`);
     }
@@ -388,7 +389,7 @@ function checkNpmAudit() {
         record('FAIL', 'npm Dependency Audit', `moderate=${vulns.moderate || 0}, high=${vulns.high || 0}, critical=${vulns.critical || 0}`);
         return;
       }
-    } catch {}
+    } catch { /* ignore unparseable npm audit output */ }
     record('WARN', 'npm Dependency Audit', 'Could not complete audit (possibly offline)');
   }
 }
@@ -583,7 +584,7 @@ function checkI18nKeyParity() {
     return;
   }
 
-  const enObj = Function(`return {${enMatch[1]}}`)();
+  const enObj = vm.runInNewContext(`({${enMatch[1]}})`);
   const enKeys = Object.keys(enObj);
   const i18nDir = path.join(ROOT, 'public', 'i18n');
   const jsonFiles = fs.readdirSync(i18nDir).filter((f) => f.endsWith('.json')).sort();

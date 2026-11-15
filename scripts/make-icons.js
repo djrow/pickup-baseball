@@ -48,13 +48,13 @@ function unfilterScanlines(raw, width, height, bytesPerPixel) {
       const b = (y > 0) ? out[lineStart - stride + x] : 0;
       const c = (y > 0 && x >= bytesPerPixel) ? out[lineStart - stride + x - bytesPerPixel] : 0;
 
-      let val = 0;
+      let val;
       switch (filterType) {
         case 0: val = xByte; break;
         case 1: val = (xByte + a) & 0xff; break;
         case 2: val = (xByte + b) & 0xff; break;
         case 3: val = (xByte + Math.floor((a + b) / 2)) & 0xff; break;
-        case 4:
+        case 4: {
           const p = a + b - c;
           const pa = Math.abs(p - a);
           const pb = Math.abs(p - b);
@@ -64,6 +64,7 @@ function unfilterScanlines(raw, width, height, bytesPerPixel) {
           else if (pb <= pc) pr = b;
           val = (xByte + pr) & 0xff;
           break;
+        }
         default:
           throw new Error('Unknown filter type ' + filterType);
       }

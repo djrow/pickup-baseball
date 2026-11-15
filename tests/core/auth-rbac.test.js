@@ -8,10 +8,9 @@ const path = require('path');
 const fs = require('fs');
 
 module.exports = function registerAuthRbacTests(ctx) {
-  const { apiReq, getCookie, db, initDatabase, createSession, getDefaultDuties, CURRENT_APP_VERSION } = ctx;
+  const { apiReq, getCookie, db, initDatabase, createSession, getDefaultDuties } = ctx;
 
 test('T1: Authentication & Session Cookies', async (t) => {
-  const { seedAdminId, seedAdminCookie, seedOrgId, seedOrgCookie, seedPlayerId, seedPlayerCookie, sharedEventId, baseUrl } = ctx;
   let authCodeRecord;
   let t1SessionCookie;
 
@@ -254,7 +253,7 @@ test('T1: Authentication & Session Cookies', async (t) => {
 // ---------------------------------------------------------------------------
 
 test('T2: Three-Tier RBAC Permission Guards', async (t) => {
-  const { seedAdminId, seedAdminCookie, seedOrgId, seedOrgCookie, seedPlayerId, seedPlayerCookie, sharedEventId, baseUrl } = ctx;
+  const { seedAdminCookie, seedOrgCookie, seedPlayerCookie, sharedEventId } = ctx;
   await t.test('T2.1: Player attempt to access Organizer route POST /api/events -> 403', async () => {
     const res = await apiReq('POST', '/api/events', seedPlayerCookie, {
       title: 'Unauthorized Game',
@@ -357,7 +356,7 @@ test('T2: Three-Tier RBAC Permission Guards', async (t) => {
 // ---------------------------------------------------------------------------
 
 test('T3: User Role Management & Session Persistence', async (t) => {
-  const { seedAdminId, seedAdminCookie, seedOrgId, seedOrgCookie, seedPlayerId, seedPlayerCookie, sharedEventId, baseUrl } = ctx;
+  const { seedAdminId, seedAdminCookie } = ctx;
   let targetPlayerId;
   let targetPlayerCookie;
 

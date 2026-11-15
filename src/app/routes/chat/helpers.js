@@ -5,6 +5,7 @@
  */
 
 import { canAccessChannel } from '../../security.js';
+import { logEvent } from '../../errors.js';
 
 /**
  * Split an array into chunks (keeps Cloudflare D1 `IN (...)` bound parameters well below 100).
@@ -167,7 +168,9 @@ export async function getAccessibleChannels(chatDb, user, options = {}) {
         hiddenChannelIds.add(r.channel_id);
       }
     }
-  } catch (e) {}
+  } catch (e) {
+    logEvent('warn', 'chat_channel_membership_lookup_failed', { err: e });
+  }
 
   /** @type {Array<Record<string, any>>} */
   const accessible = [];
@@ -207,7 +210,9 @@ export async function getAccessibleChannels(chatDb, user, options = {}) {
           ch.member_ids = list;
         }
       }
-    } catch (e) {}
+    } catch (e) {
+      logEvent('warn', 'chat_channel_members_hydrate_failed', { err: e });
+    }
   }
 
   return accessible;
@@ -296,7 +301,9 @@ export async function hydrateMessages(chatDb, messages) {
         reactionsByMsg.get(r.message_id).push(r);
       }
     }
-  } catch (e) {}
+  } catch (e) {
+    logEvent('warn', 'chat_reactions_hydrate_failed', { err: e });
+  }
 
   try {
     for (const chunk of idChunks) {
@@ -313,7 +320,9 @@ export async function hydrateMessages(chatDb, messages) {
         });
       }
     }
-  } catch (e) {}
+  } catch (e) {
+    logEvent('warn', 'chat_attachments_hydrate_failed', { err: e });
+  }
 
   return messages.map((m) => normalizeMessageRow(m, reactionsByMsg, attachmentsByMsg));
 }

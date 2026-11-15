@@ -75,7 +75,7 @@ async function waitForBrowserWsUrl(cdpPort, procState, timeoutMs = 20000) {
       if (info && info.webSocketDebuggerUrl) {
         return info.webSocketDebuggerUrl;
       }
-    } catch (_) {}
+    } catch (_) { /* DevTools /json/version not ready yet; retry on next poll */ }
     await new Promise((r) => setTimeout(r, 150));
   }
   const detail = procState.stderr.trim();
@@ -259,12 +259,12 @@ class CdpBrowser {
     if (session.browserContextId) {
       try {
         await this.send('Target.disposeBrowserContext', { browserContextId: session.browserContextId });
-      } catch (_) {}
+      } catch (_) { /* best-effort incognito browser context disposal */ }
     }
   }
 
   close() {
-    try { this.ws.close(); } catch (_) {}
+    try { this.ws.close(); } catch (_) { /* best-effort CDP socket close */ }
   }
 }
 
@@ -1081,9 +1081,9 @@ async function main() {
   } finally {
     if (browser) browser.close();
     if (browserProc && !browserProc.killed) {
-      try { browserProc.kill('SIGKILL'); } catch (_) {}
+      try { browserProc.kill('SIGKILL'); } catch (_) { /* best-effort browser process kill */ }
     }
-    try { fs.rmSync(userDataDir, { recursive: true, force: true }); } catch (_) {}
+    try { fs.rmSync(userDataDir, { recursive: true, force: true }); } catch (_) { /* best-effort profile dir cleanup */ }
     await server.cleanup();
   }
 }

@@ -18,7 +18,6 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createClubhouseTestContext } = require('../helpers/test-harness');
 const {
-  generateIdentityKeyPair,
   generateChannelKey,
   encryptPayload,
   decryptPayload,
@@ -31,13 +30,10 @@ async function runTier2(t, ctx) {
     baseUrl,
     baseballDb,
     chatDb,
-    baseballD1,
-    chatD1,
     adminCookie,
     orgCookie,
     playerCookie,
     facilitatorCookie,
-    bannedCookie,
     expiredCookie,
     adminUser,
     playerUser,

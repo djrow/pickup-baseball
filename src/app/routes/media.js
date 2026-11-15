@@ -12,12 +12,12 @@ import {
   verifyTurnstileIfConfigured,
   rejectIfChatMuted,
   rejectIfClubhouseOptedOut,
-  isPrivateIpOrHost,
   safeFetchExternalUrl,
   readResponseWithByteCap,
   APPSCRIPT_EXEC_URL_RE,
   validateAppscriptRedirectUrl
 } from '../security.js';
+import { logEvent } from '../errors.js';
 import {
   MAX_MEDIA_BYTES,
   MAX_LOCAL_D1_MEDIA_BYTES,
@@ -483,7 +483,9 @@ mediaRouter.post('/', async (c) => {
         if (storedMimeType === 'image/jpeg' || storedMimeType === 'image/jpg') {
           try {
             processedBuffer = stripJpegMetadata(arrayBuf);
-          } catch (e) {}
+          } catch (e) {
+            /* best-effort EXIF strip; preserve original buffer if malformed */
+          }
         }
 
         storedFileData = arrayBufferToBase64(processedBuffer);
@@ -536,7 +538,9 @@ mediaRouter.post('/', async (c) => {
       if (storedMimeType === 'image/jpeg' || storedMimeType === 'image/jpg') {
         try {
           processedBytes = stripJpegMetadata(bytes.buffer);
-        } catch (e) {}
+        } catch (e) {
+          /* best-effort EXIF strip; preserve original buffer if malformed */
+        }
       }
 
       storedFileData = arrayBufferToBase64(processedBytes);
@@ -552,7 +556,9 @@ mediaRouter.post('/', async (c) => {
           if (row && row.value && String(row.value).trim()) {
             appscriptUrl = String(row.value).trim();
           }
-        } catch (e) {}
+        } catch (e) {
+          logEvent('warn', 'settings_appscript_read_failed', { err: e });
+        }
       }
 
       if (appscriptUrl) {
@@ -811,7 +817,9 @@ async function handleMediaDelete(c) {
       try {
         const b = await c.req.json().catch(() => ({}));
         tokenBody = b && b.token ? b.token : null;
-      } catch (e) {}
+      } catch (e) {
+        /* ignore missing/non-JSON delete request body */
+      }
     }
     const providedToken = String(tokenHeader || tokenQuery || tokenBody || '').trim();
     const isOwnerToken = Boolean(existing.delete_token && providedToken && constantTimeEqual(existing.delete_token, providedToken));
@@ -827,7 +835,9 @@ async function handleMediaDelete(c) {
       try {
         const row = await c.env.DB.prepare("SELECT value FROM app_settings WHERE key = 'appscript_upload_url'").first();
         if (row && row.value) appscriptUrl = row.value.trim();
-      } catch (e) {}
+      } catch (e) {
+        logEvent('warn', 'settings_appscript_read_failed', { err: e });
+      }
     }
     if (appscriptUrl && !existing.file_data && Number(existing.file_size || 0) > 0 && (existing.file_url || existing.original_url)) {
       let targetDriveId = null;
@@ -840,7 +850,9 @@ async function handleMediaDelete(c) {
             targetDriveId = extractGoogleDriveFileId(parsedDriveUrl.href);
             if (targetDriveId) break;
           }
-        } catch (e) {}
+        } catch (e) {
+          /* skip unparseable candidate Drive URL */
+        }
       }
       if (targetDriveId) {
         const likePattern = `%${targetDriveId}%`;
@@ -853,7 +865,9 @@ async function handleMediaDelete(c) {
             chatAttRef = await c.env.CHAT_DB.prepare(
               'SELECT 1 FROM chat_attachments WHERE drive_file_id = ? LIMIT 1'
             ).bind(targetDriveId).first();
-          } catch (e) {}
+          } catch (e) {
+            logEvent('warn', 'media_delete_chat_attachment_ref_check_failed', { err: e });
+          }
         }
         if (!otherRef && !chatAttRef && APPSCRIPT_EXEC_URL_RE.test(appscriptUrl)) {
           safeFetchExternalUrl(
@@ -866,7 +880,9 @@ async function handleMediaDelete(c) {
             },
             3,
             8000
-          ).catch(() => {});
+          ).catch((err) => {
+            logEvent('warn', 'media_appscript_delete_failed', { mediaId: id, err });
+          });
         }
       }
     }
@@ -875,7 +891,9 @@ async function handleMediaDelete(c) {
     if (c.env && c.env.CHAT_DB) {
       try {
         await c.env.CHAT_DB.prepare('UPDATE chat_attachments SET promoted_media_id = NULL WHERE promoted_media_id = ?').bind(id).run();
-      } catch (clearErr) {}
+      } catch (clearErr) {
+        logEvent('warn', 'chat_attachment_unpromote_failed', { mediaId: id, err: clearErr });
+      }
     }
     return c.json({ success: true, message: 'Media submission taken down and deleted.' });
   } catch (err) {
@@ -901,6 +919,7 @@ attachmentsRouter.post('/init', requireAuth, async (c) => {
 
   const body = await c.req.json().catch(() => ({}));
   const channelParam = body.channel_id;
+  // eslint-disable-next-line no-control-regex -- strip ASCII control characters from uploaded file names
   const fileName = String(body.file_name || '').replace(/[\x00-\x1F\x7F]/g, '').trim();
   const mimeType = String(body.mime_type || '').trim().toLowerCase();
   const fileSize = parseInt(body.file_size, 10);
@@ -943,7 +962,9 @@ attachmentsRouter.post('/init', requireAuth, async (c) => {
     if (attRateRow && Number(attRateRow.count) > 30) {
       return c.json({ error: 'Too many file uploads initialized. Please wait a few minutes and try again.' }, 429);
     }
-  } catch (e) {}
+  } catch (e) {
+    logEvent('warn', 'attachment_init_rate_limit_failed', { err: e });
+  }
 
   if (!ALLOWED_ATTACHMENT_MIME_TYPES.has(mimeType)) {
     return c.json({ error: `Disallowed MIME type: ${mimeType}.` }, 400);
@@ -1117,7 +1138,9 @@ attachmentsRouter.put('/:id/upload', requireAuth, async (c) => {
   if (!attachment.is_encrypted && (attachment.mime_type === 'image/jpeg' || attachment.mime_type === 'image/jpg')) {
     try {
       processedBuffer = stripJpegMetadata(rawBuffer);
-    } catch (e) {}
+    } catch (e) {
+      /* best-effort EXIF strip; preserve original buffer if malformed */
+    }
   }
 
   const base64Data = arrayBufferToBase64(processedBuffer);
@@ -1196,10 +1219,11 @@ attachmentsRouter.post('/:id/complete', requireAuth, async (c) => {
   let verifiedSize = attachment.file_size;
 
   if (attachment.storage_provider === 'gdrive' && driveFileId && isGDriveConfigured(c.env)) {
-    let meta = null;
+    let meta;
     try {
       meta = await getGDriveFileMetadata(c.env, driveFileId);
     } catch (e) {
+      logEvent('warn', 'gdrive_metadata_verify_failed', { attachmentId: id, err: e });
       return c.json({ error: 'Failed to verify uploaded Google Drive file metadata.' }, 400);
     }
     if (!meta || !meta.id) {
@@ -1291,7 +1315,9 @@ attachmentsRouter.get('/:id/stream', async (c) => {
         isPublicPromoted = false;
         try {
           await chatDb.prepare('UPDATE chat_attachments SET promoted_media_id = NULL WHERE id = ?').bind(id).run();
-        } catch (clearPromoErr) {}
+        } catch (clearPromoErr) {
+          logEvent('warn', 'chat_attachment_unpromote_failed', { attachmentId: id, err: clearPromoErr });
+        }
       } else if (
         Number(promoRow.is_approved) !== 1 ||
         (promoRow.event_id && !promoRow.event_exists) ||
@@ -1392,7 +1418,9 @@ attachmentsRouter.post('/:id/promote-to-gallery', requireAdmin, async (c) => {
     if (uploader && uploader.name) {
       contributorName = String(uploader.name);
     }
-  } catch (e) {}
+  } catch (e) {
+    logEvent('warn', 'media_promote_uploader_lookup_failed', { attachmentId: id, err: e });
+  }
 
   const mediaType = String(attachment.mime_type || '').startsWith('video/') ? 'video' : 'photo';
   const streamUrl = `/api/attachments/${attachment.id}/stream`;
@@ -1517,7 +1545,9 @@ export async function getAdminStorageStatusHandler(c) {
       chatCounts.messages = (msgRes && msgRes.results && msgRes.results[0]) ? msgRes.results[0].c : 0;
       chatCounts.attachments = (attRes && attRes.results && attRes.results[0]) ? attRes.results[0].c : 0;
       chatCounts.keys = (kyRes && kyRes.results && kyRes.results[0]) ? kyRes.results[0].c : 0;
-    } catch (e) {}
+    } catch (e) {
+      logEvent('warn', 'admin_storage_status_chat_counts_failed', { err: e });
+    }
   }
 
   const baseballCounts = { users: 0, events: 0, attendees: 0, media_items: 0 };
@@ -1533,7 +1563,9 @@ export async function getAdminStorageStatusHandler(c) {
       baseballCounts.events = (evRes && evRes.results && evRes.results[0]) ? evRes.results[0].c : 0;
       baseballCounts.attendees = (atRes && atRes.results && atRes.results[0]) ? atRes.results[0].c : 0;
       baseballCounts.media_items = (miRes && miRes.results && miRes.results[0]) ? miRes.results[0].c : 0;
-    } catch (e) {}
+    } catch (e) {
+      logEvent('warn', 'admin_storage_status_baseball_counts_failed', { err: e });
+    }
   }
 
   return c.json({

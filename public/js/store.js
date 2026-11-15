@@ -65,7 +65,7 @@
 
   function closeStoreDbHandle() {
     if (openStoreDbInstance) {
-      try { openStoreDbInstance.close(); } catch (e) {}
+      try { openStoreDbInstance.close(); } catch (e) { /* best-effort IDB handle close */ }
       openStoreDbInstance = null;
     }
     cachedStoreDbPromise = null;
@@ -77,7 +77,7 @@
       var ch = new BroadcastChannel('pickup_clubhouse_clear');
       ch.postMessage({ type: 'clear' });
       ch.close();
-    } catch (e) {}
+    } catch (e) { /* BroadcastChannel unavailable */ }
   }
 
   if (typeof window !== 'undefined' && typeof BroadcastChannel !== 'undefined') {
@@ -92,7 +92,7 @@
           clearCachedDmKeys();
         }
       });
-    } catch (e) {}
+    } catch (e) { /* BroadcastChannel unavailable */ }
   }
 
   function openStoreDb() {
@@ -121,7 +121,7 @@
           var db = ev.target.result;
           openStoreDbInstance = db;
           db.onversionchange = function () {
-            try { db.close(); } catch (e) {}
+            try { db.close(); } catch (e) { /* best-effort close on versionchange */ }
             if (openStoreDbInstance === db) openStoreDbInstance = null;
             cachedStoreDbPromise = null;
           };
@@ -157,7 +157,9 @@
         for (var i = 0; i < channels.length; i++) {
           store.put(channels[i]);
         }
-      } catch (e) {}
+      } catch (e) {
+        console.warn('[ClubhouseStore] Failed to cache channels in IndexedDB:', e);
+      }
     });
   }
 
@@ -231,7 +233,9 @@
             }
           };
         }
-      } catch (e) {}
+      } catch (e) {
+        console.warn('[ClubhouseStore] Failed to remove channel from IndexedDB:', e);
+      }
     });
   }
 
@@ -832,7 +836,7 @@
     verifiedEpochByChannel = {};
     var urls = Object.keys(decryptedAttBlobUrls);
     for (var i = 0; i < urls.length; i++) {
-      try { URL.revokeObjectURL(decryptedAttBlobUrls[urls[i]]); } catch (e) {}
+      try { URL.revokeObjectURL(decryptedAttBlobUrls[urls[i]]); } catch (e) { /* best-effort blob URL cleanup */ }
     }
     decryptedAttBlobUrls = {};
   }
@@ -1059,7 +1063,7 @@
         localStorage.removeItem('pickup_cached_user');
         localStorage.removeItem('pickup_ch_collapsed_cats');
       }
-    } catch (e) {}
+    } catch (e) { /* localStorage unavailable */ }
     broadcastClearSignal();
     closeStoreDbHandle();
     return Promise.all([clearStoreIdb(), clearCryptoIdb()]);
@@ -1105,7 +1109,7 @@
         if (typeof localStorage !== 'undefined' && !localStorage.getItem('pickup_cached_user')) {
           hasSessionHint = false;
         }
-      } catch (e) {}
+      } catch (e) { /* localStorage unavailable */ }
       if (hasSessionHint && publicCached.length > 0 && state.channels.length === 0) {
         state.channels = publicCached;
         emit('bootstrap_cached', { channels: publicCached });
@@ -1503,7 +1507,7 @@
         }
       };
       img.onerror = function () {
-        try { URL.revokeObjectURL(objectUrl); } catch (e) {}
+        try { URL.revokeObjectURL(objectUrl); } catch (e) { /* best-effort blob URL cleanup */ }
         resolve(fallback);
       };
       img.src = objectUrl;
@@ -1709,7 +1713,9 @@
     var payload = {};
     try {
       payload = typeof ev.payload_json === 'string' ? JSON.parse(ev.payload_json) : (ev.payload_json || {});
-    } catch (e) {}
+    } catch (e) {
+      console.warn('[ClubhouseStore] Failed to parse sync event payload:', e);
+    }
 
     var chId = Number(ev.channel_id);
     var list = state.messagesByChannel[chId] || [];
@@ -2252,6 +2258,7 @@
     uploadAttachment: uploadAttachment,
     getDmE2eeStatus: getDmE2eeStatus,
     ensureChannelE2eeKey: ensureChannelE2eeKey,
+    ensureDmChannelKey: ensureDmChannelKey,
     getActiveChannelEpoch: getActiveChannelEpoch,
     getChannelVerificationInfo: getChannelVerificationInfo,
     verifyPeerIdentityKey: verifyPeerIdentityKey,

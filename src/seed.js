@@ -58,7 +58,7 @@ function seed() {
     VALUES (?, ?, ?, ?, 0, 'attending', ?, ?)
   `);
 
-  samplePlayers.forEach((p, idx) => {
+  samplePlayers.forEach((p) => {
     // Ensure user row exists with bio
     let user = db.prepare('SELECT id FROM users WHERE email = ?').get(p.email);
     if (!user) {

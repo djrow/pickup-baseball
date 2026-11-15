@@ -299,7 +299,7 @@ export async function normalizeApiErrorResponse(c) {
   }
 
   if (contentType.toLowerCase().includes('application/json')) {
-    let parsed = null;
+    let parsed;
     try {
       const rawText = await c.res.text();
       parsed = rawText ? JSON.parse(rawText) : {};

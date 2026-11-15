@@ -805,8 +805,8 @@ function renderAdminGamesList(query) {
       if (action === 'toggle-edit-game') return window.toggleEditGamePanel(eventId);
       if (action === 'toggle-quick-turnout') return window.toggleQuickTurnout(eventId);
       if (action === 'toggle-weather') return window.toggleAdminWeatherPanel(eventId);
-      if (action === 'send-reminders') return window.sendReminders(eventId);
-      if (action === 'delete-game') return window.deleteGame(eventId);
+      if (action === 'send-reminders') return sendReminders(eventId);
+      if (action === 'delete-game') return deleteGame(eventId);
       if (action === 'save-edited-game') return window.saveEditedGame(eventId);
       if (action === 'edit-duty') {
         return window.editDutyInline(eventId, parseInt(btn.dataset.dutyId, 10), btn.dataset.title, btn.dataset.desc, parseInt(btn.dataset.slots, 10));
@@ -1554,7 +1554,12 @@ function setupAdminSecurity() {
           }
         }
       }
-    } catch (e) {}
+    } catch (e) {
+      console.warn('Failed to load admin settings:', e);
+      if (typeof API !== 'undefined' && API.recordDiagnostic) {
+        API.recordDiagnostic({ route: '/api/auth/settings', method: 'GET', status: 0, code: 'ADMIN_SETTINGS_LOAD_FAILED' });
+      }
+    }
   }
 
   const appscriptForm = document.getElementById('appscript-settings-form');
@@ -1741,7 +1746,7 @@ function setupAdminSecurity() {
 
   if (window.location.hash === '#admin-security-section' || window.location.hash === '#security-management-section') {
     setTimeout(function() {
-      try { section.scrollIntoView({ behavior: 'smooth' }); } catch (e) {}
+      try { section.scrollIntoView({ behavior: 'smooth' }); } catch (e) { /* best-effort scroll */ }
     }, 150);
   }
 }
@@ -1991,7 +1996,7 @@ async function setupMediaCarouselsAdmin() {
 
     container.innerHTML = filtered.map(item => {
       const isVideo = item.media_type === 'video' || item.media_type === 'youtube';
-      let thumbUrl = '/logo.svg';
+      let thumbUrl;
       if (item.media_type === 'youtube') {
         const ytId = API.getYouTubeId ? API.getYouTubeId(item.file_url || item.original_url) : null;
         thumbUrl = ytId ? `https://img.youtube.com/vi/${ytId}/hqdefault.jpg` : '/logo.svg';
@@ -2208,7 +2213,7 @@ async function setupMediaCarouselsAdmin() {
 
     // Wire up Remove button
     container.querySelectorAll('.btn-admin-remove-media').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
+      btn.addEventListener('click', async () => {
         const id = btn.getAttribute('data-id');
         const type = btn.getAttribute('data-type');
         const typeLabel = (type === 'video' || type === 'youtube') ? 'video' : 'photo';

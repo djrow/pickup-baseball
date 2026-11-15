@@ -10,6 +10,7 @@ import { parseAllowedEmails, canUserAccessEvent, getDutyType } from '../policy.j
 import { canUserAccessChannel } from './chat.js';
 import { chunkArray } from './chat/helpers.js';
 import { promoteNextWaitlistedPlayer } from './events/helpers.js';
+import { logEvent } from '../errors.js';
 
 export const baseballRouter = /** @type {AppHono} */ (new Hono());
 
@@ -102,7 +103,9 @@ baseballRouter.get('/upcoming', async (c) => {
       if (candidateCh && (await canUserAccessChannel(chatDb, user, candidateCh, 'read'))) {
         linkedChannel = candidateCh;
       }
-    } catch (e) {}
+    } catch (e) {
+      logEvent('warn', 'baseball_linked_channel_lookup_failed', { eventId: event.id, err: e });
+    }
   }
 
   const totalPlayers = (attendees || []).reduce((sum, a) => sum + Number(a.players_count || 1), 0);
@@ -611,7 +614,9 @@ baseballRouter.post('/events/:eventId/sync-channel', requireOrganizer, async (c)
           embedMeta
         ).run();
       }
-    } catch (e) {}
+    } catch (e) {
+      logEvent('warn', 'baseball_game_embed_post_failed', { eventId, err: e });
+    }
   }
 
   return c.json({

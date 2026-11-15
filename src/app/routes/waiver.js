@@ -18,6 +18,7 @@ import {
 } from '../security.js';
 import { isGDriveConfigured, uploadGDriveTextFile } from '../gdrive.js';
 import { sendWaiverConfirmationEmail } from '../mailer.js';
+import { logEvent } from '../errors.js';
 
 export const waiverRouter = /** @type {AppHono} */ (new Hono());
 
@@ -79,7 +80,9 @@ async function getProvenanceSecretMaterial(env, db = null) {
       if (row && row.value) {
         return String(row.value);
       }
-    } catch (err) {}
+    } catch (err) {
+      logEvent('warn', 'waiver_provenance_secret_db_failed', { err });
+    }
   }
 
   if (!e.NODE_ENV || e.NODE_ENV !== 'test') {
@@ -642,7 +645,7 @@ waiverRouter.get('/certificate/:id', async (c) => {
     }
   }
 
-  let row = null;
+  let row;
   if (/^\d+$/.test(paramId)) {
     if (!user || (!user.isAdmin && user.id !== parseInt(paramId, 10))) {
       return c.json({ error: 'Unauthorized to view this user waiver.' }, 403);

@@ -11,7 +11,7 @@ function getSafeRedirectUrl() {
     if (parsed.origin === window.location.origin && parsed.pathname.indexOf('/') === 0 && parsed.pathname.indexOf('//') !== 0) {
       return parsed.pathname + parsed.search + parsed.hash;
     }
-  } catch (e) {}
+  } catch (e) { /* invalid redirect URL falls back to home */ }
   return '/index.html';
 }
 
@@ -96,7 +96,7 @@ document.addEventListener('DOMContentLoaded', async function() {
       if (savedName) document.getElementById('player-name').value = savedName;
       rememberBox.checked = true;
     }
-  } catch (e) {}
+  } catch (e) { /* localStorage unavailable */ }
 
   function showAlert(msg, isError) {
     alertBox.innerHTML = '<div class="alert ' + (isError ? 'alert-error' : 'alert-success') + '">' + API.escapeHtml(msg) + '</div>';
@@ -128,7 +128,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         localStorage.removeItem('pickup_remembered_email');
         localStorage.removeItem('pickup_remembered_name');
       }
-    } catch (err) {}
+    } catch (err) { /* localStorage unavailable */ }
 
     sendBtn.disabled = true;
     sendBtn.textContent = 'Sending code...';

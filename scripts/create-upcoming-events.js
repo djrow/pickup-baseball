@@ -1,6 +1,5 @@
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
 const { db, DEFAULT_BASEBALL_DUTIES } = require('../src/db');
 
 // List of 13 upcoming Sundays for Dec 2026, Jan 2027, Feb 2027 (12:00 PM Pacific / 20:00:00 UTC)

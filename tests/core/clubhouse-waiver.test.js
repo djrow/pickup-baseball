@@ -6,12 +6,13 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
 const fs = require('fs');
+const vm = require('node:vm');
 
 module.exports = function registerClubhouseWaiverTests(ctx) {
-  const { apiReq, getCookie, db, createSession, getDefaultDuties, CURRENT_APP_VERSION } = ctx;
+  const { apiReq } = ctx;
 
 test('Clubhouse Frontend & Native Waiver Verification', async (t) => {
-  const { seedAdminId, seedAdminCookie, seedOrgId, seedOrgCookie, seedPlayerId, seedPlayerCookie, sharedEventId, baseUrl } = ctx;
+  const { seedAdminCookie, seedOrgCookie, seedPlayerId, seedPlayerCookie, baseUrl } = ctx;
   await t.test('Check 8.2: Discord Clubhouse 4-Column UI & WP-5/WP-6 Frontend Modules', () => {
     const publicDir = ctx.publicDir;
     const requiredFiles = [
@@ -216,7 +217,7 @@ test('Clubhouse Frontend & Native Waiver Verification', async (t) => {
     const apiJsSrc = fs.readFileSync(path.join(publicDir, 'js', 'api.js'), 'utf8');
     const m = apiJsSrc.match(/const EN_DICT = \{([\s\S]*?)\n\};/);
     assert.ok(m, 'api.js must define EN_DICT');
-    const enObj = Function('return {' + m[1] + '}')();
+    const enObj = vm.runInNewContext('({' + m[1] + '})');
     const enKeys = Object.keys(enObj);
     const i18nDir = path.join(publicDir, 'i18n');
     for (const lang of ['ar', 'es', 'fa', 'fr', 'hi', 'hy', 'ja', 'ko', 'pa', 'pt', 'ru', 'tl', 'vi', 'zh']) {

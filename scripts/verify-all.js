@@ -131,7 +131,7 @@ async function apiReq(method, endpoint, cookie = null, body = null, extraHeaders
     redirect: 'manual'
   });
 
-  let data = null;
+  let data;
   const contentType = res.headers.get('content-type') || '';
   if (contentType.includes('application/json')) {
     try {
@@ -232,7 +232,7 @@ test.after(async () => {
     if (fs.existsSync(testChatDbPath + '-wal')) fs.unlinkSync(testChatDbPath + '-wal');
     if (fs.existsSync(testChatDbPath + '-shm')) fs.unlinkSync(testChatDbPath + '-shm');
     if (fs.existsSync(testDataDir)) fs.rmSync(testDataDir, { recursive: true, force: true });
-  } catch (e) {}
+  } catch (e) { /* best-effort temp test artifact cleanup */ }
 
   if (typeof process._getActiveHandles === 'function') {
     for (const h of process._getActiveHandles()) {
@@ -242,7 +242,7 @@ test.after(async () => {
         try {
           if (typeof h.unref === 'function') h.unref();
           if (name === 'Socket' && typeof h.destroy === 'function') h.destroy();
-        } catch (e) {}
+        } catch (e) { /* best-effort handle teardown on test exit */ }
       }
     }
   }
@@ -262,5 +262,6 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
 require('../tests/core/clubhouse-waiver.test.js')(ctx);
 require('../tests/core/security-scan.test.js');
 require('../tests/core/typecheck.test.js')();
+require('../tests/core/lint.test.js')();
 require('../tests/core/error-telemetry.test.js')(ctx);
 require('../tests/clubhouse/index.js')();

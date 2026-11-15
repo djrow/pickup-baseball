@@ -25,8 +25,7 @@ const {
   deriveEcdhSharedKey,
   wrapChannelKey,
   unwrapChannelKey,
-  encryptVault,
-  decryptVault
+  encryptVault
 } = require('../helpers/crypto-test-utils');
 const { stripJpegMetadata } = require('../../src/app/security');
 
@@ -35,14 +34,12 @@ async function runTier1(t, ctx) {
     baseUrl,
     baseballDb,
     chatDb,
-    baseballD1,
     chatD1,
     adminCookie,
     orgCookie,
     playerCookie,
     facilitatorCookie,
     bannedCookie,
-    adminUser,
     playerUser,
     facilitatorUser,
     testEventId,

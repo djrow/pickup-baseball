@@ -17,9 +17,6 @@ const {
   generateChannelKey,
   encryptPayload,
   decryptPayload,
-  deriveEcdhSharedKey,
-  wrapChannelKey,
-  unwrapChannelKey,
   encryptVault,
   decryptVault
 } = require('../helpers/crypto-test-utils');
@@ -27,11 +24,8 @@ const { stripJpegMetadata } = require('../../src/app/security');
 
 async function runTier4(t, ctx) {
   const {
-    baseUrl,
     baseballDb,
     chatDb,
-    baseballD1,
-    chatD1,
     adminCookie,
     orgCookie,
     playerCookie,
@@ -39,8 +33,6 @@ async function runTier4(t, ctx) {
     adminUser,
     orgUser,
     playerUser,
-    facilitatorUser,
-    testEventId,
     apiReq,
     isEndpointAvailable
   } = ctx;
@@ -202,7 +194,7 @@ async function runTier4(t, ctx) {
     // -----------------------------------------------------------------------
     // SCENARIO 3: Bad Weather Coordination & Emergency Rainout Alert
     // -----------------------------------------------------------------------
-    await scenarios.test('Scenario 3: Bad Weather Coordination & Emergency Rainout Alert', async (tSub) => {
+    await scenarios.test('Scenario 3: Bad Weather Coordination & Emergency Rainout Alert', async () => {
       // 1. Create a game for rainout test
       const evRes = await apiReq('POST', '/api/events', orgCookie, {
         title: 'Rainout Test Game',
@@ -304,9 +296,9 @@ async function runTier4(t, ctx) {
       const { ciphertextB64, ivB64 } = await encryptPayload(channelKey, secretPlaintext);
 
       // 5. Device 2 (Fresh device, zero local storage): downloads encrypted vault from server
-      let storedVault = null;
-      let storedSalt = null;
-      let storedIv = null;
+      let storedVault;
+      let storedSalt;
+      let storedIv;
 
       const getVaultRes = await apiReq('GET', '/api/keys/identity', playerCookie);
       if (getVaultRes.status === 200 && getVaultRes.data.encrypted_private_vault) {

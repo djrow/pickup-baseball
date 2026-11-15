@@ -4,14 +4,12 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const path = require('path');
-const fs = require('fs');
 
 module.exports = function registerEventsRsvpTests(ctx) {
-  const { apiReq, getCookie, db, createSession, getDefaultDuties, CURRENT_APP_VERSION } = ctx;
+  const { apiReq, db, getDefaultDuties } = ctx;
 
 test('T4: 1-Click Sunday Game Creation', async (t) => {
-  const { seedAdminId, seedAdminCookie, seedOrgId, seedOrgCookie, seedPlayerId, seedPlayerCookie, sharedEventId, baseUrl } = ctx;
+  const { seedOrgId, seedOrgCookie } = ctx;
   let createdEventId;
 
   await t.test('T4.1: Call POST /api/events with 1-Click payload', async () => {
@@ -72,7 +70,7 @@ test('T4: 1-Click Sunday Game Creation', async (t) => {
 // ---------------------------------------------------------------------------
 
 test('T5: Custom Game Creation & Duties Builder', async (t) => {
-  const { seedAdminId, seedAdminCookie, seedOrgId, seedOrgCookie, seedPlayerId, seedPlayerCookie, sharedEventId, baseUrl } = ctx;
+  const { seedOrgCookie } = ctx;
   let customEventId;
 
   const customPayload = {
@@ -132,7 +130,7 @@ test('T5: Custom Game Creation & Duties Builder', async (t) => {
 // ---------------------------------------------------------------------------
 
 test('T6: Attendee RSVPs & Duty Claiming', async (t) => {
-  const { seedAdminId, seedAdminCookie, seedOrgId, seedOrgCookie, seedPlayerId, seedPlayerCookie, sharedEventId, baseUrl } = ctx;
+  const { seedOrgCookie } = ctx;
   let eventId;
   let targetDutyId;
   let alphaToken;
@@ -279,7 +277,7 @@ test('T6: Attendee RSVPs & Duty Claiming', async (t) => {
 // ---------------------------------------------------------------------------
 
 test('T7: Error Boundaries', async (t) => {
-  const { seedAdminId, seedAdminCookie, seedOrgId, seedOrgCookie, seedPlayerId, seedPlayerCookie, sharedEventId, baseUrl } = ctx;
+  const { seedAdminCookie, seedOrgCookie, sharedEventId } = ctx;
   await t.test('T7.1: Missing title / missing date / invalid date string -> 400', async () => {
     // Missing title on creation
     const noTitle = await apiReq('POST', '/api/events', seedOrgCookie, {

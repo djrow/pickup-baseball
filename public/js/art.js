@@ -37,13 +37,11 @@
   let pixelGridData = [];
   let pixelCooldownSec = 0;
   let cooldownTimer = null;
-  let currentUser = null;
   let isAdmin = false;
   let adminBypassCooldown = false;
   let chalkboardFrozen = false;
 
   function setUser(user) {
-    currentUser = user;
     isAdmin = Boolean(user && (user.isAdmin || user.role === 'admin' || user.canManageEvents));
     updateAdminUi();
     const stage = document.getElementById('trunk-canvas-stage');
@@ -235,7 +233,7 @@
     }, 1000);
   }
 
-  function renderPixelCanvas(ctx, canvas) {
+  function renderPixelCanvas(ctx, _canvas) {
     const imgData = ctx.createImageData(PIXEL_GRID_SIZE, PIXEL_GRID_SIZE);
     const data = imgData.data;
 
@@ -975,7 +973,12 @@
         API.renderNav(user);
         setUser(user);
       }
-    } catch (e) {}
+    } catch (e) {
+      console.warn('ArtStudio nav/user init failed:', e);
+      if (window.API && typeof window.API.recordDiagnostic === 'function') {
+        window.API.recordDiagnostic({ route: '/api/auth/me', method: 'GET', status: 0, code: 'ART_INIT_FAILED' });
+      }
+    }
   });
 
   // Export to global window object

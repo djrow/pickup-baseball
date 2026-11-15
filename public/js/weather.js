@@ -187,7 +187,7 @@
             return parsed;
           }
         }
-      } catch (e) {}
+      } catch (e) { /* sessionStorage unavailable or invalid JSON */ }
     }
 
     try {
@@ -207,7 +207,7 @@
         if (typeof window !== 'undefined' && window.sessionStorage) {
           try {
             window.sessionStorage.setItem('pbf_geo_' + cacheKey, JSON.stringify(result));
-          } catch (e) {}
+          } catch (e) { /* sessionStorage quota / private mode */ }
         }
         return result;
       }
@@ -265,7 +265,9 @@
     try {
       var geocoded = await geocodeLocation(locationStr);
       if (geocoded) return geocoded;
-    } catch (e) {}
+    } catch (e) {
+      console.warn('[Weather] Geocoding fallback failed:', e);
+    }
 
     return DEFAULT_COORDS;
   }
@@ -376,7 +378,7 @@
         }
         localStorage.removeItem(key);
       }
-    } catch (e) {}
+    } catch (e) { /* localStorage cache unavailable or invalid JSON */ }
 
     try {
       var raw = (typeof sessionStorage !== 'undefined') ? sessionStorage.getItem(key) : null;
@@ -388,7 +390,7 @@
         }
         sessionStorage.removeItem(key);
       }
-    } catch (e) {}
+    } catch (e) { /* sessionStorage cache unavailable or invalid JSON */ }
 
     if (inFlightForecasts[key]) {
       return inFlightForecasts[key];
@@ -418,14 +420,14 @@
         var serializedEntry = null;
         try {
           serializedEntry = JSON.stringify(cacheEntry);
-        } catch (e) {}
+        } catch (e) { /* skip storage persistence if forecast payload cannot be serialized */ }
         if (serializedEntry) {
           try {
             if (typeof localStorage !== 'undefined') localStorage.setItem(key, serializedEntry);
-          } catch (e) {}
+          } catch (e) { /* localStorage quota / private mode */ }
           try {
             if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(key, serializedEntry);
-          } catch (e) {}
+          } catch (e) { /* sessionStorage quota / private mode */ }
         }
 
         return data;
@@ -671,7 +673,6 @@
     var firstEventRainTime = null;
     var effectiveMoisture = 0;
     var lastPreGameRainIdx = -1;
-    var lastGameRainIdx = -1;
     var maxHourlyRain = 0;
     var maxSurfaceWater = 0;
     var runningSurfaceWater = 0;
@@ -731,10 +732,6 @@
           }
         }
         if (r > maxHourlyRain) maxHourlyRain = r;
-
-        if (r >= 0.008) {
-          lastGameRainIdx = i;
-        }
 
         hourlyBreakdown.push({
           time: hourlyTimes[i],
@@ -1322,7 +1319,9 @@
           el.style.display = 'inline-flex';
         });
       }
-      } catch (e) {}
+      } catch (e) {
+        console.warn('[Weather] Failed to update card weather badges:', e);
+      }
     });
   }
 

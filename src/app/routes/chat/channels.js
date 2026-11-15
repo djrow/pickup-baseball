@@ -7,6 +7,7 @@
 
 import { Hono } from 'hono';
 import { requireAuth, requireModerator, rejectIfChatMuted, rejectIfClubhouseOptedOut } from '../../security.js';
+import { logEvent } from '../../errors.js';
 import {
   resolveChannel,
   isPrivateEncryptedBoard,
@@ -121,7 +122,9 @@ chatChannelsRouter.post('/channels', requireAuth, async (c) => {
     if (chRateRow && Number(chRateRow.count) > 20) {
       return c.json({ error: 'Too many channel creation requests. Please wait a minute.' }, 429);
     }
-  } catch (e) {}
+  } catch (e) {
+    logEvent('warn', 'chat_channel_create_rate_limit_failed', { err: e });
+  }
 
   if (isDm || isPrivateBoard) {
     const otherIds = dmMemberIds.filter((uid) => Number(uid) !== Number(user.id));
@@ -161,7 +164,9 @@ chatChannelsRouter.post('/channels', requireAuth, async (c) => {
         await chatDb.prepare(
           'INSERT INTO channel_members (channel_id, user_id, role, hidden) VALUES (?, ?, ?, 0) ON CONFLICT(channel_id, user_id) DO UPDATE SET hidden = 0'
         ).bind(existing.id, user.id, existing.created_by === user.id ? 'owner' : 'member').run();
-      } catch (e) {}
+      } catch (e) {
+        logEvent('warn', 'chat_dm_member_unhide_failed', { channelId: existing.id, err: e });
+      }
       const { results: dmMemRows } = await chatDb.prepare(
         'SELECT user_id FROM channel_members WHERE channel_id = ?'
       ).bind(existing.id).all();
@@ -229,7 +234,9 @@ chatChannelsRouter.post('/channels', requireAuth, async (c) => {
           'SELECT muter_user_id FROM user_mutes WHERE muted_user_id = ?'
         ).bind(user.id).all();
         mutedBySet = new Set((muteRows || []).map((r) => Number(r.muter_user_id)));
-      } catch (e) {}
+      } catch (e) {
+        logEvent('warn', 'chat_dm_mute_lookup_failed', { err: e });
+      }
     }
     try {
       await chatDb.batch(membersToInsert.map((uid) =>
@@ -237,7 +244,9 @@ chatChannelsRouter.post('/channels', requireAuth, async (c) => {
           'INSERT INTO channel_members (channel_id, user_id, role, hidden) VALUES (?, ?, ?, ?) ON CONFLICT(channel_id, user_id) DO NOTHING'
         ).bind(newChannelId, uid, uid === user.id ? 'owner' : 'member', (isDm && Number(uid) !== Number(user.id) && mutedBySet.has(Number(uid))) ? 1 : 0)
       ));
-    } catch (e) {}
+    } catch (e) {
+      logEvent('warn', 'chat_channel_members_seed_failed', { channelId: newChannelId, err: e });
+    }
   }
 
   const created = await chatDb.prepare('SELECT * FROM channels WHERE id = ?').bind(newChannelId).first();
@@ -251,7 +260,9 @@ chatChannelsRouter.post('/channels', requireAuth, async (c) => {
         INSERT INTO sync_events (channel_id, event_type, target_id, payload_json, created_at)
         VALUES (?, 'channel_create', ?, ?, ?)
       `).bind(isRoleRestricted ? newChannelId : 0, newChannelId, JSON.stringify(created), Math.floor(Date.now() / 1000)).run();
-    } catch (e) {}
+    } catch (e) {
+      logEvent('warn', 'chat_sync_event_write_failed', { eventType: 'channel_create', err: e });
+    }
   }
   return c.json({ success: true, channel: created, id: newChannelId }, 201);
 });
@@ -457,7 +468,9 @@ chatChannelsRouter.patch('/channels/:id', requireAuth, async (c) => {
       INSERT INTO sync_events (channel_id, event_type, target_id, payload_json, created_at)
       VALUES (?, 'channel_update', ?, ?, ?)
     `).bind(isRoleRestricted ? channel.id : 0, channel.id, JSON.stringify(updated), Math.floor(Date.now() / 1000)).run();
-  } catch (e) {}
+  } catch (e) {
+    logEvent('warn', 'chat_sync_event_write_failed', { eventType: 'channel_update', err: e });
+  }
 
   return c.json({ success: true, channel: updated });
 });
@@ -498,7 +511,9 @@ chatChannelsRouter.delete('/channels/:id', requireModerator, async (c) => {
       INSERT INTO sync_events (channel_id, event_type, target_id, payload_json, created_at)
       VALUES (?, 'channel_delete', ?, ?, ?)
     `).bind(isRoleRestricted ? channel.id : 0, channel.id, JSON.stringify({ id: channel.id, slug: channel.slug }), Math.floor(Date.now() / 1000)).run();
-  } catch (e) {}
+  } catch (e) {
+    logEvent('warn', 'chat_sync_event_write_failed', { eventType: 'channel_delete', err: e });
+  }
 
   return c.json({ success: true, id: channel.id, slug: channel.slug });
 });

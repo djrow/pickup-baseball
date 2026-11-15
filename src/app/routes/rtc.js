@@ -6,6 +6,7 @@
 import { Hono } from 'hono';
 import { requireAuth, rejectIfChatMuted, rejectIfClubhouseOptedOut } from '../security.js';
 import { resolveChannel, canUserAccessChannel } from './chat.js';
+import { logEvent } from '../errors.js';
 
 export const voiceRouter = /** @type {AppHono} */ (new Hono());
 export const rtcRouter = /** @type {AppHono} */ (new Hono());
@@ -50,7 +51,9 @@ voiceRouter.post('/:channelId/join', requireAuth, async (c) => {
     if (joinRateRow && Number(joinRateRow.count) > 30) {
       return c.json({ error: 'Too many voice join requests. Please wait a moment.' }, 429);
     }
-  } catch (e) {}
+  } catch (e) {
+    logEvent('warn', 'rtc_voice_join_rate_limit_failed', { err: e });
+  }
 
   const vpCountRow = await chatDb.prepare(
     'SELECT COUNT(*) as total FROM voice_participants WHERE channel_id = ? AND user_id != ? AND heartbeat_at > ?'
@@ -71,7 +74,9 @@ voiceRouter.post('/:channelId/join', requireAuth, async (c) => {
     if (staleVp) {
       await chatDb.prepare('DELETE FROM voice_participants WHERE heartbeat_at <= ?').bind(nowSec - 25).run();
     }
-  } catch (e) {}
+  } catch (e) {
+    /* best-effort stale voice participant prune */
+  }
 
   await chatDb.prepare(`
     INSERT INTO voice_participants (channel_id, user_id, user_name, muted, deafened, screen_sharing, heartbeat_at)
@@ -144,7 +149,9 @@ voiceRouter.post('/:channelId/state', requireAuth, async (c) => {
     if (stateRateRow && Number(stateRateRow.count) > 60) {
       return c.json({ error: 'Too many voice state requests. Please wait a moment.' }, 429);
     }
-  } catch (e) {}
+  } catch (e) {
+    logEvent('warn', 'rtc_voice_state_rate_limit_failed', { err: e });
+  }
 
   const body = await c.req.json().catch(() => ({}));
   const existing = await chatDb.prepare(
@@ -277,7 +284,9 @@ rtcRouter.post('/signal', requireAuth, async (c) => {
     if (sigRateRow && Number(sigRateRow.count) > 120) {
       return c.json({ error: 'Too many signaling requests. Please wait a moment.' }, 429);
     }
-  } catch (e) {}
+  } catch (e) {
+    logEvent('warn', 'rtc_signal_rate_limit_failed', { err: e });
+  }
 
   const body = await c.req.json().catch(() => ({}));
   const channelParam = body.channel_id;
@@ -314,7 +323,7 @@ rtcRouter.post('/signal', requireAuth, async (c) => {
     return c.json({ error: 'Signal payload exceeds maximum allowed size (64 KB).' }, 400);
   }
 
-  let parsedPayload = null;
+  let parsedPayload;
   try {
     parsedPayload = JSON.parse(payloadJson);
   } catch (e) {
@@ -393,7 +402,9 @@ rtcRouter.post('/signal', requireAuth, async (c) => {
     if (muteRow) {
       return c.json({ error: 'Recipient is not accepting signals from you.' }, 403);
     }
-  } catch (e) {}
+  } catch (e) {
+    logEvent('warn', 'rtc_signal_mute_lookup_failed', { err: e });
+  }
 
   // Prune expired signals (>60s) at most once every 60 seconds per isolate
   if (nowSec - lastSignalPruneSec >= 60) {
@@ -403,7 +414,9 @@ rtcRouter.post('/signal', requireAuth, async (c) => {
       if (staleSig) {
         await chatDb.prepare('DELETE FROM rtc_signals WHERE created_at <= ?').bind(nowSec - 60).run();
       }
-    } catch (e) {}
+    } catch (e) {
+      /* best-effort expired rtc_signals prune */
+    }
   }
 
   const insRes = await chatDb.prepare(`
