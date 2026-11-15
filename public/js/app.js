@@ -61,7 +61,7 @@ function updateSyncPillUi() {
   if (!cachedEpoch) {
     try {
       cachedEpoch = parseInt(localStorage.getItem('pickup_cached_events_synced_at') || '0', 10) || 0;
-    } catch (e) {}
+    } catch (e) { /* localStorage unavailable */ }
   }
   if (hasCachedFallback && cachedEpoch > 0) {
     textEl.textContent = API.t('calendar.sync_offline_cached', { time: formatSyncTimestamp(cachedEpoch) });
@@ -196,7 +196,7 @@ async function loadGames(justLoggedIn = false, isBackgroundRefresh = false) {
           renderEventsView(cachedEvents);
         }
       }
-    } catch (e) {}
+    } catch (e) { /* localStorage unavailable or invalid cached JSON */ }
   }
 
   calendarSyncState = 'syncing';
@@ -230,7 +230,7 @@ async function loadGames(justLoggedIn = false, isBackgroundRefresh = false) {
     try {
       localStorage.setItem(cacheKey, JSON.stringify(events));
       localStorage.setItem('pickup_cached_events_synced_at', String(lastCloudSyncedAt));
-    } catch (e) {}
+    } catch (e) { /* storage quota / private mode */ }
 
     renderEventsView(events);
   } catch (err) {
@@ -332,7 +332,7 @@ function getPacificDateKey(dateInput) {
   return d.toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
 }
 
-function getGoogleCalendarUrl(ev) {
+window.getGoogleCalendarUrl = function getGoogleCalendarUrl(ev) {
   if (API && typeof API.getGoogleCalendarUrl === 'function') {
     return API.getGoogleCalendarUrl(ev);
   }
@@ -355,11 +355,11 @@ function getGoogleCalendarUrl(ev) {
   const details = encodeURIComponent('Free community pickup baseball. Check headcount, coordinate gear & volunteer for tasks at https://www.pickupbaseballfoundation.org/event.html?id=' + ev.id);
   const location = encodeURIComponent(ev.location || 'Bushrod Park Field 1, Oakland, CA');
   return 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + title + '&dates=' + formatGCal(startDate) + '/' + formatGCal(endDate) + '&details=' + details + '&location=' + location;
-}
+};
 
-function downloadCalendarIcs(events) {
+window.downloadCalendarIcs = function downloadCalendarIcs(events) {
   API.downloadEventsIcs(events, 'pickup-baseball-schedule.ics');
-}
+};
 
 function renderCalendarDrawer(dateKey, game, isPast) {
   const drawer = document.getElementById('calendar-date-drawer');
@@ -445,7 +445,7 @@ function renderCalendarDrawer(dateKey, game, isPast) {
         day: 'numeric',
         year: 'numeric'
       }).format(dateObj);
-    } catch (e) {}
+    } catch (e) { /* fallback to ISO dateKey */ }
 
     drawer.innerHTML = `
       <div class="drawer-header-row">
@@ -564,14 +564,13 @@ function renderCalendar(events) {
   const lang = API.getLang();
   const now = new Date();
   const todayKey = getPacificDateKey(now);
-  const pad = n => String(n).padStart(2, '0');
 
   // Identify the true next scheduled or prospective game relative to actual today
   const upcomingScheduled = (calendarEventsCache || [])
     .filter(e => e.status !== 'cancelled' && getPacificDateKey(e.event_date) >= todayKey)
     .sort((a, b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime());
 
-  let trueNextGameKey = null;
+  let trueNextGameKey;
   if (upcomingScheduled.length > 0) {
     trueNextGameKey = getPacificDateKey(upcomingScheduled[0].event_date);
     const routineBpLink = document.getElementById('routine-bp-link');
@@ -601,7 +600,7 @@ function renderCalendar(events) {
   }
 
   // 1. Identify the most recent past event or past Sunday relative to the anchor
-  let pastItem = null;
+  let pastItem;
   const pastEvents = (calendarEventsCache || [])
     .filter(e => e.status !== 'cancelled' && getPacificDateKey(e.event_date) < anchorKey)
     .sort((a, b) => new Date(b.event_date).getTime() - new Date(a.event_date).getTime());
@@ -747,7 +746,7 @@ function renderCalendar(events) {
     }
 
     let weekdayShort = item.isSunday ? 'Sun' : 'Game';
-    let monthShort = '';
+    let monthShort;
     try {
       weekdayShort = new Intl.DateTimeFormat(lang, { weekday: 'short' }).format(item.dateObj);
       monthShort = new Intl.DateTimeFormat(lang, { month: 'short' }).format(item.dateObj);
@@ -831,7 +830,6 @@ function renderCalendar(events) {
         gridContainer.querySelectorAll('.calendar-sunday-card').forEach(c => c.classList.remove('selected-sunday'));
         card.classList.add('selected-sunday');
         const game = eventsByDate[dateKey];
-        const item = gameDates.find(g => g.dateKey === dateKey);
         renderCalendarDrawer(dateKey, game, dateKey < todayKey);
       }
     };

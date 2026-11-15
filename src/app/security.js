@@ -75,7 +75,9 @@ export function sanitizeHttpUrl(rawUrl) {
     if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
       return parsed.href;
     }
-  } catch (e) {}
+  } catch (e) {
+    /* invalid URL syntax returns null */
+  }
   return null;
 }
 
@@ -84,6 +86,7 @@ export function getSafeRelativeRedirect(redirectParam) {
     return '/index.html?logged_in=1';
   }
   const trimmed = redirectParam.trim();
+  // eslint-disable-next-line no-control-regex -- reject ASCII control chars and backslashes in redirect URL
   if (!trimmed || /[\x00-\x1f\x7f\\]/.test(trimmed) || trimmed.startsWith('//')) {
     return '/index.html?logged_in=1';
   }
@@ -96,7 +99,9 @@ export function getSafeRelativeRedirect(redirectParam) {
     ) {
       return parsed.pathname + parsed.search + parsed.hash;
     }
-  } catch (e) {}
+  } catch (e) {
+    /* invalid relative redirect falls back to default landing */
+  }
   return '/index.html?logged_in=1';
 }
 
@@ -160,6 +165,7 @@ export function isValidEmailAddress(raw) {
   if (typeof raw !== 'string') return false;
   const clean = raw.trim();
   if (!clean || clean.length > 254) return false;
+  // eslint-disable-next-line no-control-regex -- reject whitespace and ASCII control characters in email addresses
   if (/[\s\x00-\x1f\x7f,<>;]/.test(clean)) return false;
   return /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)+$/i.test(clean);
 }
@@ -200,7 +206,9 @@ export function getSafePublicOrigin(c) {
   if (configured) {
     try {
       return new URL(configured).origin;
-    } catch (e) {}
+    } catch (e) {
+      /* ignore invalid configured PUBLIC_ORIGIN */
+    }
   }
   try {
     const parsed = new URL(c.req.url);
@@ -217,7 +225,9 @@ export function getSafePublicOrigin(c) {
     ) {
       return parsed.origin;
     }
-  } catch (e) {}
+  } catch (e) {
+    /* ignore unparseable request URL and fall back to canonical origin */
+  }
   return 'https://www.pickupbaseballfoundation.org';
 }
 
@@ -258,7 +268,9 @@ export async function checkRateLimit(db, key, maxRequests, windowSeconds, env, o
     if (nowSec % 20 === 0) {
       try {
         await db.prepare('DELETE FROM rate_limits WHERE window_start < ?').bind(nowSec - 86400).run();
-      } catch (pruneErr) {}
+      } catch (pruneErr) {
+        /* best-effort opportunistic prune of expired rate limits */
+      }
     }
 
     if (newCount > maxRequests) {
@@ -563,7 +575,7 @@ export function canAccessChannel(user, channel, mode = 'read') {
     public: 0
   };
 
-  let userRank = 1;
+  let userRank;
   if (user.role === 'admin' || user.isAdmin || user.is_admin === 1) {
     userRank = 4;
   } else if (user.role === 'organizer') {
@@ -768,7 +780,7 @@ export function validateExternalGifUrl(rawUrl, options = {}) {
   return { ok: true, url: parsed.toString() };
 }
 
-export const APPSCRIPT_EXEC_URL_RE = /^https:\/\/script\.google\.com\/macros\/s\/[a-zA-Z0-9_\-]+\/exec$/i;
+export const APPSCRIPT_EXEC_URL_RE = /^https:\/\/script\.google\.com\/macros\/s\/[a-zA-Z0-9_-]+\/exec$/i;
 
 export function validateAppscriptRedirectUrl(rawUrl) {
   let parsed;
@@ -842,17 +854,31 @@ async function fetchWithPinnedNodeIp(targetUrl, pinnedAddress, pinnedFamily, { m
           nodeRes.on('data', (chunk) => {
             try {
               controller.enqueue(chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk));
-            } catch (e) {}
+            } catch (e) {
+              /* stream controller already closed or errored */
+            }
           });
           nodeRes.on('end', () => {
-            try { controller.close(); } catch (e) {}
+            try {
+              controller.close();
+            } catch (e) {
+              /* stream controller already closed */
+            }
           });
           nodeRes.on('error', (err) => {
-            try { controller.error(err); } catch (e) {}
+            try {
+              controller.error(err);
+            } catch (e) {
+              /* stream controller already closed */
+            }
           });
         },
         cancel() {
-          try { nodeRes.destroy(); } catch (e) {}
+          try {
+            nodeRes.destroy();
+          } catch (e) {
+            /* best-effort Node stream cleanup on cancel */
+          }
         }
       });
       resolve(new Response(stream, { status, headers: respHeaders }));
@@ -998,7 +1024,11 @@ export async function readResponseWithByteCap(res, maxBytes) {
   }
   const declaredLen = parseInt((res.headers && res.headers.get('content-length')) || '0', 10);
   if (!isNaN(declaredLen) && declaredLen > maxBytes) {
-    try { if (res.body && typeof res.body.cancel === 'function') await res.body.cancel(); } catch (e) {}
+    try {
+      if (res.body && typeof res.body.cancel === 'function') await res.body.cancel();
+    } catch (e) {
+      /* best-effort stream cancel after size limit exceeded */
+    }
     return { ok: false, status: 413, error: 'Remote file exceeds the maximum allowed size limit.' };
   }
 
@@ -1013,14 +1043,22 @@ export async function readResponseWithByteCap(res, maxBytes) {
         if (value && value.byteLength) {
           totalBytes += value.byteLength;
           if (totalBytes > maxBytes) {
-            try { await reader.cancel(); } catch (e) {}
+            try {
+              await reader.cancel();
+            } catch (e) {
+              /* best-effort reader cancel after byte cap exceeded */
+            }
             return { ok: false, status: 413, error: 'Remote file exceeds the maximum allowed size limit.' };
           }
           chunks.push(value);
         }
       }
     } catch (err) {
-      try { await reader.cancel(); } catch (e) {}
+      try {
+        await reader.cancel();
+      } catch (e) {
+        /* best-effort reader cancel on download failure */
+      }
       return { ok: false, status: 422, error: 'Failed while downloading data from the remote host.' };
     }
     if (totalBytes === 0) {

@@ -13,6 +13,8 @@
  * @module app/gdrive
  */
 
+import { logEvent } from './errors.js';
+
 let cachedAccessToken = null;
 let cachedTokenExpiryMs = 0;
 
@@ -121,7 +123,7 @@ export async function initGDriveResumableSession(env, { fileName, mimeType, file
   }
 
   const locationUri = res.headers.get('location') || res.headers.get('Location');
-  let bodyData = null;
+  let bodyData;
   try {
     bodyData = await res.json();
   } catch (err) {
@@ -322,7 +324,9 @@ export async function streamGDriveFile(env, driveFileId, rangeHeader, fallbackMi
       if (cachedRes) {
         return cachedRes;
       }
-    } catch (e) {}
+    } catch (e) {
+      /* best-effort Cloudflare edge cache lookup */
+    }
   }
 
   const token = await getGDriveAccessToken(env);
@@ -408,7 +412,9 @@ export async function streamGDriveFile(env, driveFileId, rangeHeader, fallbackMi
   if (edgeCache && cacheReq && (upstreamRes.status === 200 || upstreamRes.status === 206)) {
     try {
       await edgeCache.put(cacheReq, outRes.clone());
-    } catch (e) {}
+    } catch (e) {
+      /* best-effort Cloudflare edge cache write */
+    }
   }
 
   return outRes;
@@ -470,7 +476,9 @@ export async function getGDriveStorageQuota(env) {
         usageInDriveTrash: Number(q.usageInDriveTrash || 0)
       };
     }
-  } catch (e) {}
+  } catch (e) {
+    logEvent('warn', 'gdrive_quota_fetch_failed', { err: e });
+  }
 
   return {
     provider: 'gdrive',

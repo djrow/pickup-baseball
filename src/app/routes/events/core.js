@@ -27,7 +27,7 @@ import {
 } from '../../policy.js';
 import { buildCalendarIcs } from '../../feeds.js';
 import { sendRainoutEmail, sendReopenEmail } from '../../mailer.js';
-import { ERROR_CODES, jsonError } from '../../errors.js';
+import { ERROR_CODES, jsonError, logEvent } from '../../errors.js';
 import {
   AVATAR_EXPR,
   isDeliverableEmail,
@@ -871,7 +871,9 @@ eventsCoreRouter.delete('/:id', requireAdmin, async (c) => {
         for (const m of privMediaRows) {
           try {
             await c.env.CHAT_DB.prepare('UPDATE chat_attachments SET promoted_media_id = NULL WHERE promoted_media_id = ?').bind(m.id).run();
-          } catch (e) {}
+          } catch (e) {
+            logEvent('warn', 'chat_attachment_unpromote_failed', { mediaId: m.id, err: e });
+          }
         }
       }
     } else {

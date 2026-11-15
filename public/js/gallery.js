@@ -42,7 +42,7 @@
           year: 'numeric'
         }).format(d);
       }
-    } catch (e) {}
+    } catch (e) { /* fallback to raw dateStr */ }
     return dateStr;
   }
 
@@ -82,7 +82,7 @@
       var all = getMySubmissions();
       all[record.id] = Object.assign({}, all[record.id] || {}, record);
       localStorage.setItem(SUBMISSIONS_STORAGE_KEY, JSON.stringify(all));
-    } catch (e) {}
+    } catch (e) { /* localStorage unavailable */ }
   }
 
   function removeMySubmission(id) {
@@ -90,7 +90,7 @@
       var all = getMySubmissions();
       delete all[id];
       localStorage.setItem(SUBMISSIONS_STORAGE_KEY, JSON.stringify(all));
-    } catch (e) {}
+    } catch (e) { /* localStorage unavailable */ }
   }
 
   function canUserDeleteMedia(item) {
@@ -159,7 +159,12 @@
           }
         }
       }
-    } catch (e) {}
+    } catch (e) {
+      console.warn('[Gallery] Settings lookup failed:', e);
+      if (typeof API !== 'undefined' && API.recordDiagnostic) {
+        API.recordDiagnostic({ route: '/api/auth/settings', method: 'GET', status: 0, code: 'GALLERY_SETTINGS_FAILED' });
+      }
+    }
 
     await loadGalleryData();
 
@@ -181,7 +186,7 @@
           var cleanGalleryUrl = new URL(window.location.href);
           cleanGalleryUrl.searchParams.delete('token');
           window.history.replaceState({}, document.title, cleanGalleryUrl.pathname + cleanGalleryUrl.search + cleanGalleryUrl.hash);
-        } catch (e) {}
+        } catch (e) { /* best-effort URL token strip */ }
       }
       if (takedownId) {
         if (takedownToken) {
@@ -191,7 +196,9 @@
           handleDeleteMedia(takedownId, 'submission');
         }, 500);
       }
-    } catch (e) {}
+    } catch (e) {
+      console.warn('[Gallery] Takedown URL handling failed:', e);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -256,7 +263,7 @@
         : 'Community User';
       var title = item.title ? API.escapeHtml(item.title) : (item.media_type === 'youtube' ? 'YouTube Video' : 'Photo Submission');
       var album = item.album ? API.escapeHtml(item.album) : 'General';
-      var thumbHtml = '';
+      var thumbHtml;
 
       if (item.media_type === 'youtube') {
         var ytId = API.getYouTubeId ? API.getYouTubeId(item.file_url || item.original_url) : null;
@@ -509,13 +516,10 @@
     }
 
     var isManager = isManagerUser();
+    var _photoAbbr = API.abbreviateDisplayNames ? API.abbreviateDisplayNames(photos, 'contributor_name', 'user_id', 'Community') : [];
 
-    var photoAbbr = API.abbreviateDisplayNames ? API.abbreviateDisplayNames(photos, 'contributor_name', 'user_id', 'Community') : [];
     var html = photos.map(function(pt, idx) {
       var ptDate = formatDisplayDate(pt.date_taken);
-      var ptContributor = pt.contributor_name
-        ? API.escapeHtml(photoAbbr[idx] || API.formatDisplayName(pt.contributor_name, 'Community'))
-        : 'Community';
       var ptTitle = pt.title ? API.escapeHtml(pt.title) : '';
       var ptAlbum = pt.album || 'General';
       var ptAlbumSlug = slugify(ptAlbum);
@@ -641,7 +645,7 @@
       var albumTag = vid.album ? API.escapeHtml(vid.album) : 'General';
 
       var canDelete = canUserDeleteMedia(vid);
-      var playerHtml = '';
+      var playerHtml;
       var gDriveId = API.getGoogleDriveId ? API.getGoogleDriveId(vid.file_url || vid.original_url) : null;
       if (!gDriveId && String(vid.file_url || '').indexOf('drive.google.com/file/d/') !== -1) {
         var mDrive = String(vid.file_url).match(/drive\.google\.com\/file\/d\/([\w-]{25,})/);
@@ -1201,6 +1205,7 @@
     var alertBox = document.getElementById('media-submit-alert');
     var submitBtn = document.getElementById('media-submit-btn');
     var isLinkMode = document.getElementById('tab-mode-link') && document.getElementById('tab-mode-link').classList.contains('active');
+    var fileInput = document.getElementById('media-file-input');
     var urlInput = document.getElementById('media-url-input');
     var dateInput = document.getElementById('media-date-input');
     var albumSelect = document.getElementById('media-album-select');
@@ -1462,7 +1467,7 @@
 
     list.innerHTML = items.map(function(item) {
       var isVideo = item.media_type === 'video' || item.media_type === 'youtube';
-      var thumbUrl = '/logo.svg';
+      var thumbUrl;
       if (item.media_type === 'youtube') {
         var ytId = API.getYouTubeId ? API.getYouTubeId(item.file_url || item.original_url) : null;
         thumbUrl = ytId ? 'https://img.youtube.com/vi/' + ytId + '/hqdefault.jpg' : '/logo.svg';

@@ -26,18 +26,12 @@ const {
 
 async function runTier3(t, ctx) {
   const {
-    baseUrl,
     baseballDb,
     chatDb,
-    baseballD1,
-    chatD1,
     adminCookie,
-    orgCookie,
     playerCookie,
-    facilitatorCookie,
     adminUser,
     playerUser,
-    facilitatorUser,
     testEventId,
     apiReq,
     isEndpointAvailable

@@ -65,7 +65,7 @@ function validateAndSerializeJwk(jwk, name) {
   if (!jwk) {
     throw new Error(`Missing ${name}`);
   }
-  let parsed = null;
+  let parsed;
   if (typeof jwk === 'string') {
     if (jwk.length > 2048) {
       throw new Error(`${name} exceeds maximum allowed size (2 KB)`);
@@ -73,7 +73,7 @@ function validateAndSerializeJwk(jwk, name) {
     try {
       parsed = JSON.parse(jwk);
     } catch (e) {
-      throw new Error(`Malformed ${name} JSON`);
+      throw new Error(`Malformed ${name} JSON`, { cause: e });
     }
   } else if (typeof jwk === 'object' && jwk !== null) {
     parsed = jwk;

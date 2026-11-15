@@ -149,6 +149,7 @@ interface PBFApiFacade {
   setCachedUser(user: PBFUser | null): void;
   clearClubhouseIndexedDb(): Promise<void>;
   clearDataCaches(skipIndexedDb?: boolean): Promise<void>;
+  recordDiagnostic(entry: Record<string, any>): void;
   request(method: string, url: string, body?: any, opts?: PBFApiRequestOptions): Promise<any>;
   getMe(): Promise<PBFUser | null>;
   regenerateCalendarToken(): Promise<any>;

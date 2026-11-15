@@ -33,12 +33,16 @@ const chatD1 = createD1Adapter(chatDb);
 const db = baseballDb;
 const d1 = baseballD1;
 
-function initBaseballDatabase(force = false) {
+function initBaseballDatabase(_force = false) {
   for (const sql of CREATE_TABLES_SQL) {
     baseballDb.exec(sql);
   }
   for (const sql of ALTER_STATEMENTS) {
-    try { baseballDb.exec(sql); } catch (e) {}
+    try {
+      baseballDb.exec(sql);
+    } catch (e) {
+      /* intentional schema probe: column or index may already exist */
+    }
   }
 
   baseballDb.exec(`
@@ -96,9 +100,13 @@ function initBaseballDatabase(force = false) {
   }
 }
 
-function initChatDatabase(force = false) {
+function initChatDatabase(_force = false) {
   for (const sql of CREATE_CHAT_TABLES_SQL) {
-    try { chatDb.exec(sql); } catch (e) {}
+    try {
+      chatDb.exec(sql);
+    } catch (e) {
+      /* intentional idempotent DDL: table or index may already exist */
+    }
   }
   const insertChannel = chatDb.prepare(`
     INSERT INTO channels (slug, name, category, channel_type, topic, min_role_read, min_role_write, is_encrypted, sort_order)
@@ -118,7 +126,9 @@ function initChatDatabase(force = false) {
         ch.is_encrypted,
         ch.sort_order
       );
-    } catch (e) {}
+    } catch (e) {
+      /* best-effort default channel seed */
+    }
   }
 }
 

@@ -409,7 +409,7 @@ const API = {
       if (saved && this.SUPPORTED_LANGUAGES.some(l => l.code === saved)) {
         return saved;
       }
-    } catch (e) {}
+    } catch (e) { /* localStorage unavailable */ }
     if (typeof navigator !== 'undefined' && navigator.language) {
       const base = navigator.language.split('-')[0].toLowerCase();
       const normalized = base === 'fil' ? 'tl' : base;
@@ -483,7 +483,7 @@ const API = {
         this.i18nCache[lang] = JSON.parse(cachedRaw);
         return this.i18nCache[lang];
       }
-    } catch (e) {}
+    } catch (e) { /* ignore invalid/unavailable i18n cache */ }
     try {
       const res = await fetch('/i18n/' + encodeURIComponent(lang) + '.json?v=' + this.CLIENT_VERSION);
       if (res.ok) {
@@ -491,7 +491,7 @@ const API = {
         this.i18nCache[lang] = data;
         try {
           localStorage.setItem(cacheKey, JSON.stringify(data));
-        } catch (e) {}
+        } catch (e) { /* storage quota / private mode */ }
         return data;
       }
     } catch (err) {
@@ -504,7 +504,7 @@ const API = {
     if (!this.SUPPORTED_LANGUAGES.some(l => l.code === lang)) return;
     try {
       localStorage.setItem('pickup_lang', lang);
-    } catch (e) {}
+    } catch (e) { /* localStorage unavailable */ }
     await this.loadLangDict(lang);
     this.applyTranslations();
     this.renderNav(this.currentUser);
@@ -572,7 +572,7 @@ const API = {
       if (saved === 'light' || saved === 'dark' || saved === 'system') return saved;
       const legacy = localStorage.getItem('pickup_theme');
       if (legacy === 'light' || legacy === 'dark') return legacy;
-    } catch (e) {}
+    } catch (e) { /* localStorage unavailable */ }
     return 'system';
   },
 
@@ -596,7 +596,7 @@ const API = {
       if (saved && this.COLOR_THEMES.some(t => t.id === saved)) {
         return saved;
       }
-    } catch (e) {}
+    } catch (e) { /* localStorage unavailable */ }
     return 'bay-area';
   },
 
@@ -644,7 +644,7 @@ const API = {
     if (!this.COLOR_THEMES.some(t => t.id === themeId)) return;
     try {
       localStorage.setItem('pickup_color_theme', themeId);
-    } catch (e) {}
+    } catch (e) { /* localStorage unavailable */ }
     this.applyColorTheme(themeId);
     this.updateFooterThemeUi();
     this.updateThemePickersUi();
@@ -665,7 +665,7 @@ const API = {
     try {
       localStorage.setItem('pickup_theme_mode', mode);
       localStorage.setItem('pickup_theme', this.getEffectiveTheme());
-    } catch (e) {}
+    } catch (e) { /* localStorage unavailable */ }
     this.applyTheme(this.getEffectiveTheme());
     this.updateFooterThemeUi();
     this.updateThemePickersUi();
@@ -707,7 +707,7 @@ const API = {
             this._dispatchThemeChange();
           }
         });
-      } catch (e) {}
+      } catch (e) { /* Safari <14 without matchMedia.addEventListener */ }
     }
     if (typeof window !== 'undefined' && !this._themeStorageBound) {
       this._themeStorageBound = true;
@@ -1001,7 +1001,7 @@ const API = {
       if (serverVersion && serverVersion !== this.CLIENT_VERSION) {
         this.setUpdateAvailableUi(null, null, serverVersion);
       }
-    } catch (e) {}
+    } catch (e) { /* ignore opaque/missing response headers */ }
   },
 
   async checkForUpdates() {
@@ -1015,7 +1015,9 @@ const API = {
           return true;
         }
       }
-    } catch (e) {}
+    } catch (e) {
+      this.recordDiagnostic({ route: '/api/version', method: 'GET', status: 0, code: 'VERSION_CHECK_FAILED' });
+    }
     return false;
   },
 
@@ -1070,7 +1072,7 @@ const API = {
           return;
         }
         localStorage.setItem('pb_version_last_check', String(Date.now()));
-      } catch (e) {}
+      } catch (e) { /* localStorage unavailable */ }
       this.checkForUpdates();
     }, 1500);
 
@@ -1081,7 +1083,7 @@ const API = {
     });
   },
 
-  setUpdateAvailableUi(btn, statusEl, newVersion) {
+  setUpdateAvailableUi(btn, statusEl, _newVersion) {
     if (!btn) btn = document.getElementById('footer-update-btn');
     if (!statusEl) statusEl = document.getElementById('footer-update-status');
     const wrapper = document.getElementById('footer-update-wrapper') || (btn ? btn.closest('.footer-update-wrapper') : null);
@@ -1181,7 +1183,7 @@ const API = {
       } else {
         localStorage.removeItem('pickup_cached_user');
       }
-    } catch (e) {}
+    } catch (e) { /* localStorage unavailable */ }
   },
 
   clearClubhouseIndexedDb() {
@@ -1190,7 +1192,7 @@ const API = {
         const ch = new BroadcastChannel('pickup_clubhouse_clear');
         ch.postMessage({ type: 'clear' });
         ch.close();
-      } catch (e) {}
+      } catch (e) { /* BroadcastChannel unavailable */ }
     }
     if (typeof indexedDB === 'undefined') return Promise.resolve();
     const deleteDb = (dbName) => new Promise((resolve) => {
@@ -1236,7 +1238,7 @@ const API = {
         }
       }
       keysToRemove.forEach(k => localStorage.removeItem(k));
-    } catch (e) {}
+    } catch (e) { /* localStorage unavailable */ }
     if (!skipIndexedDb) {
       this.clearClubhouseIndexedDb();
     }
@@ -1415,13 +1417,13 @@ const API = {
         'X-App-Version': this.CLIENT_VERSION
       });
       if (isTimeout) {
-        throw new Error('Request timed out. Please check your connection and try again.');
+        throw new Error('Request timed out. Please check your connection and try again.', { cause: err });
       }
       throw err;
     }
     if (timeoutHandle) clearTimeout(timeoutHandle);
     this.checkResponseVersion(res);
-    let data = {};
+    let data;
     const contentType = (res.headers && res.headers.get && res.headers.get('content-type')) || '';
     if (contentType.includes('application/json')) {
       data = await res.json().catch(() => ({}));
@@ -1458,7 +1460,7 @@ const API = {
     if (options.invalidateKeys && (!options.invalidateOnSuccess || (data && data.success))) {
       try {
         options.invalidateKeys.forEach(function(k) { localStorage.removeItem(k); });
-      } catch (e) {}
+      } catch (e) { /* localStorage unavailable */ }
     }
     return data;
   },
@@ -1843,7 +1845,7 @@ const API = {
     } else if (ev.allowed_emails) {
       try {
         allowedArr = typeof ev.allowed_emails === 'string' ? JSON.parse(ev.allowed_emails) : ev.allowed_emails;
-      } catch (e) {}
+      } catch (e) { /* ignore malformed allowed_emails JSON */ }
     }
 
     return `
@@ -2247,12 +2249,12 @@ const API = {
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard.writeText(feedHttpUrl).then(markCopied).catch(function() {
             urlInput.select();
-            try { document.execCommand('copy'); } catch (e) {}
+            try { document.execCommand('copy'); } catch (e) { /* clipboard fallback unavailable */ }
             markCopied();
           });
         } else {
           urlInput.select();
-          try { document.execCommand('copy'); } catch (e) {}
+          try { document.execCommand('copy'); } catch (e) { /* clipboard fallback unavailable */ }
           markCopied();
         }
       });
@@ -2273,7 +2275,7 @@ const API = {
     const isGalleryPage = pathname.endsWith('gallery.html') || pathname === '/gallery';
     const isClubhousePage = pathname.endsWith('clubhouse.html') || pathname === '/clubhouse';
 
-    let authHtml = '';
+    let authHtml;
     if (user) {
       const displayName = this.formatDisplayName(user.name, 'Player');
       const safeAvatar = this.safeAvatarUrl(user.avatarUrl);
@@ -2500,6 +2502,7 @@ const API = {
   safeUrl(rawUrl) {
     if (!rawUrl || typeof rawUrl !== 'string') return '';
     const trimmed = rawUrl.trim();
+    // eslint-disable-next-line no-control-regex
     if (/[\u0000-\u001f\u007f]/.test(trimmed)) return '';
     if (trimmed.startsWith('/') && !trimmed.startsWith('//') && !trimmed.startsWith('/\\')) {
       return trimmed;
@@ -2509,7 +2512,7 @@ const API = {
       if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
         return parsed.href;
       }
-    } catch (e) {}
+    } catch (e) { /* invalid URL rejected */ }
     return '';
   },
 
@@ -2543,7 +2546,7 @@ const API = {
     if (typeof document === 'undefined' || typeof window === 'undefined') return;
     try {
       if (localStorage.getItem('pbf_cookie_consent') === '1') return;
-    } catch (e) {}
+    } catch (e) { /* localStorage unavailable */ }
     if (document.getElementById('cookie-notice-banner')) return;
 
     const banner = document.createElement('aside');
@@ -2565,7 +2568,7 @@ const API = {
       dismissBtn.addEventListener('click', function() {
         try {
           localStorage.setItem('pbf_cookie_consent', '1');
-        } catch (e) {}
+        } catch (e) { /* localStorage unavailable */ }
         banner.remove();
       });
     }

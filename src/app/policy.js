@@ -15,7 +15,9 @@ export function parseAllowedEmails(raw) {
       if (Array.isArray(parsed)) {
         return [...new Set(parsed.map(e => String(e).trim().toLowerCase()).filter(e => e.includes('@')))];
       }
-    } catch (e) {}
+    } catch (e) {
+      /* not JSON; fall back to delimiter-separated parsing below */
+    }
     return [...new Set(raw.split(/[,\n;]/).map(e => String(e).trim().toLowerCase()).filter(e => e.includes('@')))];
   }
   return [];

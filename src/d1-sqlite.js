@@ -103,10 +103,12 @@ function getFullRequestUrl(req, trustProxy = false) {
   const proto = firstProto === 'https' ? 'https' : 'http';
   const rawHost = String(req.headers.host || '127.0.0.1').trim();
   let safeHost = '127.0.0.1';
-  if (/^[a-z0-9.\-:\[\]]+$/i.test(rawHost)) {
+  if (/^[a-z0-9.\-:[\]]+$/i.test(rawHost)) {
     try {
       safeHost = new URL(`${proto}://${rawHost}`).host || '127.0.0.1';
-    } catch (e) {}
+    } catch (e) {
+      /* invalid Host header falls back to 127.0.0.1 */
+    }
   }
   return `${proto}://${safeHost}${req.originalUrl || req.url}`;
 }

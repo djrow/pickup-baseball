@@ -111,7 +111,7 @@
 
   function closeKeyDbHandle() {
     if (openKeyDbInstance) {
-      try { openKeyDbInstance.close(); } catch (e) {}
+      try { openKeyDbInstance.close(); } catch (e) { /* best-effort IDB handle close */ }
       openKeyDbInstance = null;
     }
     cachedKeyDbPromise = null;
@@ -129,7 +129,7 @@
           closeKeyDbHandle();
         }
       });
-    } catch (e) {}
+    } catch (e) { /* BroadcastChannel unavailable */ }
   }
 
   function openKeyDb() {
@@ -151,7 +151,7 @@
           var db = ev.target.result;
           openKeyDbInstance = db;
           db.onversionchange = function () {
-            try { db.close(); } catch (e) {}
+            try { db.close(); } catch (e) { /* best-effort close on versionchange */ }
             if (openKeyDbInstance === db) openKeyDbInstance = null;
             cachedKeyDbPromise = null;
           };
@@ -238,7 +238,7 @@
         req.onsuccess = function (ev) {
           var db = ev.target.result;
           db.onversionchange = function () {
-            try { db.close(); } catch (e) {}
+            try { db.close(); } catch (e) { /* best-effort close on versionchange */ }
             cachedPinDbPromise = null;
           };
           db.onclose = function () {

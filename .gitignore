@@ -5,6 +5,7 @@ node_modules/
 !.env.example
 .wrangler/
 _worker.bundle
+.eslintcache
 *.db
 *.db-wal
 *.db-shm

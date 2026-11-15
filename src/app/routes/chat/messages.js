@@ -7,6 +7,7 @@
 
 import { Hono } from 'hono';
 import { requireAuth, requireModerator, rejectIfChatMuted, rejectIfClubhouseOptedOut } from '../../security.js';
+import { logEvent } from '../../errors.js';
 import {
   abbreviateMemberNames,
   resolveChannel,
@@ -302,7 +303,9 @@ chatMessagesRouter.post('/channels/:id/messages', requireAuth, async (c) => {
       VALUES (?, ?, ?)
       ON CONFLICT(channel_id, user_id) DO UPDATE SET last_read_message_id = MAX(last_read_message_id, ?)
     `).bind(channel.id, user.id, newMsgId, newMsgId).run();
-  } catch (e) {}
+  } catch (e) {
+    logEvent('warn', 'chat_read_watermark_update_failed', { channelId: channel.id, err: e });
+  }
 
   if (channel.channel_type === 'dm' || channel.channel_type === 'group_dm') {
     try {
@@ -338,7 +341,9 @@ chatMessagesRouter.post('/channels/:id/messages', requireAuth, async (c) => {
           Math.floor(Date.now() / 1000)
         ).run();
       }
-    } catch (e) {}
+    } catch (e) {
+      logEvent('warn', 'chat_dm_reopen_sync_failed', { channelId: channel.id, err: e });
+    }
   }
 
   const createdRow = await chatDb.prepare('SELECT * FROM messages WHERE id = ?').bind(newMsgId).first();
@@ -558,7 +563,9 @@ chatMessagesRouter.post('/messages/:id/reactions', requireAuth, async (c) => {
     if (rxRateRow && Number(rxRateRow.count) > 60) {
       return c.json({ error: 'Too many reaction updates. Please wait a moment.' }, 429);
     }
-  } catch (e) {}
+  } catch (e) {
+    logEvent('warn', 'chat_reaction_rate_limit_failed', { err: e });
+  }
 
   const existingRx = await chatDb.prepare(
     'SELECT id FROM message_reactions WHERE message_id = ? AND user_id = ? AND emoji = ?'

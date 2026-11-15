@@ -235,7 +235,7 @@ gifsRouter.post('/import-url', requireAuth, async (c) => {
 
   const gifId = 'gif_' + generateToken().slice(0, 24);
   const ext = mimeType === 'image/webp' ? 'webp' : 'gif';
-  let driveFileId = null;
+  let driveFileId;
 
   try {
     driveFileId = await uploadGDriveBytes(c.env, {

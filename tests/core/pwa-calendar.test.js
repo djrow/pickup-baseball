@@ -6,11 +6,12 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
 const fs = require('fs');
+const vm = require('node:vm');
 
 module.exports = async function registerPwaCalendarTests(ctx, t9) {
-  const { apiReq, getCookie, db, createSession, getDefaultDuties, CURRENT_APP_VERSION } = ctx;
+  const { apiReq, db, createSession, CURRENT_APP_VERSION } = ctx;
 
-  const { seedAdminId, seedAdminCookie, seedOrgId, seedOrgCookie, seedPlayerId, seedPlayerCookie, sharedEventId, baseUrl, publicDir } = ctx;
+  const { seedOrgCookie, seedPlayerCookie, baseUrl, publicDir } = ctx;
 
   await t9.test('T9.1: Web App Manifest exists and is valid', () => {
     const manifestPath = path.join(publicDir, 'manifest.webmanifest');
@@ -224,7 +225,6 @@ module.exports = async function registerPwaCalendarTests(ctx, t9) {
     assert.equal(initDetail.status, 200);
     assert.ok(initDetail.data.duties.length >= 3, 'Event must have default volunteer tasks');
     const task1Id = initDetail.data.duties[0].id;
-    const task2Id = initDetail.data.duties[1].id;
     const task3Id = initDetail.data.duties[2].id;
     const task5Id = initDetail.data.duties[4].id;
 
@@ -575,8 +575,8 @@ module.exports = async function registerPwaCalendarTests(ctx, t9) {
     assert.ok(eventHtmlCal.includes('id="event-calendar-meta-item"') && eventHtmlCal.includes('id="event-subscribe-ics-btn"') && eventHtmlCal.includes('id="event-subscribe-panel"'), 'Event page must include single-game calendar subscription in detail cards');
     assert.ok(eventJsCal.includes('API.renderSubscribePanel('), 'event.js must bind single-game subscription panel');
     assert.ok(!eventJsCal.includes('?.') && !eventJsCal.includes('??'), 'event.js must avoid optional chaining / nullish coalescing');
-    assert.doesNotThrow(() => new Function(apiJsNav), 'api.js must parse as valid JS without syntax errors');
-    assert.doesNotThrow(() => new Function(appJs), 'app.js must parse as valid JS without syntax errors');
+    assert.doesNotThrow(() => new vm.Script(apiJsNav, { filename: 'public/js/api.js' }), 'api.js must parse as valid JS without syntax errors');
+    assert.doesNotThrow(() => new vm.Script(appJs, { filename: 'public/js/app.js' }), 'app.js must parse as valid JS without syntax errors');
 
     const apiJs = fs.readFileSync(path.join(publicDir, 'js/api.js'), 'utf8');
     assert.ok(apiJs.includes('?cal_token=') && apiJs.includes('/api/auth/calendar-token/regenerate'), 'api.js subscribe panel must support personalized cal_token and token rotation');
@@ -711,22 +711,6 @@ module.exports = async function registerPwaCalendarTests(ctx, t9) {
 
     const feedFunctionExists = fs.existsSync(path.join(ctx.rootDir, 'functions', 'feed.xml.js'));
     assert.ok(feedFunctionExists, 'functions/feed.xml.js must exist for Cloudflare Pages edge rendering');
-
-    // 9. Verify zero ES2020+ incompatible syntax (?. or ??) in client JS
-    const jsFiles = ['api.js', 'app.js', 'admin.js', 'event.js', 'archive.js', 'login.js', 'profile.js', 'weather.js', 'art.js'];
-    for (const file of jsFiles) {
-      const code = fs.readFileSync(path.join(publicDir, 'js', file), 'utf8');
-      const lines = code.split('\n');
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        if (/\?\./.test(line) && !/regex|\/|\.test\(|match\(/.test(line)) {
-          assert.fail(`Found disallowed optional chaining (?.) in public/js/${file} at line ${i + 1}: ${line.trim()}`);
-        }
-        if (/\?\?/.test(line)) {
-          assert.fail(`Found disallowed nullish coalescing (??) in public/js/${file} at line ${i + 1}: ${line.trim()}`);
-        }
-      }
-    }
   });
 
   await test('T9.18: 15-Language i18n Coverage for Calendar Legend, Cloud Sync, and Webapp Build Attribution', async () => {

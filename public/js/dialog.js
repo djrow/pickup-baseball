@@ -10,7 +10,7 @@
       if (typeof window !== 'undefined' && window.API && typeof window.API.t === 'function') {
         return window.API.t(key, fallback);
       }
-    } catch (e) {}
+    } catch (e) { /* fallback to English string when API.t throws */ }
     return fallback;
   }
 
@@ -36,7 +36,7 @@
     ta.style.left = '-9999px';
     document.body.appendChild(ta);
     ta.select();
-    var ok = false;
+    var ok;
     try {
       ok = document.execCommand('copy');
     } catch (err) {
@@ -213,7 +213,7 @@
         if (backdrop.parentNode) backdrop.parentNode.removeChild(backdrop);
         if (activeBackdrop === backdrop) activeBackdrop = null;
         if (previouslyFocused && typeof previouslyFocused.focus === 'function') {
-          try { previouslyFocused.focus(); } catch (e) {}
+          try { previouslyFocused.focus(); } catch (e) { /* best-effort focus restore */ }
         }
         resolve(result);
       }
@@ -239,7 +239,7 @@
       var focusTarget = card.querySelector('input, textarea, select, button.pbf-dialog-btn-primary, button');
       if (focusTarget && typeof focusTarget.focus === 'function') {
         setTimeout(function () {
-          try { focusTarget.focus(); } catch (e) {}
+          try { focusTarget.focus(); } catch (e) { /* best-effort initial focus */ }
         }, 0);
       }
     });
@@ -396,7 +396,7 @@
       title: title,
       message: options.message || '',
       defaultCancelValue: null,
-      buildBody: function (bodyEl, finish) {
+      buildBody: function (bodyEl) {
         errorEl = document.createElement('div');
         errorEl.className = 'pbf-dialog-error';
         errorEl.setAttribute('role', 'alert');

@@ -42,7 +42,7 @@ async function loadArchiveGames() {
         renderedFromCache = true;
       }
     }
-  } catch (e) {}
+  } catch (e) { /* localStorage unavailable or invalid cache */ }
 
   if (!renderedFromCache) {
     container.innerHTML = `<p style="color: var(--text-muted);">${API.escapeHtml(API.t('home.loading_games'))}</p>`;
@@ -59,7 +59,7 @@ async function loadArchiveGames() {
 
     try {
       localStorage.setItem(cacheKey, JSON.stringify(events));
-    } catch (e) {}
+    } catch (e) { /* storage quota / private mode */ }
 
     renderArchiveList(events, container);
   } catch (err) {

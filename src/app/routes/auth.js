@@ -33,7 +33,7 @@ import {
 } from '../security.js';
 import { getRequireLoginSetting, getDisallowZeroLoginMediaSetting, pruneEphemeralBaseballRows } from '../schema.js';
 import { sendAuthCode } from '../mailer.js';
-import { ERROR_CODES, jsonError } from '../errors.js';
+import { ERROR_CODES, jsonError, logEvent } from '../errors.js';
 
 export const authRouter = /** @type {AppHono} */ (new Hono());
 
@@ -138,7 +138,7 @@ async function handleSendCode(c) {
     const origin = getSafePublicOrigin(c);
     try {
       await sendAuthCode(c.env, origin, { email, name: name || 'Player', code, token, sharedDevice });
-    } catch (mailErr) {
+    } catch (_mailErr) {
       return jsonError(c, 500, ERROR_CODES.MAIL_ERROR, 'Failed to dispatch verification code.');
     }
 
@@ -368,7 +368,9 @@ async function handleClubhouseOptInToggle(c) {
           INSERT INTO sync_events (channel_id, event_type, target_id, payload_json, created_at)
           VALUES (0, 'member_opt_change', ?, ?, ?)
         `).bind(user.id, JSON.stringify({ user_id: user.id, clubhouse_opted_in: val }), Math.floor(Date.now() / 1000)).run();
-      } catch (e) {}
+      } catch (e) {
+        logEvent('warn', 'chat_sync_event_write_failed', { eventType: 'member_opt_change', err: e });
+      }
     }
 
     user.clubhouseOptedIn = optedIn;
@@ -750,7 +752,11 @@ authRouter.post('/logout-other-devices', requireAuth, async (c) => {
 authRouter.post('/logout', async (c) => {
   const sessionId = getCookie(c, SESSION_COOKIE_NAME);
   if (sessionId && c.env.DB) {
-    try { await c.env.DB.prepare('DELETE FROM sessions WHERE id = ?').bind(sessionId).run(); } catch (e) {}
+    try {
+      await c.env.DB.prepare('DELETE FROM sessions WHERE id = ?').bind(sessionId).run();
+    } catch (e) {
+      logEvent('warn', 'auth_logout_session_delete_failed', { err: e });
+    }
   }
   deleteCookie(c, SESSION_COOKIE_NAME, { path: '/' });
   return c.json({ success: true, message: 'Logged out successfully.' });
@@ -804,7 +810,9 @@ export async function getSettingsHandler(c) {
     try {
       const row = await c.env.DB.prepare("SELECT value FROM app_settings WHERE key = 'appscript_upload_url'").first();
       if (row && row.value) appscriptUrl = row.value;
-    } catch (e) {}
+    } catch (e) {
+      logEvent('warn', 'settings_appscript_read_failed', { err: e });
+    }
   }
   const user = c.get('user');
   const payload = {
@@ -854,7 +862,9 @@ export async function testAppscriptHandler(c) {
       try {
         const row = await c.env.DB.prepare("SELECT value FROM app_settings WHERE key = 'appscript_upload_url'").first();
         targetUrl = (row && row.value) ? row.value.trim() : '';
-      } catch (e) {}
+      } catch (e) {
+        logEvent('warn', 'settings_appscript_read_failed', { err: e });
+      }
     }
     if (!targetUrl && c.env && c.env.APPSCRIPT_UPLOAD_URL) {
       targetUrl = c.env.APPSCRIPT_UPLOAD_URL.trim();

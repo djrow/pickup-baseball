@@ -19,7 +19,7 @@ async function initEvent() {
   let storedGuestToken = '';
   try {
     storedGuestToken = eventId ? (localStorage.getItem('guest_token_' + eventId) || '') : '';
-  } catch (e) {}
+  } catch (e) { /* localStorage unavailable */ }
   guestToken = params.get('token') || storedGuestToken || '';
 
   if (params.has('token') && typeof window.history !== 'undefined' && typeof window.history.replaceState === 'function') {
@@ -27,7 +27,7 @@ async function initEvent() {
       const cleanUrl = new URL(window.location.href);
       cleanUrl.searchParams.delete('token');
       window.history.replaceState({}, document.title, cleanUrl.pathname + cleanUrl.search + cleanUrl.hash);
-    } catch (e) {}
+    } catch (e) { /* best-effort URL token strip */ }
   }
 
   if (!eventId) {
@@ -131,13 +131,13 @@ async function loadEventData(preserveAlertHtml) {
           applyLoadedEventToDom(cachedRes, false);
         }
       }
-    } catch (e) {}
+    } catch (e) { /* localStorage cache unavailable or invalid JSON */ }
   }
 
   try {
     const res = await API.getEvent(eventId, guestToken);
     if (res.error) {
-      try { localStorage.removeItem(cacheKey); } catch (e) {}
+      try { localStorage.removeItem(cacheKey); } catch (e) { /* localStorage unavailable */ }
       showError(res.error);
       return;
     }
@@ -166,7 +166,7 @@ async function loadEventData(preserveAlertHtml) {
         };
         localStorage.setItem(cacheKey, JSON.stringify(publicCacheCopy));
       }
-    } catch (e) {}
+    } catch (e) { /* storage quota / private mode */ }
 
     applyLoadedEventToDom(res, preserveAlertHtml);
   } catch (err) {
@@ -365,6 +365,7 @@ function renderEventDetails() {
         window.WeatherService.renderAssistantWidget('smart-rainout-widget', fc, { locationName: ev.location });
       }
     }).catch(function(err) {
+      console.warn('Weather forecast fetch failed:', err);
       if (weatherDisplay) {
         weatherDisplay.innerHTML = '<span style="font-size: 0.84rem; color: var(--text-muted);">Weather forecast temporarily unavailable</span>';
       }
@@ -423,7 +424,7 @@ function renderAttendeesRoster() {
     return;
   }
 
-  let rosterHtml = '';
+  let rosterHtml;
   if (attendees.length === 0) {
     rosterHtml = `
       <p style="color: var(--text-muted); font-style: italic; padding: 12px 0;">
@@ -698,7 +699,7 @@ function renderTasksChecklist(isInteractive) {
     const translatedTitle = API.translatePhrase(d.title);
     const translatedDesc = API.translatePhrase(d.description || '');
 
-    let statusPillHtml = '';
+    let statusPillHtml;
     if (isRainout) {
       statusPillHtml = '<span class="badge badge-gray" style="font-size: 0.68rem;">🌧️ Excused</span>';
     } else if (isCompletelyFull) {
@@ -906,7 +907,12 @@ async function setupRsvpState(preserveAlertHtml) {
       if (s && s.require_login_to_rsvp !== undefined) {
         requireLogin = Boolean(s.require_login_to_rsvp);
       }
-    } catch (e) {}
+    } catch (e) {
+      console.warn('Could not load RSVP settings:', e);
+      if (typeof API !== 'undefined' && API.recordDiagnostic) {
+        API.recordDiagnostic({ route: '/api/auth/settings', method: 'GET', status: 0, code: 'EVENT_SETTINGS_FAILED' });
+      }
+    }
   }
 
   const isRainout = Boolean(eventData && eventData.event && eventData.event.status === 'rainout');
@@ -1100,7 +1106,7 @@ async function setupRsvpState(preserveAlertHtml) {
 
     if (myRsvp.management_token) {
       guestToken = myRsvp.management_token;
-      try { localStorage.setItem('guest_token_' + eventId, guestToken); } catch (e) {}
+      try { localStorage.setItem('guest_token_' + eventId, guestToken); } catch (e) { /* localStorage unavailable */ }
     }
   } else {
     rsvpBadge.innerHTML = '';
@@ -1528,7 +1534,7 @@ function setupRsvpForm() {
         } else {
           if (res.managementToken) {
             guestToken = res.managementToken;
-            try { localStorage.setItem('guest_token_' + eventId, guestToken); } catch (e) {}
+            try { localStorage.setItem('guest_token_' + eventId, guestToken); } catch (e) { /* localStorage unavailable */ }
           }
           alertBox.innerHTML = `<div class="alert alert-info">${API.escapeHtml(res.message || 'Your RSVP has been cancelled.')}</div>`;
           await loadEventData(true);
@@ -1606,7 +1612,7 @@ function setupRsvpForm() {
       } else {
         if (res.managementToken) {
           guestToken = res.managementToken;
-          try { localStorage.setItem('guest_token_' + eventId, guestToken); } catch (e) {}
+          try { localStorage.setItem('guest_token_' + eventId, guestToken); } catch (e) { /* localStorage unavailable */ }
         }
         const alertClass = res.status === 'waitlist' ? 'alert-info' : 'alert-success';
         alertBox.innerHTML = `<div class="alert ${alertClass}">${API.escapeHtml(res.message)}</div>`;

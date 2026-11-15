@@ -277,10 +277,16 @@ async function runSchemaBatch(db, sqlList) {
     try {
       await db.batch(sqlList.map((sql) => db.prepare(sql)));
       return;
-    } catch (e) {}
+    } catch (e) {
+      /* best-effort batch; fall back to statement-by-statement execution */
+    }
   }
   for (const sql of sqlList) {
-    try { await db.prepare(sql).run(); } catch (e) {}
+    try {
+      await db.prepare(sql).run();
+    } catch (e) {
+      /* intentional idempotent DDL probe: object may already exist */
+    }
   }
 }
 
@@ -294,14 +300,20 @@ export async function ensureD1Schema(db, force = false) {
       if (verRow && verRow.value === BASEBALL_SCHEMA_VERSION) {
         alreadyAtVersion = true;
       }
-    } catch (e) {}
+    } catch (e) {
+      /* schema_version probe: app_settings table may not exist yet on fresh DB */
+    }
   }
 
   if (!alreadyAtVersion) {
     await runSchemaBatch(db, CREATE_TABLES_SQL);
 
     for (const sql of ALTER_STATEMENTS) {
-      try { await db.prepare(sql).run(); } catch (e) {}
+      try {
+        await db.prepare(sql).run();
+      } catch (e) {
+        /* intentional schema probe: column or index may already exist */
+      }
     }
     try {
       await db.prepare(`
@@ -309,7 +321,9 @@ export async function ensureD1Schema(db, force = false) {
         SET players_count = CASE WHEN status = 'declined' THEN 0 ELSE 1 + COALESCE(additional_guests, 0) END
         WHERE players_count IS NULL
       `).run();
-    } catch (e) {}
+    } catch (e) {
+      /* best-effort legacy row backfill during schema migration */
+    }
 
     try {
       await runSchemaBatch(db, [
@@ -320,11 +334,15 @@ export async function ensureD1Schema(db, force = false) {
         "UPDATE events SET location = 'Bushrod Park Field 1' WHERE location = 'Bushrod Part Field 1'",
         "UPDATE media_items SET is_approved = 1 WHERE is_approved IS NULL OR (is_approved = 0 AND id <= 10)"
       ]);
-    } catch (e) {}
+    } catch (e) {
+      /* best-effort legacy role/location normalization during migration */
+    }
 
     try {
       await db.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('schema_version', ?)").bind(BASEBALL_SCHEMA_VERSION).run();
-    } catch (e) {}
+    } catch (e) {
+      /* best-effort schema_version stamp */
+    }
 
     try {
       const mediaCountRow = await db.prepare("SELECT COUNT(*) as c FROM media_items").first();
@@ -730,14 +748,20 @@ export async function ensureChatD1Schema(chatDb, force = false) {
         migratedChatDbs.add(chatDb);
         return;
       }
-    } catch (e) {}
+    } catch (e) {
+      /* schema_version probe: chat_meta table may not exist yet on fresh DB */
+    }
   }
 
   if (typeof chatDb.prepare === 'function') {
     await runSchemaBatch(chatDb, CREATE_CHAT_TABLES_SQL);
   } else if (typeof chatDb.exec === 'function') {
     for (const sql of CREATE_CHAT_TABLES_SQL) {
-      try { chatDb.exec(sql); } catch (e) {}
+      try {
+        chatDb.exec(sql);
+      } catch (e) {
+        /* intentional idempotent DDL probe: object may already exist */
+      }
     }
   }
 
@@ -761,7 +785,9 @@ export async function ensureChatD1Schema(chatDb, force = false) {
       if (msgCols.has('hidden_at') && msgCols.has('original_iv') && chCols.has('is_private') && cmCols.has('hidden')) {
         needsColumnAlter = false;
       }
-    } catch (e) {}
+    } catch (e) {
+      /* pragma column probe fallback: run ALTER_STATEMENTS */
+    }
   }
 
   if (needsColumnAlter) {
@@ -803,7 +829,9 @@ export async function ensureChatD1Schema(chatDb, force = false) {
       ]);
       migratedChatDbs.add(chatDb);
       return;
-    } catch (e) {}
+    } catch (e) {
+      /* best-effort batch seed; fall back to per-channel inserts */
+    }
   }
 
   for (const ch of DEFAULT_CHAT_CHANNELS) {
@@ -842,7 +870,9 @@ export async function ensureChatD1Schema(chatDb, force = false) {
         await metaStmt.bind(CHAT_SCHEMA_VERSION).run();
       }
     }
-  } catch (e) {}
+  } catch (e) {
+    /* best-effort topic sync and chat schema_version stamp */
+  }
 
   migratedChatDbs.add(chatDb);
 }
@@ -872,7 +902,9 @@ export async function pruneEphemeralBaseballRows(db) {
     } else {
       for (const s of stmts) await s.run();
     }
-  } catch (e) {}
+  } catch (e) {
+    /* best-effort opportunistic cleanup; non-fatal if DB is busy */
+  }
 }
 
 /** Opportunistically prunes stale WebRTC signals, chat rate limits, and aged sync tombstones at most once per 10 minutes per isolate. */
@@ -895,7 +927,9 @@ export async function pruneEphemeralChatRows(chatDb) {
     } else {
       for (const s of stmts) await s.run();
     }
-  } catch (e) {}
+  } catch (e) {
+    /* best-effort opportunistic cleanup; non-fatal if DB is busy */
+  }
 }
 
 export const ensureBaseballD1Schema = ensureD1Schema;
@@ -919,13 +953,17 @@ export async function ensureClubhouseOptInBackfill(baseballDb, chatDb, force = f
       for (const r of (msgAuthors || [])) {
         if (r && r.uid) activeIds.add(Number(r.uid));
       }
-    } catch (e) {}
+    } catch (e) {
+      /* best-effort backfill probe: messages table may not be initialized yet */
+    }
     try {
       const { results: keyUsers } = await chatDb.prepare('SELECT DISTINCT user_id as uid FROM user_crypto_keys WHERE user_id IS NOT NULL').all();
       for (const r of (keyUsers || [])) {
         if (r && r.uid) activeIds.add(Number(r.uid));
       }
-    } catch (e) {}
+    } catch (e) {
+      /* best-effort backfill probe: user_crypto_keys table may not be initialized yet */
+    }
 
     if (activeIds.size > 0) {
       const idsArr = Array.from(activeIds);
@@ -993,11 +1031,13 @@ export async function getRequireLoginSetting(db, env) {
   return env && env.NODE_ENV === 'test' ? false : true;
 }
 
-export async function getDisallowZeroLoginMediaSetting(db, env) {
+export async function getDisallowZeroLoginMediaSetting(db, _env) {
   if (!db) return false;
   try {
     const row = await db.prepare("SELECT value FROM app_settings WHERE key = 'disallow_zero_login_media'").first();
     if (row) return row.value === 'true';
-  } catch (e) {}
+  } catch (e) {
+    /* app_settings probe: table may not exist yet during cold start */
+  }
   return false;
 }

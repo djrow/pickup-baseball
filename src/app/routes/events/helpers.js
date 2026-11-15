@@ -38,7 +38,9 @@ export function runBackground(c, promise) {
     if (c.executionCtx && typeof c.executionCtx.waitUntil === 'function') {
       c.executionCtx.waitUntil(promise);
     }
-  } catch (e) {}
+  } catch (e) {
+    /* executionCtx.waitUntil unavailable outside Cloudflare Workers runtime */
+  }
 }
 
 /**

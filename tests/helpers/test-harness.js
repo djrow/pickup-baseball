@@ -40,10 +40,10 @@ function generateSessionId() {
  */
 function initTestBaseballDb(db) {
   for (const sql of CREATE_TABLES_SQL) {
-    try { db.exec(sql); } catch (e) {}
+    try { db.exec(sql); } catch (e) { /* schema DDL is idempotent */ }
   }
   for (const sql of ALTER_STATEMENTS) {
-    try { db.exec(sql); } catch (e) {}
+    try { db.exec(sql); } catch (e) { /* ALTER TABLE column may already exist */ }
   }
 
   // Seed default duties
@@ -60,7 +60,7 @@ function initTestBaseballDb(db) {
   defaultDuties.forEach((d, idx) => {
     try {
       insertDuty.run(d.title, d.description, d.slots_needed, idx);
-    } catch (e) {}
+    } catch (e) { /* ignore duplicate default_duties seed row */ }
   });
 }
 
@@ -69,7 +69,7 @@ function initTestBaseballDb(db) {
  */
 function initTestChatDb(db) {
   for (const sql of CREATE_CHAT_TABLES_SQL) {
-    try { db.exec(sql); } catch (e) {}
+    try { db.exec(sql); } catch (e) { /* schema DDL is idempotent */ }
   }
 
   const insertChannel = db.prepare(`
@@ -91,14 +91,14 @@ function initTestChatDb(db) {
         ch.is_encrypted !== undefined ? ch.is_encrypted : 1,
         ch.sort_order || 0
       );
-    } catch (e) {}
+    } catch (e) { /* ignore duplicate channel seed row */ }
   }
 }
 
 /**
  * Create a complete, isolated Clubhouse test context
  */
-async function createClubhouseTestContext(options = {}) {
+async function createClubhouseTestContext(_options = {}) {
   const nonce = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
   const testDbPath = path.join(os.tmpdir(), `clubhouse_bb_${nonce}.db`);
   const testChatDbPath = path.join(os.tmpdir(), `clubhouse_chat_${nonce}.db`);
@@ -123,7 +123,6 @@ async function createClubhouseTestContext(options = {}) {
   // -------------------------------------------------------------------------
   // Seed Test Accounts in BASEBALL_DB
   // -------------------------------------------------------------------------
-  const now = new Date();
   const futureExpiry = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString();
   const pastExpiry = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
@@ -221,7 +220,7 @@ async function createClubhouseTestContext(options = {}) {
   `).run(facilitatorDutyId, attFacId);
 
   // Add attendee for Charlie Player (attending, playingSunday = true)
-  const attPlayerRes = baseballDb.prepare(`
+  baseballDb.prepare(`
     INSERT INTO attendees (event_id, user_id, name, email, status, players_count)
     VALUES (?, ?, 'Charlie Player', 'player@pickupbaseball.org', 'attending', 1)
   `).run(testEventId, playerId);
@@ -355,11 +354,11 @@ async function createClubhouseTestContext(options = {}) {
     // Windows safety: close database handles BEFORE unlinking
     try {
       if (chatDb && typeof chatDb.close === 'function') chatDb.close();
-    } catch (e) {}
+    } catch (e) { /* best-effort chatDb close in cleanup */ }
 
     try {
       if (baseballDb && typeof baseballDb.close === 'function') baseballDb.close();
-    } catch (e) {}
+    } catch (e) { /* best-effort baseballDb close in cleanup */ }
 
     // Safe unlinking of temporary database files
     const pathsToClean = [
@@ -374,7 +373,7 @@ async function createClubhouseTestContext(options = {}) {
     for (const p of pathsToClean) {
       try {
         if (fs.existsSync(p)) fs.unlinkSync(p);
-      } catch (e) {}
+      } catch (e) { /* best-effort temp DB unlink on Windows */ }
     }
   }
 

@@ -2,15 +2,14 @@
  * T9.19–T9.27: Weather Engine, Fair-Share Duties, Art Studio, Gallery, ZAP Hardening & BP Order Tests
  */
 
-const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
 const fs = require('fs');
 
 module.exports = async function registerWeatherGalleryTests(ctx, t9) {
-  const { apiReq, getCookie, db, createSession, getDefaultDuties, CURRENT_APP_VERSION } = ctx;
+  const { apiReq, db, createSession, CURRENT_APP_VERSION } = ctx;
 
-  const { seedAdminId, seedAdminCookie, seedOrgId, seedOrgCookie, seedPlayerId, seedPlayerCookie, sharedEventId, baseUrl, publicDir } = ctx;
+  const { seedAdminCookie, seedOrgCookie, seedPlayerCookie, sharedEventId, baseUrl, publicDir } = ctx;
 
   await t9.test('T9.19: Client-Side Weather Engine, Temperature/Emoji Pills & Smart Rainout Assistant Drainage Heuristic', async () => {
     // 1. Verify public/js/weather.js exists and is syntactically valid ES6
@@ -1096,7 +1095,7 @@ module.exports = async function registerWeatherGalleryTests(ctx, t9) {
     const p2Claim = await p2ClaimRes.json();
     assert.equal(p2Claim.success, true);
     assert.equal(p2Claim.slot_number, 2);
-    const p2SignupId = p2Claim.signup_id;
+    assert.ok(p2Claim.signup_id, 'Guest BP signup must return signup_id');
 
     // 8. Player 1 moves to Slot #5 via POST
     const p1MoveRes = await fetch(`${baseUrl}/api/events/${bpEvent.id}/bp-order`, {

@@ -28,7 +28,7 @@
           if (parsed && typeof parsed === 'object') return parsed;
         }
       }
-    } catch (e) {}
+    } catch (e) { /* localStorage unavailable or invalid JSON */ }
     return {};
   }
 
@@ -37,7 +37,7 @@
       if (typeof localStorage !== 'undefined') {
         localStorage.setItem('pickup_ch_collapsed_cats', JSON.stringify(map || {}));
       }
-    } catch (e) {}
+    } catch (e) { /* localStorage unavailable */ }
   }
 
   var uiState = {
@@ -795,7 +795,7 @@
     var badges = {};
     try {
       badges = typeof msg.author_badges === 'string' ? JSON.parse(msg.author_badges) : (msg.author_badges || {});
-    } catch (e) {}
+    } catch (e) { /* ignore malformed author_badges JSON */ }
 
     var html = '';
     if (msg.author_role === 'admin') {
@@ -1339,7 +1339,7 @@
         if (!isNaN(parsedDate.getTime())) {
           dateText = parsedDate.toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
         }
-      } catch (e) {}
+      } catch (e) { /* fallback to empty dateText */ }
     }
 
     detailsEl.innerHTML =
@@ -1496,7 +1496,7 @@
           vidEl.srcObject = uiState.remoteStreams[pid];
           vidEl.muted = Boolean(Store.isUserMutedByMe(pid));
           vidEl.style.display = 'block';
-        } catch (e) {}
+        } catch (e) { /* ignore video element srcObject attachment failure */ }
       }
     }
   }
@@ -2024,6 +2024,7 @@
       var g = filtered[j];
       var rawGifUrl = String(g.url || '').trim();
       var gifUrl = '';
+      // eslint-disable-next-line no-control-regex
       if (/[\u0000-\u001f\u007f]/.test(rawGifUrl)) {
         gifUrl = '';
       } else if (rawGifUrl.charAt(0) === '/' && rawGifUrl.charAt(1) !== '/' && rawGifUrl.charAt(1) !== '\\') {
@@ -2058,7 +2059,7 @@
 
   function sendGifToActiveChannel(gifUrl, gifTitle, driveGifId) {
     if (!uiState.activeChannelId || !gifUrl) return Promise.resolve();
-    var cleanTitle = String(gifTitle || 'GIF').replace(/[\[\]|]/g, ' ').trim().slice(0, 80) || 'GIF';
+    var cleanTitle = String(gifTitle || 'GIF').replace(/[[\]|]/g, ' ').trim().slice(0, 80) || 'GIF';
     var composerInput = el('ch-composer-input');
     var caption = composerInput ? composerInput.value.trim() : '';
     var token = '[[gif:' + gifUrl + '|' + cleanTitle + ']]';
@@ -2495,11 +2496,11 @@
           var key = 'clubhouse_fac_check_' + checkbox.getAttribute('data-check');
           try {
             checkbox.checked = localStorage.getItem(key) === '1';
-          } catch (e) {}
+          } catch (e) { /* localStorage unavailable */ }
           checkbox.addEventListener('change', function () {
             try {
               localStorage.setItem(key, checkbox.checked ? '1' : '0');
-            } catch (e) {}
+            } catch (e) { /* localStorage unavailable */ }
           });
         })(checks[cIdx]);
       }

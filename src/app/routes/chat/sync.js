@@ -8,6 +8,7 @@ import { Hono } from 'hono';
 import { requireAuth, rejectIfClubhouseOptedOut } from '../../security.js';
 import { canUserAccessEvent } from '../../policy.js';
 import { pruneEphemeralChatRows } from '../../schema.js';
+import { logEvent } from '../../errors.js';
 import {
   abbreviateMemberNames,
   chunkArray,
@@ -56,7 +57,9 @@ chatSyncRouter.get('/bootstrap', requireAuth, async (c) => {
         const { allowed_emails, ...restEvent } = visibleEvent;
         upcoming_game = isOrganizer ? visibleEvent : restEvent;
       }
-    } catch (e) {}
+    } catch (e) {
+      logEvent('warn', 'chat_bootstrap_upcoming_event_failed', { err: e });
+    }
   }
 
   if (!isOptedIn) {
@@ -81,7 +84,9 @@ chatSyncRouter.get('/bootstrap', requireAuth, async (c) => {
     if (staleVoice) {
       await chatDb.prepare('DELETE FROM voice_participants WHERE heartbeat_at <= ?').bind(nowSec - 25).run();
     }
-  } catch (e) {}
+  } catch (e) {
+    /* best-effort stale voice participant prune */
+  }
 
   // Active voice participants (<25s heartbeat)
   const { results: rawVoice } = await chatDb.prepare(
@@ -116,7 +121,9 @@ chatSyncRouter.get('/bootstrap', requireAuth, async (c) => {
         unread_counts[ch.id] = cnt;
         unread_counts[ch.slug] = cnt;
       }
-    } catch (e) {}
+    } catch (e) {
+      logEvent('warn', 'chat_bootstrap_unread_counts_failed', { err: e });
+    }
   }
 
   // Community member directory from BASEBALL_DB
@@ -172,7 +179,9 @@ chatSyncRouter.get('/bootstrap', requireAuth, async (c) => {
           statusText: (ck && ck.status_text) || ''
         };
       });
-    } catch (e) {}
+    } catch (e) {
+      logEvent('warn', 'chat_bootstrap_members_load_failed', { err: e });
+    }
   }
 
   let muted_user_ids = [];
@@ -181,7 +190,9 @@ chatSyncRouter.get('/bootstrap', requireAuth, async (c) => {
       'SELECT muted_user_id FROM user_mutes WHERE muter_user_id = ?'
     ).bind(user.id).all();
     muted_user_ids = (muteRows || []).map((r) => r.muted_user_id);
-  } catch (e) {}
+  } catch (e) {
+    logEvent('warn', 'chat_bootstrap_mutes_load_failed', { err: e });
+  }
 
   let last_message_id = 0;
   let last_event_id = 0;
@@ -190,7 +201,9 @@ chatSyncRouter.get('/bootstrap', requireAuth, async (c) => {
     const maxEvtRow = await chatDb.prepare('SELECT MAX(id) as m FROM sync_events').first();
     if (maxMsgRow && maxMsgRow.m) last_message_id = Number(maxMsgRow.m);
     if (maxEvtRow && maxEvtRow.m) last_event_id = Number(maxEvtRow.m);
-  } catch (e) {}
+  } catch (e) {
+    logEvent('warn', 'chat_bootstrap_watermarks_failed', { err: e });
+  }
 
   return c.json({
     user,
@@ -312,7 +325,9 @@ chatSyncRouter.get('/sync', requireAuth, async (c) => {
         await chatDb.prepare('DELETE FROM voice_participants WHERE heartbeat_at <= ?').bind(nowSec - 25).run();
       }
       await pruneEphemeralChatRows(chatDb);
-    } catch (e) {}
+    } catch (e) {
+      /* best-effort periodic TTL prune */
+    }
   }
 
   const { results: rawSignals } = await chatDb.prepare(

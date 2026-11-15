@@ -165,7 +165,9 @@
           rtcState.speakingUsers[peerUserId] = Boolean(msg.speaking);
           emitRtc('speaking_update', { userId: peerUserId, speaking: Boolean(msg.speaking) });
         }
-      } catch (e) {}
+      } catch (e) {
+        console.warn('[ClubhouseRTC] Ephemeral DataChannel message parse failed:', e);
+      }
     };
     dc.onclose = function () {
       if (rtcState.dataChannels[peerKey] === dc) {
@@ -250,7 +252,9 @@
       try {
         var dc = pc.createDataChannel('clubhouse-ephemeral', { ordered: false, maxRetransmits: 0 });
         attachDataChannelHandlers(peerUserId, dc);
-      } catch (e) {}
+      } catch (e) {
+        console.warn('[ClubhouseRTC] Failed to create ephemeral data channel:', e);
+      }
     }
 
     return pc;
@@ -283,7 +287,7 @@
         if (!sig.channel_id || Number(sig.channel_id) !== Number(rtcState.activeChannelId)) return;
         var senderId = Number(sig.sender_user_id);
         if (!senderId || senderId === Number(rtcState.currentUserId)) return;
-        var payload = {};
+        var payload;
         try {
           payload = typeof sig.payload_json === 'string' ? JSON.parse(sig.payload_json) : (sig.payload_json || {});
         } catch (e) {
@@ -481,7 +485,7 @@
     for (var i = 0; i < peerIds.length; i++) {
       try {
         rtcState.peerConnections[peerIds[i]].close();
-      } catch (e) {}
+      } catch (e) { /* best-effort peer connection close */ }
     }
     rtcState.peerConnections = {};
     rtcState.dataChannels = {};
@@ -560,7 +564,7 @@
       if (dc && dc.readyState === 'open') {
         try {
           dc.send(payload);
-        } catch (e) {}
+        } catch (e) { /* ignore transient DataChannel send failure for typing indicator */ }
       }
     }
   }

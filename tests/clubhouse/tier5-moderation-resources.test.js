@@ -1133,7 +1133,7 @@ module.exports = async function runTier5(t, ctx) {
         }), gdriveEnv);
         const text = await res.text();
         let data = null;
-        try { data = JSON.parse(text); } catch (e) {}
+        try { data = JSON.parse(text); } catch (e) { /* non-JSON response body */ }
         return { status: res.status, headers: res.headers, data, text };
       };
 

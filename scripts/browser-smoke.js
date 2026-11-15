@@ -82,11 +82,11 @@ async function waitForCdpTarget(cdpPort, procState, timeoutMs = 20000) {
             try {
               const createdGet = await fetchJson(`http://127.0.0.1:${cdpPort}/json/new?about:blank`, 'GET');
               if (createdGet && createdGet.webSocketDebuggerUrl) return createdGet;
-            } catch (_) {}
+            } catch (_) { /* DevTools target not ready yet; retry on next poll */ }
           }
         }
       }
-    } catch (_) {}
+    } catch (_) { /* DevTools /json/list not ready yet; retry on next poll */ }
     await new Promise((r) => setTimeout(r, 150));
   }
   const detail = procState.stderr.trim();
@@ -151,7 +151,7 @@ class CdpClient {
   }
 
   close() {
-    try { this.ws.close(); } catch (_) {}
+    try { this.ws.close(); } catch (_) { /* best-effort CDP socket close */ }
   }
 }
 
@@ -407,9 +407,9 @@ async function main() {
   } finally {
     if (cdp) cdp.close();
     if (browserProc && !browserProc.killed) {
-      try { browserProc.kill('SIGKILL'); } catch (_) {}
+      try { browserProc.kill('SIGKILL'); } catch (_) { /* best-effort browser process kill */ }
     }
-    try { fs.rmSync(userDataDir, { recursive: true, force: true }); } catch (_) {}
+    try { fs.rmSync(userDataDir, { recursive: true, force: true }); } catch (_) { /* best-effort profile dir cleanup */ }
     await server.cleanup();
   }
 }
