@@ -516,17 +516,26 @@ async function checkLiveProduction(origin) {
  * 8. Audit PWA asset cache & version parity: every public HTML/JS/CSS asset must
  *    appear in public/sw.js STATIC_ASSETS and every HTML script/css tag must carry ?v=<CURRENT_APP_VERSION>.
  */
-function checkPwaAssetSync() {
-  const swPath = path.join(ROOT, 'public', 'sw.js');
+function toPosixAssetPath(publicDir, filePath) {
+  return '/' + path.relative(publicDir, filePath).replace(/\\/g, '/');
+}
+
+function checkPwaAssetSync(rootDir = ROOT, options = {}) {
+  const report = typeof options.record === 'function'
+    ? options.record
+    : (options.silent ? () => {} : record);
+  const publicDir = path.join(rootDir, 'public');
+  const swPath = path.join(publicDir, 'sw.js');
   const swSrc = fs.readFileSync(swPath, 'utf8');
-  const verSrc = fs.readFileSync(path.join(ROOT, 'src', 'app', 'version.js'), 'utf8');
+  const verSrc = fs.readFileSync(path.join(rootDir, 'src', 'app', 'version.js'), 'utf8');
   const verMatch = verSrc.match(/CURRENT_APP_VERSION\s*=\s*'(\d+)'/);
   const appVer = verMatch ? verMatch[1] : null;
 
-  const htmlFiles = fs.readdirSync(path.join(ROOT, 'public')).filter((f) => f.endsWith('.html'));
-  const jsFiles = fs.readdirSync(path.join(ROOT, 'public', 'js')).filter((f) => f.endsWith('.js')).map((f) => `/js/${f}`);
-  const cssFiles = fs.readdirSync(path.join(ROOT, 'public', 'css')).filter((f) => f.endsWith('.css')).map((f) => `/css/${f}`);
-  const expectedAssets = [...htmlFiles.map((f) => `/${f}`), ...jsFiles, ...cssFiles];
+  const htmlFilePaths = walkFiles(publicDir, (f) => f.endsWith('.html'));
+  const htmlAssets = htmlFilePaths.map((f) => toPosixAssetPath(publicDir, f));
+  const jsAssets = walkFiles(path.join(publicDir, 'js'), (f) => f.endsWith('.js')).map((f) => toPosixAssetPath(publicDir, f));
+  const cssAssets = walkFiles(path.join(publicDir, 'css'), (f) => f.endsWith('.css')).map((f) => toPosixAssetPath(publicDir, f));
+  const expectedAssets = [...htmlAssets, ...jsAssets, ...cssAssets];
 
   const missingFromSw = expectedAssets.filter((p) => !swSrc.includes(`'${p}'`) && !swSrc.includes(`"${p}"`));
   const versionIssues = [];
@@ -534,22 +543,33 @@ function checkPwaAssetSync() {
     if (!swSrc.includes(`pbf-cache-v${appVer}`)) {
       versionIssues.push(`sw.js CACHE_NAME missing pbf-cache-v${appVer}`);
     }
-    for (const htmlFile of htmlFiles) {
-      const html = fs.readFileSync(path.join(ROOT, 'public', htmlFile), 'utf8');
-      for (const m of html.matchAll(/(?:src|href)="(\/(?:js|css)\/[^"]+)"/g)) {
-        if (!m[1].endsWith(`?v=${appVer}`)) {
-          versionIssues.push(`${htmlFile} -> ${m[1]} (expected ?v=${appVer})`);
+    for (const htmlFilePath of htmlFilePaths) {
+      const htmlRel = path.relative(publicDir, htmlFilePath).replace(/\\/g, '/');
+      const html = fs.readFileSync(htmlFilePath, 'utf8');
+      for (const m of html.matchAll(/(?:src|href)=(["'])(\/(?:js|css)\/[^"']+)\1/g)) {
+        if (!m[2].endsWith(`?v=${appVer}`)) {
+          versionIssues.push(`${htmlRel} -> ${m[2]} (expected ?v=${appVer})`);
         }
       }
     }
+  } else {
+    versionIssues.push('Could not parse CURRENT_APP_VERSION in src/app/version.js');
   }
 
-  if (missingFromSw.length || versionIssues.length) {
-    const details = [...missingFromSw.map((p) => `missing from sw.js: ${p}`), ...versionIssues];
-    record('FAIL', 'PWA Asset & Version Parity', details.join('; '));
-  } else {
-    record('PASS', 'PWA Asset & Version Parity', `${expectedAssets.length} static assets synced at v${appVer}`);
-  }
+  const details = [...missingFromSw.map((p) => `missing from sw.js: ${p}`), ...versionIssues];
+  const status = details.length ? 'FAIL' : 'PASS';
+  const detail = details.length ? details.join('; ') : `${expectedAssets.length} static assets synced at v${appVer}`;
+  report(status, 'PWA Asset & Version Parity', detail);
+
+  return {
+    status,
+    name: 'PWA Asset & Version Parity',
+    detail,
+    expectedAssets,
+    missingFromSw,
+    versionIssues,
+    appVer
+  };
 }
 
 /**
@@ -614,4 +634,11 @@ async function main() {
   }
 }
 
-main();
+if (require.main === module) {
+  main();
+}
+
+module.exports = {
+  checkPwaAssetSync,
+  walkFiles
+};
