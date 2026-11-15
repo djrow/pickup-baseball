@@ -47,29 +47,50 @@ function getFreePort() {
   });
 }
 
-function fetchJson(url) {
+function fetchJson(url, method = 'GET') {
   return new Promise((resolve, reject) => {
-    http.get(url, (res) => {
+    const req = http.request(url, { method }, (res) => {
       let data = '';
       res.on('data', (chunk) => { data += chunk; });
       res.on('end', () => {
         try { resolve(JSON.parse(data)); } catch (err) { reject(err); }
       });
-    }).on('error', reject);
+    });
+    req.setTimeout(1500, () => req.destroy(new Error('HTTP timeout')));
+    req.on('error', reject);
+    req.end();
   });
 }
 
-async function waitForCdpTarget(cdpPort, timeoutMs = 10000) {
+async function waitForCdpTarget(cdpPort, procState, timeoutMs = 20000) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
+    if (procState.exited) {
+      throw new Error(`Browser exited early (code=${procState.code}, signal=${procState.signal}): ${procState.stderr.trim()}`);
+    }
     try {
       const targets = await fetchJson(`http://127.0.0.1:${cdpPort}/json/list`);
-      const page = Array.isArray(targets) && targets.find((t) => t.type === 'page' && t.webSocketDebuggerUrl);
-      if (page) return page;
+      if (Array.isArray(targets)) {
+        const page = targets.find((t) => t.type === 'page' && t.webSocketDebuggerUrl);
+        if (page) return page;
+        // Cold headless Chrome can occasionally start with 0 open tabs; open one via CDP HTTP endpoint
+        if (targets.length === 0) {
+          try {
+            const created = await fetchJson(`http://127.0.0.1:${cdpPort}/json/new?about:blank`, 'PUT');
+            if (created && created.webSocketDebuggerUrl) return created;
+          } catch (_) {
+            try {
+              const createdGet = await fetchJson(`http://127.0.0.1:${cdpPort}/json/new?about:blank`, 'GET');
+              if (createdGet && createdGet.webSocketDebuggerUrl) return createdGet;
+            } catch (_) {}
+          }
+        }
+      }
     } catch (_) {}
     await new Promise((r) => setTimeout(r, 150));
   }
-  throw new Error('Timed out waiting for Chrome DevTools target');
+  const detail = procState.stderr.trim();
+  throw new Error(`Timed out waiting for Chrome DevTools target on port ${cdpPort}${detail ? ` (stderr: ${detail})` : ''}`);
 }
 
 class CdpClient {
@@ -181,19 +202,39 @@ async function main() {
   let browserProc = null;
   let cdp = null;
 
+  const procState = { exited: false, code: null, signal: null, stderr: '' };
+
   try {
     browserProc = spawn(exe, [
       '--headless=new',
       `--remote-debugging-port=${cdpPort}`,
+      '--remote-debugging-address=127.0.0.1',
+      '--remote-allow-origins=*',
       `--user-data-dir=${userDataDir}`,
       '--no-first-run',
       '--no-default-browser-check',
       '--disable-gpu',
+      '--disable-dev-shm-usage',
+      '--disable-setuid-sandbox',
       '--no-sandbox',
+      '--disable-background-networking',
       'about:blank'
-    ], { stdio: 'ignore' });
+    ], { stdio: ['ignore', 'ignore', 'pipe'] });
 
-    const target = await waitForCdpTarget(cdpPort, 12000);
+    if (browserProc.stderr) {
+      browserProc.stderr.on('data', (chunk) => {
+        if (procState.stderr.length < 4096) {
+          procState.stderr += String(chunk);
+        }
+      });
+    }
+    browserProc.on('exit', (code, signal) => {
+      procState.exited = true;
+      procState.code = code;
+      procState.signal = signal;
+    });
+
+    const target = await waitForCdpTarget(cdpPort, procState, 20000);
     cdp = new CdpClient(target.webSocketDebuggerUrl);
     await cdp.connect();
     await cdp.send('Page.enable');
