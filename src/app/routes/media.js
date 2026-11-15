@@ -28,7 +28,8 @@ import {
   extractYouTubeId,
   extractGoogleDriveFileId,
   normalizeMediaItem,
-  hasInvalidOrSpoofedMagicBytes
+  hasInvalidOrSpoofedMagicBytes,
+  isValidContainerMediaBuffer
 } from './media-helpers.js';
 import { arrayBufferToBase64, base64ToUint8Array, stripJpegMetadata } from '../security.js';
 import {
@@ -42,7 +43,7 @@ import {
 } from '../gdrive.js';
 import { resolveChannel, canUserAccessChannel } from './chat.js';
 import { isPrivateEncryptedBoard } from './chat/helpers.js';
-import { canUserAccessEvent } from '../policy.js';
+import { canUserAccessEvent, parseAllowedEmails } from '../policy.js';
 import { getDisallowZeroLoginMediaSetting } from '../schema.js';
 
 export const mediaRouter = new Hono();
@@ -92,7 +93,7 @@ mediaRouter.get('/', async (c) => {
       SELECT m.id, m.title, m.caption, m.media_type, m.original_url, m.file_url,
              m.mime_type, m.file_size, m.album, m.date_taken, m.contributor_name,
              m.contributor_id, m.event_id, m.is_approved, m.created_at,
-             e.title as event_title, e.allowed_emails as event_allowed_emails
+             e.id as event_exists, e.title as event_title, e.allowed_emails as event_allowed_emails
       FROM media_items m
       LEFT JOIN events e ON m.event_id = e.id
       ${whereSql}
@@ -104,23 +105,25 @@ mediaRouter.get('/', async (c) => {
       ? await c.env.DB.prepare(querySql).bind(...bindings).all()
       : await c.env.DB.prepare(querySql).all();
 
-    // Media linked to invite-only events is hidden entirely from viewers who cannot access the event.
+    // Media linked to invite-only or deleted events is hidden from viewers without access.
     const media = (rawMedia || []).filter((item) => {
+      if (item.event_id && !item.event_exists) return false;
       return !(item.event_allowed_emails && !canUserAccessEvent(user, { allowed_emails: item.event_allowed_emails }));
     }).map((item) => {
-      const { event_allowed_emails, ...rest } = item;
+      const { event_exists, event_allowed_emails, ...rest } = item;
       return rest;
     });
 
     // Fetch album metadata for quick bookmarks navigation (only counting approved media the viewer may see)
     const { results: albumRows } = await c.env.DB.prepare(`
-      SELECT m.album, m.date_taken, e.allowed_emails as event_allowed_emails
+      SELECT m.album, m.date_taken, m.event_id, e.id as event_exists, e.allowed_emails as event_allowed_emails
       FROM media_items m
       LEFT JOIN events e ON m.event_id = e.id
       WHERE m.is_approved = 1
     `).all();
     const albumMap = new Map();
     for (const row of (albumRows || [])) {
+      if (row.event_id && !row.event_exists) continue;
       if (row.event_allowed_emails && !canUserAccessEvent(user, { allowed_emails: row.event_allowed_emails })) continue;
       const key = row.album;
       let agg = albumMap.get(key);
@@ -143,13 +146,18 @@ mediaRouter.get('/', async (c) => {
       const { results: pending } = await c.env.DB.prepare(`
         SELECT m.id, m.title, m.caption, m.media_type, m.original_url, m.file_url,
                m.mime_type, m.file_size, m.album, m.date_taken, m.contributor_name,
-               m.contributor_id, m.event_id, m.is_approved, m.created_at
+               m.contributor_id, m.event_id, m.is_approved, m.created_at,
+               e.id as event_exists, e.allowed_emails as event_allowed_emails
         FROM media_items m
+        LEFT JOIN events e ON m.event_id = e.id
         WHERE m.is_approved = 0
         ORDER BY m.created_at DESC
         LIMIT 100
       `).all();
-      pendingMedia = pending || [];
+      pendingMedia = (pending || []).filter((item) => {
+        if (item.event_id && !item.event_exists) return false;
+        return !(item.event_allowed_emails && !canUserAccessEvent(user, { allowed_emails: item.event_allowed_emails }));
+      }).map(({ event_exists, event_allowed_emails, ...rest }) => rest);
     }
 
     c.header('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -173,18 +181,18 @@ mediaRouter.get('/:id/file', async (c) => {
     if (!id || isNaN(id)) return c.text('Not found', 404);
 
     const row = await c.env.DB.prepare(`
-      SELECT m.file_data, m.file_url, m.original_url, m.mime_type, m.is_approved, e.allowed_emails as event_allowed_emails
+      SELECT m.file_data, m.file_url, m.original_url, m.mime_type, m.is_approved, m.event_id,
+             e.id as event_exists, e.allowed_emails as event_allowed_emails
       FROM media_items m
       LEFT JOIN events e ON m.event_id = e.id
       WHERE m.id = ?
     `).bind(id).first();
     if (!row) return c.text('Not found', 404);
 
-    // Media linked to invite-only events is only available to invited users and managers
-    if (row.event_allowed_emails && !canUserAccessEvent(c.get('user'), { allowed_emails: row.event_allowed_emails })) {
+    // Media linked to invite-only or deleted events is only available to invited users and managers
+    if ((row.event_id && !row.event_exists) || (row.event_allowed_emails && !canUserAccessEvent(c.get('user'), { allowed_emails: row.event_allowed_emails }))) {
       return c.text('Not found', 404);
     }
-    const mediaCacheControl = row.event_allowed_emails ? 'private, no-store' : 'public, max-age=604800, stale-while-revalidate=2592000';
 
     // Moderation security check: Only approved media or organizers/admins can view files
     if (row.is_approved !== 1) {
@@ -194,6 +202,9 @@ mediaRouter.get('/:id/file', async (c) => {
         return c.text('Not found', 404);
       }
     }
+    const mediaCacheControl = (row.event_allowed_emails || Number(row.is_approved) !== 1)
+      ? 'private, no-store'
+      : 'public, max-age=604800, stale-while-revalidate=2592000';
 
     // 1. If stored in Google Drive / external vault (file_data is null)
     if (!row.file_data) {
@@ -781,7 +792,7 @@ async function handleMediaDelete(c) {
     if (!id || isNaN(id)) return c.json({ error: 'Invalid ID' }, 400);
 
     const existing = await c.env.DB.prepare(
-      'SELECT id, file_url, original_url, contributor_id, delete_token, file_size FROM media_items WHERE id = ?'
+      'SELECT id, file_data, file_url, original_url, contributor_id, delete_token, file_size FROM media_items WHERE id = ?'
     ).bind(id).first();
     if (!existing) return c.json({ error: 'Media item not found' }, 404);
 
@@ -806,7 +817,8 @@ async function handleMediaDelete(c) {
       return c.json({ error: 'Access denied: You do not have permission to take down this submission.' }, 403);
     }
 
-    // Attempt Google Drive file deletion ONLY for actual binary uploads (file_size > 0) not referenced elsewhere
+    // Attempt Google Drive file deletion ONLY for actual Drive-backed binary uploads (!file_data && file_size > 0)
+    // and only when the URL host is an authentic Google Drive domain.
     let appscriptUrl = (c.env && c.env.APPSCRIPT_UPLOAD_URL) || null;
     if (!appscriptUrl && c.env && c.env.DB) {
       try {
@@ -814,16 +826,33 @@ async function handleMediaDelete(c) {
         if (row && row.value) appscriptUrl = row.value.trim();
       } catch (e) {}
     }
-    if (appscriptUrl && Number(existing.file_size || 0) > 0 && (existing.file_url || existing.original_url)) {
-      const combined = `${existing.file_url || ''} ${existing.original_url || ''}`;
-      const match = combined.match(/(?:lh3\.googleusercontent\.com\/d\/|id=|file\/d\/)([\w-]{25,})/);
-      if (match && match[1]) {
-        const targetDriveId = match[1];
+    if (appscriptUrl && !existing.file_data && Number(existing.file_size || 0) > 0 && (existing.file_url || existing.original_url)) {
+      let targetDriveId = null;
+      for (const candidateUrl of [existing.file_url, existing.original_url]) {
+        if (!candidateUrl || typeof candidateUrl !== 'string') continue;
+        try {
+          const parsedDriveUrl = new URL(candidateUrl);
+          const host = parsedDriveUrl.hostname.toLowerCase();
+          if (host === 'lh3.googleusercontent.com' || host === 'drive.google.com' || host === 'docs.google.com') {
+            targetDriveId = extractGoogleDriveFileId(parsedDriveUrl.href);
+            if (targetDriveId) break;
+          }
+        } catch (e) {}
+      }
+      if (targetDriveId) {
         const likePattern = `%${targetDriveId}%`;
         const otherRef = await c.env.DB.prepare(
           'SELECT 1 FROM media_items WHERE id != ? AND (file_url LIKE ? OR original_url LIKE ?) LIMIT 1'
         ).bind(id, likePattern, likePattern).first();
-        if (!otherRef && APPSCRIPT_EXEC_URL_RE.test(appscriptUrl)) {
+        let chatAttRef = null;
+        if (c.env && c.env.CHAT_DB) {
+          try {
+            chatAttRef = await c.env.CHAT_DB.prepare(
+              'SELECT 1 FROM chat_attachments WHERE drive_file_id = ? LIMIT 1'
+            ).bind(targetDriveId).first();
+          } catch (e) {}
+        }
+        if (!otherRef && !chatAttRef && APPSCRIPT_EXEC_URL_RE.test(appscriptUrl)) {
           safeFetchExternalUrl(
             appscriptUrl,
             {
@@ -1244,17 +1273,29 @@ attachmentsRouter.get('/:id/stream', async (c) => {
   }
 
   let isPublicPromoted = Boolean(attachment.promoted_media_id);
+  let promoRestrictedEvent = false;
   if (isPublicPromoted) {
     const baseballDb = c.env && (c.env.BASEBALL_DB || c.env.DB);
     if (baseballDb) {
-      const promoRow = await baseballDb.prepare('SELECT id, is_approved FROM media_items WHERE id = ? LIMIT 1').bind(attachment.promoted_media_id).first();
+      const promoRow = await baseballDb.prepare(`
+        SELECT m.id, m.is_approved, m.event_id, e.id as event_exists, e.allowed_emails as event_allowed_emails
+        FROM media_items m
+        LEFT JOIN events e ON m.event_id = e.id
+        WHERE m.id = ?
+        LIMIT 1
+      `).bind(attachment.promoted_media_id).first();
       if (!promoRow) {
         isPublicPromoted = false;
         try {
           await chatDb.prepare('UPDATE chat_attachments SET promoted_media_id = NULL WHERE id = ?').bind(id).run();
         } catch (clearPromoErr) {}
-      } else if (Number(promoRow.is_approved) !== 1) {
+      } else if (
+        Number(promoRow.is_approved) !== 1 ||
+        (promoRow.event_id && !promoRow.event_exists) ||
+        (promoRow.event_allowed_emails && parseAllowedEmails(promoRow.event_allowed_emails).length > 0)
+      ) {
         isPublicPromoted = false;
+        promoRestrictedEvent = Boolean(promoRow.event_allowed_emails || (promoRow.event_id && !promoRow.event_exists));
       }
     }
   }
@@ -1286,7 +1327,7 @@ attachmentsRouter.get('/:id/stream', async (c) => {
   if (attachment.storage_provider === 'gdrive' && attachment.drive_file_id && isGDriveConfigured(c.env)) {
     const streamOpts = isPublicPromoted
       ? { useEdgeCache: true, cacheControl: 'public, max-age=31536000, immutable' }
-      : { useEdgeCache: false, cacheControl: 'private, max-age=3600' };
+      : { useEdgeCache: false, cacheControl: promoRestrictedEvent ? 'private, no-store' : 'private, max-age=3600' };
     return await streamGDriveFile(c.env, attachment.drive_file_id, rangeHeader, attachment.mime_type, c.req.url, streamOpts);
   }
 
@@ -1301,7 +1342,9 @@ attachmentsRouter.get('/:id/stream', async (c) => {
     return c.json({ error: 'Invalid attachment binary payload.' }, 400);
   }
   const mimeType = attachment.mime_type || 'application/octet-stream';
-  const localCacheControl = isPublicPromoted ? 'public, max-age=31536000, immutable' : 'private, max-age=3600';
+  const localCacheControl = isPublicPromoted
+    ? 'public, max-age=31536000, immutable'
+    : (promoRestrictedEvent ? 'private, no-store' : 'private, max-age=3600');
   return serveByteRangeResponse(bytes, mimeType, rangeHeader, localCacheControl);
 });
 

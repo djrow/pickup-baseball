@@ -311,7 +311,9 @@ export async function streamGDriveFile(env, driveFileId, rangeHeader, fallbackMi
 
   if (edgeCache && cacheKeyUrl) {
     try {
-      cacheReq = new Request(cacheKeyUrl + (rangeHeader ? `?range=${encodeURIComponent(rangeHeader)}` : ''), {
+      const parsedCacheUrl = new URL(cacheKeyUrl);
+      const canonicalBase = `${parsedCacheUrl.origin}${parsedCacheUrl.pathname}`;
+      cacheReq = new Request(canonicalBase + (rangeHeader ? `?range=${encodeURIComponent(rangeHeader)}` : ''), {
         method: 'GET'
       });
       const cachedRes = await edgeCache.match(cacheReq);
@@ -354,14 +356,36 @@ export async function streamGDriveFile(env, driveFileId, rangeHeader, fallbackMi
     return new Response('Upstream media unavailable', { status: upstreamRes.status });
   }
 
+  const SAFE_STREAM_MIME_TYPES = new Set([
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/gif',
+    'image/webp',
+    'image/avif',
+    'video/mp4',
+    'video/webm',
+    'video/quicktime',
+    'audio/mpeg',
+    'audio/webm',
+    'audio/ogg',
+    'application/pdf',
+    'application/octet-stream'
+  ]);
+  const rawContentType = String(upstreamRes.headers.get('content-type') || fallbackMimeType || 'application/octet-stream')
+    .split(';')[0].trim().toLowerCase();
+  const safeContentType = SAFE_STREAM_MIME_TYPES.has(rawContentType)
+    ? rawContentType
+    : (SAFE_STREAM_MIME_TYPES.has(String(fallbackMimeType || '').toLowerCase()) ? String(fallbackMimeType).toLowerCase() : 'application/octet-stream');
+
   const responseHeaders = {
-    'Content-Type': upstreamRes.headers.get('content-type') || fallbackMimeType,
+    'Content-Type': safeContentType,
     'Accept-Ranges': 'bytes',
     'Cache-Control': cacheControl,
     'X-Content-Type-Options': 'nosniff',
     'Content-Security-Policy': "default-src 'none'; sandbox"
   };
-  if (String(responseHeaders['Content-Type']).toLowerCase().includes('application/pdf')) {
+  if (safeContentType === 'application/pdf' || safeContentType === 'application/octet-stream') {
     responseHeaders['Content-Disposition'] = 'attachment';
   }
 

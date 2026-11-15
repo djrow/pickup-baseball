@@ -16,5 +16,6 @@ npm-debug.log*
 .agents/
 
 baseball_backup*
+clubhouse_chat_backup*
 d1*_backup*.sql
 pickupbaseballfoundation.org.txt

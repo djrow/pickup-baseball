@@ -882,6 +882,9 @@
   function clearMemoryKeys() {
     memoryKeyStore = {};
     pinOwnerId = 0;
+    if (typeof indexedDB !== 'undefined') {
+      memoryPinStore = {};
+    }
     closeKeyDbHandle();
   }
 

@@ -325,7 +325,7 @@ function checkSecretAndFileHygiene() {
   const tracked = getTrackedFiles();
   const forbiddenTracked = tracked.filter((f) =>
     f !== '.env.example' &&
-    /(^|\/)(\.env(\..*)?|\.dev\.vars)$|\.(db|sqlite|sqlite3)(-wal|-shm)?$|^d1_backup.*\.sql$/i.test(f)
+    /(^|\/)(\.env(\..*)?|\.dev\.vars)$|\.(db|sqlite|sqlite3)(-wal|-shm)?$|^d1.*_backup.*\.sql$|^(?:baseball|clubhouse_chat)_backup/i.test(f)
   );
 
   if (forbiddenTracked.length) {

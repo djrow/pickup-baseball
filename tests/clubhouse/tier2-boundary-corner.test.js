@@ -1155,6 +1155,339 @@ async function runTier2(t, ctx) {
       'editMessage must fail closed rather than sending plaintext when channel cannot be resolved'
     );
   });
+
+  await t.test('T2.11: Audit Remediations (rate_limits prune units, container media check, invite-event leak & epoch/channel ACLs)', async () => {
+    const { adminCookie, orgCookie, playerCookie, facilitatorCookie, adminUser, playerUser, facilitatorUser } = ctx;
+    const { pruneEphemeralBaseballRows } = await import('../../src/app/schema.js');
+
+    // 1. pruneEphemeralBaseballRows compares Unix seconds vs Unix seconds (must keep active 60s window)
+    const nowSec = Math.floor(Date.now() / 1000);
+    const activeRlKey = 'rl_active_test_' + Date.now();
+    const expiredRlKey = 'rl_expired_test_' + Date.now();
+    baseballDb.prepare('INSERT INTO rate_limits (key, count, window_start) VALUES (?, 3, ?)').run(activeRlKey, nowSec - 60);
+    baseballDb.prepare('INSERT INTO rate_limits (key, count, window_start) VALUES (?, 3, ?)').run(expiredRlKey, nowSec - 7205);
+    await pruneEphemeralBaseballRows({
+      prepare: (sql) => ({
+        bind: (...args) => ({
+          run: async () => baseballDb.prepare(sql).run(...args)
+        })
+      }),
+      batch: async (stmts) => {
+        for (const s of stmts) await s.run();
+      }
+    }, Date.now(), { force: true });
+    const activeRow = baseballDb.prepare('SELECT count FROM rate_limits WHERE key = ?').get(activeRlKey);
+    const expiredRow = baseballDb.prepare('SELECT count FROM rate_limits WHERE key = ?').get(expiredRlKey);
+    assert.ok(activeRow && activeRow.count === 3, 'Active rate_limits window in Unix seconds must survive prune');
+    assert.equal(expiredRow, undefined, 'Expired (>2h) rate_limits window must be pruned');
+    baseballDb.prepare('DELETE FROM rate_limits WHERE key IN (?, ?)').run(activeRlKey, expiredRlKey);
+
+    // 2. AVIF upload exercises imported isValidContainerMediaBuffer without ReferenceError (invalid bytes -> 400)
+    const badAvifRes = await apiReq('POST', '/api/media', playerCookie, {
+      title: 'Bad AVIF',
+      file_data: 'data:image/avif;base64,' + Buffer.from('not-a-valid-avif-header').toString('base64')
+    });
+    assert.equal(badAvifRes.status, 400, 'Invalid AVIF must return 400 instead of 500 ReferenceError');
+
+    // 3. Promoted attachment linked to invite-only event must NOT bypass channel/auth ACL
+    const invEvRes = await apiReq('POST', '/api/events', adminCookie, {
+      title: 'Private Scrimmage',
+      location: 'Hidden Diamond',
+      event_date: '2099-12-01',
+      max_players: 18,
+      allowed_emails: [playerUser.email]
+    });
+    assert.equal(invEvRes.status, 200);
+    const invEvId = invEvRes.data.event.id;
+    const privMediaIns = baseballDb.prepare(`
+      INSERT INTO media_items (title, media_type, original_url, file_url, album, date_taken, contributor_name, event_id, is_approved)
+      VALUES ('Invite Photo', 'photo', 'https://example.com/p.png', '/api/media/999/file', 'Private', '2099-12-01', 'Admin', ?, 1)
+    `).run(invEvId);
+    const privMediaId = Number(privMediaIns.lastInsertRowid);
+    const pvtChRes = await apiReq('POST', '/api/channels', adminCookie, {
+      name: 'pvt-promo-' + Date.now(),
+      channel_type: 'text',
+      is_private: true,
+      member_ids: [playerUser.id]
+    });
+    assert.equal(pvtChRes.status, 201);
+    const pvtChId = pvtChRes.data.channel.id;
+    const attId = 'att-promo-' + Date.now();
+    chatDb.prepare(`
+      INSERT INTO chat_attachments (id, channel_id, uploader_id, file_name, mime_type, file_size, storage_provider, local_data_base64, promoted_media_id)
+      VALUES (?, ?, ?, 'secret.png', 'image/png', 8, 'local', ?, ?)
+    `).run(attId, pvtChId, adminUser.id, Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).toString('base64'), privMediaId);
+
+    const unauthStream = await apiReq('GET', `/api/attachments/${attId}/stream`);
+    assert.equal(unauthStream.status, 401, 'Promoted attachment for invite-only event must require authentication');
+    const outsiderStream = await apiReq('GET', `/api/attachments/${attId}/stream`, facilitatorCookie);
+    assert.equal(outsiderStream.status, 403, 'Promoted attachment for invite-only event must enforce channel read ACL');
+
+    // 4. Deleting an invite-only event deletes linked private media & posts (no declassification)
+    const privPostIns = baseballDb.prepare(`
+      INSERT INTO posts (title, content, media_type, author_id, author_name, event_id)
+      VALUES ('Secret Recap', 'Private details', 'none', ?, 'Admin', ?)
+    `).run(adminUser.id, invEvId);
+    const privPostId = Number(privPostIns.lastInsertRowid);
+    const delInvEv = await apiReq('DELETE', `/api/events/${invEvId}`, adminCookie);
+    assert.equal(delInvEv.status, 200);
+    assert.equal(baseballDb.prepare('SELECT id FROM media_items WHERE id = ?').get(privMediaId), undefined, 'Deleting invite-only event must delete its media_items');
+    assert.equal(baseballDb.prepare('SELECT id FROM posts WHERE id = ?').get(privPostId), undefined, 'Deleting invite-only event must delete its posts');
+
+    // 5. E2EE message with key_epoch=2 before key shares exist (max_epoch NULL) must be rejected + >2 DM becomes group_dm
+    const dm3Res = await apiReq('POST', '/api/channels', playerCookie, {
+      channel_type: 'dm',
+      member_ids: [adminUser.id, facilitatorUser.id]
+    });
+    assert.equal(dm3Res.status, 201);
+    assert.equal(dm3Res.data.channel.channel_type, 'group_dm', 'DM with >2 participants must coerce to group_dm');
+    const futureEpochMsg = await apiReq('POST', `/api/channels/${dm3Res.data.channel.id}/messages`, playerCookie, {
+      content: 'cipher',
+      iv: 'testiv123456',
+      key_epoch: 2
+    });
+    assert.equal(futureEpochMsg.status, 400);
+    assert.equal(futureEpochMsg.data.code, 'UNKNOWN_KEY_EPOCH');
+
+    // 6. Moderator cannot set min_role_write='admin' on POST /api/channels; removed members lose channel_key_shares
+    baseballDb.prepare("UPDATE users SET is_moderator = 1 WHERE email = 'organizer@pickupbaseball.org'").run();
+    try {
+      const escBoard = await apiReq('POST', '/api/channels', orgCookie, {
+        name: 'org-admin-write-' + Date.now(),
+        min_role_write: 'admin'
+      });
+      assert.equal(escBoard.status, 403, 'Non-admin moderator must not set min_role_write higher than own role');
+    } finally {
+      baseballDb.prepare("UPDATE users SET is_moderator = 0 WHERE email = 'organizer@pickupbaseball.org'").run();
+    }
+
+    chatDb.prepare(`
+      INSERT INTO channel_key_shares (channel_id, key_epoch, recipient_user_id, sender_user_id, wrapped_key_base64, wrap_iv)
+      VALUES (?, 1, ?, ?, 'wrapped', 'wrapiv')
+    `).run(pvtChId, playerUser.id, adminUser.id);
+    const kickRes = await apiReq('PATCH', `/api/channels/${pvtChId}`, adminCookie, {
+      member_ids: []
+    });
+    assert.equal(kickRes.status, 200);
+    const remainingShare = chatDb.prepare('SELECT channel_id FROM channel_key_shares WHERE channel_id = ? AND recipient_user_id = ?').get(pvtChId, playerUser.id);
+    assert.equal(remainingShare, undefined, 'Removed private board members must have channel_key_shares purged');
+
+    // 7. Unlisted GIF /use check
+    const gifId = 'gif-unlisted-test-' + Date.now();
+    chatDb.prepare(`
+      INSERT INTO clubhouse_gifs (id, title, drive_file_id, source_url, added_by, is_public)
+      VALUES (?, 'Unlisted', 'drive1234567890123456789012', 'https://example.com/x.gif', ?, 0)
+    `).run(gifId, playerUser.id);
+    const otherUse = await apiReq('POST', `/api/gifs/${gifId}/use`, facilitatorCookie);
+    assert.equal(otherUse.status, 403, 'Other users cannot bump use_count on unlisted GIFs');
+
+    // Cleanup synthetic rows
+    chatDb.prepare('DELETE FROM chat_attachments WHERE id = ?').run(attId);
+    chatDb.prepare('DELETE FROM clubhouse_gifs WHERE id = ?').run(gifId);
+    chatDb.prepare('DELETE FROM channels WHERE id IN (?, ?)').run(pvtChId, dm3Res.data.channel.id);
+  });
+
+  await t.test('T2.12: Practical Cut-Off Hardening (created_by removal, staff board lock, opt-out mod list, muted status, <48h credit churn, BP ACL & bad ID 400)', async () => {
+    const { adminCookie, orgCookie, playerCookie, facilitatorCookie, adminUser, playerUser, facilitatorUser } = ctx;
+    const webcrypto = require('node:crypto').webcrypto;
+    const orgRow = baseballDb.prepare("SELECT id FROM users WHERE email = 'organizer@pickupbaseball.org'").get();
+    const orgUserId = orgRow.id;
+
+    // 1. Removed created_by user loses private channel access and is not forced back into members
+    // 2. Non-admin moderator cannot downgrade #facilitators-lounge or another organizer board
+    let pvtId = null;
+    baseballDb.prepare('UPDATE users SET is_moderator = 1 WHERE id = ?').run(orgUserId);
+    try {
+      const pvtRes = await apiReq('POST', '/api/channels', orgCookie, {
+        name: 'creator-removal-' + Date.now(),
+        is_private: true,
+        min_role_read: 'invite',
+        member_ids: [adminUser.id]
+      });
+      assert.equal(pvtRes.status, 201);
+      pvtId = pvtRes.data.channel.id;
+
+      const patchRemoveCreator = await apiReq('PATCH', `/api/channels/${pvtId}`, adminCookie, {
+        member_ids: [facilitatorUser.id]
+      });
+      assert.equal(patchRemoveCreator.status, 200);
+      assert.equal(patchRemoveCreator.data.channel.member_ids.includes(orgUserId), false, 'Admin removing channel creator from private board must not force creator back in');
+
+      const creatorMsgsRes = await apiReq('GET', `/api/channels/${pvtId}/messages`, orgCookie);
+      assert.equal(creatorMsgsRes.status, 403, 'Removed creator must lose read access to private board');
+      const creatorBootRes = await apiReq('GET', '/api/bootstrap', orgCookie);
+      assert.equal(creatorBootRes.status, 200);
+      assert.equal((creatorBootRes.data.channels || []).some((ch) => Number(ch.id) === Number(pvtId)), false, 'Removed creator must not see private board in /bootstrap');
+
+      const loungeRow = chatDb.prepare("SELECT id FROM channels WHERE slug = 'facilitators-lounge'").get();
+      assert.ok(loungeRow, '#facilitators-lounge seeded channel must exist');
+      const loungeDowngrade = await apiReq('PATCH', `/api/channels/${loungeRow.id}`, orgCookie, {
+        min_role_read: 'player',
+        min_role_write: 'player'
+      });
+      assert.equal(loungeDowngrade.status, 403, 'Non-admin moderator must not edit/downgrade #facilitators-lounge');
+    } finally {
+      baseballDb.prepare('UPDATE users SET is_moderator = 0 WHERE id = ?').run(orgUserId);
+    }
+
+    // 3. Opted-out users hidden from GET /api/moderation/users
+    const prevOptIn = baseballDb.prepare('SELECT clubhouse_opted_in FROM users WHERE id = ?').get(facilitatorUser.id);
+    baseballDb.prepare('UPDATE users SET clubhouse_opted_in = 0 WHERE id = ?').run(facilitatorUser.id);
+    try {
+      const modUsersHidden = await apiReq('GET', '/api/moderation/users', adminCookie);
+      assert.equal(modUsersHidden.status, 200);
+      assert.equal((modUsersHidden.data.users || []).some((u) => Number(u.id) === Number(facilitatorUser.id)), false, 'User with clubhouse_opted_in = 0 must not appear in /moderation/users');
+
+      baseballDb.prepare('UPDATE users SET clubhouse_opted_in = 1 WHERE id = ?').run(facilitatorUser.id);
+      chatDb.prepare('INSERT OR REPLACE INTO clubhouse_opted_out (user_id, opted_out_at) VALUES (?, CURRENT_TIMESTAMP)').run(facilitatorUser.id);
+      const modUsersTableHidden = await apiReq('GET', '/api/moderation/users', adminCookie);
+      assert.equal(modUsersTableHidden.status, 200);
+      assert.equal((modUsersTableHidden.data.users || []).some((u) => Number(u.id) === Number(facilitatorUser.id)), false, 'User in clubhouse_opted_out must not appear in /moderation/users');
+    } finally {
+      chatDb.prepare('DELETE FROM clubhouse_opted_out WHERE user_id = ?').run(facilitatorUser.id);
+      baseballDb.prepare('UPDATE users SET clubhouse_opted_in = ? WHERE id = ?').run(prevOptIn ? prevOptIn.clubhouse_opted_in : 1, facilitatorUser.id);
+    }
+
+    // 4. Muted user blocked from setting non-empty status_text on PUT /api/keys/identity
+    const kp = await webcrypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey']);
+    const sp = await webcrypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign']);
+    const ecdhJwk = await webcrypto.subtle.exportKey('jwk', kp.publicKey);
+    const ecdsaJwk = await webcrypto.subtle.exportKey('jwk', sp.publicKey);
+    baseballDb.prepare('UPDATE users SET chat_muted = 1 WHERE id = ?').run(playerUser.id);
+    try {
+      const mutedIdentityRes = await apiReq('PUT', '/api/keys/identity', playerCookie, {
+        ecdh_public_key_jwk: ecdhJwk,
+        ecdsa_public_key_jwk: ecdsaJwk,
+        status_text: 'Muted spam status'
+      });
+      assert.equal(mutedIdentityRes.status, 403, 'Muted user must not broadcast non-empty status_text via PUT /api/keys/identity');
+    } finally {
+      baseballDb.prepare('UPDATE users SET chat_muted = 0 WHERE id = ?').run(playerUser.id);
+    }
+
+    // 5. <48h urgent credit churn blocked after credit is spent
+    const prevPlayerState = baseballDb.prepare('SELECT machine_badge, field_badge, hero_credits FROM users WHERE id = ?').get(playerUser.id);
+    const soonIso = new Date(Date.now() + 12 * 3600 * 1000).toISOString();
+    const churnEvInfo = baseballDb.prepare(`
+      INSERT INTO events (title, description, location, event_date, max_players, status, allowed_emails)
+      VALUES ('Urgent Churn Test', 'Desc', 'Park', ?, 20, 'active', ?)
+    `).run(soonIso, JSON.stringify([playerUser.email]));
+    const churnEventId = churnEvInfo.lastInsertRowid;
+    const paidDutyInfo = baseballDb.prepare(`
+      INSERT INTO event_duties (event_id, title, description, slots_needed, sort_order)
+      VALUES (?, 'Pitching Machine Operator', 'Run the pitching machine', 2, 0)
+    `).run(churnEventId);
+    const paidDutyId = paidDutyInfo.lastInsertRowid;
+    const bpEvtInfo = baseballDb.prepare(`
+      INSERT INTO events (title, description, location, event_date, max_players, status, allowed_emails)
+      VALUES ('BP ACL Test', 'Desc', 'Cage', ?, 20, 'active', ?)
+    `).run(new Date(Date.now() + 72 * 3600 * 1000).toISOString(), JSON.stringify([playerUser.email, facilitatorUser.email]));
+    const bpEventId = bpEvtInfo.lastInsertRowid;
+
+    try {
+      baseballDb.prepare('UPDATE users SET machine_badge = 1, field_badge = 1, hero_credits = 0 WHERE id = ?').run(playerUser.id);
+
+      const earnRes = await apiReq('POST', `/api/events/${churnEventId}/rsvp`, playerCookie, {
+        status: 'attending',
+        players_count: 1,
+        spectators_count: 0,
+        duty_ids: [paidDutyId]
+      });
+      assert.equal(earnRes.status, 200);
+      const earnedCredits = baseballDb.prepare('SELECT hero_credits FROM users WHERE id = ?').get(playerUser.id);
+      assert.equal(earnedCredits.hero_credits, 1, 'Signing up for paid duty <48h must award 1 urgent credit');
+
+      // Simulate spending that earned credit elsewhere
+      baseballDb.prepare('UPDATE users SET hero_credits = 0 WHERE id = ?').run(playerUser.id);
+
+      const dropRes = await apiReq('POST', `/api/events/${churnEventId}/rsvp`, playerCookie, {
+        status: 'attending',
+        players_count: 1,
+        spectators_count: 0,
+        duty_ids: []
+      });
+      assert.equal(dropRes.status, 400, 'Dropping paid duty while staying attending after spending earned credit must fail with 400');
+
+      const declineRes = await apiReq('POST', `/api/events/${churnEventId}/rsvp`, playerCookie, {
+        status: 'declined',
+        players_count: 1,
+        spectators_count: 0,
+        duty_ids: []
+      });
+      assert.equal(declineRes.status, 200, 'Declining RSVP should still be allowed');
+
+      const reRsvpRes = await apiReq('POST', `/api/events/${churnEventId}/rsvp`, playerCookie, {
+        status: 'attending',
+        players_count: 1,
+        spectators_count: 0,
+        duty_ids: [paidDutyId]
+      });
+      assert.equal(reRsvpRes.status, 200);
+      assert.equal(String(reRsvpRes.data.message || '').includes('Backup Hero Credit awarded'), false, 'Re-RSVP after decline must not re-mint urgent credit when spent');
+      const postCredits = baseballDb.prepare('SELECT hero_credits FROM users WHERE id = ?').get(playerUser.id);
+      assert.equal(postCredits.hero_credits, 0, 'Credit churn must leave hero_credits at 0');
+
+      // 6. PUT /api/events/:id/bp-order/:signupId enforces allowed_emails removal, hides private occupant name, and blocks on rainout
+      const facBpRes = await apiReq('POST', `/api/events/${bpEventId}/bp-order`, facilitatorCookie, {
+        slot_number: 1,
+        player_name: facilitatorUser.name
+      });
+      assert.equal(facBpRes.status, 200);
+      const playerBpRes = await apiReq('POST', `/api/events/${bpEventId}/bp-order`, playerCookie, {
+        slot_number: 2,
+        player_name: playerUser.name
+      });
+      assert.equal(playerBpRes.status, 200);
+      const signupId = playerBpRes.data.signup_id;
+
+      // Slot collision on invite-only event must omit occupant player_name for non-organizers
+      const collideRes = await apiReq('PUT', `/api/events/${bpEventId}/bp-order/${signupId}`, playerCookie, {
+        slot_number: 1
+      });
+      assert.equal(collideRes.status, 400);
+      assert.equal(String(collideRes.data.error || '').includes(facilitatorUser.name), false, 'Private event BP collision error must not leak occupant name to non-organizers');
+
+      // Remove player from allowed_emails -> PUT blocked with 403
+      baseballDb.prepare('UPDATE events SET allowed_emails = ? WHERE id = ?').run(JSON.stringify([facilitatorUser.email]), bpEventId);
+      const removedInvitePut = await apiReq('PUT', `/api/events/${bpEventId}/bp-order/${signupId}`, playerCookie, {
+        slot_number: 3
+      });
+      assert.equal(removedInvitePut.status, 403, 'User removed from allowed_emails must be blocked from mutating BP slot');
+
+      // Restore invite and mark rainout -> PUT blocked with 400
+      baseballDb.prepare("UPDATE events SET allowed_emails = ?, status = 'rainout' WHERE id = ?").run(JSON.stringify([playerUser.email, facilitatorUser.email]), bpEventId);
+      const rainoutPut = await apiReq('PUT', `/api/events/${bpEventId}/bp-order/${signupId}`, playerCookie, {
+        slot_number: 3
+      });
+      assert.equal(rainoutPut.status, 400, 'Rainout event must block BP slot mutations');
+    } finally {
+      baseballDb.prepare('UPDATE users SET machine_badge = ?, field_badge = ?, hero_credits = ? WHERE id = ?').run(
+        prevPlayerState.machine_badge || 0,
+        prevPlayerState.field_badge || 0,
+        prevPlayerState.hero_credits || 0,
+        playerUser.id
+      );
+      baseballDb.prepare('DELETE FROM batting_practice_signups WHERE event_id IN (?, ?)').run(churnEventId, bpEventId);
+      baseballDb.prepare('DELETE FROM duty_assignments WHERE attendee_id IN (SELECT id FROM attendees WHERE event_id IN (?, ?))').run(churnEventId, bpEventId);
+      baseballDb.prepare('DELETE FROM attendees WHERE event_id IN (?, ?)').run(churnEventId, bpEventId);
+      baseballDb.prepare('DELETE FROM event_duties WHERE event_id IN (?, ?)').run(churnEventId, bpEventId);
+      baseballDb.prepare('DELETE FROM events WHERE id IN (?, ?)').run(churnEventId, bpEventId);
+    }
+
+    // 7. Malformed IDs return 400 instead of 500
+    const badEventGet = await apiReq('GET', '/api/events/not-a-number', playerCookie);
+    assert.equal(badEventGet.status, 400);
+    const badRolePut = await apiReq('PUT', '/api/auth/users/bad-id/role', adminCookie, { role: 'player' });
+    assert.equal(badRolePut.status, 400);
+    const badAttendeeDel = await apiReq('DELETE', '/api/events/bad/attendees/1', adminCookie);
+    assert.equal(badAttendeeDel.status, 400);
+    const badBpPut = await apiReq('PUT', '/api/events/1/bp-order/bad', adminCookie, { slot_number: 2 });
+    assert.equal(badBpPut.status, 400);
+
+    // Cleanup synthetic channel
+    chatDb.prepare('DELETE FROM channel_members WHERE channel_id = ?').run(pvtId);
+    chatDb.prepare('DELETE FROM channels WHERE id = ?').run(pvtId);
+  });
 }
 
 // Standalone execution support

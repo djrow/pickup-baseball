@@ -176,25 +176,25 @@ chatModerationRouter.get('/moderation/reports', requireModerator, async (c) => {
       ? (channelAccessMap.has(chId) ? channelAccessMap.get(chId) : Boolean(user.isAdmin))
       : true;
     const selfTargeted = !user.isAdmin && r.target_user_id && Number(r.target_user_id) === Number(user.id);
-    const showReporter = canViewChannel && !selfTargeted;
+    const visibleDetails = canViewChannel && !selfTargeted;
     return {
       ...r,
-      reporter_id: showReporter ? r.reporter_id : null,
-      reporter_name: showReporter ? r.reporter_name : 'Redacted',
-      target_user_id: canViewChannel ? r.target_user_id : null,
-      target_user_name: canViewChannel ? r.target_user_name : 'Redacted',
-      target_message_id: canViewChannel ? r.target_message_id : null,
-      reason: showReporter ? r.reason : (canViewChannel ? '[Report against you — details redacted]' : '[Private board report]'),
-      channel_id: canViewChannel ? r.channel_id : null,
-      reviewed_by: canViewChannel ? r.reviewed_by : null,
-      reviewed_by_name: canViewChannel ? r.reviewed_by_name : null,
-      resolution_note: canViewChannel ? r.resolution_note : null,
-      reviewed_at: canViewChannel ? r.reviewed_at : null,
-      message_preview: m ? (!canViewChannel ? '[Private channel message]' : (m.deleted_at ? '[deleted]' : m.content)) : null,
-      message_hidden: canViewChannel ? Boolean(m && m.hidden_at) : false,
-      message_hidden_reason: canViewChannel && m ? m.hidden_reason : null,
-      target_chat_muted: canViewChannel ? Boolean(u && u.chat_muted) : false,
-      target_chat_muted_reason: canViewChannel && u ? u.chat_muted_reason : null
+      reporter_id: visibleDetails ? r.reporter_id : null,
+      reporter_name: visibleDetails ? r.reporter_name : 'Redacted',
+      target_user_id: visibleDetails ? r.target_user_id : null,
+      target_user_name: visibleDetails ? r.target_user_name : (selfTargeted ? '[Redacted]' : 'Redacted'),
+      target_message_id: visibleDetails ? r.target_message_id : null,
+      reason: visibleDetails ? r.reason : (selfTargeted ? '[Report against you — details redacted]' : '[Private board report]'),
+      channel_id: visibleDetails ? r.channel_id : null,
+      reviewed_by: visibleDetails ? r.reviewed_by : null,
+      reviewed_by_name: visibleDetails ? r.reviewed_by_name : null,
+      resolution_note: visibleDetails ? r.resolution_note : null,
+      reviewed_at: visibleDetails ? r.reviewed_at : null,
+      message_preview: m ? (!canViewChannel ? '[Private channel message]' : (selfTargeted ? '[Redacted]' : (m.deleted_at ? '[deleted]' : m.content))) : null,
+      message_hidden: visibleDetails ? Boolean(m && m.hidden_at) : false,
+      message_hidden_reason: visibleDetails && m ? m.hidden_reason : null,
+      target_chat_muted: visibleDetails ? Boolean(u && u.chat_muted) : false,
+      target_chat_muted_reason: visibleDetails && u ? u.chat_muted_reason : null
     };
   });
 
@@ -261,12 +261,22 @@ chatModerationRouter.get('/moderation/users', requireModerator, async (c) => {
            chat_muted_reason,
            chat_muted_at
     FROM users
-    WHERE NOT EXISTS (SELECT 1 FROM banned_emails b WHERE LOWER(b.email) = LOWER(users.email))
+    WHERE COALESCE(clubhouse_opted_in, 0) = 1
+      AND NOT EXISTS (SELECT 1 FROM banned_emails b WHERE LOWER(b.email) = LOWER(users.email))
     ORDER BY CASE WHEN is_admin = 1 OR role = 'admin' THEN 1 WHEN is_moderator = 1 THEN 2 ELSE 3 END, name COLLATE NOCASE ASC
     LIMIT 200
   `).all();
 
-  return c.json({ users: results || [] });
+  let optedOutIds = new Set();
+  const chatDb = c.env && c.env.CHAT_DB;
+  if (chatDb) {
+    const { results: optedRows } = await chatDb.prepare('SELECT user_id FROM clubhouse_opted_out').all();
+    optedOutIds = new Set((optedRows || []).map((r) => Number(r.user_id)));
+  }
+
+  return c.json({
+    users: (results || []).filter((u) => !optedOutIds.has(Number(u.id)))
+  });
 });
 
 chatModerationRouter.put('/moderation/users/:id/mute', requireModerator, async (c) => {

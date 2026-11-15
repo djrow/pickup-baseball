@@ -6,7 +6,7 @@
 import { Hono } from 'hono';
 import { requireOrganizer, requireAdmin, getClientIp, checkRateLimit, verifyTurnstileIfConfigured } from '../../security.js';
 import { getDefaultDuties, getRequireLoginSetting } from '../../schema.js';
-import { canUserAccessEvent } from '../../policy.js';
+import { canUserAccessEvent, parseAllowedEmails } from '../../policy.js';
 import { AVATAR_EXPR } from './helpers.js';
 
 export const eventsBpDutiesRouter = new Hono();
@@ -16,13 +16,32 @@ export const eventsBpDutiesRouter = new Hono();
  * or guest `management_token` ownership before mutating it.
  */
 async function authorizeBpSignupMutation(c, db, eventId, signupId, actionLabel) {
+  if (!eventId || isNaN(eventId) || eventId <= 0 || !signupId || isNaN(signupId) || signupId <= 0) {
+    return { errorResponse: c.json({ error: 'Invalid event or signup ID.' }, 400) };
+  }
   const user = c.get('user');
+  const event = await db.prepare('SELECT id, status, allowed_emails FROM events WHERE id = ?').bind(eventId).first();
+  if (!event) {
+    return { errorResponse: c.json({ error: 'Event not found.' }, 404) };
+  }
+
+  const isOrganizer = Boolean(user && (user.canManageEvents || user.isAdmin));
+  if (!isOrganizer && !canUserAccessEvent(user, event)) {
+    return {
+      errorResponse: c.json({ error: 'Access denied: this pickup game is restricted to an invite list.', restricted: true }, user ? 403 : 401)
+    };
+  }
+  if (event.status === 'rainout' || event.status === 'cancelled') {
+    return {
+      errorResponse: c.json({ error: 'Batting practice is unavailable because this game was called for rain or cancelled.' }, 400)
+    };
+  }
+
   const existing = await db.prepare('SELECT * FROM batting_practice_signups WHERE id = ? AND event_id = ?').bind(signupId, eventId).first();
   if (!existing) {
     return { errorResponse: c.json({ error: 'Batting practice signup not found.' }, 404) };
   }
 
-  const isOrganizer = Boolean(user && (user.canManageEvents || user.isAdmin));
   const isOwner = Boolean(user && existing.user_id && existing.user_id === user.id);
 
   const body = await c.req.json().catch(() => ({}));
@@ -37,7 +56,7 @@ async function authorizeBpSignupMutation(c, db, eventId, signupId, actionLabel) 
     return { errorResponse: c.json({ error: `You are not authorized to ${actionLabel} this batting practice ${actionLabel === 'remove' ? 'signup' : 'slot'}.` }, 403) };
   }
 
-  return { errorResponse: null, existing, body };
+  return { errorResponse: null, existing, body, event, isOrganizer };
 }
 
 eventsBpDutiesRouter.get('/default-duties', async (c) => {
@@ -79,6 +98,9 @@ eventsBpDutiesRouter.put('/default-duties', requireAdmin, async (c) => {
 eventsBpDutiesRouter.get('/:id/bp-order', async (c) => {
   try {
     const eventId = parseInt(c.req.param('id'), 10);
+    if (!eventId || isNaN(eventId) || eventId <= 0) {
+      return c.json({ error: 'Invalid event ID.' }, 400);
+    }
     const user = c.get('user');
     const token = c.req.query('token');
     const db = c.env.DB;
@@ -272,7 +294,7 @@ eventsBpDutiesRouter.put('/:id/bp-order/:signupId', async (c) => {
 
     const authRes = await authorizeBpSignupMutation(c, db, eventId, signupId, 'update');
     if (authRes.errorResponse) return authRes.errorResponse;
-    const { existing, body } = authRes;
+    const { existing, body, event, isOrganizer } = authRes;
 
     const targetSlot = body.slot_number !== undefined ? parseInt(body.slot_number, 10) : existing.slot_number;
     const playerName = body.player_name ? String(body.player_name).trim().slice(0, 100) : existing.player_name;
@@ -285,7 +307,12 @@ eventsBpDutiesRouter.put('/:id/bp-order/:signupId', async (c) => {
     if (targetSlot !== existing.slot_number) {
       const slotOccupant = await db.prepare('SELECT id, player_name FROM batting_practice_signups WHERE event_id = ? AND slot_number = ? AND id != ?').bind(eventId, targetSlot, signupId).first();
       if (slotOccupant) {
-        return c.json({ error: `Slot #${targetSlot} is already claimed by ${slotOccupant.player_name}.` }, 400);
+        const hideName = !isOrganizer && parseAllowedEmails(event.allowed_emails).length > 0;
+        return c.json({
+          error: hideName
+            ? `Slot #${targetSlot} is already claimed.`
+            : `Slot #${targetSlot} is already claimed by ${slotOccupant.player_name}.`
+        }, 400);
       }
     }
 
@@ -320,6 +347,9 @@ eventsBpDutiesRouter.delete('/:id/bp-order/:signupId', async (c) => {
 eventsBpDutiesRouter.post('/:id/bp-order/clear', requireOrganizer, async (c) => {
   try {
     const eventId = parseInt(c.req.param('id'), 10);
+    if (!eventId || isNaN(eventId) || eventId <= 0) {
+      return c.json({ error: 'Invalid event ID.' }, 400);
+    }
     await c.env.DB.prepare('DELETE FROM batting_practice_signups WHERE event_id = ?').bind(eventId).run();
     return c.json({ success: true, message: 'Batting practice order cleared.' });
   } catch (err) {
@@ -331,6 +361,9 @@ eventsBpDutiesRouter.post('/:id/bp-order/clear', requireOrganizer, async (c) => 
 eventsBpDutiesRouter.post('/:id/duties', requireOrganizer, async (c) => {
   try {
     const eventId = parseInt(c.req.param('id'), 10);
+    if (!eventId || isNaN(eventId) || eventId <= 0) {
+      return c.json({ error: 'Invalid event ID.' }, 400);
+    }
     const event = await c.env.DB.prepare('SELECT id FROM events WHERE id = ?').bind(eventId).first();
     if (!event) return c.json({ error: 'Event not found.' }, 404);
 
@@ -364,6 +397,9 @@ eventsBpDutiesRouter.put('/:id/duties/:dutyId', requireOrganizer, async (c) => {
   try {
     const eventId = parseInt(c.req.param('id'), 10);
     const dutyId = parseInt(c.req.param('dutyId'), 10);
+    if (!eventId || isNaN(eventId) || eventId <= 0 || !dutyId || isNaN(dutyId) || dutyId <= 0) {
+      return c.json({ error: 'Invalid event or task ID.' }, 400);
+    }
     const { title, description, slots_needed } = await c.req.json();
 
     if (title !== undefined && (!title || !String(title).trim())) {
@@ -397,6 +433,9 @@ eventsBpDutiesRouter.delete('/:id/duties/:dutyId', requireOrganizer, async (c) =
   try {
     const eventId = parseInt(c.req.param('id'), 10);
     const dutyId = parseInt(c.req.param('dutyId'), 10);
+    if (!eventId || isNaN(eventId) || eventId <= 0 || !dutyId || isNaN(dutyId) || dutyId <= 0) {
+      return c.json({ error: 'Invalid event or task ID.' }, 400);
+    }
     const res = await c.env.DB.prepare('DELETE FROM event_duties WHERE id = ? AND event_id = ?').bind(dutyId, eventId).run();
     if (res.meta.changes === 0) return c.json({ error: 'Task not found.' }, 404);
     return c.json({ success: true, message: 'Task removed.' });

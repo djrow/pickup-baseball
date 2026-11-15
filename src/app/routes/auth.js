@@ -476,6 +476,9 @@ authRouter.get('/users', requireAdmin, async (c) => {
 
 authRouter.put('/users/:id/role', requireAdmin, async (c) => {
   const targetId = parseInt(c.req.param('id'), 10);
+  if (!targetId || isNaN(targetId) || targetId <= 0) {
+    return c.json({ error: 'Invalid user ID.' }, 400);
+  }
   const { role } = await c.req.json();
   if (!['admin', 'organizer', 'player'].includes(role)) {
     return c.json({ error: 'Invalid role. Must be admin, organizer, or player.' }, 400);
@@ -506,6 +509,9 @@ authRouter.put('/users/:id/role', requireAdmin, async (c) => {
 // PUT /api/auth/users/:id/moderator — Admin-only delegation of Clubhouse Moderator abilities
 authRouter.put('/users/:id/moderator', requireAdmin, async (c) => {
   const targetId = parseInt(c.req.param('id'), 10);
+  if (!targetId || isNaN(targetId) || targetId <= 0) {
+    return c.json({ error: 'Invalid user ID.' }, 400);
+  }
   const targetUser = await c.env.DB.prepare('SELECT id, name, email, role, is_admin, COALESCE(is_moderator, 0) as is_moderator FROM users WHERE id = ?').bind(targetId).first();
   if (!targetUser) {
     return c.json({ error: 'User not found.' }, 404);
@@ -536,6 +542,9 @@ authRouter.put('/users/:id/moderator', requireAdmin, async (c) => {
 
 authRouter.put('/users/:id/badges', requireAdmin, async (c) => {
   const targetId = parseInt(c.req.param('id'), 10);
+  if (!targetId || isNaN(targetId) || targetId <= 0) {
+    return c.json({ error: 'Invalid user ID.' }, 400);
+  }
   const targetUser = await c.env.DB.prepare("SELECT id, email, machine_badge, field_badge, hero_credits, COALESCE(waiver_status, 'none') as waiver_status, waiver_signed_at FROM users WHERE id = ?").bind(targetId).first();
   if (!targetUser) {
     return c.json({ error: 'User not found.' }, 404);
@@ -582,6 +591,9 @@ authRouter.put('/users/:id/badges', requireAdmin, async (c) => {
 authRouter.delete('/users/:id', requireAdmin, async (c) => {
   const currentUser = c.get('user');
   const targetId = parseInt(c.req.param('id'), 10);
+  if (!targetId || isNaN(targetId) || targetId <= 0) {
+    return c.json({ error: 'Invalid user ID.' }, 400);
+  }
   if (targetId === currentUser.id) {
     return c.json({ error: 'You cannot delete your own administrator account.' }, 400);
   }
@@ -661,6 +673,9 @@ authRouter.post('/banned-emails', requireAdmin, async (c) => {
 
 authRouter.delete('/banned-emails/:id', requireAdmin, async (c) => {
   const id = parseInt(c.req.param('id'), 10);
+  if (!id || isNaN(id) || id <= 0) {
+    return c.json({ error: 'Invalid ban entry ID.' }, 400);
+  }
   await c.env.DB.prepare('DELETE FROM banned_emails WHERE id = ?').bind(id).run();
   return c.json({ success: true, message: 'Ban removed.' });
 });

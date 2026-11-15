@@ -155,6 +155,10 @@ keysRouter.put('/identity', requireAuth, async (c) => {
 
     const privacyRelayMode = body.privacy_relay_mode ? 1 : 0;
     const statusText = (body.status_text || '').toString().slice(0, 100);
+    if (statusText.trim()) {
+      const mutedResp = rejectIfChatMuted(c, user);
+      if (mutedResp) return mutedResp;
+    }
 
     await chatDb.prepare(`
       INSERT INTO user_crypto_keys (
@@ -406,7 +410,6 @@ keysRouter.post('/channel/:channelId/share', requireAuth, async (c) => {
         'SELECT user_id FROM channel_members WHERE channel_id = ?'
       ).bind(channel.id).all();
       validMembers = new Set((memberRows || []).map((r) => Number(r.user_id)));
-      if (channel.created_by) validMembers.add(Number(channel.created_by));
     } else if (!canForceRotate && existingEpochShare) {
       return c.json({ error: 'Channel key epoch already initialized.' }, 403);
     }

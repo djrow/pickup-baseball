@@ -223,13 +223,14 @@ chatMessagesRouter.post('/channels/:id/messages', requireAuth, async (c) => {
     const maxEpRow = await chatDb.prepare(
       'SELECT MAX(key_epoch) as max_epoch FROM channel_key_shares WHERE channel_id = ?'
     ).bind(channel.id).first();
-    if (maxEpRow && maxEpRow.max_epoch && keyEpoch < Number(maxEpRow.max_epoch)) {
+    const currentMaxEpoch = (maxEpRow && maxEpRow.max_epoch) ? Number(maxEpRow.max_epoch) : 0;
+    if (currentMaxEpoch > 0 && keyEpoch < currentMaxEpoch) {
       return c.json({
-        error: `Message must be encrypted with the latest channel key epoch (${maxEpRow.max_epoch}).`,
+        error: `Message must be encrypted with the latest channel key epoch (${currentMaxEpoch}).`,
         code: 'STALE_KEY_EPOCH'
       }, 409);
     }
-    if (maxEpRow && maxEpRow.max_epoch && keyEpoch > Number(maxEpRow.max_epoch)) {
+    if ((currentMaxEpoch > 0 && keyEpoch > currentMaxEpoch) || (currentMaxEpoch === 0 && keyEpoch > 1)) {
       return c.json({
         error: `Invalid key_epoch: channel key epoch ${keyEpoch} does not exist.`,
         code: 'UNKNOWN_KEY_EPOCH'
@@ -410,10 +411,11 @@ chatMessagesRouter.patch('/messages/:id', requireAuth, async (c) => {
     const maxEpRow = await chatDb.prepare(
       'SELECT MAX(key_epoch) as max_epoch FROM channel_key_shares WHERE channel_id = ?'
     ).bind(existing.channel_id).first();
-    if (maxEpRow && maxEpRow.max_epoch && editKeyEpoch < Number(maxEpRow.max_epoch)) {
-      return c.json({ error: `Message edit must use the latest channel key epoch (${maxEpRow.max_epoch}).`, code: 'STALE_KEY_EPOCH' }, 409);
+    const currentMaxEpoch = (maxEpRow && maxEpRow.max_epoch) ? Number(maxEpRow.max_epoch) : 0;
+    if (currentMaxEpoch > 0 && editKeyEpoch < currentMaxEpoch) {
+      return c.json({ error: `Message edit must use the latest channel key epoch (${currentMaxEpoch}).`, code: 'STALE_KEY_EPOCH' }, 409);
     }
-    if (maxEpRow && maxEpRow.max_epoch && editKeyEpoch > Number(maxEpRow.max_epoch)) {
+    if ((currentMaxEpoch > 0 && editKeyEpoch > currentMaxEpoch) || (currentMaxEpoch === 0 && editKeyEpoch > 1)) {
       return c.json({ error: `Invalid key_epoch: channel key epoch ${editKeyEpoch} does not exist.`, code: 'UNKNOWN_KEY_EPOCH' }, 400);
     }
   }

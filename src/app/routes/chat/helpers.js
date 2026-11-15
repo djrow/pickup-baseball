@@ -126,7 +126,6 @@ export async function canUserAccessChannel(chatDb, user, channel, mode = 'read')
   if (!user || !channel) return false;
 
   if (channel.channel_type === 'dm' || channel.channel_type === 'group_dm' || isPrivateEncryptedBoard(channel)) {
-    if (channel.created_by === user.id) return true;
     const member = await chatDb.prepare(
       'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?'
     ).bind(channel.id, user.id).first();
@@ -178,7 +177,7 @@ export async function getAccessibleChannels(chatDb, user, options = {}) {
       if (isDmType && !options.includeHidden && hiddenChannelIds.has(ch.id)) {
         continue;
       }
-      if (ch.created_by === user.id || memberChannelIds.has(ch.id)) {
+      if (memberChannelIds.has(ch.id)) {
         accessible.push({ ...ch, member_ids: [] });
         keySharedChannelIds.push(ch.id);
       }

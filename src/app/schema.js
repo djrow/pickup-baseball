@@ -860,7 +860,7 @@ export async function pruneEphemeralBaseballRows(db) {
   lastBaseballPruneByDb.set(db, nowMs);
 
   const nowIso = new Date(nowMs).toISOString();
-  const rateCutoff = nowMs - 2 * 60 * 60 * 1000;
+  const rateCutoff = Math.floor(nowMs / 1000) - 2 * 60 * 60;
   try {
     const stmts = [
       db.prepare('DELETE FROM sessions WHERE expires_at <= ?').bind(nowIso),

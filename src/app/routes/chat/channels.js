@@ -58,7 +58,7 @@ chatChannelsRouter.post('/channels', requireAuth, async (c) => {
   if (!chatDb) return c.json({ error: 'Chat database unavailable.' }, 500);
 
   const body = await c.req.json().catch(() => ({}));
-  const channelType = body.channel_type || 'text';
+  let channelType = body.channel_type || 'text';
   const isDm = channelType === 'dm' || channelType === 'group_dm';
 
   if (!isDm && !user.isAdmin && !user.isModerator && !user.canModerateChat) {
@@ -87,6 +87,9 @@ chatChannelsRouter.post('/channels', requireAuth, async (c) => {
     }
     if (allParticipants.length > 20) {
       return c.json({ error: 'Group DMs are limited to 20 participants.' }, 400);
+    }
+    if (allParticipants.length > 2 && channelType === 'dm') {
+      channelType = 'group_dm';
     }
     slug = `dm-${allParticipants.join('-')}`;
     if (!name) name = body.name || `DM (${allParticipants.length})`;
@@ -182,6 +185,14 @@ chatChannelsRouter.post('/channels', requireAuth, async (c) => {
   if (!user.isAdmin && (requestedRead === 'admin' || requestedWrite === 'admin' || requestedRead === 'guest' || requestedRead === 'public')) {
     return c.json({ error: 'Access denied: only admins can configure admin or public guest channel roles.' }, 403);
   }
+  if (!user.isAdmin) {
+    const callerRank = getUserRoleRank(user);
+    const requestedReadRank = requestedRead !== undefined ? (CHANNEL_ROLE_RANKS[requestedRead] || 0) : 0;
+    const requestedWriteRank = requestedWrite !== undefined ? (CHANNEL_ROLE_RANKS[requestedWrite] || 0) : 0;
+    if (requestedReadRank > callerRank || requestedWriteRank > callerRank) {
+      return c.json({ error: 'Access denied: you cannot require a role higher than your own for a board.' }, 403);
+    }
+  }
   const minRoleRead = isPrivateBoard ? 'invite' : (requestedRead || 'player');
   const minRoleWrite = requestedWrite || (channelType === 'announcement' ? 'organizer' : 'player');
   const isEncrypted = isPrivateBoard ? 1 : (body.is_encrypted !== undefined ? (body.is_encrypted ? 1 : 0) : 1);
@@ -265,12 +276,15 @@ chatChannelsRouter.patch('/channels/:id', requireAuth, async (c) => {
   if (channel.channel_type === 'dm' || channel.channel_type === 'group_dm') {
     return c.json({ error: 'Direct message conversations cannot be edited as boards.' }, 400);
   }
-  if (!(await canUserAccessChannel(chatDb, user, channel, 'write')) && !user.isAdmin && channel.created_by !== user.id) {
+  if (!user.isAdmin && channel.created_by !== user.id &&
+      (!(await canUserAccessChannel(chatDb, user, channel, 'read')) || !(await canUserAccessChannel(chatDb, user, channel, 'write')))) {
     return c.json({ error: 'Access denied: insufficient permissions to manage this board.' }, 403);
   }
   const isProtectedCoreBoard = channel.slug === 'general' || channel.slug === 'announcements';
+  const isProtectedStaffBoard = channel.slug === 'facilitators-lounge' || channel.slug === 'organizers-war-room';
   const existingNeedsAdmin = Boolean(
     isProtectedCoreBoard ||
+    isProtectedStaffBoard ||
     channel.min_role_read === 'admin' ||
     channel.min_role_write === 'admin' ||
     channel.min_role_read === 'guest' ||
@@ -326,12 +340,23 @@ chatChannelsRouter.patch('/channels/:id', requireAuth, async (c) => {
   if (!user.isAdmin && isPrivateBoard && !wasPrivateBoard && channel.created_by !== user.id) {
     return c.json({ error: 'Access denied: only the board creator or an administrator can convert a shared board into a private board.' }, 403);
   }
+  const existingReadRank = CHANNEL_ROLE_RANKS[channel.min_role_read] || 0;
+  const existingWriteRank = CHANNEL_ROLE_RANKS[channel.min_role_write] || 0;
   if (!user.isAdmin) {
     const callerRank = getUserRoleRank(user);
-    const requestedReadRank = body.min_role_read !== undefined ? (CHANNEL_ROLE_RANKS[body.min_role_read] || 0) : 0;
-    const requestedWriteRank = body.min_role_write !== undefined ? (CHANNEL_ROLE_RANKS[body.min_role_write] || 0) : 0;
+    const requestedReadRank = body.min_role_read !== undefined ? (CHANNEL_ROLE_RANKS[body.min_role_read] || 0) : existingReadRank;
+    const requestedWriteRank = body.min_role_write !== undefined ? (CHANNEL_ROLE_RANKS[body.min_role_write] || 0) : existingWriteRank;
     if (requestedReadRank > callerRank || requestedWriteRank > callerRank) {
       return c.json({ error: 'Access denied: you cannot require a role higher than your own for a board.' }, 403);
+    }
+    if (channel.created_by !== user.id) {
+      if (existingReadRank > callerRank || existingWriteRank > callerRank) {
+        return c.json({ error: 'Access denied: your role is insufficient to modify this board.' }, 403);
+      }
+      if ((body.min_role_read !== undefined && requestedReadRank < existingReadRank) ||
+          (body.min_role_write !== undefined && requestedWriteRank < existingWriteRank)) {
+        return c.json({ error: 'Access denied: only the board creator or an administrator may lower role requirements on an existing board.' }, 403);
+      }
     }
   }
   if (!user.isAdmin && channel.min_role_read === 'invite' && body.min_role_read && body.min_role_read !== 'invite') {
@@ -384,10 +409,11 @@ chatChannelsRouter.patch('/channels/:id', requireAuth, async (c) => {
   let updatedMembers = null;
   if (isPrivateBoard && validatedCleanIds !== null) {
     const ownerId = channel.created_by || user.id;
-    updatedMembers = Array.from(new Set([ownerId, user.id, ...validatedCleanIds]));
+    updatedMembers = Array.from(new Set([user.id, ...validatedCleanIds]));
     const ph = updatedMembers.map(() => '?').join(',');
     const batchMemberOps = [
-      chatDb.prepare(`DELETE FROM channel_members WHERE channel_id = ? AND user_id NOT IN (${ph})`).bind(channel.id, ...updatedMembers)
+      chatDb.prepare(`DELETE FROM channel_members WHERE channel_id = ? AND user_id NOT IN (${ph})`).bind(channel.id, ...updatedMembers),
+      chatDb.prepare(`DELETE FROM channel_key_shares WHERE channel_id = ? AND recipient_user_id NOT IN (${ph})`).bind(channel.id, ...updatedMembers)
     ];
     for (const uid of updatedMembers) {
       batchMemberOps.push(
@@ -398,12 +424,13 @@ chatChannelsRouter.patch('/channels/:id', requireAuth, async (c) => {
     }
     await chatDb.batch(batchMemberOps);
   } else if (isPrivateBoard && !wasPrivateBoard) {
-    // Converting public -> private without member_ids must purge stale read-watermark rows
+    // Converting public -> private without member_ids must purge stale read-watermark rows and key shares
     const ownerId = channel.created_by || user.id;
     updatedMembers = Array.from(new Set([ownerId, user.id]));
     const ph = updatedMembers.map(() => '?').join(',');
     const batchReset = [
-      chatDb.prepare(`DELETE FROM channel_members WHERE channel_id = ? AND user_id NOT IN (${ph})`).bind(channel.id, ...updatedMembers)
+      chatDb.prepare(`DELETE FROM channel_members WHERE channel_id = ? AND user_id NOT IN (${ph})`).bind(channel.id, ...updatedMembers),
+      chatDb.prepare(`DELETE FROM channel_key_shares WHERE channel_id = ? AND recipient_user_id NOT IN (${ph})`).bind(channel.id, ...updatedMembers)
     ];
     for (const uid of updatedMembers) {
       batchReset.push(
@@ -417,7 +444,7 @@ chatChannelsRouter.patch('/channels/:id', requireAuth, async (c) => {
     const { results: mRows } = await chatDb.prepare(
       'SELECT user_id FROM channel_members WHERE channel_id = ?'
     ).bind(channel.id).all();
-    updatedMembers = Array.from(new Set([...(mRows || []).map((r) => r.user_id), ...(channel.created_by ? [channel.created_by] : [user.id])]));
+    updatedMembers = Array.from(new Set((mRows || []).map((r) => r.user_id)));
   }
 
   const updated = await chatDb.prepare('SELECT * FROM channels WHERE id = ?').bind(channel.id).first();

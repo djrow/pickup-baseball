@@ -5,7 +5,7 @@
  */
 
 import { Hono } from 'hono';
-import { requireAuth, requireOrganizer, generateToken, getSafePublicOrigin, checkRateLimit } from '../security.js';
+import { requireAuth, requireOrganizer, generateToken, getSafePublicOrigin, checkRateLimit, rejectIfChatMuted, rejectIfClubhouseOptedOut } from '../security.js';
 import { parseAllowedEmails, canUserAccessEvent, getDutyType } from '../policy.js';
 import { canUserAccessChannel } from './chat.js';
 import { chunkArray } from './chat/helpers.js';
@@ -452,6 +452,10 @@ baseballRouter.post('/events/:eventId/quick-bp', requireAuth, async (c) => {
 // ---------------------------------------------------------------------------
 baseballRouter.post('/events/:eventId/sync-channel', requireOrganizer, async (c) => {
   const user = c.get('user');
+  const optResp = rejectIfClubhouseOptedOut(c, user);
+  if (optResp) return optResp;
+  const mutedResp = rejectIfChatMuted(c, user);
+  if (mutedResp) return mutedResp;
   const baseballDb = c.env && (c.env.BASEBALL_DB || c.env.DB);
   const chatDb = c.env && c.env.CHAT_DB;
 
@@ -490,6 +494,7 @@ baseballRouter.post('/events/:eventId/sync-channel', requireOrganizer, async (c)
         SELECT u.id
         FROM users u
         WHERE LOWER(u.email) IN (${placeholders})
+          AND COALESCE(u.clubhouse_opted_in, 0) = 1
           AND NOT EXISTS (SELECT 1 FROM banned_emails b WHERE LOWER(b.email) = LOWER(u.email))
       `).bind(...normalized).all();
       for (const u of (userRows || [])) {
@@ -565,6 +570,9 @@ baseballRouter.post('/events/:eventId/sync-channel', requireOrganizer, async (c)
         const ph = staleChunk.map(() => '?').join(', ');
         await chatDb.prepare(
           `DELETE FROM channel_members WHERE channel_id = ? AND user_id IN (${ph})`
+        ).bind(channel.id, ...staleChunk).run();
+        await chatDb.prepare(
+          `DELETE FROM channel_key_shares WHERE channel_id = ? AND recipient_user_id IN (${ph})`
         ).bind(channel.id, ...staleChunk).run();
       }
     }

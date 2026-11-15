@@ -372,7 +372,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '147',
+  CLIENT_VERSION: '148',
 
   // Current user cache
   currentUser: null,
@@ -2290,6 +2290,7 @@ const API = {
   safeUrl(rawUrl) {
     if (!rawUrl || typeof rawUrl !== 'string') return '';
     const trimmed = rawUrl.trim();
+    if (/[\u0000-\u001f\u007f]/.test(trimmed)) return '';
     if (trimmed.startsWith('/') && !trimmed.startsWith('//') && !trimmed.startsWith('/\\')) {
       return trimmed;
     }

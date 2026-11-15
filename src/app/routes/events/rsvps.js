@@ -35,9 +35,44 @@ import {
 
 export const eventsRsvpsRouter = new Hono();
 
+/**
+ * Reclaims a previously awarded <48h Backup Hero Credit only when the user actually
+ * still holds a credit (>= 1). If the credit was already spent elsewhere, keeps
+ * urgent_credit_awarded = 1 so the player cannot re-mint credits by toggling duties/RSVPs.
+ */
+async function reclaimUrgentHeroCredit(db, attendeeId, creditUserId) {
+  const attRow = await db.prepare(
+    'SELECT COALESCE(urgent_credit_awarded, 0) as urgent_credit_awarded FROM attendees WHERE id = ?'
+  ).bind(attendeeId).first();
+  if (!attRow || attRow.urgent_credit_awarded !== 1) {
+    return { reclaimed: false, alreadySpent: false };
+  }
+
+  const decRes = await db.prepare(
+    'UPDATE users SET hero_credits = hero_credits - 1 WHERE id = ? AND COALESCE(hero_credits, 0) >= 1'
+  ).bind(creditUserId).run();
+  if (!decRes.meta || decRes.meta.changes !== 1) {
+    return { reclaimed: false, alreadySpent: true };
+  }
+
+  const clearFlag = await db.prepare(
+    'UPDATE attendees SET urgent_credit_awarded = 0 WHERE id = ? AND COALESCE(urgent_credit_awarded, 0) = 1'
+  ).bind(attendeeId).run();
+  if (!clearFlag.meta || clearFlag.meta.changes !== 1) {
+    // Concurrent call cleared the flag first; restore the deducted credit.
+    await db.prepare('UPDATE users SET hero_credits = hero_credits + 1 WHERE id = ?').bind(creditUserId).run();
+    return { reclaimed: false, alreadySpent: false };
+  }
+
+  return { reclaimed: true, alreadySpent: false };
+}
+
 eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
   try {
     const eventId = parseInt(c.req.param('id'), 10);
+    if (!eventId || isNaN(eventId) || eventId <= 0) {
+      return c.json({ error: 'Invalid event ID.' }, 400);
+    }
     const user = c.get('user');
     const db = c.env.DB;
 
@@ -355,6 +390,22 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
         }
       }
 
+      const willHavePaidDuty = dutiesToAssign.some((item) => item.dType.isPaid);
+      if (prevHadPaidDuty && !willHavePaidDuty && hoursUntilEvent > 0 && wasAttending && creditUserId) {
+        const creditState = await db.prepare(
+          `SELECT COALESCE(a.urgent_credit_awarded, 0) as urgent_credit_awarded,
+                  COALESCE(u.hero_credits, 0) as hero_credits
+           FROM attendees a
+           JOIN users u ON u.id = ?
+           WHERE a.id = ?`
+        ).bind(creditUserId, attendeeId).first();
+        if (creditState && creditState.urgent_credit_awarded === 1 && creditState.hero_credits < 1) {
+          return c.json({
+            error: 'You already redeemed the Backup Hero Credit earned from this shift. Contact an organizer if you need to drop your shift.'
+          }, 400);
+        }
+      }
+
       if (creditsRequired > 0 && user && user.id) {
         const decRes = await db.prepare(
           'UPDATE users SET hero_credits = hero_credits - ? WHERE id = ? AND hero_credits >= ?'
@@ -396,32 +447,22 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
         await db.prepare('UPDATE users SET hero_credits = hero_credits + ? WHERE id = ?').bind(unusedCredits, user.id).run();
       }
 
-      if (isUrgentWindow && !prevHadPaidDuty && newHasPaidDuty && user && user.id) {
+      if (isUrgentWindow && !prevHadPaidDuty && newHasPaidDuty && user && creditUserId && Number(user.id) === Number(creditUserId)) {
         const awardFlagRes = await db.prepare(
           'UPDATE attendees SET urgent_credit_awarded = 1 WHERE id = ? AND COALESCE(urgent_credit_awarded, 0) = 0'
         ).bind(attendeeId).run();
         if (awardFlagRes.meta && awardFlagRes.meta.changes === 1) {
-          await db.prepare('UPDATE users SET hero_credits = hero_credits + 1 WHERE id = ?').bind(user.id).run();
+          await db.prepare('UPDATE users SET hero_credits = hero_credits + 1 WHERE id = ?').bind(creditUserId).run();
           heroCreditEarned = true;
         }
       }
 
-      if (prevHadPaidDuty && !newHasPaidDuty && isUrgentWindow && wasAttending && creditUserId) {
-        const unclaimRes = await db.prepare(
-          'UPDATE attendees SET urgent_credit_awarded = 0 WHERE id = ? AND COALESCE(urgent_credit_awarded, 0) = 1'
-        ).bind(attendeeId).run();
-        if (unclaimRes.meta && unclaimRes.meta.changes === 1) {
-          await db.prepare('UPDATE users SET hero_credits = CASE WHEN COALESCE(hero_credits, 0) > 0 THEN hero_credits - 1 ELSE 0 END WHERE id = ?').bind(creditUserId).run();
-        }
+      if (prevHadPaidDuty && !newHasPaidDuty && hoursUntilEvent > 0 && wasAttending && creditUserId) {
+        await reclaimUrgentHeroCredit(db, attendeeId, creditUserId);
       }
     } else if (finalStatus !== 'attending') {
-      if (prevHadPaidDuty && isUrgentWindow && wasAttending && creditUserId) {
-        const unclaimRes = await db.prepare(
-          'UPDATE attendees SET urgent_credit_awarded = 0 WHERE id = ? AND COALESCE(urgent_credit_awarded, 0) = 1'
-        ).bind(attendeeId).run();
-        if (unclaimRes.meta && unclaimRes.meta.changes === 1) {
-          await db.prepare('UPDATE users SET hero_credits = CASE WHEN COALESCE(hero_credits, 0) > 0 THEN hero_credits - 1 ELSE 0 END WHERE id = ?').bind(creditUserId).run();
-        }
+      if (prevHadPaidDuty && hoursUntilEvent > 0 && wasAttending && creditUserId) {
+        await reclaimUrgentHeroCredit(db, attendeeId, creditUserId);
       }
       await db.prepare('DELETE FROM duty_assignments WHERE attendee_id = ?').bind(attendeeId).run();
       await db.prepare('DELETE FROM batting_practice_signups WHERE event_id = ? AND (attendee_id = ? OR (user_id IS NOT NULL AND user_id = ?))').bind(eventId, attendeeId, userId).run();
@@ -541,6 +582,9 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
 eventsRsvpsRouter.post('/:id/comments', async (c) => {
   try {
     const eventId = parseInt(c.req.param('id'), 10);
+    if (!eventId || isNaN(eventId) || eventId <= 0) {
+      return c.json({ error: 'Invalid event ID.' }, 400);
+    }
     const user = c.get('user');
     const db = c.env.DB;
 
@@ -636,13 +680,19 @@ eventsRsvpsRouter.delete('/:id/attendees/:attendeeId', requireOrganizer, async (
   try {
     const eventId = parseInt(c.req.param('id'), 10);
     const attendeeId = parseInt(c.req.param('attendeeId'), 10);
+    if (!eventId || isNaN(eventId) || eventId <= 0 || !attendeeId || isNaN(attendeeId) || attendeeId <= 0) {
+      return c.json({ error: 'Invalid event or attendee ID.' }, 400);
+    }
     const existing = await c.env.DB.prepare('SELECT status, user_id FROM attendees WHERE id = ? AND event_id = ?').bind(attendeeId, eventId).first();
+    if (!existing) {
+      return c.json({ error: 'Attendee not found.' }, 404);
+    }
     await c.env.DB.batch([
       c.env.DB.prepare('DELETE FROM duty_assignments WHERE attendee_id = ?').bind(attendeeId),
-      c.env.DB.prepare('DELETE FROM batting_practice_signups WHERE event_id = ? AND (attendee_id = ? OR (user_id IS NOT NULL AND user_id = ?))').bind(eventId, attendeeId, existing ? existing.user_id : null),
+      c.env.DB.prepare('DELETE FROM batting_practice_signups WHERE event_id = ? AND (attendee_id = ? OR (user_id IS NOT NULL AND user_id = ?))').bind(eventId, attendeeId, existing.user_id),
       c.env.DB.prepare('DELETE FROM attendees WHERE id = ? AND event_id = ?').bind(attendeeId, eventId)
     ]);
-    if (existing && existing.status === 'attending') {
+    if (existing.status === 'attending') {
       await promoteNextWaitlistedPlayer(c, getSafePublicOrigin(c), eventId);
     }
     return c.json({ success: true, message: 'Attendee removed from roster.' });

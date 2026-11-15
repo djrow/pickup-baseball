@@ -339,6 +339,9 @@ eventsCoreRouter.all('/reminders/check', async (c) => {
 eventsCoreRouter.get('/:id', async (c) => {
   try {
     const eventId = parseInt(c.req.param('id'), 10);
+    if (!eventId || isNaN(eventId) || eventId <= 0) {
+      return c.json({ error: 'Invalid event ID.' }, 400);
+    }
     const token = c.req.query('token');
     const user = c.get('user');
     const db = c.env.DB;
@@ -753,6 +756,9 @@ eventsCoreRouter.post('/', requireOrganizer, async (c) => {
 eventsCoreRouter.put('/:id', requireOrganizer, async (c) => {
   try {
     const eventId = parseInt(c.req.param('id'), 10);
+    if (!eventId || isNaN(eventId) || eventId <= 0) {
+      return c.json({ error: 'Invalid event ID.' }, 400);
+    }
     const { title, description, location, location_url, event_date, max_players, actual_attendance, status, allowed_emails } = await c.req.json();
 
     const existingEvent = await c.env.DB.prepare('SELECT * FROM events WHERE id = ?').bind(eventId).first();
@@ -835,9 +841,33 @@ eventsCoreRouter.put('/:id', requireOrganizer, async (c) => {
 eventsCoreRouter.delete('/:id', requireAdmin, async (c) => {
   try {
     const eventId = parseInt(c.req.param('id'), 10);
+    if (!eventId || isNaN(eventId) || eventId <= 0) {
+      return c.json({ error: 'Invalid event ID.' }, 400);
+    }
+    const existing = await c.env.DB.prepare('SELECT id, allowed_emails FROM events WHERE id = ?').bind(eventId).first();
+    if (!existing) {
+      return c.json({ error: 'Event not found.' }, 404);
+    }
+    const isInviteRestricted = parseAllowedEmails(existing.allowed_emails).length > 0;
     const res = await c.env.DB.prepare('DELETE FROM events WHERE id = ?').bind(eventId).run();
     if (res.meta.changes === 0) {
       return c.json({ error: 'Event not found.' }, 404);
+    }
+    if (isInviteRestricted) {
+      // Prevent orphaned media/posts from reverting to public visibility once the invite list is gone.
+      const { results: privMediaRows } = await c.env.DB.prepare('SELECT id FROM media_items WHERE event_id = ?').bind(eventId).all();
+      await c.env.DB.prepare('DELETE FROM posts WHERE event_id = ?').bind(eventId).run();
+      await c.env.DB.prepare('DELETE FROM media_items WHERE event_id = ?').bind(eventId).run();
+      if (c.env && c.env.CHAT_DB && privMediaRows && privMediaRows.length > 0) {
+        for (const m of privMediaRows) {
+          try {
+            await c.env.CHAT_DB.prepare('UPDATE chat_attachments SET promoted_media_id = NULL WHERE promoted_media_id = ?').bind(m.id).run();
+          } catch (e) {}
+        }
+      }
+    } else {
+      await c.env.DB.prepare('UPDATE posts SET event_id = NULL WHERE event_id = ?').bind(eventId).run();
+      await c.env.DB.prepare('UPDATE media_items SET event_id = NULL WHERE event_id = ?').bind(eventId).run();
     }
     return c.json({ success: true, message: 'Event deleted.' });
   } catch (err) {
@@ -849,6 +879,9 @@ eventsCoreRouter.delete('/:id', requireAdmin, async (c) => {
 eventsCoreRouter.post('/:id/send-reminders', requireAdmin, async (c) => {
   try {
     const eventId = parseInt(c.req.param('id'), 10);
+    if (!eventId || isNaN(eventId) || eventId <= 0) {
+      return c.json({ error: 'Invalid event ID.' }, 400);
+    }
     const event = await c.env.DB.prepare('SELECT * FROM events WHERE id = ?').bind(eventId).first();
     if (!event) return c.json({ error: 'Event not found.' }, 404);
 
@@ -863,6 +896,9 @@ eventsCoreRouter.post('/:id/send-reminders', requireAdmin, async (c) => {
 eventsCoreRouter.post('/:id/rainout', requireOrganizer, async (c) => {
   try {
     const eventId = parseInt(c.req.param('id'), 10);
+    if (!eventId || isNaN(eventId) || eventId <= 0) {
+      return c.json({ error: 'Invalid event ID.' }, 400);
+    }
     const event = await c.env.DB.prepare('SELECT * FROM events WHERE id = ?').bind(eventId).first();
     if (!event) return c.json({ error: 'Event not found.' }, 404);
 
@@ -892,6 +928,9 @@ eventsCoreRouter.post('/:id/rainout', requireOrganizer, async (c) => {
 eventsCoreRouter.post('/:id/reopen', requireOrganizer, async (c) => {
   try {
     const eventId = parseInt(c.req.param('id'), 10);
+    if (!eventId || isNaN(eventId) || eventId <= 0) {
+      return c.json({ error: 'Invalid event ID.' }, 400);
+    }
     const event = await c.env.DB.prepare('SELECT * FROM events WHERE id = ?').bind(eventId).first();
     if (!event) return c.json({ error: 'Event not found.' }, 404);
 
@@ -915,6 +954,9 @@ eventsCoreRouter.post('/:id/reopen', requireOrganizer, async (c) => {
 eventsCoreRouter.post('/:id/send-rainout-email', requireOrganizer, async (c) => {
   try {
     const eventId = parseInt(c.req.param('id'), 10);
+    if (!eventId || isNaN(eventId) || eventId <= 0) {
+      return c.json({ error: 'Invalid event ID.' }, 400);
+    }
     const event = await c.env.DB.prepare('SELECT * FROM events WHERE id = ?').bind(eventId).first();
     if (!event) return c.json({ error: 'Event not found.' }, 404);
 

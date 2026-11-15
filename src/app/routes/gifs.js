@@ -325,6 +325,15 @@ gifsRouter.post('/:id/use', requireAuth, async (c) => {
   const id = String(c.req.param('id') || '').trim();
   if (!id) return c.json({ error: 'Invalid GIF ID.' }, 400);
 
+  const gif = await chatDb.prepare('SELECT id, is_public, added_by FROM clubhouse_gifs WHERE id = ?').bind(id).first();
+  if (!gif) {
+    return c.json({ error: 'GIF not found.' }, 404);
+  }
+  const isModOrAdmin = Boolean(user.isAdmin || user.isModerator || user.canModerateChat);
+  if (Number(gif.is_public) !== 1 && !isModOrAdmin && Number(gif.added_by) !== Number(user.id)) {
+    return c.json({ error: 'Access denied.' }, 403);
+  }
+
   await chatDb.prepare(
     'UPDATE clubhouse_gifs SET use_count = use_count + 1 WHERE id = ? AND (is_public = 1 OR added_by = ?)'
   ).bind(id, user.id).run();

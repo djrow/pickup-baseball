@@ -9,15 +9,19 @@ postsRouter.get('/', async (c) => {
   try {
     const user = c.get('user');
     const { results: posts } = await c.env.DB.prepare(`
-      SELECT p.*, e.title as event_title, e.event_date, e.allowed_emails as event_allowed_emails
+      SELECT p.*, e.id as event_exists, e.title as event_title, e.event_date, e.allowed_emails as event_allowed_emails
       FROM posts p
       LEFT JOIN events e ON p.event_id = e.id
       ORDER BY p.created_at DESC
       LIMIT 100
     `).all();
     const visiblePosts = (posts || [])
-      .filter((p) => !p.event_id || !p.event_allowed_emails || canUserAccessEvent(user, { allowed_emails: p.event_allowed_emails }))
-      .map(({ event_allowed_emails, ...rest }) => rest);
+      .filter((p) => {
+        if (!p.event_id) return true;
+        if (!p.event_exists) return false;
+        return !p.event_allowed_emails || canUserAccessEvent(user, { allowed_emails: p.event_allowed_emails });
+      })
+      .map(({ event_exists, event_allowed_emails, ...rest }) => rest);
     c.header('Cache-Control', user ? 'private, no-store' : 'public, max-age=60, s-maxage=300, stale-while-revalidate=600');
     return c.json({ posts: visiblePosts });
   } catch (err) {
@@ -34,16 +38,16 @@ postsRouter.get('/:id', async (c) => {
     }
     const user = c.get('user');
     const post = await c.env.DB.prepare(`
-      SELECT p.*, e.title as event_title, e.event_date, e.allowed_emails as event_allowed_emails
+      SELECT p.*, e.id as event_exists, e.title as event_title, e.event_date, e.allowed_emails as event_allowed_emails
       FROM posts p
       LEFT JOIN events e ON p.event_id = e.id
       WHERE p.id = ?
     `).bind(postId).first();
     if (!post) return c.json({ error: 'Post not found.' }, 404);
-    if (post.event_id && post.event_allowed_emails && !canUserAccessEvent(user, { allowed_emails: post.event_allowed_emails })) {
+    if (post.event_id && (!post.event_exists || (post.event_allowed_emails && !canUserAccessEvent(user, { allowed_emails: post.event_allowed_emails })))) {
       return c.json({ error: 'Post not found.' }, 404);
     }
-    const { event_allowed_emails, ...safePost } = post;
+    const { event_exists, event_allowed_emails, ...safePost } = post;
     return c.json({ post: safePost });
   } catch (err) {
     console.error('[Posts] Error fetching post:', err);

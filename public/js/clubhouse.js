@@ -844,6 +844,7 @@
     var mime = String(att.mime_type || '').toLowerCase();
     var isEncryptedAtt = Boolean(att.is_encrypted && att.iv);
     var activeIsDm = Boolean(uiState.activeChannel && (uiState.activeChannel.channel_type === 'dm' || uiState.activeChannel.channel_type === 'group_dm'));
+    var requiresE2ee = Boolean(Store.requiresE2eeChannel && Store.requiresE2eeChannel(uiState.activeChannel));
     var html = '<div class="ch-attachment-card">';
 
     if (isEncryptedAtt) {
@@ -856,6 +857,8 @@
       } else {
         html += '<a href="#decrypting" data-e2ee-att-id="' + escapeHtml(att.id) + '" download="' + escapeHtml(att.file_name) + '" rel="noopener noreferrer" style="color:var(--ch-accent);">🔒 ' + escapeHtml(att.file_name) + ' (Decrypting...)</a>';
       }
+    } else if (requiresE2ee) {
+      html += '<span class="ch-e2ee-locked-text" style="color:var(--ch-text-muted,#9aa5b4);font-size:0.85em;">🔒 Plaintext attachment blocked on encrypted channel (' + escapeHtml(att.file_name || 'file') + ')</span>';
     } else if (mime.indexOf('image/') === 0) {
       html += '<img src="' + escapeHtml(streamUrl) + '" alt="' + escapeHtml(att.file_name) + '" loading="lazy" />';
     } else if (mime.indexOf('video/') === 0) {
@@ -2021,7 +2024,9 @@
       var g = filtered[j];
       var rawGifUrl = String(g.url || '').trim();
       var gifUrl = '';
-      if (rawGifUrl.charAt(0) === '/' && rawGifUrl.charAt(1) !== '/' && rawGifUrl.charAt(1) !== '\\') {
+      if (/[\u0000-\u001f\u007f]/.test(rawGifUrl)) {
+        gifUrl = '';
+      } else if (rawGifUrl.charAt(0) === '/' && rawGifUrl.charAt(1) !== '/' && rawGifUrl.charAt(1) !== '\\') {
         gifUrl = rawGifUrl;
       } else if (/^https:\/\//i.test(rawGifUrl)) {
         gifUrl = rawGifUrl;

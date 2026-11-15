@@ -190,19 +190,26 @@
       : ['channels', 'messages', 'meta'];
     return openStoreDb().then(function (db) {
       if (!db) return;
-      try {
-        var existing = [];
-        for (var i = 0; i < names.length; i++) {
-          if (db.objectStoreNames.contains(names[i])) {
-            existing.push(names[i]);
+      return new Promise(function (resolve) {
+        try {
+          var existing = [];
+          for (var i = 0; i < names.length; i++) {
+            if (db.objectStoreNames.contains(names[i])) {
+              existing.push(names[i]);
+            }
           }
+          if (existing.length === 0) { resolve(); return; }
+          var tx = db.transaction(existing, 'readwrite');
+          tx.oncomplete = function () { resolve(); };
+          tx.onerror = function () { resolve(); };
+          tx.onabort = function () { resolve(); };
+          for (var j = 0; j < existing.length; j++) {
+            tx.objectStore(existing[j]).clear();
+          }
+        } catch (e) {
+          resolve();
         }
-        if (existing.length === 0) return;
-        var tx = db.transaction(existing, 'readwrite');
-        for (var j = 0; j < existing.length; j++) {
-          tx.objectStore(existing[j]).clear();
-        }
-      } catch (e) {}
+      });
     });
   }
 
@@ -247,32 +254,46 @@
   function setMetaInIdb(key, value) {
     return openStoreDb().then(function (db) {
       if (!db || !db.objectStoreNames.contains('meta')) return;
-      try {
-        var tx = db.transaction(['meta'], 'readwrite');
-        tx.objectStore('meta').put(value, key);
-      } catch (e) {}
+      return new Promise(function (resolve) {
+        try {
+          var tx = db.transaction(['meta'], 'readwrite');
+          tx.oncomplete = function () { resolve(); };
+          tx.onerror = function () { resolve(); };
+          tx.onabort = function () { resolve(); };
+          tx.objectStore('meta').put(value, key);
+        } catch (e) {
+          resolve();
+        }
+      });
     });
   }
 
   function saveMessagesToIdb(messages) {
     return openStoreDb().then(function (db) {
       if (!db || !Array.isArray(messages)) return;
-      try {
-        var tx = db.transaction(['messages'], 'readwrite');
-        var store = tx.objectStore('messages');
-        for (var i = 0; i < messages.length; i++) {
-          var msg = messages[i];
-          if (!msg) continue;
-          if (msg.is_e2ee_decrypted || msg.iv || msg.encryption_iv || msg.sender_key_id) {
-            var toStore = Object.assign({}, msg);
-            delete toStore.decrypted_content;
-            delete toStore.is_e2ee_decrypted;
-            store.put(toStore);
-          } else {
-            store.put(msg);
+      return new Promise(function (resolve) {
+        try {
+          var tx = db.transaction(['messages'], 'readwrite');
+          tx.oncomplete = function () { resolve(); };
+          tx.onerror = function () { resolve(); };
+          tx.onabort = function () { resolve(); };
+          var store = tx.objectStore('messages');
+          for (var i = 0; i < messages.length; i++) {
+            var msg = messages[i];
+            if (!msg) continue;
+            if (msg.is_e2ee_decrypted || msg.iv || msg.encryption_iv || msg.sender_key_id) {
+              var toStore = Object.assign({}, msg);
+              delete toStore.decrypted_content;
+              delete toStore.is_e2ee_decrypted;
+              store.put(toStore);
+            } else {
+              store.put(msg);
+            }
           }
+        } catch (e) {
+          resolve();
         }
-      } catch (e) {}
+      });
     });
   }
 
@@ -476,6 +497,9 @@
         : null;
       var senderUid = Number(share.senderUserId || share.sender_user_id || 0);
       var myUid = state.user && state.user.id ? Number(state.user.id) : 0;
+      if (!senderUid || isNaN(senderUid) || senderUid <= 0) {
+        return Promise.reject(createE2eeError('E2EE_PEER_KEY_MISSING', 'Missing sender user ID for channel key share.'));
+      }
       // Refuse to adopt an active key epoch lower than the highest epoch this device has already seen
       // (defends against a server replaying an older key epoch after a rotation).
       var epochGuard = (!exactEpoch && root.ClubhouseCrypto && typeof root.ClubhouseCrypto.idbGet === 'function')
@@ -907,12 +931,14 @@
     var ch = findChannelById(msg.channel_id);
     var isE2ee = requiresE2eeChannel(ch);
     var iv = msg.encryption_iv || msg.iv || null;
-    if (!ch && iv) {
-      // Encrypted payload for a channel whose metadata is not loaded: fail closed instead of showing ciphertext/plaintext.
+    if (!ch) {
+      // Message for a channel whose metadata is not loaded: fail closed instead of exposing ciphertext/unverified plaintext.
       var unknownCopy = Object.assign({}, msg);
       unknownCopy.is_e2ee_locked = true;
       unknownCopy.is_e2ee_decrypted = false;
-      unknownCopy.decrypted_content = '🔒 Encrypted message — channel details are still loading.';
+      unknownCopy.decrypted_content = iv
+        ? '🔒 Encrypted message — channel details are still loading.'
+        : '🔒 Channel details are still loading — message withheld.';
       return Promise.resolve(unknownCopy);
     }
     if (isE2ee) {
@@ -1292,6 +1318,9 @@
         if (!res.ok) {
           throw new Error((res.data && res.data.error) || 'Failed to edit message');
         }
+        if (needsE2ee && (!res.data || res.data.content !== payload.content)) {
+          throw new Error('Server edit response did not match encrypted payload.');
+        }
         var chKeys = Object.keys(state.messagesByChannel);
         for (var c = 0; c < chKeys.length; c++) {
           var list = state.messagesByChannel[chKeys[c]] || [];
@@ -1664,7 +1693,7 @@
         if (String(list[i].id) === String(ev.target_id)) {
           if (!targetChannel && !(payload.iv || payload.encryption_iv)) {
             // Unknown channel metadata: never apply an unencrypted edit that could target a private board.
-            break;
+            return;
           }
           list[i].content = payload.content || list[i].content;
           if (payload.key_epoch) list[i].key_epoch = payload.key_epoch;
