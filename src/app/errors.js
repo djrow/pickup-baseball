@@ -18,7 +18,7 @@ export const ERROR_CODES = Object.freeze({
 });
 
 export const CANONICAL_ERROR_CODES = Object.freeze(Object.values(ERROR_CODES));
-const CANONICAL_CODE_SET = new Set(CANONICAL_ERROR_CODES);
+const CANONICAL_CODE_SET = /** @type {Set<string>} */ (new Set(CANONICAL_ERROR_CODES));
 
 // Domain-specific Clubhouse subcodes preserved for backwards compatibility
 const PRESERVED_DOMAIN_CODES = new Set([
@@ -223,7 +223,7 @@ function shouldLogError(status, code) {
  * @param {number} status
  * @param {string} code
  * @param {string} message
- * @param {object|null} [extra]
+ * @param {Record<string, any>|null} [extra]
  * @returns {Response}
  */
 export function jsonError(c, status, code, message, extra = null) {
@@ -239,6 +239,7 @@ export function jsonError(c, status, code, message, extra = null) {
     c.set('errorPayloadNormalized', true);
   }
 
+  /** @type {Record<string, any>} */
   let extraFields = {};
   let alreadyLogged = Boolean(c && typeof c.get === 'function' && c.get('errorLogged'));
   if (extra && typeof extra === 'object') {
@@ -267,7 +268,7 @@ export function jsonError(c, status, code, message, extra = null) {
     code: canonicalCode,
     requestId
   });
-  return c.json(payload, safeStatus);
+  return c.json(payload, /** @type {any} */ (safeStatus));
 }
 
 /**
