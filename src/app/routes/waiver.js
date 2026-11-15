@@ -19,7 +19,7 @@ import {
 import { isGDriveConfigured, uploadGDriveTextFile } from '../gdrive.js';
 import { sendWaiverConfirmationEmail } from '../mailer.js';
 
-export const waiverRouter = new Hono();
+export const waiverRouter = /** @type {AppHono} */ (new Hono());
 
 export const WAIVER_DOC_VERSION = '41335\\14760738.1';
 
@@ -37,8 +37,8 @@ export const OFFICIAL_WAIVER_TEXT = [
 ].join('\n\n');
 
 function getSubtleCrypto() {
-  if (typeof globalThis !== 'undefined' && globalThis.crypto && globalThis.crypto.subtle) {
-    return globalThis.crypto.subtle;
+  if (typeof crypto !== 'undefined' && crypto && crypto.subtle) {
+    return crypto.subtle;
   }
   return null;
 }
@@ -72,7 +72,7 @@ async function getProvenanceSecretMaterial(env, db = null) {
         return String(existing.value);
       }
       const bytes = new Uint8Array(32);
-      globalThis.crypto.getRandomValues(bytes);
+      crypto.getRandomValues(bytes);
       const generated = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
       await targetDb.prepare("INSERT OR IGNORE INTO app_settings (key, value) VALUES ('waiver_provenance_secret', ?)").bind(generated).run();
       const row = await targetDb.prepare("SELECT value FROM app_settings WHERE key = 'waiver_provenance_secret'").first();
@@ -88,7 +88,7 @@ async function getProvenanceSecretMaterial(env, db = null) {
 
   if (!ephemeralProvenanceSecret) {
     const bytes = new Uint8Array(32);
-    globalThis.crypto.getRandomValues(bytes);
+    crypto.getRandomValues(bytes);
     ephemeralProvenanceSecret = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
   }
   return ephemeralProvenanceSecret;
@@ -114,7 +114,7 @@ export async function computeProvenanceSeal(env, payloadStr, db = null) {
 function generateCertificateId(signedDateStr) {
   const dateCompact = String(signedDateStr || new Date().toISOString().slice(0, 10)).replace(/[^0-9]/g, '').slice(0, 8) || '20260101';
   const randBytes = new Uint8Array(5);
-  globalThis.crypto.getRandomValues(randBytes);
+  crypto.getRandomValues(randBytes);
   const randHex = Array.from(randBytes).map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
   return `PBF-WVR-${dateCompact}-${randHex}`;
 }

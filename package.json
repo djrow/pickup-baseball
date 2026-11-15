@@ -16,6 +16,7 @@
     "test": "node scripts/verify-all.js",
     "test:workerd": "node --test tests/workerd/*.test.js",
     "test:browser": "node scripts/browser-smoke.js",
+    "typecheck": "tsc -p tsconfig.backend.json --noEmit && tsc -p tsconfig.sw.json --noEmit && tsc -p tsconfig.client.json --noEmit",
     "security:scan": "node scripts/security-scan.js",
     "security:scan:live": "node scripts/security-scan.js --live"
   },
@@ -28,7 +29,9 @@
     "hono": "^4.13.13"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261115.1",
     "miniflare": "^5.20261113.0-beta",
+    "typescript": "^7.0.2",
     "wrangler": "^4.162.0"
   }
 }

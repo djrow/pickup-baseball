@@ -293,24 +293,26 @@ export async function verifyTurnstileIfConfigured(env, token, remoteip) {
 /**
  * Resolves the authenticated user profile, capabilities, and Clubhouse opt-in state for a session cookie.
  * Automatically checks opt-in backfill when `CHAT_DB` is provided unless `options.lightweight` is set.
- * @param {object} db - Baseball D1 binding or Hono context holding `.env`.
+ * @param {D1Database|{ env?: AppBindings }} db - Baseball D1 binding or Hono context holding `.env`.
  * @param {string} sessionId
- * @param {object|null} chatDb - Clubhouse D1 binding (`CHAT_DB`).
+ * @param {D1Database|null} [chatDb] - Clubhouse D1 binding (`CHAT_DB`).
  * @param {{ lightweight?: boolean }} [options]
- * @returns {Promise<object|null>} Normalized user object with boolean capability flags, or null.
+ * @returns {Promise<AppUser|null>} Normalized user object with boolean capability flags, or null.
  */
 export async function getUserFromSession(db, sessionId, chatDb, options = {}) {
   if (!sessionId || !db) return null;
 
-  let baseballDb = db;
+  /** @type {D1Database} */
+  let baseballDb = /** @type {D1Database} */ (db);
   let chatDbInstance = chatDb;
-  if (db && db.env) {
+  if (db && 'env' in db && db.env) {
     baseballDb = db.env.BASEBALL_DB || db.env.DB;
     chatDbInstance = chatDb || db.env.CHAT_DB;
   }
 
   const lightweight = Boolean(options && options.lightweight);
 
+  /** @type {Record<string, any>|null} */
   const session = await baseballDb.prepare(`
     SELECT 
       s.id as session_id, 
@@ -457,7 +459,7 @@ export async function getUserFromSession(db, sessionId, chatDb, options = {}) {
 
 /**
  * Remove expired sessions and evict oldest active sessions beyond `maxKeep` for a user.
- * @param {object} db - Baseball D1 binding.
+ * @param {D1Database} db - Baseball D1 binding.
  * @param {number} userId
  * @param {number} [maxKeep=MAX_SESSIONS_PER_USER]
  * @returns {Promise<void>}
@@ -785,7 +787,13 @@ export function validateAppscriptRedirectUrl(rawUrl) {
   return { ok: true, url: parsed.toString() };
 }
 
-async function fetchWithPinnedNodeIp(targetUrl, pinnedAddress, pinnedFamily, { method = 'GET', headers, body, timeoutMs = 8000 } = {}) {
+/**
+ * @param {string} targetUrl
+ * @param {string} pinnedAddress
+ * @param {number} pinnedFamily
+ * @param {{ method?: string, headers?: Record<string, string>, body?: any, timeoutMs?: number }} [options]
+ */
+async function fetchWithPinnedNodeIp(targetUrl, pinnedAddress, pinnedFamily, { method = 'GET', headers = undefined, body = undefined, timeoutMs = 8000 } = {}) {
   const parsed = new URL(targetUrl);
   const modName = parsed.protocol === 'https:' ? 'node:https' : 'node:http';
   const transport = await import(modName);

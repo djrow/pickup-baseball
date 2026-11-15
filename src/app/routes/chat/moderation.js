@@ -10,7 +10,7 @@ import { Hono } from 'hono';
 import { requireAuth, requireModerator, rejectIfChatMuted, rejectIfClubhouseOptedOut } from '../../security.js';
 import { resolveChannel, canUserAccessChannel, chunkArray, abbreviateMemberNames } from './helpers.js';
 
-export const chatModerationRouter = new Hono();
+export const chatModerationRouter = /** @type {AppHono} */ (new Hono());
 
 chatModerationRouter.post('/reports', requireAuth, async (c) => {
   const user = c.get('user');
@@ -43,7 +43,7 @@ chatModerationRouter.post('/reports', requireAuth, async (c) => {
         window_start = CASE WHEN chat_rate_limits.window_start <= ? THEN ? ELSE chat_rate_limits.window_start END
     `).bind(reportRateKey, nowSec, reportCutoff, reportCutoff, nowSec).run();
     const updatedRate = await chatDb.prepare('SELECT count FROM chat_rate_limits WHERE key = ?').bind(reportRateKey).first();
-    if (updatedRate && updatedRate.count > 10) {
+    if (updatedRate && Number(updatedRate.count) > 10) {
       return c.json({ error: 'Too many reports submitted recently. Please wait before submitting more.' }, 429);
     }
   } catch (e) {}
@@ -62,7 +62,7 @@ chatModerationRouter.post('/reports', requireAuth, async (c) => {
     if (!msg) {
       return c.json({ error: 'Target message not found.' }, 404);
     }
-    const msgChannel = await resolveChannel(chatDb, msg.channel_id);
+    const msgChannel = await resolveChannel(chatDb, String(msg.channel_id || ''));
     if (msgChannel && !(await canUserAccessChannel(chatDb, user, msgChannel, 'read'))) {
       return c.json({ error: 'Target message not found.' }, 404);
     }
@@ -70,7 +70,7 @@ chatModerationRouter.post('/reports', requireAuth, async (c) => {
       return c.json({ error: 'You cannot report your own message.' }, 400);
     }
     targetUserId = msg.author_id;
-    targetUserName = msg.author_name || '';
+    targetUserName = String(msg.author_name || '');
     channelId = msg.channel_id;
   } else {
     targetUserId = parseInt(body.target_user_id !== undefined ? body.target_user_id : body.reported_user_id, 10);
@@ -85,7 +85,7 @@ chatModerationRouter.post('/reports', requireAuth, async (c) => {
       if (!targetUser) {
         return c.json({ error: 'Target user not found.' }, 404);
       }
-      targetUserName = targetUser.name || '';
+      targetUserName = String(targetUser.name || '');
     }
   }
 
@@ -106,7 +106,7 @@ chatModerationRouter.post('/reports', requireAuth, async (c) => {
 
   const report = await chatDb.prepare('SELECT * FROM chat_reports WHERE id = ?').bind(insRes.meta.last_row_id).first();
   if (report && report.target_user_name) {
-    report.target_user_name = abbreviateMemberNames([{ user_id: report.target_user_id, name: report.target_user_name }])[0];
+    report.target_user_name = abbreviateMemberNames([{ user_id: Number(report.target_user_id), name: String(report.target_user_name) }])[0];
   }
   return c.json({ success: true, report }, 201);
 });
@@ -219,7 +219,7 @@ chatModerationRouter.patch('/moderation/reports/:id', requireModerator, async (c
     return c.json({ error: 'You cannot resolve or dismiss a report targeting your own account.' }, 403);
   }
   if (!user.isAdmin && existing.channel_id) {
-    const ch = await resolveChannel(chatDb, existing.channel_id);
+    const ch = await resolveChannel(chatDb, String(existing.channel_id));
     if (!ch || !(await canUserAccessChannel(chatDb, user, ch, 'read'))) {
       return c.json({ error: 'Access denied: you do not have permission to resolve reports for this board.' }, 403);
     }

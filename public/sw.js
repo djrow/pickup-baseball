@@ -1,5 +1,7 @@
 // Service Worker for Pickup Baseball Foundation PWA
 const CACHE_NAME = 'pbf-cache-v149';
+/** @type {ServiceWorkerGlobalScope} */
+const sw = /** @type {any} */ (self);
 
 // Core app shell & pages precached on install; i18n bundles (~312 KB) are cached on demand
 const STATIC_ASSETS = [
@@ -59,19 +61,19 @@ const STATIC_ASSETS = [
 ];
 
 // Install: Cache core application shell
-self.addEventListener('install', (event) => {
+sw.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       // Use Promise.all with individual catch so missing optional files don't fail install (ES6 compatible)
       return Promise.all(
         STATIC_ASSETS.map((url) => cache.add(url).catch((err) => console.warn('[SW] Failed to precache:', url, err)))
       );
-    }).then(() => self.skipWaiting())
+    }).then(() => sw.skipWaiting())
   );
 });
 
 // Activate: Clean up older cache versions & claim clients
-self.addEventListener('activate', (event) => {
+sw.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
@@ -82,7 +84,7 @@ self.addEventListener('activate', (event) => {
           }
         })
       );
-    }).then(() => self.clients.claim())
+    }).then(() => sw.clients.claim())
   );
 });
 
@@ -94,12 +96,12 @@ function isCacheableResponse(res) {
 }
 
 // Fetch: Strategy depending on request type
-self.addEventListener('fetch', (event) => {
+sw.addEventListener('fetch', (event) => {
   const req = event.request;
   const url = new URL(req.url);
 
   // Only handle same-origin GET requests
-  if (req.method !== 'GET' || url.origin !== self.location.origin) {
+  if (req.method !== 'GET' || url.origin !== sw.location.origin) {
     return;
   }
 
@@ -160,8 +162,8 @@ self.addEventListener('fetch', (event) => {
 });
 
 // Message listener for manual app update
-self.addEventListener('message', (event) => {
+sw.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
-    self.skipWaiting();
+    sw.skipWaiting();
   }
 });

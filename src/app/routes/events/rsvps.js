@@ -33,7 +33,7 @@ import {
   promoteNextWaitlistedPlayer
 } from './helpers.js';
 
-export const eventsRsvpsRouter = new Hono();
+export const eventsRsvpsRouter = /** @type {AppHono} */ (new Hono());
 
 /**
  * Reclaims a previously awarded <48h Backup Hero Credit only when the user actually
@@ -198,7 +198,7 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
       : 0;
 
     let finalStatus = status;
-    if (status === 'attending' && playersCount > 0 && event.max_players && event.max_players > 0) {
+    if (status === 'attending' && playersCount > 0 && event.max_players && Number(event.max_players) > 0) {
       const activeRow = existingAttendee
         ? await db.prepare(`
             SELECT COALESCE(SUM(COALESCE(players_count, 1 + COALESCE(additional_guests, 0))), 0) as total
@@ -208,12 +208,12 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
             SELECT COALESCE(SUM(COALESCE(players_count, 1 + COALESCE(additional_guests, 0))), 0) as total
             FROM attendees WHERE event_id = ? AND status = 'attending'
           `).bind(eventId).first();
-      if ((activeRow ? activeRow.total : 0) + playersCount > event.max_players) {
+      if (Number(activeRow ? activeRow.total : 0) + playersCount > Number(event.max_players)) {
         finalStatus = 'waitlist';
       }
     }
 
-    const tierInfo = getTaskTier(event.event_date);
+    const tierInfo = getTaskTier(String(event.event_date || ''));
     if (status === 'attending' && Array.isArray(duty_ids) && duty_ids.length > 0) {
       if (!tierInfo.isUnlocked) {
         return c.json({
@@ -237,7 +237,7 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
       for (const dId of uniquePreDutyIds) {
         const duty = await db.prepare('SELECT * FROM event_duties WHERE id = ? AND event_id = ?').bind(dId, eventId).first();
         if (!duty) continue;
-        const dType = getDutyType(duty.title);
+        const dType = getDutyType(String(duty.title || ''));
         if (dType.isPaid) {
           if (!attendeeUser) {
             return c.json({ error: `To select '${duty.title}', you must first complete training (${dType.badgeName}) and sign in.` }, 400);
@@ -251,7 +251,7 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
               dutyCapCache[dType.type] = await getDutyTier1Cap(db, dType.type);
             }
             if (rollingShiftsCache[dType.type] === undefined) {
-              rollingShiftsCache[dType.type] = await getUserRollingShifts(db, attendeeUser.id, dType.type, event.event_date, eventId);
+              rollingShiftsCache[dType.type] = await getUserRollingShifts(db, Number(attendeeUser.id), dType.type, String(event.event_date || ''), eventId);
             }
             const cap = dutyCapCache[dType.type];
             const userShifts = rollingShiftsCache[dType.type];
@@ -261,7 +261,7 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
                   error: `Tier 1 rolling 3-month fair-share cap reached (${cap} shifts). You have ${attendeeUser.hero_credits || 0} Backup Hero Credit(s). Check 'Redeem 1 Backup Hero Credit' to claim this shift early.`
                 }, 400);
               }
-              if ((attendeeUser.hero_credits || 0) < 1) {
+              if (Number(attendeeUser.hero_credits || 0) < 1) {
                 return c.json({ error: `Tier 1 fair-share cap reached (${cap} shifts) and you do not have any Backup Hero Credits available.` }, 400);
               }
               creditsNeeded += 1;
@@ -269,7 +269,7 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
           }
         }
       }
-      if (creditsNeeded > 0 && (attendeeUser.hero_credits || 0) < creditsNeeded) {
+      if (creditsNeeded > 0 && Number(attendeeUser.hero_credits || 0) < creditsNeeded) {
         return c.json({ error: `Insufficient Backup Hero Credits. You need ${creditsNeeded} credit(s) but have ${attendeeUser.hero_credits || 0}.` }, 400);
       }
     }
@@ -326,7 +326,7 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
       attendeeId = ins.meta.last_row_id;
     }
 
-    if (finalStatus === 'attending' && playersCount > 0 && event.max_players && event.max_players > 0 && (!wasAttending || playersCount > prevPlayersCount)) {
+    if (finalStatus === 'attending' && playersCount > 0 && event.max_players && Number(event.max_players) > 0 && (!wasAttending || playersCount > Number(prevPlayersCount))) {
       if (!existingAttendee) {
         // Atomic post-insert tie-breaker using monotonic id prevents concurrent inserts from double-demoting each other
         const demoteRes = await db.prepare(`
@@ -365,7 +365,7 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
     let heroCreditEarned = false;
     let heroCreditRedeemed = false;
     let creditsRedeemedCount = 0;
-    const hoursUntilEvent = (new Date(event.event_date).getTime() - Date.now()) / (3600 * 1000);
+    const hoursUntilEvent = (new Date(String(event.event_date || '')).getTime() - Date.now()) / (3600 * 1000);
     const isUrgentWindow = hoursUntilEvent > 0 && hoursUntilEvent < 48;
 
     const { results: pRows } = await db.prepare(`
@@ -375,7 +375,7 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
       WHERE da.attendee_id = ?
     `).bind(attendeeId).all();
     const prevDuties = (pRows || []).map(r => r.duty_id);
-    const prevHadPaidDuty = (pRows || []).some(r => getDutyType(r.title).isPaid);
+    const prevHadPaidDuty = (pRows || []).some(r => getDutyType(String(r.title || '')).isPaid);
     const creditUserId = (user && user.id) || (existingAttendee && existingAttendee.user_id) || null;
     let newHasPaidDuty = false;
 
@@ -399,12 +399,12 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
       for (const dId of uniqueDutyIds) {
         const duty = dutyById.get(dId);
         if (!duty) continue;
-        if ((duty.taken_count || 0) < duty.slots_needed) {
+        if (Number(duty.taken_count || 0) < Number(duty.slots_needed || 0)) {
           let needsCredit = false;
-          const dType = getDutyType(duty.title);
+          const dType = getDutyType(String(duty.title || ''));
           if (dType.isPaid && user && user.id && tierInfo.tier === 'tier1' && redeem_hero_credit && !prevDuties.includes(dId)) {
             const cap = await getDutyTier1Cap(db, dType.type);
-            const shifts = await getUserRollingShifts(db, user.id, dType.type, event.event_date, eventId);
+            const shifts = await getUserRollingShifts(db, user.id, dType.type, String(event.event_date || ''), eventId);
             if (shifts >= cap) {
               needsCredit = true;
               creditsRequired += 1;
@@ -423,7 +423,7 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
            JOIN users u ON u.id = ?
            WHERE a.id = ?`
         ).bind(creditUserId, attendeeId).first();
-        if (creditState && creditState.urgent_credit_awarded === 1 && creditState.hero_credits < 1) {
+        if (creditState && creditState.urgent_credit_awarded === 1 && Number(creditState.hero_credits) < 1) {
           return c.json({
             error: 'You already redeemed the Backup Hero Credit earned from this shift. Contact an organizer if you need to drop your shift.'
           }, 400);

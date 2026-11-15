@@ -79,6 +79,8 @@ export async function getGDriveAccessToken(env) {
 
 /**
  * Initiate a single-use Google Drive v3 Resumable Upload Session
+ * @param {AppBindings|Record<string, any>} env
+ * @param {{ fileName: string, mimeType?: string, fileSize?: number, origin?: string, appProperties?: Record<string, string> }} file
  */
 export async function initGDriveResumableSession(env, { fileName, mimeType, fileSize, origin, appProperties }) {
   const token = await getGDriveAccessToken(env);
@@ -146,7 +148,7 @@ export async function initGDriveResumableSession(env, { fileName, mimeType, file
  */
 export async function uploadGDriveBytes(env, { fileName, mimeType = 'application/octet-stream', bytes }) {
   if (!isGDriveConfigured(env)) return null;
-  const payload = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || 0);
+  const payload = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || new ArrayBuffer(0));
   const session = await initGDriveResumableSession(env, {
     fileName,
     mimeType,

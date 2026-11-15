@@ -17,7 +17,7 @@ export {
   canUserAccessChannel
 } from './chat/helpers.js';
 
-export const chatRouter = new Hono();
+export const chatRouter = /** @type {AppHono} */ (new Hono());
 
 chatRouter.route('/', chatSyncRouter);
 chatRouter.route('/', chatChannelsRouter);

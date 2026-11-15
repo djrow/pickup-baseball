@@ -9,7 +9,7 @@ import { getDefaultDuties, getRequireLoginSetting } from '../../schema.js';
 import { canUserAccessEvent, parseAllowedEmails } from '../../policy.js';
 import { AVATAR_EXPR } from './helpers.js';
 
-export const eventsBpDutiesRouter = new Hono();
+export const eventsBpDutiesRouter = /** @type {AppHono} */ (new Hono());
 
 function isUniqueConstraintError(err) {
   const msg = String((err && (err.message || (err.cause && err.cause.message))) || '');
@@ -142,7 +142,7 @@ eventsBpDutiesRouter.get('/:id/bp-order', async (c) => {
       is_mine: Boolean(
         (user && s.user_id && s.user_id === user.id) ||
         (myAttendee && s.attendee_id && s.attendee_id === myAttendee.id) ||
-        (myAttendee && s.player_name && myAttendee.name && s.player_name.trim().toLowerCase() === myAttendee.name.trim().toLowerCase())
+        (myAttendee && s.player_name && myAttendee.name && String(s.player_name).trim().toLowerCase() === String(myAttendee.name).trim().toLowerCase())
       )
     }));
 
@@ -194,7 +194,7 @@ eventsBpDutiesRouter.post('/:id/bp-order', async (c) => {
         const validAtt = await db.prepare('SELECT id, user_id FROM attendees WHERE id = ? AND event_id = ?').bind(requestedAttId, eventId).first();
         if (validAtt) {
           attendeeId = validAtt.id;
-          targetBpUserId = validAtt.user_id || null;
+          targetBpUserId = validAtt.user_id ? Number(validAtt.user_id) : null;
         }
       }
     }
@@ -411,7 +411,7 @@ eventsBpDutiesRouter.post('/:id/duties', requireOrganizer, async (c) => {
     }
 
     const maxSortRow = await c.env.DB.prepare('SELECT MAX(sort_order) as max_sort FROM event_duties WHERE event_id = ?').bind(eventId).first();
-    const nextSort = (maxSortRow && maxSortRow.max_sort !== null) ? maxSortRow.max_sort + 1 : 0;
+    const nextSort = (maxSortRow && maxSortRow.max_sort !== null) ? Number(maxSortRow.max_sort) + 1 : 0;
 
     const res = await c.env.DB.prepare(
       'INSERT INTO event_duties (event_id, title, description, slots_needed, sort_order) VALUES (?, ?, ?, ?, ?)'

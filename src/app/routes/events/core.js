@@ -35,7 +35,7 @@ import {
   notifyConfirmedAttendees
 } from './helpers.js';
 
-export const eventsCoreRouter = new Hono();
+export const eventsCoreRouter = /** @type {AppHono} */ (new Hono());
 
 eventsCoreRouter.get('/', async (c) => {
   try {
@@ -439,6 +439,7 @@ eventsCoreRouter.get('/:id', async (c) => {
     }
 
     const batchRes = await db.batch(batchStmts);
+    /** @type {Record<string, any>|null} */
     const event = (batchRes[0].results && batchRes[0].results[0]) || null;
     if (!event) {
       return c.json({ error: 'Event not found.' }, 404);
@@ -458,7 +459,8 @@ eventsCoreRouter.get('/:id', async (c) => {
       }, 403);
     }
 
-    let duties = (batchRes[1].results || []).map(d => ({
+    /** @type {Array<Record<string, any>>} */
+    let duties = (batchRes[1].results || []).map(/** @param {Record<string, any>} d */ d => ({
       ...d,
       assigned_players: JSON.parse(d.assigned_players || '[]')
     }));
@@ -495,10 +497,15 @@ eventsCoreRouter.get('/:id', async (c) => {
       }
     }
 
+    /** @type {Array<Record<string, any>>} */
     const attendees = batchRes[2].results || [];
+    /** @type {Array<Record<string, any>>} */
     const waitlist = batchRes[3].results || [];
+    /** @type {Array<Record<string, any>>} */
     const comments = batchRes[4].results || [];
+    /** @type {Array<Record<string, any>>} */
     const bpSignups = batchRes[5].results || [];
+    /** @type {Record<string, any>|null} */
     let myRsvp = (batchRes.length > 6 && batchRes[6] && batchRes[6].results && batchRes[6].results[0]) || null;
     if (myRsvp) {
       if (myRsvp.email && !isDeliverableEmail(myRsvp.email)) {
@@ -519,7 +526,7 @@ eventsCoreRouter.get('/:id', async (c) => {
     const [requireLogin, viewerUser, machineCap, fieldCap] = await Promise.all([
       getRequireLoginSetting(db, c.env),
       viewerId
-        ? db.prepare('SELECT id, machine_badge, field_badge, hero_credits FROM users WHERE id = ?').bind(viewerId).first()
+        ? /** @type {Promise<Record<string, any>|null>} */ (db.prepare('SELECT id, machine_badge, field_badge, hero_credits FROM users WHERE id = ?').bind(viewerId).first())
         : Promise.resolve(null),
       getDutyTier1Cap(db, 'machine'),
       getDutyTier1Cap(db, 'field')
@@ -628,6 +635,7 @@ eventsCoreRouter.get('/:id', async (c) => {
       )
     }));
 
+    /** @type {Record<string, any>} */
     const safeEventObj = {
       ...event,
       allowed_emails_list: isOrganizer ? allowedList : [],
@@ -961,7 +969,7 @@ eventsCoreRouter.post('/:id/send-rainout-email', requireOrganizer, async (c) => 
     if (!event) return c.json({ error: 'Event not found.' }, 404);
 
     const body = await c.req.json().catch(() => ({}));
-    const cleanNote = body.note !== undefined ? (body.note ? String(body.note).trim() : null) : event.rainout_note;
+    const cleanNote = body.note !== undefined ? (body.note ? String(body.note).trim() : null) : (event.rainout_note ? String(event.rainout_note) : null);
 
     await notifyConfirmedAttendees(c, event, cleanNote, sendRainoutEmail);
     await c.env.DB.prepare('UPDATE events SET rainout_email_sent = 1 WHERE id = ?').bind(eventId).run();

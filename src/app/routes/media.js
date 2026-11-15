@@ -46,8 +46,8 @@ import { isPrivateEncryptedBoard } from './chat/helpers.js';
 import { canUserAccessEvent, parseAllowedEmails } from '../policy.js';
 import { getDisallowZeroLoginMediaSetting } from '../schema.js';
 
-export const mediaRouter = new Hono();
-export const attachmentsRouter = new Hono();
+export const mediaRouter = /** @type {AppHono} */ (new Hono());
+export const attachmentsRouter = /** @type {AppHono} */ (new Hono());
 
 // ---------------------------------------------------------------------------
 // GET /api/media - List media items with chronological sorting & album stats
@@ -208,16 +208,18 @@ mediaRouter.get('/:id/file', async (c) => {
 
     // 1. If stored in Google Drive / external vault (file_data is null)
     if (!row.file_data) {
-      const remoteUrl = (row.original_url && row.original_url.startsWith('http'))
-        ? row.original_url
-        : ((row.file_url && row.file_url.startsWith('http')) ? row.file_url : null);
+      const origUrl = typeof row.original_url === 'string' ? row.original_url : '';
+      const fUrl = typeof row.file_url === 'string' ? row.file_url : '';
+      const remoteUrl = origUrl.startsWith('http')
+        ? origUrl
+        : (fUrl.startsWith('http') ? fUrl : null);
 
       if (!remoteUrl) return c.text('Not found', 404);
 
       const isTestEnv = Boolean(c.env && (c.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'test'));
       const check = validateExternalHttpUrl(remoteUrl, isTestEnv);
       if (!check.ok) {
-        return c.text(check.error, check.status);
+        return c.text(check.error, /** @type {any} */ (check.status || 400));
       }
 
       const etag = `W/"remote-media-${id}"`;
@@ -253,7 +255,7 @@ mediaRouter.get('/:id/file', async (c) => {
 
       const capped = await readResponseWithByteCap(upstreamRes, MAX_MEDIA_BYTES);
       if (!capped.ok) {
-        return c.text(capped.error || 'Upstream file exceeds maximum size limit', capped.status || 413);
+        return c.text(capped.error || 'Upstream file exceeds maximum size limit', /** @type {any} */ (capped.status || 413));
       }
 
       const ALLOWED_PROXY_MIME_TYPES = new Set([
@@ -261,7 +263,7 @@ mediaRouter.get('/:id/file', async (c) => {
         'video/mp4', 'video/webm', 'video/quicktime'
       ]);
       const upstreamCt = (upstreamRes.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
-      const storedCt = (row.mime_type || '').split(';')[0].trim().toLowerCase();
+      const storedCt = String(row.mime_type || '').split(';')[0].trim().toLowerCase();
       let safeProxyCt = null;
       if (ALLOWED_PROXY_MIME_TYPES.has(upstreamCt)) {
         safeProxyCt = upstreamCt;
@@ -298,7 +300,7 @@ mediaRouter.get('/:id/file', async (c) => {
       });
     }
 
-    let mimeType = row.mime_type || 'image/jpeg';
+    let mimeType = String(row.mime_type || 'image/jpeg');
     let base64Payload = rawData;
 
     const dataUrlMatch = rawData.match(/^data:([^;]+);base64,(.+)$/s);
@@ -313,6 +315,7 @@ mediaRouter.get('/:id/file', async (c) => {
     } catch (b64Err) {
       return c.text('Invalid media data.', 400);
     }
+    /** @type {Record<string, string>} */
     const headers = {
       'Content-Type': mimeType,
       'Cache-Control': mediaCacheControl,
@@ -414,7 +417,7 @@ mediaRouter.post('/', async (c) => {
       } else if (/\.(mp4|webm)(\?.*)?$/i.test(cleanUrl)) {
         const videoUrlCheck = validateExternalHttpUrl(cleanUrl, isTestEnv);
         if (!videoUrlCheck.ok) {
-          return c.json({ error: videoUrlCheck.error }, videoUrlCheck.status);
+          return c.json({ error: videoUrlCheck.error }, /** @type {any} */ (videoUrlCheck.status || 400));
         }
         // Direct streaming video links
         finalMediaType = 'video';
@@ -427,7 +430,7 @@ mediaRouter.post('/', async (c) => {
         // "copy over the facebook hosted images. images hosted on other sites are fine, too. copy it all."
         const imgUrlCheck = validateExternalHttpUrl(cleanUrl, isTestEnv);
         if (!imgUrlCheck.ok) {
-          return c.json({ error: imgUrlCheck.error }, imgUrlCheck.status);
+          return c.json({ error: imgUrlCheck.error }, /** @type {any} */ (imgUrlCheck.status || 400));
         }
 
         const fetched = await safeFetchExternalUrl(
@@ -937,7 +940,7 @@ attachmentsRouter.post('/init', requireAuth, async (c) => {
         window_start = CASE WHEN chat_rate_limits.window_start <= ? THEN ? ELSE chat_rate_limits.window_start END
     `).bind(attRateKey, nowSecAtt, attCutoff, attCutoff, nowSecAtt).run();
     const attRateRow = await chatDb.prepare('SELECT count FROM chat_rate_limits WHERE key = ?').bind(attRateKey).first();
-    if (attRateRow && attRateRow.count > 30) {
+    if (attRateRow && Number(attRateRow.count) > 30) {
       return c.json({ error: 'Too many file uploads initialized. Please wait a few minutes and try again.' }, 429);
     }
   } catch (e) {}
@@ -1308,7 +1311,7 @@ attachmentsRouter.get('/:id/stream', async (c) => {
     }
     const optResp = rejectIfClubhouseOptedOut(c, user);
     if (optResp) return optResp;
-    const channel = await resolveChannel(chatDb, attachment.channel_id);
+    const channel = await resolveChannel(chatDb, String(attachment.channel_id || ''));
     if (!channel || !(await canUserAccessChannel(chatDb, user, channel, 'read'))) {
       return c.json({ error: 'Access denied.' }, 403);
     }
@@ -1328,7 +1331,7 @@ attachmentsRouter.get('/:id/stream', async (c) => {
     const streamOpts = isPublicPromoted
       ? { useEdgeCache: true, cacheControl: 'public, max-age=31536000, immutable' }
       : { useEdgeCache: false, cacheControl: promoRestrictedEvent ? 'private, no-store' : 'private, max-age=3600' };
-    return await streamGDriveFile(c.env, attachment.drive_file_id, rangeHeader, attachment.mime_type, c.req.url, streamOpts);
+    return await streamGDriveFile(c.env, String(attachment.drive_file_id), rangeHeader, String(attachment.mime_type || 'application/octet-stream'), c.req.url, streamOpts);
   }
 
   if (!attachment.local_data_base64) {
@@ -1387,11 +1390,11 @@ attachmentsRouter.post('/:id/promote-to-gallery', requireAdmin, async (c) => {
   try {
     const uploader = await baseballDb.prepare('SELECT name FROM users WHERE id = ?').bind(attachment.uploader_id).first();
     if (uploader && uploader.name) {
-      contributorName = uploader.name;
+      contributorName = String(uploader.name);
     }
   } catch (e) {}
 
-  const mediaType = (attachment.mime_type || '').startsWith('video/') ? 'video' : 'photo';
+  const mediaType = String(attachment.mime_type || '').startsWith('video/') ? 'video' : 'photo';
   const streamUrl = `/api/attachments/${attachment.id}/stream`;
   const deleteToken = generateToken();
   const nowIso = new Date().toISOString();
@@ -1466,7 +1469,7 @@ attachmentsRouter.delete('/:id', requireAuth, async (c) => {
     return c.json({ error: 'Access denied.' }, 403);
   }
   if (!isAdmin) {
-    const channel = await resolveChannel(chatDb, att.channel_id);
+    const channel = await resolveChannel(chatDb, String(att.channel_id || ''));
     if (!channel || !(await canUserAccessChannel(chatDb, user, channel, 'read'))) {
       return c.json({ error: 'Access denied.' }, 403);
     }

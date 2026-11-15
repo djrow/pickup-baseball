@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "target": "ES2019",
+    "lib": ["ES2019", "DOM", "DOM.Iterable"],
+    "moduleDetection": "force",
+    "types": [],
+    "skipLibCheck": true,
+    "strict": false
+  },
+  "include": [
+    "public/js/*.js",
+    "public/js/**/*.js",
+    "types/client-globals.d.ts"
+  ]
+}

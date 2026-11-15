@@ -29,7 +29,7 @@ export function isDeliverableEmail(email) {
 
 /**
  * Schedules a non-blocking promise via Cloudflare Pages `waitUntil` when available.
- * @param {import('hono').Context} c
+ * @param {AppContext} c
  * @param {Promise<unknown>} promise
  */
 export function runBackground(c, promise) {
@@ -64,13 +64,14 @@ export async function runBoundedConcurrency(items, concurrency, worker) {
 /**
  * Promotes eligible waitlisted parties into attending slots in FIFO order when spots open.
  * Dispatches waitlist promotion emails in the background.
- * @param {import('hono').Context} c
+ * @param {AppContext} c
  * @param {string} origin
  * @param {number} eventId
- * @returns {Promise<object|null>} First promoted attendee row, or null if none promoted.
+ * @returns {Promise<Record<string, any>|null>} First promoted attendee row, or null if none promoted.
  */
 export async function promoteNextWaitlistedPlayer(c, origin, eventId) {
   const db = c.env.DB;
+  /** @type {Record<string, any>|null} */
   const event = await db.prepare('SELECT * FROM events WHERE id = ?').bind(eventId).first();
   if (!event || event.status === 'rainout') return null;
 
@@ -80,11 +81,13 @@ export async function promoteNextWaitlistedPlayer(c, origin, eventId) {
       SELECT COALESCE(SUM(COALESCE(players_count, 1 + COALESCE(additional_guests, 0))), 0) as total
       FROM attendees WHERE event_id = ? AND status = 'attending'
     `).bind(eventId).first();
-    const activeCount = activeRow ? activeRow.total : 0;
+    const activeCount = Number((activeRow && activeRow.total) || 0);
 
-    if (event.max_players && activeCount >= event.max_players) break;
-    const availableSlots = event.max_players ? (event.max_players - activeCount) : 999;
+    const maxPlayers = Number(event.max_players || 0);
+    if (maxPlayers && activeCount >= maxPlayers) break;
+    const availableSlots = maxPlayers ? (maxPlayers - activeCount) : 999;
 
+    /** @type {Record<string, any>|null} */
     const nextWaitlisted = await db.prepare(`
       SELECT * FROM attendees
       WHERE event_id = ? AND status = 'waitlist'
@@ -93,9 +96,9 @@ export async function promoteNextWaitlistedPlayer(c, origin, eventId) {
     if (!nextWaitlisted) break;
 
     const partyPlayers = nextWaitlisted.players_count != null
-      ? nextWaitlisted.players_count
-      : (1 + (nextWaitlisted.additional_guests || 0));
-    if (event.max_players && partyPlayers > availableSlots) break;
+      ? Number(nextWaitlisted.players_count)
+      : (1 + Number(nextWaitlisted.additional_guests || 0));
+    if (maxPlayers && partyPlayers > availableSlots) break;
 
     const promoRes = await db.prepare(
       "UPDATE attendees SET status = 'attending' WHERE id = ? AND status = 'waitlist'"
@@ -118,10 +121,10 @@ export async function promoteNextWaitlistedPlayer(c, origin, eventId) {
 
 /**
  * Sends pre-game reminder emails to all attending registrants for a single event and marks `reminder_sent = 1`.
- * @param {object} db - D1 database binding (`BASEBALL_DB`).
- * @param {object} env - Cloudflare environment bindings.
+ * @param {D1Database} db - D1 database binding (`BASEBALL_DB`).
+ * @param {AppBindings} env - Cloudflare environment bindings.
  * @param {string} origin - Public site origin URL.
- * @param {object} event - Event row.
+ * @param {Record<string, any>} event - Event row.
  * @returns {Promise<void>}
  */
 export async function sendRemindersForEventD1(db, env, origin, event) {
@@ -133,6 +136,7 @@ export async function sendRemindersForEventD1(db, env, origin, event) {
     WHERE a.event_id = ? AND a.status = 'attending'
   `).bind(event.id).all();
 
+  /** @type {Array<Record<string, any>>} */
   const list = attendees || [];
   await runBoundedConcurrency(list, 5, async (att) => {
     if (!isDeliverableEmail(att.email)) return;
@@ -155,8 +159,8 @@ export async function sendRemindersForEventD1(db, env, origin, event) {
 
 /**
  * Processes all active games within the next 36 hours whose reminders have not yet been sent.
- * @param {object} db - D1 database binding.
- * @param {object} env - Cloudflare environment bindings.
+ * @param {D1Database} db - D1 database binding.
+ * @param {AppBindings} env - Cloudflare environment bindings.
  * @param {string} [origin] - Public site origin URL.
  * @returns {Promise<number>} Count of events processed.
  */
@@ -179,10 +183,10 @@ export async function processUpcomingEventRemindersD1(db, env, origin = 'https:/
 
 /**
  * Broadcasts an event status email (rainout or reopen) to all confirmed attendees with deliverable emails.
- * @param {import('hono').Context} c
- * @param {object} event
+ * @param {AppContext} c
+ * @param {Record<string, any>} event
  * @param {string|null} note
- * @param {(env: object, origin: string, payload: object) => Promise<void>} emailFn
+ * @param {(env: AppBindings, origin: string, payload: Record<string, any>) => Promise<any>} emailFn
  * @returns {Promise<void>}
  */
 export async function notifyConfirmedAttendees(c, event, note, emailFn) {
@@ -191,7 +195,7 @@ export async function notifyConfirmedAttendees(c, event, note, emailFn) {
   ).bind(event.id).all();
   const origin = getSafePublicOrigin(c);
   await runBoundedConcurrency(attendees || [], 5, async (att) => {
-    if (!isDeliverableEmail(att.email)) return;
+    if (!isDeliverableEmail(String(att.email || ''))) return;
     try {
       await emailFn(c.env, origin, {
         email: att.email,
