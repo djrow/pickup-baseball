@@ -11,6 +11,11 @@ import { AVATAR_EXPR } from './helpers.js';
 
 export const eventsBpDutiesRouter = new Hono();
 
+function isUniqueConstraintError(err) {
+  const msg = String((err && (err.message || (err.cause && err.cause.message))) || '');
+  return /UNIQUE constraint failed|SQLITE_CONSTRAINT/i.test(msg);
+}
+
 /**
  * Loads an existing batting practice signup row and verifies organizer, signed-in owner,
  * or guest `management_token` ownership before mutating it.
@@ -221,65 +226,91 @@ eventsBpDutiesRouter.post('/:id/bp-order', async (c) => {
       }
     }
 
-    const { results: existingSlots } = await db.prepare('SELECT id, slot_number, user_id, attendee_id, player_name FROM batting_practice_signups WHERE event_id = ?').bind(eventId).all();
-    const existingList = existingSlots || [];
-
-    if (!user && !attendeeId) {
-      const normalizedTargetName = playerName.toLowerCase();
-      const dupAnonSlot = existingList.find((s) => !s.user_id && !s.attendee_id && String(s.player_name || '').trim().toLowerCase() === normalizedTargetName);
-      if (dupAnonSlot && (isNaN(slotNumber) || dupAnonSlot.slot_number !== slotNumber)) {
-        return c.json({ error: 'Please RSVP or sign in to claim or move a Batting Practice slot.' }, 401);
-      }
-    }
-
-    if (isNaN(slotNumber) || slotNumber < 1) {
-      const takenNums = new Set(existingList.map(s => s.slot_number));
-      slotNumber = 1;
-      while (takenNums.has(slotNumber)) slotNumber++;
-    }
-
-    if (slotNumber > 50) {
+    const hasExplicitSlot = !isNaN(slotNumber) && slotNumber >= 1;
+    if (hasExplicitSlot && slotNumber > 50) {
       return c.json({ error: 'Slot number cannot exceed 50.' }, 400);
     }
 
-    const slotOccupant = existingList.find(s => s.slot_number === slotNumber);
     const isOrganizer = Boolean(user && (user.canManageEvents || user.isAdmin));
+    const maxAttempts = hasExplicitSlot ? 1 : 8;
 
-    const myCurrentSlot = existingList.find(s =>
-      (user && !body.attendee_id && s.user_id && s.user_id === user.id) ||
-      (attendeeId && s.attendee_id && s.attendee_id === attendeeId)
-    );
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const { results: existingSlots } = await db.prepare('SELECT id, slot_number, user_id, attendee_id, player_name FROM batting_practice_signups WHERE event_id = ?').bind(eventId).all();
+      const existingList = existingSlots || [];
 
-    if (slotOccupant) {
-      if (myCurrentSlot && slotOccupant.id === myCurrentSlot.id) {
-        await db.prepare('UPDATE batting_practice_signups SET notes = ?, player_name = ? WHERE id = ?').bind(notes, playerName, slotOccupant.id).run();
-        return c.json({ success: true, message: `Updated Batting Practice slot #${slotNumber}!`, slot_number: slotNumber });
+      if (attempt === 0 && !user && !attendeeId) {
+        const normalizedTargetName = playerName.toLowerCase();
+        const dupAnonSlot = existingList.find((s) => !s.user_id && !s.attendee_id && String(s.player_name || '').trim().toLowerCase() === normalizedTargetName);
+        if (dupAnonSlot && (!hasExplicitSlot || dupAnonSlot.slot_number !== slotNumber)) {
+          return c.json({ error: 'Please RSVP or sign in to claim or move a Batting Practice slot.' }, 401);
+        }
       }
-      return c.json({
-        error: user
-          ? `Slot #${slotNumber} is already claimed by ${slotOccupant.player_name}. Please choose another slot.`
-          : `Slot #${slotNumber} is already claimed. Please choose another slot.`
-      }, 400);
+
+      let candidateSlot = slotNumber;
+      if (!hasExplicitSlot) {
+        const takenNums = new Set(existingList.map(s => s.slot_number));
+        candidateSlot = 1;
+        while (takenNums.has(candidateSlot)) candidateSlot++;
+      }
+
+      if (candidateSlot > 50) {
+        return c.json({ error: 'Slot number cannot exceed 50.' }, 400);
+      }
+
+      const slotOccupant = existingList.find(s => s.slot_number === candidateSlot);
+      const myCurrentSlot = existingList.find(s =>
+        (user && !body.attendee_id && s.user_id && s.user_id === user.id) ||
+        (attendeeId && s.attendee_id && s.attendee_id === attendeeId)
+      );
+
+      if (slotOccupant) {
+        if (myCurrentSlot && slotOccupant.id === myCurrentSlot.id) {
+          await db.prepare('UPDATE batting_practice_signups SET notes = ?, player_name = ? WHERE id = ?').bind(notes, playerName, slotOccupant.id).run();
+          return c.json({ success: true, message: `Updated Batting Practice slot #${candidateSlot}!`, slot_number: candidateSlot });
+        }
+        return c.json({
+          error: user
+            ? `Slot #${candidateSlot} is already claimed by ${slotOccupant.player_name}. Please choose another slot.`
+            : `Slot #${candidateSlot} is already claimed. Please choose another slot.`
+        }, 400);
+      }
+
+      try {
+        if (myCurrentSlot && !isOrganizer) {
+          await db.prepare('UPDATE batting_practice_signups SET slot_number = ?, player_name = ?, notes = ? WHERE id = ?').bind(
+            candidateSlot, playerName, notes, myCurrentSlot.id
+          ).run();
+          return c.json({ success: true, message: `Moved to Batting Practice slot #${candidateSlot}!`, slot_number: candidateSlot });
+        }
+
+        const ins = await db.prepare(`
+          INSERT INTO batting_practice_signups (event_id, user_id, attendee_id, slot_number, player_name, notes)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `).bind(eventId, targetBpUserId, attendeeId, candidateSlot, playerName, notes).run();
+
+        return c.json({
+          success: true,
+          message: `Signed up for Batting Practice slot #${candidateSlot}!`,
+          signup_id: ins.meta ? ins.meta.last_row_id : null,
+          slot_number: candidateSlot
+        });
+      } catch (writeErr) {
+        if (isUniqueConstraintError(writeErr)) {
+          if (!hasExplicitSlot && attempt < maxAttempts - 1) {
+            continue;
+          }
+          const winner = await db.prepare('SELECT player_name FROM batting_practice_signups WHERE event_id = ? AND slot_number = ?').bind(eventId, candidateSlot).first();
+          return c.json({
+            error: user && winner
+              ? `Slot #${candidateSlot} is already claimed by ${winner.player_name}. Please choose another slot.`
+              : `Slot #${candidateSlot} is already claimed. Please choose another slot.`
+          }, 409);
+        }
+        throw writeErr;
+      }
     }
 
-    if (myCurrentSlot && !isOrganizer) {
-      await db.prepare('UPDATE batting_practice_signups SET slot_number = ?, player_name = ?, notes = ? WHERE id = ?').bind(
-        slotNumber, playerName, notes, myCurrentSlot.id
-      ).run();
-      return c.json({ success: true, message: `Moved to Batting Practice slot #${slotNumber}!`, slot_number: slotNumber });
-    }
-
-    const ins = await db.prepare(`
-      INSERT INTO batting_practice_signups (event_id, user_id, attendee_id, slot_number, player_name, notes)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(eventId, targetBpUserId, attendeeId, slotNumber, playerName, notes).run();
-
-    return c.json({
-      success: true,
-      message: `Signed up for Batting Practice slot #${slotNumber}!`,
-      signup_id: ins.meta ? ins.meta.last_row_id : null,
-      slot_number: slotNumber
-    });
+    return c.json({ error: 'All batting practice slots are currently busy. Please try again.' }, 409);
   } catch (err) {
     console.error('[BP-Order] Error saving BP signup:', err);
     return c.json({ error: 'Failed to sign up for batting practice.' }, 500);
@@ -316,9 +347,16 @@ eventsBpDutiesRouter.put('/:id/bp-order/:signupId', async (c) => {
       }
     }
 
-    await db.prepare('UPDATE batting_practice_signups SET slot_number = ?, player_name = ?, notes = ? WHERE id = ?').bind(
-      targetSlot, playerName, notes, signupId
-    ).run();
+    try {
+      await db.prepare('UPDATE batting_practice_signups SET slot_number = ?, player_name = ?, notes = ? WHERE id = ?').bind(
+        targetSlot, playerName, notes, signupId
+      ).run();
+    } catch (writeErr) {
+      if (isUniqueConstraintError(writeErr)) {
+        return c.json({ error: `Slot #${targetSlot} is already claimed. Please choose another slot.` }, 409);
+      }
+      throw writeErr;
+    }
 
     return c.json({ success: true, message: `Batting practice slot updated to #${targetSlot}.`, slot_number: targetSlot });
   } catch (err) {
