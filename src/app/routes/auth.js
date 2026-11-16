@@ -300,6 +300,284 @@ authRouter.get('/verify-magic', async (c) => {
 
 authRouter.get('/me', (c) => c.json({ user: c.get('user') }));
 
+async function fetchBaseballExportData(db, userId, userEmail) {
+  const [
+    profileRow,
+    consentRes,
+    attendeeRes,
+    dutyRes,
+    bpRes,
+    commentRes,
+    postRes,
+    mediaRes,
+    waiverRes
+  ] = await Promise.all([
+    db.prepare(`
+      SELECT
+        id, name, email, bio, avatar_url, role, is_admin,
+        COALESCE(is_moderator, 0) as is_moderator,
+        COALESCE(chat_muted, 0) as chat_muted,
+        chat_muted_reason, chat_muted_at,
+        COALESCE(machine_badge, 0) as machine_badge,
+        COALESCE(field_badge, 0) as field_badge,
+        COALESCE(hero_credits, 0) as hero_credits,
+        COALESCE(waiver_status, 'none') as waiver_status,
+        waiver_signed_at,
+        COALESCE(clubhouse_opted_in, 0) as clubhouse_opted_in,
+        COALESCE(roster_visibility, 0) as roster_visibility,
+        COALESCE(profile_sharing, 0) as profile_sharing,
+        COALESCE(notify_rsvp_confirm, 1) as notify_rsvp_confirm,
+        COALESCE(notify_rainouts, 1) as notify_rainouts,
+        COALESCE(notify_event_reminders, 1) as notify_event_reminders,
+        COALESCE(notify_community_updates, 0) as notify_community_updates,
+        created_at
+      FROM users
+      WHERE id = ?
+    `).bind(userId).first(),
+    db.prepare(`
+      SELECT id, subject_type, user_id, consent_type, policy_version, policy_sha256,
+             status, granted_at, withdrawn_at, created_at
+      FROM consent_records
+      WHERE user_id = ?
+      ORDER BY id ASC
+    `).bind(userId).all(),
+    db.prepare(`
+      SELECT a.id, a.event_id, a.user_id, a.name, a.email, a.is_guest, a.status,
+             a.gear_bringing, a.notes, a.players_count, a.spectators_count,
+             a.additional_guests, a.guest_names, a.urgent_credit_awarded,
+             a.created_at, a.reminder_sent_at, a.last_notice_key, a.last_notice_sent_at,
+             a.notify_emails, a.roster_consent, a.paper_waiver_at,
+             e.title as event_title, e.event_date as event_date,
+             e.location as event_location, e.status as event_status
+      FROM attendees a
+      LEFT JOIN events e ON a.event_id = e.id
+      WHERE a.user_id = ? OR LOWER(a.email) = LOWER(?)
+      ORDER BY a.id ASC
+    `).bind(userId, userEmail).all(),
+    db.prepare(`
+      SELECT da.id, da.duty_id, da.attendee_id, da.created_at,
+             ed.event_id, ed.title as duty_title, ed.description as duty_description,
+             ed.grants_coordinator, ed.required_badge,
+             e.title as event_title, e.event_date as event_date
+      FROM duty_assignments da
+      JOIN event_duties ed ON da.duty_id = ed.id
+      JOIN attendees a ON da.attendee_id = a.id
+      LEFT JOIN events e ON ed.event_id = e.id
+      WHERE a.user_id = ? OR LOWER(a.email) = LOWER(?)
+      ORDER BY da.id ASC
+    `).bind(userId, userEmail).all(),
+    db.prepare(`
+      SELECT bp.id, bp.event_id, bp.user_id, bp.attendee_id, bp.slot_number,
+             bp.player_name, bp.notes, bp.created_at,
+             e.title as event_title, e.event_date as event_date
+      FROM batting_practice_signups bp
+      LEFT JOIN attendees a ON bp.attendee_id = a.id
+      LEFT JOIN events e ON bp.event_id = e.id
+      WHERE bp.user_id = ? OR (bp.attendee_id IS NOT NULL AND (a.user_id = ? OR LOWER(a.email) = LOWER(?)))
+      ORDER BY bp.id ASC
+    `).bind(userId, userId, userEmail).all(),
+    db.prepare(`
+      SELECT cm.id, cm.event_id, cm.user_id, cm.author_name, cm.author_email,
+             cm.content, cm.created_at,
+             e.title as event_title, e.event_date as event_date
+      FROM comments cm
+      LEFT JOIN events e ON cm.event_id = e.id
+      WHERE cm.user_id = ? OR (cm.user_id IS NULL AND LOWER(cm.author_email) = LOWER(?))
+      ORDER BY cm.id ASC
+    `).bind(userId, userEmail).all(),
+    db.prepare(`
+      SELECT p.id, p.title, p.content, p.summary, p.media_url, p.media_type,
+             p.author_id, p.author_name, p.event_id, p.created_at,
+             e.title as event_title, e.event_date as event_date
+      FROM posts p
+      LEFT JOIN events e ON p.event_id = e.id
+      WHERE p.author_id = ?
+      ORDER BY p.id ASC
+    `).bind(userId).all(),
+    db.prepare(`
+      SELECT m.id, m.title, m.caption, m.media_type, m.original_url, m.file_url,
+             m.mime_type, m.file_size, m.album, m.date_taken, m.contributor_name,
+             m.contributor_id, m.event_id, m.is_approved, m.approved_at,
+             m.storage_provider, m.upload_status, m.created_at,
+             e.title as event_title
+      FROM media_items m
+      LEFT JOIN events e ON m.event_id = e.id
+      WHERE m.contributor_id = ?
+      ORDER BY m.id ASC
+    `).bind(userId).all(),
+    db.prepare(`
+      SELECT id, certificate_id, user_id, email, printed_name, signed_date,
+             signature_type, signature_data, document_version,
+             waiver_text_sha256, document_sha256, provenance_seal,
+             electronic_consent, waiver_locale, status,
+             erasure_requested_at, retention_until, signed_at
+      FROM waivers
+      WHERE user_id = ? OR LOWER(email) = LOWER(?)
+      ORDER BY id ASC
+    `).bind(userId, userEmail).all()
+  ]);
+
+  const badges = {
+    machine_badge: Boolean(profileRow && profileRow.machine_badge),
+    field_badge: Boolean(profileRow && profileRow.field_badge),
+    hero_credits: profileRow ? Number(profileRow.hero_credits || 0) : 0
+  };
+
+  let profile = null;
+  if (profileRow) {
+    const { machine_badge: _mb, field_badge: _fb, hero_credits: _hc, ...rest } = profileRow;
+    profile = rest;
+  }
+
+  return {
+    profile,
+    badges,
+    consent_records: (consentRes && consentRes.results) || [],
+    attendees: (attendeeRes && attendeeRes.results) || [],
+    duty_assignments: (dutyRes && dutyRes.results) || [],
+    batting_practice_signups: (bpRes && bpRes.results) || [],
+    comments: (commentRes && commentRes.results) || [],
+    posts: (postRes && postRes.results) || [],
+    media_items: (mediaRes && mediaRes.results) || [],
+    waivers: (waiverRes && waiverRes.results) || []
+  };
+}
+
+async function fetchChatExportData(chatDb, userId) {
+  if (!chatDb) {
+    return {
+      user_crypto_keys: null,
+      channel_members: [],
+      channel_key_shares: [],
+      messages: [],
+      message_reactions: [],
+      chat_attachments: [],
+      chat_reports: []
+    };
+  }
+
+  const [
+    cryptoRow,
+    memberRes,
+    shareRes,
+    messageRes,
+    reactionRes,
+    attachmentRes,
+    reportRes
+  ] = await Promise.all([
+    chatDb.prepare(`
+      SELECT user_id, ecdh_public_key_jwk, ecdsa_public_key_jwk,
+             encrypted_private_vault, vault_salt, vault_iv,
+             privacy_relay_mode, status_text, key_version, key_rotated_at, updated_at
+      FROM user_crypto_keys
+      WHERE user_id = ?
+    `).bind(userId).first(),
+    chatDb.prepare(`
+      SELECT cm.channel_id, cm.user_id, cm.role, cm.last_read_message_id,
+             cm.muted, cm.hidden, cm.joined_at,
+             c.slug as channel_slug, c.name as channel_name, c.channel_type,
+             c.is_encrypted, c.is_private
+      FROM channel_members cm
+      LEFT JOIN channels c ON cm.channel_id = c.id
+      WHERE cm.user_id = ?
+      ORDER BY cm.channel_id ASC
+    `).bind(userId).all(),
+    chatDb.prepare(`
+      SELECT cks.channel_id, cks.key_epoch, cks.recipient_user_id, cks.sender_user_id,
+             cks.wrapped_key_base64, cks.wrap_iv, cks.sender_ephemeral_pub_jwk, cks.created_at,
+             uk.ecdh_public_key_jwk as sender_ecdh_public_key_jwk
+      FROM channel_key_shares cks
+      LEFT JOIN user_crypto_keys uk ON uk.user_id = cks.sender_user_id
+      WHERE cks.recipient_user_id = ?
+      ORDER BY cks.channel_id ASC, cks.key_epoch ASC
+    `).bind(userId).all(),
+    chatDb.prepare(`
+      SELECT m.id, m.channel_id, m.parent_message_id, m.author_id, m.author_name,
+             m.author_role, m.content, m.iv, m.key_epoch, m.message_type,
+             m.metadata_json, m.reply_count, m.edited_at, m.deleted_at,
+             m.hidden_at, m.created_at,
+             c.slug as channel_slug, c.name as channel_name, c.channel_type,
+             c.is_encrypted, c.is_private
+      FROM messages m
+      LEFT JOIN channels c ON m.channel_id = c.id
+      WHERE m.author_id = ?
+      ORDER BY m.id ASC
+    `).bind(userId).all(),
+    chatDb.prepare(`
+      SELECT id, message_id, channel_id, user_id, user_name, emoji, created_at
+      FROM message_reactions
+      WHERE user_id = ?
+      ORDER BY id ASC
+    `).bind(userId).all(),
+    chatDb.prepare(`
+      SELECT id, channel_id, message_id, uploader_id, file_name, mime_type,
+             file_size, storage_provider, upload_status, is_encrypted, iv,
+             promoted_media_id, created_at
+      FROM chat_attachments
+      WHERE uploader_id = ?
+      ORDER BY created_at ASC, id ASC
+    `).bind(userId).all(),
+    chatDb.prepare(`
+      SELECT id, reporter_id, reporter_name, target_type, target_user_id,
+             target_user_name, target_message_id, channel_id, reason, status,
+             reviewed_at, created_at
+      FROM chat_reports
+      WHERE reporter_id = ?
+      ORDER BY id ASC
+    `).bind(userId).all()
+  ]);
+
+  return {
+    user_crypto_keys: cryptoRow || null,
+    channel_members: (memberRes && memberRes.results) || [],
+    channel_key_shares: (shareRes && shareRes.results) || [],
+    messages: (messageRes && messageRes.results) || [],
+    message_reactions: (reactionRes && reactionRes.results) || [],
+    chat_attachments: (attachmentRes && attachmentRes.results) || [],
+    chat_reports: (reportRes && reportRes.results) || []
+  };
+}
+
+authRouter.get('/export', requireAuth, async (c) => {
+  const user = c.get('user');
+  const db = c.env && (c.env.BASEBALL_DB || c.env.DB);
+  const chatDb = c.env && c.env.CHAT_DB;
+  if (!db) {
+    return c.json({ error: 'Database unavailable.' }, 500);
+  }
+
+  try {
+    const exportLimit = await checkRateLimit(db, `auth_export_${user.id}`, 5, 3600, c.env);
+    if (!exportLimit.allowed) {
+      c.header('Retry-After', '3600');
+      return c.json({ error: 'Too many data export requests. Please wait before exporting again.' }, 429);
+    }
+
+    const userEmail = String(user.email || '').trim().toLowerCase();
+    const [baseball, chat] = await Promise.all([
+      fetchBaseballExportData(db, user.id, userEmail),
+      fetchChatExportData(chatDb, user.id)
+    ]);
+
+    const exportedAt = new Date().toISOString();
+    const dateStr = exportedAt.slice(0, 10);
+    c.header('Cache-Control', 'private, no-store');
+    c.header('X-Content-Type-Options', 'nosniff');
+    c.header('Content-Disposition', `attachment; filename="pickup-baseball-export-${dateStr}.json"`);
+
+    return c.json({
+      export_version: 1,
+      exported_at: exportedAt,
+      user_id: user.id,
+      baseball,
+      chat
+    });
+  } catch (err) {
+    logEvent('error', 'auth_data_export_failed', { userId: user.id, err });
+    return jsonError(c, 500, ERROR_CODES.INTERNAL_ERROR, 'Failed to export account data.');
+  }
+});
+
 authRouter.post('/calendar-token/regenerate', requireAuth, async (c) => {
   const user = c.get('user');
   const db = c.env && (c.env.BASEBALL_DB || c.env.DB);
