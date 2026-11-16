@@ -263,6 +263,7 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
 require('../tests/core/clubhouse-waiver.test.js')(ctx);
 require('../tests/core/security-scan.test.js');
 require('../tests/core/schema-barrel.test.js')();
+require('../tests/core/security-barrel.test.js')();
 require('../tests/core/migration-engine.test.js')();
 require('../tests/core/typecheck.test.js')();
 require('../tests/core/lint.test.js')();
