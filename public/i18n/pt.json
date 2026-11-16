@@ -331,5 +331,10 @@
   "gallery.videos_reel": "Vídeos e melhores momentos",
   "gallery.drop_links_btn": "📥 Enviar fotos / links",
   "gallery.mod_queue_title": "Fila de moderação",
-  "gallery.all_albums": "🌟 Todos os álbuns"
+  "gallery.all_albums": "🌟 Todos os álbuns",
+  "event.edit_link_prompt": "Já confirmou presença como convidado?",
+  "event.edit_link_btn": "🔗 Enviar um novo link de edição por e-mail",
+  "event.edit_link_email_placeholder": "Digite o e-mail usado na sua confirmação",
+  "event.edit_link_send_btn": "Enviar link de edição",
+  "event.edit_link_sending": "Enviando..."
 }

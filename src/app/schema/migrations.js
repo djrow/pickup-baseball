@@ -8,7 +8,7 @@
 
 import { CREATE_TABLES_SQL } from './baseball-ddl.js';
 import { DEFAULT_CHAT_CHANNELS, CREATE_CHAT_TABLES_SQL } from './chat-ddl.js';
-import { hashSessionId } from '../security.js';
+import { hashSessionId, hashManagementToken, MANAGEMENT_TOKEN_PREFIX } from '../security.js';
 
 /**
  * @typedef {Object} MigrationColumnDef
@@ -326,6 +326,49 @@ export const BASEBALL_MIGRATIONS = [
       (sql) => isCreateIndexSql(sql) && BASEBALL_V2_NEW_INDEXES.has(extractCreatedIndexName(sql))
     ),
     sqlStatements: BASEBALL_V2_BACKFILL_SQL
+  },
+  {
+    version: 4,
+    name: 'backfill-hashed-rsvp-management-tokens',
+    async run(db) {
+      const CHUNK_SIZE = 50;
+      const likePrefix = `${MANAGEMENT_TOKEN_PREFIX}%`;
+      while (true) {
+        const { results: rows } = await db.prepare(
+          'SELECT id, management_token FROM attendees WHERE management_token IS NOT NULL AND management_token NOT LIKE ? ORDER BY id ASC LIMIT ?'
+        ).bind(likePrefix, CHUNK_SIZE).all();
+
+        const batchRows = rows || [];
+        if (batchRows.length === 0) break;
+
+        const stmts = [];
+        for (const row of batchRows) {
+          const raw = row && row.management_token != null ? String(row.management_token).trim() : '';
+          if (!raw) {
+            stmts.push(db.prepare('UPDATE attendees SET management_token = NULL WHERE id = ?').bind(row.id));
+            continue;
+          }
+          const hashed = await hashManagementToken(raw);
+          stmts.push(
+            db.prepare(
+              'UPDATE attendees SET management_token = ? WHERE id = ? AND management_token IS NOT NULL AND management_token NOT LIKE ?'
+            ).bind(hashed, row.id, likePrefix)
+          );
+        }
+
+        if (stmts.length > 0) {
+          if (typeof db.batch === 'function') {
+            await db.batch(stmts);
+          } else {
+            for (const st of stmts) {
+              await st.run();
+            }
+          }
+        }
+
+        if (batchRows.length < CHUNK_SIZE) break;
+      }
+    }
   }
 ];
 

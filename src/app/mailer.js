@@ -136,7 +136,9 @@ export async function sendAuthCode(env, origin, { email, name, code, token, shar
 
 export async function sendRsvpConfirmation(env, origin, { email, name, event, dutyName, gearBringing, playersCount, spectatorsCount, guestNames, managementToken }) {
   const appName = (env && env.APP_NAME) || 'Sunday Pickup Baseball';
-  const manageLink = `${origin}/event.html?id=${event.id}&token=${encodeURIComponent(managementToken || '')}`;
+  const manageLink = managementToken
+    ? `${origin}/event.html?id=${event.id}&token=${encodeURIComponent(managementToken)}`
+    : `${origin}/event.html?id=${event.id}`;
   const dateFormatted = formatEmailEventDate(event.event_date);
 
   const pCount = playersCount !== undefined ? Number(playersCount) : 1;
@@ -177,7 +179,9 @@ export async function sendRsvpConfirmation(env, origin, { email, name, event, du
 
 export async function sendWaitlistConfirmation(env, origin, { email, name, event, waitlistPosition, playersCount, spectatorsCount, managementToken }) {
   const appName = (env && env.APP_NAME) || 'Sunday Pickup Baseball';
-  const manageLink = `${origin}/event.html?id=${event.id}&token=${encodeURIComponent(managementToken || '')}`;
+  const manageLink = managementToken
+    ? `${origin}/event.html?id=${event.id}&token=${encodeURIComponent(managementToken)}`
+    : `${origin}/event.html?id=${event.id}`;
   const dateFormatted = formatEmailEventDate(event.event_date);
   const pCount = playersCount !== undefined ? Number(playersCount) : 1;
   const sCount = Number(spectatorsCount) || 0;
@@ -206,13 +210,13 @@ export async function sendWaitlistConfirmation(env, origin, { email, name, event
   return dispatchEmail(env, { to: email, subject, text, html });
 }
 
-export async function sendWaitlistPromotionEmail(env, origin, { email, name, event, managementToken }) {
+export async function sendWaitlistPromotionEmail(env, origin, { email, name, event }) {
   const appName = (env && env.APP_NAME) || 'Sunday Pickup Baseball';
-  const manageLink = `${origin}/event.html?id=${event.id}&token=${encodeURIComponent(managementToken || '')}`;
+  const eventLink = `${origin}/event.html?id=${event.id}`;
   const dateFormatted = formatEmailEventDate(event.event_date);
 
   const subject = `⚾ A spot opened up! You're in for ${event.title} (${dateFormatted})`;
-  const text = `Hi ${name},\n\nGreat news! A spot just opened up for pickup baseball!\n\nYou have been automatically promoted from the waitlist to the ACTIVE ROSTER for:\n${event.title}\n\nDate & Time: ${dateFormatted}\nLocation: ${event.location}\n\nVisit the event page to coordinate gear, sign up for tasks, or view the roster:\n${manageLink}\n\nSee you on the field!\n- ${appName}`;
+  const text = `Hi ${name},\n\nGreat news! A spot just opened up for pickup baseball!\n\nYou have been automatically promoted from the waitlist to the ACTIVE ROSTER for:\n${event.title}\n\nDate & Time: ${dateFormatted}\nLocation: ${event.location}\n\nVisit the event page to coordinate gear, sign up for tasks, or view the roster:\n${eventLink}\n\nSee you on the field!\n- ${appName}`;
 
   const html = renderEmailLayout({
     origin,
@@ -226,21 +230,21 @@ export async function sendWaitlistPromotionEmail(env, origin, { email, name, eve
         <p style="margin: 4px 0; color: #0c1f1a;"><strong>📍 Where:</strong> ${escapeHtml(event.location)}</p>
         <p style="margin: 6px 0 0 0; color: #003831; font-weight: 700;">Status: Confirmed Roster</p>
       </div>`,
-    ctaUrl: manageLink,
+    ctaUrl: eventLink,
     ctaLabel: 'View Roster & Claim Group Tasks →'
   });
 
   return dispatchEmail(env, { to: email, subject, text, html });
 }
 
-export async function sendEventReminder(env, origin, { email, name, event, dutyName, gearBringing, totalAttendees, managementToken }) {
+export async function sendEventReminder(env, origin, { email, name, event, dutyName, gearBringing, totalAttendees }) {
   const appName = (env && env.APP_NAME) || 'Sunday Pickup Baseball';
-  const manageLink = `${origin}/event.html?id=${event.id}&token=${encodeURIComponent(managementToken || '')}`;
+  const eventLink = `${origin}/event.html?id=${event.id}`;
   const dateFormatted = formatEmailEventDate(event.event_date);
   const safeLocationUrl = sanitizeHttpUrl(event.location_url);
 
   const subject = `Game Reminder: ${event.title} is coming up! (${dateFormatted})`;
-  const text = `Hi ${name},\n\nThis is a reminder that you're signed up for pickup baseball:\n\nEvent: ${event.title}\nDate & Time: ${dateFormatted}\nLocation: ${event.location}\n${dutyName ? `Your Assigned Task: ${dutyName}\n` : ''}${gearBringing ? `Gear You're Bringing: ${gearBringing}\n` : ''}Total Players Confirmed: ${totalAttendees}\n\nView details & live roster:\n${manageLink}\n\nSee you on the diamond!\n- ${appName}`;
+  const text = `Hi ${name},\n\nThis is a reminder that you're signed up for pickup baseball:\n\nEvent: ${event.title}\nDate & Time: ${dateFormatted}\nLocation: ${event.location}\n${dutyName ? `Your Assigned Task: ${dutyName}\n` : ''}${gearBringing ? `Gear You're Bringing: ${gearBringing}\n` : ''}Total Players Confirmed: ${totalAttendees}\n\nView details & live roster:\n${eventLink}\n\nSee you on the diamond!\n- ${appName}`;
 
   const html = renderEmailLayout({
     origin,
@@ -256,7 +260,7 @@ export async function sendEventReminder(env, origin, { email, name, event, dutyN
         ${dutyName ? `<p style="margin: 6px 0 4px 0; color: #003831;"><strong>🛡️ Your Task:</strong> <span style="background: #e6f0ed; padding: 2px 8px; border-radius: 4px; font-weight: 700;">${escapeHtml(dutyName)}</span></p>` : ''}
         ${gearBringing ? `<p style="margin: 4px 0; color: #0c1f1a;"><strong>🎒 Gear You're Bringing:</strong> <em>${escapeHtml(gearBringing)}</em></p>` : ''}
       </div>`,
-    ctaUrl: manageLink,
+    ctaUrl: eventLink,
     ctaLabel: 'Check Game Discussion & Roster →',
     ctaColor: '#003831'
   });
@@ -264,13 +268,13 @@ export async function sendEventReminder(env, origin, { email, name, event, dutyN
   return dispatchEmail(env, { to: email, subject, text, html });
 }
 
-export async function sendRainoutEmail(env, origin, { email, name, event, note, managementToken }) {
+export async function sendRainoutEmail(env, origin, { email, name, event, note }) {
   const appName = (env && env.APP_NAME) || 'Sunday Pickup Baseball';
-  const manageLink = `${origin}/event.html?id=${event.id}&token=${encodeURIComponent(managementToken || '')}`;
+  const eventLink = `${origin}/event.html?id=${event.id}`;
   const dateFormatted = formatEmailEventDate(event.event_date);
 
   const subject = `🌧️ Sunday Pickup Baseball Rained Out: ${event.title}`;
-  const text = `Hi ${name},\n\nThe pickup baseball game scheduled for ${dateFormatted} (${event.title}) has been called due to rain and field conditions.\n\nEvent: ${event.title}\nOriginally Scheduled: ${dateFormatted}\nLocation: ${event.location}\n${note ? `Organizer Note:\n"${note}"\n\n` : ''}Any volunteer task or equipment commitments you made for this game are excused.\n\nThe discussion board on the event page remains open:\n${manageLink}\n\nStay dry, and see you on the field next Sunday!\n- ${appName}`;
+  const text = `Hi ${name},\n\nThe pickup baseball game scheduled for ${dateFormatted} (${event.title}) has been called due to rain and field conditions.\n\nEvent: ${event.title}\nOriginally Scheduled: ${dateFormatted}\nLocation: ${event.location}\n${note ? `Organizer Note:\n"${note}"\n\n` : ''}Any volunteer task or equipment commitments you made for this game are excused.\n\nThe discussion board on the event page remains open:\n${eventLink}\n\nStay dry, and see you on the field next Sunday!\n- ${appName}`;
 
   const html = renderEmailLayout({
     origin,
@@ -287,7 +291,7 @@ export async function sendRainoutEmail(env, origin, { email, name, event, note, 
         <p style="margin: 3px 0; color: #64748b; font-size: 14px;"><strong>📍 Field:</strong> ${escapeHtml(event.location)}</p>
         <p style="margin: 6px 0 0; color: #0284c7; font-weight: 600; font-size: 14px;">✓ Your task and equipment commitments are excused for this game.</p>
       </div>`,
-    ctaUrl: manageLink,
+    ctaUrl: eventLink,
     ctaLabel: 'Open Event Discussion Board →',
     ctaColor: '#0f172a',
     footerText: 'The discussion board is still active if you want to chat with teammates, coordinate batting cages, or catch up before next Sunday.'
@@ -296,13 +300,13 @@ export async function sendRainoutEmail(env, origin, { email, name, event, note, 
   return dispatchEmail(env, { to: email, subject, text, html });
 }
 
-export async function sendReopenEmail(env, origin, { email, name, event, note, managementToken }) {
+export async function sendReopenEmail(env, origin, { email, name, event, note }) {
   const appName = (env && env.APP_NAME) || 'Sunday Pickup Baseball';
-  const manageLink = `${origin}/event.html?id=${event.id}&token=${encodeURIComponent(managementToken || '')}`;
+  const eventLink = `${origin}/event.html?id=${event.id}`;
   const dateFormatted = formatEmailEventDate(event.event_date);
 
   const subject = `⚾ Game is BACK ON! Sunday Pickup Baseball: ${event.title}`;
-  const text = `Hi ${name},\n\nGreat news! The field or weather conditions have cleared up and the pickup baseball game scheduled for ${dateFormatted} (${event.title}) is BACK ON!\n\nEvent: ${event.title}\nWhen: ${dateFormatted}\nWhere: ${event.location}\n${note ? `Organizer Note:\n"${note}"\n\n` : ''}Your roster spot is active. Grab your gear and see you on the field!\n\nCheck the live roster & event page:\n${manageLink}\n\nPlay ball!\n- ${appName}`;
+  const text = `Hi ${name},\n\nGreat news! The field or weather conditions have cleared up and the pickup baseball game scheduled for ${dateFormatted} (${event.title}) is BACK ON!\n\nEvent: ${event.title}\nWhen: ${dateFormatted}\nWhere: ${event.location}\n${note ? `Organizer Note:\n"${note}"\n\n` : ''}Your roster spot is active. Grab your gear and see you on the field!\n\nCheck the live roster & event page:\n${eventLink}\n\nPlay ball!\n- ${appName}`;
 
   const html = renderEmailLayout({
     origin,
@@ -317,8 +321,35 @@ export async function sendReopenEmail(env, origin, { email, name, event, note, m
         <p style="margin: 3px 0; color: #0c1f1a; font-size: 14px;"><strong>📍 Where:</strong> ${escapeHtml(event.location)}</p>
         <p style="margin: 6px 0 0; color: #003831; font-weight: 700; font-size: 14px;">✓ Your roster spot is active. Grab your glove and head out!</p>
       </div>`,
-    ctaUrl: manageLink,
+    ctaUrl: eventLink,
     ctaLabel: 'Check Live Roster & Tasks →'
+  });
+
+  return dispatchEmail(env, { to: email, subject, text, html });
+}
+
+export async function sendRsvpEditLinkEmail(env, origin, { email, name, event, managementToken }) {
+  const appName = (env && env.APP_NAME) || 'Sunday Pickup Baseball';
+  const manageLink = `${origin}/event.html?id=${event.id}&token=${encodeURIComponent(managementToken || '')}`;
+  const dateFormatted = formatEmailEventDate(event.event_date);
+
+  const subject = `Your Fresh RSVP Edit Link: ${event.title}`;
+  const text = `Hi ${name || 'there'},\n\nYou requested a fresh link to manage your RSVP for ${event.title} (${dateFormatted} at ${event.location}).\n\nUse this link to update or cancel your RSVP (any previous edit links have been deactivated):\n${manageLink}\n\nIf you did not request this link, you can safely ignore this email.\n\n- ${appName}`;
+
+  const html = renderEmailLayout({
+    origin,
+    topColor: '#003831',
+    headingHtml: '🔗 Fresh RSVP Edit Link',
+    bodyHtml: `
+      <p style="color: #0c1f1a; font-size: 16px;">Hi <strong>${escapeHtml(name || 'there')}</strong>,</p>
+      <p style="color: #546e66; font-size: 15px;">Use the button below to manage your RSVP for <strong>${escapeHtml(event.title)}</strong>.</p>
+      <div style="background: #f5f8f7; border-left: 4px solid #003831; border: 1px solid #dbe4e0; padding: 16px; margin: 18px 0; border-radius: 6px;">
+        <p style="margin: 3px 0; color: #0c1f1a; font-size: 14px;"><strong>📅 When:</strong> ${escapeHtml(dateFormatted)}</p>
+        <p style="margin: 3px 0; color: #0c1f1a; font-size: 14px;"><strong>📍 Where:</strong> ${escapeHtml(event.location)}</p>
+      </div>`,
+    ctaUrl: manageLink,
+    ctaLabel: 'Manage My RSVP →',
+    footerText: 'For your security, issuing this link deactivated any older edit link for this RSVP. If you did not request this, you can safely ignore this email.'
   });
 
   return dispatchEmail(env, { to: email, subject, text, html });

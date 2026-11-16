@@ -331,5 +331,10 @@
   "gallery.videos_reel": "Video & Điểm nhấn",
   "gallery.drop_links_btn": "📥 Gửi ảnh / liên kết",
   "gallery.mod_queue_title": "Hàng chờ kiểm duyệt",
-  "gallery.all_albums": "🌟 Tất cả album"
+  "gallery.all_albums": "🌟 Tất cả album",
+  "event.edit_link_prompt": "Bạn đã RSVP với tư cách khách rồi?",
+  "event.edit_link_btn": "🔗 Gửi liên kết chỉnh sửa mới qua email",
+  "event.edit_link_email_placeholder": "Nhập email bạn đã dùng cho RSVP",
+  "event.edit_link_send_btn": "Gửi liên kết chỉnh sửa",
+  "event.edit_link_sending": "Đang gửi..."
 }

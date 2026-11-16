@@ -1364,6 +1364,82 @@ module.exports = function registerMigrationEngineTests() {
       }
     });
   });
+
+  test('Ticket #33: Chunked attendees.management_token sha256 backfill migration', async () => {
+    const engineMod = await import('../../src/app/schema/engine.js');
+    const migrationsMod = await import('../../src/app/schema/migrations.js');
+    const { CREATE_TABLES_SQL } = await import('../../src/app/schema/baseball-ddl.js');
+    const { ensureD1Schema, BASEBALL_SCHEMA_VERSION } = engineMod;
+    const { BASEBALL_MIGRATIONS } = migrationsMod;
+
+    assert.equal(BASEBALL_SCHEMA_VERSION, 4, 'BASEBALL_SCHEMA_VERSION must be 4 including Ticket #33 backfill step');
+    assert.ok(
+      BASEBALL_MIGRATIONS.some((m) => m.version === 4 && m.name === 'backfill-hashed-rsvp-management-tokens' && typeof m.run === 'function'),
+      'BASEBALL_MIGRATIONS must include v4 JS backfill step for attendees.management_token'
+    );
+
+    const raw = new Database(':memory:');
+    try {
+      // Simulate an existing v3 database before Ticket #33 v4 migration
+      for (const sql of CREATE_TABLES_SQL) {
+        raw.exec(sql);
+      }
+      raw.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('schema_version', '3')").run();
+      raw.prepare("INSERT INTO events (id, title, location, event_date) VALUES (1, 'Backfill Game', 'Bushrod Park', '2026-12-01T12:00:00Z')").run();
+
+      const insertAtt = raw.prepare(
+        "INSERT INTO attendees (event_id, name, email, is_guest, status, management_token) VALUES (1, ?, ?, 1, 'attending', ?)"
+      );
+      // 115 unhashed tokens -> 3 chunks (50 + 50 + 15)
+      for (let i = 1; i <= 115; i++) {
+        insertAtt.run(`Legacy ${i}`, `legacy_${i}@example.org`, `legacy_raw_tok_${i}`);
+      }
+      // Already hashed + NULL rows should remain untouched
+      const preHashed = 'sha256:' + crypto.createHash('sha256').update('already_hashed_tok').digest('hex');
+      insertAtt.run('Already Hashed', 'hashed@example.org', preHashed);
+      insertAtt.run('Null Token', 'nulltok@example.org', null);
+
+      const spyDb = createSpyD1(createD1Adapter(raw));
+      await ensureD1Schema(spyDb);
+
+      const ver = raw.prepare("SELECT value FROM app_settings WHERE key = 'schema_version'").get();
+      assert.equal(ver.value, String(BASEBALL_SCHEMA_VERSION), 'schema_version must advance to BASEBALL_SCHEMA_VERSION');
+
+      // Verify chunked batching of size 50 (50, 50, 15)
+      const backfillBatches = spyDb.log.batches.filter((b) =>
+        b.some((sql) => /UPDATE\s+attendees\s+SET\s+management_token\s*=/i.test(sql))
+      );
+      assert.equal(backfillBatches.length, 3, '115 unhashed rows must be backfilled in 3 chunks of <= 50');
+      assert.deepEqual(
+        backfillBatches.map((b) => b.length),
+        [50, 50, 15],
+        'Chunk sizes must be 50, 50, and 15'
+      );
+
+      // Verify all 115 rows now store sha256:<hex>
+      for (let i = 1; i <= 115; i++) {
+        const row = raw.prepare('SELECT management_token FROM attendees WHERE email = ?').get(`legacy_${i}@example.org`);
+        const expected = 'sha256:' + crypto.createHash('sha256').update(`legacy_raw_tok_${i}`).digest('hex');
+        assert.equal(row.management_token, expected, `Row ${i} must be hashed with sha256: prefix`);
+      }
+
+      const preHashedRow = raw.prepare("SELECT management_token FROM attendees WHERE email = 'hashed@example.org'").get();
+      assert.equal(preHashedRow.management_token, preHashed, 'Already-hashed row must not be double-hashed');
+
+      const nullRow = raw.prepare("SELECT management_token FROM attendees WHERE email = 'nulltok@example.org'").get();
+      assert.equal(nullRow.management_token, null, 'NULL management_token row must remain NULL');
+
+      // Verify idempotency on second forced run
+      const spyDb2 = createSpyD1(createD1Adapter(raw));
+      await ensureD1Schema(spyDb2, true);
+      const backfillBatches2 = spyDb2.log.batches.filter((b) =>
+        b.some((sql) => /UPDATE\s+attendees\s+SET\s+management_token\s*=/i.test(sql))
+      );
+      assert.equal(backfillBatches2.length, 0, 'Re-running backfill must find 0 unhashed rows');
+    } finally {
+      raw.close();
+    }
+  });
 };
 
 if (require.main === module) {

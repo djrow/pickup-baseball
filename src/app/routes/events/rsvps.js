@@ -6,7 +6,10 @@
 import { Hono } from 'hono';
 import {
   generateToken,
-  constantTimeEqual,
+  hashManagementToken,
+  getManagementTokenCandidates,
+  verifyManagementToken,
+  MANAGEMENT_TOKEN_PREFIX,
   getClientIp,
   getSafePublicOrigin,
   checkRateLimit,
@@ -25,7 +28,8 @@ import {
   getUserRollingShifts,
   canUserAccessEvent
 } from '../../policy.js';
-import { sendRsvpConfirmation, sendWaitlistConfirmation } from '../../mailer.js';
+import { sendRsvpConfirmation, sendWaitlistConfirmation, sendRsvpEditLinkEmail } from '../../mailer.js';
+import { ERROR_CODES, logEvent } from '../../errors.js';
 import {
   GUEST_NO_EMAIL_SUFFIX,
   isDeliverableEmail,
@@ -93,6 +97,9 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
       additional_guests, guest_names, cf_turnstile_response,
       bp_signup, bp_slot, resend_confirmation, send_confirmation_email
     } = await c.req.json();
+    if (!management_token) {
+      management_token = c.req.query('token');
+    }
     status = status === 'declined' ? 'declined' : 'attending';
 
     let playersCount = 1;
@@ -185,9 +192,15 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
 
     const cleanGear = String(gear_bringing || '').trim().slice(0, 300);
     const freshToken = generateToken();
+    const freshTokenHash = await hashManagementToken(freshToken);
     let existingAttendee = null;
     if (!user && management_token) {
-      existingAttendee = await db.prepare('SELECT * FROM attendees WHERE event_id = ? AND management_token = ?').bind(eventId, management_token).first();
+      const candidates = await getManagementTokenCandidates(String(management_token));
+      if (candidates) {
+        existingAttendee = await db.prepare(
+          'SELECT * FROM attendees WHERE event_id = ? AND management_token IN (?, ?)'
+        ).bind(eventId, candidates.hashed, candidates.legacy).first();
+      }
     }
     if (!existingAttendee && hasEmail) {
       existingAttendee = await db.prepare('SELECT * FROM attendees WHERE event_id = ? AND email = ?').bind(eventId, email).first();
@@ -280,12 +293,32 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
       user.id &&
       (!existingAttendee.user_id || existingAttendee.user_id !== user.id)
     );
-    const activeToken = existingAttendee
-      ? (shouldRotateClaimToken ? freshToken : (existingAttendee.management_token || freshToken))
-      : freshToken;
+    let storedTokenHash = freshTokenHash;
+    let responseToken;
+    let emailToken = '';
+
+    if (!existingAttendee) {
+      storedTokenHash = freshTokenHash;
+      responseToken = freshToken;
+      emailToken = freshToken;
+    } else if (shouldRotateClaimToken || !existingAttendee.management_token) {
+      storedTokenHash = freshTokenHash;
+      responseToken = freshToken;
+      emailToken = freshToken;
+    } else {
+      const existingRaw = String(existingAttendee.management_token);
+      storedTokenHash = existingRaw.startsWith(MANAGEMENT_TOKEN_PREFIX)
+        ? existingRaw
+        : await hashManagementToken(existingRaw);
+      responseToken = undefined;
+      if (!user && management_token) {
+        emailToken = String(management_token).trim();
+      }
+    }
+
     const storedEmail = hasEmail
       ? email
-      : (existingAttendee ? existingAttendee.email : `guest-${activeToken}${GUEST_NO_EMAIL_SUFFIX}`);
+      : (existingAttendee ? existingAttendee.email : `guest-${freshToken}${GUEST_NO_EMAIL_SUFFIX}`);
 
     if (!hasEmail && storedEmail) {
       const storedBanRecord = await db.prepare('SELECT id FROM banned_emails WHERE LOWER(email) = LOWER(?)').bind(storedEmail).first();
@@ -296,7 +329,7 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
 
     let attendeeId;
     if (existingAttendee) {
-      if (!user && (!existingAttendee.management_token || !constantTimeEqual(management_token, existingAttendee.management_token))) {
+      if (!user && (!existingAttendee.management_token || !(await verifyManagementToken(management_token, existingAttendee.management_token)))) {
         return c.json({ error: 'Invalid or missing management token for this RSVP. Please use your confirmation link or sign in.' }, 403);
       }
       if (!user && existingAttendee.user_id) {
@@ -317,12 +350,12 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
         UPDATE attendees
         SET name = ?, email = ?, status = ?, gear_bringing = ?, players_count = ?, spectators_count = ?, additional_guests = ?, guest_names = ?, user_id = COALESCE(?, user_id), is_guest = ?, management_token = ?
         WHERE id = ?
-      `).bind(name, storedEmail, finalStatus, cleanGear, playersCount, spectatorsCount, additionalGuests, cleanGuestNames, userId, isGuest, activeToken, attendeeId).run();
+      `).bind(name, storedEmail, finalStatus, cleanGear, playersCount, spectatorsCount, additionalGuests, cleanGuestNames, userId, isGuest, storedTokenHash, attendeeId).run();
     } else {
       const ins = await db.prepare(`
         INSERT INTO attendees (event_id, user_id, name, email, is_guest, status, gear_bringing, players_count, spectators_count, additional_guests, guest_names, management_token)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).bind(eventId, userId, name, storedEmail, isGuest, finalStatus, cleanGear, playersCount, spectatorsCount, additionalGuests, cleanGuestNames, freshToken).run();
+      `).bind(eventId, userId, name, storedEmail, isGuest, finalStatus, cleanGear, playersCount, spectatorsCount, additionalGuests, cleanGuestNames, freshTokenHash).run();
       attendeeId = ins.meta.last_row_id;
     }
 
@@ -492,7 +525,7 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
       if (hasEmail && isDeliverableEmail(storedEmail)) {
         runBackground(c, sendWaitlistConfirmation(c.env, origin, {
           email: storedEmail, name, event, waitlistPosition: waitlistPos,
-          playersCount, spectatorsCount, managementToken: activeToken
+          playersCount, spectatorsCount, managementToken: emailToken
         }).catch(e => console.error('[Waitlist Email Error]:', e)));
       }
 
@@ -502,7 +535,7 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
         waitlistPosition: waitlistPos,
         playersCount,
         spectatorsCount,
-        managementToken: activeToken,
+        ...(responseToken ? { managementToken: responseToken } : {}),
         message: hasEmail
           ? `The playing roster is full (${event.max_players} players), so your group is #${waitlistPos} on the player waitlist! If a spot opens up, you will be automatically promoted and notified immediately.`
           : `The playing roster is full (${event.max_players} players), so your group is #${waitlistPos} on the player waitlist!`
@@ -519,7 +552,7 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
           gearBringing: cleanGear,
           playersCount, spectatorsCount,
           guestNames: cleanGuestNames,
-          managementToken: activeToken
+          managementToken: emailToken
         }).catch(e => console.error('[RSVP Email Error]:', e)));
       }
 
@@ -568,7 +601,7 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
         status: 'attending',
         playersCount,
         spectatorsCount,
-        managementToken: activeToken,
+        ...(responseToken ? { managementToken: responseToken } : {}),
         message: confirmMsg
       });
     }
@@ -578,12 +611,91 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
       status: 'declined',
       playersCount: 0,
       spectatorsCount: 0,
-      managementToken: activeToken,
+      ...(responseToken ? { managementToken: responseToken } : {}),
       message: 'Your RSVP has been cancelled.'
     });
   } catch (err) {
     console.error('[RSVP] Error updating RSVP:', err);
     return c.json({ error: 'Failed to record RSVP.' }, 500);
+  }
+});
+
+eventsRsvpsRouter.post('/:id/rsvp/edit-link', async (c) => {
+  try {
+    const eventId = parseInt(c.req.param('id'), 10);
+    if (!eventId || isNaN(eventId) || eventId <= 0) {
+      return c.json({ error: 'Invalid event ID.' }, 400);
+    }
+
+    const db = c.env.DB;
+    const user = c.get('user');
+    const clientIp = getClientIp(c);
+    const ipLimit = await checkRateLimit(db, `rsvp_edit_link_ip:${clientIp}`, 10, 600, c.env);
+    if (!ipLimit.allowed) {
+      return c.json({ error: 'Too many edit link requests. Please wait a few minutes and try again.' }, 429);
+    }
+
+    const body = await c.req.json().catch(() => ({}));
+    if (!user && !(await verifyTurnstileIfConfigured(c.env, body.cf_turnstile_response, clientIp))) {
+      return c.json({ error: 'Bot verification failed. Please refresh and try again.' }, 403);
+    }
+
+    const cleanEmail = body.email != null ? String(body.email).trim().toLowerCase() : '';
+    if (!isValidEmailAddress(cleanEmail) || cleanEmail.endsWith(GUEST_NO_EMAIL_SUFFIX)) {
+      return c.json({ error: 'Please enter a valid email address.' }, 400);
+    }
+
+    const emailLimit = await checkRateLimit(db, `rsvp_edit_link_email:${eventId}:${cleanEmail}`, 3, 600, c.env);
+    if (!emailLimit.allowed) {
+      return c.json({ error: 'Too many edit link requests for this email. Please check your inbox or wait 10 minutes.' }, 429);
+    }
+
+    const event = await db.prepare('SELECT * FROM events WHERE id = ?').bind(eventId).first();
+    if (!event) {
+      return c.json({ error: 'Event not found.' }, 404);
+    }
+
+    const genericMessage = 'If an RSVP with that email exists for this event, a fresh edit link has been sent.';
+    const banRecord = await db.prepare('SELECT id FROM banned_emails WHERE LOWER(email) = LOWER(?)').bind(cleanEmail).first();
+    if (banRecord) {
+      return c.json({ success: true, message: genericMessage });
+    }
+
+    const attendee = await db.prepare(
+      'SELECT id, user_id, name, email FROM attendees WHERE event_id = ? AND LOWER(email) = LOWER(?) LIMIT 1'
+    ).bind(eventId, cleanEmail).first();
+
+    const attendeeEmail = attendee && attendee.email ? String(attendee.email) : '';
+    if (attendee && attendee.user_id == null && isDeliverableEmail(attendeeEmail)) {
+      const freshToken = generateToken();
+      const freshTokenHash = await hashManagementToken(freshToken);
+      const upd = await db.prepare(
+        'UPDATE attendees SET management_token = ? WHERE id = ? AND event_id = ? AND user_id IS NULL'
+      ).bind(freshTokenHash, attendee.id, eventId).run();
+
+      if (upd.meta && upd.meta.changes === 1) {
+        const origin = getSafePublicOrigin(c);
+        try {
+          await sendRsvpEditLinkEmail(c.env, origin, {
+            email: attendeeEmail,
+            name: attendee.name ? String(attendee.name) : '',
+            event,
+            managementToken: freshToken
+          });
+        } catch (mailErr) {
+          logEvent('error', 'rsvp_edit_link_email_failed', {
+            code: ERROR_CODES.MAIL_ERROR,
+            eventId,
+            msg: mailErr && mailErr.message ? mailErr.message : 'Failed to dispatch RSVP edit link email'
+          });
+        }
+      }
+    }
+
+    return c.json({ success: true, message: genericMessage });
+  } catch (err) {
+    console.error('[RSVP] Error issuing fresh edit link:', err);
+    return c.json({ error: 'Failed to process edit link request.' }, 500);
   }
 });
 

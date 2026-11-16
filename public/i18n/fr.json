@@ -331,5 +331,10 @@
   "gallery.videos_reel": "Vidéos et moments forts",
   "gallery.drop_links_btn": "📥 Ajouter photos / liens",
   "gallery.mod_queue_title": "File de modération",
-  "gallery.all_albums": "🌟 Tous les albums"
+  "gallery.all_albums": "🌟 Tous les albums",
+  "event.edit_link_prompt": "Déjà inscrit en tant qu’invité ?",
+  "event.edit_link_btn": "🔗 M’envoyer un nouveau lien de modification",
+  "event.edit_link_email_placeholder": "Entrez l’e-mail utilisé pour votre inscription",
+  "event.edit_link_send_btn": "Envoyer le lien",
+  "event.edit_link_sending": "Envoi..."
 }

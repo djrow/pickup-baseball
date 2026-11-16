@@ -239,6 +239,7 @@ function checkRouteAuthGuards() {
     'auth.js:POST:/verify-code',        // Public OTP verification (rate limited + SHA-256 code)
     'auth.js:POST:/logout',             // Clears own session cookie
     'rsvps.js:POST:/:id/rsvp',          // Conditional require_login + Turnstile + management_token
+    'rsvps.js:POST:/:id/rsvp/edit-link', // Public visitor edit-link rotation (Turnstile + IP/email rate limited + non-disclosing)
     'rsvps.js:POST:/:id/comments',      // Conditional require_login + Turnstile + attendee validation
     'bp-duties.js:POST:/:id/bp-order',  // Verified by signed-in user or valid RSVP token
     'bp-duties.js:PUT:/:id/bp-order/:signupId',

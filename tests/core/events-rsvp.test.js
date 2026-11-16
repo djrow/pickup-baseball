@@ -4,6 +4,11 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
+
+function hashTokenForAssert(raw) {
+  return 'sha256:' + crypto.createHash('sha256').update(String(raw)).digest('hex');
+}
 
 module.exports = function registerEventsRsvpTests(ctx) {
   const { apiReq, db, getDefaultDuties } = ctx;
@@ -175,7 +180,9 @@ test('T6: Attendee RSVPs & Duty Claiming', async (t) => {
     assert.equal(att.name, 'Player Alpha');
     assert.equal(att.status, 'attending');
     assert.equal(att.gear_bringing, 'Catcher mask and 3 balls');
-    assert.equal(att.management_token, alphaToken);
+    assert.ok(att.management_token.startsWith('sha256:'), 'DB must store sha256-prefixed management_token');
+    assert.notEqual(att.management_token, alphaToken, 'DB must not store plaintext management_token');
+    assert.equal(att.management_token, hashTokenForAssert(alphaToken), 'DB hash must match sha256(alphaToken)');
 
     const da = db.prepare('SELECT * FROM duty_assignments WHERE attendee_id = ? AND duty_id = ?').get(att.id, targetDutyId);
     assert.ok(da, 'Duty assignment record must link attendee to duty');
@@ -445,6 +452,361 @@ test('T7: Error Boundaries', async (t) => {
       assert.ok(attendeeNames.includes('P3'), 'P3 must be promoted to confirmed attendee');
       assert.ok(attendeeNames.includes('P2'), 'P2 must remain attending');
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Ticket #33: Hashed RSVP Tokens, Stripped Follow-up Emails & Fresh Edit Link
+// ---------------------------------------------------------------------------
+test('Ticket #33: Hashed RSVP Management Tokens & On-Demand Fresh Edit Link', async (t) => {
+  const { seedOrgCookie, seedPlayerCookie, seedPlayerId } = ctx;
+  const { app: honoApp } = await import('../../src/app/index.js');
+  const { createD1Adapter } = require('../../src/d1-sqlite');
+  const { sendRemindersForEventD1, notifyConfirmedAttendees } = await import('../../src/app/routes/events/helpers.js');
+  const {
+    sendWaitlistPromotionEmail,
+    sendEventReminder,
+    sendRainoutEmail,
+    sendReopenEmail
+  } = await import('../../src/app/mailer.js');
+  const testD1 = createD1Adapter(db);
+
+  const evRes = await apiReq('POST', '/api/events', seedOrgCookie, {
+    title: 'Ticket 33 Token Hashing Game',
+    location: 'Bushrod Park Field 1',
+    event_date: new Date(Date.now() + 7 * 86400 * 1000).toISOString(),
+    max_players: 1,
+    custom_duties: [
+      { title: 'Bases', description: 'Bring 3 bases', slots_needed: 2 }
+    ]
+  });
+  assert.equal(evRes.status, 200);
+  const eventId = evRes.data.eventId;
+  const duties = db.prepare('SELECT id FROM event_duties WHERE event_id = ?').all(eventId);
+  const dutyId = duties[0].id;
+  const eventRow = db.prepare('SELECT * FROM events WHERE id = ?').get(eventId);
+
+  let visitorToken = '';
+  let waitlistToken = '';
+
+  await t.test('1. Creation stores sha256:<hex>, returns plaintext once, and initial email has ?token=', async () => {
+    const sentEmails = [];
+    const origFetch = global.fetch;
+    global.fetch = async (url, opts) => {
+      if (String(url) === 'https://api.resend.com/emails') {
+        sentEmails.push(JSON.parse(opts.body));
+        return { ok: true, status: 200, json: async () => ({ id: 'mock-email-id' }) };
+      }
+      return origFetch(url, opts);
+    };
+
+    try {
+      const req = new Request(`https://example.org/api/events/${eventId}/rsvp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Origin: 'https://example.org' },
+        body: JSON.stringify({
+          name: 'Visitor One',
+          email: 't33_visitor1@example.org',
+          status: 'attending',
+          duty_ids: [dutyId]
+        })
+      });
+      const res = await honoApp.fetch(req, {
+        DB: testD1,
+        BASEBALL_DB: testD1,
+        NODE_ENV: 'test',
+        RESEND_API_KEY: 're_mock_ticket33'
+      });
+      assert.equal(res.status, 200);
+      const data = await res.json();
+      visitorToken = data.managementToken;
+      assert.ok(visitorToken && !visitorToken.startsWith('sha256:'), 'Creation must return raw plaintext token once');
+
+      const attRow = db.prepare('SELECT management_token FROM attendees WHERE event_id = ? AND email = ?').get(eventId, 't33_visitor1@example.org');
+      assert.equal(attRow.management_token, hashTokenForAssert(visitorToken), 'DB must store sha256:<hex> hash');
+
+      // Wait briefly for background email promise if needed
+      await new Promise((r) => setTimeout(r, 20));
+      assert.equal(sentEmails.length, 1, 'Initial RSVP confirmation email must be dispatched');
+      assert.ok(sentEmails[0].text.includes(`?id=${eventId}&token=${encodeURIComponent(visitorToken)}`), 'Initial confirmation email must embed plaintext ?token=');
+      assert.ok(sentEmails[0].html.includes(`?id=${eventId}&token=${encodeURIComponent(visitorToken)}`), 'Initial confirmation HTML must embed plaintext ?token=');
+    } finally {
+      global.fetch = origFetch;
+    }
+  });
+
+  await t.test('2. GET/edit/BP/cancel work with raw token, never leak sha256:, and reject hash replay', async () => {
+    const storedHash = db.prepare('SELECT management_token FROM attendees WHERE event_id = ? AND email = ?').get(eventId, 't33_visitor1@example.org').management_token;
+
+    // Hash replay must be rejected
+    const replayGet = await apiReq('GET', `/api/events/${eventId}?token=${encodeURIComponent(storedHash)}`);
+    assert.equal(replayGet.status, 200);
+    assert.equal(replayGet.data.myRsvp, null, 'Stored sha256: hash must not authenticate GET ?token=');
+
+    const replayPost = await apiReq('POST', `/api/events/${eventId}/rsvp`, null, {
+      name: 'Visitor One',
+      email: 't33_visitor1@example.org',
+      management_token: storedHash,
+      status: 'declined'
+    });
+    assert.equal(replayPost.status, 403, 'Stored sha256: hash must not authorize RSVP mutation');
+
+    // Valid raw token GET resolves myRsvp without leaking management_token
+    const getRes = await apiReq('GET', `/api/events/${eventId}?token=${encodeURIComponent(visitorToken)}`);
+    assert.equal(getRes.status, 200);
+    assert.ok(getRes.data.myRsvp, 'Valid raw token must resolve myRsvp');
+    assert.equal(getRes.data.myRsvp.management_token, undefined, 'GET must not leak management_token or sha256: hash');
+
+    // Update RSVP via ?token= query param preserves stored hash (never overwrites with plaintext)
+    const editRes = await apiReq('POST', `/api/events/${eventId}/rsvp?token=${encodeURIComponent(visitorToken)}`, null, {
+      name: 'Visitor One Updated',
+      email: 't33_visitor1@example.org',
+      gear_bringing: '2 bats',
+      duty_ids: [dutyId],
+      status: 'attending'
+    });
+    assert.equal(editRes.status, 200);
+    assert.equal(editRes.data.managementToken, undefined, 'Non-rotating update must not re-return or leak hash as managementToken');
+
+    const attAfterEdit = db.prepare('SELECT management_token, gear_bringing FROM attendees WHERE event_id = ? AND email = ?').get(eventId, 't33_visitor1@example.org');
+    assert.equal(attAfterEdit.management_token, storedHash, 'Update must preserve stored sha256: hash');
+    assert.equal(attAfterEdit.gear_bringing, '2 bats');
+
+    // BP order POST / PUT / DELETE with management_token
+    const bpPost = await apiReq('POST', `/api/events/${eventId}/bp-order`, null, {
+      player_name: 'Visitor One Updated',
+      slot_number: 3,
+      management_token: visitorToken
+    });
+    assert.equal(bpPost.status, 200);
+    const bpId = bpPost.data.signup_id;
+
+    const bpPut = await apiReq('PUT', `/api/events/${eventId}/bp-order/${bpId}`, null, {
+      slot_number: 4,
+      notes: 'Lefty',
+      management_token: visitorToken
+    });
+    assert.equal(bpPut.status, 200);
+
+    const bpDel = await apiReq('DELETE', `/api/events/${eventId}/bp-order/${bpId}?token=${encodeURIComponent(visitorToken)}`);
+    assert.equal(bpDel.status, 200);
+  });
+
+  await t.test('3. Waitlist promotion, reminder, rainout & reopen emails contain zero ?token= strings', async () => {
+    // Second visitor joins waitlist (max_players=1)
+    const wlRes = await apiReq('POST', `/api/events/${eventId}/rsvp`, null, {
+      name: 'Visitor Waitlist',
+      email: 't33_waitlist@example.org',
+      status: 'attending'
+    });
+    assert.equal(wlRes.status, 200);
+    assert.equal(wlRes.data.status, 'waitlist');
+    waitlistToken = wlRes.data.managementToken;
+
+    const sentEmails = [];
+    const origFetch = global.fetch;
+    global.fetch = async (url, opts) => {
+      if (String(url) === 'https://api.resend.com/emails') {
+        sentEmails.push(JSON.parse(opts.body));
+        return { ok: true, status: 200, json: async () => ({ id: 'mock-email-id' }) };
+      }
+      return origFetch(url, opts);
+    };
+
+    try {
+      const mockEnv = { NODE_ENV: 'test', RESEND_API_KEY: 're_mock_ticket33' };
+      const origin = 'https://www.pickupbaseballfoundation.org';
+
+      // Direct template checks
+      await sendWaitlistPromotionEmail(mockEnv, origin, {
+        email: 't33_waitlist@example.org',
+        name: 'Visitor Waitlist',
+        event: eventRow,
+        managementToken: 'should-be-ignored'
+      });
+      await sendEventReminder(mockEnv, origin, {
+        email: 't33_visitor1@example.org',
+        name: 'Visitor One Updated',
+        event: eventRow,
+        dutyName: 'Bases',
+        gearBringing: '2 bats',
+        totalAttendees: 1,
+        managementToken: 'should-be-ignored'
+      });
+      await sendRainoutEmail(mockEnv, origin, {
+        email: 't33_visitor1@example.org',
+        name: 'Visitor One Updated',
+        event: eventRow,
+        note: 'Wet field',
+        managementToken: 'should-be-ignored'
+      });
+      await sendReopenEmail(mockEnv, origin, {
+        email: 't33_visitor1@example.org',
+        name: 'Visitor One Updated',
+        event: eventRow,
+        note: 'Dry field',
+        managementToken: 'should-be-ignored'
+      });
+
+      // Helper dispatch checks
+      await sendRemindersForEventD1(testD1, mockEnv, origin, eventRow);
+      await notifyConfirmedAttendees({ env: { ...mockEnv, DB: testD1 }, req: { url: `${origin}/api/events/${eventId}/rainout` } }, eventRow, 'Rain note', sendRainoutEmail);
+
+      assert.ok(sentEmails.length >= 6);
+      for (const mail of sentEmails) {
+        assert.ok(!mail.text.includes('token='), `Follow-up email text (${mail.subject}) must not contain token=`);
+        assert.ok(!mail.html.includes('token='), `Follow-up email html (${mail.subject}) must not contain token=`);
+        assert.ok(!mail.text.includes('should-be-ignored'), 'Follow-up email must not embed passed managementToken');
+        assert.ok(!mail.text.includes('sha256:'), 'Follow-up email must not embed sha256: hash');
+        assert.ok(mail.text.includes(`${origin}/event.html?id=${eventId}`), 'Follow-up email must link cleanly to Event page');
+      }
+    } finally {
+      global.fetch = origFetch;
+    }
+  });
+
+  await t.test('4. On-demand fresh edit link rotates hash, invalidates old token, avoids email oracle, and rate-limits', async () => {
+    const sentEmails = [];
+    const origFetch = global.fetch;
+    global.fetch = async (url, opts) => {
+      if (String(url) === 'https://api.resend.com/emails') {
+        sentEmails.push(JSON.parse(opts.body));
+        return { ok: true, status: 200, json: async () => ({ id: 'mock-edit-link-id' }) };
+      }
+      return origFetch(url, opts);
+    };
+
+    let rotatedToken;
+    try {
+      // Request fresh edit link for Visitor One via honoApp with RESEND_API_KEY
+      const editLinkReq = new Request(`https://example.org/api/events/${eventId}/rsvp/edit-link`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Origin: 'https://example.org' },
+        body: JSON.stringify({ email: 't33_visitor1@example.org' })
+      });
+      const editLinkRes = await honoApp.fetch(editLinkReq, {
+        DB: testD1,
+        BASEBALL_DB: testD1,
+        NODE_ENV: 'test',
+        RESEND_API_KEY: 're_mock_ticket33'
+      });
+      assert.equal(editLinkRes.status, 200);
+      const editLinkBody = await editLinkRes.json();
+      assert.equal(editLinkBody.success, true);
+
+      assert.equal(sentEmails.length, 1, 'Fresh edit link email must be sent');
+      const tokenMatch = sentEmails[0].text.match(/[?&]token=([a-f0-9]{64})/i);
+      assert.ok(tokenMatch, 'Edit link email must include fresh 64-char hex ?token=');
+      rotatedToken = tokenMatch[1];
+      assert.notEqual(rotatedToken, visitorToken, 'Fresh edit link must issue a brand new token');
+
+      // DB hash updated
+      const dbRow = db.prepare('SELECT management_token FROM attendees WHERE event_id = ? AND email = ?').get(eventId, 't33_visitor1@example.org');
+      assert.equal(dbRow.management_token, hashTokenForAssert(rotatedToken));
+
+      // Non-disclosure: unknown email & signed-in Member RSVP return identical 200 response with 0 emails sent
+      const memberRsvp = await apiReq('POST', `/api/events/${eventId}/rsvp`, seedPlayerCookie, {
+        name: 'Member Player',
+        status: 'attending'
+      });
+      assert.equal(memberRsvp.status, 200);
+      const memberEmailRow = db.prepare('SELECT email FROM users WHERE id = ?').get(seedPlayerId);
+
+      sentEmails.length = 0;
+      const unknownRes = await apiReq('POST', `/api/events/${eventId}/rsvp/edit-link`, null, { email: 'nobody_t33@example.org' });
+      const memberRes = await apiReq('POST', `/api/events/${eventId}/rsvp/edit-link`, null, { email: memberEmailRow.email });
+      assert.equal(unknownRes.status, 200);
+      assert.equal(memberRes.status, 200);
+      assert.equal(unknownRes.data.message, editLinkBody.message, 'Unknown email must return same generic message');
+      assert.equal(memberRes.data.message, editLinkBody.message, 'Member RSVP email must return same generic message');
+      assert.equal(sentEmails.length, 0, 'Must not email visitor edit links for unknown or Member RSVPs');
+    } finally {
+      global.fetch = origFetch;
+    }
+
+    // Old token must be invalidated
+    const oldGet = await apiReq('GET', `/api/events/${eventId}?token=${encodeURIComponent(visitorToken)}`);
+    assert.equal(oldGet.data.myRsvp, null, 'Old token must no longer resolve myRsvp after rotation');
+
+    const oldCancel = await apiReq('POST', `/api/events/${eventId}/rsvp`, null, {
+      name: 'Visitor One Updated',
+      email: 't33_visitor1@example.org',
+      management_token: visitorToken,
+      status: 'declined'
+    });
+    assert.equal(oldCancel.status, 403, 'Old token must be rejected after rotation');
+
+    // New rotated token works for GET + cancel (which also promotes Visitor Waitlist)
+    const newGet = await apiReq('GET', `/api/events/${eventId}?token=${encodeURIComponent(rotatedToken)}`);
+    assert.ok(newGet.data.myRsvp, 'New rotated token must resolve myRsvp');
+
+    const newCancel = await apiReq('POST', `/api/events/${eventId}/rsvp`, null, {
+      name: 'Visitor One Updated',
+      email: 't33_visitor1@example.org',
+      management_token: rotatedToken,
+      status: 'declined'
+    });
+    assert.equal(newCancel.status, 200);
+    assert.equal(newCancel.data.status, 'declined');
+
+    // Rate limiting enforcement (with non-test NODE_ENV so checkRateLimit enforces bucket)
+    for (let i = 0; i < 3; i++) {
+      const rlRes = await honoApp.fetch(new Request(`https://example.org/api/events/${eventId}/rsvp/edit-link`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Origin: 'https://example.org',
+          'CF-Connecting-IP': '198.51.100.77'
+        },
+        body: JSON.stringify({ email: 'ratelimit_t33@example.org' })
+      }), { DB: testD1, BASEBALL_DB: testD1, NODE_ENV: 'production' });
+      assert.equal(rlRes.status, 200, `Request ${i + 1} within email rate limit must succeed`);
+    }
+    const blockedRes = await honoApp.fetch(new Request(`https://example.org/api/events/${eventId}/rsvp/edit-link`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: 'https://example.org',
+        'CF-Connecting-IP': '198.51.100.77'
+      },
+      body: JSON.stringify({ email: 'ratelimit_t33@example.org' })
+    }), { DB: testD1, BASEBALL_DB: testD1, NODE_ENV: 'production' });
+    assert.equal(blockedRes.status, 429, '4th edit-link request for same email within window must be rate-limited (429)');
+  });
+
+  await t.test('5. Legacy unhashed management_token rows work via dual-lookup and upgrade cleanly', async () => {
+    const legacyRaw = 'legacy_unhashed_token_t33_' + Date.now();
+    db.prepare(`
+      INSERT INTO attendees (event_id, user_id, name, email, is_guest, status, players_count, management_token)
+      VALUES (?, NULL, 'Legacy Guest', 't33_legacy@example.org', 1, 'attending', 1, ?)
+    `).run(eventId, legacyRaw);
+
+    const legacyGet = await apiReq('GET', `/api/events/${eventId}?token=${encodeURIComponent(legacyRaw)}`);
+    assert.equal(legacyGet.status, 200);
+    assert.ok(legacyGet.data.myRsvp, 'Legacy unhashed token must resolve myRsvp via dual-lookup');
+    assert.equal(legacyGet.data.myRsvp.name, 'Legacy Guest');
+
+    const legacyBp = await apiReq('POST', `/api/events/${eventId}/bp-order`, null, {
+      player_name: 'Legacy Guest',
+      slot_number: 8,
+      management_token: legacyRaw
+    });
+    assert.equal(legacyBp.status, 200, 'Legacy unhashed token must authorize BP signup');
+
+    const legacyUpdate = await apiReq('POST', `/api/events/${eventId}/rsvp`, null, {
+      name: 'Legacy Guest Updated',
+      email: 't33_legacy@example.org',
+      gear_bringing: 'Catcher gear',
+      management_token: legacyRaw,
+      status: 'attending'
+    });
+    assert.equal(legacyUpdate.status, 200, 'Legacy unhashed token must authorize RSVP update');
+
+    const rowAfterUpdate = db.prepare('SELECT management_token FROM attendees WHERE event_id = ? AND email = ?').get(eventId, 't33_legacy@example.org');
+    assert.equal(rowAfterUpdate.management_token, hashTokenForAssert(legacyRaw), 'Updating legacy row must store hashed token, not plaintext');
+
+    // Keep waitlistToken used so eslint has no unused var
+    assert.ok(waitlistToken);
   });
 });
 
