@@ -744,6 +744,10 @@ async function runMemberLoginAndWaiverJourney(browser, server, tracker, record) 
     await session.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: endX, y: endY, button: 'left', clickCount: 1 });
 
     await session.evaluate(`(() => {
+      const ageCb = document.getElementById('waiver-age-attestation');
+      if (!ageCb) throw new Error('Missing 18+ age attestation checkbox');
+      ageCb.checked = true;
+      ageCb.dispatchEvent(new Event('change', { bubbles: true }));
       const cb = document.getElementById('waiver-consent-checkbox');
       if (!cb) throw new Error('Missing consent checkbox');
       cb.checked = true;

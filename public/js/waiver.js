@@ -316,6 +316,7 @@
       e.preventDefault();
       var printedName = printedInput ? printedInput.value.trim() : '';
       var signedDate = dateInput ? dateInput.value.trim() : todayStr;
+      var ageBox = document.getElementById('waiver-age-attestation');
       var consentBox = document.getElementById('waiver-consent-checkbox');
       var submitBtn = document.getElementById('btn-submit-waiver');
 
@@ -325,6 +326,10 @@
       }
       if (!hasDrawnStrokes || !pad || !pad.canvas) {
         showWaiverAlert('Please draw or type your signature on the Signature line.', true);
+        return;
+      }
+      if (!ageBox || !ageBox.checked) {
+        showWaiverAlert(API.t('waiver.age_attestation_error', 'You must confirm that you are 18 years of age or older (or a parent/legal guardian signing on behalf of a minor).'), true);
         return;
       }
       if (!consentBox || !consentBox.checked) {
@@ -344,6 +349,8 @@
           signed_date: signedDate,
           signature_type: sigMode,
           signature_data: sigDataUrl,
+          age_attestation: true,
+          attested_18_plus: true,
           electronic_consent: true
         });
 

@@ -351,5 +351,7 @@
   "backup_failed": "데이터베이스 백업 실패: {error}",
   "rtc_turn_unavailable_note": "사용 불가: 이 배포 환경에 TURN 프라이버시 릴레이 서버가 구성되어 있지 않습니다.",
   "rtc_turn_available_note": "TURN 프라이버시 릴레이 서버가 구성되어 준비되었습니다.",
-  "rtc_turn_blocked_warning": "TURN 릴레이 서버가 구성되지 않아 프라이버시 릴레이 모드가 직접 P2P 음성을 차단했습니다."
+  "rtc_turn_blocked_warning": "TURN 릴레이 서버가 구성되지 않아 프라이버시 릴레이 모드가 직접 P2P 음성을 차단했습니다.",
+  "waiver.age_attestation_label": "본인은 만 18세 이상이거나, 미성년자 참가자를 대신하여 서명하는 부모 또는 법정 대리인임을 확인합니다.",
+  "waiver.age_attestation_error": "만 18세 이상이거나 미성년자를 대신해 서명하는 부모/법정 대리인임을 확인해야 합니다."
 }
