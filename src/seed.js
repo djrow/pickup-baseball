@@ -1,8 +1,8 @@
 const crypto = require('crypto');
 const { initDatabase, db, DEFAULT_BASEBALL_DUTIES } = require('./db');
 
-function seed() {
-  initDatabase();
+async function seed() {
+  await initDatabase();
 
   console.log('🌱 Seeding sample Sunday pickup game...');
 
@@ -101,4 +101,7 @@ function seed() {
   console.log(`✅ Sample game #${eventId} created for ${formattedDate} with 5 players and 2 discussion comments!`);
 }
 
-seed();
+seed().catch((err) => {
+  console.error('❌ Seed failed:', err);
+  process.exit(1);
+});

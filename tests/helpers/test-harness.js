@@ -22,10 +22,8 @@ const { createD1Adapter, createNodeHttpBridge } = require('../../src/d1-sqlite')
 const { app: honoApp } = require('../../src/app/index.js');
 const { CURRENT_APP_VERSION } = require('../../src/app/version.js');
 const {
-  CREATE_TABLES_SQL,
-  ALTER_STATEMENTS,
-  CREATE_CHAT_TABLES_SQL,
-  DEFAULT_CHAT_CHANNELS
+  DEFAULT_BASEBALL_DUTIES,
+  ensureDualD1Schema
 } = require('../../src/app/schema.js');
 
 /**
@@ -36,63 +34,15 @@ function generateSessionId() {
 }
 
 /**
- * Initialize baseball database schema on a better-sqlite3 instance
+ * Seed default volunteer duties for test baseball DB
  */
-function initTestBaseballDb(db) {
-  for (const sql of CREATE_TABLES_SQL) {
-    try { db.exec(sql); } catch (e) { /* schema DDL is idempotent */ }
-  }
-  for (const sql of ALTER_STATEMENTS) {
-    try { db.exec(sql); } catch (e) { /* ALTER TABLE column may already exist */ }
-  }
-
-  // Seed default duties
-  const defaultDuties = [
-    { title: 'Bases', description: 'Bring 3 throw-down bases.', slots_needed: 1 },
-    { title: 'Pitching machine and power', description: 'Bring a pitching machine and a way to run it on the field.', slots_needed: 1 },
-    { title: 'Game Baseballs', description: 'Bring game balls bucket.', slots_needed: 1 },
-    { title: 'Field Dragging', description: 'Arrive 20 mins early to drag the infield with the pull rake.', slots_needed: 2 },
-    { title: 'Game Facilitator', description: 'Help coordinate teams, batting order, and fair play throughout the game.', slots_needed: 1 },
-    { title: 'Water / Food', description: 'Bring drinking water, ice, and dugout snacks or fruit for players.', slots_needed: 1 }
-  ];
-
+function seedTestDefaultDuties(db) {
   const insertDuty = db.prepare('INSERT INTO default_duties (title, description, slots_needed, sort_order) VALUES (?, ?, ?, ?)');
-  defaultDuties.forEach((d, idx) => {
+  DEFAULT_BASEBALL_DUTIES.forEach((d, idx) => {
     try {
       insertDuty.run(d.title, d.description, d.slots_needed, idx);
     } catch (e) { /* ignore duplicate default_duties seed row */ }
   });
-}
-
-/**
- * Initialize chat database schema and seed default channels
- */
-function initTestChatDb(db) {
-  for (const sql of CREATE_CHAT_TABLES_SQL) {
-    try { db.exec(sql); } catch (e) { /* schema DDL is idempotent */ }
-  }
-
-  const insertChannel = db.prepare(`
-    INSERT INTO channels (slug, name, category, channel_type, topic, min_role_read, min_role_write, is_encrypted, sort_order)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(slug) DO NOTHING
-  `);
-
-  for (const ch of DEFAULT_CHAT_CHANNELS) {
-    try {
-      insertChannel.run(
-        ch.slug,
-        ch.name,
-        ch.category,
-        ch.channel_type || 'text',
-        ch.topic || '',
-        ch.min_role_read || 'player',
-        ch.min_role_write || 'player',
-        ch.is_encrypted !== undefined ? ch.is_encrypted : 1,
-        ch.sort_order || 0
-      );
-    } catch (e) { /* ignore duplicate channel seed row */ }
-  }
 }
 
 /**
@@ -112,13 +62,12 @@ async function createClubhouseTestContext(_options = {}) {
   chatDb.pragma('journal_mode = WAL');
   chatDb.pragma('foreign_keys = ON');
 
-  // Initialize schemas
-  initTestBaseballDb(baseballDb);
-  initTestChatDb(chatDb);
-
-  // Wrap with Cloudflare D1 adapters
+  // Wrap with Cloudflare D1 adapters and initialize schemas via canonical engine
   const baseballD1 = createD1Adapter(baseballDb);
   const chatD1 = createD1Adapter(chatDb);
+
+  await ensureDualD1Schema({ BASEBALL_DB: baseballD1, CHAT_DB: chatD1 });
+  seedTestDefaultDuties(baseballDb);
 
   // -------------------------------------------------------------------------
   // Seed Test Accounts in BASEBALL_DB

@@ -1,218 +1,305 @@
 /**
- * @fileoverview Schema Initialization Engine, Opportunistic Pruning & Settings Helpers.
- * Orchestrates idempotent cold-start schema checks across BASEBALL_DB and CHAT_DB.
+ * @fileoverview Versioned Schema Initialization Engine, Opportunistic Pruning & Settings Helpers.
+ * Orchestrates idempotent cold-start schema checks across BASEBALL_DB and CHAT_DB
+ * with fresh-DB single-batch fast-path, PRAGMA table_info incremental upgrades,
+ * fail-loud error semantics, and WeakMap concurrency locks.
  *
  * @module app/schema/engine
  */
 
 import { DEFAULT_BASEBALL_DUTIES, CREATE_TABLES_SQL } from './baseball-ddl.js';
-import { DEFAULT_CHAT_CHANNELS, CREATE_CHAT_TABLES_SQL } from './chat-ddl.js';
+import { CREATE_CHAT_TABLES_SQL } from './chat-ddl.js';
 import {
-  ALTER_STATEMENTS,
-  CHAT_ALTER_STATEMENTS,
-  OLD_HIGHLIGHTS_TOPIC,
-  NEW_HIGHLIGHTS_TOPIC,
-  HIGHLIGHTS_TOPIC_SYNC_SQL,
-  runBaseballLegacyBackfills,
+  BASEBALL_MIGRATIONS,
+  CHAT_MIGRATIONS,
+  buildDefaultChatChannelStatements,
   seedSampleMediaIfEmpty,
   ensureClubhouseOptInBackfill
 } from './migrations.js';
 
 const migratedDbs = new WeakSet();
-const BASEBALL_SCHEMA_VERSION = '2026-11-14.1';
+const inFlightBaseballMigrations = new WeakMap();
+export const BASEBALL_SCHEMA_VERSION = BASEBALL_MIGRATIONS[BASEBALL_MIGRATIONS.length - 1].version;
 
-async function runSchemaBatch(db, sqlList) {
-  if (typeof db.batch === 'function' && sqlList.length > 1) {
-    try {
-      await db.batch(sqlList.map((sql) => db.prepare(sql)));
-      return;
-    } catch (e) {
-      /* best-effort batch; fall back to statement-by-statement execution */
+const migratedChatDbs = new WeakSet();
+const inFlightChatMigrations = new WeakMap();
+export const CHAT_SCHEMA_VERSION = CHAT_MIGRATIONS[CHAT_MIGRATIONS.length - 1].version;
+
+/**
+ * Parses a stored schema_version string into a non-negative integer.
+ * Non-integer legacy strings (e.g. '2026-11-14.1') normalize to 0 so
+ * baseline incremental verification and integer stamping execute once.
+ * @param {unknown} raw
+ * @returns {number}
+ */
+export function parseSchemaVersion(raw) {
+  if (raw === null || raw === undefined) return 0;
+  const str = String(raw).trim();
+  if (!/^\d+$/.test(str)) return 0;
+  const parsed = Number(str);
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : 0;
+}
+
+function validateIdentifier(name) {
+  if (typeof name !== 'string' || !/^[a-z_][a-z0-9_]*$/i.test(name)) {
+    throw new Error(`Invalid SQLite identifier: ${String(name)}`);
+  }
+  return name;
+}
+
+function isNoSuchTableError(err) {
+  return Boolean(err && typeof err.message === 'string' && /no such table/i.test(err.message));
+}
+
+async function executePreparedList(db, stmts) {
+  if (!stmts || stmts.length === 0) return;
+  if (typeof db.batch === 'function' && stmts.length > 1) {
+    await db.batch(stmts);
+    return;
+  }
+  for (const stmt of stmts) {
+    await stmt.run();
+  }
+}
+
+async function executeSqlList(db, sqlList) {
+  if (!sqlList || sqlList.length === 0) return;
+  await executePreparedList(db, sqlList.map((sql) => db.prepare(sql)));
+}
+
+/**
+ * Fetches existing column names for each requested table in a single D1 batch.
+ * @param {D1Database} db
+ * @param {string[]} tableNames
+ * @returns {Promise<Map<string, Set<string>>>}
+ */
+async function fetchExistingColumnsByTable(db, tableNames) {
+  const uniqueTables = [];
+  const seen = new Set();
+  for (const name of tableNames) {
+    const table = validateIdentifier(name);
+    if (!seen.has(table)) {
+      seen.add(table);
+      uniqueTables.push(table);
     }
   }
-  for (const sql of sqlList) {
-    try {
-      await db.prepare(sql).run();
-    } catch (e) {
-      /* intentional idempotent DDL probe: object may already exist */
+
+  /** @type {Map<string, Set<string>>} */
+  const colsByTable = new Map();
+  if (uniqueTables.length === 0) return colsByTable;
+
+  const pragmaStmts = uniqueTables.map((table) => db.prepare(`PRAGMA table_info(${table})`));
+  const results = (typeof db.batch === 'function' && pragmaStmts.length > 1)
+    ? await db.batch(pragmaStmts)
+    : await Promise.all(pragmaStmts.map((stmt) => stmt.all()));
+
+  for (let i = 0; i < uniqueTables.length; i++) {
+    const rows = /** @type {Array<{ name: string }>} */ ((results[i] && results[i].results) || []);
+    colsByTable.set(uniqueTables[i], new Set(rows.map((r) => r.name)));
+  }
+  return colsByTable;
+}
+
+/**
+ * Checks column existence via batched PRAGMA table_info and alters only missing columns.
+ * Fails loud if any PRAGMA or ALTER statement errors.
+ * @param {D1Database} db
+ * @param {import('./migrations.js').MigrationColumnDef[]} columnDefs
+ */
+async function applyMissingColumns(db, columnDefs) {
+  if (!columnDefs || columnDefs.length === 0) return;
+  const colsByTable = await fetchExistingColumnsByTable(db, columnDefs.map((c) => c.table));
+  const missingAlterSql = [];
+
+  for (const colDef of columnDefs) {
+    const table = validateIdentifier(colDef.table);
+    let existing = colsByTable.get(table);
+    if (!existing) {
+      existing = new Set();
+      colsByTable.set(table, existing);
+    }
+    if (!existing.has(colDef.column)) {
+      missingAlterSql.push(colDef.sql);
+      existing.add(colDef.column);
     }
   }
+
+  await executeSqlList(db, missingAlterSql);
+}
+
+/**
+ * Probes whether a database is completely empty (fresh fast-path) or an existing
+ * database with an integer schema_version (or 0 if unversioned/legacy).
+ * @param {D1Database} db
+ * @param {string} metaTable
+ * @returns {Promise<{ isFresh: boolean, currentVersion: number }>}
+ */
+async function probeSchemaState(db, metaTable) {
+  const table = validateIdentifier(metaTable);
+  try {
+    const verRow = await db.prepare(`SELECT value FROM ${table} WHERE key = 'schema_version'`).first();
+    return {
+      isFresh: false,
+      currentVersion: parseSchemaVersion(verRow && verRow.value)
+    };
+  } catch (err) {
+    if (!isNoSuchTableError(err)) {
+      throw err;
+    }
+  }
+
+  const existingTable = await db.prepare(
+    "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' LIMIT 1"
+  ).first();
+
+  return {
+    isFresh: !existingTable,
+    currentVersion: 0
+  };
+}
+
+/**
+ * Runs a single versioned migration step and stamps its integer version on completion.
+ * @param {D1Database} db
+ * @param {import('./migrations.js').MigrationStep} step
+ * @param {string} metaTable
+ */
+async function runMigrationStep(db, step, metaTable) {
+  if (step.ensureTables && step.ensureTables.length > 0) {
+    await executeSqlList(db, step.ensureTables);
+  }
+  if (step.columns && step.columns.length > 0) {
+    await applyMissingColumns(db, step.columns);
+  }
+  if (step.indexes && step.indexes.length > 0) {
+    await executeSqlList(db, step.indexes);
+  }
+  if (step.sqlStatements && step.sqlStatements.length > 0) {
+    await executeSqlList(db, step.sqlStatements);
+  }
+  if (typeof step.run === 'function') {
+    await step.run(db);
+  }
+
+  const table = validateIdentifier(metaTable);
+  await db.prepare(`INSERT OR REPLACE INTO ${table} (key, value) VALUES ('schema_version', ?)`)
+    .bind(String(step.version))
+    .run();
+}
+
+/**
+ * Executes fresh-DB single-batch fast-path or pending ordered versioned migrations.
+ * Throws loudly on any failure without advancing `schema_version`.
+ *
+ * @param {D1Database} db
+ * @param {{
+ *   metaTable: string,
+ *   migrations: import('./migrations.js').MigrationStep[],
+ *   force?: boolean,
+ *   buildFreshStatements?: (targetVersion: number) => D1PreparedStatement[]
+ * }} options
+ * @returns {Promise<{ mode: 'fresh' | 'upgraded' | 'noop', previousVersion: number, currentVersion: number }>}
+ */
+export async function runVersionedMigrations(db, options) {
+  const { metaTable, migrations, force = false, buildFreshStatements } = options;
+  const sorted = [...migrations].sort((a, b) => a.version - b.version);
+  const targetVersion = sorted.length > 0 ? sorted[sorted.length - 1].version : 0;
+
+  const state = await probeSchemaState(db, metaTable);
+  if (!force && state.isFresh && typeof buildFreshStatements === 'function') {
+    const freshStmts = buildFreshStatements(targetVersion);
+    await executePreparedList(db, freshStmts);
+    return {
+      mode: 'fresh',
+      previousVersion: 0,
+      currentVersion: targetVersion
+    };
+  }
+
+  const effectiveVersion = force ? 0 : state.currentVersion;
+  const pending = sorted.filter((step) => step.version > effectiveVersion);
+  for (const step of pending) {
+    await runMigrationStep(db, step, metaTable);
+  }
+
+  return {
+    mode: pending.length > 0 ? 'upgraded' : 'noop',
+    previousVersion: state.currentVersion,
+    currentVersion: pending.length > 0 ? pending[pending.length - 1].version : state.currentVersion
+  };
+}
+
+/**
+ * Deduplicates concurrent cold-start initialization per DB instance via WeakMap
+ * and memoizes successful completion in the provided WeakSet.
+ * @param {D1Database} db
+ * @param {boolean} force
+ * @param {WeakSet<object>} doneSet
+ * @param {WeakMap<object, Promise<void>>} inFlightMap
+ * @param {() => Promise<void>} workerFn
+ */
+async function runWithDbLock(db, force, doneSet, inFlightMap, workerFn) {
+  if (!db) return;
+  if (!force && doneSet.has(db)) return;
+
+  const existing = inFlightMap.get(db);
+  if (existing) {
+    if (!force) {
+      return existing;
+    }
+    try {
+      await existing;
+    } catch (_err) {
+      /* previous attempt failed; forced call executes a fresh run */
+    }
+  }
+
+  const promise = (async () => {
+    try {
+      await workerFn();
+      doneSet.add(db);
+    } finally {
+      if (inFlightMap.get(db) === promise) {
+        inFlightMap.delete(db);
+      }
+    }
+  })();
+
+  inFlightMap.set(db, promise);
+  return promise;
 }
 
 export async function ensureD1Schema(db, force = false) {
-  if (!db || (!force && migratedDbs.has(db))) return;
+  return runWithDbLock(db, force, migratedDbs, inFlightBaseballMigrations, async () => {
+    const result = await runVersionedMigrations(db, {
+      metaTable: 'app_settings',
+      migrations: BASEBALL_MIGRATIONS,
+      force,
+      buildFreshStatements: (targetVersion) => [
+        ...CREATE_TABLES_SQL.map((sql) => db.prepare(sql)),
+        db.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('schema_version', ?)").bind(String(targetVersion))
+      ]
+    });
 
-  let alreadyAtVersion = false;
-  if (!force) {
-    try {
-      const verRow = await db.prepare("SELECT value FROM app_settings WHERE key = 'schema_version'").first();
-      if (verRow && verRow.value === BASEBALL_SCHEMA_VERSION) {
-        alreadyAtVersion = true;
-      }
-    } catch (e) {
-      /* schema_version probe: app_settings table may not exist yet on fresh DB */
+    if (result.mode !== 'noop') {
+      await seedSampleMediaIfEmpty(db);
     }
-  }
-
-  if (!alreadyAtVersion) {
-    await runSchemaBatch(db, CREATE_TABLES_SQL);
-
-    for (const sql of ALTER_STATEMENTS) {
-      try {
-        await db.prepare(sql).run();
-      } catch (e) {
-        /* intentional schema probe: column or index may already exist */
-      }
-    }
-
-    await runBaseballLegacyBackfills(db, runSchemaBatch);
-
-    try {
-      await db.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('schema_version', ?)").bind(BASEBALL_SCHEMA_VERSION).run();
-    } catch (e) {
-      /* best-effort schema_version stamp */
-    }
-
-    await seedSampleMediaIfEmpty(db);
-  }
-
-  migratedDbs.add(db);
+  });
 }
 
-const migratedChatDbs = new WeakSet();
-const CHAT_SCHEMA_VERSION = '2026-11-14.1';
-
 export async function ensureChatD1Schema(chatDb, force = false) {
-  if (!chatDb || (!force && migratedChatDbs.has(chatDb))) return;
-
-  if (!force && typeof chatDb.prepare === 'function') {
-    try {
-      const verRow = await chatDb.prepare("SELECT value FROM chat_meta WHERE key = 'schema_version'").first();
-      if (verRow && verRow.value === CHAT_SCHEMA_VERSION) {
-        migratedChatDbs.add(chatDb);
-        return;
-      }
-    } catch (e) {
-      /* schema_version probe: chat_meta table may not exist yet on fresh DB */
-    }
-  }
-
-  if (typeof chatDb.prepare === 'function') {
-    await runSchemaBatch(chatDb, CREATE_CHAT_TABLES_SQL);
-  } else if (typeof chatDb.exec === 'function') {
-    for (const sql of CREATE_CHAT_TABLES_SQL) {
-      try {
-        chatDb.exec(sql);
-      } catch (e) {
-        /* intentional idempotent DDL probe: object may already exist */
-      }
-    }
-  }
-
-  let needsColumnAlter = true;
-  if (!force && typeof chatDb.prepare === 'function') {
-    try {
-      const [msgColsRes, chColsRes, cmColsRes] = typeof chatDb.batch === 'function'
-        ? await chatDb.batch([
-            chatDb.prepare('PRAGMA table_info(messages)'),
-            chatDb.prepare('PRAGMA table_info(channels)'),
-            chatDb.prepare('PRAGMA table_info(channel_members)')
-          ])
-        : [
-            await chatDb.prepare('PRAGMA table_info(messages)').all(),
-            await chatDb.prepare('PRAGMA table_info(channels)').all(),
-            await chatDb.prepare('PRAGMA table_info(channel_members)').all()
-          ];
-      const msgCols = new Set(((msgColsRes && msgColsRes.results) || []).map((c) => c.name));
-      const chCols = new Set(((chColsRes && chColsRes.results) || []).map((c) => c.name));
-      const cmCols = new Set(((cmColsRes && cmColsRes.results) || []).map((c) => c.name));
-      if (msgCols.has('hidden_at') && msgCols.has('original_iv') && chCols.has('is_private') && cmCols.has('hidden')) {
-        needsColumnAlter = false;
-      }
-    } catch (e) {
-      /* pragma column probe fallback: run ALTER_STATEMENTS */
-    }
-  }
-
-  if (needsColumnAlter) {
-    for (const sql of CHAT_ALTER_STATEMENTS) {
-      try {
-        if (typeof chatDb.prepare === 'function') {
-          await chatDb.prepare(sql).run();
-        } else if (typeof chatDb.exec === 'function') {
-          chatDb.exec(sql);
-        }
-      } catch (e) {
-        // Ignore if column exists
-      }
-    }
-  }
-
-  const channelSeedSql = `
-    INSERT INTO channels (slug, name, category, channel_type, topic, min_role_read, min_role_write, is_encrypted, sort_order)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(slug) DO NOTHING
-  `;
-  if (typeof chatDb.prepare === 'function' && typeof chatDb.batch === 'function') {
-    try {
-      await chatDb.batch([
-        ...DEFAULT_CHAT_CHANNELS.map((ch) =>
-          chatDb.prepare(channelSeedSql).bind(
-            ch.slug, ch.name, ch.category, ch.channel_type, ch.topic,
-            ch.min_role_read, ch.min_role_write, ch.is_encrypted, ch.sort_order
-          )
-        ),
-        chatDb.prepare(HIGHLIGHTS_TOPIC_SYNC_SQL).bind(NEW_HIGHLIGHTS_TOPIC, OLD_HIGHLIGHTS_TOPIC),
-        chatDb.prepare("INSERT OR REPLACE INTO chat_meta (key, value) VALUES ('schema_version', ?)").bind(CHAT_SCHEMA_VERSION)
-      ]);
-      migratedChatDbs.add(chatDb);
-      return;
-    } catch (e) {
-      /* best-effort batch seed; fall back to per-channel inserts */
-    }
-  }
-
-  for (const ch of DEFAULT_CHAT_CHANNELS) {
-    try {
-      if (typeof chatDb.prepare === 'function') {
-        const stmt = chatDb.prepare(channelSeedSql);
-        if (typeof stmt.bind === 'function') {
-          await stmt.bind(
-            ch.slug, ch.name, ch.category, ch.channel_type, ch.topic,
-            ch.min_role_read, ch.min_role_write, ch.is_encrypted, ch.sort_order
-          ).run();
-        } else if (typeof stmt.run === 'function') {
-          stmt.run(
-            ch.slug, ch.name, ch.category, ch.channel_type, ch.topic,
-            ch.min_role_read, ch.min_role_write, ch.is_encrypted, ch.sort_order
-          );
-        }
-      }
-    } catch (e) {
-      console.warn(`[ensureChatD1Schema] Error seeding channel ${ch.slug}:`, e);
-    }
-  }
-
-  try {
-    if (typeof chatDb.prepare === 'function') {
-      const syncStmt = chatDb.prepare(HIGHLIGHTS_TOPIC_SYNC_SQL);
-      if (typeof syncStmt.bind === 'function') {
-        await syncStmt.bind(NEW_HIGHLIGHTS_TOPIC, OLD_HIGHLIGHTS_TOPIC).run();
-      } else if (typeof syncStmt.run === 'function') {
-        syncStmt.run(NEW_HIGHLIGHTS_TOPIC, OLD_HIGHLIGHTS_TOPIC);
-      }
-    }
-    if (typeof chatDb.prepare === 'function') {
-      const metaStmt = chatDb.prepare("INSERT OR REPLACE INTO chat_meta (key, value) VALUES ('schema_version', ?)");
-      if (typeof metaStmt.bind === 'function') {
-        await metaStmt.bind(CHAT_SCHEMA_VERSION).run();
-      }
-    }
-  } catch (e) {
-    /* best-effort topic sync and chat schema_version stamp */
-  }
-
-  migratedChatDbs.add(chatDb);
+  return runWithDbLock(chatDb, force, migratedChatDbs, inFlightChatMigrations, async () => {
+    await runVersionedMigrations(chatDb, {
+      metaTable: 'chat_meta',
+      migrations: CHAT_MIGRATIONS,
+      force,
+      buildFreshStatements: (targetVersion) => [
+        ...CREATE_CHAT_TABLES_SQL.map((sql) => chatDb.prepare(sql)),
+        ...buildDefaultChatChannelStatements(chatDb),
+        chatDb.prepare("INSERT OR REPLACE INTO chat_meta (key, value) VALUES ('schema_version', ?)").bind(String(targetVersion))
+      ]
+    });
+  });
 }
 
 const lastBaseballPruneByDb = new WeakMap();

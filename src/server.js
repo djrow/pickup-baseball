@@ -9,8 +9,6 @@ const { renderFeedXmlResponse } = require('./app/feeds.js');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-initDatabase();
-
 app.use((req, res, next) => {
   res.setHeader('X-App-Version', CURRENT_APP_VERSION);
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -74,15 +72,28 @@ app.use((req, res, next) => {
   next();
 });
 
-const server = app.listen(PORT, '0.0.0.0', () => {
-  console.log(`⚾ Sunday Pickup Baseball running on http://localhost:${PORT} (v${CURRENT_APP_VERSION})`);
-});
+let server = null;
 
 function shutdown() {
+  if (!server) {
+    process.exit(0);
+    return;
+  }
   server.close(() => process.exit(0));
 }
 
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
+
+initDatabase()
+  .then(() => {
+    server = app.listen(PORT, '0.0.0.0', () => {
+      console.log(`⚾ Sunday Pickup Baseball running on http://localhost:${PORT} (v${CURRENT_APP_VERSION})`);
+    });
+  })
+  .catch((err) => {
+    console.error('[Server] Database schema initialization failed:', err);
+    process.exit(1);
+  });
 
 module.exports = app;

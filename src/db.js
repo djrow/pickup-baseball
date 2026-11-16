@@ -4,10 +4,9 @@ const fs = require('fs');
 const { createD1Adapter } = require('./d1-sqlite');
 const {
   DEFAULT_BASEBALL_DUTIES,
-  CREATE_TABLES_SQL,
-  ALTER_STATEMENTS,
-  CREATE_CHAT_TABLES_SQL,
-  DEFAULT_CHAT_CHANNELS
+  ensureBaseballD1Schema,
+  ensureChatD1Schema,
+  ensureDualD1Schema
 } = require('./app/schema.js');
 
 const dbDir = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
@@ -33,29 +32,7 @@ const chatD1 = createD1Adapter(chatDb);
 const db = baseballDb;
 const d1 = baseballD1;
 
-function initBaseballDatabase(_force = false) {
-  for (const sql of CREATE_TABLES_SQL) {
-    baseballDb.exec(sql);
-  }
-  for (const sql of ALTER_STATEMENTS) {
-    try {
-      baseballDb.exec(sql);
-    } catch (e) {
-      /* intentional schema probe: column or index may already exist */
-    }
-  }
-
-  baseballDb.exec(`
-    UPDATE attendees
-    SET players_count = CASE WHEN status = 'declined' THEN 0 ELSE 1 + COALESCE(additional_guests, 0) END
-    WHERE players_count IS NULL
-  `);
-
-  baseballDb.exec("UPDATE users SET role = 'admin' WHERE is_admin = 1 AND (role IS NULL OR role = 'player')");
-  baseballDb.exec("UPDATE users SET is_admin = 1 WHERE role = 'admin'");
-  baseballDb.exec("UPDATE users SET role = 'player' WHERE role IS NULL");
-  baseballDb.exec("UPDATE users SET role = 'organizer' WHERE role = 'facilitator'");
-
+function seedNodeBootstrapDefaults() {
   const adminCount = baseballDb.prepare("SELECT COUNT(*) as c FROM users WHERE role = 'admin' OR is_admin = 1").get().c;
   if (adminCount === 0) {
     const targetUser = baseballDb.prepare("SELECT id, email FROM users WHERE email = 'pickupbaseballfoundation@gmail.com'").get();
@@ -100,41 +77,18 @@ function initBaseballDatabase(_force = false) {
   }
 }
 
-function initChatDatabase(_force = false) {
-  for (const sql of CREATE_CHAT_TABLES_SQL) {
-    try {
-      chatDb.exec(sql);
-    } catch (e) {
-      /* intentional idempotent DDL: table or index may already exist */
-    }
-  }
-  const insertChannel = chatDb.prepare(`
-    INSERT INTO channels (slug, name, category, channel_type, topic, min_role_read, min_role_write, is_encrypted, sort_order)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(slug) DO NOTHING
-  `);
-  for (const ch of DEFAULT_CHAT_CHANNELS) {
-    try {
-      insertChannel.run(
-        ch.slug,
-        ch.name,
-        ch.category,
-        ch.channel_type,
-        ch.topic,
-        ch.min_role_read,
-        ch.min_role_write,
-        ch.is_encrypted,
-        ch.sort_order
-      );
-    } catch (e) {
-      /* best-effort default channel seed */
-    }
-  }
+async function initBaseballDatabase(force = false) {
+  await ensureBaseballD1Schema(baseballD1, force);
+  seedNodeBootstrapDefaults();
 }
 
-function initDatabase(force = false) {
-  initBaseballDatabase(force);
-  initChatDatabase(force);
+async function initChatDatabase(force = false) {
+  await ensureChatD1Schema(chatD1, force);
+}
+
+async function initDatabase(force = false) {
+  await ensureDualD1Schema({ BASEBALL_DB: baseballD1, CHAT_DB: chatD1 }, force);
+  seedNodeBootstrapDefaults();
 }
 
 function getDefaultDuties() {
