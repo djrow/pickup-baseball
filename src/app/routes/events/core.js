@@ -610,8 +610,20 @@ eventsCoreRouter.all('/reminders/check', async (c) => {
 
   try {
     const origin = getSafePublicOrigin(c);
-    const processed = await processUpcomingEventRemindersD1(c.env.DB, c.env, origin);
-    return c.json({ success: true, processed, message: 'Reminder check executed.' });
+    const result = await processUpcomingEventRemindersD1(c.env.DB, c.env, origin);
+    const processed = typeof result === 'object' && result !== null ? result.processed : result;
+    const sent = typeof result === 'object' && result !== null ? result.sent : undefined;
+    const remaining = typeof result === 'object' && result !== null ? result.remaining : undefined;
+    const quotaPaused = typeof result === 'object' && result !== null ? result.quotaPaused : undefined;
+
+    return c.json({
+      success: true,
+      processed,
+      ...(sent !== undefined ? { sent } : {}),
+      ...(remaining !== undefined ? { remaining } : {}),
+      ...(quotaPaused !== undefined ? { quotaPaused } : {}),
+      message: 'Reminder check executed.'
+    });
   } catch (err) {
     console.error('[Reminders] Error checking reminders:', err);
     return c.json({ error: 'Failed to process reminders.' }, 500);
@@ -1157,6 +1169,12 @@ eventsCoreRouter.put('/:id', requireOrganizer, async (c) => {
       }
     }
 
+    const dateChanged = Boolean(
+      event_date !== undefined &&
+      event_date !== null &&
+      new Date(String(event_date)).getTime() !== new Date(String(existingEvent.event_date)).getTime()
+    );
+
     await c.env.DB.prepare(`
       UPDATE events
       SET title = COALESCE(?, title),
@@ -1167,7 +1185,8 @@ eventsCoreRouter.put('/:id', requireOrganizer, async (c) => {
           max_players = ?,
           actual_attendance = ?,
           allowed_emails = ?,
-          status = COALESCE(?, status)
+          status = COALESCE(?, status),
+          reminder_sent = CASE WHEN ? = 1 THEN 0 ELSE reminder_sent END
       WHERE id = ?
     `).bind(
       title !== undefined ? String(title).trim().slice(0, 150) : null,
@@ -1179,8 +1198,13 @@ eventsCoreRouter.put('/:id', requireOrganizer, async (c) => {
       newActualAttendance,
       newAllowedEmails,
       status || null,
+      dateChanged ? 1 : 0,
       eventId
     ).run();
+
+    if (dateChanged) {
+      await c.env.DB.prepare('UPDATE attendees SET reminder_sent_at = NULL WHERE event_id = ?').bind(eventId).run();
+    }
 
     const updated = await c.env.DB.prepare('SELECT * FROM events WHERE id = ?').bind(eventId).first();
     await purgePublicEdgeCache(c, { events: true, eventId });
@@ -1271,7 +1295,7 @@ eventsCoreRouter.post('/:id/rainout', requireOrganizer, async (c) => {
     `).bind(cleanNote, shouldEmail ? 1 : 0, eventId).run();
 
     if (shouldEmail) {
-      await notifyConfirmedAttendees(c, event, cleanNote, sendRainoutEmail);
+      await notifyConfirmedAttendees(c, event, cleanNote, sendRainoutEmail, { actionType: 'rainout' });
     }
     await purgePublicEdgeCache(c, { events: true, eventId });
     return c.json({ success: true, message: 'Game has been marked as rained out.' });
@@ -1298,7 +1322,7 @@ eventsCoreRouter.post('/:id/reopen', requireOrganizer, async (c) => {
     ).bind(eventId).run();
 
     if (body.sendEmail) {
-      await notifyConfirmedAttendees(c, event, cleanNote, sendReopenEmail);
+      await notifyConfirmedAttendees(c, event, cleanNote, sendReopenEmail, { actionType: 'reopen' });
     }
     await purgePublicEdgeCache(c, { events: true, eventId });
     return c.json({ success: true, message: 'Game has been reopened and is back on!' });
@@ -1320,11 +1344,50 @@ eventsCoreRouter.post('/:id/send-rainout-email', requireOrganizer, async (c) => 
     const body = await c.req.json().catch(() => ({}));
     const cleanNote = body.note !== undefined ? (body.note ? String(body.note).trim() : null) : (event.rainout_note ? String(event.rainout_note) : null);
 
-    await notifyConfirmedAttendees(c, event, cleanNote, sendRainoutEmail);
+    const result = await notifyConfirmedAttendees(c, event, cleanNote, sendRainoutEmail, { actionType: 'rainout' });
     await c.env.DB.prepare('UPDATE events SET rainout_email_sent = 1 WHERE id = ?').bind(eventId).run();
 
-    return c.json({ success: true, message: 'Rainout email sent to confirmed attendees.' });
+    return c.json({
+      success: true,
+      sent: result.sent,
+      remaining: result.remaining,
+      quotaPaused: result.quotaPaused,
+      message: 'Rainout email sent to confirmed attendees.'
+    });
   } catch (err) {
     return jsonError(c, 500, ERROR_CODES.MAIL_ERROR, 'Failed to send rainout email.');
+  }
+});
+
+eventsCoreRouter.post('/:id/notifications/resume', requireOrganizer, async (c) => {
+  try {
+    const eventId = parseInt(c.req.param('id'), 10);
+    if (!eventId || isNaN(eventId) || eventId <= 0) {
+      return c.json({ error: 'Invalid event ID.' }, 400);
+    }
+    const event = await c.env.DB.prepare('SELECT * FROM events WHERE id = ?').bind(eventId).first();
+    if (!event) return c.json({ error: 'Event not found.' }, 404);
+
+    const body = await c.req.json().catch(() => ({}));
+    const actionType = body.actionType || (event.status === 'rainout' ? 'rainout' : 'reopen');
+    const note = body.note !== undefined ? (body.note ? String(body.note).trim() : null) : (event.rainout_note ? String(event.rainout_note) : null);
+    const limit = body.limit !== undefined ? Math.min(200, Math.max(1, parseInt(body.limit, 10) || 100)) : 100;
+
+    const emailFn = actionType === 'rainout' ? sendRainoutEmail : sendReopenEmail;
+    const result = await notifyConfirmedAttendees(c, event, note, emailFn, {
+      actionType,
+      limit
+    });
+
+    return c.json({
+      success: true,
+      sent: result.sent,
+      remaining: result.remaining,
+      quotaPaused: result.quotaPaused,
+      message: result.remaining === 0 ? 'All attendee notices delivered.' : 'Attendee notice batch dispatched.'
+    });
+  } catch (err) {
+    console.error('[Events] Error resuming notifications:', err);
+    return jsonError(c, 500, ERROR_CODES.MAIL_ERROR, 'Failed to resume notifications.');
   }
 });

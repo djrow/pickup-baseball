@@ -493,8 +493,15 @@ test('Ticket #33: Hashed RSVP Management Tokens & On-Demand Fresh Edit Link', as
     const sentEmails = [];
     const origFetch = global.fetch;
     global.fetch = async (url, opts) => {
-      if (String(url) === 'https://api.resend.com/emails') {
-        sentEmails.push(JSON.parse(opts.body));
+      if (String(url) === 'https://api.resend.com/emails' || String(url) === 'https://api.resend.com/emails/batch') {
+        const bodyObj = JSON.parse(opts.body);
+        if (Array.isArray(bodyObj)) {
+          for (const item of bodyObj) {
+            sentEmails.push(item);
+          }
+          return { ok: true, status: 200, json: async () => ({ data: bodyObj.map((_, i) => ({ id: `mock-batch-${i}` })) }) };
+        }
+        sentEmails.push(bodyObj);
         return { ok: true, status: 200, json: async () => ({ id: 'mock-email-id' }) };
       }
       return origFetch(url, opts);
@@ -606,8 +613,15 @@ test('Ticket #33: Hashed RSVP Management Tokens & On-Demand Fresh Edit Link', as
     const sentEmails = [];
     const origFetch = global.fetch;
     global.fetch = async (url, opts) => {
-      if (String(url) === 'https://api.resend.com/emails') {
-        sentEmails.push(JSON.parse(opts.body));
+      if (String(url) === 'https://api.resend.com/emails' || String(url) === 'https://api.resend.com/emails/batch') {
+        const bodyObj = JSON.parse(opts.body);
+        if (Array.isArray(bodyObj)) {
+          for (const item of bodyObj) {
+            sentEmails.push(item);
+          }
+          return { ok: true, status: 200, json: async () => ({ data: bodyObj.map((_, i) => ({ id: `mock-batch-${i}` })) }) };
+        }
+        sentEmails.push(bodyObj);
         return { ok: true, status: 200, json: async () => ({ id: 'mock-email-id' }) };
       }
       return origFetch(url, opts);

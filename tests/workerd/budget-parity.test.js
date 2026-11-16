@@ -110,11 +110,11 @@ test('Workerd Subrequest & D1 Query Budget Parity (Cloudflare Free <= 50 ceiling
     assert.equal(remRes.json.processed, 1);
 
     const remCounts = parseD1Counts(remRes);
-    assert.equal(harness.outboundCalls.length, 25, 'Must dispatch 25 reminder email fetch() calls');
-    assert.equal(remCounts.outboundFetches, 25, 'In-worker fetch() counter must match outboundService count');
+    assert.equal(harness.outboundCalls.length, 1, 'Must dispatch 1 batch reminder email fetch() call');
+    assert.equal(remCounts.outboundFetches, 1, 'In-worker fetch() counter must match outboundService count');
     assert.ok(
-      harness.outboundCalls.every((c) => c.url === 'https://api.resend.com/emails' && c.method === 'POST'),
-      'All outbound reminder calls must target Resend POST /emails'
+      harness.outboundCalls.every((c) => c.url === 'https://api.resend.com/emails/batch' && c.method === 'POST'),
+      'All outbound reminder calls must target Resend POST /emails/batch'
     );
     assert.ok(remCounts.outboundFetches <= 50, `Outbound fetches (${remCounts.outboundFetches}) must stay <= 50`);
     assert.ok(remCounts.queries <= 50, `D1 queries (${remCounts.queries}) must stay <= 50`);
@@ -172,7 +172,11 @@ test('Workerd Subrequest & D1 Query Budget Parity (Cloudflare Free <= 50 ceiling
     assert.equal(rainRes.status, 200);
 
     const rainCounts = parseD1Counts(rainRes);
-    assert.equal(harness.outboundCalls.length, 20, 'Must dispatch 20 rainout emails');
+    assert.equal(harness.outboundCalls.length, 1, 'Must dispatch 1 batch rainout email fetch() call');
+    assert.ok(
+      harness.outboundCalls.every((c) => c.url === 'https://api.resend.com/emails/batch' && c.method === 'POST'),
+      'All outbound rainout calls must target Resend POST /emails/batch'
+    );
     assert.ok(rainCounts.outboundFetches <= 50, `Outbound fetches (${rainCounts.outboundFetches}) must stay <= 50`);
     assert.ok(rainCounts.queries <= 50, `D1 queries (${rainCounts.queries}) must stay <= 50`);
   });

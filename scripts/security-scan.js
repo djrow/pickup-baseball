@@ -539,7 +539,7 @@ function inferRequiredRoleTier(method, fullPath, localPath = '', fileName = '') 
     (full === '/api/events' && m === 'POST') ||
     (full === '/api/events/:id' && (m === 'PUT' || m === 'PATCH')) ||
     full === '/api/events/attendee-candidates' ||
-    /^\/api\/events\/[^/]+\/(?:rainout|reopen|send-rainout-email|bp-order\/clear)$/.test(full) ||
+    /^\/api\/events\/[^/]+\/(?:rainout|reopen|send-rainout-email|notifications\/resume|bp-order\/clear)$/.test(full) ||
     /^\/api\/events\/[^/]+\/duties(?:\/|$)/.test(full) ||
     /^\/api\/events\/[^/]+\/attendees(?:\/|$)/.test(full) ||
     (/^\/api\/posts(?:\/|$)/.test(full) && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(m)) ||
