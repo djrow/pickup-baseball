@@ -351,5 +351,15 @@
   "backup_failed": "Échec de la sauvegarde de la base de données : {error}",
   "rtc_turn_unavailable_note": "Indisponible : aucun serveur relais de confidentialité TURN n’est configuré sur ce déploiement.",
   "rtc_turn_available_note": "Le serveur relais de confidentialité TURN est configuré et prêt.",
-  "rtc_turn_blocked_warning": "Le mode relais de confidentialité a bloqué la voix P2P directe car aucun serveur relais TURN n’est configuré."
+  "rtc_turn_blocked_warning": "Le mode relais de confidentialité a bloqué la voix P2P directe car aucun serveur relais TURN n’est configuré.",
+  "profile.erasure_title": "🗑️ Supprimer le compte et effacer les données",
+  "profile.erasure_notice": "La suppression de votre compte efface immédiatement votre profil, vos sessions, codes de connexion, consentements, inscriptions futures, tâches et créneaux de frappe. Les présences passées, discussions et publications sont anonymisées. Avis de conservation de décharge : les décharges de responsabilité signées restent scellées en quarantaine restreinte réservée aux administrateurs pendant 3 ans après la signature ou votre dernier événement avant suppression définitive.",
+  "profile.erasure_keep_gallery": "Conserver mes photos/vidéos approuvées dans la galerie sous le nom anonyme « Community Member » (les éléments non approuvés sont toujours supprimés)",
+  "profile.erasure_send_code_btn": "📧 Envoyer le code de vérification pour supprimer le compte",
+  "profile.erasure_code_label": "Entrez le code de vérification à 6 chiffres",
+  "profile.erasure_code_placeholder": "123456",
+  "profile.erasure_confirm_btn": "Supprimer définitivement mon compte",
+  "profile.erasure_cancel_btn": "Annuler",
+  "profile.erasure_confirm_dialog": "Supprimer définitivement votre compte et vos données personnelles ? Cette action est irréversible. Toute décharge signée restera en quarantaine juridique restreinte de 3 ans avant purge automatique.",
+  "profile.erasure_code_sent": "Code de vérification envoyé par e-mail. Saisissez le code à 6 chiffres ci-dessous pour confirmer."
 }

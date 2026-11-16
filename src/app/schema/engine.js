@@ -10,6 +10,7 @@
 import { DEFAULT_BASEBALL_DUTIES, DEFAULT_GENERIC_DUTIES, CREATE_TABLES_SQL } from './baseball-ddl.js';
 import { CREATE_CHAT_TABLES_SQL } from './chat-ddl.js';
 import { resolveConfig, PRESET_PICKUP_BASEBALL } from '../config.js';
+import { purgeExpiredQuarantinedWaivers } from '../erasure.js';
 import {
   BASEBALL_MIGRATIONS,
   CHAT_MIGRATIONS,
@@ -356,6 +357,7 @@ export async function pruneEphemeralBaseballRows(db) {
     } else {
       for (const s of stmts) await s.run();
     }
+    await purgeExpiredQuarantinedWaivers(db);
   } catch (e) {
     /* best-effort opportunistic cleanup; non-fatal if DB is busy */
   }

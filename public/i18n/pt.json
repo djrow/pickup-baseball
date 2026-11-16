@@ -351,5 +351,15 @@
   "backup_failed": "Falha no backup do banco de dados: {error}",
   "rtc_turn_unavailable_note": "Indisponível: Nenhum servidor TURN de retransmissão de privacidade está configurado nesta implantação.",
   "rtc_turn_available_note": "Servidor TURN de retransmissão de privacidade configurado e pronto.",
-  "rtc_turn_blocked_warning": "O Modo de Retransmissão de Privacidade bloqueou a voz P2P direta porque nenhum servidor TURN está configurado."
+  "rtc_turn_blocked_warning": "O Modo de Retransmissão de Privacidade bloqueou a voz P2P direta porque nenhum servidor TURN está configurado.",
+  "profile.erasure_title": "🗑️ Excluir conta e apagar dados",
+  "profile.erasure_notice": "Excluir sua conta remove imediatamente seu perfil, sessões, códigos de acesso, registros de consentimento, confirmações futuras, tarefas e vagas de treino de rebatida. Contagens passadas, comentários e publicações são anonimizados. Aviso de retenção de termo legal: termos de responsabilidade assinados permanecem selados em quarentena restrita a administradores por 3 anos após a assinatura ou seu último evento, sendo depois apagados permanentemente.",
+  "profile.erasure_keep_gallery": "Manter minhas fotos/vídeos aprovados na Galeria atribuídos anonimamente a \"Community Member\" (itens não aprovados são sempre excluídos)",
+  "profile.erasure_send_code_btn": "📧 Enviar código de verificação por e-mail para excluir conta",
+  "profile.erasure_code_label": "Digite o código de verificação de 6 dígitos",
+  "profile.erasure_code_placeholder": "123456",
+  "profile.erasure_confirm_btn": "Excluir minha conta permanentemente",
+  "profile.erasure_cancel_btn": "Cancelar",
+  "profile.erasure_confirm_dialog": "Excluir permanentemente sua conta e dados pessoais? Isso não pode ser desfeito. Qualquer termo assinado permanecerá em quarentena jurídica restrita de 3 anos antes da exclusão automática.",
+  "profile.erasure_code_sent": "Código de verificação enviado para seu e-mail. Digite o código de 6 dígitos abaixo para confirmar."
 }

@@ -293,6 +293,16 @@ const EN_DICT = {
   "profile.sessions_title": "🔐 Signed-In Devices",
   "profile.sessions_desc": "Accounts stay signed in on up to 5 devices at once. If you forgot to log out on a friend's phone, sign out everywhere else below.",
   "profile.logout_other_devices_btn": "Sign Out of All Other Devices",
+  "profile.erasure_title": "🗑️ Delete Account & Erase Data",
+  "profile.erasure_notice": "Deleting your account immediately removes your profile, sessions, login codes, consent records, future RSVPs, task assignments, and batting practice slots. Past attendance counts, discussions, and posts are anonymized. Legal Waiver Retention Notice: Signed liability waivers remain sealed in restricted Admin-only quarantine for 3 years from signing or your last attended event before permanent deletion.",
+  "profile.erasure_keep_gallery": "Keep my approved Gallery photos/videos anonymously attributed to \"Community Member\" (unapproved items are always deleted)",
+  "profile.erasure_send_code_btn": "📧 Email Verification Code to Delete Account",
+  "profile.erasure_code_label": "Enter 6-Digit Verification Code",
+  "profile.erasure_code_placeholder": "123456",
+  "profile.erasure_confirm_btn": "Permanently Delete My Account",
+  "profile.erasure_cancel_btn": "Cancel",
+  "profile.erasure_confirm_dialog": "Permanently delete your account and personal data? This cannot be undone. Any signed liability waiver will stay in restricted 3-year legal-defense quarantine before automatic purge.",
+  "profile.erasure_code_sent": "Verification code sent to your email. Enter the 6-digit code below to confirm deletion.",
   "donate.hero_pill": "❤️ Support Free Community Baseball",
   "donate.hero_title": "Help Keep the Games Free",
   "donate.hero_desc": "Pickup Baseball Foundation provides free, welcoming Sunday baseball for everyone in the community. Your donation helps us buy equipment, maintain gear, and keep the games open to all.",
@@ -1899,6 +1909,18 @@ const API = {
 
   async deleteUser(userId, ban = false, reason = '') {
     return this.request('DELETE', '/api/auth/users/' + encodeURIComponent(userId) + '?ban=' + (ban ? 'true' : 'false') + '&reason=' + encodeURIComponent(reason));
+  },
+
+  async deleteMyAccount(payload) {
+    return this.request('DELETE', '/api/auth/me', payload || {});
+  },
+
+  async getQuarantinedWaivers() {
+    return this.request('GET', '/api/waiver/admin/quarantined', null, { noStore: true });
+  },
+
+  async purgeQuarantinedWaivers() {
+    return this.request('POST', '/api/waiver/admin/quarantined/purge', {});
   },
 
   async getBannedEmails() {

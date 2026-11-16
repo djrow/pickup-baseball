@@ -351,5 +351,15 @@
   "backup_failed": "数据库备份失败：{error}",
   "rtc_turn_unavailable_note": "不可用：此部署未配置 TURN 隐私中继服务器。",
   "rtc_turn_available_note": "TURN 隐私中继服务器已配置并就绪。",
-  "rtc_turn_blocked_warning": "由于未配置 TURN 中继服务器，隐私中继模式已阻止直接 P2P 语音连接。"
+  "rtc_turn_blocked_warning": "由于未配置 TURN 中继服务器，隐私中继模式已阻止直接 P2P 语音连接。",
+  "profile.erasure_title": "🗑️ 删除账户并清除数据",
+  "profile.erasure_notice": "删除账户将立即移除您的个人资料、会话、登录验证码、同意记录、未来活动报名、任务分配及打击练习名额。过往出席人数、讨论和帖文将被匿名化。法律免责声明保留声明：已签署的免责声明将在签署日或最后一次参加活动起 3 年内封存在仅限管理员访问的法律防卫隔离区中，到期后永久清除。",
+  "profile.erasure_keep_gallery": "保留我已获批准的图库照片/视频并匿名署名为“Community Member”（未获批准的内容一律删除）",
+  "profile.erasure_send_code_btn": "📧 发送邮箱验证码以删除账户",
+  "profile.erasure_code_label": "输入 6 位验证码",
+  "profile.erasure_code_placeholder": "123456",
+  "profile.erasure_confirm_btn": "永久删除我的账户",
+  "profile.erasure_cancel_btn": "取消",
+  "profile.erasure_confirm_dialog": "永久删除您的账户和个人数据？此操作不可撤销。已签署的免责声明将在 3 年受限法律防卫隔离期满后自动清除。",
+  "profile.erasure_code_sent": "验证码已发送至您的邮箱。请在下方输入 6 位验证码以确认删除。"
 }

@@ -39,6 +39,8 @@ import { getRequireLoginSetting, getDisallowZeroLoginMediaSetting, pruneEphemera
 import { resolveConfig } from '../config.js';
 import { sendAuthCode } from '../mailer.js';
 import { ERROR_CODES, jsonError, logEvent } from '../errors.js';
+import { executeTwoTierErasure } from '../erasure.js';
+import { promoteNextWaitlistedPlayer } from './events/helpers.js';
 
 export const authRouter = /** @type {AppHono} */ (new Hono());
 
@@ -160,6 +162,97 @@ async function handleSendCode(c) {
 authRouter.post('/send-code', handleSendCode);
 authRouter.post('/request-code', handleSendCode);
 
+async function verifyAndConsumeAuthCode(db, env, cleanEmail, cleanCode) {
+  const latestActive = await db.prepare(`
+    SELECT * FROM auth_codes
+    WHERE LOWER(email) = LOWER(?) AND used_at IS NULL AND datetime(expires_at) > datetime('now')
+    ORDER BY id DESC LIMIT 1
+  `).bind(cleanEmail).first();
+
+  if (!latestActive) {
+    return { ok: false, status: 400, error: 'Invalid or expired code. Please request a new code.' };
+  }
+
+  const isTest = Boolean(env && env.NODE_ENV === 'test');
+  const codeHash = await sha256Hex(cleanCode);
+  const codeMatches = constantTimeEqual(latestActive.code, codeHash)
+    || (isTest && constantTimeEqual(latestActive.code, cleanCode));
+  if (!codeMatches) {
+    await db.prepare(`
+      UPDATE auth_codes
+      SET attempts = COALESCE(attempts, 0) + 1,
+          used_at = CASE WHEN COALESCE(attempts, 0) + 1 >= ? THEN CURRENT_TIMESTAMP ELSE used_at END
+      WHERE id = ? AND used_at IS NULL
+    `).bind(MAX_CODE_VERIFY_ATTEMPTS, latestActive.id).run();
+    const updatedRow = await db.prepare('SELECT attempts FROM auth_codes WHERE id = ?').bind(latestActive.id).first();
+    const newAttempts = updatedRow ? Number(updatedRow.attempts || 0) : (Number(latestActive.attempts || 0) + 1);
+    if (newAttempts >= MAX_CODE_VERIFY_ATTEMPTS) {
+      return { ok: false, status: 400, error: 'Too many failed attempts. This code has been invalidated—please request a new code.' };
+    }
+    return { ok: false, status: 400, error: `Invalid verification code (${MAX_CODE_VERIFY_ATTEMPTS - newAttempts} attempt(s) remaining).` };
+  }
+
+  const consumeRes = await db.prepare(
+    'UPDATE auth_codes SET used_at = CURRENT_TIMESTAMP WHERE id = ? AND used_at IS NULL AND COALESCE(attempts, 0) < ?'
+  ).bind(latestActive.id, MAX_CODE_VERIFY_ATTEMPTS).run();
+  if (!consumeRes || !consumeRes.meta || consumeRes.meta.changes === 0) {
+    return { ok: false, status: 400, error: 'Invalid or expired code. Please request a new code.' };
+  }
+
+  return { ok: true, authCode: latestActive };
+}
+
+async function verifyRecentOtpForUser(c, db, user, providedCode) {
+  const cleanEmail = String(user.email || '').trim().toLowerCase();
+  const rawCode = providedCode !== undefined && providedCode !== null ? String(providedCode).trim() : '';
+
+  if (rawCode) {
+    const rl = await checkRateLimit(db, `reauth_otp_user:${user.id}`, 10, 600, c.env);
+    if (!rl.allowed) {
+      return { ok: false, status: 429, error: 'Too many verification attempts. Please wait 10 minutes before trying again.' };
+    }
+    return verifyAndConsumeAuthCode(db, c.env, cleanEmail, rawCode);
+  }
+
+  const recentVerified = await db.prepare(`
+    SELECT id FROM auth_codes
+    WHERE LOWER(email) = LOWER(?)
+      AND used_at IS NOT NULL
+      AND COALESCE(attempts, 0) < ?
+      AND datetime(used_at) >= datetime('now', '-10 minutes')
+    ORDER BY id DESC LIMIT 1
+  `).bind(cleanEmail, MAX_CODE_VERIFY_ATTEMPTS).first();
+
+  if (!recentVerified) {
+    return {
+      ok: false,
+      status: 403,
+      requiresReauth: true,
+      error: 'Recent email verification is required to delete your account. Request a verification code and enter it to confirm.'
+    };
+  }
+  return { ok: true };
+}
+
+async function promoteFutureEventWaitlists(c, eventIds) {
+  if (!Array.isArray(eventIds) || eventIds.length === 0) return;
+  const origin = getSafePublicOrigin(c);
+  for (const evId of eventIds) {
+    await promoteNextWaitlistedPlayer(c, origin, evId).catch((err) => {
+      logEvent('warn', 'erasure_waitlist_promote_failed', { eventId: evId, err });
+    });
+  }
+}
+
+function buildWaiverRetentionNotice(result) {
+  const yrs = result.retentionYears || 3;
+  if (result.waivers && result.waivers.length > 0) {
+    const untilDate = result.latestRetentionUntil ? result.latestRetentionUntil.slice(0, 10) : `${yrs} years`;
+    return `Your account and personal data have been erased. ${result.waivers.length} signed liability waiver(s) have been placed in restricted Legal-Defense Quarantine until ${untilDate} (${yrs} years from signing or last attendance) and will then be permanently purged.`;
+  }
+  return `Your account and personal data have been permanently erased. (Signed liability waivers are retained in restricted Admin-only quarantine for ${yrs} years when present; none were on file for your account.)`;
+}
+
 authRouter.post('/verify-code', async (c) => {
   try {
     const body = await c.req.json();
@@ -187,41 +280,11 @@ authRouter.post('/verify-code', async (c) => {
       return c.json({ error: 'This email address has been restricted from accessing this service.' }, 403);
     }
 
-    const latestActive = await c.env.DB.prepare(`
-      SELECT * FROM auth_codes
-      WHERE email = ? AND used_at IS NULL AND datetime(expires_at) > datetime('now')
-      ORDER BY id DESC LIMIT 1
-    `).bind(cleanEmail).first();
-
-    if (!latestActive) {
-      return c.json({ error: 'Invalid or expired code. Please request a new code.' }, 400);
+    const checkRes = await verifyAndConsumeAuthCode(c.env.DB, c.env, cleanEmail, cleanCode);
+    if (!checkRes.ok) {
+      return c.json({ error: checkRes.error }, /** @type {any} */ (checkRes.status));
     }
-
-    const isTest = Boolean(c.env && c.env.NODE_ENV === 'test');
-    const codeHash = await sha256Hex(cleanCode);
-    const codeMatches = constantTimeEqual(latestActive.code, codeHash)
-      || (isTest && constantTimeEqual(latestActive.code, cleanCode));
-    if (!codeMatches) {
-      await c.env.DB.prepare(`
-        UPDATE auth_codes
-        SET attempts = COALESCE(attempts, 0) + 1,
-            used_at = CASE WHEN COALESCE(attempts, 0) + 1 >= ? THEN CURRENT_TIMESTAMP ELSE used_at END
-        WHERE id = ? AND used_at IS NULL
-      `).bind(MAX_CODE_VERIFY_ATTEMPTS, latestActive.id).run();
-      const updatedRow = await c.env.DB.prepare('SELECT attempts FROM auth_codes WHERE id = ?').bind(latestActive.id).first();
-      const newAttempts = updatedRow ? Number(updatedRow.attempts || 0) : (Number(latestActive.attempts || 0) + 1);
-      if (newAttempts >= MAX_CODE_VERIFY_ATTEMPTS) {
-        return c.json({ error: 'Too many failed attempts. This code has been invalidated—please request a new code.' }, 400);
-      }
-      return c.json({ error: `Invalid verification code (${MAX_CODE_VERIFY_ATTEMPTS - newAttempts} attempt(s) remaining).` }, 400);
-    }
-
-    const consumeRes = await c.env.DB.prepare(
-      'UPDATE auth_codes SET used_at = CURRENT_TIMESTAMP WHERE id = ? AND used_at IS NULL AND COALESCE(attempts, 0) < ?'
-    ).bind(latestActive.id, MAX_CODE_VERIFY_ATTEMPTS).run();
-    if (!consumeRes || !consumeRes.meta || consumeRes.meta.changes === 0) {
-      return c.json({ error: 'Invalid or expired code. Please request a new code.' }, 400);
-    }
+    const latestActive = checkRes.authCode;
     const sharedDevice = body.shared_device !== undefined
       ? Boolean(body.shared_device)
       : (body.sharedDevice !== undefined ? Boolean(body.sharedDevice) : Boolean(latestActive.shared_device));
@@ -299,6 +362,59 @@ authRouter.get('/verify-magic', async (c) => {
 });
 
 authRouter.get('/me', (c) => c.json({ user: c.get('user') }));
+
+authRouter.delete('/me', requireAuth, async (c) => {
+  const user = c.get('user');
+  const db = c.env && (c.env.BASEBALL_DB || c.env.DB);
+  if (!db) return c.json({ error: 'Database unavailable.' }, 500);
+
+  const body = await c.req.json().catch(() => ({}));
+  const providedCode = body.otp_code !== undefined
+    ? body.otp_code
+    : (body.code !== undefined ? body.code : (c.req.header('X-OTP-Code') || c.req.query('code') || ''));
+
+  const reauth = await verifyRecentOtpForUser(c, db, user, providedCode);
+  if (!reauth.ok) {
+    return c.json(
+      reauth.requiresReauth
+        ? { error: reauth.error, requiresReauth: true }
+        : { error: reauth.error },
+      /** @type {any} */ (reauth.status)
+    );
+  }
+
+  const keepApprovedGallery = body.keep_approved_gallery === true
+    || body.keep_approved_gallery === 'true'
+    || c.req.query('keep_approved_gallery') === 'true';
+
+  const result = await executeTwoTierErasure({
+    db,
+    chatDb: c.env && c.env.CHAT_DB,
+    env: c.env,
+    userId: user.id,
+    email: user.email,
+    actorType: 'member',
+    actorId: user.id,
+    banEmail: false,
+    keepApprovedGallery
+  });
+
+  await promoteFutureEventWaitlists(c, result.affectedFutureEventIds);
+
+  deleteCookie(c, SESSION_COOKIE_NAME, { path: '/' });
+  const notice = buildWaiverRetentionNotice(result);
+
+  return c.json({
+    success: true,
+    message: notice,
+    waiverRetentionNotice: notice,
+    waiversQuarantined: result.counts.waiversQuarantined,
+    retentionYears: result.retentionYears,
+    latestRetentionUntil: result.latestRetentionUntil,
+    keepApprovedGallery: result.keepApprovedGallery,
+    counts: result.counts
+  });
+});
 
 authRouter.post('/calendar-token/regenerate', requireAuth, async (c) => {
   const user = c.get('user');
@@ -469,7 +585,7 @@ authRouter.get('/users', requireAdmin, async (c) => {
         COALESCE(u.hero_credits, 0) as hero_credits,
         COALESCE(u.waiver_status, 'none') as waiver_status,
         u.waiver_signed_at as waiver_signed_at,
-        (SELECT w.certificate_id FROM waivers w WHERE w.user_id = u.id OR LOWER(w.email) = LOWER(u.email) ORDER BY w.id DESC LIMIT 1) as waiver_certificate_id,
+        (SELECT w.certificate_id FROM waivers w WHERE (w.user_id = u.id OR LOWER(w.email) = LOWER(u.email)) AND COALESCE(w.status, 'active') != 'quarantined' ORDER BY w.id DESC LIMIT 1) as waiver_certificate_id,
         u.created_at as createdAt,
         (SELECT COUNT(*) FROM attendees WHERE user_id = u.id AND status = 'attending') as eventsAttended
       FROM users u
@@ -619,42 +735,36 @@ authRouter.delete('/users/:id', requireAdmin, async (c) => {
     return c.json({ error: 'User not found.' }, 404);
   }
 
+  const body = await c.req.json().catch(() => ({}));
   const ban = c.req.query('ban') === 'true';
-  const reason = (c.req.query('reason') || 'Banned by administrator').slice(0, 200);
+  const reason = (c.req.query('reason') || body.reason || 'Banned by administrator').toString().slice(0, 200);
+  const keepApprovedGallery = c.req.query('keep_approved_gallery') === 'true'
+    || body.keep_approved_gallery === true
+    || body.keep_approved_gallery === 'true';
 
-  if (ban) {
-    await c.env.DB.prepare('INSERT OR REPLACE INTO banned_emails (email, reason) VALUES (?, ?)').bind(targetUser.email.toLowerCase(), reason).run();
-  }
+  const result = await executeTwoTierErasure({
+    db: c.env.DB,
+    chatDb: c.env.CHAT_DB,
+    env: c.env,
+    userId: targetId,
+    email: targetUser.email,
+    actorType: 'admin',
+    actorId: currentUser.id,
+    banEmail: ban,
+    banReason: reason,
+    keepApprovedGallery
+  });
 
-  await c.env.DB.batch([
-    c.env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(targetId),
-    c.env.DB.prepare('DELETE FROM auth_codes WHERE email = ?').bind(targetUser.email),
-    ban
-      ? c.env.DB.prepare('DELETE FROM attendees WHERE user_id = ? OR email = ?').bind(targetId, targetUser.email)
-      : c.env.DB.prepare('UPDATE attendees SET user_id = NULL WHERE user_id = ?').bind(targetId),
-    ban
-      ? c.env.DB.prepare('DELETE FROM comments WHERE user_id = ? OR author_email = ?').bind(targetId, targetUser.email)
-      : c.env.DB.prepare('UPDATE comments SET user_id = NULL WHERE user_id = ?').bind(targetId),
-    c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(targetId)
-  ]);
-
-  if (c.env.CHAT_DB) {
-    try {
-      await c.env.CHAT_DB.batch([
-        c.env.CHAT_DB.prepare('DELETE FROM user_crypto_keys WHERE user_id = ?').bind(targetId),
-        c.env.CHAT_DB.prepare('DELETE FROM channel_members WHERE user_id = ?').bind(targetId),
-        c.env.CHAT_DB.prepare('DELETE FROM channel_key_shares WHERE recipient_user_id = ? OR sender_user_id = ?').bind(targetId, targetId),
-        c.env.CHAT_DB.prepare('DELETE FROM voice_participants WHERE user_id = ?').bind(targetId),
-        c.env.CHAT_DB.prepare('DELETE FROM rtc_signals WHERE sender_user_id = ? OR recipient_user_id = ?').bind(targetId, targetId),
-        c.env.CHAT_DB.prepare('DELETE FROM user_mutes WHERE muter_user_id = ? OR muted_user_id = ?').bind(targetId, targetId)
-      ]);
-    } catch (chatErr) {
-      console.warn('[Auth] Best-effort CHAT_DB cleanup failed on user delete:', chatErr);
-    }
-  }
+  await promoteFutureEventWaitlists(c, result.affectedFutureEventIds);
 
   return c.json({
     success: true,
+    emailBanned: result.emailBanned,
+    waiversQuarantined: result.counts.waiversQuarantined,
+    retentionYears: result.retentionYears,
+    latestRetentionUntil: result.latestRetentionUntil,
+    keepApprovedGallery: result.keepApprovedGallery,
+    counts: result.counts,
     message: ban
       ? `User ${targetUser.email} has been removed and banned from re-registering.`
       : `User ${targetUser.email} has been removed.`
