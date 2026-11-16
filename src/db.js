@@ -8,6 +8,8 @@ const {
   ensureChatD1Schema,
   ensureDualD1Schema
 } = require('./app/schema.js');
+const { getPresetDefaultDuties } = require('./app/schema/engine.js');
+const { normalizeDutyFlags } = require('./app/policy.js');
 
 const dbDir = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
 if (!fs.existsSync(dbDir)) {
@@ -33,29 +35,6 @@ const db = baseballDb;
 const d1 = baseballD1;
 
 function seedNodeBootstrapDefaults() {
-  const defaultDutiesCount = baseballDb.prepare('SELECT COUNT(*) as c FROM default_duties').get().c;
-  if (defaultDutiesCount === 0) {
-    const insertDefault = baseballDb.prepare(
-      'INSERT INTO default_duties (title, description, slots_needed, sort_order) VALUES (?, ?, ?, ?)'
-    );
-    DEFAULT_BASEBALL_DUTIES.forEach((d, idx) => {
-      insertDefault.run(d.title, d.description || '', d.slots_needed || 1, idx);
-    });
-  } else {
-    const hasFacilitator = baseballDb.prepare("SELECT COUNT(*) as c FROM default_duties WHERE title LIKE '%facilitator%'").get().c > 0;
-    if (!hasFacilitator) {
-      baseballDb.prepare('INSERT INTO default_duties (title, description, slots_needed, sort_order) VALUES (?, ?, ?, ?)').run(
-        'Game Facilitator', 'Help coordinate teams, batting order, and fair play throughout the game.', 1, 4
-      );
-    }
-    const hasWaterFood = baseballDb.prepare("SELECT COUNT(*) as c FROM default_duties WHERE title LIKE '%water%' OR title LIKE '%food%'").get().c > 0;
-    if (!hasWaterFood) {
-      baseballDb.prepare('INSERT INTO default_duties (title, description, slots_needed, sort_order) VALUES (?, ?, ?, ?)').run(
-        'Water / Food', 'Bring drinking water, ice, and dugout snacks or fruit for players.', 1, 5
-      );
-    }
-  }
-
   const adminEmail = process.env.ADMIN_EMAIL ? process.env.ADMIN_EMAIL.trim().toLowerCase() : null;
   const adminName = process.env.ADMIN_NAME || 'Organization Admin';
   if (adminEmail) {
@@ -69,7 +48,7 @@ function seedNodeBootstrapDefaults() {
 }
 
 async function initBaseballDatabase(force = false) {
-  await ensureBaseballD1Schema(baseballD1, force);
+  await ensureBaseballD1Schema(baseballD1, force, process.env);
   seedNodeBootstrapDefaults();
 }
 
@@ -78,22 +57,34 @@ async function initChatDatabase(force = false) {
 }
 
 async function initDatabase(force = false) {
-  await ensureDualD1Schema({ BASEBALL_DB: baseballD1, CHAT_DB: chatD1 }, force);
+  await ensureDualD1Schema({ BASEBALL_DB: baseballD1, CHAT_DB: chatD1 }, force, process.env);
   seedNodeBootstrapDefaults();
 }
 
 function getDefaultDuties() {
-  const duties = baseballDb.prepare('SELECT title, description, slots_needed, sort_order FROM default_duties ORDER BY sort_order ASC, id ASC').all();
-  return duties.length > 0 ? duties : DEFAULT_BASEBALL_DUTIES;
+  const duties = baseballDb.prepare(
+    'SELECT title, description, slots_needed, sort_order, COALESCE(grants_coordinator, 0) as grants_coordinator, required_badge FROM default_duties ORDER BY sort_order ASC, id ASC'
+  ).all();
+  return duties.length > 0 ? duties : getPresetDefaultDuties(process.env);
 }
 
 function saveDefaultDuties(duties) {
   if (!Array.isArray(duties)) return;
-  const insert = baseballDb.prepare('INSERT INTO default_duties (title, description, slots_needed, sort_order) VALUES (?, ?, ?, ?)');
+  const insert = baseballDb.prepare(
+    'INSERT INTO default_duties (title, description, slots_needed, sort_order, grants_coordinator, required_badge) VALUES (?, ?, ?, ?, ?, ?)'
+  );
   const txn = baseballDb.transaction((list) => {
     baseballDb.prepare('DELETE FROM default_duties').run();
     list.filter(d => d && d.title && d.title.trim()).forEach((d, idx) => {
-      insert.run(d.title.trim(), (d.description || '').trim(), parseInt(d.slots_needed || 1, 10), idx);
+      const flags = normalizeDutyFlags(d);
+      insert.run(
+        d.title.trim(),
+        (d.description || '').trim(),
+        parseInt(d.slots_needed || 1, 10),
+        idx,
+        flags.grantsCoordinator,
+        flags.invalidBadge ? null : flags.requiredBadge
+      );
     });
   });
   txn(duties);

@@ -16,6 +16,14 @@ document.addEventListener('DOMContentLoaded', async function() {
 
   API.renderNav(currentUser);
   populateProfileData();
+  if (typeof API.getPublicConfig === 'function') {
+    API.getPublicConfig().then(function(cfg) {
+      if (cfg && cfg.features && cfg.features.certifiedShifts === false) {
+        const certCard = document.getElementById('profile-certified-shifts-card');
+        if (certCard) certCard.style.display = 'none';
+      }
+    }).catch(function() {});
+  }
   setupClubhouseOptIn();
   setupSessionManagement();
   setupAvatarUpload();

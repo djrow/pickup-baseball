@@ -28,6 +28,7 @@ import {
   getUserRollingShifts,
   canUserAccessEvent
 } from '../../policy.js';
+import { resolveConfig } from '../../config.js';
 import { sendRsvpConfirmation, sendWaitlistConfirmation, sendRsvpEditLinkEmail } from '../../mailer.js';
 import { ERROR_CODES, logEvent } from '../../errors.js';
 import {
@@ -226,9 +227,15 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
       }
     }
 
-    const tierInfo = getTaskTier(String(event.event_date || ''));
+    const cfg = resolveConfig(c.env);
+    const certifiedShiftsEnabled = cfg.FEATURE_CERTIFIED_SHIFTS;
+    const battingPracticeEnabled = cfg.FEATURE_BATTING_PRACTICE;
+
+    const tierInfo = certifiedShiftsEnabled
+      ? getTaskTier(String(event.event_date || ''))
+      : { tier: 'open', isUnlocked: true, unlockAt: null };
     if (status === 'attending' && Array.isArray(duty_ids) && duty_ids.length > 0) {
-      if (!tierInfo.isUnlocked) {
+      if (certifiedShiftsEnabled && !tierInfo.isUnlocked) {
         return c.json({
           error: `Volunteer tasks for this game are locked until ${formatUnlockDateTime(tierInfo.unlockAt)} (12 weeks before first pitch).`
         }, 400);
@@ -250,7 +257,7 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
       for (const dId of uniquePreDutyIds) {
         const duty = await db.prepare('SELECT * FROM event_duties WHERE id = ? AND event_id = ?').bind(dId, eventId).first();
         if (!duty) continue;
-        const dType = getDutyType(String(duty.title || ''));
+        const dType = getDutyType(duty, { certifiedShiftsEnabled });
         if (dType.isPaid) {
           if (!attendeeUser) {
             return c.json({ error: `To select '${duty.title}', you must first complete training (${dType.badgeName}) and sign in.` }, 400);
@@ -386,13 +393,13 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
     const isUrgentWindow = hoursUntilEvent > 0 && hoursUntilEvent < 48;
 
     const { results: pRows } = await db.prepare(`
-      SELECT da.duty_id, ed.title
+      SELECT da.duty_id, ed.title, ed.required_badge
       FROM duty_assignments da
       JOIN event_duties ed ON ed.id = da.duty_id
       WHERE da.attendee_id = ?
     `).bind(attendeeId).all();
     const prevDuties = (pRows || []).map(r => r.duty_id);
-    const prevHadPaidDuty = (pRows || []).some(r => getDutyType(String(r.title || '')).isPaid);
+    const prevHadPaidDuty = (pRows || []).some(r => getDutyType(r, { certifiedShiftsEnabled }).isPaid);
     const creditUserId = (user && user.id) || (existingAttendee && existingAttendee.user_id) || null;
     let newHasPaidDuty = false;
 
@@ -418,7 +425,7 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
         if (!duty) continue;
         if (Number(duty.taken_count || 0) < Number(duty.slots_needed || 0)) {
           let needsCredit = false;
-          const dType = getDutyType(String(duty.title || ''));
+          const dType = getDutyType(duty, { certifiedShiftsEnabled });
           if (dType.isPaid && user && user.id && tierInfo.tier === 'tier1' && redeem_hero_credit && !prevDuties.includes(dId)) {
             const cap = await getDutyTier1Cap(db, dType.type);
             const shifts = await getUserRollingShifts(db, user.id, dType.type, String(event.event_date || ''), eventId);
@@ -573,7 +580,7 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
       if (heroCreditEarned) confirmMsg += ' 🛡️ Short-notice urgent shift cover (<48 hrs): +1 Backup Hero Credit awarded!';
       if (heroCreditRedeemed) confirmMsg += creditsRedeemedCount > 1 ? ` 🛡️ ${creditsRedeemedCount} Backup Hero Credits redeemed for Tier 1 early access.` : ' 🛡️ 1 Backup Hero Credit redeemed for Tier 1 early access.';
 
-      if (bp_signup && playersCount > 0) {
+      if (battingPracticeEnabled && bp_signup && playersCount > 0) {
         try {
           const existingBp = await db.prepare('SELECT id, slot_number FROM batting_practice_signups WHERE event_id = ? AND (attendee_id = ? OR (user_id IS NOT NULL AND user_id = ?))').bind(eventId, attendeeId, userId).first();
           if (!existingBp) {

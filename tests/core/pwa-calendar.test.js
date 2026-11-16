@@ -480,10 +480,11 @@ module.exports = async function registerPwaCalendarTests(ctx, t9) {
 
     const icsText = await icsRes.text();
     const expectedIcsHost = new URL(baseUrl).hostname;
+    const icsUidPrefix = process.env.COMMUNITY_PRESET === 'pickup-baseball' ? 'pickup-baseball-event' : 'event';
     assert.ok(icsText.includes('BEGIN:VCALENDAR') && icsText.includes('END:VCALENDAR'), 'Feed must be valid VCALENDAR');
     assert.ok(icsText.includes('REFRESH-INTERVAL;VALUE=DURATION:PT1H'), 'Feed must advertise 1-hour refresh interval (RFC 7986)');
     assert.ok(icsText.includes('X-PUBLISHED-TTL:PT1H'), 'Feed must advertise 1-hour TTL for Apple/Outlook');
-    assert.ok(icsText.includes(`UID:event-${pubRainId}@${expectedIcsHost}`), 'Public event must have stable UID');
+    assert.ok(icsText.includes(`UID:${icsUidPrefix}-${pubRainId}@${expectedIcsHost}`), 'Public event must have stable UID');
     assert.ok(icsText.includes('SUMMARY:🌧️ RAINED OUT: Public Live Feed Sunday Game'), 'Rained-out game must be prefixed with RAINED OUT in live feed');
     assert.ok(icsText.includes('Infield standing water after overnight storm'), 'Rainout note must appear in VEVENT description');
     assert.ok(!icsText.includes('Private Whitelist Secret Scrimmage'), 'Restricted private whitelist events must be excluded from anonymous public .ics feed');
@@ -494,7 +495,7 @@ module.exports = async function registerPwaCalendarTests(ctx, t9) {
     assert.ok((singleIcsRes.headers.get('content-type') || '').includes('text/calendar'), 'Single-game calendar.ics must return text/calendar');
     assert.ok((singleIcsRes.headers.get('cache-control') || '').includes('no-store'), 'Single-game calendar.ics must disable edge caching');
     const singleIcsText = await singleIcsRes.text();
-    assert.ok(singleIcsText.includes(`UID:event-${pubRainId}@${expectedIcsHost}`), 'Single-game feed must include requested event UID');
+    assert.ok(singleIcsText.includes(`UID:${icsUidPrefix}-${pubRainId}@${expectedIcsHost}`), 'Single-game feed must include requested event UID');
     assert.ok(singleIcsText.includes('REFRESH-INTERVAL;VALUE=DURATION:PT1H'), 'Single-game feed must advertise 1-hour refresh interval');
     const singleVeventCount = (singleIcsText.match(/BEGIN:VEVENT/g) || []).length;
     assert.equal(singleVeventCount, 1, 'Single-game feed must contain exactly 1 VEVENT');
@@ -528,7 +529,7 @@ module.exports = async function registerPwaCalendarTests(ctx, t9) {
     const uninvitedFeedRes = await fetch(`${baseUrl}/api/events/calendar.ics?cal_token=${encodeURIComponent(uninvitedCalToken)}`);
     assert.equal(uninvitedFeedRes.status, 200);
     const uninvitedFeedText = await uninvitedFeedRes.text();
-    assert.ok(uninvitedFeedText.includes(`UID:event-${pubRainId}@${expectedIcsHost}`), 'Tokenized feed must include public events');
+    assert.ok(uninvitedFeedText.includes(`UID:${icsUidPrefix}-${pubRainId}@${expectedIcsHost}`), 'Tokenized feed must include public events');
     assert.ok(!uninvitedFeedText.includes('Invited Personal Feed Game'), 'Uninvited user tokenized feed must exclude uninvited private events');
     assert.ok(!uninvitedFeedText.includes('Private Whitelist Secret Scrimmage'), 'Uninvited user tokenized feed must exclude VIP-only events');
 
@@ -543,14 +544,14 @@ module.exports = async function registerPwaCalendarTests(ctx, t9) {
     const invitedFeedRes = await fetch(`${baseUrl}/api/events/calendar.ics?cal_token=${encodeURIComponent(invitedCalToken)}`);
     assert.equal(invitedFeedRes.status, 200);
     const invitedFeedText = await invitedFeedRes.text();
-    assert.ok(invitedFeedText.includes(`UID:event-${pubRainId}@${expectedIcsHost}`), 'Invited user tokenized feed must include public games');
-    assert.ok(invitedFeedText.includes(`UID:event-${invitedPrivId}@${expectedIcsHost}`), 'Invited user tokenized feed must include invited private games');
+    assert.ok(invitedFeedText.includes(`UID:${icsUidPrefix}-${pubRainId}@${expectedIcsHost}`), 'Invited user tokenized feed must include public games');
+    assert.ok(invitedFeedText.includes(`UID:${icsUidPrefix}-${invitedPrivId}@${expectedIcsHost}`), 'Invited user tokenized feed must include invited private games');
     assert.ok(!invitedFeedText.includes('Private Whitelist Secret Scrimmage'), 'Invited user tokenized feed must still exclude private games they are not invited to');
 
     const invitedSingleRes = await fetch(`${baseUrl}/api/events/${invitedPrivId}/calendar.ics?cal_token=${encodeURIComponent(invitedCalToken)}`);
     assert.equal(invitedSingleRes.status, 200, 'Invited user tokenized single-game feed must return 200');
     const invitedSingleText = await invitedSingleRes.text();
-    assert.ok(invitedSingleText.includes(`UID:event-${invitedPrivId}@${expectedIcsHost}`), 'Invited single-game feed must contain the private game VEVENT');
+    assert.ok(invitedSingleText.includes(`UID:${icsUidPrefix}-${invitedPrivId}@${expectedIcsHost}`), 'Invited single-game feed must contain the private game VEVENT');
 
     const bogusTokenRes = await fetch(`${baseUrl}/api/events/calendar.ics?cal_token=invalid_token_should_fail_0123456789abcdef`);
     assert.equal(bogusTokenRes.status, 401, 'Invalid cal_token must return 401');
@@ -566,7 +567,7 @@ module.exports = async function registerPwaCalendarTests(ctx, t9) {
     const rotatedFeedRes = await fetch(`${baseUrl}/api/events/calendar.ics?cal_token=${encodeURIComponent(rotatedToken)}`);
     assert.equal(rotatedFeedRes.status, 200);
     const rotatedFeedText = await rotatedFeedRes.text();
-    assert.ok(rotatedFeedText.includes(`UID:event-${invitedPrivId}@${expectedIcsHost}`), 'New rotated cal_token must serve invited private games');
+    assert.ok(rotatedFeedText.includes(`UID:${icsUidPrefix}-${invitedPrivId}@${expectedIcsHost}`), 'New rotated cal_token must serve invited private games');
 
     // Verify UI labels and single-game subscription controls on Home drawer & Event Details card grid
     assert.ok(indexHtml.includes('Subscribe All (.ics)'), 'Home calendar header must clarify all-games subscription');

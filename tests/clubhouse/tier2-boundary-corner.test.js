@@ -1370,8 +1370,8 @@ async function runTier2(t, ctx) {
     `).run(soonIso, JSON.stringify([playerUser.email]));
     const churnEventId = churnEvInfo.lastInsertRowid;
     const paidDutyInfo = baseballDb.prepare(`
-      INSERT INTO event_duties (event_id, title, description, slots_needed, sort_order)
-      VALUES (?, 'Pitching Machine Operator', 'Run the pitching machine', 2, 0)
+      INSERT INTO event_duties (event_id, title, description, slots_needed, sort_order, required_badge)
+      VALUES (?, 'Pitching Machine Operator', 'Run the pitching machine', 2, 0, 'machine')
     `).run(churnEventId);
     const paidDutyId = paidDutyInfo.lastInsertRowid;
     const bpEvtInfo = baseballDb.prepare(`

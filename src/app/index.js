@@ -89,7 +89,7 @@ app.use('*', async (c, next) => {
 
     if (!isStatelessEndpoint) {
       if (c.env.DB) {
-        await ensureD1Schema(c.env.DB);
+        await ensureD1Schema(c.env.DB, false, c.env);
       }
       if (c.env.CHAT_DB) {
         await ensureChatD1Schema(c.env.CHAT_DB);

@@ -35,6 +35,7 @@ const testChatDbPath = process.env.TEST_CHAT_DB_PATH || path.join(
 );
 process.env.CHAT_DB_PATH = testChatDbPath;
 process.env.NODE_ENV = 'test';
+process.env.COMMUNITY_PRESET = process.env.COMMUNITY_PRESET || 'pickup-baseball';
 
 const testDataDir = path.join(os.tmpdir(), `pickup_verify_data_${Date.now()}`);
 process.env.DATA_DIR = testDataDir;
@@ -268,4 +269,5 @@ require('../tests/core/lint.test.js')();
 require('../tests/core/error-telemetry.test.js')(ctx);
 require('../tests/core/config.test.js')(ctx);
 require('../tests/core/dehardcode.test.js')(ctx);
+require('../tests/core/duty-feature-flags.test.js')();
 require('../tests/clubhouse/index.js')();

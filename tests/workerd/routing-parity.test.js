@@ -210,6 +210,20 @@ test('Workerd No-Lockout Fork Defaults Serve *.pages.dev Without Redirect', asyn
     assert.ok(icsGet.text.includes('X-WR-CALNAME:Fork Community'));
     assert.equal(icsGet.text.toLowerCase().includes('pickupbaseballfoundation'), false);
     assert.equal(icsGet.text.toLowerCase().includes('sunday pickup baseball'), false);
+
+    const defaultDutiesGet = await harness.apiFetch('https://fork-preview.pages.dev/api/events/default-duties', {
+      redirect: 'manual'
+    });
+    assert.equal(defaultDutiesGet.status, 200);
+    assert.deepEqual(
+      defaultDutiesGet.json.duties.map((d) => d.title),
+      ['Event Coordinator', 'Setup / Check-In', 'Cleanup']
+    );
+
+    const bpBlocked = await harness.apiFetch('https://fork-preview.pages.dev/api/events/1/bp-order', {
+      redirect: 'manual'
+    });
+    assert.equal(bpBlocked.status, 403);
   });
 });
 

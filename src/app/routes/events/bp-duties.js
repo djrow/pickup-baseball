@@ -13,7 +13,12 @@ import {
   getManagementTokenCandidates
 } from '../../security.js';
 import { getDefaultDuties, getRequireLoginSetting } from '../../schema.js';
-import { canUserAccessEvent, parseAllowedEmails } from '../../policy.js';
+import {
+  canUserAccessEvent,
+  parseAllowedEmails,
+  normalizeDutyFlags,
+  rejectIfBattingPracticeDisabled
+} from '../../policy.js';
 import { AVATAR_EXPR } from './helpers.js';
 
 export const eventsBpDutiesRouter = /** @type {AppHono} */ (new Hono());
@@ -85,7 +90,7 @@ async function authorizeBpSignupMutation(c, db, eventId, signupId, actionLabel) 
 }
 
 eventsBpDutiesRouter.get('/default-duties', async (c) => {
-  const duties = await getDefaultDuties(c.env.DB);
+  const duties = await getDefaultDuties(c.env.DB, c.env);
   return c.json({ duties });
 });
 
@@ -99,20 +104,30 @@ eventsBpDutiesRouter.put('/default-duties', requireAdmin, async (c) => {
       return c.json({ error: 'Default duties template cannot exceed 25 tasks.' }, 400);
     }
 
+    const validDuties = duties.filter(d => d && d.title && String(d.title).trim());
     const batch = [c.env.DB.prepare('DELETE FROM default_duties')];
-    duties.filter(d => d && d.title && String(d.title).trim()).forEach((d, idx) => {
+    for (let idx = 0; idx < validDuties.length; idx++) {
+      const d = validDuties[idx];
+      const flags = normalizeDutyFlags(d);
+      if (flags.invalidBadge) {
+        return c.json({ error: `Invalid required_badge on duty '${String(d.title).trim()}'. Must be 'machine', 'field', or null.` }, 400);
+      }
       batch.push(
-        c.env.DB.prepare('INSERT INTO default_duties (title, description, slots_needed, sort_order) VALUES (?, ?, ?, ?)').bind(
+        c.env.DB.prepare(
+          'INSERT INTO default_duties (title, description, slots_needed, sort_order, grants_coordinator, required_badge) VALUES (?, ?, ?, ?, ?, ?)'
+        ).bind(
           String(d.title).trim().slice(0, 120),
           String(d.description || '').trim().slice(0, 300),
           Math.min(50, Math.max(1, parseInt(d.slots_needed || 1, 10) || 1)),
-          idx
+          idx,
+          flags.grantsCoordinator,
+          flags.requiredBadge
         )
       );
-    });
+    }
 
     await c.env.DB.batch(batch);
-    const updated = await getDefaultDuties(c.env.DB);
+    const updated = await getDefaultDuties(c.env.DB, c.env);
     return c.json({ success: true, duties: updated, message: 'Default task template updated successfully!' });
   } catch (err) {
     console.error('[Events] Error saving default duties:', err);
@@ -121,6 +136,8 @@ eventsBpDutiesRouter.put('/default-duties', requireAdmin, async (c) => {
 });
 
 eventsBpDutiesRouter.get('/:id/bp-order', async (c) => {
+  const bpDisabled = rejectIfBattingPracticeDisabled(c);
+  if (bpDisabled) return bpDisabled;
   try {
     const eventId = parseInt(c.req.param('id'), 10);
     if (!eventId || isNaN(eventId) || eventId <= 0) {
@@ -179,6 +196,8 @@ eventsBpDutiesRouter.get('/:id/bp-order', async (c) => {
 });
 
 eventsBpDutiesRouter.post('/:id/bp-order', async (c) => {
+  const bpDisabled = rejectIfBattingPracticeDisabled(c);
+  if (bpDisabled) return bpDisabled;
   try {
     const eventId = parseInt(c.req.param('id'), 10);
     if (!eventId || isNaN(eventId)) {
@@ -354,6 +373,8 @@ eventsBpDutiesRouter.post('/:id/bp-order', async (c) => {
 });
 
 eventsBpDutiesRouter.put('/:id/bp-order/:signupId', async (c) => {
+  const bpDisabled = rejectIfBattingPracticeDisabled(c);
+  if (bpDisabled) return bpDisabled;
   try {
     const eventId = parseInt(c.req.param('id'), 10);
     const signupId = parseInt(c.req.param('signupId'), 10);
@@ -411,6 +432,8 @@ eventsBpDutiesRouter.put('/:id/bp-order/:signupId', async (c) => {
 });
 
 eventsBpDutiesRouter.delete('/:id/bp-order/:signupId', async (c) => {
+  const bpDisabled = rejectIfBattingPracticeDisabled(c);
+  if (bpDisabled) return bpDisabled;
   try {
     const eventId = parseInt(c.req.param('id'), 10);
     const signupId = parseInt(c.req.param('signupId'), 10);
@@ -428,6 +451,8 @@ eventsBpDutiesRouter.delete('/:id/bp-order/:signupId', async (c) => {
 });
 
 eventsBpDutiesRouter.post('/:id/bp-order/clear', requireOrganizer, async (c) => {
+  const bpDisabled = rejectIfBattingPracticeDisabled(c);
+  if (bpDisabled) return bpDisabled;
   try {
     const eventId = parseInt(c.req.param('id'), 10);
     if (!eventId || isNaN(eventId) || eventId <= 0) {
@@ -450,22 +475,30 @@ eventsBpDutiesRouter.post('/:id/duties', requireOrganizer, async (c) => {
     const event = await c.env.DB.prepare('SELECT id FROM events WHERE id = ?').bind(eventId).first();
     if (!event) return c.json({ error: 'Event not found.' }, 404);
 
-    const { title, description, slots_needed } = await c.req.json();
+    const body = await c.req.json();
+    const { title, description, slots_needed } = body;
     if (!title || !String(title).trim()) {
       return c.json({ error: 'Task title is required.' }, 400);
+    }
+
+    const flags = normalizeDutyFlags(body);
+    if (flags.invalidBadge) {
+      return c.json({ error: "Invalid required_badge. Must be 'machine', 'field', or null." }, 400);
     }
 
     const maxSortRow = await c.env.DB.prepare('SELECT MAX(sort_order) as max_sort FROM event_duties WHERE event_id = ?').bind(eventId).first();
     const nextSort = (maxSortRow && maxSortRow.max_sort !== null) ? Number(maxSortRow.max_sort) + 1 : 0;
 
     const res = await c.env.DB.prepare(
-      'INSERT INTO event_duties (event_id, title, description, slots_needed, sort_order) VALUES (?, ?, ?, ?, ?)'
+      'INSERT INTO event_duties (event_id, title, description, slots_needed, sort_order, grants_coordinator, required_badge) VALUES (?, ?, ?, ?, ?, ?, ?)'
     ).bind(
       eventId,
       String(title).trim().slice(0, 120),
       String(description || '').trim().slice(0, 300),
       Math.min(50, Math.max(1, parseInt(slots_needed || 1, 10) || 1)),
-      nextSort
+      nextSort,
+      flags.grantsCoordinator,
+      flags.requiredBadge
     ).run();
 
     const duty = await c.env.DB.prepare('SELECT * FROM event_duties WHERE id = ?').bind(res.meta.last_row_id).first();
@@ -483,27 +516,46 @@ eventsBpDutiesRouter.put('/:id/duties/:dutyId', requireOrganizer, async (c) => {
     if (!eventId || isNaN(eventId) || eventId <= 0 || !dutyId || isNaN(dutyId) || dutyId <= 0) {
       return c.json({ error: 'Invalid event or task ID.' }, 400);
     }
-    const { title, description, slots_needed } = await c.req.json();
+    const existing = await c.env.DB.prepare('SELECT * FROM event_duties WHERE id = ? AND event_id = ?').bind(dutyId, eventId).first();
+    if (!existing) return c.json({ error: 'Task not found.' }, 404);
+
+    const body = await c.req.json();
+    const { title, description, slots_needed } = body;
 
     if (title !== undefined && (!title || !String(title).trim())) {
       return c.json({ error: 'Task title cannot be empty.' }, 400);
     }
 
-    const res = await c.env.DB.prepare(`
+    const flags = normalizeDutyFlags(body);
+    if (body.required_badge !== undefined && flags.invalidBadge) {
+      return c.json({ error: "Invalid required_badge. Must be 'machine', 'field', or null." }, 400);
+    }
+
+    const nextGrantsCoordinator = body.grants_coordinator !== undefined
+      ? flags.grantsCoordinator
+      : (existing.grants_coordinator ? 1 : 0);
+    const nextRequiredBadge = body.required_badge !== undefined
+      ? flags.requiredBadge
+      : (existing.required_badge || null);
+
+    await c.env.DB.prepare(`
       UPDATE event_duties
       SET title = COALESCE(?, title),
           description = COALESCE(?, description),
-          slots_needed = COALESCE(?, slots_needed)
+          slots_needed = COALESCE(?, slots_needed),
+          grants_coordinator = ?,
+          required_badge = ?
       WHERE id = ? AND event_id = ?
     `).bind(
       title ? String(title).trim().slice(0, 120) : null,
       description !== undefined ? String(description).trim().slice(0, 300) : null,
       slots_needed ? Math.min(50, Math.max(1, parseInt(slots_needed, 10) || 1)) : null,
+      nextGrantsCoordinator,
+      nextRequiredBadge,
       dutyId,
       eventId
     ).run();
 
-    if (res.meta.changes === 0) return c.json({ error: 'Task not found.' }, 404);
     const updated = await c.env.DB.prepare('SELECT * FROM event_duties WHERE id = ?').bind(dutyId).first();
     return c.json({ success: true, duty: updated });
   } catch (err) {

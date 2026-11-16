@@ -18,7 +18,13 @@ import {
   CANONICAL_MEMBER_ROLE,
   normalizeMemberRole
 } from '../security.js';
-import { parseAllowedEmails, canUserAccessEvent, getDutyType } from '../policy.js';
+import {
+  parseAllowedEmails,
+  canUserAccessEvent,
+  getDutyType,
+  rejectIfBattingPracticeDisabled
+} from '../policy.js';
+import { resolveConfig } from '../config.js';
 import { canUserAccessChannel } from './chat.js';
 import { chunkArray } from './chat/helpers.js';
 import { promoteNextWaitlistedPlayer } from './events/helpers.js';
@@ -38,16 +44,17 @@ baseballRouter.get('/upcoming', async (c) => {
     return c.json({ error: 'Baseball database unavailable.' }, 500);
   }
 
+  const cfg = resolveConfig(c.env);
   const { results: candidateEvents } = await baseballDb.prepare(`
     SELECT * FROM events
     WHERE (status IS NULL OR status NOT IN ('cancelled'))
       AND datetime(event_date) >= datetime('now', '-1 day')
     ORDER BY
       CASE WHEN status = 'active' THEN 0 ELSE 1 END,
-      CASE WHEN strftime('%w', event_date) = '0' OR title LIKE '%Sunday%' THEN 0 ELSE 1 END,
+      CASE WHEN ? = 1 AND (strftime('%w', event_date) = '0' OR title LIKE '%Sunday%') THEN 0 ELSE 1 END,
       event_date ASC
     LIMIT 20
-  `).all();
+  `).bind(cfg.FEATURE_SUNDAY_PRIORITY ? 1 : 0).all();
 
   const event = (candidateEvents || []).find((ev) => canUserAccessEvent(user, ev)) || null;
 
@@ -100,11 +107,13 @@ baseballRouter.get('/upcoming', async (c) => {
     assigned_players: assignmentsByDuty.get(d.id) || []
   }));
 
-  const { results: bpSignups } = await baseballDb.prepare(`
-    SELECT * FROM batting_practice_signups
-    WHERE event_id = ?
-    ORDER BY slot_number ASC
-  `).bind(event.id).all();
+  const bpSignups = cfg.FEATURE_BATTING_PRACTICE
+    ? (await baseballDb.prepare(`
+        SELECT * FROM batting_practice_signups
+        WHERE event_id = ?
+        ORDER BY slot_number ASC
+      `).bind(event.id).all()).results
+    : [];
 
   let linkedChannel = null;
   if (chatDb && user && user.clubhouseOptedIn !== false) {
@@ -233,13 +242,16 @@ baseballRouter.post('/events/:eventId/quick-rsvp', requireAuth, async (c) => {
 
   if (existing) {
     if (finalStatus !== 'attending') {
+      const cfg = resolveConfig(c.env);
       const { results: prevDutyRows } = await baseballDb.prepare(`
-        SELECT ed.title
+        SELECT ed.title, ed.required_badge
         FROM duty_assignments da
         JOIN event_duties ed ON ed.id = da.duty_id
         WHERE da.attendee_id = ?
       `).bind(existing.id).all();
-      const hadPaidDuty = (prevDutyRows || []).some((row) => getDutyType(String(row.title || '')).isPaid);
+      const hadPaidDuty = (prevDutyRows || []).some((row) =>
+        getDutyType(row, { certifiedShiftsEnabled: cfg.FEATURE_CERTIFIED_SHIFTS }).isPaid
+      );
       const hoursUntilEvent = (new Date(String(event.event_date || '')).getTime() - Date.now()) / (3600 * 1000);
       const isUrgentWindow = hoursUntilEvent > 0 && hoursUntilEvent < 48;
       if (hadPaidDuty && isUrgentWindow && wasAttending) {
@@ -355,6 +367,8 @@ baseballRouter.post('/events/:eventId/quick-rsvp', requireAuth, async (c) => {
 // POST /api/baseball/events/:eventId/quick-bp - 1-Click Batting Practice Slot (1..28)
 // ---------------------------------------------------------------------------
 baseballRouter.post('/events/:eventId/quick-bp', requireAuth, async (c) => {
+  const bpDisabled = rejectIfBattingPracticeDisabled(c);
+  if (bpDisabled) return bpDisabled;
   const user = c.get('user');
   const baseballDb = c.env && (c.env.BASEBALL_DB || c.env.DB);
   if (!baseballDb) return c.json({ error: 'Baseball database unavailable.' }, 500);
@@ -527,8 +541,10 @@ baseballRouter.post('/events/:eventId/sync-channel', requireOrganizer, async (c)
   };
 
   if (!channel) {
+    const cfg = resolveConfig(c.env);
     const rawDate = String(event.event_date || '').slice(0, 10) || `game-${eventId}`;
-    let slug = `sunday-${rawDate}`.toLowerCase().replace(/[^a-z0-9-]+/g, '-');
+    const prefix = cfg.FEATURE_SUNDAY_PRIORITY ? 'sunday' : 'event';
+    let slug = `${prefix}-${rawDate}`.toLowerCase().replace(/[^a-z0-9-]+/g, '-');
     const slugCollision = await chatDb.prepare('SELECT id FROM channels WHERE slug = ?').bind(slug).first();
     if (slugCollision) {
       slug = `${slug}-${eventId}`;

@@ -7,6 +7,7 @@
 import { Hono } from 'hono';
 import { requireAuth, rejectIfClubhouseOptedOut, CANONICAL_MEMBER_ROLE } from '../../security.js';
 import { canUserAccessEvent } from '../../policy.js';
+import { resolveConfig } from '../../config.js';
 import { pruneEphemeralChatRows } from '../../schema.js';
 import { logEvent } from '../../errors.js';
 import {
@@ -42,15 +43,16 @@ chatSyncRouter.get('/bootstrap', requireAuth, async (c) => {
   let upcoming_game = null;
   if (baseballDb) {
     try {
+      const cfg = resolveConfig(c.env);
       const { results: upcomingCandidates } = await baseballDb.prepare(`
         SELECT * FROM events
         WHERE (status IS NULL OR status NOT IN ('cancelled'))
           AND datetime(event_date) >= datetime('now', '-1 day')
         ORDER BY
-          CASE WHEN strftime('%w', event_date) = '0' OR title LIKE '%Sunday%' THEN 0 ELSE 1 END,
+          CASE WHEN ? = 1 AND (strftime('%w', event_date) = '0' OR title LIKE '%Sunday%') THEN 0 ELSE 1 END,
           event_date ASC
         LIMIT 20
-      `).all();
+      `).bind(cfg.FEATURE_SUNDAY_PRIORITY ? 1 : 0).all();
       const visibleEvent = (upcomingCandidates || []).find((ev) => canUserAccessEvent(user, ev)) || null;
       if (visibleEvent) {
         const isOrganizer = Boolean(user && (user.canManageEvents || user.isAdmin));

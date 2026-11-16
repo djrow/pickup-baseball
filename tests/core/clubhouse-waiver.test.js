@@ -49,6 +49,9 @@ test('Clubhouse Frontend & Native Waiver Verification', async (t) => {
   });
 
   await t.test('Check 8.3: Native Digital & Paper Waiver Provenance & Admin Status Control', async () => {
+    const prevPreset = process.env.COMMUNITY_PRESET;
+    process.env.COMMUNITY_PRESET = 'generic-community';
+    try {
     // 1. Check anonymous waiver status returns neutral community-named waiver text under generic-community preset
     const anonStatus = await apiReq('GET', '/api/waiver/status');
     assert.equal(anonStatus.status, 200);
@@ -125,6 +128,13 @@ test('Clubhouse Frontend & Native Waiver Verification', async (t) => {
       file_size: 25 * 1024 * 1024
     });
     assert.equal(oversizedAtt.status, 400, 'Local D1 attachment fallback must reject files over 10 MB');
+    } finally {
+      if (prevPreset === undefined) {
+        delete process.env.COMMUNITY_PRESET;
+      } else {
+        process.env.COMMUNITY_PRESET = prevPreset;
+      }
+    }
   });
 
   await t.test('Check 8.4: Free-tier resource savings (RSVP email dedupe, voice heartbeat dedupe, edge cache & polling intervals)', async () => {

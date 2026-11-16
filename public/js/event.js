@@ -11,6 +11,27 @@
 let eventId = null;
 let guestToken = '';
 let eventData = null;
+let eventPublicConfig = null;
+
+function isBattingPracticeEnabled() {
+  return !(eventPublicConfig && eventPublicConfig.features && eventPublicConfig.features.battingPractice === false);
+}
+
+function isCertifiedShiftsEnabled() {
+  return !(eventPublicConfig && eventPublicConfig.features && eventPublicConfig.features.certifiedShifts === false);
+}
+
+function applyEventFeatureFlags() {
+  const bpEnabled = isBattingPracticeEnabled();
+  const bpMeta = document.getElementById('event-bp-meta-item');
+  if (bpMeta) bpMeta.style.display = bpEnabled ? '' : 'none';
+  const bpSignupWrap = document.getElementById('rsvp-bp-signup-wrap');
+  if (bpSignupWrap) bpSignupWrap.style.display = bpEnabled ? '' : 'none';
+  const bpSignupEl = document.getElementById('rsvp-bp-signup');
+  if (!bpEnabled && bpSignupEl) bpSignupEl.checked = false;
+  const bpSection = document.getElementById('bp-order-section');
+  if (bpSection) bpSection.style.display = bpEnabled ? '' : 'none';
+}
 
 async function initEvent() {
   const params = new URLSearchParams(window.location.search);
@@ -58,7 +79,14 @@ async function initEvent() {
   setupEditLinkForm();
   setupCommentForm();
   setupBpOrderUi();
-  await loadEventData();
+  const configPromise = typeof API.getPublicConfig === 'function'
+    ? API.getPublicConfig().then(function(cfg) {
+        eventPublicConfig = cfg;
+        applyEventFeatureFlags();
+      }).catch(function() {})
+    : Promise.resolve();
+  await Promise.all([configPromise, loadEventData()]);
+  applyEventFeatureFlags();
 }
 
 function showError(msg) {
@@ -73,6 +101,7 @@ function applyLoadedEventToDom(res, preserveAlertHtml) {
   if (res.user !== undefined) {
     API.renderNav(res.user);
   }
+  applyEventFeatureFlags();
   renderEventDetails();
   renderAttendeesRoster();
   renderBpOrder();
@@ -720,7 +749,7 @@ function renderTasksChecklist(isInteractive) {
     }
 
     let badgePillHtml = '';
-    if (d.is_paid) {
+    if (isCertifiedShiftsEnabled() && d.is_paid) {
       if (d.duty_type === 'machine') {
         badgePillHtml = '<span class="badge badge-gray" style="font-size: 0.68rem; margin-right: 4px;">⚡ Machine Badge</span>';
       } else if (d.duty_type === 'field') {
@@ -728,7 +757,7 @@ function renderTasksChecklist(isInteractive) {
       }
     }
 
-    if (d.is_urgent_cover && !isCompletelyFull) {
+    if (isCertifiedShiftsEnabled() && d.is_urgent_cover && !isCompletelyFull) {
       badgePillHtml += '<span class="badge badge-green" style="font-size: 0.68rem; margin-right: 4px;">🛡️ Urgent Cover (+1 Hero Credit)</span>';
     }
 
@@ -1592,10 +1621,10 @@ function setupRsvpForm() {
     const guestNamesEl = document.getElementById('rsvp-guest-names');
     const guestNames = ((guestNamesEl && guestNamesEl.value) || '').trim();
     const redeemHeroEl = document.getElementById('redeem-hero-credit-checkbox');
-    const redeemHeroCredit = Boolean(redeemHeroEl && redeemHeroEl.checked);
+    const redeemHeroCredit = Boolean(isCertifiedShiftsEnabled() && redeemHeroEl && redeemHeroEl.checked);
 
     const bpSignupEl = document.getElementById('rsvp-bp-signup');
-    const bpSignup = Boolean(bpSignupEl && bpSignupEl.checked);
+    const bpSignup = Boolean(isBattingPracticeEnabled() && bpSignupEl && bpSignupEl.checked);
 
     const payload = {
       status: 'attending',
@@ -1831,12 +1860,17 @@ const toggleEditEventPanel = window.toggleEditEventPanel;
 // ==========================================
 
 function renderBpOrder() {
+  const bpSection = document.getElementById('bp-order-section');
+  if (!isBattingPracticeEnabled()) {
+    if (bpSection) bpSection.style.display = 'none';
+    return;
+  }
   const container = document.getElementById('bp-slots-grid');
   if (!container || !eventData) return;
 
-  const bpSection = document.getElementById('bp-order-section');
   const isRainout = Boolean(eventData.event && eventData.event.status === 'rainout');
   if (bpSection) {
+    bpSection.style.display = '';
     bpSection.style.opacity = isRainout ? '0.6' : '1';
   }
 

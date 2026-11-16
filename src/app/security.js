@@ -450,7 +450,7 @@ export async function getUserFromSession(db, sessionId, chatDb, options = {}) {
           JOIN attendees a ON da.attendee_id = a.id
           WHERE (e.status IS NULL OR e.status NOT IN ('cancelled', 'rainout'))
             AND datetime(e.event_date) >= datetime('now', '-1 day')
-            AND (ed.title = 'Game Facilitator' OR ed.title LIKE '%Facilitator%')
+            AND COALESCE(ed.grants_coordinator, 0) = 1
             AND (a.user_id = u.id OR a.email = u.email)
             AND a.status = 'attending'
         )

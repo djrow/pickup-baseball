@@ -37,10 +37,14 @@ function generateSessionId() {
  * Seed default volunteer duties for test baseball DB
  */
 function seedTestDefaultDuties(db) {
-  const insertDuty = db.prepare('INSERT INTO default_duties (title, description, slots_needed, sort_order) VALUES (?, ?, ?, ?)');
+  const existing = db.prepare('SELECT COUNT(*) as c FROM default_duties').get();
+  if (existing && existing.c > 0) return;
+  const insertDuty = db.prepare(
+    'INSERT INTO default_duties (title, description, slots_needed, sort_order, grants_coordinator, required_badge) VALUES (?, ?, ?, ?, ?, ?)'
+  );
   DEFAULT_BASEBALL_DUTIES.forEach((d, idx) => {
     try {
-      insertDuty.run(d.title, d.description, d.slots_needed, idx);
+      insertDuty.run(d.title, d.description, d.slots_needed, idx, d.grants_coordinator ? 1 : 0, d.required_badge || null);
     } catch (e) { /* ignore duplicate default_duties seed row */ }
   });
 }
@@ -66,7 +70,10 @@ async function createClubhouseTestContext(_options = {}) {
   const baseballD1 = createD1Adapter(baseballDb);
   const chatD1 = createD1Adapter(chatDb);
 
-  await ensureDualD1Schema({ BASEBALL_DB: baseballD1, CHAT_DB: chatD1 });
+  const presetEnv = {
+    COMMUNITY_PRESET: process.env.COMMUNITY_PRESET || 'pickup-baseball'
+  };
+  await ensureDualD1Schema({ BASEBALL_DB: baseballD1, CHAT_DB: chatD1 }, false, presetEnv);
   seedTestDefaultDuties(baseballDb);
 
   // -------------------------------------------------------------------------
@@ -149,12 +156,17 @@ async function createClubhouseTestContext(_options = {}) {
   `).run(nextSunday.toISOString(), adminId);
   const testEventId = evRes.lastInsertRowid;
 
-  // Add event duty: Game Facilitator
+  // Add event duty: Game Facilitator + open Water / Food task
   const dutyRes = baseballDb.prepare(`
-    INSERT INTO event_duties (event_id, title, description, slots_needed, sort_order)
-    VALUES (?, 'Game Facilitator', 'Coordinate teams and batting order', 1, 1)
+    INSERT INTO event_duties (event_id, title, description, slots_needed, sort_order, grants_coordinator)
+    VALUES (?, 'Game Facilitator', 'Coordinate teams and batting order', 1, 1, 1)
   `).run(testEventId);
   const facilitatorDutyId = dutyRes.lastInsertRowid;
+
+  baseballDb.prepare(`
+    INSERT INTO event_duties (event_id, title, description, slots_needed, sort_order, grants_coordinator, required_badge)
+    VALUES (?, 'Water / Food', 'Bring drinking water, ice, and dugout snacks.', 1, 2, 0, NULL)
+  `).run(testEventId);
 
   // Add attendee for Dana Facilitator
   const attFacRes = baseballDb.prepare(`
@@ -200,6 +212,7 @@ async function createClubhouseTestContext(_options = {}) {
   // Mount Hono API bridge with Dual-D1 bindings
   const bridgeEnv = {
     ...process.env,
+    COMMUNITY_PRESET: process.env.COMMUNITY_PRESET || 'pickup-baseball',
     NODE_ENV: 'test',
     BASEBALL_DB: baseballD1,
     CHAT_DB: chatD1,
