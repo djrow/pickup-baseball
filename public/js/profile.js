@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', async function() {
   populateProfileData();
   if (typeof API.getPublicConfig === 'function') {
     API.getPublicConfig().then(function(cfg) {
-      if (cfg && cfg.features && cfg.features.certifiedShifts === false) {
+      if (!API.isFeatureEnabled('certifiedShifts', cfg)) {
         const certCard = document.getElementById('profile-certified-shifts-card');
         if (certCard) certCard.style.display = 'none';
       }

@@ -152,6 +152,7 @@ interface PBFApiFacade {
   recordDiagnostic(entry: Record<string, any>): void;
   request(method: string, url: string, body?: any, opts?: PBFApiRequestOptions): Promise<any>;
   getPublicConfig(forceRefresh?: boolean): Promise<Record<string, any>>;
+  isFeatureEnabled(flagKey: string, configOverride?: Record<string, any> | null): boolean;
   getMe(): Promise<PBFUser | null>;
   regenerateCalendarToken(): Promise<any>;
   logout(): Promise<void>;

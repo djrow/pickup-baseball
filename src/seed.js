@@ -125,7 +125,7 @@ async function seed() {
     // Ensure user row exists with bio
     let user = db.prepare('SELECT id FROM users WHERE email = ?').get(p.email);
     if (!user) {
-      const uRes = db.prepare('INSERT INTO users (name, email, bio) VALUES (?, ?, ?)').run(p.name, p.email, p.bio);
+      const uRes = db.prepare("INSERT INTO users (name, email, role, bio) VALUES (?, ?, 'member', ?)").run(p.name, p.email, p.bio);
       user = { id: uRes.lastInsertRowid };
     } else {
       db.prepare('UPDATE users SET bio = ? WHERE id = ?').run(p.bio, user.id);

@@ -201,7 +201,7 @@ const EN_DICT = {
   "event.update_rsvp_btn": "Update RSVP",
   "event.saving_rsvp": "Saving RSVP...",
   "event.rsvp_email_note": "📬 Email confirmation & reminders sent if an email is provided",
-  "event.edit_link_prompt": "Already RSVPed as a guest?",
+  "event.edit_link_prompt": "Already RSVPed as a visitor?",
   "event.edit_link_btn": "🔗 Email me a fresh edit link",
   "event.edit_link_email_placeholder": "Enter the email used for your RSVP",
   "event.edit_link_send_btn": "Send Edit Link",
@@ -1482,14 +1482,14 @@ const API = {
     }
     const self = this;
     const fallback = {
-      preset: 'pickup-baseball',
-      communityName: 'Sunday Pickup Baseball',
+      preset: 'generic-community',
+      communityName: 'Community Hub',
       publicOrigin: null,
       handbookUrl: null,
       features: {
-        battingPractice: true,
-        certifiedShifts: true,
-        sundayPriority: true
+        battingPractice: false,
+        certifiedShifts: false,
+        sundayPriority: false
       }
     };
     this._publicConfigPromise = (async function() {
@@ -1523,6 +1523,14 @@ const API = {
       return fallback;
     })();
     return this._publicConfigPromise;
+  },
+
+  isFeatureEnabled(flagKey, configOverride) {
+    const cfg = configOverride || this.publicConfig;
+    if (!cfg || !cfg.features || typeof cfg.features[flagKey] !== 'boolean') {
+      return true;
+    }
+    return cfg.features[flagKey] === true;
   },
 
   async getMe() {

@@ -14,11 +14,11 @@ let eventData = null;
 let eventPublicConfig = null;
 
 function isBattingPracticeEnabled() {
-  return !(eventPublicConfig && eventPublicConfig.features && eventPublicConfig.features.battingPractice === false);
+  return API.isFeatureEnabled('battingPractice', eventPublicConfig);
 }
 
 function isCertifiedShiftsEnabled() {
-  return !(eventPublicConfig && eventPublicConfig.features && eventPublicConfig.features.certifiedShifts === false);
+  return API.isFeatureEnabled('certifiedShifts', eventPublicConfig);
 }
 
 function applyEventFeatureFlags() {

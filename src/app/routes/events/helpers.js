@@ -8,7 +8,7 @@ import {
   sendWaitlistPromotionEmail,
   sendEventReminder
 } from '../../mailer.js';
-import { getSafePublicOrigin } from '../../security.js';
+import { getSafePublicOrigin, getManagementTokenCandidates } from '../../security.js';
 import { ERROR_CODES, logEvent } from '../../errors.js';
 import { resolveConfig } from '../../config.js';
 
@@ -222,4 +222,61 @@ export async function notifyConfirmedAttendees(c, event, note, emailFn) {
       });
     }
   });
+}
+
+/** Detail projection for `GET /api/events/:id` attendee self-lookup. */
+export const ATTENDEE_DETAIL_COLUMNS = `a.id, a.event_id, a.user_id, a.name, a.email, a.status, a.gear_bringing,
+  COALESCE(a.players_count, 1 + COALESCE(a.additional_guests, 0)) as players_count,
+  COALESCE(a.spectators_count, 0) as spectators_count,
+  a.additional_guests, a.guest_names,
+  (SELECT json_group_array(duty_id) FROM duty_assignments WHERE attendee_id = a.id) as duty_ids`;
+
+const ALLOWED_ATTENDEE_COLUMNS = new Set([
+  '*',
+  'a.*',
+  'id',
+  'a.id',
+  'id, name',
+  'a.id, a.name',
+  ATTENDEE_DETAIL_COLUMNS
+]);
+
+/**
+ * Prepares a parameterized D1 statement looking up an attendee by management token
+ * (checking both the `sha256:` hash and legacy raw token during migration rollout).
+ * Returns `null` if `rawToken` is empty/invalid or neither `eventId` nor `attendeeId` is supplied.
+ * @param {D1Database} db
+ * @param {{ eventId?: number|null, attendeeId?: number|null, rawToken: unknown, columns?: string, userIdIsNull?: boolean }} opts
+ * @returns {Promise<ReturnType<D1Database['prepare']>|null>}
+ */
+export async function prepareAttendeeByManagementToken(db, {
+  eventId = null,
+  attendeeId = null,
+  rawToken,
+  columns = '*',
+  userIdIsNull = false
+}) {
+  const candidates = await getManagementTokenCandidates(rawToken);
+  if (!candidates) return null;
+
+  const selectClause = ALLOWED_ATTENDEE_COLUMNS.has(columns) ? columns : '*';
+  const scopeCol = attendeeId != null ? 'a.id' : 'a.event_id';
+  const scopeVal = attendeeId != null ? attendeeId : eventId;
+  if (scopeVal == null) return null;
+
+  const userNullSql = userIdIsNull ? ' AND a.user_id IS NULL' : '';
+  const sql = `SELECT ${selectClause} FROM attendees a WHERE ${scopeCol} = ? AND a.management_token IN (?, ?)${userNullSql}`;
+  return db.prepare(sql).bind(scopeVal, candidates.hashed, candidates.legacy);
+}
+
+/**
+ * Looks up a single attendee row by management token (hashed + legacy fallback).
+ * @param {D1Database} db
+ * @param {{ eventId?: number|null, attendeeId?: number|null, rawToken: unknown, columns?: string, userIdIsNull?: boolean }} opts
+ * @returns {Promise<Record<string, any>|null>}
+ */
+export async function findAttendeeByManagementToken(db, opts) {
+  const stmt = await prepareAttendeeByManagementToken(db, opts);
+  if (!stmt) return null;
+  return stmt.first();
 }

@@ -22,7 +22,7 @@ let currentAdminUser = null;
 let adminPublicConfig = null;
 
 function isAdminCertifiedShiftsEnabled() {
-  return !(adminPublicConfig && adminPublicConfig.features && adminPublicConfig.features.certifiedShifts === false);
+  return API.isFeatureEnabled('certifiedShifts', adminPublicConfig);
 }
 
 function applyAdminFeatureFlags() {

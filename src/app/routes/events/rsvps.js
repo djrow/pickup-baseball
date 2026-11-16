@@ -7,7 +7,6 @@ import { Hono } from 'hono';
 import {
   generateToken,
   hashManagementToken,
-  getManagementTokenCandidates,
   verifyManagementToken,
   MANAGEMENT_TOKEN_PREFIX,
   getClientIp,
@@ -35,7 +34,8 @@ import {
   GUEST_NO_EMAIL_SUFFIX,
   isDeliverableEmail,
   runBackground,
-  promoteNextWaitlistedPlayer
+  promoteNextWaitlistedPlayer,
+  findAttendeeByManagementToken
 } from './helpers.js';
 
 export const eventsRsvpsRouter = /** @type {AppHono} */ (new Hono());
@@ -196,12 +196,10 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
     const freshTokenHash = await hashManagementToken(freshToken);
     let existingAttendee = null;
     if (!user && management_token) {
-      const candidates = await getManagementTokenCandidates(String(management_token));
-      if (candidates) {
-        existingAttendee = await db.prepare(
-          'SELECT * FROM attendees WHERE event_id = ? AND management_token IN (?, ?)'
-        ).bind(eventId, candidates.hashed, candidates.legacy).first();
-      }
+      existingAttendee = await findAttendeeByManagementToken(db, {
+        eventId,
+        rawToken: String(management_token)
+      });
     }
     if (!existingAttendee && hasEmail) {
       existingAttendee = await db.prepare('SELECT * FROM attendees WHERE event_id = ? AND email = ?').bind(eventId, email).first();

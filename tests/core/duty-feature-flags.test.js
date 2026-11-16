@@ -92,6 +92,7 @@ function registerDutyFeatureFlagTests() {
         assert.equal(initRes.status, 200);
 
         const org = ctx.seedUser({ name: 'Org Lead', email: 'org1@example.org', role: 'organizer' });
+        const admin = ctx.seedUser({ name: 'Admin Lead', email: 'admin1@example.org', role: 'admin', isAdmin: 1 });
         const alice = ctx.seedUser({ name: 'Alice Member', email: 'alice1@example.org', role: 'member' });
 
         // Create event with "Snacks" (grants_coordinator: 1), "Facilitator" (grants_coordinator: 0),
@@ -141,6 +142,42 @@ function registerDutyFeatureFlagTests() {
           '"Facilitator" with grants_coordinator=0 must NOT unlock #facilitators-lounge'
         );
 
+        // Regression (keys.js & rtc.js): "Facilitator" with grants_coordinator=0 must be rejected
+        // on #facilitators-lounge key-share and coordinator-gated voice signaling
+        const voiceJoin = await ctx.apiFetch('/api/voice/organizers-war-room/join', {
+          method: 'POST',
+          cookie: admin.cookie,
+          body: { muted: false }
+        });
+        assert.equal(voiceJoin.status, 200);
+
+        const keyShareDenied = await ctx.apiFetch('/api/keys/channel/facilitators-lounge/share', {
+          method: 'POST',
+          cookie: admin.cookie,
+          body: {
+            key_epoch: 1,
+            shares: [{
+              recipient_user_id: alice.userId,
+              key_epoch: 1,
+              wrapped_key_base64: 'dGVzdC13cmFwcGVkLWtleQ==',
+              wrap_iv: 'dGVzdC1pdg=='
+            }]
+          }
+        });
+        assert.equal(keyShareDenied.status, 403, '"Facilitator" with grants_coordinator=0 must be rejected for #facilitators-lounge key share');
+
+        const rtcDenied = await ctx.apiFetch('/api/rtc/signal', {
+          method: 'POST',
+          cookie: admin.cookie,
+          body: {
+            channel_id: 'organizers-war-room',
+            recipient_user_id: alice.userId,
+            signal_type: 'offer',
+            payload_json: JSON.stringify({ type: 'offer', sdp: 'v=0\r\n' })
+          }
+        });
+        assert.equal(rtcDenied.status, 403, '"Facilitator" with grants_coordinator=0 must be rejected for coordinator WebRTC signaling');
+
         // Claim "Game Facilitator" (omitted -> 0) -> must NOT grant coordinator
         const rsvpFacOmit = await ctx.apiFetch(`/api/events/${eventId}/rsvp`, {
           method: 'POST',
@@ -168,6 +205,33 @@ function registerDutyFeatureFlagTests() {
           true,
           '"Snacks" with grants_coordinator=1 MUST unlock #facilitators-lounge'
         );
+
+        const keyShareAllowed = await ctx.apiFetch('/api/keys/channel/facilitators-lounge/share', {
+          method: 'POST',
+          cookie: admin.cookie,
+          body: {
+            key_epoch: 1,
+            shares: [{
+              recipient_user_id: alice.userId,
+              key_epoch: 1,
+              wrapped_key_base64: 'dGVzdC13cmFwcGVkLWtleQ==',
+              wrap_iv: 'dGVzdC1pdg=='
+            }]
+          }
+        });
+        assert.equal(keyShareAllowed.status, 200, '"Snacks" with grants_coordinator=1 MUST be authorized for #facilitators-lounge key share');
+
+        const rtcAllowed = await ctx.apiFetch('/api/rtc/signal', {
+          method: 'POST',
+          cookie: admin.cookie,
+          body: {
+            channel_id: 'organizers-war-room',
+            recipient_user_id: alice.userId,
+            signal_type: 'offer',
+            payload_json: JSON.stringify({ type: 'offer', sdp: 'v=0\r\n' })
+          }
+        });
+        assert.equal(rtcAllowed.status, 200, '"Snacks" with grants_coordinator=1 MUST be authorized for coordinator WebRTC signaling');
 
         // Toggle via PUT /api/events/:id/duties/:dutyId
         const toggleOff = await ctx.apiFetch(`/api/events/${eventId}/duties/${snacksDuty.id}`, {
@@ -494,18 +558,25 @@ function registerDutyFeatureFlagTests() {
 
     await t.test('5. Frontend scripts wire getPublicConfig() feature flags with strict ES6 syntax', () => {
       const apiJs = fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'api.js'), 'utf8');
+      const appJs = fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'app.js'), 'utf8');
       const eventJs = fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'event.js'), 'utf8');
       const adminJs = fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'admin.js'), 'utf8');
       const clubhouseJs = fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'clubhouse.js'), 'utf8');
 
       assert.ok(apiJs.includes('getPublicConfig('), 'api.js must define getPublicConfig()');
+      assert.ok(apiJs.includes('isFeatureEnabled('), 'api.js must define isFeatureEnabled()');
       assert.ok(apiJs.includes('/api/config/public'), 'api.js getPublicConfig() must fetch /api/config/public');
+      assert.ok(appJs.includes('isFeatureEnabled'), 'app.js must reuse API.isFeatureEnabled()');
       assert.ok(eventJs.includes('getPublicConfig'), 'event.js must inspect API.getPublicConfig()');
+      assert.ok(eventJs.includes('isFeatureEnabled'), 'event.js must reuse API.isFeatureEnabled()');
       assert.ok(adminJs.includes('getPublicConfig'), 'admin.js must inspect API.getPublicConfig()');
+      assert.ok(adminJs.includes('isFeatureEnabled'), 'admin.js must reuse API.isFeatureEnabled()');
       assert.ok(clubhouseJs.includes('getPublicConfig'), 'clubhouse.js must inspect API.getPublicConfig()');
+      assert.ok(clubhouseJs.includes('isFeatureEnabled'), 'clubhouse.js must reuse API.isFeatureEnabled()');
 
       for (const [name, src] of [
         ['api.js', apiJs],
+        ['app.js', appJs],
         ['event.js', eventJs],
         ['admin.js', adminJs],
         ['clubhouse.js', clubhouseJs]

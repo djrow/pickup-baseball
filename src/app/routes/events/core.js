@@ -12,7 +12,6 @@ import {
   requireAdmin,
   resolveUserByCalendarToken,
   constantTimeEqual,
-  getManagementTokenCandidates,
   checkRateLimit,
   getSafePublicOrigin
 } from '../../security.js';
@@ -33,10 +32,12 @@ import { ERROR_CODES, jsonError, logEvent } from '../../errors.js';
 import { resolveConfig, PRESET_PICKUP_BASEBALL } from '../../config.js';
 import {
   AVATAR_EXPR,
+  ATTENDEE_DETAIL_COLUMNS,
   isDeliverableEmail,
   sendRemindersForEventD1,
   processUpcomingEventRemindersD1,
-  notifyConfirmedAttendees
+  notifyConfirmedAttendees,
+  prepareAttendeeByManagementToken
 } from './helpers.js';
 
 export const eventsCoreRouter = /** @type {AppHono} */ (new Hono());
@@ -229,6 +230,13 @@ eventsCoreRouter.get('/attendee-candidates', requireOrganizer, async (c) => {
   }
 });
 
+function buildCalendarSlug(cfg, baseballSlug, genericFallback) {
+  if (cfg.COMMUNITY_PRESET === PRESET_PICKUP_BASEBALL) {
+    return baseballSlug;
+  }
+  return cfg.COMMUNITY_NAME.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || genericFallback;
+}
+
 function createIcsResponse(icsContent, filename, forceDownload = false) {
   const dispositionType = forceDownload ? 'attachment' : 'inline';
   return new Response(icsContent, {
@@ -270,9 +278,7 @@ eventsCoreRouter.get('/calendar.ics', async (c) => {
     const cfg = resolveConfig(c.env);
     const ics = buildCalendarIcs(allEvents || [], origin, { viewerUser, env: c.env });
     const forceDownload = c.req.query('download') === '1';
-    const fileSlug = cfg.COMMUNITY_PRESET === PRESET_PICKUP_BASEBALL
-      ? 'pickup-baseball'
-      : (cfg.COMMUNITY_NAME.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'community');
+    const fileSlug = buildCalendarSlug(cfg, 'pickup-baseball', 'community');
 
     return createIcsResponse(ics, `${fileSlug}-schedule.ics`, forceDownload);
   } catch (err) {
@@ -308,9 +314,7 @@ eventsCoreRouter.get('/:id/calendar.ics', async (c) => {
       calendarDesc: `Live updates for ${baseTitle} (${origin}/event.html?id=${ev.id})`
     });
     const forceDownload = c.req.query('download') === '1';
-    const fileSlug = cfg.COMMUNITY_PRESET === PRESET_PICKUP_BASEBALL
-      ? 'pickup-baseball-game'
-      : (cfg.COMMUNITY_NAME.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'community-event');
+    const fileSlug = buildCalendarSlug(cfg, 'pickup-baseball-game', 'community-event');
 
     return createIcsResponse(ics, `${fileSlug}-${ev.id}.ics`, forceDownload);
   } catch (err) {
@@ -439,19 +443,14 @@ eventsCoreRouter.get('/:id', async (c) => {
         `).bind(eventId, user.id, user.email)
       );
     } else if (token) {
-      const tokenCandidates = await getManagementTokenCandidates(token);
-      if (tokenCandidates) {
-        batchStmts.push(
-          db.prepare(`
-            SELECT a.id, a.event_id, a.user_id, a.name, a.email, a.status, a.gear_bringing,
-              COALESCE(a.players_count, 1 + COALESCE(a.additional_guests, 0)) as players_count,
-              COALESCE(a.spectators_count, 0) as spectators_count,
-              a.additional_guests, a.guest_names,
-              (SELECT json_group_array(duty_id) FROM duty_assignments WHERE attendee_id = a.id) as duty_ids
-            FROM attendees a
-            WHERE a.event_id = ? AND a.management_token IN (?, ?) AND a.user_id IS NULL
-          `).bind(eventId, tokenCandidates.hashed, tokenCandidates.legacy)
-        );
+      const tokenStmt = await prepareAttendeeByManagementToken(db, {
+        eventId,
+        rawToken: token,
+        columns: ATTENDEE_DETAIL_COLUMNS,
+        userIdIsNull: true
+      });
+      if (tokenStmt) {
+        batchStmts.push(tokenStmt);
       }
     }
 

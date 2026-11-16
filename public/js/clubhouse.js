@@ -62,11 +62,17 @@
   };
 
   function isClubhouseBpEnabled() {
-    return !(uiState.publicConfig && uiState.publicConfig.features && uiState.publicConfig.features.battingPractice === false);
+    if (window.API && typeof window.API.isFeatureEnabled === 'function') {
+      return window.API.isFeatureEnabled('battingPractice', uiState.publicConfig);
+    }
+    return true;
   }
 
   function isClubhouseCertifiedShiftsEnabled() {
-    return !(uiState.publicConfig && uiState.publicConfig.features && uiState.publicConfig.features.certifiedShifts === false);
+    if (window.API && typeof window.API.isFeatureEnabled === 'function') {
+      return window.API.isFeatureEnabled('certifiedShifts', uiState.publicConfig);
+    }
+    return true;
   }
 
   function isMemberRole(role) {

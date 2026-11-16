@@ -12,7 +12,7 @@ let syncLifecycleBound = false;
 let appPublicConfig = null;
 
 function isAppBpEnabled() {
-  return !(appPublicConfig && appPublicConfig.features && appPublicConfig.features.battingPractice === false);
+  return API.isFeatureEnabled('battingPractice', appPublicConfig);
 }
 
 function formatSyncTimestamp(epochMs) {
