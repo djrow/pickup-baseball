@@ -89,23 +89,49 @@ function getSubtleCrypto() {
 
 let ephemeralProvenanceSecret = null;
 
+/**
+ * @param {string} secretMaterial
+ * @param {string} payloadStr
+ * @returns {Promise<string>}
+ */
+async function hmacSha256Hex(secretMaterial, payloadStr) {
+  const subtle = getSubtleCrypto();
+  const keyBytes = new TextEncoder().encode(String(secretMaterial));
+  const cryptoKey = await subtle.importKey(
+    'raw',
+    keyBytes,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const sigBuffer = await subtle.sign('HMAC', cryptoKey, new TextEncoder().encode(String(payloadStr || '')));
+  return Array.from(new Uint8Array(sigBuffer))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+/**
+ * @param {string} sessionSecret
+ * @returns {Promise<string>}
+ */
+async function deriveLegacySessionProvenanceSecret(sessionSecret) {
+  return hmacSha256Hex(String(sessionSecret), 'pickup-waiver-provenance-key-v1');
+}
+
+/**
+ * Resolve isolated waiver provenance HMAC secret material (never coupled to SESSION_SECRET).
+ *
+ * @param {Record<string, any> | null | undefined} env
+ * @param {D1Database | null} [db]
+ * @returns {Promise<string>}
+ */
 async function getProvenanceSecretMaterial(env, db = null) {
   const e = env || (typeof process !== 'undefined' ? process.env : {}) || {};
-  if (e.WAIVER_SIGNING_SECRET) {
-    return String(e.WAIVER_SIGNING_SECRET);
-  }
-  const baseSecret = e.SESSION_SECRET;
-  if (baseSecret) {
-    const subtle = getSubtleCrypto();
-    const baseKey = await subtle.importKey(
-      'raw',
-      new TextEncoder().encode(String(baseSecret)),
-      { name: 'HMAC', hash: 'SHA-256' },
-      false,
-      ['sign']
-    );
-    const derived = await subtle.sign('HMAC', baseKey, new TextEncoder().encode('pickup-waiver-provenance-key-v1'));
-    return Array.from(new Uint8Array(derived), (b) => b.toString(16).padStart(2, '0')).join('');
+  const explicitWaiverSecret = e.WAIVER_SIGNING_SECRET !== undefined && e.WAIVER_SIGNING_SECRET !== null
+    ? String(e.WAIVER_SIGNING_SECRET).trim()
+    : '';
+  if (explicitWaiverSecret) {
+    return explicitWaiverSecret;
   }
 
   const targetDb = db || e.DB || e.BASEBALL_DB || null;
@@ -142,19 +168,81 @@ async function getProvenanceSecretMaterial(env, db = null) {
 
 export async function computeProvenanceSeal(env, payloadStr, db = null) {
   const secretMaterial = await getProvenanceSecretMaterial(env, db);
-  const subtle = getSubtleCrypto();
-  const keyBytes = new TextEncoder().encode(secretMaterial);
-  const cryptoKey = await subtle.importKey(
-    'raw',
-    keyBytes,
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
-  );
-  const sigBuffer = await subtle.sign('HMAC', cryptoKey, new TextEncoder().encode(String(payloadStr || '')));
-  return Array.from(new Uint8Array(sigBuffer))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
+  return hmacSha256Hex(secretMaterial, payloadStr);
+}
+
+/**
+ * Verify a waiver provenance seal against the isolated `WAIVER_SIGNING_SECRET` /
+ * `app_settings.waiver_provenance_secret`, with backward-compatible fallback
+ * to DB-stored secret (if WAIVER_SIGNING_SECRET was added later) and the legacy
+ * `SESSION_SECRET`-derived HMAC key for pre-cutover waivers.
+ *
+ * @param {Record<string, any> | null | undefined} env
+ * @param {string} payloadStr
+ * @param {string} storedSeal
+ * @param {D1Database | null} [db]
+ * @returns {Promise<boolean>}
+ */
+export async function verifyWaiverProvenanceSeal(env, payloadStr, storedSeal, db = null) {
+  if (!storedSeal || typeof storedSeal !== 'string') {
+    return false;
+  }
+  const primarySeal = await computeProvenanceSeal(env, payloadStr, db);
+  if (constantTimeEqual(primarySeal, storedSeal)) {
+    return true;
+  }
+
+  const e = env || (typeof process !== 'undefined' ? process.env : {}) || {};
+  const explicitWaiverSecret = e.WAIVER_SIGNING_SECRET !== undefined && e.WAIVER_SIGNING_SECRET !== null
+    ? String(e.WAIVER_SIGNING_SECRET).trim()
+    : '';
+  const targetDb = db || e.DB || e.BASEBALL_DB || null;
+  if (explicitWaiverSecret && targetDb) {
+    try {
+      const existing = await targetDb.prepare("SELECT value FROM app_settings WHERE key = 'waiver_provenance_secret'").first();
+      if (existing && existing.value) {
+        const dbSeal = await hmacSha256Hex(String(existing.value), payloadStr);
+        if (constantTimeEqual(dbSeal, storedSeal)) {
+          return true;
+        }
+      }
+    } catch (err) {
+      logEvent('warn', 'waiver_provenance_legacy_db_lookup_failed', { err });
+    }
+  }
+
+  const legacySessionSecret = e.SESSION_SECRET !== undefined && e.SESSION_SECRET !== null
+    ? String(e.SESSION_SECRET)
+    : '';
+  if (legacySessionSecret) {
+    const legacyMaterial = await deriveLegacySessionProvenanceSecret(legacySessionSecret);
+    const legacySeal = await hmacSha256Hex(legacyMaterial, payloadStr);
+    if (constantTimeEqual(legacySeal, storedSeal)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Idempotently scrub auxiliary anti-fraud telemetry (`signer_ip` and `user_agent`)
+ * on waiver rows older than the 30-day anti-fraud window without mutating sealed columns.
+ *
+ * @param {D1Database | null | undefined} db
+ * @returns {Promise<number>}
+ */
+export async function scrubExpiredWaiverTelemetry(db) {
+  if (!db || typeof db.prepare !== 'function') return 0;
+  try {
+    const res = await db.prepare(
+      "UPDATE waivers SET signer_ip = NULL, user_agent = NULL, signer_ip_scrubbed_at = CURRENT_TIMESTAMP WHERE (signer_ip IS NOT NULL OR user_agent IS NOT NULL OR signer_ip_scrubbed_at IS NULL) AND datetime(signed_at) <= datetime('now', '-30 days')"
+    ).run();
+    return Number((res && res.meta && res.meta.changes) || (res && /** @type {any} */ (res).changes) || 0);
+  } catch (err) {
+    logEvent('warn', 'waiver_telemetry_scrub_failed', { err });
+    return 0;
+  }
 }
 
 function generateCertificateId(signedDateStr, prefix = 'PBF-WVR') {
@@ -205,8 +293,6 @@ export function renderSignedWaiverCertificateHtml(waiverRow, integrityVerified =
   const safeTextHash = escapeHtml(waiverRow.waiver_text_sha256 || '');
   const safeDocHash = escapeHtml(waiverRow.document_sha256 || '');
   const safeSeal = escapeHtml(waiverRow.provenance_seal || '');
-  const safeIp = includePii ? escapeHtml(waiverRow.signer_ip || 'recorded') : 'Redacted';
-  const safeUa = includePii ? escapeHtml(waiverRow.user_agent || 'browser') : 'Verification View';
   const sigData = includePii ? String(waiverRow.signature_data || '') : '';
   const isImgSig = includePii && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(sigData);
 
@@ -419,7 +505,7 @@ export function renderSignedWaiverCertificateHtml(waiverRow, integrityVerified =
         <div class="prov-label">Executed Timestamp (UTC):</div>
         <div class="prov-val">${safeSignedAt}</div>
         <div class="prov-label">Client IP &amp; User-Agent:</div>
-        <div class="prov-val">${safeIp} • ${safeUa}</div>
+        <div class="prov-val">Redacted (30-day anti-fraud window)</div>
         <div class="prov-label">Electronic Consent:</div>
         <div class="prov-val">Explicitly affirmed by signer prior to execution</div>
         <div class="prov-label">Waiver Text SHA-256:</div>
@@ -452,6 +538,8 @@ async function getWaiverStatusHandler(c) {
       latest_waiver: null
     });
   }
+
+  await scrubExpiredWaiverTelemetry(c.env.DB);
 
   const dbUser = await c.env.DB.prepare(
     "SELECT COALESCE(waiver_status, 'none') as waiver_status, waiver_signed_at FROM users WHERE id = ?"
@@ -535,6 +623,13 @@ waiverRouter.post('/sign', requireAuth, async (c) => {
     signedDate = rawDate;
   }
 
+  const rawAgeAttestation = body.age_attestation !== undefined ? body.age_attestation : body.attested_18_plus;
+  if (rawAgeAttestation !== true && rawAgeAttestation !== 1) {
+    return c.json({
+      error: 'You must confirm that you are 18 years of age or older (or a parent/legal guardian signing on behalf of a minor).'
+    }, 400);
+  }
+
   if (body.electronic_consent !== true) {
     return c.json({ error: 'You must check the box consenting to sign this Consent, Waiver and Indemnity electronically.' }, 400);
   }
@@ -562,6 +657,7 @@ waiverRouter.post('/sign', requireAuth, async (c) => {
     return c.json({ error: 'Signature image must be a valid PNG file.' }, 400);
   }
 
+  const cfg = resolveConfig(c.env);
   const spec = getWaiverSpec(c.env);
   const waiverTextSha256 = await sha256Hex(spec.officialText);
   const signatureSha256 = await sha256Hex(signatureData);
@@ -578,7 +674,11 @@ waiverRouter.post('/sign', requireAuth, async (c) => {
   const documentSha256 = await sha256Hex(canonicalPayload);
   const certificateId = generateCertificateId(signedDate, spec.certificatePrefix);
   const provenanceSeal = await computeProvenanceSeal(c.env, `${certificateId}:${documentSha256}`, c.env.DB);
-  const signedAtIso = new Date().toISOString();
+  const signedAtDate = new Date();
+  const signedAtIso = signedAtDate.toISOString();
+  const retentionUntilDate = new Date(signedAtDate.getTime());
+  retentionUntilDate.setUTCFullYear(retentionUntilDate.getUTCFullYear() + cfg.WAIVER_RETENTION_YEARS);
+  const retentionUntilIso = retentionUntilDate.toISOString();
   const userAgent = (c.req.header('User-Agent') || 'unknown').slice(0, 250);
 
   await c.env.DB.batch([
@@ -587,8 +687,8 @@ waiverRouter.post('/sign', requireAuth, async (c) => {
         certificate_id, user_id, email, printed_name, signed_date,
         signature_type, signature_data, document_version,
         waiver_text_sha256, document_sha256, provenance_seal,
-        signer_ip, user_agent, electronic_consent, signed_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+        signer_ip, user_agent, electronic_consent, signed_at, retention_until
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
     `).bind(
       certificateId,
       user.id,
@@ -603,7 +703,8 @@ waiverRouter.post('/sign', requireAuth, async (c) => {
       provenanceSeal,
       clientIp,
       userAgent,
-      signedAtIso
+      signedAtIso,
+      retentionUntilIso
     ),
     c.env.DB.prepare(
       "UPDATE users SET waiver_status = 'digital', waiver_signed_at = ? WHERE id = ?"
@@ -622,14 +723,13 @@ waiverRouter.post('/sign', requireAuth, async (c) => {
     waiver_text_sha256: waiverTextSha256,
     document_sha256: documentSha256,
     provenance_seal: provenanceSeal,
-    signer_ip: clientIp,
-    user_agent: userAgent,
     signed_at: signedAtIso
   };
 
   const origin = getSafePublicOrigin(c);
 
   const backgroundWork = (async () => {
+    await scrubExpiredWaiverTelemetry(c.env.DB);
     try {
       if (isGDriveConfigured(c.env)) {
         const htmlCert = renderSignedWaiverCertificateHtml(waiverRow, true, true, c.env);
@@ -723,7 +823,14 @@ waiverRouter.get('/certificate/:id', async (c) => {
     return c.json({ error: 'Signed waiver certificate not found.' }, 404);
   }
 
-  // Re-verify cryptographic provenance hash and HMAC seal
+  if (c.env && c.env.DB && row.signed_at && (row.signer_ip !== null || row.user_agent !== null || !row.signer_ip_scrubbed_at)) {
+    const signedMs = Date.parse(String(row.signed_at));
+    if (Number.isFinite(signedMs) && signedMs <= Date.now() - 30 * 86400 * 1000) {
+      await scrubExpiredWaiverTelemetry(c.env.DB);
+    }
+  }
+
+  // Re-verify cryptographic provenance hash and HMAC seal (with legacy fallback)
   const sigSha256 = await sha256Hex(row.signature_data);
   const expectedCanonical = buildCanonicalWaiverPayload({
     document_version: row.document_version,
@@ -736,10 +843,15 @@ waiverRouter.get('/certificate/:id', async (c) => {
     electronic_consent: Boolean(row.electronic_consent)
   });
   const recomputedDocSha256 = await sha256Hex(expectedCanonical);
-  const recomputedSeal = await computeProvenanceSeal(c.env, `${row.certificate_id}:${recomputedDocSha256}`, c.env.DB);
+  const sealVerified = await verifyWaiverProvenanceSeal(
+    c.env,
+    `${row.certificate_id}:${recomputedDocSha256}`,
+    row.provenance_seal,
+    c.env.DB
+  );
   const integrityVerified = (
     constantTimeEqual(recomputedDocSha256, row.document_sha256) &&
-    constantTimeEqual(recomputedSeal, row.provenance_seal)
+    sealVerified
   );
 
   const canViewPii = Boolean(user && (user.isAdmin || user.id === row.user_id));

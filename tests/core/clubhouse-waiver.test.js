@@ -79,6 +79,7 @@ test('Clubhouse Frontend & Native Waiver Verification', async (t) => {
       signed_date: '2026-11-11',
       signature_type: 'drawn',
       signature_data: samplePngSig,
+      age_attestation: true,
       electronic_consent: true
     });
     assert.equal(signRes.status, 201);

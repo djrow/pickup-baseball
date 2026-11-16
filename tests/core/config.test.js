@@ -61,6 +61,8 @@ function registerConfigTests(ctx) {
       assert.equal(cfg.FEATURE_BATTING_PRACTICE, false);
       assert.equal(cfg.FEATURE_CERTIFIED_SHIFTS, false);
       assert.equal(cfg.FEATURE_SUNDAY_PRIORITY, false);
+      assert.equal(cfg.WAIVER_SIGNING_SECRET, '');
+      assert.equal(cfg.WAIVER_RETENTION_YEARS, 3);
       assert.equal(isPreviewOriginLocked(cfg), false);
 
       // No pickupbaseballfoundation literals in generic preset
@@ -113,6 +115,8 @@ function registerConfigTests(ctx) {
         HANDBOOK_URL: '/about.html',
         MAIL_PROVIDER: 'brevo',
         STORAGE_PROVIDER: 'r2',
+        WAIVER_SIGNING_SECRET: '  isolated-waiver-secret  ',
+        WAIVER_RETENTION_YEARS: '5',
         FEATURE_BATTING_PRACTICE: '0',
         FEATURE_CERTIFIED_SHIFTS: 'false',
         FEATURE_SUNDAY_PRIORITY: 'off'
@@ -121,9 +125,16 @@ function registerConfigTests(ctx) {
       assert.equal(overridden.HANDBOOK_URL, '/about.html');
       assert.equal(overridden.MAIL_PROVIDER, 'brevo');
       assert.equal(overridden.STORAGE_PROVIDER, 'r2');
+      assert.equal(overridden.WAIVER_SIGNING_SECRET, 'isolated-waiver-secret');
+      assert.equal(overridden.WAIVER_RETENTION_YEARS, 5);
       assert.equal(overridden.FEATURE_BATTING_PRACTICE, false);
       assert.equal(overridden.FEATURE_CERTIFIED_SHIFTS, false);
       assert.equal(overridden.FEATURE_SUNDAY_PRIORITY, false);
+
+      // Invalid WAIVER_RETENTION_YEARS falls back safely to 3
+      for (const badYears of ['0', '-2', 'abc', '']) {
+        assert.equal(resolveConfig({ WAIVER_RETENTION_YEARS: badYears }).WAIVER_RETENTION_YEARS, 3);
+      }
 
       // Unsafe HANDBOOK_URL schemes are rejected back to preset default
       const unsafeUrl = resolveConfig({
@@ -168,6 +179,7 @@ function registerConfigTests(ctx) {
         RESEND_API_KEY: 'test-resend-key-secret-value',
         TURNSTILE_SECRET_KEY: 'turnstile_secret_value',
         SESSION_SECRET: 'session_secret_value',
+        WAIVER_SIGNING_SECRET: 'waiver_signing_secret_value',
         GDRIVE_CLIENT_SECRET: 'gdrive_secret_value'
       });
 
@@ -198,6 +210,7 @@ function registerConfigTests(ctx) {
         'RESEND_API_KEY', 'test-resend-key-secret-value',
         'TURNSTILE_SECRET_KEY', 'turnstile_secret_value',
         'SESSION_SECRET', 'session_secret_value',
+        'WAIVER_SIGNING_SECRET', 'waiver_signing_secret_value',
         'GDRIVE_CLIENT_SECRET', 'gdrive_secret_value'
       ]) {
         assert.equal(text.includes(secretKey), false, `GET /api/config/public must never leak ${secretKey}`);
@@ -259,7 +272,9 @@ function registerConfigTests(ctx) {
         'FEATURE_BATTING_PRACTICE',
         'FEATURE_CERTIFIED_SHIFTS',
         'FEATURE_SUNDAY_PRIORITY',
-        'TURN_ICE_SERVERS_JSON'
+        'TURN_ICE_SERVERS_JSON',
+        'WAIVER_SIGNING_SECRET',
+        'WAIVER_RETENTION_YEARS'
       ]) {
         assert.ok(raw.includes(`${key}=`), `.env.example must document ${key}`);
       }
