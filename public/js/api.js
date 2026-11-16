@@ -80,6 +80,7 @@ const EN_DICT = {
   "footer.about_site": "Prototyped with Google Gemini in October 2026 for simplicity and durability. Free & open-source",
   "footer.handbook": "Handbook & Field Rules",
   "footer.copyright": "© 2026 Pickup Baseball Foundation. Licensed under Apache License 2.0.",
+  "footer.erase_data": "Erase My Data",
   "hero.handbook_btn": "📖 Handbook & Field Rules ↗",
   "rules.summary": "⚾ Typical Rules of Play on Sundays: Casual, all skill levels, pitching machine, continuous batting, and safety first.",
   "rules.full_link": "📖 Read the Complete Sunday Rules of Play in the Webapp Handbook ↗",
@@ -103,6 +104,7 @@ const EN_DICT = {
   "privacy.b4": "Your handwritten signature is only on a paper waiver we keep on file. We <strong>never share it</strong>.",
   "privacy.b5": "If you make a player account, the site will also email you sign-in codes and game confirmations or reminders. Anything extra you add to your profile (like a bio or photo) is optional.",
   "privacy.contact_prefix": "Questions or want your info removed? Email",
+  "privacy.erase_link": "Erase your Visitor / RSVP data →",
   "home.welcome_signed_in": "Welcome, {name}! You are signed in.",
   "home.scheduled_games": "Scheduled Games",
   "home.future_games": "Future Scheduled Games",
@@ -392,7 +394,21 @@ const EN_DICT = {
   "profile.export_passphrase_msg": "Enter your E2EE Key Vault passphrase to decrypt your encrypted Clubhouse messages in-browser before saving:",
   "profile.export_passphrase_placeholder": "Enter vault passphrase...",
   "profile.export_passphrase_confirm": "Unlock & Decrypt",
-  "profile.export_wrong_passphrase": "Incorrect E2EE vault passphrase. Encrypted messages could not be decrypted."
+  "profile.export_wrong_passphrase": "Incorrect E2EE vault passphrase. Encrypted messages could not be decrypted.",
+  "visitor_erasure.title": "🗑️ Erase Visitor / RSVP Data",
+  "visitor_erasure.summary_hint": "Remove RSVPs or data without signing in",
+  "visitor_erasure.notice": "Verify your email with a 6-digit code to permanently delete future RSVPs, task assignments, batting practice slots, and consent records, and anonymize past attendance and comments. Legal Waiver Retention Notice: Signed liability waivers remain sealed in restricted Admin-only quarantine for 3 years from signing or your last attended event before permanent deletion.",
+  "visitor_erasure.email_label": "Email Address *",
+  "visitor_erasure.email_placeholder": "you@example.com",
+  "visitor_erasure.keep_gallery": "If an account exists, keep my approved Gallery photos/videos anonymously attributed to \"Community Member\" (unapproved items are always deleted)",
+  "visitor_erasure.send_code_btn": "📧 Email Erasure Verification Code",
+  "visitor_erasure.code_label": "Enter 6-Digit Erasure Code",
+  "visitor_erasure.code_placeholder": "123456",
+  "visitor_erasure.confirm_btn": "Permanently Erase My Data",
+  "visitor_erasure.cancel_btn": "Cancel",
+  "visitor_erasure.confirm_dialog": "Permanently erase all personal data and RSVPs matching this email? This cannot be undone. Any signed liability waiver will stay in restricted 3-year legal-defense quarantine before automatic purge.",
+  "visitor_erasure.invalid_email": "Please enter a valid email address.",
+  "visitor_erasure.invalid_code": "Please enter the 6-digit verification code sent to your email."
 };
 
 const KNOWN_PHRASE_KEYS = {
@@ -925,7 +941,7 @@ const API = {
             </a>
           </div>
           <p style="margin-top: 12px; font-size: 0.8rem; color: #94a3b8; line-height: 1.5;">
-            <span data-i18n="footer.about_site">${this.escapeHtml(this.t('footer.about_site', 'Prototyped with Google Gemini in October 2026 for simplicity and durability. Free & open-source'))}</span> on <a href="https://github.com/djrow/pickup-baseball" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">GitHub</a> • <a href="/about.html" data-i18n="nav.about" style="color: inherit; text-decoration: underline;">About Us</a> • <a href="/waiver.html" style="color: inherit; text-decoration: underline;">Player Waiver</a>.
+            <span data-i18n="footer.about_site">${this.escapeHtml(this.t('footer.about_site', 'Prototyped with Google Gemini in October 2026 for simplicity and durability. Free & open-source'))}</span> on <a href="https://github.com/djrow/pickup-baseball" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">GitHub</a> • <a href="/about.html" data-i18n="nav.about" style="color: inherit; text-decoration: underline;">About Us</a> • <a href="/waiver.html" style="color: inherit; text-decoration: underline;">Player Waiver</a> • <a href="/login.html#erase-data" data-i18n="footer.erase_data" style="color: inherit; text-decoration: underline;">${this.escapeHtml(this.t('footer.erase_data', 'Erase My Data'))}</a>.
           </p>
           <p style="margin-top: 6px; font-size: 0.75rem; color: #64748b; line-height: 1.4;">
             <a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;" data-i18n="footer.copyright">${this.escapeHtml(this.t('footer.copyright', '© 2026 Pickup Baseball Foundation. Licensed under Apache License 2.0.'))}</a> • <span id="footer-app-version" class="footer-app-version" title="Loaded web app version">v${this.escapeHtml(this.CLIENT_VERSION)}</span>
@@ -1933,6 +1949,14 @@ const API = {
 
   async deleteMyAccount(payload) {
     return this.request('DELETE', '/api/auth/me', payload || {});
+  },
+
+  async requestVisitorErasure(email) {
+    return this.request('POST', '/api/auth/erasure/request', { email: email });
+  },
+
+  async confirmVisitorErasure(payload) {
+    return this.request('POST', '/api/auth/erasure/confirm', payload || {});
   },
 
   async getQuarantinedWaivers() {

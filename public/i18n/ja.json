@@ -377,5 +377,21 @@
   "profile.erasure_confirm_btn": "アカウントを完全に削除する",
   "profile.erasure_cancel_btn": "キャンセル",
   "profile.erasure_confirm_dialog": "アカウントと個人データを完全に削除しますか？この操作は取り消せません。署名済みの免責同意書は自動削除まで3年間、制限付きの法的防衛隔離下に保持されます。",
-  "profile.erasure_code_sent": "確認コードをメールで送信しました。下の欄に6桁のコードを入力して削除を確定してください。"
+  "profile.erasure_code_sent": "確認コードをメールで送信しました。下の欄に6桁のコードを入力して削除を確定してください。",
+  "footer.erase_data": "データを削除",
+  "privacy.erase_link": "ビジター / RSVP データを削除 →",
+  "visitor_erasure.title": "🗑️ ビジター / RSVP データの削除",
+  "visitor_erasure.summary_hint": "ログインせずに RSVP やデータを削除",
+  "visitor_erasure.notice": "6桁の確認コードでメールアドレスを認証すると、今後の RSVP・担当タスク・打撃練習枠・同意履歴を完全に削除し、過去の参加記録やコメントを匿名化します。法的免責同意書の保持に関するお知らせ：署名済みの免責同意書は、署名日または最終参加日のいずれか遅い方から3年間、管理者限定の隔離保管状態に置かれた後に完全削除されます。",
+  "visitor_erasure.email_label": "メールアドレス *",
+  "visitor_erasure.email_placeholder": "you@example.com",
+  "visitor_erasure.keep_gallery": "アカウントが存在する場合、承認済みのギャラリー写真/動画のみ「Community Member」として匿名で残す（未承認の項目は常に削除されます）",
+  "visitor_erasure.send_code_btn": "📧 削除確認コードをメールで送信",
+  "visitor_erasure.code_label": "6桁の削除確認コードを入力",
+  "visitor_erasure.code_placeholder": "123456",
+  "visitor_erasure.confirm_btn": "データを完全に削除する",
+  "visitor_erasure.cancel_btn": "キャンセル",
+  "visitor_erasure.confirm_dialog": "このメールアドレスに一致するすべての個人データと RSVP を完全に削除しますか？この操作は取り消せません。署名済みの免責同意書は自動削除までの3年間、制限付きの法的防衛隔離状態に保持されます。",
+  "visitor_erasure.invalid_email": "有効なメールアドレスを入力してください。",
+  "visitor_erasure.invalid_code": "メールに送信された6桁の確認コードを入力してください。"
 }

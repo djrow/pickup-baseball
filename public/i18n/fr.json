@@ -377,5 +377,21 @@
   "profile.erasure_confirm_btn": "Supprimer définitivement mon compte",
   "profile.erasure_cancel_btn": "Annuler",
   "profile.erasure_confirm_dialog": "Supprimer définitivement votre compte et vos données personnelles ? Cette action est irréversible. Toute décharge signée restera en quarantaine juridique restreinte de 3 ans avant purge automatique.",
-  "profile.erasure_code_sent": "Code de vérification envoyé par e-mail. Saisissez le code à 6 chiffres ci-dessous pour confirmer."
+  "profile.erasure_code_sent": "Code de vérification envoyé par e-mail. Saisissez le code à 6 chiffres ci-dessous pour confirmer.",
+  "footer.erase_data": "Effacer mes données",
+  "privacy.erase_link": "Effacer vos données visiteur / RSVP →",
+  "visitor_erasure.title": "🗑️ Effacer les données visiteur / RSVP",
+  "visitor_erasure.summary_hint": "Supprimer des RSVP ou données sans vous connecter",
+  "visitor_erasure.notice": "Vérifiez votre e-mail avec un code à 6 chiffres pour supprimer définitivement les RSVP futurs, tâches attribuées, créneaux d'entraînement et registres de consentement, et anonymiser les présences et commentaires passés. Avis de conservation légale : les décharges signées restent scellées en quarantaine restreinte réservée aux administrateurs pendant 3 ans après la signature ou le dernier événement suivi avant suppression définitive.",
+  "visitor_erasure.email_label": "Adresse e-mail *",
+  "visitor_erasure.email_placeholder": "you@example.com",
+  "visitor_erasure.keep_gallery": "Si un compte existe, conserver mes photos/vidéos approuvées de la Galerie attribuées anonymement à \"Community Member\" (les éléments non approuvés sont toujours supprimés)",
+  "visitor_erasure.send_code_btn": "📧 Envoyer le code de vérification d'effacement",
+  "visitor_erasure.code_label": "Entrez le code d'effacement à 6 chiffres",
+  "visitor_erasure.code_placeholder": "123456",
+  "visitor_erasure.confirm_btn": "Effacer définitivement mes données",
+  "visitor_erasure.cancel_btn": "Annuler",
+  "visitor_erasure.confirm_dialog": "Effacer définitivement toutes les données personnelles et RSVP associés à cet e-mail ? Cette action est irréversible. Toute décharge signée restera en quarantaine juridique restreinte pendant 3 ans avant suppression automatique.",
+  "visitor_erasure.invalid_email": "Veuillez saisir une adresse e-mail valide.",
+  "visitor_erasure.invalid_code": "Veuillez saisir le code de vérification à 6 chiffres envoyé à votre e-mail."
 }
