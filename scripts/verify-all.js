@@ -265,4 +265,5 @@ require('../tests/core/schema-barrel.test.js')();
 require('../tests/core/typecheck.test.js')();
 require('../tests/core/lint.test.js')();
 require('../tests/core/error-telemetry.test.js')(ctx);
+require('../tests/core/config.test.js')(ctx);
 require('../tests/clubhouse/index.js')();

@@ -6,6 +6,7 @@
 import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { CURRENT_APP_VERSION } from './version.js';
+import { resolveConfig, getPublicConfig, getPreviewOriginLockout } from './config.js';
 import { ensureD1Schema, ensureChatD1Schema, ensureClubhouseOptInBackfill } from './schema.js';
 import { SESSION_COOKIE_NAME, getUserFromSession, requireAdmin } from './security.js';
 import { ERROR_CODES, getRequestId, jsonError, logEvent, normalizeApiErrorResponse } from './errors.js';
@@ -77,13 +78,16 @@ app.notFound((c) => {
 app.use('*', async (c, next) => {
   const reqUrl = new URL(c.req.url);
   const pathName = reqUrl.pathname;
-  const isHealthEndpoint = pathName === '/api/version' || pathName === '/api/health';
+  const isStatelessEndpoint =
+    pathName === '/api/version' ||
+    pathName === '/api/health' ||
+    pathName === '/api/config/public';
 
   if (c.env) {
     if (!c.env.DB && c.env.BASEBALL_DB) c.env.DB = c.env.BASEBALL_DB;
     if (!c.env.BASEBALL_DB && c.env.DB) c.env.BASEBALL_DB = c.env.DB;
 
-    if (!isHealthEndpoint) {
+    if (!isStatelessEndpoint) {
       if (c.env.DB) {
         await ensureD1Schema(c.env.DB);
       }
@@ -96,21 +100,18 @@ app.use('*', async (c, next) => {
     }
   }
 
-  // Enforce custom domain WAF on Cloudflare Pages preview domains
-  if (reqUrl.hostname.endsWith('.pages.dev')) {
+  // Enforce opt-in custom domain WAF on Cloudflare Pages preview domains
+  const previewLockout = getPreviewOriginLockout(reqUrl, c.env);
+  if (previewLockout) {
     if (c.req.method === 'GET' || c.req.method === 'HEAD') {
-      return new Response(null, {
-        status: 301,
-        headers: {
-          'Location': `https://www.pickupbaseballfoundation.org${reqUrl.pathname}${reqUrl.search}`,
-          'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
-          'X-Content-Type-Options': 'nosniff',
-          'X-Frame-Options': 'DENY',
-          'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'"
-        }
-      });
+      return previewLockout.redirectResponse();
     }
-    return jsonError(c, 403, ERROR_CODES.FORBIDDEN, 'Direct origin/preview API access is disabled. Please use www.pickupbaseballfoundation.org.');
+    return jsonError(
+      c,
+      403,
+      ERROR_CODES.FORBIDDEN,
+      `Direct origin/preview API access is disabled. Please use ${previewLockout.publicHost}.`
+    );
   }
 
   // CSRF Origin / Fetch-Metadata verification on state-changing requests
@@ -145,7 +146,7 @@ app.use('*', async (c, next) => {
   }
 
   const skipSessionLookup =
-    isHealthEndpoint ||
+    isStatelessEndpoint ||
     pathName === '/api/auth/logout' ||
     /^\/api\/users\/\d+\/avatar$/.test(pathName);
 
@@ -172,16 +173,11 @@ app.use('*', async (c, next) => {
   await next();
 });
 
-function resolveStorageProvider(env) {
-  const hasGDrive = Boolean((env && env.GDRIVE_CLIENT_ID) || (typeof process !== 'undefined' && process.env && process.env.GDRIVE_CLIENT_ID));
-  return hasGDrive ? 'gdrive' : 'local';
-}
-
 app.get('/version', (c) => {
   return c.json({
     version: CURRENT_APP_VERSION,
     status: 'ok',
-    storageProvider: resolveStorageProvider(c.env)
+    storageProvider: resolveConfig(c.env).STORAGE_PROVIDER
   });
 });
 
@@ -190,9 +186,14 @@ app.get('/health', (c) => {
     version: CURRENT_APP_VERSION,
     status: 'ok',
     environment: (c.env && c.env.NODE_ENV) || 'cloudflare-pages',
-    storageProvider: resolveStorageProvider(c.env),
+    storageProvider: resolveConfig(c.env).STORAGE_PROVIDER,
     timestamp: new Date().toISOString()
   });
+});
+
+app.get('/config/public', (c) => {
+  c.header('Cache-Control', 'public, max-age=300, s-maxage=300, stale-while-revalidate=600');
+  return c.json(getPublicConfig(c.env));
 });
 
 app.get('/users/:id/avatar', serveUserAvatar);

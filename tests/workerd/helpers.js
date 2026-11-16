@@ -190,6 +190,10 @@ async function createWorkerdHarness(options = {}) {
       routerConfig: { has_user_worker: true }
     },
     bindings: {
+      COMMUNITY_PRESET: 'pickup-baseball',
+      COMMUNITY_NAME: 'Sunday Pickup Baseball',
+      PUBLIC_ORIGIN: 'https://www.pickupbaseballfoundation.org',
+      LOCK_PREVIEW_ORIGIN: '1',
       APP_NAME: 'Sunday Pickup Baseball',
       FROM_EMAIL: 'Sunday Pickup Baseball <games@pickupbaseballfoundation.org>',
       REPLY_TO_EMAIL: 'pickupbaseballfoundation@gmail.com',
