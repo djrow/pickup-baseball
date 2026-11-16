@@ -351,7 +351,19 @@ const EN_DICT = {
   "gallery.videos_reel": "Video Releases & Highlights Reel",
   "gallery.drop_links_btn": "📥 Drop Photos / Links",
   "gallery.mod_queue_title": "Admin Moderation Queue",
-  "gallery.all_albums": "🌟 All Albums"
+  "gallery.all_albums": "🌟 All Albums",
+  "backup_scrubbed_btn": "📥 Operational SQL (.zip)",
+  "backup_dr_btn": "🔐 Encrypted DR Backup (.pbfenc)",
+  "backup_scrubbed_working": "⏳ Exporting scrubbed SQL...",
+  "backup_dr_working": "⏳ Encrypting DR backup...",
+  "backup_dr_prompt_title": "🔐 Encrypted Full DR Backup",
+  "backup_dr_prompt_msg": "Enter a passphrase (at least 8 characters) to encrypt this full disaster-recovery backup. Keep it safe — you will need it with scripts/restore-backup.js:",
+  "backup_dr_prompt_placeholder": "Enter backup encryption passphrase...",
+  "backup_dr_confirm_btn": "Encrypt & Download",
+  "backup_dr_passphrase_short": "Backup passphrase must be at least 8 characters.",
+  "backup_scrubbed_success": "Scrubbed operational SQL backup downloaded.",
+  "backup_dr_success": "Encrypted disaster-recovery backup (.pbfenc) downloaded.",
+  "backup_failed": "Database backup failed: {error}"
 };
 
 const KNOWN_PHRASE_KEYS = {

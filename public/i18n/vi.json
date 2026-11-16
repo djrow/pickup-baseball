@@ -336,5 +336,17 @@
   "event.edit_link_btn": "🔗 Gửi liên kết chỉnh sửa mới qua email",
   "event.edit_link_email_placeholder": "Nhập email bạn đã dùng cho RSVP",
   "event.edit_link_send_btn": "Gửi liên kết chỉnh sửa",
-  "event.edit_link_sending": "Đang gửi..."
+  "event.edit_link_sending": "Đang gửi...",
+  "backup_scrubbed_btn": "📥 SQL vận hành (.zip)",
+  "backup_dr_btn": "🔐 Sao lưu DR mã hóa (.pbfenc)",
+  "backup_scrubbed_working": "⏳ Đang xuất SQL đã lọc...",
+  "backup_dr_working": "⏳ Đang mã hóa bản sao lưu DR...",
+  "backup_dr_prompt_title": "🔐 Sao lưu khôi phục thảm họa (DR) mã hóa",
+  "backup_dr_prompt_msg": "Nhập cụm mật khẩu (ít nhất 8 ký tự) để mã hóa bản sao lưu khôi phục thảm họa đầy đủ này. Hãy giữ kỹ — bạn sẽ cần nó với scripts/restore-backup.js:",
+  "backup_dr_prompt_placeholder": "Nhập cụm mật khẩu mã hóa sao lưu...",
+  "backup_dr_confirm_btn": "Mã hóa & Tải xuống",
+  "backup_dr_passphrase_short": "Cụm mật khẩu sao lưu phải có ít nhất 8 ký tự.",
+  "backup_scrubbed_success": "Đã tải xuống bản sao lưu SQL vận hành.",
+  "backup_dr_success": "Đã tải xuống bản sao lưu DR mã hóa (.pbfenc).",
+  "backup_failed": "Sao lưu cơ sở dữ liệu thất bại: {error}"
 }

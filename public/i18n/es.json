@@ -336,5 +336,17 @@
   "event.edit_link_btn": "🔗 Envíame un enlace nuevo para editar",
   "event.edit_link_email_placeholder": "Ingresa el correo usado en tu confirmación",
   "event.edit_link_send_btn": "Enviar enlace de edición",
-  "event.edit_link_sending": "Enviando..."
+  "event.edit_link_sending": "Enviando...",
+  "backup_scrubbed_btn": "📥 SQL operativo (.zip)",
+  "backup_dr_btn": "🔐 Copia DR cifrada (.pbfenc)",
+  "backup_scrubbed_working": "⏳ Exportando SQL depurado...",
+  "backup_dr_working": "⏳ Cifrando copia DR...",
+  "backup_dr_prompt_title": "🔐 Copia completa de recuperación (DR) cifrada",
+  "backup_dr_prompt_msg": "Ingresa una frase de contraseña (mínimo 8 caracteres) para cifrar esta copia completa de recuperación. Guárdala en un lugar seguro — la necesitarás con scripts/restore-backup.js:",
+  "backup_dr_prompt_placeholder": "Ingresa la frase de contraseña de respaldo...",
+  "backup_dr_confirm_btn": "Cifrar y descargar",
+  "backup_dr_passphrase_short": "La frase de contraseña debe tener al menos 8 caracteres.",
+  "backup_scrubbed_success": "Copia SQL operativa depurada descargada.",
+  "backup_dr_success": "Copia de recuperación cifrada (.pbfenc) descargada.",
+  "backup_failed": "Error en la copia de seguridad: {error}"
 }

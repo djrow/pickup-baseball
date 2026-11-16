@@ -336,5 +336,17 @@
   "event.edit_link_btn": "🔗 मुझे नया संपादन लिंक ईमेल करें",
   "event.edit_link_email_placeholder": "अपने RSVP के लिए उपयोग किया गया ईमेल दर्ज करें",
   "event.edit_link_send_btn": "संपादन लिंक भेजें",
-  "event.edit_link_sending": "भेजा जा रहा है..."
+  "event.edit_link_sending": "भेजा जा रहा है...",
+  "backup_scrubbed_btn": "📥 ऑपरेशनल SQL (.zip)",
+  "backup_dr_btn": "🔐 एन्क्रिप्टेड DR बैकअप (.pbfenc)",
+  "backup_scrubbed_working": "⏳ स्क्रब किया गया SQL निर्यात हो रहा है...",
+  "backup_dr_working": "⏳ DR बैकअप एन्क्रिप्ट हो रहा है...",
+  "backup_dr_prompt_title": "🔐 एन्क्रिप्टेड पूर्ण DR बैकअप",
+  "backup_dr_prompt_msg": "इस पूर्ण आपदा-रिकवरी बैकअप को एन्क्रिप्ट करने के लिए पासफ़्रेज़ (कम से कम 8 अक्षर) दर्ज करें। इसे सुरक्षित रखें — scripts/restore-backup.js के साथ इसकी आवश्यकता होगी:",
+  "backup_dr_prompt_placeholder": "बैकअप एन्क्रिप्शन पासफ़्रेज़ दर्ज करें...",
+  "backup_dr_confirm_btn": "एन्क्रिप्ट और डाउनलोड करें",
+  "backup_dr_passphrase_short": "बैकअप पासफ़्रेज़ कम से कम 8 अक्षरों का होना चाहिए।",
+  "backup_scrubbed_success": "स्क्रब किया गया ऑपरेशनल SQL बैकअप डाउनलोड हो गया।",
+  "backup_dr_success": "एन्क्रिप्टेड आपदा-रिकवरी बैकअप (.pbfenc) डाउनलोड हो गया।",
+  "backup_failed": "डेटाबेस बैकअप विफल रहा: {error}"
 }

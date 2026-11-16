@@ -11,6 +11,7 @@ _worker.bundle
 *.db-shm
 data/
 backup*
+!tests/core/backup-dr.test.js
 .DS_Store
 Thumbs.db
 npm-debug.log*
@@ -18,5 +19,6 @@ npm-debug.log*
 
 baseball_backup*
 clubhouse_chat_backup*
+*.pbfenc
 d1*_backup*.sql
 pickupbaseballfoundation.org.txt

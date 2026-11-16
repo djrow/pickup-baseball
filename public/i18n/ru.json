@@ -336,5 +336,17 @@
   "event.edit_link_btn": "🔗 Отправить новую ссылку для редактирования",
   "event.edit_link_email_placeholder": "Введите email, указанный при регистрации",
   "event.edit_link_send_btn": "Отправить ссылку",
-  "event.edit_link_sending": "Отправка..."
+  "event.edit_link_sending": "Отправка...",
+  "backup_scrubbed_btn": "📥 Операционный SQL (.zip)",
+  "backup_dr_btn": "🔐 Зашифрованный DR-бэкап (.pbfenc)",
+  "backup_scrubbed_working": "⏳ Экспорт очищенного SQL...",
+  "backup_dr_working": "⏳ Шифрование DR-бэкапа...",
+  "backup_dr_prompt_title": "🔐 Зашифрованная полная DR-копия",
+  "backup_dr_prompt_msg": "Введите парольную фразу (не менее 8 символов) для шифрования полной резервной копии. Сохраните её — она потребуется для scripts/restore-backup.js:",
+  "backup_dr_prompt_placeholder": "Введите парольную фразу шифрования...",
+  "backup_dr_confirm_btn": "Зашифровать и скачать",
+  "backup_dr_passphrase_short": "Парольная фраза должна содержать не менее 8 символов.",
+  "backup_scrubbed_success": "Очищенная операционная SQL-копия скачана.",
+  "backup_dr_success": "Зашифрованная резервная DR-копия (.pbfenc) скачана.",
+  "backup_failed": "Ошибка резервного копирования БД: {error}"
 }

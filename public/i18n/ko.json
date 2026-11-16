@@ -336,5 +336,17 @@
   "event.edit_link_btn": "🔗 새 수정 링크 이메일로 받기",
   "event.edit_link_email_placeholder": "RSVP에 사용한 이메일을 입력하세요",
   "event.edit_link_send_btn": "수정 링크 보내기",
-  "event.edit_link_sending": "전송 중..."
+  "event.edit_link_sending": "전송 중...",
+  "backup_scrubbed_btn": "📥 운영 SQL 백업 (.zip)",
+  "backup_dr_btn": "🔐 암호화된 DR 백업 (.pbfenc)",
+  "backup_scrubbed_working": "⏳ 비식별 운영 SQL 내보내는 중...",
+  "backup_dr_working": "⏳ DR 백업 암호화 중...",
+  "backup_dr_prompt_title": "🔐 암호화된 전체 재해복구(DR) 백업",
+  "backup_dr_prompt_msg": "전체 재해복구 백업을 암호화할 암호문(최소 8자 이상)을 입력하세요. scripts/restore-backup.js로 복구할 때 필요하므로 안전하게 보관하세요:",
+  "backup_dr_prompt_placeholder": "백업 암호화 암호문 입력...",
+  "backup_dr_confirm_btn": "암호화 및 다운로드",
+  "backup_dr_passphrase_short": "백업 암호문은 최소 8자 이상이어야 합니다.",
+  "backup_scrubbed_success": "비식별 운영 SQL 백업이 다운로드되었습니다.",
+  "backup_dr_success": "암호화된 재해복구 백업(.pbfenc)이 다운로드되었습니다.",
+  "backup_failed": "데이터베이스 백업 실패: {error}"
 }
