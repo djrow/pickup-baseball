@@ -353,5 +353,18 @@
   "rtc_turn_available_note": "Le serveur relais de confidentialité TURN est configuré et prêt.",
   "rtc_turn_blocked_warning": "Le mode relais de confidentialité a bloqué la voix P2P directe car aucun serveur relais TURN n’est configuré.",
   "waiver.age_attestation_label": "Je confirme être âgé(e) de 18 ans ou plus, ou être le parent ou le tuteur légal signant au nom d’un participant mineur.",
-  "waiver.age_attestation_error": "Vous devez confirmer être âgé(e) de 18 ans ou plus (ou être un parent/tuteur légal signant pour un mineur)."
+  "waiver.age_attestation_error": "Vous devez confirmer être âgé(e) de 18 ans ou plus (ou être un parent/tuteur légal signant pour un mineur).",
+  "profile.export_title": "📦 Télécharger vos données",
+  "profile.export_desc": "Téléchargez une archive JSON de votre profil, historique de consentements, présences, tâches bénévoles, décharges signées et messages du Clubhouse.",
+  "profile.export_btn": "📥 Télécharger l’export JSON",
+  "profile.export_decrypt_label": "Déchiffrer mes messages Clubhouse chiffrés dans le navigateur avant d’enregistrer",
+  "profile.export_working": "⏳ Préparation de l’export...",
+  "profile.export_success": "Votre export de données personnelles a été téléchargé.",
+  "profile.export_success_decrypted": "Votre export de données personnelles (avec {count} message(s) E2EE déchiffré(s)) a été téléchargé.",
+  "profile.export_failed": "Échec de l’export de vos données : {error}",
+  "profile.export_passphrase_title": "🔐 Déverrouiller le coffre de clés E2EE",
+  "profile.export_passphrase_msg": "Entrez la phrase secrète de votre coffre de clés E2EE pour déchiffrer vos messages dans le navigateur avant l’enregistrement :",
+  "profile.export_passphrase_placeholder": "Entrez la phrase secrète du coffre...",
+  "profile.export_passphrase_confirm": "Déverrouiller et déchiffrer",
+  "profile.export_wrong_passphrase": "Phrase secrète incorrecte. Les messages chiffrés n’ont pas pu être déchiffrés."
 }
