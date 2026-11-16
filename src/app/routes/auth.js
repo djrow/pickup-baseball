@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import {
   SESSION_COOKIE_NAME,
+  SESSION_HASH_PREFIX,
   SESSION_DURATION_SECONDS,
   TEMPORARY_SESSION_DURATION_SECONDS,
   MAX_SESSIONS_PER_USER,
@@ -10,6 +11,7 @@ import {
   generateToken,
   generateCode,
   sha256Hex,
+  hashSessionId,
   getSafeRelativeRedirect,
   arrayBufferToBase64,
   base64ToUint8Array,
@@ -66,10 +68,11 @@ async function upsertUserAndCreateSession(c, cleanEmail, fallbackName, { sharedD
   const isTemporary = Boolean(sharedDevice);
   const durationSeconds = isTemporary ? TEMPORARY_SESSION_DURATION_SECONDS : SESSION_DURATION_SECONDS;
   const sessionId = generateToken();
+  const storedSessionId = await hashSessionId(sessionId);
   const expiresAt = new Date(Date.now() + durationSeconds * 1000).toISOString();
   await db.prepare(
     'INSERT INTO sessions (id, user_id, expires_at, is_temporary) VALUES (?, ?, ?, ?)'
-  ).bind(sessionId, user.id, expiresAt, isTemporary ? 1 : 0).run();
+  ).bind(storedSessionId, user.id, expiresAt, isTemporary ? 1 : 0).run();
 
   const isHttps = new URL(c.req.url).protocol === 'https:';
   /** @type {import('hono/utils/cookie').CookieOptions} */
@@ -699,6 +702,7 @@ authRouter.get('/sessions', requireAuth, async (c) => {
   if (!db) return c.json({ error: 'Database unavailable.' }, 500);
 
   const currentSessionId = getCookie(c, SESSION_COOKIE_NAME) || '';
+  const currentSessionHash = currentSessionId ? await hashSessionId(currentSessionId) : '';
   await db.prepare(
     "DELETE FROM sessions WHERE user_id = ? AND datetime(expires_at) <= datetime('now')"
   ).bind(user.id).run();
@@ -712,7 +716,9 @@ authRouter.get('/sessions', requireAuth, async (c) => {
 
   const rows = results || [];
   const sessions = rows.map((row) => ({
-    isCurrent: row.id === currentSessionId,
+    isCurrent: row.id === currentSessionHash || (
+      !String(row.id || '').startsWith(SESSION_HASH_PREFIX) && row.id === currentSessionId
+    ),
     isTemporary: Boolean(row.is_temporary),
     createdAt: row.created_at,
     expiresAt: row.expires_at
@@ -732,9 +738,11 @@ authRouter.post('/logout-other-devices', requireAuth, async (c) => {
   if (!db) return c.json({ error: 'Database unavailable.' }, 500);
 
   const currentSessionId = getCookie(c, SESSION_COOKIE_NAME) || '';
+  const currentSessionHash = currentSessionId ? await hashSessionId(currentSessionId) : '';
+  const legacySessionId = currentSessionId && !currentSessionId.startsWith(SESSION_HASH_PREFIX) ? currentSessionId : '';
   const delRes = await db.prepare(
-    'DELETE FROM sessions WHERE user_id = ? AND id != ?'
-  ).bind(user.id, currentSessionId).run();
+    'DELETE FROM sessions WHERE user_id = ? AND id != ? AND id != ?'
+  ).bind(user.id, currentSessionHash, legacySessionId).run();
   const revokedCount = (delRes && delRes.meta && typeof delRes.meta.changes === 'number') ? delRes.meta.changes : 0;
 
   const countRow = await db.prepare(
@@ -757,7 +765,10 @@ authRouter.post('/logout', async (c) => {
   const sessionId = getCookie(c, SESSION_COOKIE_NAME);
   if (sessionId && c.env.DB) {
     try {
-      await c.env.DB.prepare('DELETE FROM sessions WHERE id = ?').bind(sessionId).run();
+      const hashedId = await hashSessionId(sessionId);
+      await c.env.DB.prepare(
+        "DELETE FROM sessions WHERE id = ? OR (id = ? AND id NOT LIKE 'sha256:%')"
+      ).bind(hashedId, sessionId).run();
     } catch (e) {
       logEvent('warn', 'auth_logout_session_delete_failed', { err: e });
     }
