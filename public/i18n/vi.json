@@ -104,6 +104,7 @@
   "event.discussion_title": "💬 Bảng Thảo Luận Trận Đấu",
   "event.discussion_desc": "Phối hợp đi chung xe, hỏi về dụng cụ, thời tiết hoặc chia sẻ khoảnh khắc sau trận!",
   "event.no_comments_yet": "Chưa có bình luận nào. Bạn có câu hỏi về sân bãi hay dụng cụ? Hãy viết bên dưới!",
+  "event.comments_members_only": "Thảo luận trận đấu chỉ hiển thị cho các thành viên đã đăng nhập.",
   "event.signin_to_comment": "Vui lòng đăng nhập để tham gia thảo luận cùng đồng đội.",
   "event.signin_email_btn": "Đăng Nhập Bằng Email →",
   "event.leave_message": "Để Lại Lời Nhắn",

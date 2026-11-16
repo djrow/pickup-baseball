@@ -1165,11 +1165,27 @@ authRouter.post('/logout', async (c) => {
 // Top-level handlers mounted directly under /api
 export async function serveUserAvatar(c) {
   try {
-    const userId = parseInt(c.req.param('id'), 10);
-    if (!userId || isNaN(userId)) return c.text('Not found', 404);
+    const requester = c.get('user');
+    if (!requester) {
+      return c.json({ error: 'Authentication required.' }, 401);
+    }
 
-    const row = await c.env.DB.prepare('SELECT avatar_url FROM users WHERE id = ?').bind(userId).first();
-    if (!row || !row.avatar_url) return c.text('No avatar', 404);
+    const userId = parseInt(c.req.param('id'), 10);
+    if (!userId || isNaN(userId) || userId <= 0) return c.text('Not found', 404);
+
+    const row = await c.env.DB.prepare(
+      'SELECT id, avatar_url, COALESCE(profile_sharing, 0) as profile_sharing FROM users WHERE id = ?'
+    ).bind(userId).first();
+    if (!row) return c.text('Not found', 404);
+
+    const isOwner = Number(requester.id) === Number(userId);
+    const isOrganizer = Boolean(requester.canManageEvents || requester.isAdmin);
+    const hasProfileSharing = Boolean(row.profile_sharing);
+    if (!isOwner && !isOrganizer && !hasProfileSharing) {
+      return c.json({ error: 'Avatar is private unless profile sharing is enabled.' }, 403);
+    }
+
+    if (!row.avatar_url) return c.text('No avatar', 404);
 
     const raw = String(row.avatar_url).trim();
     const etag = `W/"av-${userId}-${raw.length}"`;
@@ -1178,7 +1194,8 @@ export async function serveUserAvatar(c) {
         status: 304,
         headers: {
           'ETag': etag,
-          'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800'
+          'Cache-Control': 'private, max-age=3600',
+          'Vary': 'Cookie'
         }
       });
     }
@@ -1191,7 +1208,8 @@ export async function serveUserAvatar(c) {
       status: 200,
       headers: {
         'Content-Type': match[1].toLowerCase(),
-        'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800',
+        'Cache-Control': 'private, max-age=3600',
+        'Vary': 'Cookie',
         'ETag': etag,
         'X-Content-Type-Options': 'nosniff'
       }

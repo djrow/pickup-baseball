@@ -104,6 +104,7 @@
   "event.discussion_title": "💬 Forum de Discussion du Match",
   "event.discussion_desc": "Coordonnez le covoiturage, posez des questions sur le matériel ou la météo !",
   "event.no_comments_yet": "Aucune discussion pour l'instant. Posez votre question ci-dessous !",
+  "event.comments_members_only": "La discussion du match est visible uniquement par les membres connectés.",
   "event.signin_to_comment": "Veuillez vous connecter pour participer à la discussion.",
   "event.signin_email_btn": "Connexion par E-mail →",
   "event.leave_message": "Laisser un Message",

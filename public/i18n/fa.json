@@ -104,6 +104,7 @@
   "event.discussion_title": "💬 تابلوی گفتگوی بازی",
   "event.discussion_desc": "هماهنگی مسیر، سوال درباره تجهیزات، آب‌وهوا یا پیام‌های بعد از بازی!",
   "event.no_comments_yet": "هنوز پیامی ثبت نشده است. سوالی دارید؟ گفتگو را در پایین شروع کنید!",
+  "event.comments_members_only": "گفتگوی بازی فقط برای اعضای واردشده قابل مشاهده است.",
   "event.signin_to_comment": "لطفاً برای شرکت در گفتگو وارد شوید.",
   "event.signin_email_btn": "ورود با ایمیل ←",
   "event.leave_message": "ارسال پیام",

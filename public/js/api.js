@@ -240,6 +240,7 @@ const EN_DICT = {
   "event.discussion_title": "💬 Game Discussion Board",
   "event.discussion_desc": "Coordinate carpools, ask about gear, discuss weather, or post post-game highlights!",
   "event.no_comments_yet": "No discussion yet. Have a question about field location or gear? Start the conversation below!",
+  "event.comments_members_only": "Game discussion is visible to signed-in members only.",
   "event.signin_to_comment": "Please sign in to join the game discussion and coordinate gear with teammates.",
   "event.signin_email_btn": "Sign In with Email →",
   "event.leave_message": "Leave a Message",

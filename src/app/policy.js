@@ -173,3 +173,234 @@ export async function getUserRollingShifts(db, userId, dutyType, targetEventDate
   `).bind(userId, targetEventId || 0, requiredBadge, targetEventDate).first();
   return row ? row.count : 0;
 }
+
+/**
+ * Abbreviate last names in a member directory ("First L.", or "First La."
+ * when multiple distinct users share the same first name and last initial).
+ * @param {Array<{user_id?: number|null, attendee_id?: number|null, id?: number|null, name?: string}>} records
+ * @returns {string[]}
+ */
+export function abbreviateMemberNames(records) {
+  const list = Array.isArray(records) ? records : [];
+  const seenIds = new Set();
+  const keyCounts = Object.create(null);
+
+  const parsed = list.map((rec, idx) => {
+    const raw = rec && rec.name ? String(rec.name).trim() : '';
+    const parts = raw ? raw.split(/\s+/) : [];
+    const first = parts.length > 1 ? parts.slice(0, -1).join(' ') : (parts[0] || '');
+    const last = parts.length > 1 ? parts[parts.length - 1].replace(/\.+$/, '') : '';
+    const key = (first && last) ? (first.toLowerCase() + '|' + last.charAt(0).toLowerCase()) : '';
+    let personId = 'i:' + idx;
+    if (rec) {
+      if (rec.user_id != null) personId = 'u:' + String(rec.user_id);
+      else if (rec.attendee_id != null) personId = 'a:' + String(rec.attendee_id);
+      else if (rec.id != null) personId = 'id:' + String(rec.id);
+    }
+    if (key && !seenIds.has(personId)) {
+      seenIds.add(personId);
+      keyCounts[key] = (keyCounts[key] || 0) + 1;
+    }
+    return { raw, first, last, key };
+  });
+
+  return parsed.map((p) => {
+    if (!p.raw) return 'Player';
+    if (!p.last) return p.raw;
+    const len = keyCounts[p.key] > 1 ? 2 : 1;
+    return p.first + ' ' + p.last.slice(0, len) + '.';
+  });
+}
+
+/**
+ * Returns true if the signed-in user holds Organizer or Admin permissions.
+ * @param {AppUser|null|undefined} user
+ * @returns {boolean}
+ */
+export function isViewerOrganizer(user) {
+  return Boolean(user && (user.canManageEvents || user.isAdmin));
+}
+
+/**
+ * Returns true if an attendee/waitlist row belongs to the current viewer (signed-in Member or ?token= Visitor).
+ * @param {AppUser|null|undefined} user
+ * @param {Record<string, any>} row
+ * @param {Record<string, any>|null|undefined} myRsvp
+ * @returns {boolean}
+ */
+export function isSelfAttendee(user, row, myRsvp) {
+  if (!row) return false;
+  if (user) {
+    if (row.user_id != null && Number(row.user_id) === Number(user.id)) return true;
+    if (user.email && row.email && String(user.email).toLowerCase() === String(row.email).toLowerCase()) return true;
+  }
+  if (myRsvp && row.id != null && Number(row.id) === Number(myRsvp.id)) return true;
+  return false;
+}
+
+/**
+ * Sanitizes event attendee/waitlist rows according to ADR-0005 privacy & consent rules.
+ * - Default peer Members see "First L." names and RSVP/task status only.
+ * - `notes` and `waiver_status` are restricted to Organizers and self.
+ * - Full name, `gear_bringing`, and `guest_names` require `roster_visibility`/`roster_consent` (or Organizer/self).
+ * - `bio` and `avatar_url` require `profile_sharing` (or Organizer/self).
+ * @param {Array<Record<string, any>>} rows
+ * @param {{ user?: AppUser|null, isOrganizer?: boolean, myRsvp?: Record<string, any>|null }} opts
+ * @returns {Array<Record<string, any>>}
+ */
+export function sanitizeAttendeesForViewer(rows, { user = null, isOrganizer = false, myRsvp = null } = {}) {
+  const list = Array.isArray(rows) ? rows : [];
+  const abbrNames = abbreviateMemberNames(list);
+
+  return list.map((row, idx) => {
+    const isSelf = isSelfAttendee(user, row, myRsvp);
+    const hasRosterConsent = Boolean(row.roster_visibility || row.roster_consent);
+    const hasProfileSharing = Boolean(row.profile_sharing);
+    const canSeeRoster = Boolean(isOrganizer || isSelf || hasRosterConsent);
+    const canSeePrivate = Boolean(isOrganizer || isSelf);
+    const canSeeProfile = Boolean(isOrganizer || isSelf || hasProfileSharing);
+
+    const {
+      email: _email,
+      roster_visibility: _rv,
+      profile_sharing: _ps,
+      roster_consent: _rc,
+      notes,
+      waiver_status,
+      ...rest
+    } = row;
+
+    /** @type {Record<string, any>} */
+    const sanitized = {
+      ...rest,
+      name: canSeeRoster ? row.name : abbrNames[idx],
+      gear_bringing: canSeeRoster ? (row.gear_bringing || '') : '',
+      guest_names: canSeeRoster ? (row.guest_names || '') : '',
+      bio: canSeeProfile ? (row.bio || '') : '',
+      avatar_url: canSeeProfile ? (row.avatar_url || '') : '',
+      show_full_name: canSeeRoster
+    };
+
+    if (canSeePrivate) {
+      sanitized.notes = notes || '';
+      sanitized.waiver_status = waiver_status || 'none';
+    }
+
+    return sanitized;
+  });
+}
+
+/**
+ * Sanitizes event comments for the current viewer. Visitors receive `[]`.
+ * @param {Array<Record<string, any>>} rows
+ * @param {{ user?: AppUser|null, isOrganizer?: boolean }} opts
+ * @returns {Array<Record<string, any>>}
+ */
+export function sanitizeCommentsForViewer(rows, { user = null, isOrganizer = false } = {}) {
+  if (!user) return [];
+  const list = Array.isArray(rows) ? rows : [];
+  const abbrNames = abbreviateMemberNames(
+    list.map((c) => ({ id: c.id, user_id: c.user_id, name: c.author_name }))
+  );
+
+  return list.map((c, idx) => {
+    const isSelf = Boolean(c.user_id != null && Number(c.user_id) === Number(user.id));
+    const hasRosterConsent = Boolean(c.roster_visibility);
+    const hasProfileSharing = Boolean(c.profile_sharing);
+    const canSeeRoster = Boolean(isOrganizer || isSelf || hasRosterConsent);
+    const canSeeProfile = Boolean(isOrganizer || isSelf || hasProfileSharing);
+
+    return {
+      id: c.id,
+      author_name: canSeeRoster ? c.author_name : abbrNames[idx],
+      content: c.content,
+      created_at: c.created_at,
+      user_id: c.user_id,
+      avatar_url: canSeeProfile ? (c.avatar_url || '') : '',
+      bio: canSeeProfile ? (c.bio || '') : '',
+      show_full_name: canSeeRoster
+    };
+  });
+}
+
+/**
+ * Sanitizes batting practice signup rows for signed-in Members / Organizers.
+ * @param {Array<Record<string, any>>} rows
+ * @param {{ user?: AppUser|null, isOrganizer?: boolean, myRsvp?: Record<string, any>|null }} opts
+ * @returns {Array<Record<string, any>>}
+ */
+export function sanitizeBpSignupsForViewer(rows, { user = null, isOrganizer = false, myRsvp = null } = {}) {
+  const list = Array.isArray(rows) ? rows : [];
+  const abbrNames = abbreviateMemberNames(
+    list.map((s) => ({ id: s.id, user_id: s.user_id, attendee_id: s.attendee_id, name: s.player_name }))
+  );
+
+  return list.map((s, idx) => {
+    const isSelf = Boolean(
+      (user && s.user_id != null && Number(s.user_id) === Number(user.id)) ||
+      (myRsvp && s.attendee_id != null && Number(s.attendee_id) === Number(myRsvp.id))
+    );
+    const hasRosterConsent = Boolean(s.roster_visibility || s.roster_consent);
+    const hasProfileSharing = Boolean(s.profile_sharing);
+    const canSeeRoster = Boolean(isOrganizer || isSelf || hasRosterConsent);
+    const canSeeProfile = Boolean(isOrganizer || isSelf || hasProfileSharing);
+
+    const {
+      roster_visibility: _rv,
+      roster_consent: _rc,
+      profile_sharing: _ps,
+      ...rest
+    } = s;
+
+    return {
+      ...rest,
+      player_name: canSeeRoster ? s.player_name : abbrNames[idx],
+      avatar_url: canSeeProfile ? (s.avatar_url || '') : '',
+      show_full_name: canSeeRoster
+    };
+  });
+}
+
+/**
+ * Sanitizes duty assignee lists for Visitors (own `?token=` RSVP only) and Members (`First L.` unless consented/Organizer/self).
+ * @param {Array<Record<string, any>>} players
+ * @param {{ user?: AppUser|null, isOrganizer?: boolean, myRsvp?: Record<string, any>|null, includeUserId?: boolean }} opts
+ * @returns {Array<Record<string, any>>}
+ */
+export function sanitizeDutyAssignedPlayers(players, { user = null, isOrganizer = false, myRsvp = null, includeUserId = false } = {}) {
+  const list = Array.isArray(players) ? players : [];
+  if (!user) {
+    return list.map((p) => {
+      const isOwnTokenRsvp = Boolean(myRsvp && p.attendee_id != null && Number(p.attendee_id) === Number(myRsvp.id));
+      /** @type {Record<string, any>} */
+      const out = {
+        attendee_id: p.attendee_id,
+        name: isOwnTokenRsvp ? p.name : ''
+      };
+      if (includeUserId) out.user_id = null;
+      if (isOwnTokenRsvp) out.show_full_name = true;
+      return out;
+    });
+  }
+
+  const abbrNames = abbreviateMemberNames(
+    list.map((p) => ({ id: p.attendee_id, attendee_id: p.attendee_id, user_id: p.user_id, name: p.name }))
+  );
+
+  return list.map((p, idx) => {
+    const isSelf = Boolean(
+      (p.user_id != null && Number(p.user_id) === Number(user.id)) ||
+      (user.email && p.email && String(user.email).toLowerCase() === String(p.email).toLowerCase())
+    );
+    const hasRosterConsent = Boolean(p.roster_visibility || p.roster_consent);
+    const canSeeRoster = Boolean(isOrganizer || isSelf || hasRosterConsent);
+    /** @type {Record<string, any>} */
+    const out = {
+      attendee_id: p.attendee_id,
+      name: canSeeRoster ? p.name : abbrNames[idx],
+      show_full_name: canSeeRoster
+    };
+    if (includeUserId) out.user_id = p.user_id;
+    return out;
+  });
+}

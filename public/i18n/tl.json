@@ -104,6 +104,7 @@
   "event.discussion_title": "💬 Talakayan sa Laro",
   "event.discussion_desc": "Mag-usap tungkol sa carpool, gamit, lagay ng panahon, o mga highlight!",
   "event.no_comments_yet": "Wala pang usapan. May tanong ka ba tungkol sa field o gamit? Mag-post sa ibaba!",
+  "event.comments_members_only": "Ang talakayan ng laro ay makikita lamang ng mga naka-sign in na miyembro.",
   "event.signin_to_comment": "Mangyaring mag-sign in upang makasali sa talakayan.",
   "event.signin_email_btn": "Mag-Sign In gamit ang Email →",
   "event.leave_message": "Mag-iwan ng Mensahe",

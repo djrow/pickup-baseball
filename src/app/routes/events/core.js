@@ -26,7 +26,12 @@ import {
   getDutyType,
   getDutyTier1Cap,
   getUserRollingShifts,
-  normalizeDutyFlags
+  normalizeDutyFlags,
+  isViewerOrganizer,
+  sanitizeAttendeesForViewer,
+  sanitizeCommentsForViewer,
+  sanitizeBpSignupsForViewer,
+  sanitizeDutyAssignedPlayers
 } from '../../policy.js';
 import { buildCalendarIcs } from '../../feeds.js';
 import { sendRainoutEmail, sendReopenEmail } from '../../mailer.js';
@@ -610,9 +615,17 @@ eventsCoreRouter.get('/:id', async (c) => {
       db.prepare(`
         SELECT d.*,
           COALESCE((
-            SELECT json_group_array(json_object('attendee_id', a.id, 'name', a.name))
+            SELECT json_group_array(json_object(
+              'attendee_id', a.id,
+              'user_id', a.user_id,
+              'name', a.name,
+              'email', a.email,
+              'roster_consent', COALESCE(a.roster_consent, 0),
+              'roster_visibility', COALESCE(u.roster_visibility, 0)
+            ))
             FROM duty_assignments da
             JOIN attendees a ON da.attendee_id = a.id
+            LEFT JOIN users u ON a.user_id = u.id
             WHERE da.duty_id = d.id AND a.status = 'attending'
           ), '[]') as assigned_players
         FROM event_duties d
@@ -620,12 +633,15 @@ eventsCoreRouter.get('/:id', async (c) => {
         ORDER BY d.sort_order ASC, d.id ASC
       `).bind(eventId),
       db.prepare(`
-        SELECT a.id, a.name, a.status, a.gear_bringing,
+        SELECT a.id, a.user_id, a.name, a.email, a.status, a.gear_bringing, a.notes,
           COALESCE(a.players_count, 1 + COALESCE(a.additional_guests, 0)) as players_count,
           COALESCE(a.spectators_count, 0) as spectators_count,
           a.additional_guests, a.guest_names, a.is_guest, a.created_at,
+          COALESCE(a.roster_consent, 0) as roster_consent,
           u.bio,
           COALESCE(u.waiver_status, 'none') as waiver_status,
+          COALESCE(u.roster_visibility, 0) as roster_visibility,
+          COALESCE(u.profile_sharing, 0) as profile_sharing,
           ${AVATAR_EXPR} as avatar_url,
           (
             SELECT group_concat(d.title, ', ')
@@ -639,11 +655,15 @@ eventsCoreRouter.get('/:id', async (c) => {
         ORDER BY a.created_at ASC
       `).bind(eventId),
       db.prepare(`
-        SELECT a.id, a.name, a.status,
+        SELECT a.id, a.user_id, a.name, a.email, a.status, a.gear_bringing, a.notes,
           COALESCE(a.players_count, 1 + COALESCE(a.additional_guests, 0)) as players_count,
           COALESCE(a.spectators_count, 0) as spectators_count,
           a.additional_guests, a.guest_names, a.is_guest, a.created_at,
+          COALESCE(a.roster_consent, 0) as roster_consent,
           u.bio,
+          COALESCE(u.waiver_status, 'none') as waiver_status,
+          COALESCE(u.roster_visibility, 0) as roster_visibility,
+          COALESCE(u.profile_sharing, 0) as profile_sharing,
           ${AVATAR_EXPR} as avatar_url
         FROM attendees a
         LEFT JOIN users u ON a.user_id = u.id
@@ -652,6 +672,8 @@ eventsCoreRouter.get('/:id', async (c) => {
       `).bind(eventId),
       db.prepare(`
         SELECT c.id, c.author_name, c.content, c.created_at, c.user_id,
+          COALESCE(u.roster_visibility, 0) as roster_visibility,
+          COALESCE(u.profile_sharing, 0) as profile_sharing,
           ${AVATAR_EXPR} as avatar_url,
           u.bio
         FROM comments c
@@ -662,10 +684,14 @@ eventsCoreRouter.get('/:id', async (c) => {
       db.prepare(`
         SELECT bp.id, bp.event_id, bp.user_id, bp.attendee_id, bp.slot_number,
           bp.player_name, bp.notes, bp.created_at,
+          COALESCE(a.roster_consent, 0) as roster_consent,
+          COALESCE(u.roster_visibility, 0) as roster_visibility,
+          COALESCE(u.profile_sharing, 0) as profile_sharing,
           ${AVATAR_EXPR} as avatar_url,
           u.role as user_role
         FROM batting_practice_signups bp
         LEFT JOIN users u ON bp.user_id = u.id
+        LEFT JOIN attendees a ON bp.attendee_id = a.id
         WHERE bp.event_id = ?
         ORDER BY bp.slot_number ASC
       `).bind(eventId)
@@ -748,7 +774,7 @@ eventsCoreRouter.get('/:id', async (c) => {
     const certifiedShiftsEnabled = cfg.FEATURE_CERTIFIED_SHIFTS;
     const battingPracticeEnabled = cfg.FEATURE_BATTING_PRACTICE;
 
-    const isOrganizer = Boolean(user && user.canManageEvents);
+    const isOrganizer = isViewerOrganizer(user);
     const canViewRoster = Boolean(user || (myRsvp && myRsvp.id));
     const tierInfo = certifiedShiftsEnabled
       ? getTaskTier(event.event_date)
@@ -819,15 +845,10 @@ eventsCoreRouter.get('/:id', async (c) => {
 
       return {
         ...d,
-        assigned_players: (d.assigned_players || []).map(p => {
-          const canSeeVolunteerName = Boolean(
-            (user && canViewRoster) ||
-            (!user && myRsvp && p.attendee_id === myRsvp.id)
-          );
-          return {
-            attendee_id: p.attendee_id,
-            name: canSeeVolunteerName ? p.name : ''
-          };
+        assigned_players: sanitizeDutyAssignedPlayers(d.assigned_players || [], {
+          user,
+          isOrganizer,
+          myRsvp
         }),
         duty_type: dType.type,
         is_paid: dType.isPaid,
@@ -884,21 +905,27 @@ eventsCoreRouter.get('/:id', async (c) => {
     }
 
     const canViewBpOrder = Boolean(battingPracticeEnabled && user && canUserAccessEvent(user, earlyAllowedList));
-    const visibleBpSignups = canViewBpOrder ? decoratedBpSignups : [];
+    const visibleBpSignups = canViewBpOrder
+      ? sanitizeBpSignupsForViewer(decoratedBpSignups, { user, isOrganizer, myRsvp })
+      : [];
 
-    const visibleAttendees = !canViewRoster
+    const rawVisibleAttendees = !canViewRoster
       ? []
       : (user ? attendees : attendees.filter(a => myRsvp && a.id === myRsvp.id));
-    const visibleWaitlist = !canViewRoster
+    const rawVisibleWaitlist = !canViewRoster
       ? []
       : (user ? waitlist : waitlist.filter(w => myRsvp && w.id === myRsvp.id));
+
+    const visibleAttendees = sanitizeAttendeesForViewer(rawVisibleAttendees, { user, isOrganizer, myRsvp });
+    const visibleWaitlist = sanitizeAttendeesForViewer(rawVisibleWaitlist, { user, isOrganizer, myRsvp });
+    const visibleComments = sanitizeCommentsForViewer(comments, { user, isOrganizer });
 
     return c.json({
       event: safeEventObj,
       duties: sanitizedDuties,
       attendees: visibleAttendees,
       waitlist: visibleWaitlist,
-      comments,
+      comments: visibleComments,
       bp_signups: visibleBpSignups,
       bpCount: battingPracticeEnabled ? bpSignups.length : 0,
       canViewBpOrder,

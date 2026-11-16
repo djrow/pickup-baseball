@@ -104,6 +104,7 @@
   "event.discussion_title": "💬 경기 자유 게시판",
   "event.discussion_desc": "카풀, 장비 문의, 날씨 확인 및 경기 후기를 남겨주세요!",
   "event.no_comments_yet": "아직 게시글이 없습니다. 구장이나 장비에 대해 궁금한 점을 아래에 남겨보세요!",
+  "event.comments_members_only": "경기 토론은 로그인한 회원만 볼 수 있습니다.",
   "event.signin_to_comment": "게시판 대화에 참여하려면 로그인해 주세요.",
   "event.signin_email_btn": "이메일로 로그인 →",
   "event.leave_message": "메시지 남기기",

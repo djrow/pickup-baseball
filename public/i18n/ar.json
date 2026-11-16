@@ -104,6 +104,7 @@
   "event.discussion_title": "💬 لوحة نقاش المباراة",
   "event.discussion_desc": "نسق المواصلات، اسأل عن المعدات، ناقش الطقس، أو شارك أبرز اللحظات!",
   "event.no_comments_yet": "لا توجد تعليقات بعد. ابدأ المحادثة أدناه!",
+  "event.comments_members_only": "مناقشة المباراة مرئية للأعضاء المسجلين فقط.",
   "event.signin_to_comment": "يرجى تسجيل الدخول للمشاركة في نقاش المباراة.",
   "event.signin_email_btn": "تسجيل الدخول بالبريد الإلكتروني ←",
   "event.leave_message": "اترك رسالة",
