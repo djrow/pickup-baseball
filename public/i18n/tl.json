@@ -352,5 +352,7 @@
   "backup_failed": "Nabigo ang database backup: {error}",
   "rtc_turn_unavailable_note": "Hindi available: Walang TURN privacy relay server na naka-configure sa deployment na ito.",
   "rtc_turn_available_note": "Naka-configure at handa na ang TURN privacy relay server.",
-  "rtc_turn_blocked_warning": "Hinarangan ng Privacy Relay Mode ang direktang P2P voice dahil walang naka-configure na TURN relay server."
+  "rtc_turn_blocked_warning": "Hinarangan ng Privacy Relay Mode ang direktang P2P voice dahil walang naka-configure na TURN relay server.",
+  "waiver.age_attestation_label": "Pinapatunayan ko na ako ay 18 taong gulang o mas matanda, o ako ang magulang o legal na tagapag-alaga na pumipirma sa ngalan ng isang menor de edad na kalahok.",
+  "waiver.age_attestation_error": "Dapat mong kumpirmahin na ikaw ay 18 taong gulang o mas matanda (o isang magulang/legal na tagapag-alaga na pumipirma para sa isang menor de edad)."
 }

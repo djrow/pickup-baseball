@@ -16,7 +16,8 @@ import {
   resolveChannel,
   isPublicGuestChannel,
   getAccessibleChannels,
-  hydrateMessages
+  hydrateMessages,
+  getBlockedUserIds
 } from './helpers.js';
 
 export const chatSyncRouter = /** @type {AppHono} */ (new Hono());
@@ -72,6 +73,7 @@ chatSyncRouter.get('/bootstrap', requireAuth, async (c) => {
       unread_counts: {},
       members: [],
       muted_user_ids: [],
+      blocked_user_ids: [],
       upcoming_game,
       last_message_id: 0,
       last_event_id: 0
@@ -203,6 +205,8 @@ chatSyncRouter.get('/bootstrap', requireAuth, async (c) => {
     logEvent('warn', 'chat_bootstrap_mutes_load_failed', { err: e });
   }
 
+  const blocked_user_ids = await getBlockedUserIds(chatDb, user.id);
+
   let last_message_id = 0;
   let last_event_id = 0;
   try {
@@ -221,6 +225,7 @@ chatSyncRouter.get('/bootstrap', requireAuth, async (c) => {
     unread_counts,
     members,
     muted_user_ids,
+    blocked_user_ids,
     upcoming_game,
     last_message_id,
     last_event_id
@@ -254,9 +259,17 @@ chatSyncRouter.get('/sync', requireAuth, async (c) => {
       SELECT
         (SELECT COALESCE(MAX(id), 0) FROM messages) as max_msg_id,
         (SELECT COALESCE(MAX(id), 0) FROM sync_events) as max_event_id,
-        EXISTS(SELECT 1 FROM rtc_signals WHERE recipient_user_id = ? AND created_at > ? AND id > ?) as has_signals,
+        EXISTS(
+          SELECT 1 FROM rtc_signals
+          WHERE recipient_user_id = ? AND created_at > ? AND id > ?
+            AND sender_user_id NOT IN (
+              SELECT blocked_id FROM user_blocks WHERE blocker_id = ?
+              UNION
+              SELECT blocker_id FROM user_blocks WHERE blocked_id = ?
+            )
+        ) as has_signals,
         EXISTS(SELECT 1 FROM voice_participants WHERE heartbeat_at > ?) as has_voice
-    `).bind(user.id, nowSec - 60, sinceSignalId, nowSec - 25).first();
+    `).bind(user.id, nowSec - 60, sinceSignalId, user.id, user.id, nowSec - 25).first();
 
     if (
       watermark &&
@@ -342,9 +355,14 @@ chatSyncRouter.get('/sync', requireAuth, async (c) => {
   const { results: rawSignals } = await chatDb.prepare(
     `SELECT * FROM rtc_signals
      WHERE recipient_user_id = ? AND created_at > ? AND id > ?
+       AND sender_user_id NOT IN (
+         SELECT blocked_id FROM user_blocks WHERE blocker_id = ?
+         UNION
+         SELECT blocker_id FROM user_blocks WHERE blocked_id = ?
+       )
      ORDER BY id DESC
      LIMIT 100`
-  ).bind(user.id, nowSec - 60, sinceSignalId).all();
+  ).bind(user.id, nowSec - 60, sinceSignalId, user.id, user.id).all();
 
   const rtc_signals = (rawSignals || []).slice().reverse();
 
@@ -354,6 +372,7 @@ chatSyncRouter.get('/sync', requireAuth, async (c) => {
 
   const accessibleSet = new Set(accessibleChannels.map((ch) => ch.id));
   const voice_participants = (rawVoice || []).filter((vp) => accessibleSet.has(vp.channel_id));
+  const blocked_user_ids = await getBlockedUserIds(chatDb, user.id);
 
   const latest_msg_id = messages.length > 0 ? messages[messages.length - 1].id : sinceMsgId;
   const latest_event_id = events.length > 0 ? events[events.length - 1].id : sinceEventId;
@@ -363,6 +382,7 @@ chatSyncRouter.get('/sync', requireAuth, async (c) => {
     events,
     rtc_signals,
     voice_participants,
+    blocked_user_ids,
     latest_msg_id,
     latest_event_id
   });

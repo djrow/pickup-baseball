@@ -352,5 +352,7 @@
   "backup_failed": "数据库备份失败：{error}",
   "rtc_turn_unavailable_note": "不可用：此部署未配置 TURN 隐私中继服务器。",
   "rtc_turn_available_note": "TURN 隐私中继服务器已配置并就绪。",
-  "rtc_turn_blocked_warning": "由于未配置 TURN 中继服务器，隐私中继模式已阻止直接 P2P 语音连接。"
+  "rtc_turn_blocked_warning": "由于未配置 TURN 中继服务器，隐私中继模式已阻止直接 P2P 语音连接。",
+  "waiver.age_attestation_label": "我确认我已年满 18 周岁，或我是代表未成年参与者签署本协议的父母或法定监护人。",
+  "waiver.age_attestation_error": "您必须确认您已年满 18 周岁（或为代表未成年人签署的父母/法定监护人）。"
 }

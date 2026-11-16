@@ -312,6 +312,7 @@ module.exports = function registerDehardcodeTests(ctx) {
             signed_date: '2026-11-15',
             signature_type: 'drawn',
             signature_data: SAMPLE_PNG_SIG,
+            age_attestation: true,
             electronic_consent: true
           })
         }), pbfEnv);
@@ -356,6 +357,7 @@ module.exports = function registerDehardcodeTests(ctx) {
             signed_date: '2026-11-15',
             signature_type: 'drawn',
             signature_data: SAMPLE_PNG_SIG,
+            age_attestation: true,
             electronic_consent: true
           })
         }), genEnv);

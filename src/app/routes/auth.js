@@ -646,7 +646,8 @@ authRouter.delete('/users/:id', requireAdmin, async (c) => {
         c.env.CHAT_DB.prepare('DELETE FROM channel_key_shares WHERE recipient_user_id = ? OR sender_user_id = ?').bind(targetId, targetId),
         c.env.CHAT_DB.prepare('DELETE FROM voice_participants WHERE user_id = ?').bind(targetId),
         c.env.CHAT_DB.prepare('DELETE FROM rtc_signals WHERE sender_user_id = ? OR recipient_user_id = ?').bind(targetId, targetId),
-        c.env.CHAT_DB.prepare('DELETE FROM user_mutes WHERE muter_user_id = ? OR muted_user_id = ?').bind(targetId, targetId)
+        c.env.CHAT_DB.prepare('DELETE FROM user_mutes WHERE muter_user_id = ? OR muted_user_id = ?').bind(targetId, targetId),
+        c.env.CHAT_DB.prepare('DELETE FROM user_blocks WHERE blocker_id = ? OR blocked_id = ?').bind(targetId, targetId)
       ]);
     } catch (chatErr) {
       console.warn('[Auth] Best-effort CHAT_DB cleanup failed on user delete:', chatErr);

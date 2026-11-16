@@ -104,6 +104,18 @@ function parseBooleanFlag(rawVal, fallback) {
 }
 
 /**
+ * @param {any} rawVal
+ * @param {number} fallback
+ * @returns {number}
+ */
+function parsePositiveInt(rawVal, fallback) {
+  if (rawVal === undefined || rawVal === null || rawVal === '') return fallback;
+  const parsed = Number.parseInt(String(rawVal).trim(), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return parsed;
+}
+
+/**
  * @param {Record<string, any>} env
  * @returns {'resend' | 'brevo' | 'mock'}
  */
@@ -247,6 +259,8 @@ export function resolveConfig(env) {
     STORAGE_PROVIDER: resolveStorageProvider(source),
     TURN_ICE_SERVERS,
     TURN_CONFIGURED,
+    WAIVER_SIGNING_SECRET: cleanString(source.WAIVER_SIGNING_SECRET),
+    WAIVER_RETENTION_YEARS: parsePositiveInt(source.WAIVER_RETENTION_YEARS, 3),
     FEATURE_BATTING_PRACTICE: parseBooleanFlag(source.FEATURE_BATTING_PRACTICE, defaults.FEATURE_BATTING_PRACTICE),
     FEATURE_CERTIFIED_SHIFTS: parseBooleanFlag(source.FEATURE_CERTIFIED_SHIFTS, defaults.FEATURE_CERTIFIED_SHIFTS),
     FEATURE_SUNDAY_PRIORITY: parseBooleanFlag(source.FEATURE_SUNDAY_PRIORITY, defaults.FEATURE_SUNDAY_PRIORITY)
