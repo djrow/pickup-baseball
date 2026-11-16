@@ -211,22 +211,47 @@ function bindSqlParameters(sql, params = []) {
   return out;
 }
 
+function parseWranglerJsonOutput(rawOutput) {
+  const trimmed = String(rawOutput || '').trim();
+  if (!trimmed) {
+    throw new SyntaxError('Unexpected end of JSON input');
+  }
+  try {
+    return JSON.parse(trimmed);
+  } catch (err) {
+    const match = trimmed.match(/(?:^|\r?\n)\s*(\[[\s\S]*\]|\{[\s\S]*\})\s*$/);
+    if (match) {
+      return JSON.parse(match[1]);
+    }
+    throw err;
+  }
+}
+
 function defaultWranglerExec(databaseName, sqlText, flags) {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pbf-d1-migrate-'));
-  const sqlFile = path.join(tmpDir, 'batch.sql');
-  fs.writeFileSync(sqlFile, sqlText, 'utf8');
+  const useCommand = Array.isArray(flags) && flags.includes('--remote') && sqlText.length <= 16000;
+  let tmpDir = null;
 
   try {
+    const wranglerArgs = [WRANGLER_BIN, 'd1', 'execute', databaseName, ...flags, '--json', '--yes'];
+    if (useCommand) {
+      wranglerArgs.push('--command', sqlText);
+    } else {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pbf-d1-migrate-'));
+      const sqlFile = path.join(tmpDir, 'batch.sql');
+      fs.writeFileSync(sqlFile, sqlText, 'utf8');
+      wranglerArgs.push('--file', sqlFile);
+    }
+
     const stdout = execFileSync(
       process.execPath,
-      [WRANGLER_BIN, 'd1', 'execute', databaseName, ...flags, '--json', '--yes', '--file', sqlFile],
+      wranglerArgs,
       {
         cwd: ROOT_DIR,
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'pipe']
       }
     );
-    const parsed = JSON.parse(stdout || '[]');
+    const parsed = parseWranglerJsonOutput(stdout || '[]');
     if (!Array.isArray(parsed)) {
       throw new Error(`Unexpected wrangler d1 execute output: ${stdout}`);
     }
@@ -236,7 +261,7 @@ function defaultWranglerExec(databaseName, sqlText, flags) {
     const stderr = err && err.stderr ? String(err.stderr) : '';
     let wranglerErrorText = '';
     try {
-      const parsedErr = JSON.parse(stdout || '{}');
+      const parsedErr = parseWranglerJsonOutput(stdout || '{}');
       if (parsedErr && parsedErr.error && parsedErr.error.text) {
         wranglerErrorText = parsedErr.error.text;
       }
@@ -245,7 +270,9 @@ function defaultWranglerExec(databaseName, sqlText, flags) {
     }
     throw new Error(wranglerErrorText || stderr.trim() || stdout.trim() || err.message, { cause: err });
   } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    if (tmpDir) {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
   }
 }
 
@@ -431,6 +458,7 @@ if (require.main === module) {
 module.exports = {
   parseArgs,
   parseWranglerD1Bindings,
+  parseWranglerJsonOutput,
   bindSqlParameters,
   createWranglerD1Adapter,
   runMigrateCli

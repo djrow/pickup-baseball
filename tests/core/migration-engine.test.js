@@ -1440,6 +1440,23 @@ module.exports = function registerMigrationEngineTests() {
       raw.close();
     }
   });
+
+  test('migrate-db CLI: parseWranglerJsonOutput strips Wrangler progress preamble and parses JSON payloads', () => {
+    const { parseWranglerJsonOutput } = require(MIGRATE_SCRIPT);
+
+    assert.deepEqual(parseWranglerJsonOutput('[]'), []);
+    assert.deepEqual(
+      parseWranglerJsonOutput(
+        '├ Checking if file needs uploading\n│\n├ 🌀 Uploading batch.sql\n│ 🌀 Uploading complete.\n│\n[\n  { "results": [{ "ok": 1 }], "success": true }\n]\n'
+      ),
+      [{ results: [{ ok: 1 }], success: true }]
+    );
+    assert.deepEqual(
+      parseWranglerJsonOutput('├ Checking...\r\n{\r\n  "error": { "text": "SQLITE_ERROR" }\r\n}\r\n'),
+      { error: { text: 'SQLITE_ERROR' } }
+    );
+    assert.throws(() => parseWranglerJsonOutput('├ Checking...\nno json here'), SyntaxError);
+  });
 };
 
 if (require.main === module) {
