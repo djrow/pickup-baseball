@@ -225,6 +225,13 @@ function registerRateLimitHmacTests() {
         });
         assert.equal(sigRes.status, 200);
 
+        const blockRes = await ctx.apiFetch('/api/blocks', {
+          method: 'POST',
+          cookie: alice.cookie,
+          body: { blocked_user_id: bob.userId }
+        });
+        assert.equal(blockRes.status, 201);
+
         const chatRows = ctx.chatSqlite.prepare('SELECT key, count, window_start, expires_at FROM chat_rate_limits').all();
         const expectedBuckets = [
           'chat_msgs',
@@ -234,7 +241,8 @@ function registerRateLimitHmacTests() {
           'chat_att_init',
           'chat_voice_join',
           'chat_voice_state',
-          'chat_rtc_sig'
+          'chat_rtc_sig',
+          'chat_blocks'
         ];
         const expectedKeys = [
           ...(await Promise.all(
