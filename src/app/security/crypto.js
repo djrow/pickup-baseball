@@ -75,6 +75,25 @@ export async function sha256Hex(input) {
 }
 
 /**
+ * Computes an HMAC-SHA256 hex digest using Web Crypto.
+ * @param {string} secret
+ * @param {string} message
+ * @returns {Promise<string>}
+ */
+export async function hmacSha256Hex(secret, message) {
+  const enc = new TextEncoder();
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    enc.encode(String(secret)),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const sigBuffer = await crypto.subtle.sign('HMAC', cryptoKey, enc.encode(String(message)));
+  return Array.from(new Uint8Array(sigBuffer), (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
  * Hashes a raw session token for storage at rest (`sha256:<hex>`).
  * @param {string} rawId
  * @returns {Promise<string>}

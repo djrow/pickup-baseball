@@ -117,7 +117,7 @@ eventsCoreRouter.get('/', async (c) => {
 });
 
 const BACKUP_PAGE_SIZE = 100;
-const SECRET_APP_SETTING_KEYS = new Set(['waiver_provenance_secret', 'appscript_upload_url']);
+const SECRET_APP_SETTING_KEYS = new Set(['waiver_provenance_secret', 'appscript_upload_url', 'rate_limit_hmac_secret']);
 const SCRUBBED_APP_SETTING_KEYS = new Set(['schema_version', 'require_login_to_rsvp', 'disallow_zero_login_media']);
 
 const SCRUBBED_TABLE_QUERIES = {
@@ -142,7 +142,7 @@ const DR_TABLE_QUERIES = {
   posts: 'SELECT * FROM "posts" LIMIT ? OFFSET ?',
   media_items: 'SELECT * FROM "media_items" LIMIT ? OFFSET ?',
   banned_emails: 'SELECT * FROM "banned_emails" LIMIT ? OFFSET ?',
-  app_settings: `SELECT * FROM "app_settings" WHERE key NOT IN ('waiver_provenance_secret', 'appscript_upload_url') LIMIT ? OFFSET ?`,
+  app_settings: `SELECT * FROM "app_settings" WHERE key NOT IN ('waiver_provenance_secret', 'appscript_upload_url', 'rate_limit_hmac_secret') LIMIT ? OFFSET ?`,
   batting_practice_signups: 'SELECT * FROM "batting_practice_signups" LIMIT ? OFFSET ?',
   waivers: 'SELECT * FROM "waivers" LIMIT ? OFFSET ?',
   consent_records: 'SELECT * FROM "consent_records" LIMIT ? OFFSET ?',
@@ -315,7 +315,7 @@ function decodeStrictBase64Bytes(raw) {
 eventsCoreRouter.get('/admin/backup-db', requireAdmin, async (c) => {
   try {
     const user = c.get('user');
-    const backupLimit = await checkRateLimit(c.env.DB, `admin_backup_${user ? user.id : 'anon'}`, 5, 3600, c.env);
+    const backupLimit = await checkRateLimit(c.env.DB, `admin_backup:${user ? user.id : 'anon'}`, 5, 3600, c.env);
     if (!backupLimit.allowed) {
       return c.json({ error: 'Too many database backup requests. Please wait before exporting again.' }, 429);
     }
@@ -369,7 +369,7 @@ eventsCoreRouter.get('/admin/backup-db', requireAdmin, async (c) => {
 eventsCoreRouter.post('/admin/backup-db', requireAdmin, async (c) => {
   try {
     const user = c.get('user');
-    const backupLimit = await checkRateLimit(c.env.DB, `admin_backup_dr_${user ? user.id : 'anon'}`, 5, 3600, c.env);
+    const backupLimit = await checkRateLimit(c.env.DB, `admin_backup_dr:${user ? user.id : 'anon'}`, 5, 3600, c.env);
     if (!backupLimit.allowed) {
       return c.json({ error: 'Too many database backup requests. Please wait before exporting again.' }, 429);
     }

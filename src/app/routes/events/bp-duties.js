@@ -217,7 +217,7 @@ eventsBpDutiesRouter.post('/:id/bp-order', async (c) => {
     const db = c.env.DB;
     const clientIp = getClientIp(c);
 
-    const bpLimit = await checkRateLimit(db, `bp_${clientIp}`, 30, 60, c.env);
+    const bpLimit = await checkRateLimit(db, `bp:${clientIp}`, 30, 60, c.env);
     if (!bpLimit.allowed) {
       return c.json({ error: 'Too many batting practice requests. Please wait a minute and try again.' }, 429);
     }
@@ -279,7 +279,7 @@ eventsBpDutiesRouter.post('/:id/bp-order', async (c) => {
     }
 
     if (!user && !attendeeId) {
-      const anonBpLimit = await checkRateLimit(db, `bp_anon_${eventId}_${clientIp}`, 3, 3600, c.env);
+      const anonBpLimit = await checkRateLimit(db, `bp_anon:${eventId}:${clientIp}`, 3, 3600, c.env);
       if (!anonBpLimit.allowed) {
         return c.json({ error: 'Too many unauthenticated batting practice signups. Please sign in or RSVP first.' }, 429);
       }
