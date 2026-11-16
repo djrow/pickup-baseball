@@ -280,4 +280,5 @@ require('../tests/core/rate-limit-hmac.test.js')();
 require('../tests/core/data-export.test.js')();
 require('../tests/core/two-tier-erasure.test.js')();
 require('../tests/core/privacy-consent.test.js')();
+require('../tests/core/peer-block-ui.test.js')();
 require('../tests/clubhouse/index.js')();

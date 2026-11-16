@@ -406,7 +406,28 @@ const EN_DICT = {
   "profile.notify_community_label": "Community updates and announcements",
   "event.visitor_privacy_title": "🔒 Privacy & Notification Choices (Optional)",
   "event.visitor_roster_consent_label": "Show my full name, shared gear, and companion names to signed-in members on the roster (otherwise shown as \"First L.\")",
-  "event.visitor_notify_emails_label": "Send me game reminder and rainout notification emails for this event (if email provided)"
+  "event.visitor_notify_emails_label": "Send me game reminder and rainout notification emails for this event (if email provided)",
+  "clubhouse.peer_block_btn": "🚫 Block",
+  "clubhouse.peer_unblock_btn": "🔓 Unblock",
+  "clubhouse.peer_block_badge": "🚫 Blocked",
+  "clubhouse.peer_block_title": "Block this member (hides their shared-channel messages and prevents 1:1 DMs and voice)",
+  "clubhouse.peer_unblock_title": "Unblock this member",
+  "clubhouse.peer_block_confirm_title": "🚫 Block Member",
+  "clubhouse.peer_block_confirm_msg": "Block {name}? This prevents 1:1 Direct Messages and voice calls between you two, and hides their messages in shared channels and group DMs for you. Announcement boards and Moderator actions are not affected.",
+  "clubhouse.peer_block_btn_confirm": "Block Member",
+  "clubhouse.peer_unblock_confirm_title": "🔓 Unblock Member",
+  "clubhouse.peer_unblock_confirm_msg": "Unblock {name}? You will be able to exchange 1:1 Direct Messages and voice calls again, and their shared-channel messages will be visible.",
+  "clubhouse.peer_unblock_btn_confirm": "Unblock Member",
+  "clubhouse.peer_block_success": "{name} has been blocked.",
+  "clubhouse.peer_unblock_success": "{name} has been unblocked.",
+  "clubhouse.peer_block_error": "Unable to update block status.",
+  "clubhouse.peer_blocked_msg_stub": "🚫 Message from blocked member {name} hidden from your view.",
+  "clubhouse.peer_blocked_reply_stub": "🚫 Reply from blocked member {name} hidden.",
+  "clubhouse.peer_blocked_show_once": "Show once",
+  "clubhouse.peer_blocked_unblock_short": "Unblock",
+  "clubhouse.peer_blocked_dm_notice": "🚫 Direct messages are blocked between you and this member.",
+  "clubhouse.peer_blocked_dm_self": "Unblock this member to start or send a 1:1 Direct Message.",
+  "clubhouse.peer_blocked_voice_notice": "🚫 Voice calls are blocked between you and this member."
 };
 
 const KNOWN_PHRASE_KEYS = {
