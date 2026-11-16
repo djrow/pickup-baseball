@@ -352,6 +352,8 @@
   "rtc_turn_unavailable_note": "Indisponível: Nenhum servidor TURN de retransmissão de privacidade está configurado nesta implantação.",
   "rtc_turn_available_note": "Servidor TURN de retransmissão de privacidade configurado e pronto.",
   "rtc_turn_blocked_warning": "O Modo de Retransmissão de Privacidade bloqueou a voz P2P direta porque nenhum servidor TURN está configurado.",
+  "waiver.age_attestation_label": "Confirmo que tenho 18 anos ou mais, ou que sou pai, mãe ou responsável legal assinando em nome de um participante menor de idade.",
+  "waiver.age_attestation_error": "Você deve confirmar que tem 18 anos ou mais (ou é pai/mãe ou responsável legal assinando por um menor).",
   "profile.erasure_title": "🗑️ Excluir conta e apagar dados",
   "profile.erasure_notice": "Excluir sua conta remove imediatamente seu perfil, sessões, códigos de acesso, registros de consentimento, confirmações futuras, tarefas e vagas de treino de rebatida. Contagens passadas, comentários e publicações são anonimizados. Aviso de retenção de termo legal: termos de responsabilidade assinados permanecem selados em quarentena restrita a administradores por 3 anos após a assinatura ou seu último evento, sendo depois apagados permanentemente.",
   "profile.erasure_keep_gallery": "Manter minhas fotos/vídeos aprovados na Galeria atribuídos anonimamente a \"Community Member\" (itens não aprovados são sempre excluídos)",

@@ -330,3 +330,124 @@ export async function hydrateMessages(chatDb, messages) {
 
   return messages.map((m) => normalizeMessageRow(m, reactionsByMsg, attachmentsByMsg));
 }
+
+/**
+ * List user IDs personally blocked by `userId`.
+ * @param {D1Database} chatDb
+ * @param {number} userId
+ * @returns {Promise<number[]>}
+ */
+export async function getBlockedUserIds(chatDb, userId) {
+  if (!chatDb || !userId) return [];
+  try {
+    const { results } = await chatDb.prepare(
+      'SELECT blocked_id FROM user_blocks WHERE blocker_id = ? ORDER BY created_at DESC'
+    ).bind(userId).all();
+    return (results || []).map((r) => Number(r.blocked_id)).filter((n) => Number.isFinite(n) && n > 0);
+  } catch (e) {
+    logEvent('warn', 'chat_blocked_users_load_failed', { userId, err: e });
+    return [];
+  }
+}
+
+/**
+ * Return true if either member has blocked the other in `user_blocks`.
+ * @param {D1Database} chatDb
+ * @param {number} userAId
+ * @param {number} userBId
+ * @returns {Promise<boolean>}
+ */
+export async function isPeerBlocked(chatDb, userAId, userBId) {
+  const a = Number(userAId);
+  const b = Number(userBId);
+  if (!chatDb || !a || !b || a === b) return false;
+  const row = await chatDb.prepare(
+    'SELECT 1 FROM user_blocks WHERE (blocker_id = ? AND blocked_id = ?) OR (blocker_id = ? AND blocked_id = ?) LIMIT 1'
+  ).bind(a, b, b, a).first();
+  return Boolean(row);
+}
+
+/**
+ * Resolve the peer user IDs of a 1:1 DM channel for `actorUserId`.
+ * @param {D1Database} chatDb
+ * @param {Record<string, any>|null} channel
+ * @param {number} actorUserId
+ * @returns {Promise<number[]>}
+ */
+export async function getDmPeerIds(chatDb, channel, actorUserId) {
+  if (!chatDb || !channel || channel.channel_type !== 'dm') return [];
+  const actor = Number(actorUserId);
+  const peerSet = new Set();
+
+  const { results: memberRows } = await chatDb.prepare(
+    'SELECT user_id FROM channel_members WHERE channel_id = ?'
+  ).bind(channel.id).all();
+  for (const row of (memberRows || [])) {
+    const uid = Number(row.user_id);
+    if (uid > 0 && uid !== actor) {
+      peerSet.add(uid);
+    }
+  }
+
+  // Fallback to canonical `dm-<a>-<b>` slug if channel_members is incomplete
+  if (peerSet.size === 0 && typeof channel.slug === 'string') {
+    const m = /^dm-(\d+)-(\d+)$/.exec(channel.slug);
+    if (m) {
+      const id1 = Number(m[1]);
+      const id2 = Number(m[2]);
+      if (id1 > 0 && id1 !== actor) peerSet.add(id1);
+      if (id2 > 0 && id2 !== actor) peerSet.add(id2);
+    }
+  }
+
+  return Array.from(peerSet);
+}
+
+/**
+ * Return true if `userId` has a bidirectional block with any user in `peerIds`.
+ * @param {D1Database} chatDb
+ * @param {number} userId
+ * @param {number[]} peerIds
+ * @returns {Promise<boolean>}
+ */
+export async function isAnyPeerBlocked(chatDb, userId, peerIds) {
+  const actor = Number(userId);
+  const targets = Array.from(new Set((peerIds || []).map(Number).filter((n) => Number.isFinite(n) && n > 0 && n !== actor)));
+  if (!chatDb || !actor || targets.length === 0) return false;
+
+  for (const idChunk of chunkArray(targets, 40)) {
+    const placeholders = idChunk.map(() => '?').join(',');
+    const row = await chatDb.prepare(
+      `SELECT 1 FROM user_blocks
+       WHERE (blocker_id = ? AND blocked_id IN (${placeholders}))
+          OR (blocked_id = ? AND blocker_id IN (${placeholders}))
+       LIMIT 1`
+    ).bind(actor, ...idChunk, actor, ...idChunk).first();
+    if (row) return true;
+  }
+  return false;
+}
+
+/**
+ * Return a 403 PEER_BLOCKED response if `channel` is a 1:1 DM with a blocked peer.
+ * @param {AppContext} c
+ * @param {D1Database} chatDb
+ * @param {Record<string, any>|null} channel
+ * @param {number} userId
+ * @param {string} [errorMessage]
+ * @returns {Promise<Response|null>}
+ */
+export async function rejectIfDmPeerBlocked(
+  c,
+  chatDb,
+  channel,
+  userId,
+  errorMessage = 'Direct messages are blocked between you and this member.'
+) {
+  if (!channel || channel.channel_type !== 'dm') return null;
+  const peerIds = await getDmPeerIds(chatDb, channel, userId);
+  if (await isAnyPeerBlocked(chatDb, userId, peerIds)) {
+    return c.json({ error: errorMessage, code: 'PEER_BLOCKED' }, 403);
+  }
+  return null;
+}

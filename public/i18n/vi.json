@@ -352,6 +352,8 @@
   "rtc_turn_unavailable_note": "Không khả dụng: Chưa cấu hình máy chủ chuyển tiếp bảo mật TURN trên hệ thống này.",
   "rtc_turn_available_note": "Máy chủ chuyển tiếp bảo mật TURN đã được cấu hình và sẵn sàng.",
   "rtc_turn_blocked_warning": "Chế độ Chuyển tiếp Bảo mật đã chặn kết nối thoại P2P trực tiếp vì chưa cấu hình máy chủ TURN.",
+  "waiver.age_attestation_label": "Tôi xác nhận rằng tôi đủ 18 tuổi trở lên, hoặc tôi là cha/mẹ hay người giám hộ hợp pháp ký thay cho người tham gia chưa thành niên.",
+  "waiver.age_attestation_error": "Bạn phải xác nhận mình đủ 18 tuổi trở lên (hoặc là cha/mẹ hay người giám hộ hợp pháp ký thay cho trẻ vị thành niên).",
   "profile.erasure_title": "🗑️ Xóa tài khoản & Xóa dữ liệu",
   "profile.erasure_notice": "Xóa tài khoản sẽ gỡ bỏ ngay hồ sơ, phiên đăng nhập, mã đăng nhập, bản ghi đồng ý, đăng ký tham gia sắp tới, nhiệm vụ và lượt tập đánh bóng. Số liệu tham dự trước đây, bình luận và bài đăng sẽ được ẩn danh. Thông báo lưu giữ giấy miễn trừ: Giấy miễn trừ trách nhiệm đã ký vẫn được niêm phong trong vùng cách ly hạn chế chỉ dành cho Quản trị viên trong 3 năm kể từ ngày ký hoặc sự kiện tham gia gần nhất trước khi bị xóa vĩnh viễn.",
   "profile.erasure_keep_gallery": "Giữ lại ảnh/video đã được duyệt của tôi trong Thư viện dưới tên ẩn danh \"Community Member\" (mục chưa duyệt luôn bị xóa)",

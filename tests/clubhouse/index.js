@@ -18,12 +18,13 @@ const runTier2 = require('./tier2-boundary-corner.test');
 const runTier3 = require('./tier3-cross-feature.test');
 const runTier4 = require('./tier4-application-scenarios.test');
 const runTier5 = require('./tier5-moderation-resources.test');
+const runTier6 = require('./tier6-peer-blocking.test');
 
 /**
  * Register all Clubhouse tests within a parent test runner
  */
 function registerClubhouseTests(options = {}) {
-  test('Clubhouse E2E Verification Suite (Tiers 1–5)', async (t) => {
+  test('Clubhouse E2E Verification Suite (Tiers 1–6)', async (t) => {
     const ctx = await createClubhouseTestContext(options);
     try {
       await t.test('Tier 1: Feature Coverage', async (t1) => {
@@ -44,6 +45,10 @@ function registerClubhouseTests(options = {}) {
 
       await t.test('Tier 5: Moderation, Mutes, Boards & Resource Frugality', async (t5) => {
         await runTier5(t5, ctx);
+      });
+
+      await t.test('Tier 6: Peer Block Enforcement API', async (t6) => {
+        await runTier6(t6, ctx);
       });
     } finally {
       await ctx.cleanup();

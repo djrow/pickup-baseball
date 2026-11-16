@@ -352,6 +352,8 @@
   "rtc_turn_unavailable_note": "Hindi available: Walang TURN privacy relay server na naka-configure sa deployment na ito.",
   "rtc_turn_available_note": "Naka-configure at handa na ang TURN privacy relay server.",
   "rtc_turn_blocked_warning": "Hinarangan ng Privacy Relay Mode ang direktang P2P voice dahil walang naka-configure na TURN relay server.",
+  "waiver.age_attestation_label": "Pinapatunayan ko na ako ay 18 taong gulang o mas matanda, o ako ang magulang o legal na tagapag-alaga na pumipirma sa ngalan ng isang menor de edad na kalahok.",
+  "waiver.age_attestation_error": "Dapat mong kumpirmahin na ikaw ay 18 taong gulang o mas matanda (o isang magulang/legal na tagapag-alaga na pumipirma para sa isang menor de edad).",
   "profile.erasure_title": "🗑️ Burahin ang Account at Data",
   "profile.erasure_notice": "Ang pagbura ng iyong account ay agad na nag-aalis ng iyong profile, mga session, login code, talaan ng pahintulot, mga susunod na RSVP, nakatalagang gawain, at slot sa batting practice. Ang mga nakaraang bilang ng pagdalo, komento, at post ay gagawing anonymous. Abiso sa Pagpapanatili ng Waiver: Ang mga nilagdaang liability waiver ay mananatiling selyado sa limitadong Admin-only quarantine sa loob ng 3 taon mula sa paglagda o huling dinaluhang event bago tuluyang mabura.",
   "profile.erasure_keep_gallery": "Panatilihin ang aking mga aprubadong larawan/video sa Gallery nang anonymous bilang \"Community Member\" (palaging binubura ang mga hindi aprubado)",

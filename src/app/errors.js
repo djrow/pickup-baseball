@@ -25,7 +25,8 @@ const PRESERVED_DOMAIN_CODES = new Set([
   'USER_MUTED',
   'CLUBHOUSE_OPT_OUT',
   'STALE_KEY_EPOCH',
-  'UNKNOWN_KEY_EPOCH'
+  'UNKNOWN_KEY_EPOCH',
+  'PEER_BLOCKED'
 ]);
 
 const PII_KEY_RE = /(?:email|token|password|passwd|secret|authorization|cookie|user[-_]?agent|client[-_]?ip|remote[-_]?ip)/i;

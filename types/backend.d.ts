@@ -19,8 +19,8 @@ interface AppBindings {
   MAIL_PROVIDER?: string;
   STORAGE_PROVIDER?: string;
   TURN_ICE_SERVERS_JSON?: string;
-  WAIVER_RETENTION_YEARS?: string | number;
   WAIVER_SIGNING_SECRET?: string;
+  WAIVER_RETENTION_YEARS?: string | number;
   MEDIA_BUCKET?: R2BucketLike;
   FEATURE_BATTING_PRACTICE?: string | number | boolean;
   FEATURE_CERTIFIED_SHIFTS?: string | number | boolean;
@@ -51,10 +51,11 @@ interface ResolvedBootConfig {
   STORAGE_PROVIDER: 'r2' | 'gdrive' | 'local';
   TURN_ICE_SERVERS: Array<{ urls: string | string[]; username?: string; credential?: string }>;
   TURN_CONFIGURED: boolean;
+  WAIVER_SIGNING_SECRET: string;
+  WAIVER_RETENTION_YEARS: number;
   FEATURE_BATTING_PRACTICE: boolean;
   FEATURE_CERTIFIED_SHIFTS: boolean;
   FEATURE_SUNDAY_PRIORITY: boolean;
-  WAIVER_RETENTION_YEARS: number;
 }
 
 interface R2BucketLike {

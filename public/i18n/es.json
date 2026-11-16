@@ -352,6 +352,8 @@
   "rtc_turn_unavailable_note": "No disponible: No hay ningún servidor TURN de retransmisión de privacidad configurado en este despliegue.",
   "rtc_turn_available_note": "El servidor TURN de retransmisión de privacidad está configurado y listo.",
   "rtc_turn_blocked_warning": "El Modo de Retransmisión de Privacidad bloqueó la voz P2P directa porque no hay un servidor TURN configurado.",
+  "waiver.age_attestation_label": "Confirmo que tengo 18 años o más, o que soy el padre, la madre o el tutor legal que firma en nombre de un participante menor de edad.",
+  "waiver.age_attestation_error": "Debes confirmar que tienes 18 años o más (o que eres el padre/madre o tutor legal que firma en nombre de un menor).",
   "profile.erasure_title": "🗑️ Eliminar cuenta y borrar datos",
   "profile.erasure_notice": "Eliminar tu cuenta borra de inmediato tu perfil, sesiones, códigos de acceso, registros de consentimiento, confirmaciones futuras, tareas asignadas y turnos de práctica de bateo. Los conteos de asistencia pasados, comentarios y publicaciones se anonimizan. Aviso de retención de exención legal: las exenciones de responsabilidad firmadas permanecen selladas en cuarentena restringida solo para administradores durante 3 años desde la firma o tu último evento asistido antes de eliminarse permanentemente.",
   "profile.erasure_keep_gallery": "Mantener mis fotos/videos aprobados de la Galería atribuidos anónimamente a \"Community Member\" (los no aprobados siempre se eliminan)",

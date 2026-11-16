@@ -272,7 +272,8 @@ function registerTwoTierErasureTests() {
           signed_date: '2024-01-15',
           signature_type: 'drawn',
           signature_data: SAMPLE_PNG_SIG,
-          electronic_consent: true
+          electronic_consent: true,
+          age_attestation: true
         });
         assert.equal(signRes.status, 201);
         const certId = signRes.data.waiver.certificate_id;
@@ -380,7 +381,8 @@ function registerTwoTierErasureTests() {
           signed_date: '2026-11-11',
           signature_type: 'drawn',
           signature_data: SAMPLE_PNG_SIG,
-          electronic_consent: true
+          electronic_consent: true,
+          age_attestation: true
         });
         assert.equal(signRes.status, 201);
         const certId = signRes.data.waiver.certificate_id;
