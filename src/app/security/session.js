@@ -238,13 +238,20 @@ async function resolveRateLimitSecret(env, db = null) {
     if (!dbSecretPromise) {
       dbSecretPromise = (async () => {
         try {
-          const existing = await secretDb.prepare("SELECT value FROM app_settings WHERE key = 'rate_limit_hmac_secret'").first();
+          const existingStmt = secretDb.prepare("SELECT value FROM app_settings WHERE key = 'rate_limit_hmac_secret'");
+          const existing = typeof existingStmt.first === 'function' ? await existingStmt.first() : (typeof existingStmt.get === 'function' ? existingStmt.get() : null);
           if (existing && existing.value) {
             return String(existing.value);
           }
           const generated = generateToken();
-          await secretDb.prepare("INSERT OR IGNORE INTO app_settings (key, value) VALUES ('rate_limit_hmac_secret', ?)").bind(generated).run();
-          const row = await secretDb.prepare("SELECT value FROM app_settings WHERE key = 'rate_limit_hmac_secret'").first();
+          const insertStmt = secretDb.prepare("INSERT OR IGNORE INTO app_settings (key, value) VALUES ('rate_limit_hmac_secret', ?)");
+          if (typeof insertStmt.bind === 'function') {
+            await insertStmt.bind(generated).run();
+          } else {
+            insertStmt.run(generated);
+          }
+          const rowStmt = secretDb.prepare("SELECT value FROM app_settings WHERE key = 'rate_limit_hmac_secret'");
+          const row = typeof rowStmt.first === 'function' ? await rowStmt.first() : (typeof rowStmt.get === 'function' ? rowStmt.get() : null);
           if (row && row.value) {
             return String(row.value);
           }
