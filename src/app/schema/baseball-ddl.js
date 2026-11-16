@@ -35,7 +35,13 @@ export const CREATE_TABLES_SQL = [
     waiver_signed_at DATETIME DEFAULT NULL,
     clubhouse_opted_in INTEGER DEFAULT 0,
     calendar_token TEXT DEFAULT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    roster_visibility INTEGER NOT NULL DEFAULT 0,
+    profile_sharing INTEGER NOT NULL DEFAULT 0,
+    notify_rsvp_confirm INTEGER NOT NULL DEFAULT 1,
+    notify_rainouts INTEGER NOT NULL DEFAULT 1,
+    notify_event_reminders INTEGER NOT NULL DEFAULT 1,
+    notify_community_updates INTEGER NOT NULL DEFAULT 0
   )`,
   `CREATE TABLE IF NOT EXISTS sessions (
     id TEXT PRIMARY KEY,
@@ -72,7 +78,10 @@ export const CREATE_TABLES_SQL = [
     rainout_at DATETIME,
     rainout_email_sent INTEGER DEFAULT 0,
     allowed_emails TEXT DEFAULT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    invite_enabled INTEGER NOT NULL DEFAULT 0,
+    invite_version INTEGER NOT NULL DEFAULT 1,
+    auto_reminders INTEGER NOT NULL DEFAULT 1
   )`,
   `CREATE TABLE IF NOT EXISTS event_duties (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -80,7 +89,9 @@ export const CREATE_TABLES_SQL = [
     title TEXT NOT NULL,
     description TEXT,
     slots_needed INTEGER DEFAULT 1,
-    sort_order INTEGER DEFAULT 0
+    sort_order INTEGER DEFAULT 0,
+    grants_coordinator INTEGER NOT NULL DEFAULT 0,
+    required_badge TEXT DEFAULT NULL
   )`,
   `CREATE TABLE IF NOT EXISTS attendees (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -99,6 +110,13 @@ export const CREATE_TABLES_SQL = [
     management_token TEXT UNIQUE,
     urgent_credit_awarded INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    reminder_sent_at DATETIME DEFAULT NULL,
+    last_notice_key TEXT DEFAULT NULL,
+    last_notice_sent_at DATETIME DEFAULT NULL,
+    notify_emails INTEGER NOT NULL DEFAULT 0,
+    roster_consent INTEGER NOT NULL DEFAULT 0,
+    paper_waiver_at DATETIME DEFAULT NULL,
+    paper_waiver_by INTEGER DEFAULT NULL,
     UNIQUE(event_id, email)
   )`,
   `CREATE TABLE IF NOT EXISTS duty_assignments (
@@ -122,7 +140,9 @@ export const CREATE_TABLES_SQL = [
     title TEXT NOT NULL,
     description TEXT,
     slots_needed INTEGER DEFAULT 1,
-    sort_order INTEGER DEFAULT 0
+    sort_order INTEGER DEFAULT 0,
+    grants_coordinator INTEGER NOT NULL DEFAULT 0,
+    required_badge TEXT DEFAULT NULL
   )`,
   `CREATE TABLE IF NOT EXISTS posts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -155,7 +175,11 @@ export const CREATE_TABLES_SQL = [
     approved_by INTEGER DEFAULT NULL,
     approved_at DATETIME DEFAULT NULL,
     delete_token TEXT DEFAULT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    storage_provider TEXT NOT NULL DEFAULT 'local',
+    r2_key TEXT DEFAULT NULL,
+    upload_status TEXT NOT NULL DEFAULT 'ready',
+    upload_token_hash TEXT DEFAULT NULL
   )`,
   `CREATE TABLE IF NOT EXISTS banned_emails (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -170,7 +194,8 @@ export const CREATE_TABLES_SQL = [
   `CREATE TABLE IF NOT EXISTS rate_limits (
     key TEXT PRIMARY KEY,
     count INTEGER DEFAULT 0,
-    window_start INTEGER NOT NULL
+    window_start INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL DEFAULT 0
   )`,
   `CREATE TABLE IF NOT EXISTS batting_practice_signups (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -200,7 +225,32 @@ export const CREATE_TABLES_SQL = [
     user_agent TEXT,
     electronic_consent INTEGER DEFAULT 1,
     gdrive_file_id TEXT DEFAULT NULL,
-    signed_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    signed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    waiver_locale TEXT NOT NULL DEFAULT 'en',
+    status TEXT NOT NULL DEFAULT 'active',
+    erasure_requested_at DATETIME DEFAULT NULL,
+    retention_until DATETIME DEFAULT NULL,
+    signer_ip_scrubbed_at DATETIME DEFAULT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS consent_records (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    subject_type TEXT NOT NULL CHECK(subject_type IN ('member', 'visitor')),
+    user_id INTEGER DEFAULT NULL REFERENCES users(id) ON DELETE CASCADE,
+    subject_email_hash TEXT DEFAULT NULL,
+    consent_type TEXT NOT NULL,
+    policy_version TEXT NOT NULL,
+    policy_sha256 TEXT NOT NULL,
+    status TEXT NOT NULL CHECK(status IN ('granted', 'withdrawn')),
+    granted_at DATETIME DEFAULT NULL,
+    withdrawn_at DATETIME DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE TABLE IF NOT EXISTS email_suppressions (
+    email TEXT PRIMARY KEY COLLATE NOCASE,
+    reason TEXT NOT NULL,
+    bounce_type TEXT DEFAULT NULL,
+    provider TEXT NOT NULL DEFAULT 'resend',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`,
   'CREATE INDEX IF NOT EXISTS idx_events_date ON events(event_date)',
   'CREATE INDEX IF NOT EXISTS idx_events_status_date ON events(status, event_date)',
@@ -225,5 +275,11 @@ export const CREATE_TABLES_SQL = [
   'CREATE INDEX IF NOT EXISTS idx_event_duties_event ON event_duties(event_id, sort_order)',
   'CREATE INDEX IF NOT EXISTS idx_attendees_event_status ON attendees(event_id, status)',
   'CREATE INDEX IF NOT EXISTS idx_users_clubhouse_opt ON users(clubhouse_opted_in)',
-  'CREATE UNIQUE INDEX IF NOT EXISTS idx_users_calendar_token ON users(calendar_token) WHERE calendar_token IS NOT NULL'
+  'CREATE UNIQUE INDEX IF NOT EXISTS idx_users_calendar_token ON users(calendar_token) WHERE calendar_token IS NOT NULL',
+  'CREATE INDEX IF NOT EXISTS idx_attendees_reminder_cursor ON attendees(event_id, status, reminder_sent_at)',
+  'CREATE INDEX IF NOT EXISTS idx_waivers_status_retention ON waivers(status, retention_until)',
+  'CREATE INDEX IF NOT EXISTS idx_media_upload_status ON media_items(upload_status, created_at)',
+  'CREATE INDEX IF NOT EXISTS idx_consent_user_type ON consent_records(user_id, consent_type, id DESC)',
+  'CREATE INDEX IF NOT EXISTS idx_consent_email_type ON consent_records(subject_email_hash, consent_type, id DESC)',
+  'CREATE INDEX IF NOT EXISTS idx_rate_limits_expires ON rate_limits(expires_at)'
 ];

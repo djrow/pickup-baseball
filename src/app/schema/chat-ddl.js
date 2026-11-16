@@ -173,7 +173,8 @@ export const CREATE_CHAT_TABLES_SQL = [
     thumbnail_base64 TEXT DEFAULT NULL,
     local_data_base64 TEXT DEFAULT NULL,
     promoted_media_id INTEGER DEFAULT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    r2_key TEXT DEFAULT NULL
   )`,
 
   // 6. User Crypto Identities & Zero-Knowledge Backup Vault
@@ -186,7 +187,9 @@ export const CREATE_CHAT_TABLES_SQL = [
     vault_iv TEXT DEFAULT NULL,
     privacy_relay_mode INTEGER NOT NULL DEFAULT 0,
     status_text TEXT DEFAULT '',
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    key_version INTEGER NOT NULL DEFAULT 1,
+    key_rotated_at DATETIME DEFAULT NULL
   )`,
 
   // 7. Channel Epoch Key Shares
@@ -239,7 +242,8 @@ export const CREATE_CHAT_TABLES_SQL = [
   `CREATE TABLE IF NOT EXISTS chat_rate_limits (
     key TEXT PRIMARY KEY,
     count INTEGER DEFAULT 0,
-    window_start INTEGER NOT NULL
+    window_start INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL DEFAULT 0
   )`,
 
   // 12. Moderation Reports (Messages & Users)
@@ -286,7 +290,8 @@ export const CREATE_CHAT_TABLES_SQL = [
     added_by_name TEXT DEFAULT '',
     is_public INTEGER NOT NULL DEFAULT 1,
     use_count INTEGER NOT NULL DEFAULT 1,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    r2_key TEXT DEFAULT NULL
   )`,
 
   // 15. Clubhouse Opt-Out Registry (non-destructive hiding of opted-out users' messages/reactions)
@@ -299,6 +304,14 @@ export const CREATE_CHAT_TABLES_SQL = [
   `CREATE TABLE IF NOT EXISTS chat_meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
+  )`,
+
+  // 17. Peer Blocking (ADR-0002)
+  `CREATE TABLE IF NOT EXISTS user_blocks (
+    blocker_id INTEGER NOT NULL,
+    blocked_id INTEGER NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (blocker_id, blocked_id)
   )`,
 
   // Indexes
@@ -320,5 +333,8 @@ export const CREATE_CHAT_TABLES_SQL = [
   'CREATE INDEX IF NOT EXISTS idx_user_mutes_muter ON user_mutes(muter_user_id)',
   'CREATE INDEX IF NOT EXISTS idx_clubhouse_gifs_public ON clubhouse_gifs(is_public, use_count DESC, created_at DESC)',
   'CREATE INDEX IF NOT EXISTS idx_clubhouse_gifs_source ON clubhouse_gifs(source_url)',
-  'CREATE INDEX IF NOT EXISTS idx_clubhouse_gifs_sha256 ON clubhouse_gifs(sha256)'
+  'CREATE INDEX IF NOT EXISTS idx_clubhouse_gifs_sha256 ON clubhouse_gifs(sha256)',
+  'CREATE INDEX IF NOT EXISTS idx_user_blocks_blocked ON user_blocks(blocked_id)',
+  'CREATE INDEX IF NOT EXISTS idx_chat_attachments_upload_status ON chat_attachments(upload_status, created_at)',
+  'CREATE INDEX IF NOT EXISTS idx_chat_rate_limits_expires ON chat_rate_limits(expires_at)'
 ];
