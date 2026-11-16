@@ -336,5 +336,8 @@
   "event.edit_link_btn": "🔗 Enviar um novo link de edição por e-mail",
   "event.edit_link_email_placeholder": "Digite o e-mail usado na sua confirmação",
   "event.edit_link_send_btn": "Enviar link de edição",
-  "event.edit_link_sending": "Enviando..."
+  "event.edit_link_sending": "Enviando...",
+  "rtc_turn_unavailable_note": "Indisponível: Nenhum servidor TURN de retransmissão de privacidade está configurado nesta implantação.",
+  "rtc_turn_available_note": "Servidor TURN de retransmissão de privacidade configurado e pronto.",
+  "rtc_turn_blocked_warning": "O Modo de Retransmissão de Privacidade bloqueou a voz P2P direta porque nenhum servidor TURN está configurado."
 }

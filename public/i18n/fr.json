@@ -336,5 +336,8 @@
   "event.edit_link_btn": "🔗 M’envoyer un nouveau lien de modification",
   "event.edit_link_email_placeholder": "Entrez l’e-mail utilisé pour votre inscription",
   "event.edit_link_send_btn": "Envoyer le lien",
-  "event.edit_link_sending": "Envoi..."
+  "event.edit_link_sending": "Envoi...",
+  "rtc_turn_unavailable_note": "Indisponible : aucun serveur relais de confidentialité TURN n’est configuré sur ce déploiement.",
+  "rtc_turn_available_note": "Le serveur relais de confidentialité TURN est configuré et prêt.",
+  "rtc_turn_blocked_warning": "Le mode relais de confidentialité a bloqué la voix P2P directe car aucun serveur relais TURN n’est configuré."
 }

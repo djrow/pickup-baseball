@@ -336,5 +336,8 @@
   "event.edit_link_btn": "🔗 Отправить новую ссылку для редактирования",
   "event.edit_link_email_placeholder": "Введите email, указанный при регистрации",
   "event.edit_link_send_btn": "Отправить ссылку",
-  "event.edit_link_sending": "Отправка..."
+  "event.edit_link_sending": "Отправка...",
+  "rtc_turn_unavailable_note": "Недоступно: на этом сервере не настроен TURN-сервер ретрансляции конфиденциальности.",
+  "rtc_turn_available_note": "TURN-сервер ретрансляции конфиденциальности настроен и готов к работе.",
+  "rtc_turn_blocked_warning": "Режим ретрансляции конфиденциальности заблокировал прямую P2P-голосовую связь, так как TURN-сервер не настроен."
 }

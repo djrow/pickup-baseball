@@ -351,7 +351,10 @@ const EN_DICT = {
   "gallery.videos_reel": "Video Releases & Highlights Reel",
   "gallery.drop_links_btn": "📥 Drop Photos / Links",
   "gallery.mod_queue_title": "Admin Moderation Queue",
-  "gallery.all_albums": "🌟 All Albums"
+  "gallery.all_albums": "🌟 All Albums",
+  "rtc_turn_unavailable_note": "Unavailable: No TURN privacy relay server is configured on this deployment.",
+  "rtc_turn_available_note": "TURN privacy relay server is configured and ready.",
+  "rtc_turn_blocked_warning": "Privacy Relay Mode blocked direct P2P voice because no TURN relay server is configured."
 };
 
 const KNOWN_PHRASE_KEYS = {
@@ -1486,6 +1489,7 @@ const API = {
       communityName: 'Community Hub',
       publicOrigin: null,
       handbookUrl: null,
+      turnConfigured: false,
       features: {
         battingPractice: false,
         certifiedShifts: false,

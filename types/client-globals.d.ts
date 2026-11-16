@@ -340,8 +340,12 @@ interface ClubhouseStoreFacade {
 interface ClubhouseRTCFacade {
   state: Record<string, any>;
   onRtcEvent(listener: (eventName: string, payload?: any) => void): () => void;
-  getIceConfiguration(): Promise<RTCConfiguration>;
-  joinVoiceChannel(channelId: number, opts?: Record<string, any>): Promise<any>;
+  setTurnConfigured(configured: boolean): boolean;
+  isTurnConfigured(): boolean;
+  setIceServers(servers: any[]): any[];
+  loadIceServers(): Promise<{ turnConfigured: boolean; iceServers: any[] }>;
+  getIceConfiguration(privacyRelayMode?: boolean): RTCConfiguration;
+  joinVoiceChannel(channelId: number | string, currentUserId?: number): Promise<any>;
   updateVoiceState(patch: Record<string, any>): Promise<any>;
   toggleScreenShare(): Promise<any>;
   leaveVoiceChannel(): Promise<void>;

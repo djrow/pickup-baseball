@@ -336,5 +336,8 @@
   "event.edit_link_btn": "🔗 ਮੈਨੂੰ ਨਵਾਂ ਸੰਪਾਦਨ ਲਿੰਕ ਈਮੇਲ ਕਰੋ",
   "event.edit_link_email_placeholder": "ਆਪਣੇ RSVP ਲਈ ਵਰਤਿਆ ਈਮੇਲ ਦਰਜ ਕਰੋ",
   "event.edit_link_send_btn": "ਸੰਪਾਦਨ ਲਿੰਕ ਭੇਜੋ",
-  "event.edit_link_sending": "ਭੇਜਿਆ ਜਾ ਰਿਹਾ ਹੈ..."
+  "event.edit_link_sending": "ਭੇਜਿਆ ਜਾ ਰਿਹਾ ਹੈ...",
+  "rtc_turn_unavailable_note": "ਅਣਉਪਲਬਧ: ਇਸ ਡਿਪਲੋਇਮੈਂਟ ਤੇ ਕੋਈ TURN ਪ੍ਰਾਈਵੇਸੀ ਰਿਲੇਅ ਸਰਵਰ ਕੌਂਫਿਗਰ ਨਹੀਂ ਕੀਤਾ ਗਿਆ ਹੈ।",
+  "rtc_turn_available_note": "TURN ਪ੍ਰਾਈਵੇਸੀ ਰਿਲੇਅ ਸਰਵਰ ਕੌਂਫਿਗਰ ਅਤੇ ਤਿਆਰ ਹੈ।",
+  "rtc_turn_blocked_warning": "ਪ੍ਰਾਈਵੇਸੀ ਰਿਲੇਅ ਮੋਡ ਨੇ ਸਿੱਧੀ P2P ਆਵਾਜ਼ ਨੂੰ ਰੋਕ ਦਿੱਤਾ ਕਿਉਂਕਿ ਕੋਈ TURN ਰਿਲੇਅ ਸਰਵਰ ਕੌਂਫਿਗਰ ਨਹੀਂ ਹੈ।"
 }

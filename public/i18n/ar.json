@@ -336,5 +336,8 @@
   "event.edit_link_btn": "🔗 أرسل لي رابط تعديل جديدًا",
   "event.edit_link_email_placeholder": "أدخل البريد الإلكتروني المستخدم في تأكيد الحضور",
   "event.edit_link_send_btn": "إرسال رابط التعديل",
-  "event.edit_link_sending": "جارٍ الإرسال..."
+  "event.edit_link_sending": "جارٍ الإرسال...",
+  "rtc_turn_unavailable_note": "غير متاح: لم يتم تكوين خادم ترحيل الخصوصية TURN في هذا النشر.",
+  "rtc_turn_available_note": "تم تكوين خادم ترحيل الخصوصية TURN وهو جاهز.",
+  "rtc_turn_blocked_warning": "حظر وضع ترحيل الخصوصية الاتصال الصوتي المباشر P2P لعدم تكوين خادم ترحيل TURN."
 }

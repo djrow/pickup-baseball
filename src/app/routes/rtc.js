@@ -5,12 +5,27 @@
 
 import { Hono } from 'hono';
 import { requireAuth, rejectIfChatMuted, rejectIfClubhouseOptedOut, CANONICAL_MEMBER_ROLE } from '../security.js';
+import { resolveConfig } from '../config.js';
 import { resolveChannel, canUserAccessChannel } from './chat.js';
 import { logEvent } from '../errors.js';
 
 export const voiceRouter = /** @type {AppHono} */ (new Hono());
 export const rtcRouter = /** @type {AppHono} */ (new Hono());
 let lastSignalPruneSec = 0;
+
+/**
+ * Build authorized ICE/TURN configuration from boot environment bindings.
+ *
+ * @param {Record<string, any> | null | undefined} env
+ * @returns {{ turnConfigured: boolean, iceServers: Array<{ urls: string | string[], username?: string, credential?: string }> }}
+ */
+function buildAuthorizedIceConfig(env) {
+  const cfg = resolveConfig(env);
+  return {
+    turnConfigured: Boolean(cfg.TURN_CONFIGURED),
+    iceServers: Array.isArray(cfg.TURN_ICE_SERVERS) ? cfg.TURN_ICE_SERVERS : []
+  };
+}
 
 // ---------------------------------------------------------------------------
 // POST /api/voice/:channelId/join - Join Voice Huddle Room
@@ -103,10 +118,14 @@ voiceRouter.post('/:channelId/join', requireAuth, async (c) => {
     'SELECT * FROM voice_participants WHERE channel_id = ? AND heartbeat_at > ? ORDER BY heartbeat_at DESC'
   ).bind(channel.id, nowSec - 25).all();
 
+  const iceConfig = buildAuthorizedIceConfig(c.env);
+
   return c.json({
     success: true,
     channel_id: channel.id,
-    participants: participants || []
+    participants: participants || [],
+    turnConfigured: iceConfig.turnConfigured,
+    iceServers: iceConfig.iceServers
   });
 });
 
@@ -254,6 +273,24 @@ voiceRouter.post('/:channelId/leave', requireAuth, async (c) => {
 
 const ALLOWED_SIGNAL_TYPES = new Set(['offer', 'answer', 'ice-candidate', 'candidate', 'renegotiate']);
 const MAX_SIGNAL_PAYLOAD_CHARS = 65536;
+
+// ---------------------------------------------------------------------------
+// GET /api/rtc/ice-servers - Authorized WebRTC TURN / ICE Server Configuration
+// ---------------------------------------------------------------------------
+rtcRouter.get('/ice-servers', requireAuth, async (c) => {
+  const user = c.get('user');
+  const optResp = rejectIfClubhouseOptedOut(c, user);
+  if (optResp) return optResp;
+  const mutedResp = rejectIfChatMuted(c, user);
+  if (mutedResp) return mutedResp;
+
+  const iceConfig = buildAuthorizedIceConfig(c.env);
+  c.header('Cache-Control', 'no-store');
+  return c.json({
+    turnConfigured: iceConfig.turnConfigured,
+    iceServers: iceConfig.iceServers
+  });
+});
 
 // ---------------------------------------------------------------------------
 // POST /api/rtc/signal - Deposit Scoped WebRTC SDP / ICE Candidate Signal

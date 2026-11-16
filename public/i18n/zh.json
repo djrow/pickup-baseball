@@ -336,5 +336,8 @@
   "event.edit_link_btn": "🔗 发送新的编辑链接到邮箱",
   "event.edit_link_email_placeholder": "请输入提交 RSVP 时使用的邮箱",
   "event.edit_link_send_btn": "发送编辑链接",
-  "event.edit_link_sending": "发送中..."
+  "event.edit_link_sending": "发送中...",
+  "rtc_turn_unavailable_note": "不可用：此部署未配置 TURN 隐私中继服务器。",
+  "rtc_turn_available_note": "TURN 隐私中继服务器已配置并就绪。",
+  "rtc_turn_blocked_warning": "由于未配置 TURN 中继服务器，隐私中继模式已阻止直接 P2P 语音连接。"
 }

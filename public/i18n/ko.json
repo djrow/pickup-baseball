@@ -336,5 +336,8 @@
   "event.edit_link_btn": "🔗 새 수정 링크 이메일로 받기",
   "event.edit_link_email_placeholder": "RSVP에 사용한 이메일을 입력하세요",
   "event.edit_link_send_btn": "수정 링크 보내기",
-  "event.edit_link_sending": "전송 중..."
+  "event.edit_link_sending": "전송 중...",
+  "rtc_turn_unavailable_note": "사용 불가: 이 배포 환경에 TURN 프라이버시 릴레이 서버가 구성되어 있지 않습니다.",
+  "rtc_turn_available_note": "TURN 프라이버시 릴레이 서버가 구성되어 준비되었습니다.",
+  "rtc_turn_blocked_warning": "TURN 릴레이 서버가 구성되지 않아 프라이버시 릴레이 모드가 직접 P2P 음성을 차단했습니다."
 }

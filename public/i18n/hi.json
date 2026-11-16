@@ -336,5 +336,8 @@
   "event.edit_link_btn": "🔗 मुझे नया संपादन लिंक ईमेल करें",
   "event.edit_link_email_placeholder": "अपने RSVP के लिए उपयोग किया गया ईमेल दर्ज करें",
   "event.edit_link_send_btn": "संपादन लिंक भेजें",
-  "event.edit_link_sending": "भेजा जा रहा है..."
+  "event.edit_link_sending": "भेजा जा रहा है...",
+  "rtc_turn_unavailable_note": "अनुपलब्ध: इस परिनियोजन पर कोई TURN गोपनीयता रिले सर्वर कॉन्फ़िगर नहीं है।",
+  "rtc_turn_available_note": "TURN गोपनीयता रिले सर्वर कॉन्फ़िगर और तैयार है।",
+  "rtc_turn_blocked_warning": "गोपनीयता रिले मोड ने सीधे P2P वॉइस को रोक दिया क्योंकि कोई TURN रिले सर्वर कॉन्फ़िगर नहीं है।"
 }

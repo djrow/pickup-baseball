@@ -336,5 +336,8 @@
   "event.edit_link_btn": "🔗 Ուղարկել խմբագրման նոր հղում",
   "event.edit_link_email_placeholder": "Մուտքագրեք ձեր գրանցման էլ. հասցեն",
   "event.edit_link_send_btn": "Ուղարկել հղումը",
-  "event.edit_link_sending": "Ուղարկվում է..."
+  "event.edit_link_sending": "Ուղարկվում է...",
+  "rtc_turn_unavailable_note": "Անհասանելի է. Այս տեղակայման մեջ TURN գաղտնիության ռելե սերվեր կարգավորված չէ:",
+  "rtc_turn_available_note": "TURN գաղտնիության ռելե սերվերը կարգավորված է և պատրաստ:",
+  "rtc_turn_blocked_warning": "Գաղտնիության ռելեի ռեժիմը արգելափակեց ուղիղ P2P ձայնային կապը, քանի որ TURN սերվեր կարգավորված չէ:"
 }

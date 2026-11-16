@@ -336,5 +336,8 @@
   "event.edit_link_btn": "🔗 لینک جدید ویرایش را برایم ایمیل کن",
   "event.edit_link_email_placeholder": "ایمیل ثبت‌شده برای اعلام حضور را وارد کنید",
   "event.edit_link_send_btn": "ارسال لینک ویرایش",
-  "event.edit_link_sending": "در حال ارسال..."
+  "event.edit_link_sending": "در حال ارسال...",
+  "rtc_turn_unavailable_note": "غیرفعال: هیچ سرور رله حریم خصوصی TURN در این استقرار پیکربندی نشده است.",
+  "rtc_turn_available_note": "سرور رله حریم خصوصی TURN پیکربندی و آماده است.",
+  "rtc_turn_blocked_warning": "حالت رله حریم خصوصی تماس صوتی مستقیم P2P را مسدود کرد زیرا سرور TURN پیکربندی نشده است."
 }

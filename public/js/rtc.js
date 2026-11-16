@@ -22,6 +22,9 @@
     cameraEnabled: false,
     screenSharing: false,
     privacyRelayMode: false,
+    turnConfigured: false,
+    customIceServers: [],
+    iceServers: [],
     localAudioStream: null,
     localScreenStream: null,
     peerConnections: Object.create(null),
@@ -55,32 +58,153 @@
     }
   }
 
-  function getIceServersList() {
-    return Array.isArray(rtcState.customIceServers) && rtcState.customIceServers.length > 0
-      ? rtcState.customIceServers.slice()
-      : DEFAULT_ICE_SERVERS.slice();
+  function getCustomIceServers() {
+    if (Array.isArray(rtcState.customIceServers) && rtcState.customIceServers.length > 0) {
+      return rtcState.customIceServers.slice();
+    }
+    if (Array.isArray(rtcState.iceServers) && rtcState.iceServers.length > 0) {
+      return rtcState.iceServers.slice();
+    }
+    return [];
+  }
+
+  function isTurnUrl(url) {
+    return typeof url === 'string' && /^turns?:/i.test(url.trim());
+  }
+
+  function filterTurnOnlyServers(servers) {
+    if (!Array.isArray(servers)) return [];
+    var out = [];
+    for (var i = 0; i < servers.length; i++) {
+      var s = servers[i];
+      if (!s || !s.urls) continue;
+      if (Array.isArray(s.urls)) {
+        var turnUrls = [];
+        for (var j = 0; j < s.urls.length; j++) {
+          if (isTurnUrl(s.urls[j])) {
+            turnUrls.push(String(s.urls[j]).trim());
+          }
+        }
+        if (turnUrls.length > 0) {
+          var copyArr = { urls: turnUrls };
+          if (s.username) copyArr.username = s.username;
+          if (s.credential) copyArr.credential = s.credential;
+          out.push(copyArr);
+        }
+      } else if (isTurnUrl(s.urls)) {
+        var copySingle = { urls: String(s.urls).trim() };
+        if (s.username) copySingle.username = s.username;
+        if (s.credential) copySingle.credential = s.credential;
+        out.push(copySingle);
+      }
+    }
+    return out;
   }
 
   function hasTurnRelayServer(servers) {
-    return servers.some(function (s) {
-      var u = s && s.urls ? (Array.isArray(s.urls) ? s.urls.join(',') : String(s.urls)) : '';
-      return /^turns?:/i.test(u) || /turns?:/i.test(u);
+    return filterTurnOnlyServers(servers).length > 0;
+  }
+
+  function getIceServersList() {
+    var custom = getCustomIceServers();
+    if (custom.length > 0) {
+      var hasStun = custom.some(function (s) {
+        var u = s && s.urls ? (Array.isArray(s.urls) ? s.urls.join(',') : String(s.urls)) : '';
+        return /^stuns?:/i.test(u) || /,stuns?:/i.test(u);
+      });
+      return hasStun ? custom : DEFAULT_ICE_SERVERS.concat(custom);
+    }
+    return DEFAULT_ICE_SERVERS.slice();
+  }
+
+  function setIceServers(servers) {
+    var list = Array.isArray(servers) ? servers.slice() : [];
+    rtcState.customIceServers = list;
+    rtcState.iceServers = list;
+    rtcState.turnConfigured = hasTurnRelayServer(list);
+    emitRtc('turn_config_updated', {
+      turnConfigured: rtcState.turnConfigured,
+      iceServers: list
+    });
+    return list;
+  }
+
+  function setTurnConfigured(configured) {
+    rtcState.turnConfigured = Boolean(configured);
+    if (!rtcState.turnConfigured) {
+      rtcState.customIceServers = [];
+      rtcState.iceServers = [];
+    }
+    emitRtc('turn_config_updated', { turnConfigured: rtcState.turnConfigured });
+    return rtcState.turnConfigured;
+  }
+
+  function isTurnConfigured() {
+    return Boolean(rtcState.turnConfigured) || hasTurnRelayServer(getCustomIceServers());
+  }
+
+  function loadIceServers() {
+    if (typeof fetch !== 'function') {
+      return Promise.resolve({
+        turnConfigured: isTurnConfigured(),
+        iceServers: getCustomIceServers()
+      });
+    }
+    return fetch('/api/rtc/ice-servers', {
+      method: 'GET',
+      credentials: 'same-origin'
+    }).then(function (res) {
+      if (!res.ok) {
+        return {
+          turnConfigured: isTurnConfigured(),
+          iceServers: getCustomIceServers()
+        };
+      }
+      return res.json().then(function (data) {
+        if (data && Array.isArray(data.iceServers)) {
+          setIceServers(data.iceServers);
+        }
+        if (data && typeof data.turnConfigured === 'boolean') {
+          rtcState.turnConfigured = data.turnConfigured || hasTurnRelayServer(getCustomIceServers());
+        }
+        return {
+          turnConfigured: isTurnConfigured(),
+          iceServers: getCustomIceServers()
+        };
+      }).catch(function () {
+        return {
+          turnConfigured: isTurnConfigured(),
+          iceServers: getCustomIceServers()
+        };
+      });
+    }).catch(function () {
+      return {
+        turnConfigured: isTurnConfigured(),
+        iceServers: getCustomIceServers()
+      };
     });
   }
 
   function getIceConfiguration(privacyRelayMode) {
-    var servers = getIceServersList();
-    var cfg = {
-      iceServers: servers
-    };
-    if (privacyRelayMode) {
-      cfg.iceTransportPolicy = 'relay';
-      if (!hasTurnRelayServer(servers)) {
+    var useRelay = privacyRelayMode !== undefined ? Boolean(privacyRelayMode) : Boolean(rtcState.privacyRelayMode);
+    if (useRelay) {
+      var turnServers = filterTurnOnlyServers(getCustomIceServers());
+      if (turnServers.length === 0) {
         console.warn('[ClubhouseRTC] Privacy Relay Mode requested, but no TURN relay server is configured.');
-        emitRtc('privacy_relay_unavailable', {});
+        emitRtc('privacy_relay_unavailable', { reason: 'turn_not_configured' });
+        return {
+          iceTransportPolicy: 'relay',
+          iceServers: []
+        };
       }
+      return {
+        iceTransportPolicy: 'relay',
+        iceServers: turnServers
+      };
     }
-    return cfg;
+    return {
+      iceServers: getIceServersList()
+    };
   }
 
   function sendSignal(channelId, recipientUserId, signalType, payloadObj) {
@@ -372,6 +496,12 @@
         if (!res.ok) {
           throw new Error((data && data.error) || 'Unable to join voice lounge');
         }
+        if (Array.isArray(data.iceServers)) {
+          setIceServers(data.iceServers);
+        }
+        if (typeof data.turnConfigured === 'boolean') {
+          rtcState.turnConfigured = data.turnConfigured || hasTurnRelayServer(getCustomIceServers());
+        }
         rtcState.activeChannelId = data.channel_id;
         rtcState.activeChannelSlug = String(channelIdOrSlug);
         rtcState.currentUserId = currentUserId ? Number(currentUserId) : null;
@@ -382,6 +512,11 @@
           channelId: data.channel_id,
           participants: participants
         });
+
+        if (rtcState.privacyRelayMode && !hasTurnRelayServer(getCustomIceServers())) {
+          emitRtc('privacy_relay_unavailable', { channelId: data.channel_id });
+          return data;
+        }
 
         for (var i = 0; i < participants.length; i++) {
           var p = participants[i];
@@ -572,6 +707,10 @@
   var ClubhouseRTC = {
     state: rtcState,
     onRtcEvent: onRtcEvent,
+    setTurnConfigured: setTurnConfigured,
+    isTurnConfigured: isTurnConfigured,
+    setIceServers: setIceServers,
+    loadIceServers: loadIceServers,
     getIceConfiguration: getIceConfiguration,
     joinVoiceChannel: joinVoiceChannel,
     updateVoiceState: updateVoiceState,
