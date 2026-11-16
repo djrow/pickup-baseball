@@ -336,5 +336,17 @@
   "event.edit_link_btn": "🔗 Enviar um novo link de edição por e-mail",
   "event.edit_link_email_placeholder": "Digite o e-mail usado na sua confirmação",
   "event.edit_link_send_btn": "Enviar link de edição",
-  "event.edit_link_sending": "Enviando..."
+  "event.edit_link_sending": "Enviando...",
+  "backup_scrubbed_btn": "📥 SQL operacional (.zip)",
+  "backup_dr_btn": "🔐 Backup DR criptografado (.pbfenc)",
+  "backup_scrubbed_working": "⏳ Exportando SQL anonimizado...",
+  "backup_dr_working": "⏳ Criptografando backup DR...",
+  "backup_dr_prompt_title": "🔐 Backup completo de recuperação (DR) criptografado",
+  "backup_dr_prompt_msg": "Digite uma frase-senha (mínimo de 8 caracteres) para criptografar este backup completo de recuperação. Guarde-a com segurança — será necessária com scripts/restore-backup.js:",
+  "backup_dr_prompt_placeholder": "Digite a frase-senha de criptografia...",
+  "backup_dr_confirm_btn": "Criptografar e baixar",
+  "backup_dr_passphrase_short": "A frase-senha do backup deve ter pelo menos 8 caracteres.",
+  "backup_scrubbed_success": "Backup SQL operacional anonimizado baixado.",
+  "backup_dr_success": "Backup de recuperação criptografado (.pbfenc) baixado.",
+  "backup_failed": "Falha no backup do banco de dados: {error}"
 }

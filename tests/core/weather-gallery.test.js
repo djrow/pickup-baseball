@@ -487,7 +487,12 @@ module.exports = async function registerWeatherGalleryTests(ctx, t9) {
     });
     assert.equal(backupRes.status, 200);
     const sqlDump = await backupRes.text();
-    assert.ok(sqlDump.includes(`-- ${communityName} Database Backup`) && sqlDump.includes('INSERT OR IGNORE INTO "users"'), 'Backup dump must contain backup header and user rows');
+    assert.ok(
+      sqlDump.includes(`-- ${communityName} Database Backup`) &&
+      sqlDump.includes('INSERT OR IGNORE INTO "events"') &&
+      !sqlDump.includes('INSERT OR IGNORE INTO "users"'),
+      'Scrubbed operational SQL backup must contain backup header and event rows without user PII'
+    );
 
     const chatBackupRes = await fetch(`${baseUrl}/api/events/admin/backup-db?db=chat`, {
       headers: { Cookie: seedAdminCookie }

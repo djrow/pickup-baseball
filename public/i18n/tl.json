@@ -336,5 +336,17 @@
   "event.edit_link_btn": "🔗 I-email sa akin ang bagong edit link",
   "event.edit_link_email_placeholder": "Ilagay ang email na ginamit sa iyong RSVP",
   "event.edit_link_send_btn": "Ipadala ang Edit Link",
-  "event.edit_link_sending": "Ipinapadala..."
+  "event.edit_link_sending": "Ipinapadala...",
+  "backup_scrubbed_btn": "📥 Operational SQL (.zip)",
+  "backup_dr_btn": "🔐 Naka-encrypt na DR Backup (.pbfenc)",
+  "backup_scrubbed_working": "⏳ Ine-export ang scrubbed SQL...",
+  "backup_dr_working": "⏳ Ine-encrypt ang DR backup...",
+  "backup_dr_prompt_title": "🔐 Naka-encrypt na Buong DR Backup",
+  "backup_dr_prompt_msg": "Maglagay ng passphrase (hindi bababa sa 8 character) upang i-encrypt ang buong disaster-recovery backup. Itago ito nang ligtas — kakailanganin ito sa scripts/restore-backup.js:",
+  "backup_dr_prompt_placeholder": "Ilagay ang backup encryption passphrase...",
+  "backup_dr_confirm_btn": "I-encrypt at I-download",
+  "backup_dr_passphrase_short": "Ang backup passphrase ay dapat hindi bababa sa 8 character.",
+  "backup_scrubbed_success": "Na-download na ang scrubbed operational SQL backup.",
+  "backup_dr_success": "Na-download na ang naka-encrypt na disaster-recovery backup (.pbfenc).",
+  "backup_failed": "Nabigo ang database backup: {error}"
 }

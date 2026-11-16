@@ -13,7 +13,9 @@ import {
   resolveUserByCalendarToken,
   constantTimeEqual,
   checkRateLimit,
-  getSafePublicOrigin
+  getSafePublicOrigin,
+  arrayBufferToBase64,
+  base64ToUint8Array
 } from '../../security.js';
 import { getDefaultDuties, getRequireLoginSetting } from '../../schema.js';
 import {
@@ -109,6 +111,202 @@ eventsCoreRouter.get('/', async (c) => {
   }
 });
 
+const BACKUP_PAGE_SIZE = 100;
+const SECRET_APP_SETTING_KEYS = new Set(['waiver_provenance_secret', 'appscript_upload_url']);
+const SCRUBBED_APP_SETTING_KEYS = new Set(['schema_version', 'require_login_to_rsvp', 'disallow_zero_login_media']);
+
+const SCRUBBED_TABLE_QUERIES = {
+  events: 'SELECT * FROM "events" LIMIT ? OFFSET ?',
+  event_duties: 'SELECT * FROM "event_duties" LIMIT ? OFFSET ?',
+  default_duties: 'SELECT * FROM "default_duties" LIMIT ? OFFSET ?',
+  posts: 'SELECT * FROM "posts" LIMIT ? OFFSET ?',
+  media_items: 'SELECT * FROM "media_items" WHERE is_approved = 1 LIMIT ? OFFSET ?',
+  app_settings: `SELECT * FROM "app_settings" WHERE key IN ('schema_version', 'require_login_to_rsvp', 'disallow_zero_login_media') LIMIT ? OFFSET ?`,
+  channels: `SELECT * FROM "channels" WHERE channel_type NOT IN ('dm', 'group_dm') LIMIT ? OFFSET ?`,
+  clubhouse_gifs: 'SELECT * FROM "clubhouse_gifs" LIMIT ? OFFSET ?'
+};
+
+const DR_TABLE_QUERIES = {
+  users: 'SELECT * FROM "users" LIMIT ? OFFSET ?',
+  events: 'SELECT * FROM "events" LIMIT ? OFFSET ?',
+  event_duties: 'SELECT * FROM "event_duties" LIMIT ? OFFSET ?',
+  attendees: 'SELECT * FROM "attendees" LIMIT ? OFFSET ?',
+  duty_assignments: 'SELECT * FROM "duty_assignments" LIMIT ? OFFSET ?',
+  comments: 'SELECT * FROM "comments" LIMIT ? OFFSET ?',
+  default_duties: 'SELECT * FROM "default_duties" LIMIT ? OFFSET ?',
+  posts: 'SELECT * FROM "posts" LIMIT ? OFFSET ?',
+  media_items: 'SELECT * FROM "media_items" LIMIT ? OFFSET ?',
+  banned_emails: 'SELECT * FROM "banned_emails" LIMIT ? OFFSET ?',
+  app_settings: `SELECT * FROM "app_settings" WHERE key NOT IN ('waiver_provenance_secret', 'appscript_upload_url') LIMIT ? OFFSET ?`,
+  batting_practice_signups: 'SELECT * FROM "batting_practice_signups" LIMIT ? OFFSET ?',
+  waivers: 'SELECT * FROM "waivers" LIMIT ? OFFSET ?',
+  consent_records: 'SELECT * FROM "consent_records" LIMIT ? OFFSET ?',
+  email_suppressions: 'SELECT * FROM "email_suppressions" LIMIT ? OFFSET ?',
+  channels: 'SELECT * FROM "channels" LIMIT ? OFFSET ?',
+  channel_members: 'SELECT * FROM "channel_members" LIMIT ? OFFSET ?',
+  messages: 'SELECT * FROM "messages" LIMIT ? OFFSET ?',
+  message_reactions: 'SELECT * FROM "message_reactions" LIMIT ? OFFSET ?',
+  chat_attachments: 'SELECT * FROM "chat_attachments" LIMIT ? OFFSET ?',
+  user_crypto_keys: 'SELECT * FROM "user_crypto_keys" LIMIT ? OFFSET ?',
+  channel_key_shares: 'SELECT * FROM "channel_key_shares" LIMIT ? OFFSET ?',
+  sync_events: 'SELECT * FROM "sync_events" LIMIT ? OFFSET ?',
+  chat_reports: 'SELECT * FROM "chat_reports" LIMIT ? OFFSET ?',
+  user_mutes: 'SELECT * FROM "user_mutes" LIMIT ? OFFSET ?',
+  user_blocks: 'SELECT * FROM "user_blocks" LIMIT ? OFFSET ?',
+  clubhouse_gifs: 'SELECT * FROM "clubhouse_gifs" LIMIT ? OFFSET ?',
+  clubhouse_opted_out: 'SELECT * FROM "clubhouse_opted_out" LIMIT ? OFFSET ?'
+};
+
+function resolveBackupTargetConfig(c, dbParam, dateStr) {
+  const { COMMUNITY_NAME } = resolveConfig(c.env);
+  const configs = {
+    baseball: {
+      db: c.env && (c.env.BASEBALL_DB || c.env.DB),
+      scrubbedHeader: `-- ${COMMUNITY_NAME} Database Backup (Scrubbed Operational SQL)\n-- Mode: scrubbed-operational`,
+      drHeader: `-- ${COMMUNITY_NAME} Database Backup (Full Disaster Recovery)\n-- Mode: encrypted-dr`,
+      scrubbedFilename: `baseball_operational_${dateStr}.sql`,
+      drFilename: `baseball_dr_backup_${dateStr}.pbfenc`,
+      scrubbedTables: [
+        'events', 'event_duties', 'default_duties',
+        'posts', 'media_items', 'app_settings'
+      ],
+      drTables: [
+        'users', 'events', 'event_duties', 'attendees',
+        'duty_assignments', 'comments', 'default_duties',
+        'posts', 'media_items', 'banned_emails', 'app_settings',
+        'batting_practice_signups', 'waivers', 'consent_records', 'email_suppressions'
+      ]
+    },
+    chat: {
+      db: c.env && c.env.CHAT_DB,
+      scrubbedHeader: `-- ${COMMUNITY_NAME} Clubhouse (CHAT_DB) Database Backup (Scrubbed Operational SQL)\n-- Mode: scrubbed-operational`,
+      drHeader: `-- ${COMMUNITY_NAME} Clubhouse (CHAT_DB) Database Backup (Full Disaster Recovery)\n-- Mode: encrypted-dr`,
+      scrubbedFilename: `clubhouse_chat_operational_${dateStr}.sql`,
+      drFilename: `clubhouse_chat_dr_backup_${dateStr}.pbfenc`,
+      scrubbedTables: [
+        'channels', 'clubhouse_gifs'
+      ],
+      drTables: [
+        'channels', 'channel_members', 'messages', 'message_reactions',
+        'chat_attachments', 'user_crypto_keys', 'channel_key_shares',
+        'sync_events', 'chat_reports', 'user_mutes', 'user_blocks',
+        'clubhouse_gifs', 'clubhouse_opted_out'
+      ]
+    }
+  };
+  return configs[dbParam] || null;
+}
+
+function scrubBackupRow(table, row, mode) {
+  if (!row || typeof row !== 'object') return null;
+  if (table === 'app_settings') {
+    const settingKey = String(row.key || '');
+    if (SECRET_APP_SETTING_KEYS.has(settingKey)) return null;
+    if (mode === 'scrubbed' && !SCRUBBED_APP_SETTING_KEYS.has(settingKey)) return null;
+  }
+
+  const out = { ...row };
+  if (table === 'users') {
+    out.calendar_token = null;
+  } else if (table === 'attendees') {
+    out.management_token = null;
+  } else if (table === 'user_crypto_keys') {
+    out.encrypted_private_vault = null;
+    out.vault_salt = null;
+    out.vault_iv = null;
+  } else if (table === 'media_items') {
+    out.delete_token = null;
+    out.upload_token_hash = null;
+    if (mode === 'scrubbed') {
+      out.file_data = null;
+      out.contributor_name = null;
+      out.contributor_id = null;
+      if ('uploader_email' in out) out.uploader_email = null;
+      if ('uploader_name' in out) out.uploader_name = null;
+    }
+  } else if (table === 'clubhouse_gifs') {
+    out.local_data_base64 = null;
+    if (mode === 'scrubbed') {
+      out.added_by = 0;
+      out.added_by_name = '';
+    }
+  } else if (table === 'chat_attachments') {
+    out.resumable_session_uri = null;
+  } else if (table === 'events' && mode === 'scrubbed') {
+    out.allowed_emails = null;
+  } else if (table === 'posts' && mode === 'scrubbed') {
+    if ('author_email' in out) out.author_email = null;
+  }
+  return out;
+}
+
+function formatSqlInsertRow(table, row) {
+  const cols = Object.keys(row).map((k) => `"${String(k).replace(/"/g, '""')}"`).join(', ');
+  const vals = Object.values(row).map((v) => {
+    if (v === null || v === undefined) return 'NULL';
+    if (typeof v === 'number') return Number.isFinite(v) ? String(v) : 'NULL';
+    if (v instanceof Uint8Array) {
+      return `X'${Array.from(v, (b) => b.toString(16).padStart(2, '0')).join('')}'`;
+    }
+    return `'${String(v).replace(/\0/g, '').replace(/'/g, "''")}'`;
+  }).join(', ');
+  return `INSERT OR IGNORE INTO "${table}" (${cols}) VALUES (${vals});\n`;
+}
+
+async function writeBackupTables(db, tables, mode, onChunk) {
+  const queryMap = mode === 'scrubbed' ? SCRUBBED_TABLE_QUERIES : DR_TABLE_QUERIES;
+  for (const table of tables) {
+    const tableQuery = queryMap[table];
+    if (!tableQuery) continue;
+    let offset = 0;
+    let headerWritten = false;
+    while (true) {
+      let rows;
+      try {
+        const res = await db.prepare(tableQuery).bind(BACKUP_PAGE_SIZE, offset).all();
+        rows = res && res.results ? res.results : [];
+      } catch (err) {
+        if (err && /no such table/i.test(String(err.message || err))) {
+          break;
+        }
+        throw err;
+      }
+      if (!rows || rows.length === 0) break;
+      let chunk = '';
+      for (const rawRow of rows) {
+        const scrubbed = scrubBackupRow(table, rawRow, mode);
+        if (!scrubbed) continue;
+        chunk += formatSqlInsertRow(table, scrubbed);
+      }
+      if (chunk) {
+        if (!headerWritten) {
+          onChunk(`-- Table: ${table}\n`);
+          headerWritten = true;
+        }
+        onChunk(chunk);
+      }
+      if (rows.length < BACKUP_PAGE_SIZE) break;
+      offset += rows.length;
+    }
+    if (headerWritten) {
+      onChunk('\n');
+    }
+  }
+}
+
+function decodeStrictBase64Bytes(raw) {
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(trimmed)) {
+    return null;
+  }
+  try {
+    return base64ToUint8Array(trimmed);
+  } catch {
+    return null;
+  }
+}
+
 eventsCoreRouter.get('/admin/backup-db', requireAdmin, async (c) => {
   try {
     const user = c.get('user');
@@ -120,32 +318,7 @@ eventsCoreRouter.get('/admin/backup-db', requireAdmin, async (c) => {
     const timestamp = new Date().toISOString();
     const dateStr = timestamp.slice(0, 10);
 
-    const { COMMUNITY_NAME } = resolveConfig(c.env);
-    const backupConfigs = {
-      baseball: {
-        db: c.env && (c.env.BASEBALL_DB || c.env.DB),
-        header: `-- ${COMMUNITY_NAME} Database Backup`,
-        filename: `baseball_backup_${dateStr}.sql`,
-        tables: [
-          'users', 'events', 'event_duties', 'attendees',
-          'duty_assignments', 'comments', 'default_duties',
-          'posts', 'banned_emails', 'app_settings', 'batting_practice_signups', 'waivers'
-        ]
-      },
-      chat: {
-        db: c.env && c.env.CHAT_DB,
-        header: `-- ${COMMUNITY_NAME} Clubhouse (CHAT_DB) Database Backup`,
-        filename: `clubhouse_chat_backup_${dateStr}.sql`,
-        tables: [
-          'channels', 'channel_members', 'messages', 'message_reactions',
-          'chat_attachments', 'user_crypto_keys', 'channel_key_shares',
-          'voice_participants', 'rtc_signals', 'sync_events',
-          'chat_reports', 'user_mutes', 'clubhouse_gifs'
-        ]
-      }
-    };
-
-    const config = backupConfigs[dbParam];
+    const config = resolveBackupTargetConfig(c, dbParam, dateStr);
     if (!config) {
       return c.json({ error: 'Invalid database target. Use "baseball" or "chat".' }, 400);
     }
@@ -154,48 +327,16 @@ eventsCoreRouter.get('/admin/backup-db', requireAdmin, async (c) => {
     }
 
     const db = config.db;
-    const tables = config.tables;
+    const tables = config.scrubbedTables;
     const encoder = new TextEncoder();
-    const PAGE_SIZE = 100;
 
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          controller.enqueue(encoder.encode(`${config.header}\n-- Exported: ${timestamp}\n\n`));
-          for (const table of tables) {
-            let offset = 0;
-            let headerWritten = false;
-            const tableQuery = table === 'app_settings'
-              ? `SELECT * FROM "app_settings" WHERE key NOT IN ('waiver_provenance_secret', 'appscript_upload_url') LIMIT ? OFFSET ?`
-              : `SELECT * FROM "${table}" LIMIT ? OFFSET ?`;
-            while (true) {
-              const { results: rows } = await db.prepare(tableQuery).bind(PAGE_SIZE, offset).all();
-              if (!rows || rows.length === 0) break;
-              if (!headerWritten) {
-                controller.enqueue(encoder.encode(`-- Table: ${table}\n`));
-                headerWritten = true;
-              }
-              let chunk = '';
-              for (const row of rows) {
-                const cols = Object.keys(row).map(k => `"${String(k).replace(/"/g, '""')}"`).join(', ');
-                const vals = Object.values(row).map(v => {
-                  if (v === null || v === undefined) return 'NULL';
-                  if (typeof v === 'number') return Number.isFinite(v) ? v : 'NULL';
-                  if (v instanceof Uint8Array) {
-                    return `X'${Array.from(v, (b) => b.toString(16).padStart(2, '0')).join('')}'`;
-                  }
-                  return `'${String(v).replace(/\0/g, '').replace(/'/g, "''")}'`;
-                }).join(', ');
-                chunk += `INSERT OR IGNORE INTO "${table}" (${cols}) VALUES (${vals});\n`;
-              }
-              controller.enqueue(encoder.encode(chunk));
-              if (rows.length < PAGE_SIZE) break;
-              offset += rows.length;
-            }
-            if (headerWritten) {
-              controller.enqueue(encoder.encode('\n'));
-            }
-          }
+          controller.enqueue(encoder.encode(`${config.scrubbedHeader}\n-- Exported: ${timestamp}\n\n`));
+          await writeBackupTables(db, tables, 'scrubbed', (textChunk) => {
+            controller.enqueue(encoder.encode(textChunk));
+          });
           controller.close();
         } catch (streamErr) {
           console.error('[Backup] Stream error:', streamErr);
@@ -208,7 +349,7 @@ eventsCoreRouter.get('/admin/backup-db', requireAdmin, async (c) => {
       status: 200,
       headers: {
         'Content-Type': 'application/sql; charset=utf-8',
-        'Content-Disposition': `attachment; filename="${config.filename}"`,
+        'Content-Disposition': `attachment; filename="${config.scrubbedFilename}"`,
         'Cache-Control': 'no-store',
         'X-Content-Type-Options': 'nosniff',
         'X-Frame-Options': 'DENY'
@@ -217,6 +358,106 @@ eventsCoreRouter.get('/admin/backup-db', requireAdmin, async (c) => {
   } catch (err) {
     console.error('[Backup] Error creating SQL dump:', err);
     return c.text('Failed to generate database backup.', 500);
+  }
+});
+
+eventsCoreRouter.post('/admin/backup-db', requireAdmin, async (c) => {
+  try {
+    const user = c.get('user');
+    const backupLimit = await checkRateLimit(c.env.DB, `admin_backup_dr_${user ? user.id : 'anon'}`, 5, 3600, c.env);
+    if (!backupLimit.allowed) {
+      return c.json({ error: 'Too many database backup requests. Please wait before exporting again.' }, 429);
+    }
+    const dbParam = (c.req.query('db') || 'baseball').toLowerCase();
+    const timestamp = new Date().toISOString();
+    const dateStr = timestamp.slice(0, 10);
+
+    const config = resolveBackupTargetConfig(c, dbParam, dateStr);
+    if (!config) {
+      return c.json({ error: 'Invalid database target. Use "baseball" or "chat".' }, 400);
+    }
+    if (!config.db) {
+      return c.json({ error: `Database binding for "${dbParam}" is unavailable.` }, 503);
+    }
+
+    let body = null;
+    try {
+      body = await c.req.json();
+    } catch {
+      body = null;
+    }
+    if (!body || typeof body !== 'object') {
+      return c.json({ error: 'Invalid JSON request body for encrypted DR backup.' }, 400);
+    }
+
+    const wrappingKeyBytes = decodeStrictBase64Bytes(body.wrappingKey);
+    if (!wrappingKeyBytes || wrappingKeyBytes.byteLength !== 32 || !wrappingKeyBytes.some((b) => b !== 0)) {
+      return c.json({ error: 'Invalid or missing 256-bit wrappingKey (expected 32 base64-encoded random bytes).' }, 400);
+    }
+
+    const saltBytes = decodeStrictBase64Bytes(body.kdfSalt);
+    if (!saltBytes || saltBytes.byteLength < 16 || saltBytes.byteLength > 64 || !saltBytes.some((b) => b !== 0)) {
+      wrappingKeyBytes.fill(0);
+      return c.json({ error: 'Invalid or missing kdfSalt (expected 16-64 base64-encoded random bytes).' }, 400);
+    }
+
+    const iterations = Number(body.kdfIterations);
+    if (!Number.isInteger(iterations) || iterations < 100000 || iterations > 10000000) {
+      wrappingKeyBytes.fill(0);
+      return c.json({ error: 'Invalid or missing kdfIterations (expected integer between 100000 and 10000000).' }, 400);
+    }
+
+    const sqlParts = [`${config.drHeader}\n-- Exported: ${timestamp}\n\n`];
+    await writeBackupTables(config.db, config.drTables, 'dr', (textChunk) => {
+      sqlParts.push(textChunk);
+    });
+    const plainBytes = new TextEncoder().encode(sqlParts.join(''));
+
+    const ivBytes = new Uint8Array(12);
+    crypto.getRandomValues(ivBytes);
+    const cryptoKey = await crypto.subtle.importKey(
+      'raw',
+      wrappingKeyBytes,
+      { name: 'AES-GCM' },
+      false,
+      ['encrypt']
+    );
+    wrappingKeyBytes.fill(0);
+
+    const cipherBuffer = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv: ivBytes, tagLength: 128 },
+      cryptoKey,
+      plainBytes
+    );
+
+    const envelope = {
+      format: 'pbf-dr-backup-v1',
+      cipher: 'AES-256-GCM',
+      db: dbParam,
+      exportedAt: timestamp,
+      iv: arrayBufferToBase64(ivBytes),
+      ciphertext: arrayBufferToBase64(cipherBuffer),
+      kdf: {
+        algorithm: 'PBKDF2',
+        hash: 'SHA-256',
+        iterations,
+        salt: String(body.kdfSalt).trim()
+      }
+    };
+
+    return new Response(JSON.stringify(envelope), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Content-Disposition': `attachment; filename="${config.drFilename}"`,
+        'Cache-Control': 'no-store',
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY'
+      }
+    });
+  } catch (err) {
+    console.error('[Backup] Error creating encrypted DR backup:', err);
+    return c.json({ error: 'Failed to generate encrypted disaster-recovery backup.' }, 500);
   }
 });
 

@@ -336,5 +336,17 @@
   "event.edit_link_btn": "🔗 أرسل لي رابط تعديل جديدًا",
   "event.edit_link_email_placeholder": "أدخل البريد الإلكتروني المستخدم في تأكيد الحضور",
   "event.edit_link_send_btn": "إرسال رابط التعديل",
-  "event.edit_link_sending": "جارٍ الإرسال..."
+  "event.edit_link_sending": "جارٍ الإرسال...",
+  "backup_scrubbed_btn": "📥 نسخة SQL التشغيلية (.zip)",
+  "backup_dr_btn": "🔐 نسخة DR المشفرة (.pbfenc)",
+  "backup_scrubbed_working": "⏳ جارٍ تصدير SQL التشغيلي...",
+  "backup_dr_working": "⏳ جارٍ تشفير نسخة DR...",
+  "backup_dr_prompt_title": "🔐 نسخة استعادة الكوارث (DR) الكاملة المشفرة",
+  "backup_dr_prompt_msg": "أدخل عبارة مرور (8 أحرف على الأقل) لتشفير نسخة الاستعادة الكاملة هذه. احتفظ بها في مكان آمن — ستحتاجها مع scripts/restore-backup.js:",
+  "backup_dr_prompt_placeholder": "أدخل عبارة مرور تشفير النسخة الاحتياطية...",
+  "backup_dr_confirm_btn": "تشفير وتنزيل",
+  "backup_dr_passphrase_short": "يجب أن تتكون عبارة مرور النسخة الاحتياطية من 8 أحرف على الأقل.",
+  "backup_scrubbed_success": "تم تنزيل نسخة SQL التشغيلية المنقحة.",
+  "backup_dr_success": "تم تنزيل نسخة استعادة الكوارث المشفرة (.pbfenc).",
+  "backup_failed": "فشل النسخ الاحتياطي لقاعدة البيانات: {error}"
 }

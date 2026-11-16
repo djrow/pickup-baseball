@@ -336,5 +336,17 @@
   "event.edit_link_btn": "🔗 新しい編集リンクをメールで受け取る",
   "event.edit_link_email_placeholder": "参加登録に使用したメールアドレスを入力",
   "event.edit_link_send_btn": "編集リンクを送信",
-  "event.edit_link_sending": "送信中..."
+  "event.edit_link_sending": "送信中...",
+  "backup_scrubbed_btn": "📥 運用SQLバックアップ (.zip)",
+  "backup_dr_btn": "🔐 暗号化DRバックアップ (.pbfenc)",
+  "backup_scrubbed_working": "⏳ 個人情報除外SQLをエクスポート中...",
+  "backup_dr_working": "⏳ DRバックアップを暗号化中...",
+  "backup_dr_prompt_title": "🔐 暗号化フルDRバックアップ",
+  "backup_dr_prompt_msg": "完全な災害復旧バックアップを暗号化するためのパスフレーズ（8文字以上）を入力してください。scripts/restore-backup.js での復元に必要となるため大切に保管してください：",
+  "backup_dr_prompt_placeholder": "バックアップ暗号化パスフレーズを入力...",
+  "backup_dr_confirm_btn": "暗号化してダウンロード",
+  "backup_dr_passphrase_short": "バックアップのパスフレーズは8文字以上で入力してください。",
+  "backup_scrubbed_success": "個人情報除外済みの運用SQLバックアップをダウンロードしました。",
+  "backup_dr_success": "暗号化DRバックアップ (.pbfenc) をダウンロードしました。",
+  "backup_failed": "データベースのバックアップに失敗しました: {error}"
 }

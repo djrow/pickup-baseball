@@ -336,5 +336,17 @@
   "event.edit_link_btn": "🔗 Ուղարկել խմբագրման նոր հղում",
   "event.edit_link_email_placeholder": "Մուտքագրեք ձեր գրանցման էլ. հասցեն",
   "event.edit_link_send_btn": "Ուղարկել հղումը",
-  "event.edit_link_sending": "Ուղարկվում է..."
+  "event.edit_link_sending": "Ուղարկվում է...",
+  "backup_scrubbed_btn": "📥 Օպերացիոն SQL (.zip)",
+  "backup_dr_btn": "🔐 Գաղտնագրված DR պահուստ (.pbfenc)",
+  "backup_scrubbed_working": "⏳ Մաքրված SQL-ի արտահանում...",
+  "backup_dr_working": "⏳ DR պահուստի գաղտնագրում...",
+  "backup_dr_prompt_title": "🔐 Գաղտնագրված լրիվ DR պահուստավորում",
+  "backup_dr_prompt_msg": "Մուտքագրեք գաղտնաբառ (առնվազն 8 նիշ) այս լրիվ պահուստավորումը գաղտնագրելու համար: Պահեք այն ապահով՝ անհրաժեշտ կլինի scripts/restore-backup.js-ի համար.",
+  "backup_dr_prompt_placeholder": "Մուտքագրեք գաղտնագրման գաղտնաբառը...",
+  "backup_dr_confirm_btn": "Գաղտնագրել և ներբեռնել",
+  "backup_dr_passphrase_short": "Պահուստային գաղտնաբառը պետք է լինի առնվազն 8 նիշ:",
+  "backup_scrubbed_success": "Օպերացիոն SQL պահուստը ներբեռնվեց:",
+  "backup_dr_success": "Գաղտնագրված DR պահուստը (.pbfenc) ներբեռնվեց:",
+  "backup_failed": "Տվյալների բազայի պահուստավորումը ձախողվեց՝ {error}"
 }

@@ -336,5 +336,17 @@
   "event.edit_link_btn": "🔗 M’envoyer un nouveau lien de modification",
   "event.edit_link_email_placeholder": "Entrez l’e-mail utilisé pour votre inscription",
   "event.edit_link_send_btn": "Envoyer le lien",
-  "event.edit_link_sending": "Envoi..."
+  "event.edit_link_sending": "Envoi...",
+  "backup_scrubbed_btn": "📥 SQL opérationnel (.zip)",
+  "backup_dr_btn": "🔐 Sauvegarde DR chiffrée (.pbfenc)",
+  "backup_scrubbed_working": "⏳ Exportation du SQL expurgé...",
+  "backup_dr_working": "⏳ Chiffrement de la sauvegarde DR...",
+  "backup_dr_prompt_title": "🔐 Sauvegarde complète de reprise (DR) chiffrée",
+  "backup_dr_prompt_msg": "Entrez une phrase secrète (au moins 8 caractères) pour chiffrer cette sauvegarde complète. Conservez-la précieusement — elle sera requise avec scripts/restore-backup.js :",
+  "backup_dr_prompt_placeholder": "Entrez la phrase secrète de chiffrement...",
+  "backup_dr_confirm_btn": "Chiffrer et télécharger",
+  "backup_dr_passphrase_short": "La phrase secrète doit contenir au moins 8 caractères.",
+  "backup_scrubbed_success": "Sauvegarde SQL opérationnelle expurgée téléchargée.",
+  "backup_dr_success": "Sauvegarde de reprise chiffrée (.pbfenc) téléchargée.",
+  "backup_failed": "Échec de la sauvegarde de la base de données : {error}"
 }

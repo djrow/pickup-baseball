@@ -336,5 +336,17 @@
   "event.edit_link_btn": "🔗 لینک جدید ویرایش را برایم ایمیل کن",
   "event.edit_link_email_placeholder": "ایمیل ثبت‌شده برای اعلام حضور را وارد کنید",
   "event.edit_link_send_btn": "ارسال لینک ویرایش",
-  "event.edit_link_sending": "در حال ارسال..."
+  "event.edit_link_sending": "در حال ارسال...",
+  "backup_scrubbed_btn": "📥 پشتیبان عملیاتی SQL (.zip)",
+  "backup_dr_btn": "🔐 پشتیبان رمزنگاری‌شده DR (.pbfenc)",
+  "backup_scrubbed_working": "⏳ در حال استخراج SQL عملیاتی...",
+  "backup_dr_working": "⏳ در حال رمزنگاری پشتیبان DR...",
+  "backup_dr_prompt_title": "🔐 پشتیبان کامل بازیابی بحران (DR) رمزنگاری‌شده",
+  "backup_dr_prompt_msg": "یک عبارت عبور (حداقل ۸ نویسه) برای رمزنگاری این پشتیبان کامل وارد کنید. آن را در جای امن نگه دارید — برای بازیابی با scripts/restore-backup.js به آن نیاز دارید:",
+  "backup_dr_prompt_placeholder": "عبارت عبور رمزنگاری پشتیبان را وارد کنید...",
+  "backup_dr_confirm_btn": "رمزنگاری و دانلود",
+  "backup_dr_passphrase_short": "عبارت عبور پشتیبان باید حداقل ۸ نویسه باشد.",
+  "backup_scrubbed_success": "پشتیبان SQL عملیاتی دانلود شد.",
+  "backup_dr_success": "پشتیبان بازیابی بحران رمزنگاری‌شده (.pbfenc) دانلود شد.",
+  "backup_failed": "پشتیبان‌گیری از پایگاه داده ناموفق بود: {error}"
 }
