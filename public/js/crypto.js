@@ -218,6 +218,59 @@
     });
   }
 
+  function idbDelete(key) {
+    delete memoryKeyStore[key];
+    return openKeyDb().then(function (db) {
+      if (!db) return true;
+      return new Promise(function (resolve) {
+        try {
+          var tx = db.transaction([KEY_STORE_NAME], 'readwrite');
+          var store = tx.objectStore(KEY_STORE_NAME);
+          var req = store.delete(key);
+          req.onsuccess = function () { resolve(true); };
+          req.onerror = function () { resolve(false); };
+        } catch (e) {
+          resolve(false);
+        }
+      });
+    });
+  }
+
+  function idbDeleteByPrefix(prefix) {
+    var pfx = String(prefix || '');
+    if (!pfx) return Promise.resolve(true);
+    var memKeys = Object.keys(memoryKeyStore);
+    for (var i = 0; i < memKeys.length; i++) {
+      if (memKeys[i].indexOf(pfx) === 0) {
+        delete memoryKeyStore[memKeys[i]];
+      }
+    }
+    return openKeyDb().then(function (db) {
+      if (!db) return true;
+      return new Promise(function (resolve) {
+        try {
+          var tx = db.transaction([KEY_STORE_NAME], 'readwrite');
+          tx.oncomplete = function () { resolve(true); };
+          tx.onerror = function () { resolve(false); };
+          tx.onabort = function () { resolve(false); };
+          var store = tx.objectStore(KEY_STORE_NAME);
+          var req = store.openCursor();
+          req.onsuccess = function (ev) {
+            var cursor = ev.target.result;
+            if (!cursor) return;
+            if (cursor.key !== undefined && String(cursor.key).indexOf(pfx) === 0) {
+              cursor.delete();
+            }
+            cursor.continue();
+          };
+          req.onerror = function () { resolve(false); };
+        } catch (e) {
+          resolve(false);
+        }
+      });
+    });
+  }
+
   var cachedPinDbPromise = null;
 
   function openPinDb() {
@@ -294,6 +347,24 @@
           var tx = db.transaction([PIN_STORE_NAME], 'readwrite');
           var store = tx.objectStore(PIN_STORE_NAME);
           var req = store.put(value, key);
+          req.onsuccess = function () { resolve(true); };
+          req.onerror = function () { resolve(false); };
+        } catch (e) {
+          resolve(false);
+        }
+      });
+    });
+  }
+
+  function pinDbDelete(key) {
+    delete memoryPinStore[key];
+    return openPinDb().then(function (db) {
+      if (!db) return true;
+      return new Promise(function (resolve) {
+        try {
+          var tx = db.transaction([PIN_STORE_NAME], 'readwrite');
+          var store = tx.objectStore(PIN_STORE_NAME);
+          var req = store.delete(key);
           req.onsuccess = function () { resolve(true); };
           req.onerror = function () { resolve(false); };
         } catch (e) {
@@ -879,6 +950,20 @@
     });
   }
 
+  function clearPeerVerificationPin(peerUserId) {
+    if (!peerUserId) return Promise.resolve(true);
+    var keys = [pinKeyFor(peerUserId), 'peer_key_pin_' + String(peerUserId)];
+    var unique = [];
+    for (var i = 0; i < keys.length; i++) {
+      if (unique.indexOf(keys[i]) === -1) unique.push(keys[i]);
+    }
+    return Promise.all(unique.map(function (k) {
+      return pinDbDelete(k);
+    })).then(function () {
+      return true;
+    });
+  }
+
   function clearMemoryKeys() {
     memoryKeyStore = {};
     pinOwnerId = 0;
@@ -1079,9 +1164,12 @@
     computeSafetyNumber: computeSafetyNumber,
     getPeerVerificationState: getPeerVerificationState,
     markPeerFingerprintVerified: markPeerFingerprintVerified,
+    clearPeerVerificationPin: clearPeerVerificationPin,
     decryptExportBundle: decryptExportBundle,
     idbGet: idbGet,
-    idbPut: idbPut
+    idbPut: idbPut,
+    idbDelete: idbDelete,
+    idbDeleteByPrefix: idbDeleteByPrefix
   };
 
   root.ClubhouseCrypto = ClubhouseCrypto;

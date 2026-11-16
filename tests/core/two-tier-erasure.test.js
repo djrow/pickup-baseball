@@ -513,6 +513,518 @@ function registerTwoTierErasureTests() {
         assert.deepEqual(missing, [], `${lang}.json must contain all EN_DICT keys`);
       }
     });
+
+    await t.test('7. Ticket #50: CHAT_DB full erasure (keys, vault, memberships, shares, voice/RTC, mutes, blocks, messages, reactions, R2/Drive attachments, report reporter scrub, user_erased tombstone)', async () => {
+      const deletedR2Keys = [];
+      const mockBucket = {
+        async delete(key) {
+          deletedR2Keys.push(key);
+        }
+      };
+      const gdriveDeleteCalls = [];
+      const origFetch = globalThis.fetch;
+      const ctx = await createErasureTestEnv({
+        MEDIA_BUCKET: mockBucket,
+        GDRIVE_CLIENT_ID: 'test-client-id',
+        GDRIVE_CLIENT_SECRET: 'test-client-secret',
+        GDRIVE_REFRESH_TOKEN: 'test-refresh-token',
+        GDRIVE_FOLDER_ID: 'test-folder-id'
+      });
+      globalThis.fetch = async (url, init) => {
+        const u = String(url);
+        if (u.includes('oauth2.googleapis.com/token')) {
+          return new Response(JSON.stringify({ access_token: 'mock-gdrive-token', expires_in: 3600 }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+        if (u.includes('/drive/v3/files/') && init && init.method === 'DELETE') {
+          gdriveDeleteCalls.push(u);
+          return new Response('', { status: 204 });
+        }
+        return origFetch(url, init);
+      };
+
+      try {
+        const adminId = Number(ctx.baseballSqlite.prepare(
+          "INSERT INTO users (name, email, role, is_admin, clubhouse_opted_in) VALUES ('Admin Mod', 'mod50@example.org', 'admin', 1, 1)"
+        ).run().lastInsertRowid);
+        const adminCookie = createDirectSession(ctx.baseballSqlite, adminId);
+
+        const targetEmail = 'chat_erased@example.org';
+        const targetId = Number(ctx.baseballSqlite.prepare(
+          "INSERT INTO users (name, email, role, is_admin, clubhouse_opted_in) VALUES ('Bob Chatter', ?, 'member', 0, 1)"
+        ).run(targetEmail).lastInsertRowid);
+        const targetCookie = createDirectSession(ctx.baseballSqlite, targetId);
+
+        const peerId = Number(ctx.baseballSqlite.prepare(
+          "INSERT INTO users (name, email, role, is_admin, clubhouse_opted_in) VALUES ('Alice Peer', 'alice50@example.org', 'member', 0, 1)"
+        ).run().lastInsertRowid);
+        const peerCookie = createDirectSession(ctx.baseballSqlite, peerId);
+
+        // Seed user_crypto_keys (with vault) for target and peer
+        ctx.chatSqlite.prepare(`
+          INSERT INTO user_crypto_keys (user_id, ecdh_public_key_jwk, ecdsa_public_key_jwk, encrypted_private_vault, vault_salt, vault_iv, status_text)
+          VALUES (?, '{"kty":"EC"}', '{"kty":"EC"}', 'vault-cipher', 'salt-b64', 'iv-b64', 'Ready to hit')
+        `).run(targetId);
+        ctx.chatSqlite.prepare(`
+          INSERT INTO user_crypto_keys (user_id, ecdh_public_key_jwk, ecdsa_public_key_jwk, encrypted_private_vault, vault_salt, vault_iv)
+          VALUES (?, '{"kty":"EC"}', '{"kty":"EC"}', 'peer-vault', 'salt-p', 'iv-p')
+        `).run(peerId);
+
+        // Seed DM channel created by target + private channel + channel_members + channel_key_shares (both directions)
+        const dmChId = Number(ctx.chatSqlite.prepare(`
+          INSERT INTO channels (slug, name, category, channel_type, is_encrypted, is_private, created_by)
+          VALUES (?, 'DM Bob & Alice', 'Direct Messages', 'dm', 1, 0, ?)
+        `).run(`dm-${Math.min(targetId, peerId)}-${Math.max(targetId, peerId)}`, targetId).lastInsertRowid);
+        const generalCh = ctx.chatSqlite.prepare("SELECT id FROM channels WHERE slug = 'general'").get();
+        const generalChId = Number(generalCh.id);
+
+        ctx.chatSqlite.prepare('INSERT INTO channel_members (channel_id, user_id, role) VALUES (?, ?, ?)').run(dmChId, targetId, 'owner');
+        ctx.chatSqlite.prepare('INSERT INTO channel_members (channel_id, user_id, role) VALUES (?, ?, ?)').run(dmChId, peerId, 'member');
+
+        // Key shares: one where target is recipient, one where target is sender to peer, one unrelated share
+        ctx.chatSqlite.prepare(`
+          INSERT INTO channel_key_shares (channel_id, key_epoch, recipient_user_id, sender_user_id, wrapped_key_base64, wrap_iv)
+          VALUES (?, 1, ?, ?, 'w1', 'iv1'), (?, 1, ?, ?, 'w2', 'iv2'), (?, 2, ?, ?, 'w3', 'iv3')
+        `).run(dmChId, targetId, peerId, dmChId, peerId, targetId, generalChId, peerId, adminId);
+
+        // Voice, RTC, mutes, blocks, opted_out
+        const nowSec = Math.floor(Date.now() / 1000);
+        ctx.chatSqlite.prepare('INSERT INTO voice_participants (channel_id, user_id, user_name, heartbeat_at) VALUES (?, ?, ?, ?)').run(generalChId, targetId, 'Bob Chatter', nowSec);
+        ctx.chatSqlite.prepare('INSERT INTO voice_participants (channel_id, user_id, user_name, heartbeat_at) VALUES (?, ?, ?, ?)').run(generalChId, peerId, 'Alice Peer', nowSec);
+        ctx.chatSqlite.prepare(`
+          INSERT INTO rtc_signals (channel_id, sender_user_id, recipient_user_id, signal_type, payload_json, created_at)
+          VALUES (?, ?, ?, 'offer', '{}', ?), (?, ?, ?, 'answer', '{}', ?), (?, ?, ?, 'ice', '{}', ?)
+        `).run(generalChId, targetId, peerId, nowSec, generalChId, peerId, targetId, nowSec, generalChId, peerId, adminId, nowSec);
+
+        ctx.chatSqlite.prepare('INSERT INTO user_mutes (muter_user_id, muted_user_id, reason) VALUES (?, ?, ?), (?, ?, ?)').run(targetId, peerId, 'noisy', peerId, targetId, 'spam');
+        ctx.chatSqlite.prepare('INSERT INTO user_blocks (blocker_id, blocked_id) VALUES (?, ?), (?, ?)').run(targetId, adminId, peerId, targetId);
+        ctx.chatSqlite.prepare('INSERT INTO clubhouse_opted_out (user_id) VALUES (?)').run(targetId);
+
+        // Messages: peer parent message + target reply + target authored message (with hidden original_content) + peer unrelated message
+        const peerParentMsgId = Number(ctx.chatSqlite.prepare(`
+          INSERT INTO messages (channel_id, author_id, author_name, content, reply_count, hidden_by, hidden_by_name)
+          VALUES (?, ?, 'Alice Peer', 'Peer root message', 1, ?, 'Bob Chatter')
+        `).run(generalChId, peerId, targetId).lastInsertRowid);
+
+        const targetReplyMsgId = Number(ctx.chatSqlite.prepare(`
+          INSERT INTO messages (channel_id, parent_message_id, author_id, author_name, content)
+          VALUES (?, ?, ?, 'Bob Chatter', 'Reply from Bob')
+        `).run(generalChId, peerParentMsgId, targetId).lastInsertRowid);
+
+        const targetHiddenMsgId = Number(ctx.chatSqlite.prepare(`
+          INSERT INTO messages (channel_id, author_id, author_name, content, original_content, original_iv, hidden_at)
+          VALUES (?, ?, 'Bob Chatter', '[Message hidden by moderator]', 'Secret moderated text', 'iv-orig', CURRENT_TIMESTAMP)
+        `).run(dmChId, targetId).lastInsertRowid);
+
+        // Reactions: target reaction on peer message + peer reaction on target message + peer reaction on peer message
+        ctx.chatSqlite.prepare(`
+          INSERT INTO message_reactions (message_id, channel_id, user_id, user_name, emoji)
+          VALUES (?, ?, ?, 'Bob Chatter', '👍'), (?, ?, ?, 'Alice Peer', '🔥'), (?, ?, ?, 'Alice Peer', '⚾')
+        `).run(peerParentMsgId, generalChId, targetId, targetHiddenMsgId, dmChId, peerId, peerParentMsgId, generalChId, peerId);
+
+        // Attachments: R2 + Drive attachment by target, plus kept promoted attachment when keep_approved_gallery=true (tested separately)
+        ctx.chatSqlite.prepare(`
+          INSERT INTO chat_attachments (id, channel_id, message_id, uploader_id, file_name, mime_type, file_size, storage_provider, drive_file_id, r2_key, upload_status, local_data_base64)
+          VALUES ('att_r2_del', ?, ?, ?, 'pic.png', 'image/png', 100, 'r2', NULL, 'chat/bob-pic.png', 'completed', NULL),
+                 ('att_drv_del', ?, ?, ?, 'vid.mp4', 'video/mp4', 200, 'gdrive', 'driveFileBob50', NULL, 'completed', 'AAAA')
+        `).run(generalChId, targetReplyMsgId, targetId, dmChId, targetHiddenMsgId, targetId);
+
+        // Clubhouse GIFs: 1 private, 1 public
+        ctx.chatSqlite.prepare(`
+          INSERT INTO clubhouse_gifs (id, title, drive_file_id, r2_key, added_by, added_by_name, is_public)
+          VALUES ('gif_priv_50', 'Private Bob', 'driveGifPriv50', 'gifs/priv50.gif', ?, 'Bob Chatter', 0),
+                 ('gif_pub_50', 'Public Bob', 'driveGifPub50', NULL, ?, 'Bob Chatter', 1)
+        `).run(targetId, targetId);
+
+        // Moderation reports: target as reporter + target as reviewer
+        const reportId = Number(ctx.chatSqlite.prepare(`
+          INSERT INTO chat_reports (reporter_id, reporter_name, target_type, target_user_id, target_user_name, target_message_id, channel_id, reason, status, reviewed_by, reviewed_by_name)
+          VALUES (?, 'Bob Chatter', 'message', ?, 'Alice Peer', ?, ?, 'Needs review', 'open', ?, 'Bob Chatter')
+        `).run(targetId, peerId, peerParentMsgId, generalChId, targetId).lastInsertRowid);
+
+        // Record sync watermark for peer before erasure
+        const beforeSync = await ctx.req('GET', '/api/sync?since_msg_id=0&since_event_id=0', peerCookie);
+        assert.equal(beforeSync.status, 200);
+        const sinceEvt = beforeSync.data.latest_event_id || 0;
+
+        // Erase target via DELETE /api/auth/me with OTP
+        await ctx.req('POST', '/api/auth/send-code', null, { email: targetEmail });
+        const codeRow = ctx.baseballSqlite.prepare('SELECT code FROM auth_codes WHERE email = ? ORDER BY id DESC LIMIT 1').get(targetEmail);
+        const delRes = await ctx.req('DELETE', '/api/auth/me', targetCookie, { code: codeRow.code });
+        assert.equal(delRes.status, 200, delRes.text);
+
+        // Verify all CHAT_DB identity/vault/memberships/shares/voice/RTC/mutes/blocks/opted_out wiped
+        assert.equal(ctx.chatSqlite.prepare('SELECT user_id FROM user_crypto_keys WHERE user_id = ?').get(targetId), undefined);
+        assert.ok(ctx.chatSqlite.prepare('SELECT user_id FROM user_crypto_keys WHERE user_id = ?').get(peerId), 'Peer keys must remain');
+        assert.equal(ctx.chatSqlite.prepare('SELECT * FROM channel_members WHERE user_id = ?').get(targetId), undefined);
+        assert.equal(ctx.chatSqlite.prepare('SELECT created_by FROM channels WHERE id = ?').get(dmChId).created_by, null);
+        assert.equal(ctx.chatSqlite.prepare('SELECT * FROM channel_key_shares WHERE recipient_user_id = ? OR sender_user_id = ?').get(targetId, targetId), undefined);
+        assert.ok(ctx.chatSqlite.prepare('SELECT * FROM channel_key_shares WHERE channel_id = ? AND recipient_user_id = ?').get(generalChId, peerId), 'Unrelated key share must remain');
+        assert.equal(ctx.chatSqlite.prepare('SELECT * FROM voice_participants WHERE user_id = ?').get(targetId), undefined);
+        assert.ok(ctx.chatSqlite.prepare('SELECT * FROM voice_participants WHERE user_id = ?').get(peerId));
+        assert.equal(ctx.chatSqlite.prepare('SELECT * FROM rtc_signals WHERE sender_user_id = ? OR recipient_user_id = ?').get(targetId, targetId), undefined);
+        assert.equal(ctx.chatSqlite.prepare('SELECT * FROM rtc_signals WHERE sender_user_id = ? AND recipient_user_id = ?').all(peerId, adminId).length, 1);
+        assert.equal(ctx.chatSqlite.prepare('SELECT * FROM user_mutes WHERE muter_user_id = ? OR muted_user_id = ?').get(targetId, targetId), undefined);
+        assert.equal(ctx.chatSqlite.prepare('SELECT * FROM user_blocks WHERE blocker_id = ? OR blocked_id = ?').get(targetId, targetId), undefined);
+        assert.equal(ctx.chatSqlite.prepare('SELECT * FROM clubhouse_opted_out WHERE user_id = ?').get(targetId), undefined);
+
+        // Verify messages hard-deleted, parent reply_count decremented, hidden_by scrubbed, peer messages kept
+        assert.equal(ctx.chatSqlite.prepare('SELECT * FROM messages WHERE author_id = ?').all(targetId).length, 0);
+        const peerParentAfter = ctx.chatSqlite.prepare('SELECT * FROM messages WHERE id = ?').get(peerParentMsgId);
+        assert.ok(peerParentAfter);
+        assert.equal(peerParentAfter.reply_count, 0, 'Parent reply_count must decrement when erased reply is removed');
+        assert.equal(peerParentAfter.hidden_by, null);
+        assert.notEqual(peerParentAfter.hidden_by_name, 'Bob Chatter');
+
+        // Reactions deleted for erased user and erased messages, while peer reaction on peer message remains
+        assert.equal(ctx.chatSqlite.prepare('SELECT * FROM message_reactions WHERE user_id = ? OR message_id = ?').all(targetId, targetHiddenMsgId).length, 0);
+        assert.equal(ctx.chatSqlite.prepare('SELECT * FROM message_reactions WHERE message_id = ? AND user_id = ?').all(peerParentMsgId, peerId).length, 1);
+
+        // Attachments deleted from D1, R2, and Google Drive
+        assert.equal(ctx.chatSqlite.prepare('SELECT * FROM chat_attachments WHERE uploader_id = ?').all(targetId).length, 0);
+        assert.ok(deletedR2Keys.includes('chat/bob-pic.png'), 'R2 object for attachment must be deleted');
+        assert.ok(deletedR2Keys.includes('gifs/priv50.gif'), 'R2 object for private GIF must be deleted');
+        assert.ok(gdriveDeleteCalls.some((u) => u.includes('/drive/v3/files/driveFileBob50')), 'Google Drive delete must be invoked for Drive attachment');
+        assert.ok(gdriveDeleteCalls.some((u) => u.includes('/drive/v3/files/driveGifPriv50')), 'Google Drive delete must be invoked for private Drive GIF');
+        assert.equal(gdriveDeleteCalls.some((u) => u.includes('/drive/v3/files/driveGifPub50')), false, 'Public GIF Drive file must NOT be deleted');
+        assert.equal(ctx.chatSqlite.prepare('SELECT * FROM clubhouse_gifs WHERE id = ?').get('gif_priv_50'), undefined);
+        const pubGif = ctx.chatSqlite.prepare('SELECT * FROM clubhouse_gifs WHERE id = ?').get('gif_pub_50');
+        assert.ok(pubGif, 'Public GIF must remain');
+        assert.equal(pubGif.added_by, 0);
+        assert.equal(pubGif.added_by_name, 'Community Member');
+
+        // Moderation report history preserved with reporter_id/reporter_name & reviewed_by scrubbed
+        const repRow = ctx.chatSqlite.prepare('SELECT * FROM chat_reports WHERE id = ?').get(reportId);
+        assert.ok(repRow, 'Moderation report history must be preserved');
+        assert.equal(repRow.reason, 'Needs review');
+        assert.notEqual(repRow.reporter_id, targetId);
+        assert.equal(repRow.reporter_id, 0);
+        assert.equal(repRow.reporter_name, 'Deleted Member');
+        assert.equal(repRow.reviewed_by, null);
+        assert.equal(repRow.reviewed_by_name, null);
+
+        const modReportsRes = await ctx.req('GET', '/api/moderation/reports', adminCookie);
+        assert.equal(modReportsRes.status, 200);
+        const apiRep = modReportsRes.data.reports.find((r) => r.id === reportId);
+        assert.ok(apiRep);
+        assert.equal(apiRep.reporter_id, null);
+        assert.equal(apiRep.reporter_name, 'Deleted Member');
+
+        // Sync event user_erased tombstone emitted and delivered via GET /api/sync
+        const tombstone = ctx.chatSqlite.prepare(
+          "SELECT * FROM sync_events WHERE event_type = 'user_erased' AND target_id = ?"
+        ).get(targetId);
+        assert.ok(tombstone, 'user_erased sync_events tombstone must be inserted');
+        assert.equal(tombstone.channel_id, 0);
+        const tPayload = JSON.parse(tombstone.payload_json);
+        assert.equal(tPayload.user_id, targetId);
+        assert.equal(tPayload.email, undefined, 'Tombstone must not leak PII');
+        assert.equal(tPayload.name, undefined, 'Tombstone must not leak PII');
+
+        const afterSync = await ctx.req('GET', `/api/sync?since_msg_id=0&since_event_id=${sinceEvt}`, peerCookie);
+        assert.equal(afterSync.status, 200);
+        const delivered = (afterSync.data.events || []).find((e) => e.event_type === 'user_erased' && Number(e.target_id) === targetId);
+        assert.ok(delivered, 'Active Clubhouse peer must receive user_erased tombstone in GET /api/sync');
+      } finally {
+        globalThis.fetch = origFetch;
+        ctx.close();
+      }
+    });
+
+    await t.test('8. Ticket #50: ClubhouseStore + ClubhouseCrypto evict cached messages, DM keys, and TOFU pins upon receiving user_erased sync event', async () => {
+      const ctx = await createErasureTestEnv();
+      const prevFetch = globalThis.fetch;
+      const prevIndexedDB = globalThis.indexedDB;
+      const prevWindow = globalThis.window;
+
+      // Minimal in-memory IndexedDB mock supporting objectStores, index cursors, delete, clear, put, get, getAll
+      function createMemoryIndexedDb() {
+        const databases = new Map();
+        function makeReq(executor) {
+          const req = { result: undefined, error: null, onsuccess: null, onerror: null, onupgradeneeded: null, onblocked: null };
+          queueMicrotask(() => executor(req));
+          return req;
+        }
+        return {
+          _databases: databases,
+          open(name) {
+            const req = { result: undefined, error: null, onsuccess: null, onerror: null, onupgradeneeded: null, onblocked: null };
+            queueMicrotask(() => {
+              let storesMap = databases.get(name);
+              const isNew = !storesMap;
+              if (!storesMap) {
+                storesMap = new Map();
+                databases.set(name, storesMap);
+              }
+              const db = {
+                objectStoreNames: {
+                  contains(sName) { return storesMap.has(sName); }
+                },
+                createObjectStore(sName, opts) {
+                  const s = { keyPath: opts && opts.keyPath ? opts.keyPath : null, data: new Map(), indexes: new Map() };
+                  storesMap.set(sName, s);
+                  return {
+                    createIndex(idxName, keyPath) {
+                      s.indexes.set(idxName, keyPath);
+                    }
+                  };
+                },
+                transaction(storeNames) {
+                  const names = Array.isArray(storeNames) ? storeNames : [storeNames];
+                  const tx = { oncomplete: null, onerror: null, onabort: null };
+                  let pending = 0;
+                  function trackOp(fn) {
+                    pending++;
+                    return makeReq((r) => {
+                      try {
+                        fn(r);
+                        if (typeof r.onsuccess === 'function') r.onsuccess({ target: r });
+                      } catch (err) {
+                        r.error = err;
+                        if (typeof r.onerror === 'function') r.onerror({ target: r });
+                      }
+                      pending--;
+                      if (pending === 0 && typeof tx.oncomplete === 'function') {
+                        queueMicrotask(() => { if (typeof tx.oncomplete === 'function') tx.oncomplete(); });
+                      }
+                    });
+                  }
+                  tx.objectStore = (sName) => {
+                    if (!names.includes(sName)) throw new Error('Store not in tx: ' + sName);
+                    const s = storesMap.get(sName);
+                    return {
+                      get(k) { return trackOp((r) => { r.result = s.data.get(k); }); },
+                      getAll() { return trackOp((r) => { r.result = Array.from(s.data.values()); }); },
+                      put(val, k) {
+                        return trackOp((r) => {
+                          const key = s.keyPath ? val[s.keyPath] : k;
+                          s.data.set(key, val);
+                          r.result = key;
+                        });
+                      },
+                      delete(k) { return trackOp((r) => { s.data.delete(k); r.result = undefined; }); },
+                      clear() { return trackOp((r) => { s.data.clear(); r.result = undefined; }); },
+                      openCursor() {
+                        const entries = Array.from(s.data.entries());
+                        let idx = 0;
+                        const cReq = { result: null, onsuccess: null, onerror: null };
+                        function step() {
+                          queueMicrotask(() => {
+                            if (idx >= entries.length) {
+                              cReq.result = null;
+                              if (typeof cReq.onsuccess === 'function') cReq.onsuccess({ target: cReq });
+                              if (typeof tx.oncomplete === 'function') tx.oncomplete();
+                              return;
+                            }
+                            const [curKey, curVal] = entries[idx++];
+                            cReq.result = {
+                              key: curKey,
+                              value: curVal,
+                              delete() { s.data.delete(curKey); },
+                              update(nextVal) { s.data.set(s.keyPath ? nextVal[s.keyPath] : curKey, nextVal); },
+                              continue() { step(); }
+                            };
+                            if (typeof cReq.onsuccess === 'function') cReq.onsuccess({ target: cReq });
+                          });
+                        }
+                        step();
+                        return cReq;
+                      }
+                    };
+                  };
+                  queueMicrotask(() => {
+                    if (pending === 0 && typeof tx.oncomplete === 'function') tx.oncomplete();
+                  });
+                  return tx;
+                }
+              };
+              req.result = db;
+              if (isNew && typeof req.onupgradeneeded === 'function') {
+                req.onupgradeneeded({ target: req });
+              }
+              if (typeof req.onsuccess === 'function') req.onsuccess({ target: req });
+            });
+            return req;
+          },
+          deleteDatabase(name) {
+            return makeReq((r) => {
+              databases.delete(name);
+              r.result = undefined;
+            });
+          }
+        };
+      }
+
+      try {
+        const memIdb = createMemoryIndexedDb();
+        globalThis.indexedDB = memIdb;
+        delete require.cache[require.resolve('../../public/js/crypto.js')];
+        delete require.cache[require.resolve('../../public/js/store.js')];
+
+        const ClubhouseCrypto = require('../../public/js/crypto.js');
+        globalThis.ClubhouseCrypto = ClubhouseCrypto;
+        const ClubhouseStore = require('../../public/js/store.js');
+
+        // Seed Admin, Alice, and Bob in BASEBALL_DB + CHAT_DB
+        const adminId = Number(ctx.baseballSqlite.prepare(
+          "INSERT INTO users (name, email, role, is_admin, clubhouse_opted_in) VALUES ('Admin Eraser', 'admin_cli@example.org', 'admin', 1, 1)"
+        ).run().lastInsertRowid);
+        const adminCookie = createDirectSession(ctx.baseballSqlite, adminId);
+
+        const aliceId = Number(ctx.baseballSqlite.prepare(
+          "INSERT INTO users (name, email, role, is_admin, clubhouse_opted_in) VALUES ('Alice Client', 'alice_cli@example.org', 'member', 0, 1)"
+        ).run().lastInsertRowid);
+        const aliceCookie = createDirectSession(ctx.baseballSqlite, aliceId);
+
+        const bobId = Number(ctx.baseballSqlite.prepare(
+          "INSERT INTO users (name, email, role, is_admin, clubhouse_opted_in) VALUES ('Bob Erased', 'bob_cli@example.org', 'member', 0, 1)"
+        ).run().lastInsertRowid);
+
+        // Route client fetch calls to Hono app as Alice
+        globalThis.fetch = async (url, init = {}) => {
+          const fullUrl = String(url).startsWith('http') ? String(url) : `https://community.example.org${url}`;
+          const headers = new Headers(init.headers || {});
+          headers.set('Cookie', aliceCookie);
+          headers.set('Origin', 'https://community.example.org');
+          return honoApp.fetch(new Request(fullUrl, { ...init, headers }), ctx.env);
+        };
+
+        // Enroll Alice + Bob E2EE keys and create 1:1 DM
+        ClubhouseCrypto.setPinOwner(aliceId);
+        const aliceKeys = await ClubhouseCrypto.generateIdentityKeyPair();
+        const bobPair = await globalThis.crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey', 'deriveBits']);
+        const bobPubJwk = await globalThis.crypto.subtle.exportKey('jwk', bobPair.publicKey);
+
+        ctx.chatSqlite.prepare(`
+          INSERT INTO user_crypto_keys (user_id, ecdh_public_key_jwk, ecdsa_public_key_jwk)
+          VALUES (?, ?, '{"kty":"EC"}'), (?, ?, '{"kty":"EC"}')
+        `).run(aliceId, JSON.stringify(aliceKeys.ecdhPublicJwk), bobId, JSON.stringify(bobPubJwk));
+
+        const dmSlug = `dm-${Math.min(aliceId, bobId)}-${Math.max(aliceId, bobId)}`;
+        const dmChId = Number(ctx.chatSqlite.prepare(`
+          INSERT INTO channels (slug, name, category, channel_type, is_encrypted, is_private, created_by)
+          VALUES (?, 'DM Alice & Bob', 'Direct Messages', 'dm', 1, 0, ?)
+        `).run(dmSlug, bobId).lastInsertRowid);
+        ctx.chatSqlite.prepare('INSERT INTO channel_members (channel_id, user_id, role) VALUES (?, ?, ?), (?, ?, ?)').run(dmChId, bobId, 'owner', dmChId, aliceId, 'member');
+
+        // Wrap DM channel key from Bob to Alice
+        const dmAesKey = await ClubhouseCrypto.generateChannelKey();
+        const alicePubKey = await globalThis.crypto.subtle.importKey('jwk', aliceKeys.ecdhPublicJwk, { name: 'ECDH', namedCurve: 'P-256' }, true, []);
+        const sharedKey = await ClubhouseCrypto.deriveEcdhSharedKey(bobPair.privateKey, alicePubKey);
+        const wrapped = await ClubhouseCrypto.wrapChannelKey(dmAesKey, sharedKey);
+        ctx.chatSqlite.prepare(`
+          INSERT INTO channel_key_shares (channel_id, key_epoch, recipient_user_id, sender_user_id, wrapped_key_base64, wrap_iv)
+          VALUES (?, 1, ?, ?, ?, ?)
+        `).run(dmChId, aliceId, bobId, wrapped.wrappedKeyBase64, wrapped.wrapIv);
+
+        // Encrypt Bob's DM message and also add Alice's message + Bob's reaction in #general
+        const encDm = await ClubhouseCrypto.encryptPayload(dmAesKey, 'Confidential Bob DM');
+        ctx.chatSqlite.prepare(`
+          INSERT INTO messages (channel_id, author_id, author_name, content, iv, key_epoch)
+          VALUES (?, ?, 'Bob Erased', ?, ?, 1)
+        `).run(dmChId, bobId, encDm.ciphertextB64, encDm.ivB64);
+
+        const generalChId = Number(ctx.chatSqlite.prepare("SELECT id FROM channels WHERE slug = 'general'").get().id);
+        const aliceGenMsgId = Number(ctx.chatSqlite.prepare(`
+          INSERT INTO messages (channel_id, author_id, author_name, content)
+          VALUES (?, ?, 'Alice Client', 'Hello team!')
+        `).run(generalChId, aliceId).lastInsertRowid);
+        ctx.chatSqlite.prepare(`
+          INSERT INTO messages (channel_id, author_id, author_name, content)
+          VALUES (?, ?, 'Bob Erased', 'Bob public message')
+        `).run(generalChId, bobId);
+        ctx.chatSqlite.prepare(`
+          INSERT INTO message_reactions (message_id, channel_id, user_id, user_name, emoji)
+          VALUES (?, ?, ?, 'Bob Erased', '👍'), (?, ?, ?, 'Alice Client', '⚾')
+        `).run(aliceGenMsgId, generalChId, bobId, aliceGenMsgId, generalChId, aliceId);
+
+        // Bootstrap Alice's ClubhouseStore, fetch both channels (populating memory + IDB + DM key + TOFU pin)
+        await ClubhouseStore.bootstrap();
+        ClubhouseStore.stopAdaptiveSyncLoop();
+        const bobFp = await ClubhouseCrypto.computeKeyFingerprint(bobPubJwk);
+        await ClubhouseStore.verifyPeerIdentityKey(bobId, bobFp);
+        await ClubhouseStore.fetchChannelMessages(dmChId);
+        await ClubhouseStore.fetchChannelMessages(generalChId);
+
+        assert.ok(ClubhouseStore.state.members.some((m) => Number(m.id) === bobId), 'Bob should be in members before erasure');
+        assert.equal((ClubhouseStore.state.messagesByChannel[dmChId] || []).length, 1);
+        assert.equal((ClubhouseStore.state.messagesByChannel[generalChId] || []).length, 2);
+        assert.ok(await ClubhouseCrypto.idbGet(`dm_aes_ch_${dmChId}_ep_1`), 'DM key must be cached before erasure');
+
+        // Wait for microtask IDB writes to flush
+        await new Promise((r) => setTimeout(r, 30));
+
+        let erasedEventDetail = null;
+        ClubhouseStore.subscribe((evType, detail) => {
+          if (evType === 'user_erased') erasedEventDetail = detail;
+        });
+
+        // Admin erases Bob -> emits user_erased tombstone
+        const adminDelRes = await ctx.req('DELETE', `/api/auth/users/${bobId}`, adminCookie);
+        assert.equal(adminDelRes.status, 200, adminDelRes.text);
+
+        // Alice polls delta sync -> receives user_erased and evicts Bob's data
+        await ClubhouseStore.pollDeltaSync();
+        await new Promise((r) => setTimeout(r, 30));
+
+        assert.ok(erasedEventDetail && Number(erasedEventDetail.userId) === bobId, 'Store must emit user_erased event');
+        assert.equal(ClubhouseStore.state.members.some((m) => Number(m.id) === bobId), false, 'Bob must be evicted from members');
+        assert.equal((ClubhouseStore.state.messagesByChannel[dmChId] || []).length, 0, 'Bob DM messages must be evicted from memory');
+
+        const genMsgsAfter = ClubhouseStore.state.messagesByChannel[generalChId] || [];
+        assert.equal(genMsgsAfter.length, 1, 'Only Alice message should remain in #general');
+        assert.equal(genMsgsAfter[0].id, aliceGenMsgId);
+        assert.equal((genMsgsAfter[0].reactions || []).some((rx) => Number(rx.user_id) === bobId), false, 'Bob reaction must be evicted from Alice message');
+
+        // Verify IndexedDB messages store no longer has Bob's authored messages and stripped Bob's reaction
+        const idbMsgsStore = memIdb._databases.get('pickup_clubhouse_db').get('messages').data;
+        const idbMsgsArr = Array.from(idbMsgsStore.values());
+        assert.equal(idbMsgsArr.some((m) => Number(m.author_id) === bobId), false, 'Bob messages must be evicted from IndexedDB');
+        const idbAliceMsg = idbMsgsArr.find((m) => Number(m.id) === aliceGenMsgId);
+        assert.ok(idbAliceMsg);
+        assert.equal((idbAliceMsg.reactions || []).some((rx) => Number(rx.user_id) === bobId), false, 'Bob reaction must be evicted from IndexedDB');
+
+        // Verify DM key & TOFU pin evicted
+        assert.equal(await ClubhouseCrypto.idbGet(`dm_aes_ch_${dmChId}_ep_1`), null, 'Cached DM key must be evicted from crypto store');
+        assert.equal(await ClubhouseCrypto.idbGet(`dm_epoch_${dmChId}`), null, 'Cached DM epoch must be evicted');
+        const pinAfter = await ClubhouseCrypto.getPeerVerificationState(bobId, bobFp);
+        assert.equal(pinAfter.verified, false, 'Erased peer TOFU pin must be cleared');
+        assert.equal(pinAfter.keyChangedWarning, false);
+
+        // Multi-tab self-erasure: if user_erased arrives for state.user.id, clearLocalSessionData + auth_required must trigger
+        let authRequiredReason = null;
+        ClubhouseStore.subscribe((evType, detail) => {
+          if (evType === 'auth_required' && detail) authRequiredReason = detail.reason || 'auth_required';
+        });
+        const adminDelAliceRes = await ctx.req('DELETE', `/api/auth/users/${aliceId}`, adminCookie);
+        assert.equal(adminDelAliceRes.status, 200, adminDelAliceRes.text);
+        // Simulate receiving the user_erased tombstone for Alice on another open tab (via sync response)
+        const aliceTombstone = ctx.chatSqlite.prepare(
+          "SELECT * FROM sync_events WHERE event_type = 'user_erased' AND target_id = ?"
+        ).get(aliceId);
+        assert.ok(aliceTombstone);
+        globalThis.fetch = async () => new Response(JSON.stringify({
+          messages: [],
+          events: [aliceTombstone],
+          rtc_signals: [],
+          voice_participants: [],
+          latest_msg_id: ClubhouseStore.state.lastMessageId,
+          latest_event_id: aliceTombstone.id
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        await ClubhouseStore.pollDeltaSync();
+        await new Promise((r) => setTimeout(r, 20));
+        assert.equal(authRequiredReason, 'user_erased', 'Self user_erased tombstone must clear local session and emit auth_required');
+        assert.equal(ClubhouseStore.state.user, null);
+      } finally {
+        delete globalThis.ClubhouseCrypto;
+        globalThis.fetch = prevFetch;
+        globalThis.indexedDB = prevIndexedDB;
+        if (prevWindow !== undefined) globalThis.window = prevWindow;
+        ctx.close();
+      }
+    });
   });
 }
 

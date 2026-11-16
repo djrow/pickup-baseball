@@ -172,7 +172,7 @@ chatModerationRouter.get('/moderation/reports', requireModerator, async (c) => {
     const visibleDetails = canViewChannel && !selfTargeted;
     return {
       ...r,
-      reporter_id: visibleDetails ? r.reporter_id : null,
+      reporter_id: visibleDetails ? (r.reporter_id || null) : null,
       reporter_name: visibleDetails ? r.reporter_name : 'Redacted',
       target_user_id: visibleDetails ? r.target_user_id : null,
       target_user_name: visibleDetails ? r.target_user_name : (selfTargeted ? '[Redacted]' : 'Redacted'),

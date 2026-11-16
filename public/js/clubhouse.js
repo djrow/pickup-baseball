@@ -3036,6 +3036,20 @@
         refreshDmE2eeNotice();
         renderMembersDirectory();
         renderMessageStream();
+      } else if (eventType === 'user_erased') {
+        var erasedUid = Number((detail && detail.userId) || 0);
+        if (uiState.activeThreadRoot && erasedUid && Number(uiState.activeThreadRoot.author_id) === erasedUid) {
+          uiState.activeThreadRoot = null;
+          switchContextTab('sunday');
+        } else if (uiState.activeThreadRoot) {
+          loadThreadReplies(uiState.activeThreadRoot.id);
+        }
+        renderChannelSidebar();
+        renderMembersDirectory();
+        renderMessageStream();
+        renderVoiceVideoTiles();
+        refreshVerifyKeyButton();
+        refreshDmE2eeNotice();
       } else if (eventType === 'rtc_signals' && RtcEngine) {
         RtcEngine.handleIncomingSignals(detail);
       }
