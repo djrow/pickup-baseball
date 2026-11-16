@@ -4,6 +4,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
 const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -541,6 +542,143 @@ module.exports = function registerMigrationEngineTests() {
         }
       } finally {
         fs.rmSync(tmpDir, { recursive: true, force: true });
+      }
+    });
+
+    await t.test('8. Ticket #32: Chunked session ID backfill purges expired rows and hashes active sessions in 50-row batches', async () => {
+      const { hashSessionId } = await import('../../src/app/security.js');
+      const { getUserFromSession } = await import('../../src/app/security.js');
+      const { CREATE_TABLES_SQL } = await import('../../src/app/schema/baseball-ddl.js');
+
+      const raw = new Database(':memory:');
+      for (const sql of CREATE_TABLES_SQL) {
+        raw.exec(sql);
+      }
+      // Stamp DB at v1 (pre-session-hash-backfill)
+      raw.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('schema_version', '1')").run();
+      raw.prepare("INSERT INTO users (id, name, email, role) VALUES (1, 'Backfill Player', 'backfill@example.org', 'member')").run();
+
+      const futureIso = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
+      const pastIso = new Date(Date.now() - 3600 * 1000).toISOString();
+      const pastSqlite = '2020-01-01 00:00:00';
+
+      // Seed 120 active unhashed sessions (exercises 3 chunks: 50 + 50 + 20)
+      const activeRawTokens = [];
+      const insStmt = raw.prepare('INSERT INTO sessions (id, user_id, expires_at, is_temporary) VALUES (?, 1, ?, ?)');
+      for (let i = 0; i < 120; i++) {
+        const tok = `legacy_active_${i}_${crypto.randomBytes(8).toString('hex')}`;
+        activeRawTokens.push(tok);
+        insStmt.run(tok, futureIso, i % 2);
+      }
+
+      // Seed 15 expired unhashed sessions (both ISO and SQLite formats)
+      const expiredTokens = [];
+      for (let i = 0; i < 15; i++) {
+        const tok = `legacy_expired_${i}_${crypto.randomBytes(8).toString('hex')}`;
+        expiredTokens.push(tok);
+        insStmt.run(tok, i % 2 === 0 ? pastIso : pastSqlite, 0);
+      }
+
+      // Seed 2 already-hashed active sessions
+      const alreadyRaw1 = `already_hashed_1_${crypto.randomBytes(8).toString('hex')}`;
+      const alreadyRaw2 = `already_hashed_2_${crypto.randomBytes(8).toString('hex')}`;
+      const alreadyHash1 = `sha256:${crypto.createHash('sha256').update(alreadyRaw1).digest('hex')}`;
+      const alreadyHash2 = `sha256:${crypto.createHash('sha256').update(alreadyRaw2).digest('hex')}`;
+      insStmt.run(alreadyHash1, futureIso, 0);
+      insStmt.run(alreadyHash2, futureIso, 1);
+
+      const spyD1 = createSpyD1(createD1Adapter(raw));
+      try {
+        await ensureD1Schema(spyD1);
+
+        // 1. Expired sessions must be purged
+        for (const expTok of expiredTokens) {
+          assert.equal(raw.prepare('SELECT id FROM sessions WHERE id = ?').get(expTok), undefined, 'Expired raw session must be purged');
+          const expHash = await hashSessionId(expTok);
+          assert.equal(raw.prepare('SELECT id FROM sessions WHERE id = ?').get(expHash), undefined, 'Expired session must not be hashed/kept');
+        }
+
+        // 2. All 120 active unhashed sessions must be hashed in-place; no unprefixed rows remain
+        const unhashedRemaining = raw.prepare("SELECT COUNT(*) as c FROM sessions WHERE id NOT LIKE 'sha256:%'").get().c;
+        assert.equal(unhashedRemaining, 0, 'Zero unhashed session rows may remain after backfill');
+        assert.equal(raw.prepare('SELECT COUNT(*) as c FROM sessions').get().c, 122, 'All 120 active + 2 pre-hashed sessions must be preserved');
+
+        for (const rawTok of activeRawTokens) {
+          assert.equal(raw.prepare('SELECT id FROM sessions WHERE id = ?').get(rawTok), undefined);
+          const expected = await hashSessionId(rawTok);
+          const row = raw.prepare('SELECT * FROM sessions WHERE id = ?').get(expected);
+          assert.ok(row, 'Active session must be hashed to sha256:<hex>');
+        }
+
+        // 3. Pre-hashed sessions must not be double-hashed
+        assert.ok(raw.prepare('SELECT id FROM sessions WHERE id = ?').get(alreadyHash1), 'Already-hashed session #1 must remain intact');
+        assert.ok(raw.prepare('SELECT id FROM sessions WHERE id = ?').get(alreadyHash2), 'Already-hashed session #2 must remain intact');
+
+        // 4. Batches must be bounded to <= 50 statements per db.batch()
+        const sessionUpdateBatches = spyD1.log.batches.filter((b) =>
+          b.some((s) => /UPDATE\s+sessions\s+SET\s+id\s*=/i.test(s))
+        );
+        assert.deepEqual(
+          sessionUpdateBatches.map((b) => b.length),
+          [50, 50, 20],
+          'Backfill must execute UPDATE batches in bounded chunks of 50 (50, 50, 20)'
+        );
+
+        // 5. Active cookies still authenticate after backfill
+        const resolvedUser = await getUserFromSession(spyD1, activeRawTokens[0], null, { lightweight: true });
+        assert.ok(resolvedUser && resolvedUser.id === 1, 'Original raw cookie must still authenticate after backfill');
+
+        // 6. schema_version must advance to BASEBALL_SCHEMA_VERSION
+        const ver = raw.prepare("SELECT value FROM app_settings WHERE key = 'schema_version'").get();
+        assert.equal(ver.value, String(BASEBALL_SCHEMA_VERSION));
+
+        // 7. Re-running with force=true must be idempotent (0 updates)
+        spyD1.log.batches.length = 0;
+        await ensureD1Schema(spyD1, true);
+        const reRunUpdateBatches = spyD1.log.batches.filter((b) =>
+          b.some((s) => /UPDATE\s+sessions\s+SET\s+id\s*=/i.test(s))
+        );
+        assert.equal(reRunUpdateBatches.length, 0, 'Idempotent re-run must not update already-hashed rows');
+        assert.ok(raw.prepare('SELECT id FROM sessions WHERE id = ?').get(alreadyHash1));
+      } finally {
+        raw.close();
+      }
+
+      // 8. Verify --remote Wrangler D1 adapter executes JS-hashed backfill cleanly
+      const { createWranglerD1Adapter } = require(MIGRATE_SCRIPT);
+      const mockRemoteRaw = new Database(':memory:');
+      for (const sql of CREATE_TABLES_SQL) {
+        mockRemoteRaw.exec(sql);
+      }
+      mockRemoteRaw.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('schema_version', '1')").run();
+      mockRemoteRaw.prepare("INSERT INTO users (id, name, email, role) VALUES (1, 'Remote Player', 'remote@example.org', 'member')").run();
+      const remoteTok = `remote_legacy_${crypto.randomBytes(8).toString('hex')}`;
+      mockRemoteRaw.prepare('INSERT INTO sessions (id, user_id, expires_at) VALUES (?, 1, ?)').run(remoteTok, futureIso);
+
+      const remoteAdapter = createWranglerD1Adapter('pickup-baseball-db', {
+        remote: true,
+        executeSqlFile(sqlText) {
+          const stmts = sqlText.split(/;\s*\n/).map((s) => s.trim()).filter(Boolean);
+          return stmts.map((stmtSql) => {
+            const s = mockRemoteRaw.prepare(stmtSql);
+            if (s.reader) {
+              return { results: s.all(), success: true, meta: { duration: 0 } };
+            }
+            s.run();
+            return { results: [], success: true, meta: { duration: 0 } };
+          });
+        }
+      });
+
+      try {
+        await ensureD1Schema(remoteAdapter);
+        const expectedRemoteHash = await hashSessionId(remoteTok);
+        assert.equal(mockRemoteRaw.prepare('SELECT id FROM sessions WHERE id = ?').get(remoteTok), undefined);
+        assert.ok(mockRemoteRaw.prepare('SELECT id FROM sessions WHERE id = ?').get(expectedRemoteHash), 'Remote Wrangler adapter must complete JS-hashed session backfill');
+        const remoteVer = mockRemoteRaw.prepare("SELECT value FROM app_settings WHERE key = 'schema_version'").get();
+        assert.equal(remoteVer.value, String(BASEBALL_SCHEMA_VERSION));
+      } finally {
+        mockRemoteRaw.close();
       }
     });
   });

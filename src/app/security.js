@@ -16,6 +16,7 @@
 import { ERROR_CODES, jsonError } from './errors.js';
 
 export const SESSION_COOKIE_NAME = 'baseball_session';
+export const SESSION_HASH_PREFIX = 'sha256:';
 export const SESSION_DURATION_SECONDS = 90 * 24 * 60 * 60; // 90 days
 export const TEMPORARY_SESSION_DURATION_SECONDS = 4 * 60 * 60; // 4 hours (shared/friend device)
 export const MAX_SESSIONS_PER_USER = 5;
@@ -80,6 +81,18 @@ export async function sha256Hex(input) {
   const data = new TextEncoder().encode(String(input));
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
   return Array.from(new Uint8Array(hashBuffer), b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Hashes a raw session token for storage at rest (`sha256:<hex>`).
+ * @param {string} rawId
+ * @returns {Promise<string>}
+ */
+export async function hashSessionId(rawId) {
+  if (!rawId || typeof rawId !== 'string') {
+    throw new Error('Session ID must be a non-empty string.');
+  }
+  return `${SESSION_HASH_PREFIX}${await sha256Hex(rawId)}`;
 }
 
 export function escapeHtml(str) {
@@ -338,7 +351,7 @@ export async function verifyTurnstileIfConfigured(env, token, remoteip) {
  * @returns {Promise<AppUser|null>} Normalized user object with boolean capability flags, or null.
  */
 export async function getUserFromSession(db, sessionId, chatDb, options = {}) {
-  if (!sessionId || !db) return null;
+  if (!sessionId || typeof sessionId !== 'string' || !db) return null;
 
   /** @type {D1Database} */
   let baseballDb = /** @type {D1Database} */ (db);
@@ -349,6 +362,7 @@ export async function getUserFromSession(db, sessionId, chatDb, options = {}) {
   }
 
   const lightweight = Boolean(options && options.lightweight);
+  const hashedSessionId = await hashSessionId(sessionId);
 
   /** @type {Record<string, any>|null} */
   const session = await baseballDb.prepare(`
@@ -401,10 +415,10 @@ export async function getUserFromSession(db, sessionId, chatDb, options = {}) {
       END as facilitator_flag
     FROM sessions s
     JOIN users u ON s.user_id = u.id
-    WHERE s.id = ?
+    WHERE (s.id = ? OR (s.id = ? AND s.id NOT LIKE 'sha256:%'))
       AND datetime(s.expires_at) > datetime('now')
       AND NOT EXISTS (SELECT 1 FROM banned_emails b WHERE b.email = u.email)
-  `).bind(sessionId).first();
+  `).bind(hashedSessionId, sessionId).first();
 
   if (!session) return null;
 

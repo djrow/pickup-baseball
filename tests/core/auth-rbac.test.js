@@ -4,8 +4,13 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
 const path = require('path');
 const fs = require('fs');
+
+function expectedSessionHash(rawId) {
+  return `sha256:${crypto.createHash('sha256').update(String(rawId)).digest('hex')}`;
+}
 
 module.exports = function registerAuthRbacTests(ctx) {
   const { apiReq, getCookie, db, initDatabase, createSession, getDefaultDuties } = ctx;
@@ -54,9 +59,11 @@ test('T1: Authentication & Session Cookies', async (t) => {
     const updatedRecord = db.prepare('SELECT used_at FROM auth_codes WHERE id = ?').get(authCodeRecord.id);
     assert.ok(updatedRecord.used_at !== null, 'auth_code must be stamped with used_at timestamp');
 
-    // Confirm session row exists in SQLite sessions table
-    const dbSession = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId);
-    assert.ok(dbSession, 'Session row must exist in SQLite sessions table');
+    // Confirm only hashed session row exists in SQLite sessions table (raw token must NOT be persisted)
+    const rawDbSession = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId);
+    assert.equal(rawDbSession, undefined, 'Raw session token must NOT be stored at rest in sessions.id');
+    const hashedDbSession = db.prepare('SELECT * FROM sessions WHERE id = ?').get(expectedSessionHash(sessionId));
+    assert.ok(hashedDbSession, 'Hashed session row (sha256:<hex>) must exist in SQLite sessions table');
   });
 
   await t.test('T1.3: Query GET /api/auth/me with session cookie, verify user identity and role', async () => {
@@ -105,7 +112,7 @@ test('T1: Authentication & Session Cookies', async (t) => {
 
     // Verify session invalidation in SQLite database
     const rawSessionId = t1SessionCookie.split('=')[1];
-    const sessionInDb = db.prepare('SELECT * FROM sessions WHERE id = ?').get(rawSessionId);
+    const sessionInDb = db.prepare('SELECT * FROM sessions WHERE id = ? OR id = ?').get(expectedSessionHash(rawSessionId), rawSessionId);
     assert.equal(sessionInDb, undefined, 'Session row must be removed from SQLite on logout');
 
     // Verify subsequent GET /me with old cookie returns user: null
@@ -172,7 +179,9 @@ test('T1: Authentication & Session Cookies', async (t) => {
     assert.ok(!/max-age=/i.test(setCookie1), 'Shared-device cookie must omit Max-Age so it expires on browser close');
 
     const sid1 = getCookie(verify1.headers, 'baseball_session');
-    const dbSess1 = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sid1);
+    assert.equal(db.prepare('SELECT * FROM sessions WHERE id = ?').get(sid1), undefined, 'Shared-device raw session ID must not be stored');
+    const dbSess1 = db.prepare('SELECT * FROM sessions WHERE id = ?').get(expectedSessionHash(sid1));
+    assert.ok(dbSess1, 'Shared-device hashed session row must exist');
     assert.equal(dbSess1.is_temporary, 1, 'Session row must be flagged is_temporary = 1');
     const ttlHours1 = (new Date(dbSess1.expires_at).getTime() - Date.now()) / (1000 * 60 * 60);
     assert.ok(ttlHours1 > 3.5 && ttlHours1 <= 4.1, `Temporary session TTL should be ~4 hours (got ${ttlHours1.toFixed(2)}h)`);
@@ -196,7 +205,9 @@ test('T1: Authentication & Session Cookies', async (t) => {
       : (magic2.headers.get('set-cookie') || '');
     assert.ok(!/max-age=/i.test(setCookie2), 'Shared-device magic-link cookie must omit Max-Age');
     const sid2 = getCookie(magic2.headers, 'baseball_session');
-    const dbSess2 = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sid2);
+    assert.equal(db.prepare('SELECT * FROM sessions WHERE id = ?').get(sid2), undefined, 'Magic-link raw session ID must not be stored');
+    const dbSess2 = db.prepare('SELECT * FROM sessions WHERE id = ?').get(expectedSessionHash(sid2));
+    assert.ok(dbSess2, 'Magic-link hashed session row must exist');
     assert.equal(dbSess2.is_temporary, 1, 'Magic-link shared-device session must be marked is_temporary = 1');
   });
 
@@ -221,6 +232,7 @@ test('T1: Authentication & Session Cookies', async (t) => {
     assert.equal(listRes.status, 200);
     assert.equal(listRes.data.activeCount, 3, 'Must report 3 active sessions');
     assert.equal(listRes.data.maxSessions, 5, 'Must report maxSessions cap of 5');
+    assert.equal(listRes.data.sessions.filter(s => s.isCurrent).length, 1, 'Exactly one session must be marked isCurrent');
 
     // 3. Sign out of all other devices from cookies[2]
     const revokeRes = await apiReq('POST', '/api/auth/logout-other-devices', cookies[2], {});
@@ -245,6 +257,81 @@ test('T1: Authentication & Session Cookies', async (t) => {
     assert.ok(loginJs.includes("getElementById('shared-device')"), 'login.js must bind shared-device checkbox');
     assert.ok(profileHtml.includes('id="btn-logout-other-devices"'), 'profile.html must include sign out of all other devices button');
     assert.ok(profileJs.includes("getElementById('btn-logout-other-devices')"), 'profile.js must bind logout-other-devices button');
+  });
+
+  await t.test('T1.9: Session ID hashing at rest, dual-lookup, hash-replay rejection, and mixed cap/logout', async () => {
+    const email = `hash_dual_${Date.now()}@sundaypickup.org`;
+    const uRes = db.prepare("INSERT INTO users (name, email, role, is_admin) VALUES ('Hash Dual Tester', ?, 'member', 0)").run(email);
+    const userId = Number(uRes.lastInsertRowid);
+    const futureExpiry = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
+
+    // 1. Seed a legacy unhashed session directly into SQLite
+    const legacyRawId = `legacy_raw_${crypto.randomBytes(16).toString('hex')}`;
+    db.prepare(
+      "INSERT INTO sessions (id, user_id, expires_at, created_at) VALUES (?, ?, ?, datetime('now', '-2 minutes'))"
+    ).run(legacyRawId, userId, futureExpiry);
+    const legacyCookie = `baseball_session=${legacyRawId}`;
+
+    // Legacy unhashed session authenticates via dual-lookup and shows isCurrent in /sessions
+    const legacyMe = await apiReq('GET', '/api/auth/me', legacyCookie);
+    assert.equal(legacyMe.status, 200);
+    assert.equal(legacyMe.data.user.email, email, 'Pre-migration unhashed session must authenticate via dual-lookup');
+
+    const legacySessions = await apiReq('GET', '/api/auth/sessions', legacyCookie);
+    assert.equal(legacySessions.status, 200);
+    assert.equal(legacySessions.data.sessions.filter(s => s.isCurrent).length, 1, 'Legacy session must be marked isCurrent');
+
+    // 2. Create a new session via POST /api/auth/verify-code -> stored as sha256:<hex>
+    await apiReq('POST', '/api/auth/send-code', null, { email, name: 'Hash Dual Tester' });
+    const codeRow = db.prepare('SELECT code FROM auth_codes WHERE email = ? ORDER BY id DESC LIMIT 1').get(email);
+    const verifyRes = await apiReq('POST', '/api/auth/verify-code', null, { email, code: codeRow.code });
+    assert.equal(verifyRes.status, 200);
+    const newRawId = getCookie(verifyRes.headers, 'baseball_session');
+    const newHashedId = expectedSessionHash(newRawId);
+    const newCookie = `baseball_session=${newRawId}`;
+
+    assert.equal(db.prepare('SELECT * FROM sessions WHERE id = ?').get(newRawId), undefined, 'New raw token must not be stored in DB');
+    assert.ok(db.prepare('SELECT * FROM sessions WHERE id = ?').get(newHashedId), 'New hashed token must be stored in DB');
+
+    // 3. Hash-replay protection: presenting the DB's sha256:<hex> value directly as cookie must NOT authenticate
+    const replayMe = await apiReq('GET', '/api/auth/me', `baseball_session=${newHashedId}`);
+    assert.equal(replayMe.status, 200);
+    assert.equal(replayMe.data.user, null, 'Presenting stored sha256: hash as cookie must be rejected');
+
+    // 4. Logout-other-devices from legacy session preserves legacy session and revokes new hashed session
+    const keepLegacyLogoutOthers = await apiReq('POST', '/api/auth/logout-other-devices', legacyCookie, {});
+    assert.equal(keepLegacyLogoutOthers.status, 200);
+    assert.equal(keepLegacyLogoutOthers.data.revokedCount, 1);
+    assert.equal((await apiReq('GET', '/api/auth/me', newCookie)).data.user, null, 'Other hashed session must be revoked');
+    assert.equal((await apiReq('GET', '/api/auth/me', legacyCookie)).data.user.email, email, 'Current legacy session must stay active');
+
+    // 5. Logout revokes legacy unhashed session cleanly
+    const logoutLegacy = await apiReq('POST', '/api/auth/logout', legacyCookie);
+    assert.equal(logoutLegacy.status, 200);
+    assert.equal(db.prepare('SELECT * FROM sessions WHERE id = ?').get(legacyRawId), undefined, 'Legacy session must be deleted on logout');
+    assert.equal((await apiReq('GET', '/api/auth/me', legacyCookie)).data.user, null);
+
+    // 6. Mixed cap eviction: 3 legacy unhashed sessions + 3 new hashed logins -> oldest legacy session evicted, max 5 remain
+    const mixedCookies = [];
+    for (let i = 0; i < 3; i++) {
+      const rid = `legacy_cap_${i}_${crypto.randomBytes(12).toString('hex')}`;
+      db.prepare(
+        `INSERT INTO sessions (id, user_id, expires_at, created_at) VALUES (?, ?, ?, datetime('now', '-${10 - i} minutes'))`
+      ).run(rid, userId, futureExpiry);
+      mixedCookies.push(`baseball_session=${rid}`);
+    }
+    for (let i = 0; i < 3; i++) {
+      await apiReq('POST', '/api/auth/send-code', null, { email, name: 'Hash Dual Tester' });
+      const cRow = db.prepare('SELECT code FROM auth_codes WHERE email = ? ORDER BY id DESC LIMIT 1').get(email);
+      const vRes = await apiReq('POST', '/api/auth/verify-code', null, { email, code: cRow.code });
+      assert.equal(vRes.status, 200);
+      mixedCookies.push(`baseball_session=${getCookie(vRes.headers, 'baseball_session')}`);
+    }
+    const remainingCount = db.prepare("SELECT COUNT(*) as c FROM sessions WHERE user_id = ? AND datetime(expires_at) > datetime('now')").get(userId).c;
+    assert.equal(remainingCount, 5, 'Mixed legacy + hashed sessions must enforce cap of 5');
+    assert.equal((await apiReq('GET', '/api/auth/me', mixedCookies[0])).data.user, null, 'Oldest legacy session must be evicted by cap');
+    assert.equal((await apiReq('GET', '/api/auth/me', mixedCookies[1])).data.user.email, email, 'Second legacy session must remain valid');
+    assert.equal((await apiReq('GET', '/api/auth/me', mixedCookies[5])).data.user.email, email, 'Newest hashed session must remain valid');
   });
 });
 

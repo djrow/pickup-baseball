@@ -8,6 +8,7 @@
 
 import { CREATE_TABLES_SQL } from './baseball-ddl.js';
 import { DEFAULT_CHAT_CHANNELS, CREATE_CHAT_TABLES_SQL } from './chat-ddl.js';
+import { hashSessionId } from '../security.js';
 
 /**
  * @typedef {Object} MigrationColumnDef
@@ -148,6 +149,43 @@ export async function seedDefaultChatChannels(chatDb) {
   }
 }
 
+const SESSION_BACKFILL_BATCH_SIZE = 50;
+
+/**
+ * Purges expired sessions and hashes legacy unprefixed active session IDs
+ * in bounded 50-row chunks using WebCrypto SHA-256 (`sha256:<hex>`).
+ * @param {D1Database} db
+ * @returns {Promise<void>}
+ */
+export async function backfillHashedSessionIds(db) {
+  await db.prepare("DELETE FROM sessions WHERE datetime(expires_at) <= datetime('now')").run();
+
+  let hasMore = true;
+  while (hasMore) {
+    const { results } = await db.prepare(
+      "SELECT id FROM sessions WHERE id NOT LIKE 'sha256:%' LIMIT ?"
+    ).bind(SESSION_BACKFILL_BATCH_SIZE).all();
+
+    const rows = /** @type {Array<{ id: string }>} */ (results || []);
+    if (rows.length === 0) break;
+
+    const hashes = await Promise.all(rows.map((row) => hashSessionId(row.id)));
+    const updateStmts = rows.map((row, idx) =>
+      db.prepare('UPDATE sessions SET id = ? WHERE id = ?').bind(hashes[idx], row.id)
+    );
+
+    if (typeof db.batch === 'function') {
+      await db.batch(updateStmts);
+    } else {
+      for (const stmt of updateStmts) {
+        await stmt.run();
+      }
+    }
+
+    hasMore = rows.length === SESSION_BACKFILL_BATCH_SIZE;
+  }
+}
+
 /** @type {MigrationStep[]} */
 export const BASEBALL_MIGRATIONS = [
   {
@@ -160,6 +198,13 @@ export const BASEBALL_MIGRATIONS = [
       ATTENDEES_PLAYERS_COUNT_BACKFILL_SQL,
       ...LEGACY_BASEBALL_NORMALIZATION_SQL
     ]
+  },
+  {
+    version: 2,
+    name: 'hash-session-ids-at-rest',
+    async run(db) {
+      await backfillHashedSessionIds(db);
+    }
   }
 ];
 
