@@ -317,6 +317,10 @@ interface ClubhouseStoreFacade {
   muteUserPersonal(userId: number): Promise<any>;
   unmuteUserPersonal(userId: number): Promise<any>;
   isUserMutedByMe(userId: number): boolean;
+  fetchBlockedPeers(): Promise<any>;
+  blockPeer(userId: number): Promise<any>;
+  unblockPeer(userId: number): Promise<any>;
+  isPeerBlockedByMe(userId: number): boolean;
   uploadAttachment(channelId: number, file: File | Blob, opts?: Record<string, any>): Promise<any>;
   getDmE2eeStatus(channelId: number): Record<string, any>;
   ensureChannelE2eeKey(channelId: number): Promise<any>;

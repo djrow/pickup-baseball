@@ -30,6 +30,7 @@
     upcomingGame: null,
     members: [],
     mutedUserIds: [],
+    blockedUserIds: [],
     unreadByChannel: {},
     lastMessageId: 0,
     lastEventId: 0,
@@ -450,6 +451,38 @@
       }
       throw err;
     });
+  }
+
+  function createStoreHttpError(res, fallbackMsg) {
+    var err = new Error((res && res.data && res.data.error) || fallbackMsg || 'Request failed');
+    err.status = res ? res.status : 0;
+    err.code = (res && res.data && res.data.code) ? res.data.code : '';
+    err.data = (res && res.data) ? res.data : null;
+    return err;
+  }
+
+  function normalizeIdList(list) {
+    if (!Array.isArray(list)) return [];
+    var seen = Object.create(null);
+    var out = [];
+    for (var i = 0; i < list.length; i++) {
+      var n = Number(list[i]);
+      if (n > 0 && !seen[n]) {
+        seen[n] = true;
+        out.push(n);
+      }
+    }
+    return out;
+  }
+
+  function idListsEqual(a, b) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+    var sortedA = a.slice().sort(function (x, y) { return x - y; });
+    var sortedB = b.slice().sort(function (x, y) { return x - y; });
+    for (var i = 0; i < sortedA.length; i++) {
+      if (sortedA[i] !== sortedB[i]) return false;
+    }
+    return true;
   }
 
   var dmChannelKeyCache = {};
@@ -1120,6 +1153,7 @@
     state.voiceParticipants = [];
     state.members = [];
     state.mutedUserIds = [];
+    state.blockedUserIds = [];
     state.unreadCounts = {};
     state.unreadByChannel = {};
     state.lastMessageId = 0;
@@ -1205,7 +1239,8 @@
       state.user = d.user || null;
       state.channels = Array.isArray(d.channels) ? d.channels : [];
       state.members = Array.isArray(d.members) ? d.members : [];
-      state.mutedUserIds = Array.isArray(d.muted_user_ids) ? d.muted_user_ids.map(Number) : [];
+      state.mutedUserIds = normalizeIdList(d.muted_user_ids);
+      state.blockedUserIds = normalizeIdList(d.blocked_user_ids);
       state.unreadCounts = d.unread_counts || {};
       state.voiceParticipants = Array.isArray(d.voice_participants) ? d.voice_participants : [];
       state.upcomingGame = d.upcoming_game || null;
@@ -1324,7 +1359,7 @@
       });
     }).then(function (res) {
       if (!res.ok) {
-        throw new Error((res.data && res.data.error) || 'Failed to send message');
+        throw createStoreHttpError(res, 'Failed to send message');
       }
       return maybeDecryptMessage(res.data).then(function (msg) {
         // Only fall back to the locally known plaintext when the server echoed exactly the ciphertext we sent;
@@ -1361,7 +1396,7 @@
       member_ids: memberIds
     }).then(function (res) {
       if (!res.ok) {
-        throw new Error((res.data && res.data.error) || 'Failed to create channel');
+        throw createStoreHttpError(res, 'Failed to create channel');
       }
       var ch = (res.data && res.data.channel) ? res.data.channel : res.data;
       if (ch && ch.id) {
@@ -1420,7 +1455,7 @@
     return prep.then(function (payload) {
       return apiRequest('PATCH', '/api/messages/' + encodeURIComponent(messageId), payload).then(function (res) {
         if (!res.ok) {
-          throw new Error((res.data && res.data.error) || 'Failed to edit message');
+          throw createStoreHttpError(res, 'Failed to edit message');
         }
         if (needsE2ee && (!res.data || res.data.content !== payload.content)) {
           throw new Error('Server edit response did not match encrypted payload.');
@@ -1471,7 +1506,7 @@
       emoji: emoji
     }).then(function (res) {
       if (!res.ok) {
-        throw new Error((res.data && res.data.error) || 'Failed to toggle reaction');
+        throw createStoreHttpError(res, 'Failed to toggle reaction');
       }
       if (res.data && Array.isArray(res.data.reactions)) {
         var chKeys = Object.keys(state.messagesByChannel);
@@ -1741,6 +1776,14 @@
 
       if (Array.isArray(d.voice_participants)) {
         state.voiceParticipants = d.voice_participants;
+      }
+
+      if (Array.isArray(d.blocked_user_ids)) {
+        var nextBlocked = normalizeIdList(d.blocked_user_ids);
+        if (!idListsEqual(state.blockedUserIds, nextBlocked)) {
+          state.blockedUserIds = nextBlocked;
+          emit('peer_blocks_changed', state.blockedUserIds);
+        }
       }
 
       var eventPromises = [];
@@ -2280,7 +2323,7 @@
 
   function unhideDmChannel(channelId) {
     return apiRequest('POST', '/api/channels/' + encodeURIComponent(channelId) + '/unhide', {}).then(function (res) {
-      if (!res.ok) throw new Error((res.data && res.data.error) || 'Failed to restore direct message');
+      if (!res.ok) throw createStoreHttpError(res, 'Failed to restore direct message');
       var ch = res.data && res.data.channel;
       if (ch && ch.id) {
         var exists = false;
@@ -2408,6 +2451,63 @@
     var target = Number(userId);
     for (var i = 0; i < state.mutedUserIds.length; i++) {
       if (Number(state.mutedUserIds[i]) === target) return true;
+    }
+    return false;
+  }
+
+  function fetchBlockedPeers() {
+    return apiRequest('GET', '/api/blocks').then(function (res) {
+      if (!res.ok) throw createStoreHttpError(res, 'Failed to load blocked members');
+      if (res.data && Array.isArray(res.data.blocked_user_ids)) {
+        state.blockedUserIds = normalizeIdList(res.data.blocked_user_ids);
+        emit('peer_blocks_changed', state.blockedUserIds);
+      }
+      return res.data;
+    });
+  }
+
+  function blockPeer(targetUserId) {
+    return apiRequest('POST', '/api/blocks', {
+      blocked_user_id: Number(targetUserId)
+    }).then(function (res) {
+      if (!res.ok) throw createStoreHttpError(res, 'Failed to block member');
+      if (res.data && Array.isArray(res.data.blocked_user_ids)) {
+        state.blockedUserIds = normalizeIdList(res.data.blocked_user_ids);
+      } else {
+        var next = state.blockedUserIds.slice();
+        next.push(Number(targetUserId));
+        state.blockedUserIds = normalizeIdList(next);
+      }
+      emit('peer_blocks_changed', state.blockedUserIds);
+      return res.data;
+    });
+  }
+
+  function unblockPeer(targetUserId) {
+    return apiRequest('DELETE', '/api/blocks/' + encodeURIComponent(targetUserId)).then(function (res) {
+      if (!res.ok) throw createStoreHttpError(res, 'Failed to unblock member');
+      if (res.data && Array.isArray(res.data.blocked_user_ids)) {
+        state.blockedUserIds = normalizeIdList(res.data.blocked_user_ids);
+      } else {
+        var target = Number(targetUserId);
+        var next = [];
+        for (var i = 0; i < state.blockedUserIds.length; i++) {
+          if (Number(state.blockedUserIds[i]) !== target) {
+            next.push(state.blockedUserIds[i]);
+          }
+        }
+        state.blockedUserIds = next;
+      }
+      emit('peer_blocks_changed', state.blockedUserIds);
+      return res.data;
+    });
+  }
+
+  function isPeerBlockedByMe(userId) {
+    var target = Number(userId);
+    if (!target || isNaN(target)) return false;
+    for (var i = 0; i < state.blockedUserIds.length; i++) {
+      if (Number(state.blockedUserIds[i]) === target) return true;
     }
     return false;
   }
@@ -2544,6 +2644,10 @@
     muteUserPersonal: muteUserPersonal,
     unmuteUserPersonal: unmuteUserPersonal,
     isUserMutedByMe: isUserMutedByMe,
+    fetchBlockedPeers: fetchBlockedPeers,
+    blockPeer: blockPeer,
+    unblockPeer: unblockPeer,
+    isPeerBlockedByMe: isPeerBlockedByMe,
     uploadAttachment: uploadAttachment,
     getDmE2eeStatus: getDmE2eeStatus,
     ensureChannelE2eeKey: ensureChannelE2eeKey,
