@@ -16,7 +16,9 @@ import {
   canUserAccessEvent,
   parseAllowedEmails,
   normalizeDutyFlags,
-  rejectIfBattingPracticeDisabled
+  rejectIfBattingPracticeDisabled,
+  isViewerOrganizer,
+  sanitizeBpSignupsForViewer
 } from '../../policy.js';
 import { AVATAR_EXPR, findAttendeeByManagementToken } from './helpers.js';
 
@@ -169,15 +171,20 @@ eventsBpDutiesRouter.get('/:id/bp-order', async (c) => {
     const { results: rows } = await db.prepare(`
       SELECT bp.id, bp.event_id, bp.user_id, bp.attendee_id, bp.slot_number,
         bp.player_name, bp.notes, bp.created_at,
+        COALESCE(a.roster_consent, 0) as roster_consent,
+        COALESCE(u.roster_visibility, 0) as roster_visibility,
+        COALESCE(u.profile_sharing, 0) as profile_sharing,
         ${AVATAR_EXPR} as avatar_url,
         u.role as user_role
       FROM batting_practice_signups bp
       LEFT JOIN users u ON bp.user_id = u.id
+      LEFT JOIN attendees a ON bp.attendee_id = a.id
       WHERE bp.event_id = ?
       ORDER BY bp.slot_number ASC
     `).bind(eventId).all();
 
-    const signups = (rows || []).map(s => ({
+    const isOrganizer = isViewerOrganizer(user);
+    const decorated = (rows || []).map(s => ({
       ...s,
       is_mine: Boolean(
         (user && s.user_id && s.user_id === user.id) ||
@@ -185,6 +192,11 @@ eventsBpDutiesRouter.get('/:id/bp-order', async (c) => {
         (myAttendee && s.player_name && myAttendee.name && String(s.player_name).trim().toLowerCase() === String(myAttendee.name).trim().toLowerCase())
       )
     }));
+    const signups = sanitizeBpSignupsForViewer(decorated, {
+      user,
+      isOrganizer,
+      myRsvp: myAttendee
+    });
 
     return c.json({ event_id: eventId, bp_signups: signups });
   } catch (err) {
@@ -205,7 +217,7 @@ eventsBpDutiesRouter.post('/:id/bp-order', async (c) => {
     const db = c.env.DB;
     const clientIp = getClientIp(c);
 
-    const bpLimit = await checkRateLimit(db, `bp_${clientIp}`, 30, 60, c.env);
+    const bpLimit = await checkRateLimit(db, `bp:${clientIp}`, 30, 60, c.env);
     if (!bpLimit.allowed) {
       return c.json({ error: 'Too many batting practice requests. Please wait a minute and try again.' }, 429);
     }
@@ -267,7 +279,7 @@ eventsBpDutiesRouter.post('/:id/bp-order', async (c) => {
     }
 
     if (!user && !attendeeId) {
-      const anonBpLimit = await checkRateLimit(db, `bp_anon_${eventId}_${clientIp}`, 3, 3600, c.env);
+      const anonBpLimit = await checkRateLimit(db, `bp_anon:${eventId}:${clientIp}`, 3, 3600, c.env);
       if (!anonBpLimit.allowed) {
         return c.json({ error: 'Too many unauthenticated batting practice signups. Please sign in or RSVP first.' }, 429);
       }

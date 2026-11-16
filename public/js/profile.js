@@ -26,8 +26,10 @@ document.addEventListener('DOMContentLoaded', async function() {
   }
   setupClubhouseOptIn();
   setupSessionManagement();
+  setupDataExport();
   setupAvatarUpload();
   setupProfileForm();
+  setupAccountErasure();
   setupLogoutButtons();
 });
 
@@ -246,6 +248,109 @@ function setupSessionManagement() {
   });
 }
 
+function triggerJsonBlobDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function() { URL.revokeObjectURL(url); }, 5000);
+}
+
+function setupDataExport() {
+  const btn = document.getElementById('btn-export-my-data');
+  const decryptCheckbox = document.getElementById('export-decrypt-e2ee-checkbox');
+  if (!btn) return;
+
+  btn.addEventListener('click', async function() {
+    btn.disabled = true;
+    const origText = btn.textContent;
+    btn.textContent = API.t('profile.export_working', '⏳ Preparing export...');
+
+    try {
+      const bundle = await API.exportMyData();
+      if (!bundle || bundle.error) {
+        showAlert((bundle && bundle.error) || API.t('profile.export_failed', 'Failed to export your data: {error}', { error: 'Request failed' }), true);
+        return;
+      }
+
+      let finalBundle = bundle;
+      const shouldDecrypt = Boolean(decryptCheckbox && decryptCheckbox.checked);
+
+      if (shouldDecrypt && window.ClubhouseCrypto && typeof window.ClubhouseCrypto.decryptExportBundle === 'function') {
+        try {
+          finalBundle = await window.ClubhouseCrypto.decryptExportBundle(bundle, {
+            getPassphrase: function() {
+              if (!window.PBFDialog || typeof window.PBFDialog.prompt !== 'function') {
+                return Promise.resolve(null);
+              }
+              return window.PBFDialog.prompt(
+                API.t(
+                  'profile.export_passphrase_msg',
+                  'Enter your E2EE Key Vault passphrase to decrypt your encrypted Clubhouse messages in-browser before saving:'
+                ),
+                '',
+                {
+                  title: API.t('profile.export_passphrase_title', '🔐 Unlock E2EE Key Vault'),
+                  inputType: 'password',
+                  placeholder: API.t('profile.export_passphrase_placeholder', 'Enter vault passphrase...'),
+                  confirmLabel: API.t('profile.export_passphrase_confirm', 'Unlock & Decrypt')
+                }
+              );
+            }
+          });
+        } catch (decErr) {
+          if (decErr && decErr.code === 'EXPORT_DECRYPT_CANCELLED') {
+            return;
+          }
+          if (decErr && decErr.name === 'OperationError') {
+            showAlert(API.t('profile.export_wrong_passphrase', 'Incorrect E2EE vault passphrase. Encrypted messages could not be decrypted.'), true);
+            return;
+          }
+          showAlert(
+            API.t('profile.export_failed', 'Failed to export your data: {error}', {
+              error: (decErr && decErr.message) || 'Decryption error'
+            }),
+            true
+          );
+          return;
+        }
+      }
+
+      const jsonText = JSON.stringify(finalBundle, null, 2);
+      const blob = new Blob([jsonText], { type: 'application/json;charset=utf-8' });
+      const dateStr = new Date().toISOString().slice(0, 10);
+      triggerJsonBlobDownload(blob, 'pickup-baseball-data-export-' + dateStr + '.json');
+
+      const summary = finalBundle && finalBundle.chat ? finalBundle.chat.decryption_summary : null;
+      if (summary && summary.decrypted > 0) {
+        showAlert(
+          API.t(
+            'profile.export_success_decrypted',
+            'Your personal data export (with {count} decrypted E2EE message(s)) has been downloaded.',
+            { count: summary.decrypted }
+          ),
+          false
+        );
+      } else {
+        showAlert(API.t('profile.export_success', 'Your personal data export has been downloaded.'), false);
+      }
+    } catch (err) {
+      showAlert(
+        API.t('profile.export_failed', 'Failed to export your data: {error}', {
+          error: (err && err.message) || 'Unknown error'
+        }),
+        true
+      );
+    } finally {
+      btn.disabled = false;
+      btn.textContent = origText;
+    }
+  });
+}
+
 function renderAvatarPreview() {
   const container = document.getElementById('avatar-preview-container');
   const removeBtn = document.getElementById('btn-remove-avatar');
@@ -381,6 +486,115 @@ function setupProfileForm() {
       saveBtn.textContent = 'Save Changes';
     }
   });
+}
+
+function setupAccountErasure() {
+  const sendCodeBtn = document.getElementById('btn-erasure-send-code');
+  const confirmPanel = document.getElementById('erasure-confirm-panel');
+  const codeInput = document.getElementById('erasure-otp-code');
+  const confirmBtn = document.getElementById('btn-erasure-confirm');
+  const cancelBtn = document.getElementById('btn-erasure-cancel');
+  const keepGalleryChk = document.getElementById('erasure-keep-gallery');
+  const alertBox = document.getElementById('erasure-alert');
+
+  function setErasureAlert(msg, isError) {
+    if (!alertBox) return;
+    if (!msg) {
+      alertBox.innerHTML = '';
+      return;
+    }
+    alertBox.innerHTML = '<div class="alert ' + (isError ? 'alert-error' : 'alert-success') + '" style="font-size: 0.82rem; margin: 0;">' + API.escapeHtml(msg) + '</div>';
+  }
+
+  if (sendCodeBtn) {
+    sendCodeBtn.addEventListener('click', async function() {
+      if (!currentUser || !currentUser.email) return;
+      sendCodeBtn.disabled = true;
+      const origText = sendCodeBtn.textContent;
+      sendCodeBtn.textContent = 'Sending code...';
+      setErasureAlert('', false);
+      try {
+        const res = await API.sendLoginCode(currentUser.email, currentUser.name || '', false);
+        if (res && res.error) {
+          setErasureAlert(res.error, true);
+        } else {
+          if (confirmPanel) confirmPanel.style.display = 'block';
+          if (codeInput) codeInput.focus();
+          setErasureAlert(API.t('profile.erasure_code_sent', 'Verification code sent to your email. Enter the 6-digit code below to confirm deletion.'), false);
+        }
+      } catch (err) {
+        setErasureAlert('Failed to send verification code.', true);
+      } finally {
+        sendCodeBtn.disabled = false;
+        sendCodeBtn.textContent = origText;
+      }
+    });
+  }
+
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', function() {
+      if (confirmPanel) confirmPanel.style.display = 'none';
+      if (codeInput) codeInput.value = '';
+      setErasureAlert('', false);
+    });
+  }
+
+  if (confirmBtn) {
+    confirmBtn.addEventListener('click', async function() {
+      const code = codeInput ? codeInput.value.trim() : '';
+      if (!code || code.length < 6) {
+        setErasureAlert('Please enter the 6-digit verification code sent to your email.', true);
+        return;
+      }
+
+      const confirmMsg = API.t(
+        'profile.erasure_confirm_dialog',
+        'Permanently delete your account and personal data? This cannot be undone. Any signed liability waiver will stay in restricted 3-year legal-defense quarantine before automatic purge.'
+      );
+      const ok = window.PBFDialog
+        ? await window.PBFDialog.confirm(confirmMsg, {
+            title: API.t('profile.erasure_title', 'Delete Account & Erase Data'),
+            confirmLabel: API.t('profile.erasure_confirm_btn', 'Permanently Delete My Account'),
+            danger: true
+          })
+        : false;
+      if (!ok) return;
+
+      confirmBtn.disabled = true;
+      const origText = confirmBtn.textContent;
+      confirmBtn.textContent = 'Deleting...';
+      setErasureAlert('', false);
+      try {
+        const res = await API.deleteMyAccount({
+          code: code,
+          keep_approved_gallery: Boolean(keepGalleryChk && keepGalleryChk.checked)
+        });
+        if (res && res.error) {
+          setErasureAlert(res.error, true);
+          return;
+        }
+
+        API.clearDataCaches(true);
+        API.clearDiagnostics();
+        if (typeof window !== 'undefined' && window.ClubhouseCrypto && typeof window.ClubhouseCrypto.clearMemoryKeys === 'function') {
+          window.ClubhouseCrypto.clearMemoryKeys();
+        }
+        await API.clearClubhouseIndexedDb();
+
+        if (window.PBFDialog) {
+          await window.PBFDialog.alert(
+            (res && (res.waiverRetentionNotice || res.message)) || 'Your account has been deleted.'
+          );
+        }
+        window.location.href = '/index.html';
+      } catch (err) {
+        setErasureAlert('Failed to delete account. Please try again.', true);
+      } finally {
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = origText;
+      }
+    });
+  }
 }
 
 function showAlert(msg, isError) {

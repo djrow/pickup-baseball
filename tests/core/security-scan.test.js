@@ -305,10 +305,8 @@ test('Dual AST + Live Hono Route-Introspection Auth-Guard Scanner (Ticket #39)',
     assert.ok(result.astRoutesChecked >= 130, `Expected >=130 AST routes, got ${result.astRoutesChecked}`);
     assert.equal(result.astRoutesChecked, result.liveRoutesChecked, 'AST route count must match live Hono route count');
 
-    // Verify required pre-#41 public/token routes are documented in manifest with non-empty reasons
+    // Verify required public/token routes are documented in manifest with non-empty reasons
     const expectedManifestEntries = [
-      'POST /:id/comments',
-      'GET /users/:id/avatar',
       '/api/config/public',
       '/api/health',
       '/api/version',
@@ -319,6 +317,8 @@ test('Dual AST + Live Hono Route-Introspection Auth-Guard Scanner (Ticket #39)',
     for (const key of expectedManifestEntries) {
       assert.ok(PUBLIC_OR_TOKEN_ROUTES.has(key), `PUBLIC_OR_TOKEN_ROUTES must contain ${key}`);
     }
+    assert.ok(!PUBLIC_OR_TOKEN_ROUTES.has('POST /:id/comments'), 'POST /:id/comments requires requireAuth (#41)');
+    assert.ok(!PUBLIC_OR_TOKEN_ROUTES.has('GET /users/:id/avatar'), 'GET /users/:id/avatar requires requireAuth (#41)');
     for (const entry of PUBLIC_OR_TOKEN_ROUTE_MANIFEST) {
       assert.ok(entry.ast && entry.route && entry.reason && entry.reason.trim().length >= 10, `Manifest entry ${JSON.stringify(entry)} must include ast, route, and justification reason`);
     }

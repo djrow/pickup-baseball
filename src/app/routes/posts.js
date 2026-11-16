@@ -58,7 +58,7 @@ postsRouter.get('/:id', async (c) => {
 postsRouter.post('/', requireOrganizer, async (c) => {
   const user = c.get('user');
   try {
-    const postLimit = await checkRateLimit(c.env.DB, 'posts_' + getClientIp(c), 20, 3600, c.env);
+    const postLimit = await checkRateLimit(c.env.DB, `posts:${getClientIp(c)}`, 20, 3600, c.env);
     if (!postLimit.allowed) {
       return c.json({ error: 'Too many community posts submitted. Please try again later.' }, 429);
     }

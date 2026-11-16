@@ -888,6 +888,170 @@
     closeKeyDbHandle();
   }
 
+  /**
+   * Decrypt a Member's own exported E2EE messages in-browser using WebCrypto.
+   * Uses unlocked IndexedDB identity keys if present, or unlocks `chat.user_crypto_keys`
+   * with a caller-supplied passphrase or `getPassphrase()` prompt callback.
+   */
+  function decryptExportBundle(bundle, options) {
+    var opts = options || {};
+    if (!bundle || !bundle.chat || !Array.isArray(bundle.chat.messages)) {
+      return Promise.resolve(bundle);
+    }
+
+    var messages = bundle.chat.messages;
+    var hasEncryptedMsgs = false;
+    for (var i = 0; i < messages.length; i++) {
+      var m = messages[i];
+      if (m && m.iv && m.content && !m.deleted_at && !m.hidden_at && m.message_type !== 'system') {
+        hasEncryptedMsgs = true;
+        break;
+      }
+    }
+
+    var clonedChat = Object.assign({}, bundle.chat);
+    var clonedBundle = Object.assign({}, bundle, { chat: clonedChat });
+
+    if (!hasEncryptedMsgs) {
+      clonedChat.messages = messages.map(function (msg) { return Object.assign({}, msg); });
+      clonedChat.decryption_summary = { attempted: 0, decrypted: 0, failed: 0 };
+      return Promise.resolve(clonedBundle);
+    }
+    if (!subtle) {
+      return Promise.reject(new Error('WebCrypto API is unavailable in this browser.'));
+    }
+
+    function resolveIdentityKeys() {
+      return getStoredIdentityKeys().then(function (idKeys) {
+        if (idKeys && idKeys.ecdhPrivateKey) {
+          return idKeys;
+        }
+        var vaultRow = bundle.chat.user_crypto_keys;
+        if (!vaultRow || !vaultRow.encrypted_private_vault || !vaultRow.vault_salt || !vaultRow.vault_iv) {
+          throw new Error('No unlocked E2EE keys or encrypted backup vault found.');
+        }
+        var passPromise = opts.passphrase !== undefined && opts.passphrase !== null
+          ? Promise.resolve(opts.passphrase)
+          : (typeof opts.getPassphrase === 'function'
+            ? Promise.resolve(opts.getPassphrase())
+            : Promise.reject(new Error('Passphrase is required to unlock your E2EE key vault.')));
+
+        return passPromise.then(function (passphrase) {
+          if (passphrase === null || passphrase === undefined || passphrase === '') {
+            var cancelErr = new Error('E2EE vault unlock cancelled.');
+            cancelErr.code = 'EXPORT_DECRYPT_CANCELLED';
+            throw cancelErr;
+          }
+          return decryptVault(
+            String(passphrase),
+            vaultRow.encrypted_private_vault,
+            vaultRow.vault_salt,
+            vaultRow.vault_iv
+          );
+        }).then(function () {
+          return getStoredIdentityKeys();
+        }).then(function (unlocked) {
+          if (!unlocked || !unlocked.ecdhPrivateKey) {
+            throw new Error('Failed to load unlocked E2EE identity key.');
+          }
+          return unlocked;
+        });
+      });
+    }
+
+    var shares = Array.isArray(bundle.chat.channel_key_shares) ? bundle.chat.channel_key_shares : [];
+    var myUserId = Number(bundle.user_id || 0);
+
+    return resolveIdentityKeys().then(function (idKeys) {
+      var channelKeyMap = {};
+      var sharePromises = shares.map(function (share) {
+        if (!share || !share.channel_id || !share.wrapped_key_base64 || !share.wrap_iv) {
+          return Promise.resolve();
+        }
+        var epoch = Number(share.key_epoch || 1);
+        var mapKey = String(share.channel_id) + ':' + String(epoch);
+        var senderPub = parseJwkObject(share.sender_ephemeral_pub_jwk);
+        if (!senderPub && Number(share.sender_user_id) === myUserId && idKeys.ecdhPublicJwk) {
+          senderPub = idKeys.ecdhPublicJwk;
+        }
+        if (!senderPub) {
+          senderPub = parseJwkObject(share.sender_ecdh_public_key_jwk);
+        }
+        if (!senderPub) {
+          return Promise.resolve();
+        }
+        return deriveEcdhSharedKey(idKeys.ecdhPrivateKey, senderPub).then(function (sharedKey) {
+          return unwrapChannelKey(share.wrapped_key_base64, sharedKey, share.wrap_iv, false);
+        }).then(function (aesKey) {
+          channelKeyMap[mapKey] = aesKey;
+        }).catch(function () {
+          // Leave unreadable share absent so per-message decryption records clean failure
+        });
+      });
+
+      return Promise.all(sharePromises).then(function () {
+        var missingCachePromises = [];
+        var seenMissing = {};
+        for (var j = 0; j < messages.length; j++) {
+          var em = messages[j];
+          if (!em || !em.iv || !em.content || em.deleted_at || em.hidden_at || em.message_type === 'system') continue;
+          var ep = Number(em.key_epoch || 1);
+          var mk = String(em.channel_id) + ':' + String(ep);
+          if (!channelKeyMap[mk] && !seenMissing[mk]) {
+            seenMissing[mk] = true;
+            (function (chId, keyEpoch, keySlot) {
+              missingCachePromises.push(
+                idbGet('dm_aes_ch_' + String(chId) + '_ep_' + String(keyEpoch)).then(function (cachedAes) {
+                  if (cachedAes) channelKeyMap[keySlot] = cachedAes;
+                }).catch(function () {})
+              );
+            })(em.channel_id, ep, mk);
+          }
+        }
+        return Promise.all(missingCachePromises);
+      }).then(function () {
+        var attempted = 0;
+        var decrypted = 0;
+        var failed = 0;
+
+        return Promise.all(messages.map(function (msg) {
+          var copy = Object.assign({}, msg);
+          if (!msg || !msg.iv || !msg.content || msg.deleted_at || msg.hidden_at || msg.message_type === 'system') {
+            return Promise.resolve(copy);
+          }
+          attempted++;
+          var mk = String(msg.channel_id) + ':' + String(msg.key_epoch || 1);
+          var aesKey = channelKeyMap[mk];
+          if (!aesKey) {
+            failed++;
+            copy.e2ee_decrypted = false;
+            copy.decryption_error = 'Missing channel key share for this message.';
+            return Promise.resolve(copy);
+          }
+          return decryptPayload(aesKey, msg.content, msg.iv).then(function (plaintext) {
+            decrypted++;
+            copy.decrypted_content = plaintext;
+            copy.e2ee_decrypted = true;
+            return copy;
+          }).catch(function () {
+            failed++;
+            copy.e2ee_decrypted = false;
+            copy.decryption_error = 'Failed to decrypt message payload.';
+            return copy;
+          });
+        })).then(function (decryptedMsgs) {
+          clonedChat.messages = decryptedMsgs;
+          clonedChat.decryption_summary = {
+            attempted: attempted,
+            decrypted: decrypted,
+            failed: failed
+          };
+          return clonedBundle;
+        });
+      });
+    });
+  }
+
   var ClubhouseCrypto = {
     clearMemoryKeys: clearMemoryKeys,
     setPinOwner: setPinOwner,
@@ -915,6 +1079,7 @@
     computeSafetyNumber: computeSafetyNumber,
     getPeerVerificationState: getPeerVerificationState,
     markPeerFingerprintVerified: markPeerFingerprintVerified,
+    decryptExportBundle: decryptExportBundle,
     idbGet: idbGet,
     idbPut: idbPut
   };

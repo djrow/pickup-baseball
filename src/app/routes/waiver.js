@@ -20,6 +20,7 @@ import { isGDriveConfigured, uploadGDriveTextFile } from '../gdrive.js';
 import { sendWaiverConfirmationEmail } from '../mailer.js';
 import { logEvent } from '../errors.js';
 import { resolveConfig, PRESET_PICKUP_BASEBALL } from '../config.js';
+import { purgeExpiredQuarantinedWaivers } from '../erasure.js';
 
 export const waiverRouter = /** @type {AppHono} */ (new Hono());
 
@@ -549,7 +550,8 @@ async function getWaiverStatusHandler(c) {
     SELECT certificate_id, printed_name, email, signed_date, signature_type, document_version,
            waiver_text_sha256, document_sha256, provenance_seal, gdrive_file_id, signed_at
     FROM waivers
-    WHERE user_id = ? OR LOWER(email) = LOWER(?)
+    WHERE (user_id = ? OR LOWER(email) = LOWER(?))
+      AND COALESCE(status, 'active') != 'quarantined'
     ORDER BY id DESC LIMIT 1
   `).bind(user.id, user.email).first();
 
@@ -579,7 +581,7 @@ waiverRouter.get('/status', getWaiverStatusHandler);
 waiverRouter.post('/sign', requireAuth, async (c) => {
   const user = c.get('user');
   const clientIp = getClientIp(c);
-  const rl = await checkRateLimit(c.env.DB, `waiver_sign_${user.id}`, 10, 3600, c.env);
+  const rl = await checkRateLimit(c.env.DB, `waiver_sign:${user.id}`, 10, 3600, c.env);
   if (!rl.allowed) {
     return c.json({ error: 'Too many waiver submissions. Please try again later.' }, 429);
   }
@@ -793,44 +795,7 @@ waiverRouter.post('/sign', requireAuth, async (c) => {
   }, 201);
 });
 
-// GET /api/waiver/certificate/:id — Retrieve or print a signed waiver certificate with live integrity verification
-waiverRouter.get('/certificate/:id', async (c) => {
-  const paramId = String(c.req.param('id') || '').trim();
-  const user = c.get('user');
-
-  if ((!user || !user.isAdmin) && c.env && c.env.DB) {
-    const certLimit = await checkRateLimit(c.env.DB, 'waiver_cert_' + getClientIp(c), 30, 600, c.env);
-    if (!certLimit.allowed) {
-      return c.json({ error: 'Too many certificate lookup requests. Please try again later.' }, 429);
-    }
-  }
-
-  let row;
-  if (/^\d+$/.test(paramId)) {
-    if (!user || (!user.isAdmin && user.id !== parseInt(paramId, 10))) {
-      return c.json({ error: 'Unauthorized to view this user waiver.' }, 403);
-    }
-    row = await c.env.DB.prepare(
-      'SELECT * FROM waivers WHERE user_id = ? ORDER BY id DESC LIMIT 1'
-    ).bind(parseInt(paramId, 10)).first();
-  } else {
-    row = await c.env.DB.prepare(
-      'SELECT * FROM waivers WHERE certificate_id = ?'
-    ).bind(paramId).first();
-  }
-
-  if (!row) {
-    return c.json({ error: 'Signed waiver certificate not found.' }, 404);
-  }
-
-  if (c.env && c.env.DB && row.signed_at && (row.signer_ip !== null || row.user_agent !== null || !row.signer_ip_scrubbed_at)) {
-    const signedMs = Date.parse(String(row.signed_at));
-    if (Number.isFinite(signedMs) && signedMs <= Date.now() - 30 * 86400 * 1000) {
-      await scrubExpiredWaiverTelemetry(c.env.DB);
-    }
-  }
-
-  // Re-verify cryptographic provenance hash and HMAC seal (with legacy fallback)
+async function verifyWaiverIntegrity(env, row, db) {
   const sigSha256 = await sha256Hex(row.signature_data);
   const expectedCanonical = buildCanonicalWaiverPayload({
     document_version: row.document_version,
@@ -844,30 +809,74 @@ waiverRouter.get('/certificate/:id', async (c) => {
   });
   const recomputedDocSha256 = await sha256Hex(expectedCanonical);
   const sealVerified = await verifyWaiverProvenanceSeal(
-    c.env,
+    env,
     `${row.certificate_id}:${recomputedDocSha256}`,
     row.provenance_seal,
-    c.env.DB
+    db
   );
-  const integrityVerified = (
+  return Boolean(
     constantTimeEqual(recomputedDocSha256, row.document_sha256) &&
     sealVerified
   );
+}
+
+function renderWaiverHtmlResponse(row, integrityVerified, includePii, env) {
+  const html = renderSignedWaiverCertificateHtml(row, integrityVerified, includePii, env);
+  return new Response(html, {
+    status: 200,
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'DENY',
+      'Content-Security-Policy': "default-src 'self'; img-src 'self' data:; style-src 'unsafe-inline'; script-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'; frame-ancestors 'none';"
+    }
+  });
+}
+
+// GET /api/waiver/certificate/:id — Retrieve or print a signed waiver certificate with live integrity verification
+waiverRouter.get('/certificate/:id', async (c) => {
+  const paramId = String(c.req.param('id') || '').trim();
+  const user = c.get('user');
+
+  if ((!user || !user.isAdmin) && c.env && c.env.DB) {
+    const certLimit = await checkRateLimit(c.env.DB, `waiver_cert:${getClientIp(c)}`, 30, 600, c.env);
+    if (!certLimit.allowed) {
+      return c.json({ error: 'Too many certificate lookup requests. Please try again later.' }, 429);
+    }
+  }
+
+  let row;
+  if (/^\d+$/.test(paramId)) {
+    if (!user || (!user.isAdmin && user.id !== parseInt(paramId, 10))) {
+      return c.json({ error: 'Unauthorized to view this user waiver.' }, 403);
+    }
+    row = await c.env.DB.prepare(
+      "SELECT * FROM waivers WHERE user_id = ? AND COALESCE(status, 'active') != 'quarantined' ORDER BY id DESC LIMIT 1"
+    ).bind(parseInt(paramId, 10)).first();
+  } else {
+    row = await c.env.DB.prepare(
+      'SELECT * FROM waivers WHERE certificate_id = ?'
+    ).bind(paramId).first();
+  }
+
+  if (!row || row.status === 'quarantined') {
+    return c.json({ error: 'Signed waiver certificate not found.' }, 404);
+  }
+
+  if (c.env && c.env.DB && row.signed_at && (row.signer_ip !== null || row.user_agent !== null || !row.signer_ip_scrubbed_at)) {
+    const signedMs = Date.parse(String(row.signed_at));
+    if (Number.isFinite(signedMs) && signedMs <= Date.now() - 30 * 86400 * 1000) {
+      await scrubExpiredWaiverTelemetry(c.env.DB);
+    }
+  }
+
+  const integrityVerified = await verifyWaiverIntegrity(c.env, row, c.env.DB);
 
   const canViewPii = Boolean(user && (user.isAdmin || user.id === row.user_id));
 
   if (c.req.query('format') === 'html') {
-    const html = renderSignedWaiverCertificateHtml(row, integrityVerified, canViewPii, c.env);
-    return new Response(html, {
-      status: 200,
-      headers: {
-        'Content-Type': 'text/html; charset=utf-8',
-        'Cache-Control': 'no-store',
-        'X-Content-Type-Options': 'nosniff',
-        'X-Frame-Options': 'DENY',
-        'Content-Security-Policy': "default-src 'self'; img-src 'self' data:; style-src 'unsafe-inline'; script-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'; frame-ancestors 'none';"
-      }
-    });
+    return renderWaiverHtmlResponse(row, integrityVerified, canViewPii, c.env);
   }
 
   return c.json({
@@ -885,6 +894,107 @@ waiverRouter.get('/certificate/:id', async (c) => {
       provenance_seal: row.provenance_seal,
       gdrive_file_id: canViewPii ? (row.gdrive_file_id || null) : null,
       signed_at: canViewPii ? row.signed_at : null,
+      integrity_verified: integrityVerified
+    }
+  });
+});
+
+// GET /api/waiver/admin/quarantined — Audited Admin legal-defense listing of Quarantined Waivers
+waiverRouter.get('/admin/quarantined', requireAdmin, async (c) => {
+  const user = c.get('user');
+  const db = c.env && (c.env.BASEBALL_DB || c.env.DB);
+  if (!db) return c.json({ error: 'Database unavailable.' }, 500);
+
+  await purgeExpiredQuarantinedWaivers(db, c.env);
+
+  const { results } = await db.prepare(`
+    SELECT id, certificate_id, email, printed_name, signed_date, signed_at,
+           document_version, waiver_locale, status, erasure_requested_at, retention_until,
+           document_sha256, provenance_seal, gdrive_file_id
+    FROM waivers
+    WHERE status = 'quarantined'
+    ORDER BY erasure_requested_at DESC, id DESC
+    LIMIT 200
+  `).all();
+
+  const waivers = results || [];
+  logEvent('info', 'admin_quarantined_waiver_list', {
+    adminId: user.id,
+    count: waivers.length
+  });
+
+  return c.json({ waivers });
+});
+
+// POST /api/waiver/admin/quarantined/purge — Idempotent Admin purge of expired Quarantined Waivers
+waiverRouter.post('/admin/quarantined/purge', requireAdmin, async (c) => {
+  const user = c.get('user');
+  const db = c.env && (c.env.BASEBALL_DB || c.env.DB);
+  if (!db) return c.json({ error: 'Database unavailable.' }, 500);
+
+  const result = await purgeExpiredQuarantinedWaivers(db, c.env);
+  logEvent('info', 'admin_quarantined_waiver_purge', {
+    adminId: user.id,
+    purgedCount: result.purgedCount
+  });
+
+  return c.json({
+    success: true,
+    purgedCount: result.purgedCount,
+    certificateIds: result.certificateIds
+  });
+});
+
+// GET /api/waiver/admin/quarantined/:id — Audited Admin legal-defense inspection of a Quarantined Waiver
+waiverRouter.get('/admin/quarantined/:id', requireAdmin, async (c) => {
+  const user = c.get('user');
+  const db = c.env && (c.env.BASEBALL_DB || c.env.DB);
+  if (!db) return c.json({ error: 'Database unavailable.' }, 500);
+
+  const paramId = String(c.req.param('id') || '').trim();
+  const row = /^\d+$/.test(paramId)
+    ? await db.prepare("SELECT * FROM waivers WHERE id = ? AND status = 'quarantined'").bind(parseInt(paramId, 10)).first()
+    : await db.prepare("SELECT * FROM waivers WHERE certificate_id = ? AND status = 'quarantined'").bind(paramId).first();
+
+  if (!row) {
+    return c.json({ error: 'Quarantined waiver record not found.' }, 404);
+  }
+
+  const integrityVerified = await verifyWaiverIntegrity(c.env, row, db);
+  const format = c.req.query('format') === 'html' ? 'html' : 'json';
+
+  logEvent('info', 'admin_quarantined_waiver_access', {
+    adminId: user.id,
+    waiverId: row.id,
+    certificateId: row.certificate_id,
+    format,
+    integrityVerified
+  });
+
+  if (format === 'html') {
+    return renderWaiverHtmlResponse(row, integrityVerified, true, c.env);
+  }
+
+  return c.json({
+    waiver: {
+      id: row.id,
+      certificate_id: row.certificate_id,
+      user_id: row.user_id,
+      email: row.email,
+      printed_name: row.printed_name,
+      signed_date: row.signed_date,
+      signature_type: row.signature_type,
+      signature_data: row.signature_data,
+      document_version: row.document_version,
+      waiver_text_sha256: row.waiver_text_sha256,
+      document_sha256: row.document_sha256,
+      provenance_seal: row.provenance_seal,
+      waiver_locale: row.waiver_locale || 'en',
+      status: row.status,
+      erasure_requested_at: row.erasure_requested_at || null,
+      retention_until: row.retention_until || null,
+      gdrive_file_id: row.gdrive_file_id || null,
+      signed_at: row.signed_at || null,
       integrity_verified: integrityVerified
     }
   });

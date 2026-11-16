@@ -39,6 +39,8 @@ import { getRequireLoginSetting, getDisallowZeroLoginMediaSetting, pruneEphemera
 import { resolveConfig } from '../config.js';
 import { sendAuthCode } from '../mailer.js';
 import { ERROR_CODES, jsonError, logEvent } from '../errors.js';
+import { executeTwoTierErasure } from '../erasure.js';
+import { promoteNextWaitlistedPlayer } from './events/helpers.js';
 
 export const authRouter = /** @type {AppHono} */ (new Hono());
 
@@ -160,6 +162,97 @@ async function handleSendCode(c) {
 authRouter.post('/send-code', handleSendCode);
 authRouter.post('/request-code', handleSendCode);
 
+async function verifyAndConsumeAuthCode(db, env, cleanEmail, cleanCode) {
+  const latestActive = await db.prepare(`
+    SELECT * FROM auth_codes
+    WHERE LOWER(email) = LOWER(?) AND used_at IS NULL AND datetime(expires_at) > datetime('now')
+    ORDER BY id DESC LIMIT 1
+  `).bind(cleanEmail).first();
+
+  if (!latestActive) {
+    return { ok: false, status: 400, error: 'Invalid or expired code. Please request a new code.' };
+  }
+
+  const isTest = Boolean(env && env.NODE_ENV === 'test');
+  const codeHash = await sha256Hex(cleanCode);
+  const codeMatches = constantTimeEqual(latestActive.code, codeHash)
+    || (isTest && constantTimeEqual(latestActive.code, cleanCode));
+  if (!codeMatches) {
+    await db.prepare(`
+      UPDATE auth_codes
+      SET attempts = COALESCE(attempts, 0) + 1,
+          used_at = CASE WHEN COALESCE(attempts, 0) + 1 >= ? THEN CURRENT_TIMESTAMP ELSE used_at END
+      WHERE id = ? AND used_at IS NULL
+    `).bind(MAX_CODE_VERIFY_ATTEMPTS, latestActive.id).run();
+    const updatedRow = await db.prepare('SELECT attempts FROM auth_codes WHERE id = ?').bind(latestActive.id).first();
+    const newAttempts = updatedRow ? Number(updatedRow.attempts || 0) : (Number(latestActive.attempts || 0) + 1);
+    if (newAttempts >= MAX_CODE_VERIFY_ATTEMPTS) {
+      return { ok: false, status: 400, error: 'Too many failed attempts. This code has been invalidated—please request a new code.' };
+    }
+    return { ok: false, status: 400, error: `Invalid verification code (${MAX_CODE_VERIFY_ATTEMPTS - newAttempts} attempt(s) remaining).` };
+  }
+
+  const consumeRes = await db.prepare(
+    'UPDATE auth_codes SET used_at = CURRENT_TIMESTAMP WHERE id = ? AND used_at IS NULL AND COALESCE(attempts, 0) < ?'
+  ).bind(latestActive.id, MAX_CODE_VERIFY_ATTEMPTS).run();
+  if (!consumeRes || !consumeRes.meta || consumeRes.meta.changes === 0) {
+    return { ok: false, status: 400, error: 'Invalid or expired code. Please request a new code.' };
+  }
+
+  return { ok: true, authCode: latestActive };
+}
+
+async function verifyRecentOtpForUser(c, db, user, providedCode) {
+  const cleanEmail = String(user.email || '').trim().toLowerCase();
+  const rawCode = providedCode !== undefined && providedCode !== null ? String(providedCode).trim() : '';
+
+  if (rawCode) {
+    const rl = await checkRateLimit(db, `reauth_otp_user:${user.id}`, 10, 600, c.env);
+    if (!rl.allowed) {
+      return { ok: false, status: 429, error: 'Too many verification attempts. Please wait 10 minutes before trying again.' };
+    }
+    return verifyAndConsumeAuthCode(db, c.env, cleanEmail, rawCode);
+  }
+
+  const recentVerified = await db.prepare(`
+    SELECT id FROM auth_codes
+    WHERE LOWER(email) = LOWER(?)
+      AND used_at IS NOT NULL
+      AND COALESCE(attempts, 0) < ?
+      AND datetime(used_at) >= datetime('now', '-10 minutes')
+    ORDER BY id DESC LIMIT 1
+  `).bind(cleanEmail, MAX_CODE_VERIFY_ATTEMPTS).first();
+
+  if (!recentVerified) {
+    return {
+      ok: false,
+      status: 403,
+      requiresReauth: true,
+      error: 'Recent email verification is required to delete your account. Request a verification code and enter it to confirm.'
+    };
+  }
+  return { ok: true };
+}
+
+async function promoteFutureEventWaitlists(c, eventIds) {
+  if (!Array.isArray(eventIds) || eventIds.length === 0) return;
+  const origin = getSafePublicOrigin(c);
+  for (const evId of eventIds) {
+    await promoteNextWaitlistedPlayer(c, origin, evId).catch((err) => {
+      logEvent('warn', 'erasure_waitlist_promote_failed', { eventId: evId, err });
+    });
+  }
+}
+
+function buildWaiverRetentionNotice(result) {
+  const yrs = result.retentionYears || 3;
+  if (result.waivers && result.waivers.length > 0) {
+    const untilDate = result.latestRetentionUntil ? result.latestRetentionUntil.slice(0, 10) : `${yrs} years`;
+    return `Your account and personal data have been erased. ${result.waivers.length} signed liability waiver(s) have been placed in restricted Legal-Defense Quarantine until ${untilDate} (${yrs} years from signing or last attendance) and will then be permanently purged.`;
+  }
+  return `Your account and personal data have been permanently erased. (Signed liability waivers are retained in restricted Admin-only quarantine for ${yrs} years when present; none were on file for your account.)`;
+}
+
 authRouter.post('/verify-code', async (c) => {
   try {
     const body = await c.req.json();
@@ -187,41 +280,11 @@ authRouter.post('/verify-code', async (c) => {
       return c.json({ error: 'This email address has been restricted from accessing this service.' }, 403);
     }
 
-    const latestActive = await c.env.DB.prepare(`
-      SELECT * FROM auth_codes
-      WHERE email = ? AND used_at IS NULL AND datetime(expires_at) > datetime('now')
-      ORDER BY id DESC LIMIT 1
-    `).bind(cleanEmail).first();
-
-    if (!latestActive) {
-      return c.json({ error: 'Invalid or expired code. Please request a new code.' }, 400);
+    const checkRes = await verifyAndConsumeAuthCode(c.env.DB, c.env, cleanEmail, cleanCode);
+    if (!checkRes.ok) {
+      return c.json({ error: checkRes.error }, /** @type {any} */ (checkRes.status));
     }
-
-    const isTest = Boolean(c.env && c.env.NODE_ENV === 'test');
-    const codeHash = await sha256Hex(cleanCode);
-    const codeMatches = constantTimeEqual(latestActive.code, codeHash)
-      || (isTest && constantTimeEqual(latestActive.code, cleanCode));
-    if (!codeMatches) {
-      await c.env.DB.prepare(`
-        UPDATE auth_codes
-        SET attempts = COALESCE(attempts, 0) + 1,
-            used_at = CASE WHEN COALESCE(attempts, 0) + 1 >= ? THEN CURRENT_TIMESTAMP ELSE used_at END
-        WHERE id = ? AND used_at IS NULL
-      `).bind(MAX_CODE_VERIFY_ATTEMPTS, latestActive.id).run();
-      const updatedRow = await c.env.DB.prepare('SELECT attempts FROM auth_codes WHERE id = ?').bind(latestActive.id).first();
-      const newAttempts = updatedRow ? Number(updatedRow.attempts || 0) : (Number(latestActive.attempts || 0) + 1);
-      if (newAttempts >= MAX_CODE_VERIFY_ATTEMPTS) {
-        return c.json({ error: 'Too many failed attempts. This code has been invalidated—please request a new code.' }, 400);
-      }
-      return c.json({ error: `Invalid verification code (${MAX_CODE_VERIFY_ATTEMPTS - newAttempts} attempt(s) remaining).` }, 400);
-    }
-
-    const consumeRes = await c.env.DB.prepare(
-      'UPDATE auth_codes SET used_at = CURRENT_TIMESTAMP WHERE id = ? AND used_at IS NULL AND COALESCE(attempts, 0) < ?'
-    ).bind(latestActive.id, MAX_CODE_VERIFY_ATTEMPTS).run();
-    if (!consumeRes || !consumeRes.meta || consumeRes.meta.changes === 0) {
-      return c.json({ error: 'Invalid or expired code. Please request a new code.' }, 400);
-    }
+    const latestActive = checkRes.authCode;
     const sharedDevice = body.shared_device !== undefined
       ? Boolean(body.shared_device)
       : (body.sharedDevice !== undefined ? Boolean(body.sharedDevice) : Boolean(latestActive.shared_device));
@@ -299,6 +362,337 @@ authRouter.get('/verify-magic', async (c) => {
 });
 
 authRouter.get('/me', (c) => c.json({ user: c.get('user') }));
+
+async function fetchBaseballExportData(db, userId, userEmail) {
+  const [
+    profileRow,
+    consentRes,
+    attendeeRes,
+    dutyRes,
+    bpRes,
+    commentRes,
+    postRes,
+    mediaRes,
+    waiverRes
+  ] = await Promise.all([
+    db.prepare(`
+      SELECT
+        id, name, email, bio, avatar_url, role, is_admin,
+        COALESCE(is_moderator, 0) as is_moderator,
+        COALESCE(chat_muted, 0) as chat_muted,
+        chat_muted_reason, chat_muted_at,
+        COALESCE(machine_badge, 0) as machine_badge,
+        COALESCE(field_badge, 0) as field_badge,
+        COALESCE(hero_credits, 0) as hero_credits,
+        COALESCE(waiver_status, 'none') as waiver_status,
+        waiver_signed_at,
+        COALESCE(clubhouse_opted_in, 0) as clubhouse_opted_in,
+        COALESCE(roster_visibility, 0) as roster_visibility,
+        COALESCE(profile_sharing, 0) as profile_sharing,
+        COALESCE(notify_rsvp_confirm, 1) as notify_rsvp_confirm,
+        COALESCE(notify_rainouts, 1) as notify_rainouts,
+        COALESCE(notify_event_reminders, 1) as notify_event_reminders,
+        COALESCE(notify_community_updates, 0) as notify_community_updates,
+        created_at
+      FROM users
+      WHERE id = ?
+    `).bind(userId).first(),
+    db.prepare(`
+      SELECT id, subject_type, user_id, consent_type, policy_version, policy_sha256,
+             status, granted_at, withdrawn_at, created_at
+      FROM consent_records
+      WHERE user_id = ?
+      ORDER BY id ASC
+    `).bind(userId).all(),
+    db.prepare(`
+      SELECT a.id, a.event_id, a.user_id, a.name, a.email, a.is_guest, a.status,
+             a.gear_bringing, a.notes, a.players_count, a.spectators_count,
+             a.additional_guests, a.guest_names, a.urgent_credit_awarded,
+             a.created_at, a.reminder_sent_at, a.last_notice_key, a.last_notice_sent_at,
+             a.notify_emails, a.roster_consent, a.paper_waiver_at,
+             e.title as event_title, e.event_date as event_date,
+             e.location as event_location, e.status as event_status
+      FROM attendees a
+      LEFT JOIN events e ON a.event_id = e.id
+      WHERE a.user_id = ? OR LOWER(a.email) = LOWER(?)
+      ORDER BY a.id ASC
+    `).bind(userId, userEmail).all(),
+    db.prepare(`
+      SELECT da.id, da.duty_id, da.attendee_id, da.created_at,
+             ed.event_id, ed.title as duty_title, ed.description as duty_description,
+             ed.grants_coordinator, ed.required_badge,
+             e.title as event_title, e.event_date as event_date
+      FROM duty_assignments da
+      JOIN event_duties ed ON da.duty_id = ed.id
+      JOIN attendees a ON da.attendee_id = a.id
+      LEFT JOIN events e ON ed.event_id = e.id
+      WHERE a.user_id = ? OR LOWER(a.email) = LOWER(?)
+      ORDER BY da.id ASC
+    `).bind(userId, userEmail).all(),
+    db.prepare(`
+      SELECT bp.id, bp.event_id, bp.user_id, bp.attendee_id, bp.slot_number,
+             bp.player_name, bp.notes, bp.created_at,
+             e.title as event_title, e.event_date as event_date
+      FROM batting_practice_signups bp
+      LEFT JOIN attendees a ON bp.attendee_id = a.id
+      LEFT JOIN events e ON bp.event_id = e.id
+      WHERE bp.user_id = ? OR (bp.attendee_id IS NOT NULL AND (a.user_id = ? OR LOWER(a.email) = LOWER(?)))
+      ORDER BY bp.id ASC
+    `).bind(userId, userId, userEmail).all(),
+    db.prepare(`
+      SELECT cm.id, cm.event_id, cm.user_id, cm.author_name, cm.author_email,
+             cm.content, cm.created_at,
+             e.title as event_title, e.event_date as event_date
+      FROM comments cm
+      LEFT JOIN events e ON cm.event_id = e.id
+      WHERE cm.user_id = ? OR (cm.user_id IS NULL AND LOWER(cm.author_email) = LOWER(?))
+      ORDER BY cm.id ASC
+    `).bind(userId, userEmail).all(),
+    db.prepare(`
+      SELECT p.id, p.title, p.content, p.summary, p.media_url, p.media_type,
+             p.author_id, p.author_name, p.event_id, p.created_at,
+             e.title as event_title, e.event_date as event_date
+      FROM posts p
+      LEFT JOIN events e ON p.event_id = e.id
+      WHERE p.author_id = ?
+      ORDER BY p.id ASC
+    `).bind(userId).all(),
+    db.prepare(`
+      SELECT m.id, m.title, m.caption, m.media_type, m.original_url, m.file_url,
+             m.mime_type, m.file_size, m.album, m.date_taken, m.contributor_name,
+             m.contributor_id, m.event_id, m.is_approved, m.approved_at,
+             m.storage_provider, m.upload_status, m.created_at,
+             e.title as event_title
+      FROM media_items m
+      LEFT JOIN events e ON m.event_id = e.id
+      WHERE m.contributor_id = ?
+      ORDER BY m.id ASC
+    `).bind(userId).all(),
+    db.prepare(`
+      SELECT id, certificate_id, user_id, email, printed_name, signed_date,
+             signature_type, signature_data, document_version,
+             waiver_text_sha256, document_sha256, provenance_seal,
+             electronic_consent, waiver_locale, status,
+             erasure_requested_at, retention_until, signed_at
+      FROM waivers
+      WHERE user_id = ? OR LOWER(email) = LOWER(?)
+      ORDER BY id ASC
+    `).bind(userId, userEmail).all()
+  ]);
+
+  const badges = {
+    machine_badge: Boolean(profileRow && profileRow.machine_badge),
+    field_badge: Boolean(profileRow && profileRow.field_badge),
+    hero_credits: profileRow ? Number(profileRow.hero_credits || 0) : 0
+  };
+
+  let profile = null;
+  if (profileRow) {
+    const { machine_badge: _mb, field_badge: _fb, hero_credits: _hc, ...rest } = profileRow;
+    profile = rest;
+  }
+
+  return {
+    profile,
+    badges,
+    consent_records: (consentRes && consentRes.results) || [],
+    attendees: (attendeeRes && attendeeRes.results) || [],
+    duty_assignments: (dutyRes && dutyRes.results) || [],
+    batting_practice_signups: (bpRes && bpRes.results) || [],
+    comments: (commentRes && commentRes.results) || [],
+    posts: (postRes && postRes.results) || [],
+    media_items: (mediaRes && mediaRes.results) || [],
+    waivers: (waiverRes && waiverRes.results) || []
+  };
+}
+
+async function fetchChatExportData(chatDb, userId) {
+  if (!chatDb) {
+    return {
+      user_crypto_keys: null,
+      channel_members: [],
+      channel_key_shares: [],
+      messages: [],
+      message_reactions: [],
+      chat_attachments: [],
+      chat_reports: []
+    };
+  }
+
+  const [
+    cryptoRow,
+    memberRes,
+    shareRes,
+    messageRes,
+    reactionRes,
+    attachmentRes,
+    reportRes
+  ] = await Promise.all([
+    chatDb.prepare(`
+      SELECT user_id, ecdh_public_key_jwk, ecdsa_public_key_jwk,
+             encrypted_private_vault, vault_salt, vault_iv,
+             privacy_relay_mode, status_text, key_version, key_rotated_at, updated_at
+      FROM user_crypto_keys
+      WHERE user_id = ?
+    `).bind(userId).first(),
+    chatDb.prepare(`
+      SELECT cm.channel_id, cm.user_id, cm.role, cm.last_read_message_id,
+             cm.muted, cm.hidden, cm.joined_at,
+             c.slug as channel_slug, c.name as channel_name, c.channel_type,
+             c.is_encrypted, c.is_private
+      FROM channel_members cm
+      LEFT JOIN channels c ON cm.channel_id = c.id
+      WHERE cm.user_id = ?
+      ORDER BY cm.channel_id ASC
+    `).bind(userId).all(),
+    chatDb.prepare(`
+      SELECT cks.channel_id, cks.key_epoch, cks.recipient_user_id, cks.sender_user_id,
+             cks.wrapped_key_base64, cks.wrap_iv, cks.sender_ephemeral_pub_jwk, cks.created_at,
+             uk.ecdh_public_key_jwk as sender_ecdh_public_key_jwk
+      FROM channel_key_shares cks
+      LEFT JOIN user_crypto_keys uk ON uk.user_id = cks.sender_user_id
+      WHERE cks.recipient_user_id = ?
+      ORDER BY cks.channel_id ASC, cks.key_epoch ASC
+    `).bind(userId).all(),
+    chatDb.prepare(`
+      SELECT m.id, m.channel_id, m.parent_message_id, m.author_id, m.author_name,
+             m.author_role, m.content, m.iv, m.key_epoch, m.message_type,
+             m.metadata_json, m.reply_count, m.edited_at, m.deleted_at,
+             m.hidden_at, m.created_at,
+             c.slug as channel_slug, c.name as channel_name, c.channel_type,
+             c.is_encrypted, c.is_private
+      FROM messages m
+      LEFT JOIN channels c ON m.channel_id = c.id
+      WHERE m.author_id = ?
+      ORDER BY m.id ASC
+    `).bind(userId).all(),
+    chatDb.prepare(`
+      SELECT id, message_id, channel_id, user_id, user_name, emoji, created_at
+      FROM message_reactions
+      WHERE user_id = ?
+      ORDER BY id ASC
+    `).bind(userId).all(),
+    chatDb.prepare(`
+      SELECT id, channel_id, message_id, uploader_id, file_name, mime_type,
+             file_size, storage_provider, upload_status, is_encrypted, iv,
+             promoted_media_id, created_at
+      FROM chat_attachments
+      WHERE uploader_id = ?
+      ORDER BY created_at ASC, id ASC
+    `).bind(userId).all(),
+    chatDb.prepare(`
+      SELECT id, reporter_id, reporter_name, target_type, target_user_id,
+             target_user_name, target_message_id, channel_id, reason, status,
+             reviewed_at, created_at
+      FROM chat_reports
+      WHERE reporter_id = ?
+      ORDER BY id ASC
+    `).bind(userId).all()
+  ]);
+
+  return {
+    user_crypto_keys: cryptoRow || null,
+    channel_members: (memberRes && memberRes.results) || [],
+    channel_key_shares: (shareRes && shareRes.results) || [],
+    messages: (messageRes && messageRes.results) || [],
+    message_reactions: (reactionRes && reactionRes.results) || [],
+    chat_attachments: (attachmentRes && attachmentRes.results) || [],
+    chat_reports: (reportRes && reportRes.results) || []
+  };
+}
+
+authRouter.get('/export', requireAuth, async (c) => {
+  const user = c.get('user');
+  const db = c.env && (c.env.BASEBALL_DB || c.env.DB);
+  const chatDb = c.env && c.env.CHAT_DB;
+  if (!db) {
+    return c.json({ error: 'Database unavailable.' }, 500);
+  }
+
+  try {
+    const exportLimit = await checkRateLimit(db, `auth_export_${user.id}`, 5, 3600, c.env);
+    if (!exportLimit.allowed) {
+      c.header('Retry-After', '3600');
+      return c.json({ error: 'Too many data export requests. Please wait before exporting again.' }, 429);
+    }
+
+    const userEmail = String(user.email || '').trim().toLowerCase();
+    const [baseball, chat] = await Promise.all([
+      fetchBaseballExportData(db, user.id, userEmail),
+      fetchChatExportData(chatDb, user.id)
+    ]);
+
+    const exportedAt = new Date().toISOString();
+    const dateStr = exportedAt.slice(0, 10);
+    c.header('Cache-Control', 'private, no-store');
+    c.header('X-Content-Type-Options', 'nosniff');
+    c.header('Content-Disposition', `attachment; filename="pickup-baseball-export-${dateStr}.json"`);
+
+    return c.json({
+      export_version: 1,
+      exported_at: exportedAt,
+      user_id: user.id,
+      baseball,
+      chat
+    });
+  } catch (err) {
+    logEvent('error', 'auth_data_export_failed', { userId: user.id, err });
+    return jsonError(c, 500, ERROR_CODES.INTERNAL_ERROR, 'Failed to export account data.');
+  }
+});
+
+authRouter.delete('/me', requireAuth, async (c) => {
+  const user = c.get('user');
+  const db = c.env && (c.env.BASEBALL_DB || c.env.DB);
+  if (!db) return c.json({ error: 'Database unavailable.' }, 500);
+
+  const body = await c.req.json().catch(() => ({}));
+  const providedCode = body.otp_code !== undefined
+    ? body.otp_code
+    : (body.code !== undefined ? body.code : (c.req.header('X-OTP-Code') || c.req.query('code') || ''));
+
+  const reauth = await verifyRecentOtpForUser(c, db, user, providedCode);
+  if (!reauth.ok) {
+    return c.json(
+      reauth.requiresReauth
+        ? { error: reauth.error, requiresReauth: true }
+        : { error: reauth.error },
+      /** @type {any} */ (reauth.status)
+    );
+  }
+
+  const keepApprovedGallery = body.keep_approved_gallery === true
+    || body.keep_approved_gallery === 'true'
+    || c.req.query('keep_approved_gallery') === 'true';
+
+  const result = await executeTwoTierErasure({
+    db,
+    chatDb: c.env && c.env.CHAT_DB,
+    env: c.env,
+    userId: user.id,
+    email: user.email,
+    actorType: 'member',
+    actorId: user.id,
+    banEmail: false,
+    keepApprovedGallery
+  });
+
+  await promoteFutureEventWaitlists(c, result.affectedFutureEventIds);
+
+  deleteCookie(c, SESSION_COOKIE_NAME, { path: '/' });
+  const notice = buildWaiverRetentionNotice(result);
+
+  return c.json({
+    success: true,
+    message: notice,
+    waiverRetentionNotice: notice,
+    waiversQuarantined: result.counts.waiversQuarantined,
+    retentionYears: result.retentionYears,
+    latestRetentionUntil: result.latestRetentionUntil,
+    keepApprovedGallery: result.keepApprovedGallery,
+    counts: result.counts
+  });
+});
 
 authRouter.post('/calendar-token/regenerate', requireAuth, async (c) => {
   const user = c.get('user');
@@ -469,7 +863,7 @@ authRouter.get('/users', requireAdmin, async (c) => {
         COALESCE(u.hero_credits, 0) as hero_credits,
         COALESCE(u.waiver_status, 'none') as waiver_status,
         u.waiver_signed_at as waiver_signed_at,
-        (SELECT w.certificate_id FROM waivers w WHERE w.user_id = u.id OR LOWER(w.email) = LOWER(u.email) ORDER BY w.id DESC LIMIT 1) as waiver_certificate_id,
+        (SELECT w.certificate_id FROM waivers w WHERE (w.user_id = u.id OR LOWER(w.email) = LOWER(u.email)) AND COALESCE(w.status, 'active') != 'quarantined' ORDER BY w.id DESC LIMIT 1) as waiver_certificate_id,
         u.created_at as createdAt,
         (SELECT COUNT(*) FROM attendees WHERE user_id = u.id AND status = 'attending') as eventsAttended
       FROM users u
@@ -619,43 +1013,36 @@ authRouter.delete('/users/:id', requireAdmin, async (c) => {
     return c.json({ error: 'User not found.' }, 404);
   }
 
+  const body = await c.req.json().catch(() => ({}));
   const ban = c.req.query('ban') === 'true';
-  const reason = (c.req.query('reason') || 'Banned by administrator').slice(0, 200);
+  const reason = (c.req.query('reason') || body.reason || 'Banned by administrator').toString().slice(0, 200);
+  const keepApprovedGallery = c.req.query('keep_approved_gallery') === 'true'
+    || body.keep_approved_gallery === true
+    || body.keep_approved_gallery === 'true';
 
-  if (ban) {
-    await c.env.DB.prepare('INSERT OR REPLACE INTO banned_emails (email, reason) VALUES (?, ?)').bind(targetUser.email.toLowerCase(), reason).run();
-  }
+  const result = await executeTwoTierErasure({
+    db: c.env.DB,
+    chatDb: c.env.CHAT_DB,
+    env: c.env,
+    userId: targetId,
+    email: targetUser.email,
+    actorType: 'admin',
+    actorId: currentUser.id,
+    banEmail: ban,
+    banReason: reason,
+    keepApprovedGallery
+  });
 
-  await c.env.DB.batch([
-    c.env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(targetId),
-    c.env.DB.prepare('DELETE FROM auth_codes WHERE email = ?').bind(targetUser.email),
-    ban
-      ? c.env.DB.prepare('DELETE FROM attendees WHERE user_id = ? OR email = ?').bind(targetId, targetUser.email)
-      : c.env.DB.prepare('UPDATE attendees SET user_id = NULL WHERE user_id = ?').bind(targetId),
-    ban
-      ? c.env.DB.prepare('DELETE FROM comments WHERE user_id = ? OR author_email = ?').bind(targetId, targetUser.email)
-      : c.env.DB.prepare('UPDATE comments SET user_id = NULL WHERE user_id = ?').bind(targetId),
-    c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(targetId)
-  ]);
-
-  if (c.env.CHAT_DB) {
-    try {
-      await c.env.CHAT_DB.batch([
-        c.env.CHAT_DB.prepare('DELETE FROM user_crypto_keys WHERE user_id = ?').bind(targetId),
-        c.env.CHAT_DB.prepare('DELETE FROM channel_members WHERE user_id = ?').bind(targetId),
-        c.env.CHAT_DB.prepare('DELETE FROM channel_key_shares WHERE recipient_user_id = ? OR sender_user_id = ?').bind(targetId, targetId),
-        c.env.CHAT_DB.prepare('DELETE FROM voice_participants WHERE user_id = ?').bind(targetId),
-        c.env.CHAT_DB.prepare('DELETE FROM rtc_signals WHERE sender_user_id = ? OR recipient_user_id = ?').bind(targetId, targetId),
-        c.env.CHAT_DB.prepare('DELETE FROM user_mutes WHERE muter_user_id = ? OR muted_user_id = ?').bind(targetId, targetId),
-        c.env.CHAT_DB.prepare('DELETE FROM user_blocks WHERE blocker_id = ? OR blocked_id = ?').bind(targetId, targetId)
-      ]);
-    } catch (chatErr) {
-      console.warn('[Auth] Best-effort CHAT_DB cleanup failed on user delete:', chatErr);
-    }
-  }
+  await promoteFutureEventWaitlists(c, result.affectedFutureEventIds);
 
   return c.json({
     success: true,
+    emailBanned: result.emailBanned,
+    waiversQuarantined: result.counts.waiversQuarantined,
+    retentionYears: result.retentionYears,
+    latestRetentionUntil: result.latestRetentionUntil,
+    keepApprovedGallery: result.keepApprovedGallery,
+    counts: result.counts,
     message: ban
       ? `User ${targetUser.email} has been removed and banned from re-registering.`
       : `User ${targetUser.email} has been removed.`
@@ -778,11 +1165,27 @@ authRouter.post('/logout', async (c) => {
 // Top-level handlers mounted directly under /api
 export async function serveUserAvatar(c) {
   try {
-    const userId = parseInt(c.req.param('id'), 10);
-    if (!userId || isNaN(userId)) return c.text('Not found', 404);
+    const requester = c.get('user');
+    if (!requester) {
+      return c.json({ error: 'Authentication required.' }, 401);
+    }
 
-    const row = await c.env.DB.prepare('SELECT avatar_url FROM users WHERE id = ?').bind(userId).first();
-    if (!row || !row.avatar_url) return c.text('No avatar', 404);
+    const userId = parseInt(c.req.param('id'), 10);
+    if (!userId || isNaN(userId) || userId <= 0) return c.text('Not found', 404);
+
+    const row = await c.env.DB.prepare(
+      'SELECT id, avatar_url, COALESCE(profile_sharing, 0) as profile_sharing FROM users WHERE id = ?'
+    ).bind(userId).first();
+    if (!row) return c.text('Not found', 404);
+
+    const isOwner = Number(requester.id) === Number(userId);
+    const isOrganizer = Boolean(requester.canManageEvents || requester.isAdmin);
+    const hasProfileSharing = Boolean(row.profile_sharing);
+    if (!isOwner && !isOrganizer && !hasProfileSharing) {
+      return c.json({ error: 'Avatar is private unless profile sharing is enabled.' }, 403);
+    }
+
+    if (!row.avatar_url) return c.text('No avatar', 404);
 
     const raw = String(row.avatar_url).trim();
     const etag = `W/"av-${userId}-${raw.length}"`;
@@ -791,7 +1194,8 @@ export async function serveUserAvatar(c) {
         status: 304,
         headers: {
           'ETag': etag,
-          'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800'
+          'Cache-Control': 'private, max-age=3600',
+          'Vary': 'Cookie'
         }
       });
     }
@@ -804,7 +1208,8 @@ export async function serveUserAvatar(c) {
       status: 200,
       headers: {
         'Content-Type': match[1].toLowerCase(),
-        'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800',
+        'Cache-Control': 'private, max-age=3600',
+        'Vary': 'Cookie',
         'ETag': etag,
         'X-Content-Type-Options': 'nosniff'
       }

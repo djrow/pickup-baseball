@@ -6,8 +6,7 @@
  */
 
 import { Hono } from 'hono';
-import { requireAuth, rejectIfClubhouseOptedOut } from '../../security.js';
-import { logEvent } from '../../errors.js';
+import { requireAuth, rejectIfClubhouseOptedOut, checkRateLimit } from '../../security.js';
 import { getBlockedUserIds } from './helpers.js';
 
 export const chatBlocksRouter = /** @type {AppHono} */ (new Hono());
@@ -54,23 +53,13 @@ chatBlocksRouter.post('/blocks', requireAuth, async (c) => {
     return c.json({ error: 'You cannot block yourself.' }, 400);
   }
 
-  const nowSec = Math.floor(Date.now() / 1000);
-  const rateKey = `user_${user.id}_blocks`;
-  const cutoff = nowSec - 60;
-  try {
-    await chatDb.prepare(`
-      INSERT INTO chat_rate_limits (key, count, window_start)
-      VALUES (?, 1, ?)
-      ON CONFLICT(key) DO UPDATE SET
-        count = CASE WHEN chat_rate_limits.window_start <= ? THEN 1 ELSE chat_rate_limits.count + 1 END,
-        window_start = CASE WHEN chat_rate_limits.window_start <= ? THEN ? ELSE chat_rate_limits.window_start END
-    `).bind(rateKey, nowSec, cutoff, cutoff, nowSec).run();
-    const rateRow = await chatDb.prepare('SELECT count FROM chat_rate_limits WHERE key = ?').bind(rateKey).first();
-    if (rateRow && Number(rateRow.count) > 60) {
-      return c.json({ error: 'Too many peer block updates. Please wait a minute.' }, 429);
-    }
-  } catch (e) {
-    logEvent('warn', 'chat_block_rate_limit_failed', { err: e });
+  const blockRate = await checkRateLimit(chatDb, `chat_blocks:${user.id}`, 60, 60, c.env, {
+    table: 'chat_rate_limits',
+    failClosed: false,
+    enforceInTest: true
+  });
+  if (!blockRate.allowed) {
+    return c.json({ error: 'Too many peer block updates. Please wait a minute.' }, 429);
   }
 
   if (baseballDb) {

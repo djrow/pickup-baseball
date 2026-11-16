@@ -22,12 +22,16 @@ import {
   parseAllowedEmails,
   canUserAccessEvent,
   getDutyType,
-  rejectIfBattingPracticeDisabled
+  rejectIfBattingPracticeDisabled,
+  isViewerOrganizer,
+  sanitizeAttendeesForViewer,
+  sanitizeBpSignupsForViewer,
+  sanitizeDutyAssignedPlayers
 } from '../policy.js';
 import { resolveConfig } from '../config.js';
 import { canUserAccessChannel } from './chat.js';
 import { chunkArray } from './chat/helpers.js';
-import { promoteNextWaitlistedPlayer } from './events/helpers.js';
+import { AVATAR_EXPR, promoteNextWaitlistedPlayer } from './events/helpers.js';
 import { logEvent } from '../errors.js';
 
 export const baseballRouter = /** @type {AppHono} */ (new Hono());
@@ -70,13 +74,21 @@ baseballRouter.get('/upcoming', async (c) => {
   }
 
   const isRestricted = parseAllowedEmails(event.allowed_emails).length > 0;
-  const isOrganizer = Boolean(user && (user.canManageEvents || user.isAdmin));
+  const isOrganizer = isViewerOrganizer(user);
 
   const { results: attendees } = await baseballDb.prepare(`
-    SELECT id, user_id, name, status, players_count, spectators_count, gear_bringing, notes, created_at
-    FROM attendees
-    WHERE event_id = ? AND status = 'attending'
-    ORDER BY id ASC
+    SELECT a.id, a.user_id, a.name, a.email, a.status, a.players_count, a.spectators_count,
+           a.gear_bringing, a.notes, a.guest_names, a.created_at,
+           COALESCE(a.roster_consent, 0) as roster_consent,
+           COALESCE(u.roster_visibility, 0) as roster_visibility,
+           COALESCE(u.profile_sharing, 0) as profile_sharing,
+           COALESCE(u.waiver_status, 'none') as waiver_status,
+           u.bio,
+           ${AVATAR_EXPR} as avatar_url
+    FROM attendees a
+    LEFT JOIN users u ON a.user_id = u.id
+    WHERE a.event_id = ? AND a.status = 'attending'
+    ORDER BY a.id ASC
   `).bind(event.id).all();
 
   const { results: rawDuties } = await baseballDb.prepare(`
@@ -86,32 +98,42 @@ baseballRouter.get('/upcoming', async (c) => {
   `).bind(event.id).all();
 
   const { results: rawAssignments } = await baseballDb.prepare(`
-    SELECT da.duty_id, da.attendee_id, a.user_id, a.name
+    SELECT da.duty_id, da.attendee_id, a.user_id, a.name, a.email,
+           COALESCE(a.roster_consent, 0) as roster_consent,
+           COALESCE(u.roster_visibility, 0) as roster_visibility
     FROM duty_assignments da
     JOIN attendees a ON da.attendee_id = a.id
+    LEFT JOIN users u ON a.user_id = u.id
     WHERE a.event_id = ? AND a.status = 'attending'
   `).bind(event.id).all();
 
   const assignmentsByDuty = new Map();
   for (const a of (rawAssignments || [])) {
     if (!assignmentsByDuty.has(a.duty_id)) assignmentsByDuty.set(a.duty_id, []);
-    assignmentsByDuty.get(a.duty_id).push({
-      attendee_id: a.attendee_id,
-      user_id: user ? a.user_id : null,
-      name: user ? a.name : ''
-    });
+    assignmentsByDuty.get(a.duty_id).push(a);
   }
 
   const duties = (rawDuties || []).map((d) => ({
     ...d,
-    assigned_players: assignmentsByDuty.get(d.id) || []
+    assigned_players: sanitizeDutyAssignedPlayers(assignmentsByDuty.get(d.id) || [], {
+      user,
+      isOrganizer,
+      includeUserId: true
+    })
   }));
 
   const bpSignups = cfg.FEATURE_BATTING_PRACTICE
     ? (await baseballDb.prepare(`
-        SELECT * FROM batting_practice_signups
-        WHERE event_id = ?
-        ORDER BY slot_number ASC
+        SELECT bp.*,
+               COALESCE(a.roster_consent, 0) as roster_consent,
+               COALESCE(u.roster_visibility, 0) as roster_visibility,
+               COALESCE(u.profile_sharing, 0) as profile_sharing,
+               ${AVATAR_EXPR} as avatar_url
+        FROM batting_practice_signups bp
+        LEFT JOIN users u ON bp.user_id = u.id
+        LEFT JOIN attendees a ON bp.attendee_id = a.id
+        WHERE bp.event_id = ?
+        ORDER BY bp.slot_number ASC
       `).bind(event.id).all()).results
     : [];
 
@@ -149,7 +171,7 @@ baseballRouter.get('/upcoming', async (c) => {
   };
 
   const safeBpSignups = user
-    ? (bpSignups || [])
+    ? sanitizeBpSignupsForViewer(bpSignups || [], { user, isOrganizer })
     : (bpSignups || []).map((s) => ({
       id: s.id,
       event_id: s.event_id,
@@ -160,7 +182,7 @@ baseballRouter.get('/upcoming', async (c) => {
 
   return c.json({
     event: safeEvent,
-    attendees: user ? (attendees || []) : [],
+    attendees: user ? sanitizeAttendeesForViewer(attendees || [], { user, isOrganizer }) : [],
     duties,
     bp_signups: safeBpSignups,
     linked_channel: linkedChannel,

@@ -240,6 +240,7 @@ const EN_DICT = {
   "event.discussion_title": "💬 Game Discussion Board",
   "event.discussion_desc": "Coordinate carpools, ask about gear, discuss weather, or post post-game highlights!",
   "event.no_comments_yet": "No discussion yet. Have a question about field location or gear? Start the conversation below!",
+  "event.comments_members_only": "Game discussion is visible to signed-in members only.",
   "event.signin_to_comment": "Please sign in to join the game discussion and coordinate gear with teammates.",
   "event.signin_email_btn": "Sign In with Email →",
   "event.leave_message": "Leave a Message",
@@ -293,6 +294,16 @@ const EN_DICT = {
   "profile.sessions_title": "🔐 Signed-In Devices",
   "profile.sessions_desc": "Accounts stay signed in on up to 5 devices at once. If you forgot to log out on a friend's phone, sign out everywhere else below.",
   "profile.logout_other_devices_btn": "Sign Out of All Other Devices",
+  "profile.erasure_title": "🗑️ Delete Account & Erase Data",
+  "profile.erasure_notice": "Deleting your account immediately removes your profile, sessions, login codes, consent records, future RSVPs, task assignments, and batting practice slots. Past attendance counts, discussions, and posts are anonymized. Legal Waiver Retention Notice: Signed liability waivers remain sealed in restricted Admin-only quarantine for 3 years from signing or your last attended event before permanent deletion.",
+  "profile.erasure_keep_gallery": "Keep my approved Gallery photos/videos anonymously attributed to \"Community Member\" (unapproved items are always deleted)",
+  "profile.erasure_send_code_btn": "📧 Email Verification Code to Delete Account",
+  "profile.erasure_code_label": "Enter 6-Digit Verification Code",
+  "profile.erasure_code_placeholder": "123456",
+  "profile.erasure_confirm_btn": "Permanently Delete My Account",
+  "profile.erasure_cancel_btn": "Cancel",
+  "profile.erasure_confirm_dialog": "Permanently delete your account and personal data? This cannot be undone. Any signed liability waiver will stay in restricted 3-year legal-defense quarantine before automatic purge.",
+  "profile.erasure_code_sent": "Verification code sent to your email. Enter the 6-digit code below to confirm deletion.",
   "donate.hero_pill": "❤️ Support Free Community Baseball",
   "donate.hero_title": "Help Keep the Games Free",
   "donate.hero_desc": "Pickup Baseball Foundation provides free, welcoming Sunday baseball for everyone in the community. Your donation helps us buy equipment, maintain gear, and keep the games open to all.",
@@ -369,6 +380,19 @@ const EN_DICT = {
   "rtc_turn_unavailable_note": "Unavailable: No TURN privacy relay server is configured on this deployment.",
   "rtc_turn_available_note": "TURN privacy relay server is configured and ready.",
   "rtc_turn_blocked_warning": "Privacy Relay Mode blocked direct P2P voice because no TURN relay server is configured.",
+  "profile.export_title": "📦 Download Your Data",
+  "profile.export_desc": "Download a JSON archive of your profile, consent history, RSVPs, volunteer tasks, signed waivers, and Clubhouse messages.",
+  "profile.export_btn": "📥 Download JSON Export",
+  "profile.export_decrypt_label": "Decrypt my encrypted Clubhouse messages in-browser before saving",
+  "profile.export_working": "⏳ Preparing export...",
+  "profile.export_success": "Your personal data export has been downloaded.",
+  "profile.export_success_decrypted": "Your personal data export (with {count} decrypted E2EE message(s)) has been downloaded.",
+  "profile.export_failed": "Failed to export your data: {error}",
+  "profile.export_passphrase_title": "🔐 Unlock E2EE Key Vault",
+  "profile.export_passphrase_msg": "Enter your E2EE Key Vault passphrase to decrypt your encrypted Clubhouse messages in-browser before saving:",
+  "profile.export_passphrase_placeholder": "Enter vault passphrase...",
+  "profile.export_passphrase_confirm": "Unlock & Decrypt",
+  "profile.export_wrong_passphrase": "Incorrect E2EE vault passphrase. Encrypted messages could not be decrypted.",
   "clubhouse.peer_block_btn": "🚫 Block",
   "clubhouse.peer_unblock_btn": "🔓 Unblock",
   "clubhouse.peer_block_badge": "🚫 Blocked",
@@ -1807,6 +1831,10 @@ const API = {
     return this.request('POST', '/api/auth/logout-other-devices', {});
   },
 
+  async exportMyData() {
+    return this.request('GET', '/api/auth/export', null, { noStore: true });
+  },
+
   async updateProfile(name, bio) {
     return this.request('PUT', '/api/auth/profile', { name: name, bio: bio });
   },
@@ -1922,6 +1950,18 @@ const API = {
 
   async deleteUser(userId, ban = false, reason = '') {
     return this.request('DELETE', '/api/auth/users/' + encodeURIComponent(userId) + '?ban=' + (ban ? 'true' : 'false') + '&reason=' + encodeURIComponent(reason));
+  },
+
+  async deleteMyAccount(payload) {
+    return this.request('DELETE', '/api/auth/me', payload || {});
+  },
+
+  async getQuarantinedWaivers() {
+    return this.request('GET', '/api/waiver/admin/quarantined', null, { noStore: true });
+  },
+
+  async purgeQuarantinedWaivers() {
+    return this.request('POST', '/api/waiver/admin/quarantined/purge', {});
   },
 
   async getBannedEmails() {

@@ -10,7 +10,8 @@ import {
   CANONICAL_MEMBER_ROLE,
   MAX_SESSIONS_PER_USER,
   generateToken,
-  hashSessionId
+  hashSessionId,
+  hmacSha256Hex
 } from './crypto.js';
 
 export function getClientIp(c) {
@@ -52,8 +53,131 @@ export function getSafePublicOrigin(c) {
   return '';
 }
 
+const RATE_LIMIT_MIN_RETENTION_SECONDS = 3600;
+const RATE_LIMIT_PRUNE_PROBABILITY = 0.01;
+const RATE_LIMIT_LEGACY_CUTOFF_SECONDS = 7200;
+
+/** @type {Map<string, Promise<string>>} */
+const derivedRateLimitSecretCache = new Map();
+/** @type {WeakMap<object, Promise<string|null>>} */
+const dbRateLimitSecretCache = new WeakMap();
+let ephemeralRateLimitSecret = null;
+
+async function resolveRateLimitSecret(env, db = null) {
+  if (env && env.RATE_LIMIT_SECRET) {
+    return String(env.RATE_LIMIT_SECRET);
+  }
+  if (env && env.SESSION_SECRET) {
+    const baseSecret = String(env.SESSION_SECRET);
+    let pending = derivedRateLimitSecretCache.get(baseSecret);
+    if (!pending) {
+      pending = hmacSha256Hex(baseSecret, 'pickup-rate-limit-key-v1');
+      if (derivedRateLimitSecretCache.size > 16) {
+        derivedRateLimitSecretCache.clear();
+      }
+      derivedRateLimitSecretCache.set(baseSecret, pending);
+    }
+    return pending;
+  }
+
+  const secretDb = (env && (env.BASEBALL_DB || env.DB)) || db;
+  if (secretDb && typeof secretDb.prepare === 'function') {
+    let dbSecretPromise = dbRateLimitSecretCache.get(secretDb);
+    if (!dbSecretPromise) {
+      dbSecretPromise = (async () => {
+        try {
+          const existing = await secretDb.prepare("SELECT value FROM app_settings WHERE key = 'rate_limit_hmac_secret'").first();
+          if (existing && existing.value) {
+            return String(existing.value);
+          }
+          const generated = generateToken();
+          await secretDb.prepare("INSERT OR IGNORE INTO app_settings (key, value) VALUES ('rate_limit_hmac_secret', ?)").bind(generated).run();
+          const row = await secretDb.prepare("SELECT value FROM app_settings WHERE key = 'rate_limit_hmac_secret'").first();
+          if (row && row.value) {
+            return String(row.value);
+          }
+        } catch (err) {
+          /* app_settings unavailable (e.g., standalone CHAT_DB or test mock); fall through */
+        }
+        return null;
+      })();
+      dbRateLimitSecretCache.set(secretDb, dbSecretPromise);
+    }
+    const dbSecret = await dbSecretPromise;
+    if (dbSecret) {
+      return dbSecret;
+    }
+    dbRateLimitSecretCache.delete(secretDb);
+  }
+
+  if (!ephemeralRateLimitSecret) {
+    ephemeralRateLimitSecret = generateToken();
+  }
+  return ephemeralRateLimitSecret;
+}
+
+function parseRateLimitSpec(key, options = {}) {
+  if (options && typeof options.bucket === 'string' && options.bucket && options.identifier !== undefined) {
+    return { bucket: options.bucket, identifier: String(options.identifier) };
+  }
+  if (key && typeof key === 'object' && typeof key.bucket === 'string') {
+    return { bucket: key.bucket, identifier: String(key.identifier ?? '') };
+  }
+  const raw = String(key || '');
+  const colonIdx = raw.indexOf(':');
+  if (colonIdx !== -1) {
+    return { bucket: raw.slice(0, colonIdx), identifier: raw.slice(colonIdx + 1) };
+  }
+  const underscoreIdx = raw.lastIndexOf('_');
+  if (underscoreIdx !== -1) {
+    return { bucket: raw.slice(0, underscoreIdx), identifier: raw.slice(underscoreIdx + 1) };
+  }
+  return { bucket: 'default', identifier: raw };
+}
+
+/**
+ * Derives a daily-salted HMAC-SHA256 rate-limit key (`HMAC(secret, utcDate:bucket:identifier)`).
+ * @param {string|{ bucket: string, identifier: string|number }} key
+ * @param {Record<string, any>|null|undefined} env
+ * @param {{ bucket?: string, identifier?: string|number, nowSec?: number, db?: D1Database|null }} [options]
+ * @returns {Promise<{ key: string, utcDate: string, bucket: string, nowSec: number }>}
+ */
+export async function deriveRateLimitKey(key, env, options = {}) {
+  const nowSec = typeof options.nowSec === 'number' && Number.isFinite(options.nowSec)
+    ? Math.floor(options.nowSec)
+    : Math.floor(Date.now() / 1000);
+  const utcDate = new Date(nowSec * 1000).toISOString().slice(0, 10);
+  const { bucket, identifier } = parseRateLimitSpec(key, options);
+  const secret = await resolveRateLimitSecret(env, options.db || null);
+  const digest = await hmacSha256Hex(secret, `${utcDate}:${bucket}:${identifier}`);
+  return { key: digest, utcDate, bucket, nowSec };
+}
+
+/**
+ * Enforces a sliding-window rate limit using daily-salted HMAC keys, explicit `expires_at`,
+ * and a 1% probabilistic expired-row prune.
+ * @param {D1Database|null|undefined} db
+ * @param {string|{ bucket: string, identifier: string|number }} key
+ * @param {number} maxRequests
+ * @param {number} windowSeconds
+ * @param {Record<string, any>|null|undefined} env
+ * @param {{
+ *   table?: 'rate_limits'|'chat_rate_limits',
+ *   bucket?: string,
+ *   identifier?: string|number,
+ *   failClosed?: boolean,
+ *   enforceInTest?: boolean,
+ *   bypassInTest?: boolean,
+ *   nowSec?: number,
+ *   randomFn?: () => number,
+ *   forcePrune?: boolean
+ * }} [options]
+ * @returns {Promise<{ allowed: boolean, remaining?: number, retryAfter?: number, expiresAt?: number }>}
+ */
 export async function checkRateLimit(db, key, maxRequests, windowSeconds, env, options = {}) {
-  const isTestBypass = Boolean(env && env.NODE_ENV === 'test' && !key.startsWith('test_'));
+  const rawKeyStr = typeof key === 'string' ? key : (options && options.bucket ? String(options.bucket) : '');
+  const bypassInTest = options.bypassInTest !== undefined ? Boolean(options.bypassInTest) : !options.enforceInTest;
+  const isTestBypass = Boolean(env && env.NODE_ENV === 'test' && bypassInTest && !rawKeyStr.startsWith('test_'));
   if (isTestBypass) {
     return { allowed: true };
   }
@@ -61,43 +185,61 @@ export async function checkRateLimit(db, key, maxRequests, windowSeconds, env, o
   if (!db) {
     return failClosed ? { allowed: false, remaining: 0 } : { allowed: true };
   }
-  const nowSec = Math.floor(Date.now() / 1000);
-  const windowStartCutoff = nowSec - windowSeconds;
+  const table = options.table === 'chat_rate_limits' ? 'chat_rate_limits' : 'rate_limits';
+  const nowSec = typeof options.nowSec === 'number' && Number.isFinite(options.nowSec)
+    ? Math.floor(options.nowSec)
+    : Math.floor(Date.now() / 1000);
+  const safeWindowSeconds = Math.max(1, Math.floor(Number(windowSeconds) || 60));
+  const ttlSeconds = Math.max(safeWindowSeconds, RATE_LIMIT_MIN_RETENTION_SECONDS);
+  const expiresAt = nowSec + ttlSeconds;
+  const windowCutoff = nowSec - safeWindowSeconds;
 
   try {
+    const { key: hashedKey } = await deriveRateLimitKey(key, env, { ...options, nowSec, db });
     const upsertStmt = db.prepare(`
-      INSERT INTO rate_limits (key, count, window_start)
-      VALUES (?, 1, ?)
+      INSERT INTO ${table} (key, count, window_start, expires_at)
+      VALUES (?, 1, ?, ?)
       ON CONFLICT(key) DO UPDATE SET
-        count = CASE WHEN rate_limits.window_start < ? THEN 1 ELSE rate_limits.count + 1 END,
-        window_start = CASE WHEN rate_limits.window_start < ? THEN ? ELSE rate_limits.window_start END
-    `).bind(key, nowSec, windowStartCutoff, windowStartCutoff, nowSec);
-    const selectStmt = db.prepare('SELECT count FROM rate_limits WHERE key = ?').bind(key);
+        count = CASE WHEN ${table}.window_start <= ? THEN 1 ELSE ${table}.count + 1 END,
+        window_start = CASE WHEN ${table}.window_start <= ? THEN ? ELSE ${table}.window_start END,
+        expires_at = CASE WHEN ${table}.window_start <= ? THEN ? ELSE MAX(${table}.expires_at, ${table}.window_start + ?) END
+    `).bind(
+      hashedKey, nowSec, expiresAt,
+      windowCutoff,
+      windowCutoff, nowSec,
+      windowCutoff, expiresAt, ttlSeconds
+    );
+    const selectStmt = db.prepare(`SELECT count, window_start, expires_at FROM ${table} WHERE key = ?`).bind(hashedKey);
 
-    let newCount = 1;
+    let row = null;
     if (typeof db.batch === 'function') {
       const batchRes = await db.batch([upsertStmt, selectStmt]);
-      const row = batchRes[1] && batchRes[1].results && batchRes[1].results[0];
-      newCount = row ? Number(row.count) : 1;
+      row = batchRes[1] && batchRes[1].results && batchRes[1].results[0] ? batchRes[1].results[0] : null;
     } else {
       await upsertStmt.run();
-      const row = await selectStmt.first();
-      newCount = row ? Number(row.count) : 1;
+      row = await selectStmt.first();
     }
+    const newCount = row ? Number(row.count) : 1;
+    const windowStart = row && row.window_start !== undefined ? Number(row.window_start) : nowSec;
+    const rowExpiresAt = row && row.expires_at !== undefined ? Number(row.expires_at) : expiresAt;
+    const retryAfter = Math.max(1, safeWindowSeconds - (nowSec - windowStart));
 
-    // Opportunistically prune stale rows older than 24h to prevent unbounded growth
-    if (nowSec % 20 === 0) {
+    // Opportunistic 1% probabilistic expired-row prune (complemented by scheduled cron prune)
+    const roll = typeof options.randomFn === 'function' ? options.randomFn() : Math.random();
+    if (options.forcePrune || roll < RATE_LIMIT_PRUNE_PROBABILITY) {
       try {
-        await db.prepare('DELETE FROM rate_limits WHERE window_start < ?').bind(nowSec - 86400).run();
+        await db.prepare(
+          `DELETE FROM ${table} WHERE (expires_at > 0 AND expires_at <= ?) OR (expires_at <= 0 AND window_start <= ?)`
+        ).bind(nowSec, nowSec - RATE_LIMIT_LEGACY_CUTOFF_SECONDS).run();
       } catch (pruneErr) {
         /* best-effort opportunistic prune of expired rate limits */
       }
     }
 
     if (newCount > maxRequests) {
-      return { allowed: false, remaining: 0 };
+      return { allowed: false, remaining: 0, retryAfter, expiresAt: rowExpiresAt };
     }
-    return { allowed: true, remaining: Math.max(0, maxRequests - newCount) };
+    return { allowed: true, remaining: Math.max(0, maxRequests - newCount), retryAfter: 0, expiresAt: rowExpiresAt };
   } catch (err) {
     console.warn('[RateLimit] Error enforcing rate limit:', err.message);
     return failClosed ? { allowed: false, remaining: 0 } : { allowed: true };
@@ -174,6 +316,12 @@ export async function getUserFromSession(db, sessionId, chatDb, options = {}) {
       COALESCE(u.waiver_status, 'none') as waiver_status,
       u.waiver_signed_at as waiver_signed_at,
       COALESCE(u.clubhouse_opted_in, 0) as clubhouse_opted_in,
+      COALESCE(u.roster_visibility, 0) as roster_visibility,
+      COALESCE(u.profile_sharing, 0) as profile_sharing,
+      COALESCE(u.notify_rsvp_confirm, 1) as notify_rsvp_confirm,
+      COALESCE(u.notify_rainouts, 1) as notify_rainouts,
+      COALESCE(u.notify_event_reminders, 1) as notify_event_reminders,
+      COALESCE(u.notify_community_updates, 0) as notify_community_updates,
       u.calendar_token as calendar_token,
       ${lightweight ? '0' : `EXISTS (
         SELECT 1 FROM attendees a
@@ -286,6 +434,18 @@ export async function getUserFromSession(db, sessionId, chatDb, options = {}) {
     privacy_relay_mode: privacyRelayMode,
     clubhouseOptedIn: Boolean(session.clubhouse_opted_in),
     clubhouse_opted_in: session.clubhouse_opted_in ? 1 : 0,
+    rosterVisibility: Boolean(session.roster_visibility),
+    roster_visibility: session.roster_visibility ? 1 : 0,
+    profileSharing: Boolean(session.profile_sharing),
+    profile_sharing: session.profile_sharing ? 1 : 0,
+    notifyRsvpConfirm: session.notify_rsvp_confirm !== 0,
+    notify_rsvp_confirm: session.notify_rsvp_confirm !== 0 ? 1 : 0,
+    notifyRainouts: session.notify_rainouts !== 0,
+    notify_rainouts: session.notify_rainouts !== 0 ? 1 : 0,
+    notifyEventReminders: session.notify_event_reminders !== 0,
+    notify_event_reminders: session.notify_event_reminders !== 0 ? 1 : 0,
+    notifyCommunityUpdates: Boolean(session.notify_community_updates),
+    notify_community_updates: session.notify_community_updates ? 1 : 0,
     calendarToken,
     calendar_token: calendarToken,
     sessionIsTemporary: Boolean(session.session_is_temporary),

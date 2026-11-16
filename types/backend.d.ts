@@ -21,11 +21,14 @@ interface AppBindings {
   TURN_ICE_SERVERS_JSON?: string;
   WAIVER_SIGNING_SECRET?: string;
   WAIVER_RETENTION_YEARS?: string | number;
+  MEDIA_BUCKET?: R2BucketLike;
   FEATURE_BATTING_PRACTICE?: string | number | boolean;
   FEATURE_CERTIFIED_SHIFTS?: string | number | boolean;
   FEATURE_SUNDAY_PRIORITY?: string | number | boolean;
   BREVO_API_KEY?: string;
   NODE_ENV?: string;
+  RATE_LIMIT_SECRET?: string;
+  SESSION_SECRET?: string;
   TURNSTILE_SECRET_KEY?: string;
   RESEND_API_KEY?: string;
   GDRIVE_CLIENT_ID?: string;
@@ -55,6 +58,10 @@ interface ResolvedBootConfig {
   FEATURE_BATTING_PRACTICE: boolean;
   FEATURE_CERTIFIED_SHIFTS: boolean;
   FEATURE_SUNDAY_PRIORITY: boolean;
+}
+
+interface R2BucketLike {
+  delete(keys: string | string[]): Promise<void>;
 }
 
 interface AppUser {
@@ -101,6 +108,18 @@ interface AppUser {
   privacy_relay_mode: number;
   clubhouseOptedIn: boolean;
   clubhouse_opted_in: number;
+  rosterVisibility: boolean;
+  roster_visibility: number;
+  profileSharing: boolean;
+  profile_sharing: number;
+  notifyRsvpConfirm: boolean;
+  notify_rsvp_confirm: number;
+  notifyRainouts: boolean;
+  notify_rainouts: number;
+  notifyEventReminders: boolean;
+  notify_event_reminders: number;
+  notifyCommunityUpdates: boolean;
+  notify_community_updates: number;
   calendarToken: string | null;
   calendar_token: string | null;
   sessionIsTemporary: boolean;

@@ -232,7 +232,7 @@ function checkSqlQueries() {
  */
 const AUTH_GUARD_NAMES = ['requireAuth', 'requireModerator', 'requireOrganizer', 'requireAdmin'];
 
-// Explicitly reviewed intentionally unauthenticated or token-guarded routes (pre-#41 baseline)
+// Explicitly reviewed intentionally unauthenticated or token-guarded routes
 const PUBLIC_OR_TOKEN_ROUTE_MANIFEST = [
   // Top-level stateless & public feeds in src/app/index.js
   {
@@ -249,11 +249,6 @@ const PUBLIC_OR_TOKEN_ROUTE_MANIFEST = [
     ast: 'index.js:GET:/config/public',
     route: 'GET /api/config/public',
     reason: 'Public community/fork branding & feature-flag configuration (ADR-0001)'
-  },
-  {
-    ast: 'index.js:GET:/users/:id/avatar',
-    route: 'GET /api/users/:id/avatar',
-    reason: 'Pre-#41 public user avatar image endpoint (ETag cached raster image)'
   },
   {
     ast: 'index.js:GET:/settings',
@@ -325,7 +320,7 @@ const PUBLIC_OR_TOKEN_ROUTE_MANIFEST = [
     reason: 'Protected inside authorizeBpSignupMutation via organizer, signed-in owner, or management_token'
   },
 
-  // Event RSVP & comment routes in src/app/routes/events/rsvps.js
+  // Event RSVP routes in src/app/routes/events/rsvps.js
   {
     ast: 'rsvps.js:POST:/:id/rsvp',
     route: 'POST /api/events/:id/rsvp',
@@ -335,11 +330,6 @@ const PUBLIC_OR_TOKEN_ROUTE_MANIFEST = [
     ast: 'rsvps.js:POST:/:id/rsvp/edit-link',
     route: 'POST /api/events/:id/rsvp/edit-link',
     reason: 'Public visitor edit-link rotation (Turnstile + IP/email rate limited + non-disclosing)'
-  },
-  {
-    ast: 'rsvps.js:POST:/:id/comments',
-    route: 'POST /api/events/:id/comments',
-    reason: 'Pre-#41 conditional require_login_to_rsvp + Turnstile + invite-list validation'
   },
 
   // Core game schedule, iCalendar & cron reminder routes in src/app/routes/events/core.js
