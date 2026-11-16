@@ -199,6 +199,17 @@ test('Workerd No-Lockout Fork Defaults Serve *.pages.dev Without Redirect', asyn
     assert.equal(feedGet.status, 200);
     assert.ok((feedGet.headers.get('content-type') || '').includes('xml'));
     assert.ok(feedGet.text.includes('<rss version="2.0"'));
+    assert.ok(feedGet.text.includes('Fork Community'));
+    assert.equal(feedGet.text.toLowerCase().includes('pickupbaseballfoundation'), false);
+    assert.equal(feedGet.text.toLowerCase().includes('sunday pickup baseball'), false);
+
+    const icsGet = await harness.apiFetch('https://fork-preview.pages.dev/api/events/calendar.ics', {
+      redirect: 'manual'
+    });
+    assert.equal(icsGet.status, 200);
+    assert.ok(icsGet.text.includes('X-WR-CALNAME:Fork Community'));
+    assert.equal(icsGet.text.toLowerCase().includes('pickupbaseballfoundation'), false);
+    assert.equal(icsGet.text.toLowerCase().includes('sunday pickup baseball'), false);
   });
 });
 

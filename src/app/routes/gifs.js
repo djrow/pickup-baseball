@@ -19,6 +19,7 @@ import {
   serveByteRangeResponse
 } from '../gdrive.js';
 import { ERROR_CODES, jsonError } from '../errors.js';
+import { resolveConfig } from '../config.js';
 
 export const gifsRouter = /** @type {AppHono} */ (new Hono());
 
@@ -86,14 +87,17 @@ function detectAnimatedMime(bytes, contentTypeHeader) {
   return null;
 }
 
-async function fetchExternalGifSafely(initialUrl, isTestEnv) {
+async function fetchExternalGifSafely(initialUrl, isTestEnv, env = null) {
+  const cfg = resolveConfig(env);
+  const uaProduct = cfg.COMMUNITY_NAME.replace(/[^A-Za-z0-9]/g, '') || 'CommunityHub';
+  const uaSuffix = cfg.PUBLIC_ORIGIN ? ` (+${cfg.PUBLIC_ORIGIN})` : '';
   const fetchedRes = await safeFetchExternalUrl(
     initialUrl,
     {
       isTestEnv,
       headers: {
         'Accept': 'image/gif,image/webp;q=0.9,*/*;q=0.1',
-        'User-Agent': 'SundayPickupBaseball/1.0 (+https://pickupbaseballfoundation.org)'
+        'User-Agent': `${uaProduct}/1.0${uaSuffix}`
       }
     },
     3,
@@ -210,7 +214,7 @@ gifsRouter.post('/import-url', requireAuth, async (c) => {
   }
 
   // 2. Fetch remote GIF safely & validate magic bytes
-  const fetched = await fetchExternalGifSafely(normalizedUrl, isTestEnv);
+  const fetched = await fetchExternalGifSafely(normalizedUrl, isTestEnv, c.env);
   if (!fetched.ok) {
     return c.json({ error: fetched.error }, fetched.status || 400);
   }

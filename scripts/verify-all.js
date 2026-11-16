@@ -77,7 +77,7 @@ app.get(['/handbook', '/rules'], (req, res) => {
 });
 app.use(express.static(PUBLIC_DIR));
 app.get('/feed.xml', async (req, res) => {
-  const webRes = await renderFeedXmlResponse(d1, getFullRequestUrl(req));
+  const webRes = await renderFeedXmlResponse(d1, getFullRequestUrl(req), process.env);
   await sendWebResponse(webRes, res);
 });
 app.get('/health', (req, res) => {
@@ -267,4 +267,5 @@ require('../tests/core/typecheck.test.js')();
 require('../tests/core/lint.test.js')();
 require('../tests/core/error-telemetry.test.js')(ctx);
 require('../tests/core/config.test.js')(ctx);
+require('../tests/core/dehardcode.test.js')(ctx);
 require('../tests/clubhouse/index.js')();

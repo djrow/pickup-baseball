@@ -5,6 +5,7 @@
 
 import { escapeHtml, sanitizeHttpUrl } from './security.js';
 import { ERROR_CODES, logEvent } from './errors.js';
+import { resolveConfig, PRESET_PICKUP_BASEBALL } from './config.js';
 
 function formatEmailEventDate(dateStr) {
   return new Date(dateStr).toLocaleString('en-US', {
@@ -58,29 +59,33 @@ function renderEmailLayout({
 
 export async function dispatchEmail(env, { to, subject, text, html }) {
   const safeEnv = env || {};
-  const appName = safeEnv.APP_NAME || 'Sunday Pickup Baseball';
-  const from = safeEnv.FROM_EMAIL || `"${appName}" <games@pickupbaseballfoundation.org>`;
-  const replyTo = safeEnv.REPLY_TO_EMAIL || 'pickupbaseballfoundation@gmail.com';
+  const cfg = resolveConfig(safeEnv);
+  const appName = cfg.COMMUNITY_NAME;
+  const from = cfg.FROM_EMAIL || `"${appName}" <onboarding@resend.dev>`;
+  const replyTo = cfg.REPLY_TO_EMAIL || '';
   // eslint-disable-next-line no-control-regex -- strip CRLF and ASCII control characters from email Subject header
   const cleanSubject = String(subject || '').replace(/[\r\n\x00-\x1f\x7f]+/g, ' ').trim();
   const apiKey = safeEnv.RESEND_API_KEY;
 
   if (apiKey) {
     try {
+      const emailPayload = {
+        from,
+        to: Array.isArray(to) ? to : [to],
+        subject: cleanSubject,
+        text,
+        html
+      };
+      if (replyTo) {
+        emailPayload.reply_to = replyTo;
+      }
       const response = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${apiKey.trim()}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          from,
-          to: Array.isArray(to) ? to : [to],
-          reply_to: replyTo,
-          subject: cleanSubject,
-          text,
-          html
-        })
+        body: JSON.stringify(emailPayload)
       });
       const data = await response.json();
       if (!response.ok) {
@@ -104,7 +109,8 @@ export async function dispatchEmail(env, { to, subject, text, html }) {
 }
 
 export async function sendAuthCode(env, origin, { email, name, code, token, sharedDevice = false }) {
-  const appName = (env && env.APP_NAME) || 'Sunday Pickup Baseball';
+  const cfg = resolveConfig(env);
+  const appName = cfg.COMMUNITY_NAME;
   const magicLink = `${origin}/api/auth/verify-magic?token=${encodeURIComponent(token)}`;
   const subject = `Your Sign-In Code for ${appName}: ${code}`;
   const sharedNote = sharedDevice
@@ -113,7 +119,8 @@ export async function sendAuthCode(env, origin, { email, name, code, token, shar
   const sharedHtmlNote = sharedDevice
     ? '<p style="color: #9a3412; background: #fff7ed; border: 1px solid #fed7aa; padding: 10px 12px; border-radius: 6px; font-size: 13px; margin: 14px 0 0;">Shared-device temporary sign-in selected: expires when the browser closes or after 4 hours.</p>'
     : '';
-  const text = `Hi ${name || 'there'},\n\nWelcome to ${appName}!\n\nYour 6-digit sign-in code is: ${code}\n\nOr click the link below to sign in automatically:\n${magicLink}${sharedNote}\n\nThis code and link will expire in 10 minutes.\n\nPlay ball!\n- ${appName} Team`;
+  const signOff = cfg.COMMUNITY_PRESET === PRESET_PICKUP_BASEBALL ? 'Play ball!' : 'Thanks!';
+  const text = `Hi ${name || 'there'},\n\nWelcome to ${appName}!\n\nYour 6-digit sign-in code is: ${code}\n\nOr click the link below to sign in automatically:\n${magicLink}${sharedNote}\n\nThis code and link will expire in 10 minutes.\n\n${signOff}\n- ${appName} Team`;
 
   const html = renderEmailLayout({
     origin,
@@ -135,7 +142,7 @@ export async function sendAuthCode(env, origin, { email, name, code, token, shar
 }
 
 export async function sendRsvpConfirmation(env, origin, { email, name, event, dutyName, gearBringing, playersCount, spectatorsCount, guestNames, managementToken }) {
-  const appName = (env && env.APP_NAME) || 'Sunday Pickup Baseball';
+  const appName = resolveConfig(env).COMMUNITY_NAME;
   const manageLink = managementToken
     ? `${origin}/event.html?id=${event.id}&token=${encodeURIComponent(managementToken)}`
     : `${origin}/event.html?id=${event.id}`;
@@ -178,7 +185,7 @@ export async function sendRsvpConfirmation(env, origin, { email, name, event, du
 }
 
 export async function sendWaitlistConfirmation(env, origin, { email, name, event, waitlistPosition, playersCount, spectatorsCount, managementToken }) {
-  const appName = (env && env.APP_NAME) || 'Sunday Pickup Baseball';
+  const appName = resolveConfig(env).COMMUNITY_NAME;
   const manageLink = managementToken
     ? `${origin}/event.html?id=${event.id}&token=${encodeURIComponent(managementToken)}`
     : `${origin}/event.html?id=${event.id}`;
@@ -211,7 +218,7 @@ export async function sendWaitlistConfirmation(env, origin, { email, name, event
 }
 
 export async function sendWaitlistPromotionEmail(env, origin, { email, name, event }) {
-  const appName = (env && env.APP_NAME) || 'Sunday Pickup Baseball';
+  const appName = resolveConfig(env).COMMUNITY_NAME;
   const eventLink = `${origin}/event.html?id=${event.id}`;
   const dateFormatted = formatEmailEventDate(event.event_date);
 
@@ -238,7 +245,7 @@ export async function sendWaitlistPromotionEmail(env, origin, { email, name, eve
 }
 
 export async function sendEventReminder(env, origin, { email, name, event, dutyName, gearBringing, totalAttendees }) {
-  const appName = (env && env.APP_NAME) || 'Sunday Pickup Baseball';
+  const appName = resolveConfig(env).COMMUNITY_NAME;
   const eventLink = `${origin}/event.html?id=${event.id}`;
   const dateFormatted = formatEmailEventDate(event.event_date);
   const safeLocationUrl = sanitizeHttpUrl(event.location_url);
@@ -269,11 +276,11 @@ export async function sendEventReminder(env, origin, { email, name, event, dutyN
 }
 
 export async function sendRainoutEmail(env, origin, { email, name, event, note }) {
-  const appName = (env && env.APP_NAME) || 'Sunday Pickup Baseball';
+  const appName = resolveConfig(env).COMMUNITY_NAME;
   const eventLink = `${origin}/event.html?id=${event.id}`;
   const dateFormatted = formatEmailEventDate(event.event_date);
 
-  const subject = `🌧️ Sunday Pickup Baseball Rained Out: ${event.title}`;
+  const subject = `🌧️ ${appName} Rained Out: ${event.title}`;
   const text = `Hi ${name},\n\nThe pickup baseball game scheduled for ${dateFormatted} (${event.title}) has been called due to rain and field conditions.\n\nEvent: ${event.title}\nOriginally Scheduled: ${dateFormatted}\nLocation: ${event.location}\n${note ? `Organizer Note:\n"${note}"\n\n` : ''}Any volunteer task or equipment commitments you made for this game are excused.\n\nThe discussion board on the event page remains open:\n${eventLink}\n\nStay dry, and see you on the field next Sunday!\n- ${appName}`;
 
   const html = renderEmailLayout({
@@ -301,11 +308,11 @@ export async function sendRainoutEmail(env, origin, { email, name, event, note }
 }
 
 export async function sendReopenEmail(env, origin, { email, name, event, note }) {
-  const appName = (env && env.APP_NAME) || 'Sunday Pickup Baseball';
+  const appName = resolveConfig(env).COMMUNITY_NAME;
   const eventLink = `${origin}/event.html?id=${event.id}`;
   const dateFormatted = formatEmailEventDate(event.event_date);
 
-  const subject = `⚾ Game is BACK ON! Sunday Pickup Baseball: ${event.title}`;
+  const subject = `⚾ Game is BACK ON! ${appName}: ${event.title}`;
   const text = `Hi ${name},\n\nGreat news! The field or weather conditions have cleared up and the pickup baseball game scheduled for ${dateFormatted} (${event.title}) is BACK ON!\n\nEvent: ${event.title}\nWhen: ${dateFormatted}\nWhere: ${event.location}\n${note ? `Organizer Note:\n"${note}"\n\n` : ''}Your roster spot is active. Grab your gear and see you on the field!\n\nCheck the live roster & event page:\n${eventLink}\n\nPlay ball!\n- ${appName}`;
 
   const html = renderEmailLayout({
@@ -329,7 +336,7 @@ export async function sendReopenEmail(env, origin, { email, name, event, note })
 }
 
 export async function sendRsvpEditLinkEmail(env, origin, { email, name, event, managementToken }) {
-  const appName = (env && env.APP_NAME) || 'Sunday Pickup Baseball';
+  const appName = resolveConfig(env).COMMUNITY_NAME;
   const manageLink = `${origin}/event.html?id=${event.id}&token=${encodeURIComponent(managementToken || '')}`;
   const dateFormatted = formatEmailEventDate(event.event_date);
 
@@ -356,19 +363,26 @@ export async function sendRsvpEditLinkEmail(env, origin, { email, name, event, m
 }
 
 export async function sendWaiverConfirmationEmail(env, origin, { email, printedName, signedDate, certificateId, documentSha256 }) {
-  const appName = (env && env.APP_NAME) || 'Sunday Pickup Baseball';
+  const cfg = resolveConfig(env);
+  const appName = cfg.COMMUNITY_NAME;
+  const isPickupPreset = cfg.COMMUNITY_PRESET === PRESET_PICKUP_BASEBALL;
   const certUrl = `${origin}/api/waiver/certificate/${encodeURIComponent(certificateId)}?format=html`;
 
   const subject = `🔏 Signed Waiver Receipt (${certificateId}) - ${appName}`;
-  const text = `Hi ${printedName},\n\nThank you for signing the Pickup Baseball Foundation Consent, Waiver and Indemnity (Form 41335\\14760738.1).\n\nCertificate ID: ${certificateId}\nPrinted Name: ${printedName}\nDate Signed: ${signedDate}\nDocument SHA-256 Hash: ${documentSha256}\n\nView or print your signed waiver certificate anytime:\n${certUrl}\n\nPlay ball!\n- ${appName}`;
+  const waiverTitleText = isPickupPreset
+    ? 'Pickup Baseball Foundation Consent, Waiver and Indemnity (Form 41335\\14760738.1)'
+    : `${appName} Consent, Waiver and Indemnity`;
+  const signOff = isPickupPreset ? 'Play ball!' : 'Thank you!';
+  const text = `Hi ${printedName},\n\nThank you for signing the ${waiverTitleText}.\n\nCertificate ID: ${certificateId}\nPrinted Name: ${printedName}\nDate Signed: ${signedDate}\nDocument SHA-256 Hash: ${documentSha256}\n\nView or print your signed waiver certificate anytime:\n${certUrl}\n\n${signOff}\n- ${appName}`;
 
+  const formHtmlSuffix = isPickupPreset ? ' (Form <code>41335\\14760738.1</code>)' : '';
   const html = renderEmailLayout({
     origin,
     topColor: '#003831',
     headingHtml: '🔏 Signed Waiver &amp; Provenance Receipt',
     bodyHtml: `
       <p style="color: #0c1f1a; font-size: 16px;">Hi <strong>${escapeHtml(printedName)}</strong>,</p>
-      <p style="color: #546e66; font-size: 15px;">Your digital signature for the <strong>Consent, Waiver and Indemnity</strong> (Form <code>41335\\14760738.1</code>) has been recorded and cryptographically sealed on file.</p>
+      <p style="color: #546e66; font-size: 15px;">Your digital signature for the <strong>${escapeHtml(appName)} Consent, Waiver and Indemnity</strong>${formHtmlSuffix} has been recorded and cryptographically sealed on file.</p>
       <div style="background: #f5f8f7; border-left: 4px solid #003831; border: 1px solid #dbe4e0; padding: 16px; margin: 18px 0; border-radius: 6px;">
         <p style="margin: 3px 0; color: #0c1f1a; font-size: 14px;"><strong>📄 Certificate ID:</strong> <code>${escapeHtml(certificateId)}</code></p>
         <p style="margin: 3px 0; color: #0c1f1a; font-size: 14px;"><strong>✍️ Printed Name:</strong> ${escapeHtml(printedName)}</p>

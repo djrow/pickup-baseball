@@ -29,6 +29,7 @@ import {
 import { buildCalendarIcs } from '../../feeds.js';
 import { sendRainoutEmail, sendReopenEmail } from '../../mailer.js';
 import { ERROR_CODES, jsonError, logEvent } from '../../errors.js';
+import { resolveConfig, PRESET_PICKUP_BASEBALL } from '../../config.js';
 import {
   AVATAR_EXPR,
   isDeliverableEmail,
@@ -117,10 +118,11 @@ eventsCoreRouter.get('/admin/backup-db', requireAdmin, async (c) => {
     const timestamp = new Date().toISOString();
     const dateStr = timestamp.slice(0, 10);
 
+    const { COMMUNITY_NAME } = resolveConfig(c.env);
     const backupConfigs = {
       baseball: {
         db: c.env && (c.env.BASEBALL_DB || c.env.DB),
-        header: '-- Sunday Pickup Baseball Database Backup',
+        header: `-- ${COMMUNITY_NAME} Database Backup`,
         filename: `baseball_backup_${dateStr}.sql`,
         tables: [
           'users', 'events', 'event_duties', 'attendees',
@@ -130,7 +132,7 @@ eventsCoreRouter.get('/admin/backup-db', requireAdmin, async (c) => {
       },
       chat: {
         db: c.env && c.env.CHAT_DB,
-        header: '-- Sunday Pickup Baseball Clubhouse (CHAT_DB) Database Backup',
+        header: `-- ${COMMUNITY_NAME} Clubhouse (CHAT_DB) Database Backup`,
         filename: `clubhouse_chat_backup_${dateStr}.sql`,
         tables: [
           'channels', 'channel_members', 'messages', 'message_reactions',
@@ -264,10 +266,14 @@ eventsCoreRouter.get('/calendar.ics', async (c) => {
       "SELECT * FROM events WHERE status IN ('active', 'rainout') ORDER BY event_date ASC LIMIT 500"
     ).all();
     const origin = getSafePublicOrigin(c);
-    const ics = buildCalendarIcs(allEvents || [], origin, { viewerUser });
+    const cfg = resolveConfig(c.env);
+    const ics = buildCalendarIcs(allEvents || [], origin, { viewerUser, env: c.env });
     const forceDownload = c.req.query('download') === '1';
+    const fileSlug = cfg.COMMUNITY_PRESET === PRESET_PICKUP_BASEBALL
+      ? 'pickup-baseball'
+      : (cfg.COMMUNITY_NAME.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'community');
 
-    return createIcsResponse(ics, 'pickup-baseball-schedule.ics', forceDownload);
+    return createIcsResponse(ics, `${fileSlug}-schedule.ics`, forceDownload);
   } catch (err) {
     console.error('[Events] Error generating live calendar.ics feed:', err);
     return c.text('Failed to generate calendar feed.', 500);
@@ -292,15 +298,20 @@ eventsCoreRouter.get('/:id/calendar.ics', async (c) => {
     }
 
     const origin = getSafePublicOrigin(c);
-    const baseTitle = ev.title || 'Sunday Pickup Baseball - Noon Game';
+    const cfg = resolveConfig(c.env);
+    const baseTitle = ev.title || cfg.COMMUNITY_NAME;
     const ics = buildCalendarIcs([ev], origin, {
       viewerUser,
+      env: c.env,
       calendarName: baseTitle,
-      calendarDesc: `Live game updates for ${baseTitle} (${origin}/event.html?id=${ev.id})`
+      calendarDesc: `Live updates for ${baseTitle} (${origin}/event.html?id=${ev.id})`
     });
     const forceDownload = c.req.query('download') === '1';
+    const fileSlug = cfg.COMMUNITY_PRESET === PRESET_PICKUP_BASEBALL
+      ? 'pickup-baseball-game'
+      : (cfg.COMMUNITY_NAME.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'community-event');
 
-    return createIcsResponse(ics, `pickup-baseball-game-${ev.id}.ics`, forceDownload);
+    return createIcsResponse(ics, `${fileSlug}-${ev.id}.ics`, forceDownload);
   } catch (err) {
     console.error('[Events] Error generating single-game calendar.ics feed:', err);
     return c.text('Failed to generate game calendar feed.', 500);

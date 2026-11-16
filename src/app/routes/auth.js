@@ -37,6 +37,7 @@ import {
   normalizeMemberRole
 } from '../security.js';
 import { getRequireLoginSetting, getDisallowZeroLoginMediaSetting, pruneEphemeralBaseballRows } from '../schema.js';
+import { resolveConfig } from '../config.js';
 import { sendAuthCode } from '../mailer.js';
 import { ERROR_CODES, jsonError, logEvent } from '../errors.js';
 
@@ -47,8 +48,8 @@ async function upsertUserAndCreateSession(c, cleanEmail, fallbackName, { sharedD
   let user = await db.prepare('SELECT * FROM users WHERE email = ?').bind(cleanEmail).first();
   if (!user) {
     const displayName = (fallbackName || cleanEmail.split('@')[0]).slice(0, 120);
-    const configuredAdminEmail = ((c.env && c.env.ADMIN_EMAIL) || 'pickupbaseballfoundation@gmail.com').toLowerCase();
-    const shouldBeAdmin = cleanEmail === configuredAdminEmail;
+    const configuredAdminEmail = resolveConfig(c.env).ADMIN_EMAIL.toLowerCase();
+    const shouldBeAdmin = Boolean(configuredAdminEmail && cleanEmail === configuredAdminEmail);
     const role = shouldBeAdmin ? 'admin' : CANONICAL_MEMBER_ROLE;
     const isAdminFlag = shouldBeAdmin ? 1 : 0;
     const calendarToken = generateToken();
