@@ -381,34 +381,34 @@ const PUBLIC_OR_TOKEN_ROUTE_MANIFEST = [
     reason: 'Public single community highlight view (filters invite-restricted event posts)'
   },
 
-  // Community gallery & attachment streaming in src/app/routes/media.js
+  // Community gallery & attachment streaming in src/app/routes/media/
   {
-    ast: 'media.js:GET:/',
+    ast: 'gallery.js:GET:/',
     route: 'GET /api/media',
     reason: 'Public approved media gallery listing (pending queue restricted to organizer/admin)'
   },
   {
-    ast: 'media.js:GET:/:id/file',
+    ast: 'gallery.js:GET:/:id/file',
     route: 'GET /api/media/:id/file',
     reason: 'Public approved gallery media file proxy (unapproved & invite-only event media restricted)'
   },
   {
-    ast: 'media.js:POST:/',
+    ast: 'gallery.js:POST:/',
     route: 'POST /api/media',
     reason: 'Intentional zero-login community photo drop (Turnstile + disallow_zero_login_media + magic-byte checks)'
   },
   {
-    ast: 'media.js:DELETE:/:id',
+    ast: 'gallery.js:DELETE:/:id',
     route: 'DELETE /api/media/:id',
     reason: 'Protected inside handleMediaDelete via organizer/admin, uploader session, or constant-time delete_token'
   },
   {
-    ast: 'media.js:POST:/:id/delete',
+    ast: 'gallery.js:POST:/:id/delete',
     route: 'POST /api/media/:id/delete',
     reason: 'Protected inside handleMediaDelete via organizer/admin, uploader session, or constant-time delete_token'
   },
   {
-    ast: 'media.js:GET:/:id/stream',
+    ast: 'attachments.js:GET:/:id/stream',
     route: 'GET /api/attachments/:id/stream',
     reason: 'Public only when promoted to approved public gallery; otherwise enforces 401 (!user) and channel read ACL'
   },
@@ -657,7 +657,9 @@ const FALLBACK_ROUTER_PREFIXES = {
   eventsBpDutiesRouter: '/api/events',
   postsRouter: '/api/posts',
   mediaRouter: '/api/media',
+  mediaGalleryRouter: '/api/media',
   attachmentsRouter: '/api/attachments',
+  mediaAttachmentsRouter: '/api/attachments',
   keysRouter: '/api/keys',
   voiceRouter: '/api/voice',
   rtcRouter: '/api/rtc',

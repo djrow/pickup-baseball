@@ -20,6 +20,7 @@ import {
 } from '../gdrive.js';
 import { ERROR_CODES, jsonError } from '../errors.js';
 import { resolveConfig } from '../config.js';
+import { resolveStorageProvider, canonicalObjectKey, r2StorageAdapter } from '../storage/index.js';
 
 export const gifsRouter = /** @type {AppHono} */ (new Hono());
 
@@ -237,31 +238,50 @@ gifsRouter.post('/import-url', requireAuth, async (c) => {
     return c.json({ success: true, deduplicated: true, gif: serializeGifMeta(existingByHash) });
   }
 
+  const provider = resolveStorageProvider(c.env);
   const gifId = 'gif_' + generateToken().slice(0, 24);
   const ext = mimeType === 'image/webp' ? 'webp' : 'gif';
-  let driveFileId;
+  let driveFileId = null;
+  let r2Key = null;
 
-  try {
-    driveFileId = await uploadGDriveBytes(c.env, {
-      fileName: `${gifId}.${ext}`,
-      mimeType,
-      bytes
-    });
-  } catch (err) {
-    return jsonError(c, 500, ERROR_CODES.STORAGE_ERROR, `Google Drive upload failed (${formatDriveErrorReason(err)}).`);
-  }
+  if (provider === 'r2') {
+    r2Key = canonicalObjectKey('gifs', { gifId, ext });
+    try {
+      await r2StorageAdapter.putObject(c.env, {
+        kind: 'gifs',
+        objectKey: r2Key,
+        fileName: `${gifId}.${ext}`,
+        mimeType,
+        bytes
+      });
+    } catch (err) {
+      return jsonError(c, 500, ERROR_CODES.STORAGE_ERROR, 'R2 GIF upload failed.');
+    }
+  } else if (provider === 'gdrive' || isGDriveConfigured(c.env)) {
+    try {
+      driveFileId = await uploadGDriveBytes(c.env, {
+        fileName: `${gifId}.${ext}`,
+        mimeType,
+        bytes
+      });
+    } catch (err) {
+      return jsonError(c, 500, ERROR_CODES.STORAGE_ERROR, `Google Drive upload failed (${formatDriveErrorReason(err)}).`);
+    }
 
-  if (!driveFileId) {
-    return jsonError(c, 500, ERROR_CODES.STORAGE_ERROR, 'Google Drive upload did not return a file ID.');
+    if (!driveFileId) {
+      return jsonError(c, 500, ERROR_CODES.STORAGE_ERROR, 'Google Drive upload did not return a file ID.');
+    }
+  } else {
+    return jsonError(c, 400, ERROR_CODES.VALIDATION_ERROR, 'GIF imports require Cloudflare R2 or Google Drive storage.');
   }
 
   try {
     await chatDb.prepare(`
       INSERT INTO clubhouse_gifs (
         id, title, tags, mime_type, file_size, source_url, sha256,
-        storage_provider, drive_file_id, local_data_base64,
+        storage_provider, drive_file_id, r2_key, local_data_base64,
         added_by, added_by_name, is_public, use_count
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'gdrive', ?, NULL, ?, ?, ?, 1)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, 1)
     `).bind(
       gifId,
       title,
@@ -270,7 +290,9 @@ gifsRouter.post('/import-url', requireAuth, async (c) => {
       bytes.byteLength,
       normalizedUrl,
       sha256,
+      provider === 'r2' ? 'r2' : 'gdrive',
       driveFileId,
+      r2Key,
       user.id,
       user.name || 'Player',
       isPublic
@@ -368,6 +390,21 @@ gifsRouter.get('/:id/stream', async (c) => {
     ? 'public, max-age=31536000, immutable'
     : 'private, max-age=3600';
 
+  if (gif.storage_provider === 'r2' || gif.r2_key) {
+    const target = await r2StorageAdapter.getDownloadTarget(c.env, {
+      kind: 'gifs',
+      objectKey: String(gif.r2_key),
+      mimeType: String(gif.mime_type || 'image/gif'),
+      fileName: String(gif.title || `${id}.gif`),
+      isPublic,
+      approved: isPublic
+    });
+    if (target.type === 'redirect') {
+      c.header('Cache-Control', String(target.cacheControl || 'public, max-age=240'));
+      return c.redirect(target.url, 302);
+    }
+  }
+
   if (gif.storage_provider === 'gdrive' && gif.drive_file_id && isGDriveConfigured(c.env)) {
     return await streamGDriveFile(
       c.env,
@@ -402,7 +439,7 @@ gifsRouter.delete('/:id', requireAuth, async (c) => {
   const id = String(c.req.param('id') || '').trim();
   if (!id) return c.json({ error: 'Invalid GIF ID.' }, 400);
 
-  const gif = await chatDb.prepare('SELECT id, added_by, drive_file_id FROM clubhouse_gifs WHERE id = ?').bind(id).first();
+  const gif = await chatDb.prepare('SELECT id, added_by, drive_file_id, r2_key FROM clubhouse_gifs WHERE id = ?').bind(id).first();
   if (!gif) {
     return c.json({ error: 'GIF not found.' }, 404);
   }
@@ -413,6 +450,9 @@ gifsRouter.delete('/:id', requireAuth, async (c) => {
   }
 
   await chatDb.prepare('DELETE FROM clubhouse_gifs WHERE id = ?').bind(id).run();
+  if (gif.r2_key) {
+    await r2StorageAdapter.deleteObject(c.env, { objectKey: String(gif.r2_key) }).catch(() => {});
+  }
   if (gif.drive_file_id) {
     await deleteGDriveFile(c.env, gif.drive_file_id).catch(() => {});
   }
