@@ -65,7 +65,7 @@ test('T1: Authentication & Session Cookies', async (t) => {
     assert.ok(res.data.user, 'GET /me must return user object');
     assert.equal(res.data.user.email, 't1_tester@sundaypickup.org', 'User email must match');
     assert.equal(res.data.user.name, 'T1 Tester', 'User name must match');
-    assert.equal(res.data.user.role, 'player', 'Standard registered user must have role player');
+    assert.equal(res.data.user.role, 'member', 'Standard registered user must have canonical role member');
     assert.equal(res.data.user.isAdmin, false, 'User must not be admin');
   });
 
@@ -411,17 +411,17 @@ test('T3: User Role Management & Session Persistence', async (t) => {
     assert.ok(postRes.data.eventId);
   });
 
-  await t.test('T3.4: Admin demoting organizer back to player', async () => {
+  await t.test('T3.4: Admin demoting organizer back to member (via legacy player alias)', async () => {
     const demoteRes = await apiReq('PUT', `/api/auth/users/${targetPlayerId}/role`, seedAdminCookie, {
       role: 'player'
     });
     assert.equal(demoteRes.status, 200);
-    assert.equal(demoteRes.data.user.role, 'player');
+    assert.equal(demoteRes.data.user.role, 'member');
 
-    // Verify session immediately reflects demotion without re-login
+    // Verify session immediately reflects canonical member role without re-login
     const meRes = await apiReq('GET', '/api/auth/me', targetPlayerCookie);
     assert.equal(meRes.status, 200);
-    assert.equal(meRes.data.user.role, 'player');
+    assert.equal(meRes.data.user.role, 'member');
     assert.equal(meRes.data.user.canManageEvents, false);
 
     // Verify demoted user is now rejected with 403 on event creation
@@ -683,6 +683,219 @@ test('T3: User Role Management & Session Persistence', async (t) => {
       email: 'attacker@example.com\nX-Header:1'
     });
     assert.equal(badBanRes.status, 400, 'banned-emails must reject newline-injected email');
+  });
+
+  await t.test('T3.13: Canonical member role and legacy player alias parity at HTTP seam', async () => {
+    // 1. Magic-link signup also creates canonical 'member' role
+    const magicEmail = `member_magic_${Date.now()}@sundaypickup.org`;
+    const sendMagic = await apiReq('POST', '/api/auth/send-code', null, {
+      email: magicEmail,
+      name: 'Magic Member'
+    });
+    assert.equal(sendMagic.status, 200);
+    const magicCodeRow = db.prepare('SELECT token FROM auth_codes WHERE email = ? ORDER BY id DESC LIMIT 1').get(magicEmail);
+    const magicRes = await apiReq('GET', `/api/auth/verify-magic?token=${magicCodeRow.token}`);
+    assert.equal(magicRes.status, 302);
+    const magicCookie = `baseball_session=${getCookie(magicRes.headers, 'baseball_session')}`;
+    const magicMe = await apiReq('GET', '/api/auth/me', magicCookie);
+    assert.equal(magicMe.status, 200);
+    assert.equal(magicMe.data.user.role, 'member', 'Magic-link signup must create user with canonical role member');
+    const magicDbUser = db.prepare('SELECT role FROM users WHERE email = ?').get(magicEmail);
+    assert.equal(magicDbUser.role, 'member', 'DB role for new magic-link signup must be member');
+
+    // 2. PUT /api/auth/users/:id/role accepts both 'member' and 'player', storing 'member'
+    const promoteRes = await apiReq('PUT', `/api/auth/users/${magicMe.data.user.id}/role`, seedAdminCookie, {
+      role: 'organizer'
+    });
+    assert.equal(promoteRes.status, 200);
+    assert.equal(promoteRes.data.user.role, 'organizer');
+
+    const setMemberRes = await apiReq('PUT', `/api/auth/users/${magicMe.data.user.id}/role`, seedAdminCookie, {
+      role: 'member'
+    });
+    assert.equal(setMemberRes.status, 200);
+    assert.equal(setMemberRes.data.user.role, 'member');
+    assert.equal(db.prepare('SELECT role FROM users WHERE id = ?').get(magicMe.data.user.id).role, 'member');
+
+    await apiReq('PUT', `/api/auth/users/${magicMe.data.user.id}/role`, seedAdminCookie, { role: 'organizer' });
+    const setPlayerAliasRes = await apiReq('PUT', `/api/auth/users/${magicMe.data.user.id}/role`, seedAdminCookie, {
+      role: 'player'
+    });
+    assert.equal(setPlayerAliasRes.status, 200);
+    assert.equal(setPlayerAliasRes.data.user.role, 'member', 'Assigning player alias must store and return canonical member');
+    assert.equal(db.prepare('SELECT role FROM users WHERE id = ?').get(magicMe.data.user.id).role, 'member');
+
+    // 3. Seed one user stored as 'member', one stored as 'player', and one with NULL role
+    const memberEmail = `seam_member_${Date.now()}@sundaypickup.org`;
+    const legacyEmail = `seam_player_${Date.now()}@sundaypickup.org`;
+    const nullRoleEmail = `seam_null_${Date.now()}@sundaypickup.org`;
+    const memberIns = db.prepare(
+      "INSERT INTO users (name, email, role, is_admin, clubhouse_opted_in) VALUES ('Seam Member', ?, 'member', 0, 1)"
+    ).run(memberEmail);
+    const legacyIns = db.prepare(
+      "INSERT INTO users (name, email, role, is_admin, clubhouse_opted_in) VALUES ('Seam Player', ?, 'player', 0, 1)"
+    ).run(legacyEmail);
+    const nullIns = db.prepare(
+      "INSERT INTO users (name, email, role, is_admin, clubhouse_opted_in) VALUES ('Seam Null', ?, NULL, 0, 1)"
+    ).run(nullRoleEmail);
+
+    const memberId = memberIns.lastInsertRowid;
+    const legacyId = legacyIns.lastInsertRowid;
+    const nullId = nullIns.lastInsertRowid;
+    const memberCookie = `baseball_session=${createSession(memberId).sessionId}`;
+    const legacyCookie = `baseball_session=${createSession(legacyId).sessionId}`;
+    const nullCookie = `baseball_session=${createSession(nullId).sessionId}`;
+
+    // Verify NULL role falls back to canonical 'member'
+    const nullMe = await apiReq('GET', '/api/auth/me', nullCookie);
+    assert.equal(nullMe.status, 200);
+    assert.equal(nullMe.data.user.role, 'member', 'NULL DB role must default to canonical member');
+
+    // Create a Clubhouse-opted-in admin for channel creation tests
+    const chAdminIns = db.prepare(
+      "INSERT INTO users (name, email, role, is_admin, clubhouse_opted_in) VALUES ('Channel Admin', ?, 'admin', 1, 1)"
+    ).run(`ch_admin_${Date.now()}@sundaypickup.org`);
+    const chAdminCookie = `baseball_session=${createSession(chAdminIns.lastInsertRowid).sessionId}`;
+
+    // Create a channel with min_role_read='member', min_role_write='member' and one with legacy 'player'
+    const chMemberRes = await apiReq('POST', '/api/channels', chAdminCookie, {
+      name: `Member Board ${Date.now()}`,
+      channel_type: 'text',
+      min_role_read: 'member',
+      min_role_write: 'member'
+    });
+    assert.equal(chMemberRes.status, 201, 'POST /api/channels must accept min_role_read/write = member');
+    assert.equal(chMemberRes.data.channel.min_role_read, 'member');
+    assert.equal(chMemberRes.data.channel.min_role_write, 'member');
+
+    const chAliasRes = await apiReq('POST', '/api/channels', chAdminCookie, {
+      name: `Alias Board ${Date.now()}`,
+      channel_type: 'text',
+      min_role_read: 'player',
+      min_role_write: 'player'
+    });
+    assert.equal(chAliasRes.status, 201, 'POST /api/channels must accept min_role_read/write = player');
+    assert.equal(chAliasRes.data.channel.min_role_read, 'member', 'Channel write must normalize player alias to member');
+    assert.equal(chAliasRes.data.channel.min_role_write, 'member', 'Channel write must normalize player alias to member');
+
+    // 4. Representative guarded routes: both 'member' and 'player' users get identical allow/deny behavior
+    for (const [label, cookie] of [['member', memberCookie], ['player', legacyCookie]]) {
+      const me = await apiReq('GET', '/api/auth/me', cookie);
+      assert.equal(me.status, 200, `${label}: GET /api/auth/me allowed`);
+      assert.equal(me.data.user.isAdmin, false, `${label}: isAdmin must be false`);
+      assert.equal(me.data.user.canManageEvents, false, `${label}: canManageEvents must be false`);
+      assert.equal(me.data.user.canModerateChat, false, `${label}: canModerateChat must be false`);
+
+      const prof = await apiReq('PUT', '/api/auth/profile', cookie, { name: `Updated ${label}`, bio: 'Test bio' });
+      assert.equal(prof.status, 200, `${label}: PUT /api/auth/profile allowed`);
+
+      const sess = await apiReq('GET', '/api/auth/sessions', cookie);
+      assert.equal(sess.status, 200, `${label}: GET /api/auth/sessions allowed`);
+
+      const chans = await apiReq('GET', '/api/channels', cookie);
+      assert.equal(chans.status, 200, `${label}: GET /api/channels allowed`);
+      const slugs = (chans.data.channels || []).map((c) => c.slug);
+      assert.ok(slugs.includes('general'), `${label}: sees #general`);
+      assert.ok(slugs.includes(chMemberRes.data.channel.slug), `${label}: sees member-gated channel`);
+      assert.ok(!slugs.includes('organizers-war-room'), `${label}: does not see #organizers-war-room`);
+      assert.ok(!slugs.includes('facilitators-lounge'), `${label}: does not see #facilitators-lounge`);
+
+      const postMsg = await apiReq('POST', `/api/channels/${chMemberRes.data.channel.id}/messages`, cookie, {
+        content: `Hello from ${label}`
+      });
+      assert.equal(postMsg.status, 201, `${label}: POST /api/channels/:id/messages to member channel allowed`);
+
+      const deniedOrgMsg = await apiReq('POST', '/api/channels/organizers-war-room/messages', cookie, {
+        content: `Denied from ${label}`
+      });
+      assert.equal(deniedOrgMsg.status, 403, `${label}: POST /api/channels/organizers-war-room/messages denied`);
+
+      const rsvpRes = await apiReq('POST', `/api/events/${ctx.sharedEventId}/rsvp`, cookie, {
+        players_count: 1,
+        spectators_count: 0
+      });
+      assert.equal(rsvpRes.status, 200, `${label}: POST /api/events/:id/rsvp allowed`);
+
+      // Organizer routes denied
+      const createEv = await apiReq('POST', '/api/events', cookie, {
+        title: `Denied ${label}`,
+        location: 'Field',
+        event_date: '2026-12-06T20:00:00Z'
+      });
+      assert.equal(createEv.status, 403, `${label}: POST /api/events denied`);
+
+      const editEv = await apiReq('PUT', `/api/events/${ctx.sharedEventId}`, cookie, { title: 'Denied' });
+      assert.equal(editEv.status, 403, `${label}: PUT /api/events/:id denied`);
+
+      // Admin routes denied
+      const listUsers = await apiReq('GET', '/api/auth/users', cookie);
+      assert.equal(listUsers.status, 403, `${label}: GET /api/auth/users denied`);
+
+      const putRole = await apiReq('PUT', `/api/auth/users/${memberId}/role`, cookie, { role: 'admin' });
+      assert.equal(putRole.status, 403, `${label}: PUT /api/auth/users/:id/role denied`);
+
+      const backupDb = await apiReq('GET', '/api/events/admin/backup-db', cookie);
+      assert.equal(backupDb.status, 403, `${label}: GET /api/events/admin/backup-db denied`);
+
+      // Moderator routes denied
+      const modReports = await apiReq('GET', '/api/moderation/reports', cookie);
+      assert.equal(modReports.status, 403, `${label}: GET /api/moderation/reports denied`);
+
+      const modUsers = await apiReq('GET', '/api/moderation/users', cookie);
+      assert.equal(modUsers.status, 403, `${label}: GET /api/moderation/users denied`);
+
+      const createBoard = await apiReq('POST', '/api/channels', cookie, {
+        name: `Denied Board ${label}`,
+        channel_type: 'text'
+      });
+      assert.equal(createBoard.status, 403, `${label}: POST /api/channels denied`);
+    }
+
+    // Verify existing 'player' DB row was NOT rewritten by any migration or read
+    assert.equal(db.prepare('SELECT role FROM users WHERE id = ?').get(legacyId).role, 'player', 'Legacy player row must not be rewritten');
+
+    // Verify admin listing includes both member and player accounts
+    const adminUsers = await apiReq('GET', '/api/auth/users', seedAdminCookie);
+    assert.equal(adminUsers.status, 200);
+    assert.ok(adminUsers.data.users.some((u) => u.id === memberId));
+    assert.ok(adminUsers.data.users.some((u) => u.id === legacyId));
+
+    // Verify shared API.isMemberRole helper and admin UI dropdown compatibility
+    const apiCode = fs.readFileSync(path.join(ctx.rootDir, 'public', 'js', 'api.js'), 'utf8');
+    const vm = require('node:vm');
+    const sandbox = {
+      window: {
+        location: { protocol: 'http:', pathname: '/', search: '', hash: '' },
+        localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+        matchMedia: () => ({ matches: false, addEventListener: () => {} }),
+        addEventListener: () => {}
+      },
+      document: {
+        readyState: 'loading',
+        head: { appendChild: () => {} },
+        body: { appendChild: () => {} },
+        documentElement: { setAttribute: () => {}, removeAttribute: () => {}, classList: { add: () => {}, remove: () => {} } },
+        createElement: () => ({ style: {}, setAttribute: () => {}, addEventListener: () => {}, remove: () => {} }),
+        getElementById: () => null,
+        querySelector: () => null,
+        querySelectorAll: () => [],
+        addEventListener: () => {}
+      },
+      navigator: { language: 'en-US' },
+      localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+      fetch: async () => ({ ok: false, json: async () => ({}) }),
+      Intl,
+      URL,
+      encodeURIComponent,
+      decodeURIComponent
+    };
+    sandbox.window.window = sandbox.window;
+    vm.runInNewContext(apiCode, sandbox);
+    assert.equal(typeof sandbox.window.API.isMemberRole, 'function', 'API.isMemberRole must exist');
+    assert.equal(sandbox.window.API.isMemberRole('member'), true);
+    assert.equal(sandbox.window.API.isMemberRole('player'), true);
+    assert.equal(sandbox.window.API.isMemberRole('organizer'), false);
+    assert.equal(sandbox.window.API.isMemberRole('admin'), false);
   });
 });
 

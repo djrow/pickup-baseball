@@ -1209,7 +1209,7 @@ function setupAdminUserManagement(currentUser) {
       const isAdminRole = u.role === 'admin';
       const isClubhouseMod = Boolean(u.is_moderator) || isAdminRole;
       const isChatMuted = Boolean(u.chat_muted);
-      let roleBadge = '<span class="badge badge-gray">👤 Player</span>';
+      let roleBadge = '<span class="badge badge-gray">👤 Member</span>';
       if (u.role === 'admin') roleBadge = '<span class="badge badge-orange">👑 Admin</span>';
       else if (u.role === 'organizer') roleBadge = '<span class="badge badge-green">🛡️ Organizer</span>';
 
@@ -1259,7 +1259,7 @@ function setupAdminUserManagement(currentUser) {
           </td>
           <td style="padding: 5px 10px;">
             <select class="admin-role-selector" data-user-id="${u.id}" data-user-name="${API.escapeHtml(u.name)}" style="padding: 2px 6px; border-radius: var(--radius-sm); border: 1.5px solid var(--border); font-size: 0.8rem; font-weight: 600; background: var(--bg-input); color: var(--text-main); cursor: pointer; height: 28px;">
-              <option value="player" ${u.role === 'player' ? 'selected' : ''}>👤 Player</option>
+              <option value="member" ${(API.isMemberRole(u.role) || !u.role) ? 'selected' : ''}>👤 Member</option>
               <option value="organizer" ${u.role === 'organizer' ? 'selected' : ''}>🛡️ Organizer (Can Post Games &amp; Record Turnout)</option>
               <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>👑 Admin (Full Access)</option>
             </select>
@@ -1361,14 +1361,14 @@ function setupAdminUserManagement(currentUser) {
           }
 
           if (isSelf && newRole !== 'admin') {
-            const roleTitle = newRole === 'organizer' ? 'Organizer' : 'Player';
+            const roleTitle = newRole === 'organizer' ? 'Organizer' : 'Member';
             setUserMgmtAlert('success', 'Your role has been updated to ' + roleTitle + '. Admin management features are now restricted.');
             applyRoleUI(currentUser);
             await loadAdminGames();
-            if (newRole === 'player') {
+            if (API.isMemberRole(newRole)) {
               setTimeout(async function() {
                 if (window.PBFDialog) {
-                  await window.PBFDialog.alert('Your role has been updated to Player. Redirecting to home page.');
+                  await window.PBFDialog.alert('Your role has been updated to Member. Redirecting to home page.');
                 }
                 window.location.href = '/index.html';
               }, 1500);

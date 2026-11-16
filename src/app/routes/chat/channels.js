@@ -6,7 +6,15 @@
  */
 
 import { Hono } from 'hono';
-import { requireAuth, requireModerator, rejectIfChatMuted, rejectIfClubhouseOptedOut } from '../../security.js';
+import {
+  requireAuth,
+  requireModerator,
+  rejectIfChatMuted,
+  rejectIfClubhouseOptedOut,
+  CANONICAL_MEMBER_ROLE,
+  isMemberRole,
+  normalizeMemberRole
+} from '../../security.js';
 import { logEvent } from '../../errors.js';
 import {
   resolveChannel,
@@ -18,7 +26,7 @@ import {
 
 export const chatChannelsRouter = /** @type {AppHono} */ (new Hono());
 
-const CHANNEL_ROLE_RANKS = { guest: 0, public: 0, invite: 0, player: 1, facilitator: 2, organizer: 3, admin: 4 };
+const CHANNEL_ROLE_RANKS = { guest: 0, public: 0, invite: 0, member: 1, player: 1, facilitator: 2, organizer: 3, admin: 4 };
 
 function getUserRoleRank(user) {
   if (user.role === 'admin' || user.isAdmin) return 4;
@@ -178,8 +186,8 @@ chatChannelsRouter.post('/channels', requireAuth, async (c) => {
 
   const category = String(body.category || (isDm ? 'Direct Messages' : (channelType === 'voice' ? 'Voice Lounges' : 'Text Channels'))).trim().slice(0, 60);
   const topic = String(body.topic || '').trim().slice(0, 300);
-  const validReadRoleList = ['guest', 'public', 'player', 'facilitator', 'organizer', 'admin', 'invite'];
-  const validWriteRoleList = ['player', 'facilitator', 'organizer', 'admin'];
+  const validReadRoleList = ['guest', 'public', 'member', 'player', 'facilitator', 'organizer', 'admin', 'invite'];
+  const validWriteRoleList = ['member', 'player', 'facilitator', 'organizer', 'admin'];
   const requestedWrite = body.min_role_write;
   if (requestedRead !== undefined && !validReadRoleList.includes(requestedRead)) {
     return c.json({ error: 'Invalid min_role_read.' }, 400);
@@ -198,8 +206,10 @@ chatChannelsRouter.post('/channels', requireAuth, async (c) => {
       return c.json({ error: 'Access denied: you cannot require a role higher than your own for a board.' }, 403);
     }
   }
-  const minRoleRead = isPrivateBoard ? 'invite' : (requestedRead || 'player');
-  const minRoleWrite = requestedWrite || (channelType === 'announcement' ? 'organizer' : 'player');
+  const normalizedRead = requestedRead !== undefined ? normalizeMemberRole(requestedRead) : undefined;
+  const normalizedWrite = requestedWrite !== undefined ? normalizeMemberRole(requestedWrite) : undefined;
+  const minRoleRead = isPrivateBoard ? 'invite' : (normalizedRead || CANONICAL_MEMBER_ROLE);
+  const minRoleWrite = normalizedWrite || (channelType === 'announcement' ? 'organizer' : CANONICAL_MEMBER_ROLE);
   const isEncrypted = isPrivateBoard ? 1 : (body.is_encrypted !== undefined ? (body.is_encrypted ? 1 : 0) : 1);
   const canLinkEvent = Boolean(!isDm && (user.canManageEvents || user.isAdmin));
   const linkedEventId = canLinkEvent && body.linked_event_id ? parseInt(body.linked_event_id, 10) : null;
@@ -255,7 +265,7 @@ chatChannelsRouter.post('/channels', requireAuth, async (c) => {
   }
   if (!isDm && created) {
     try {
-      const isRoleRestricted = isPrivateBoard || !['player', 'guest', 'public'].includes(minRoleRead);
+      const isRoleRestricted = isPrivateBoard || (!isMemberRole(minRoleRead) && minRoleRead !== 'guest' && minRoleRead !== 'public');
       await chatDb.prepare(`
         INSERT INTO sync_events (channel_id, event_type, target_id, payload_json, created_at)
         VALUES (?, 'channel_create', ?, ?, ?)
@@ -317,8 +327,8 @@ chatChannelsRouter.patch('/channels/:id', requireAuth, async (c) => {
   const channelType = body.channel_type !== undefined
     ? (allowedTypes.includes(body.channel_type) ? body.channel_type : channel.channel_type)
     : channel.channel_type;
-  const allowedReadRoles = ['guest', 'public', 'player', 'facilitator', 'organizer', 'admin', 'invite'];
-  const allowedWriteRoles = ['player', 'facilitator', 'organizer', 'admin'];
+  const allowedReadRoles = ['guest', 'public', 'member', 'player', 'facilitator', 'organizer', 'admin', 'invite'];
+  const allowedWriteRoles = ['member', 'player', 'facilitator', 'organizer', 'admin'];
   if (!user.isAdmin && (body.min_role_read === 'admin' || body.min_role_write === 'admin' || body.min_role_read === 'guest' || body.min_role_read === 'public')) {
     return c.json({ error: 'Access denied: only admins can configure admin or public guest channel roles.' }, 403);
   }
@@ -404,8 +414,12 @@ chatChannelsRouter.patch('/channels/:id', requireAuth, async (c) => {
 
   const minRoleRead = isPrivateBoard
     ? 'invite'
-    : (allowedReadRoles.includes(body.min_role_read) ? body.min_role_read : ((channel.min_role_read === 'invite' ? 'player' : channel.min_role_read) || 'player'));
-  const minRoleWrite = allowedWriteRoles.includes(body.min_role_write) ? body.min_role_write : (channel.min_role_write || 'player');
+    : (allowedReadRoles.includes(body.min_role_read)
+      ? normalizeMemberRole(body.min_role_read)
+      : ((channel.min_role_read === 'invite' ? CANONICAL_MEMBER_ROLE : channel.min_role_read) || CANONICAL_MEMBER_ROLE));
+  const minRoleWrite = allowedWriteRoles.includes(body.min_role_write)
+    ? normalizeMemberRole(body.min_role_write)
+    : (channel.min_role_write || CANONICAL_MEMBER_ROLE);
   const isEncrypted = isPrivateBoard ? 1 : (channel.is_encrypted !== undefined ? channel.is_encrypted : 1);
   const sortOrder = body.sort_order !== undefined && !isNaN(parseInt(body.sort_order, 10))
     ? parseInt(body.sort_order, 10)
@@ -463,7 +477,7 @@ chatChannelsRouter.patch('/channels/:id', requireAuth, async (c) => {
     updated.member_ids = updatedMembers;
   }
   try {
-    const isRoleRestricted = isPrivateBoard || !['player', 'guest', 'public'].includes(minRoleRead);
+    const isRoleRestricted = isPrivateBoard || (!isMemberRole(minRoleRead) && minRoleRead !== 'guest' && minRoleRead !== 'public');
     await chatDb.prepare(`
       INSERT INTO sync_events (channel_id, event_type, target_id, payload_json, created_at)
       VALUES (?, 'channel_update', ?, ?, ?)
@@ -506,7 +520,7 @@ chatChannelsRouter.delete('/channels/:id', requireModerator, async (c) => {
 
   await chatDb.prepare('DELETE FROM channels WHERE id = ?').bind(channel.id).run();
   try {
-    const isRoleRestricted = isPrivateEncryptedBoard(channel) || !['player', 'guest', 'public'].includes(channel.min_role_read || 'player');
+    const isRoleRestricted = isPrivateEncryptedBoard(channel) || (!isMemberRole(channel.min_role_read || CANONICAL_MEMBER_ROLE) && channel.min_role_read !== 'guest' && channel.min_role_read !== 'public');
     await chatDb.prepare(`
       INSERT INTO sync_events (channel_id, event_type, target_id, payload_json, created_at)
       VALUES (?, 'channel_delete', ?, ?, ?)

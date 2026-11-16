@@ -257,7 +257,7 @@ chatModerationRouter.get('/moderation/users', requireModerator, async (c) => {
 
   const { results } = await baseballDb.prepare(`
     SELECT id, name,
-           COALESCE(role, CASE WHEN is_admin = 1 THEN 'admin' ELSE 'player' END) as role,
+           COALESCE(role, CASE WHEN is_admin = 1 THEN 'admin' ELSE 'member' END) as role,
            is_admin,
            COALESCE(is_moderator, 0) as is_moderator,
            COALESCE(chat_muted, 0) as chat_muted,

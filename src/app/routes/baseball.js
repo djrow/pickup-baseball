@@ -5,7 +5,17 @@
  */
 
 import { Hono } from 'hono';
-import { requireAuth, requireOrganizer, generateToken, getSafePublicOrigin, checkRateLimit, rejectIfChatMuted, rejectIfClubhouseOptedOut } from '../security.js';
+import {
+  requireAuth,
+  requireOrganizer,
+  generateToken,
+  getSafePublicOrigin,
+  checkRateLimit,
+  rejectIfChatMuted,
+  rejectIfClubhouseOptedOut,
+  CANONICAL_MEMBER_ROLE,
+  normalizeMemberRole
+} from '../security.js';
 import { parseAllowedEmails, canUserAccessEvent, getDutyType } from '../policy.js';
 import { canUserAccessChannel } from './chat.js';
 import { chunkArray } from './chat/helpers.js';
@@ -523,12 +533,12 @@ baseballRouter.post('/events/:eventId/sync-channel', requireOrganizer, async (c)
         INSERT INTO channels (
           slug, name, category, channel_type, topic,
           min_role_read, min_role_write, is_encrypted, is_private, linked_event_id, sort_order, created_by
-        ) VALUES (?, ?, 'Text Channels', 'text', ?, ?, 'player', 1, ?, ?, 3, ?)
+        ) VALUES (?, ?, 'Text Channels', 'text', ?, ?, 'member', 1, ?, ?, 3, ?)
       `).bind(
         slug,
         name,
         topic,
-        isInviteRestricted ? 'invite' : 'player',
+        isInviteRestricted ? 'invite' : CANONICAL_MEMBER_ROLE,
         isInviteRestricted ? 1 : 0,
         eventId,
         user.id
@@ -609,7 +619,7 @@ baseballRouter.post('/events/:eventId/sync-channel', requireOrganizer, async (c)
           announcementsCh.id,
           user.id,
           user.name,
-          user.role || 'organizer',
+          normalizeMemberRole(user.role, 'organizer'),
           `⚾ Game Day Channel Opened: ${event.title} at ${event.location} — Join ${channel.name}!`,
           embedMeta
         ).run();

@@ -21,6 +21,30 @@ export const TEMPORARY_SESSION_DURATION_SECONDS = 4 * 60 * 60; // 4 hours (share
 export const MAX_SESSIONS_PER_USER = 5;
 export const AUTH_CODE_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
 export const MAX_CODE_VERIFY_ATTEMPTS = 5;
+export const CANONICAL_MEMBER_ROLE = 'member';
+export const MEMBER_ROLE_ALIASES = Object.freeze(['member', 'player']);
+
+/**
+ * Returns true if the given role represents the lowest-privilege community member role
+ * (`'member'` or legacy compatibility alias `'player'`).
+ * @param {unknown} role
+ * @returns {boolean}
+ */
+export function isMemberRole(role) {
+  return role === 'member' || role === 'player';
+}
+
+/**
+ * Normalize legacy `'player'` role alias to canonical `'member'`.
+ * @param {unknown} role
+ * @param {string} [fallback=CANONICAL_MEMBER_ROLE]
+ * @returns {string}
+ */
+export function normalizeMemberRole(role, fallback = CANONICAL_MEMBER_ROLE) {
+  if (!role || typeof role !== 'string') return fallback;
+  if (isMemberRole(role)) return CANONICAL_MEMBER_ROLE;
+  return role;
+}
 
 export function generateToken() {
   const bytes = new Uint8Array(32);
@@ -345,7 +369,7 @@ export async function getUserFromSession(db, sessionId, chatDb, options = {}) {
       COALESCE(u.chat_muted, 0) as chat_muted,
       u.chat_muted_reason,
       u.chat_muted_at,
-      COALESCE(u.role, CASE WHEN u.is_admin = 1 THEN 'admin' ELSE 'player' END) as role,
+      COALESCE(u.role, CASE WHEN u.is_admin = 1 THEN 'admin' ELSE 'member' END) as role,
       COALESCE(u.machine_badge, 0) as machine_badge,
       COALESCE(u.field_badge, 0) as field_badge,
       COALESCE(u.hero_credits, 0) as hero_credits,
@@ -384,7 +408,7 @@ export async function getUserFromSession(db, sessionId, chatDb, options = {}) {
 
   if (!session) return null;
 
-  const role = session.role || (session.is_admin === 1 ? 'admin' : 'player');
+  const role = session.role || (session.is_admin === 1 ? 'admin' : CANONICAL_MEMBER_ROLE);
   const isAdmin = role === 'admin' || Boolean(session.is_admin);
   const canManageEvents = role === 'admin' || role === 'organizer' || isAdmin;
   const isModeratorFlag = Boolean(session.is_moderator);
@@ -529,14 +553,14 @@ export async function resolveUserByCalendarToken(db, rawToken) {
   try {
     const row = await db.prepare(`
       SELECT u.id, u.name, u.email, u.is_admin,
-        COALESCE(u.role, CASE WHEN u.is_admin = 1 THEN 'admin' ELSE 'player' END) as role
+        COALESCE(u.role, CASE WHEN u.is_admin = 1 THEN 'admin' ELSE 'member' END) as role
       FROM users u
       WHERE u.calendar_token = ?
         AND NOT EXISTS (SELECT 1 FROM banned_emails b WHERE b.email = u.email)
     `).bind(token).first();
     if (!row) return null;
 
-    const role = row.role || (row.is_admin === 1 ? 'admin' : 'player');
+    const role = row.role || (row.is_admin === 1 ? 'admin' : CANONICAL_MEMBER_ROLE);
     const isAdmin = role === 'admin' || Boolean(row.is_admin);
     const canManageEvents = role === 'admin' || role === 'organizer' || isAdmin;
 
@@ -563,13 +587,14 @@ export function canAccessChannel(user, channel, mode = 'read') {
     return true;
   }
 
-  const minRole = (mode === 'write' ? channel.min_role_write : channel.min_role_read) || 'player';
+  const minRole = (mode === 'write' ? channel.min_role_write : channel.min_role_read) || CANONICAL_MEMBER_ROLE;
 
-  // Role Rank hierarchy: admin: 4, organizer: 3, facilitator: 2, player: 1, guest/public: 0
+  // Role Rank hierarchy: admin: 4, organizer: 3, facilitator: 2, member/player: 1, guest/public: 0
   const ROLE_RANKS = {
     admin: 4,
     organizer: 3,
     facilitator: 2,
+    member: 1,
     player: 1,
     guest: 0,
     public: 0

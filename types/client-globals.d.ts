@@ -225,6 +225,7 @@ interface PBFApiFacade {
   formatDisplayName(rawName: string, fallback?: string): string;
   formatDisplayNameList(rawList: string | string[]): string;
   abbreviateDisplayNames(records: Array<Record<string, any>>, nameProp?: string, idProp?: string, fallback?: string): any[];
+  isMemberRole(role: any): boolean;
   escapeHtml(str: any): string;
   parseMediaType(url: string, explicitType?: string): string;
   getYouTubeId(url: string): string | null;

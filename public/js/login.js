@@ -43,7 +43,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         } else if (user.role === 'organizer') {
           roleBadge.innerHTML = '<span class="badge badge-green" style="font-size: 0.85rem; padding: 4px 10px;">🛡️ Event Organizer</span>';
         } else {
-          roleBadge.innerHTML = '<span class="badge badge-gray" style="font-size: 0.85rem; padding: 4px 10px;">👤 Player</span>';
+          roleBadge.innerHTML = '<span class="badge badge-gray" style="font-size: 0.85rem; padding: 4px 10px;">👤 Member</span>';
         }
       }
 

@@ -6,7 +6,7 @@
  */
 
 import { Hono } from 'hono';
-import { requireAuth, requireModerator, rejectIfChatMuted, rejectIfClubhouseOptedOut } from '../../security.js';
+import { requireAuth, requireModerator, rejectIfChatMuted, rejectIfClubhouseOptedOut, normalizeMemberRole } from '../../security.js';
 import { logEvent } from '../../errors.js';
 import {
   abbreviateMemberNames,
@@ -250,6 +250,7 @@ chatMessagesRouter.post('/channels/:id/messages', requireAuth, async (c) => {
     return c.json({ error: 'metadata_json exceeds maximum allowed size (4 KB).' }, 400);
   }
 
+  const authorRole = normalizeMemberRole(user.role);
   const authorBadges = JSON.stringify({
     machine: Boolean(user.machineBadge),
     machineBadge: Boolean(user.machineBadge),
@@ -258,7 +259,7 @@ chatMessagesRouter.post('/channels/:id/messages', requireAuth, async (c) => {
     playingSunday: Boolean(user.playingSunday),
     facilitator: Boolean(user.isGameFacilitator),
     isGameFacilitator: Boolean(user.isGameFacilitator),
-    role: user.role || 'player'
+    role: authorRole
   });
 
   const insRes = await chatDb.prepare(`
@@ -271,7 +272,7 @@ chatMessagesRouter.post('/channels/:id/messages', requireAuth, async (c) => {
     parentMessageId,
     user.id,
     user.name,
-    user.role || 'player',
+    authorRole,
     authorBadges,
     content || '[media]',
     iv,
