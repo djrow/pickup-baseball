@@ -42,7 +42,7 @@ test('Workerd Pages Functions Routing & WAF Parity', async (t) => {
       method: 'POST',
       headers: { Cookie: cookie },
       body: {
-        title: 'Workerd Routing Parity Game',
+        title: 'Workerd Routing Parity Event',
         location: 'Bushrod Park Field 1',
         event_date: new Date(Date.now() + 7 * 86400 * 1000).toISOString(),
         use_default_duties: true

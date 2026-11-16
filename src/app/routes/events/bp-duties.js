@@ -16,6 +16,14 @@ function isUniqueConstraintError(err) {
   return /UNIQUE constraint failed|SQLITE_CONSTRAINT/i.test(msg);
 }
 
+function bpSlotClaimedError(c, { slotNumber, occupantName, event, user, isOrganizer, status = 400 }) {
+  const hideName = !user || (!isOrganizer && parseAllowedEmails(event && event.allowed_emails).length > 0);
+  const error = !hideName && occupantName
+    ? `Slot #${slotNumber} is already claimed by ${occupantName}. Please choose another slot.`
+    : `Slot #${slotNumber} is already claimed. Please choose another slot.`;
+  return c.json({ error }, status);
+}
+
 /**
  * Loads an existing batting practice signup row and verifies organizer, signed-in owner,
  * or guest `management_token` ownership before mutating it.
@@ -61,7 +69,7 @@ async function authorizeBpSignupMutation(c, db, eventId, signupId, actionLabel) 
     return { errorResponse: c.json({ error: `You are not authorized to ${actionLabel} this batting practice ${actionLabel === 'remove' ? 'signup' : 'slot'}.` }, 403) };
   }
 
-  return { errorResponse: null, existing, body, event, isOrganizer };
+  return { errorResponse: null, existing, body, event, user, isOrganizer };
 }
 
 eventsBpDutiesRouter.get('/default-duties', async (c) => {
@@ -268,11 +276,14 @@ eventsBpDutiesRouter.post('/:id/bp-order', async (c) => {
           await db.prepare('UPDATE batting_practice_signups SET notes = ?, player_name = ? WHERE id = ?').bind(notes, playerName, slotOccupant.id).run();
           return c.json({ success: true, message: `Updated Batting Practice slot #${candidateSlot}!`, slot_number: candidateSlot });
         }
-        return c.json({
-          error: user
-            ? `Slot #${candidateSlot} is already claimed by ${slotOccupant.player_name}. Please choose another slot.`
-            : `Slot #${candidateSlot} is already claimed. Please choose another slot.`
-        }, 400);
+        return bpSlotClaimedError(c, {
+          slotNumber: candidateSlot,
+          occupantName: slotOccupant.player_name,
+          event,
+          user,
+          isOrganizer,
+          status: 400
+        });
       }
 
       try {
@@ -300,11 +311,14 @@ eventsBpDutiesRouter.post('/:id/bp-order', async (c) => {
             continue;
           }
           const winner = await db.prepare('SELECT player_name FROM batting_practice_signups WHERE event_id = ? AND slot_number = ?').bind(eventId, candidateSlot).first();
-          return c.json({
-            error: user && winner
-              ? `Slot #${candidateSlot} is already claimed by ${winner.player_name}. Please choose another slot.`
-              : `Slot #${candidateSlot} is already claimed. Please choose another slot.`
-          }, 409);
+          return bpSlotClaimedError(c, {
+            slotNumber: candidateSlot,
+            occupantName: winner ? winner.player_name : '',
+            event,
+            user,
+            isOrganizer,
+            status: 409
+          });
         }
         throw writeErr;
       }
@@ -325,7 +339,7 @@ eventsBpDutiesRouter.put('/:id/bp-order/:signupId', async (c) => {
 
     const authRes = await authorizeBpSignupMutation(c, db, eventId, signupId, 'update');
     if (authRes.errorResponse) return authRes.errorResponse;
-    const { existing, body, event, isOrganizer } = authRes;
+    const { existing, body, event, user, isOrganizer } = authRes;
 
     const targetSlot = body.slot_number !== undefined ? parseInt(body.slot_number, 10) : existing.slot_number;
     const playerName = body.player_name ? String(body.player_name).trim().slice(0, 100) : existing.player_name;
@@ -338,12 +352,14 @@ eventsBpDutiesRouter.put('/:id/bp-order/:signupId', async (c) => {
     if (targetSlot !== existing.slot_number) {
       const slotOccupant = await db.prepare('SELECT id, player_name FROM batting_practice_signups WHERE event_id = ? AND slot_number = ? AND id != ?').bind(eventId, targetSlot, signupId).first();
       if (slotOccupant) {
-        const hideName = !isOrganizer && parseAllowedEmails(event.allowed_emails).length > 0;
-        return c.json({
-          error: hideName
-            ? `Slot #${targetSlot} is already claimed.`
-            : `Slot #${targetSlot} is already claimed by ${slotOccupant.player_name}.`
-        }, 400);
+        return bpSlotClaimedError(c, {
+          slotNumber: targetSlot,
+          occupantName: slotOccupant.player_name,
+          event,
+          user,
+          isOrganizer,
+          status: 400
+        });
       }
     }
 
@@ -353,7 +369,14 @@ eventsBpDutiesRouter.put('/:id/bp-order/:signupId', async (c) => {
       ).run();
     } catch (writeErr) {
       if (isUniqueConstraintError(writeErr)) {
-        return c.json({ error: `Slot #${targetSlot} is already claimed. Please choose another slot.` }, 409);
+        return bpSlotClaimedError(c, {
+          slotNumber: targetSlot,
+          occupantName: '',
+          event,
+          user,
+          isOrganizer,
+          status: 409
+        });
       }
       throw writeErr;
     }

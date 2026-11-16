@@ -8,6 +8,7 @@ Sunday Pickup Baseball (`pickup-baseball`) runs identically on **Cloudflare Page
 Mounted under `/api` in `src/app/index.js`:
 - **Core & Security:**
   - `src/app/index.js` — Hono app, global security headers, `.pages.dev` redirect/WAF, CSRF origin check, session middleware, router mounts.
+  - `src/app/errors.js` — Structured 9-code error taxonomy, correlation `X-Request-Id`, PII-scrubbed JSON logging, and error response normalization.
   - `src/app/security.js` — Sessions (`baseball_session`), role middleware (`requireAuth`, `requireOrganizer`, `requireModerator`, `requireAdmin`), `checkRateLimit`, SSRF validation (`validateExternalGifUrl`), HTML escaping, base64 helpers.
   - `src/app/schema.js` — DDL & idempotent migrations for both D1 databases (`ensureD1Schema`, `ensureChatD1Schema`, `ensureClubhouseOptInBackfill`).
   - `src/app/policy.js` — Roster privacy & guest-hiding helpers.

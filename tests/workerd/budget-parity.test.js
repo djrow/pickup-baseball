@@ -54,7 +54,7 @@ test('Workerd Subrequest & D1 Query Budget Parity (Cloudflare Free <= 50 ceiling
       method: 'POST',
       headers: { Cookie: cookie },
       body: {
-        title: 'Budget Parity Game',
+        title: 'Budget Parity Event',
         location: 'Bushrod Park Field 1',
         event_date: new Date(Date.now() + 72 * 3600 * 1000).toISOString(),
         max_players: 30,
@@ -80,7 +80,7 @@ test('Workerd Subrequest & D1 Query Budget Parity (Cloudflare Free <= 50 ceiling
     const soonIso = new Date(Date.now() + 10 * 3600 * 1000).toISOString();
     const evIns = await db.prepare(
       "INSERT INTO events (title, location, event_date, max_players, status, reminder_sent) VALUES (?, ?, ?, ?, 'active', 0)"
-    ).bind('Bulk Reminder Budget Game', 'Bushrod Park Field 1', soonIso, 40).run();
+    ).bind('Bulk Reminder Budget Event', 'Bushrod Park Field 1', soonIso, 40).run();
     const eventId = evIns.meta.last_row_id;
 
     // Seed 25 confirmed attendees with deliverable emails
@@ -139,7 +139,7 @@ test('Workerd Subrequest & D1 Query Budget Parity (Cloudflare Free <= 50 ceiling
       method: 'POST',
       headers: { Cookie: cookie },
       body: {
-        title: 'Bulk Rainout Budget Game',
+        title: 'Bulk Rainout Budget Event',
         location: 'Bushrod Park Field 1',
         event_date: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
         max_players: 30

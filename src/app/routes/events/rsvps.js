@@ -327,37 +327,21 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
     }
 
     if (finalStatus === 'attending' && playersCount > 0 && event.max_players && Number(event.max_players) > 0 && (!wasAttending || playersCount > Number(prevPlayersCount))) {
-      if (!existingAttendee) {
-        // Atomic post-insert tie-breaker using monotonic id prevents concurrent inserts from double-demoting each other
-        const demoteRes = await db.prepare(`
-          UPDATE attendees
-          SET status = 'waitlist'
-          WHERE id = ?
-            AND status = 'attending'
-            AND (
-              SELECT COALESCE(SUM(COALESCE(players_count, 1 + COALESCE(additional_guests, 0))), 0)
-              FROM attendees
-              WHERE event_id = ? AND status = 'attending' AND id <= ?
-            ) > ?
-        `).bind(attendeeId, eventId, attendeeId, event.max_players).run();
-        if (demoteRes.meta && demoteRes.meta.changes === 1) {
-          finalStatus = 'waitlist';
-        }
-      } else {
-        const demoteRes = await db.prepare(`
-          UPDATE attendees
-          SET status = 'waitlist'
-          WHERE id = ?
-            AND status = 'attending'
-            AND (
-              SELECT COALESCE(SUM(COALESCE(players_count, 1 + COALESCE(additional_guests, 0))), 0)
-              FROM attendees
-              WHERE event_id = ? AND status = 'attending'
-            ) > ?
-        `).bind(attendeeId, eventId, event.max_players).run();
-        if (demoteRes.meta && demoteRes.meta.changes === 1) {
-          finalStatus = 'waitlist';
-        }
+      // Atomic post-insert tie-breaker using monotonic id prevents concurrent new inserts from double-demoting each other;
+      // existing attendees re-attending or increasing party size must check total active capacity across all rows.
+      const demoteRes = await db.prepare(`
+        UPDATE attendees
+        SET status = 'waitlist'
+        WHERE id = ?
+          AND status = 'attending'
+          AND (
+            SELECT COALESCE(SUM(COALESCE(players_count, 1 + COALESCE(additional_guests, 0))), 0)
+            FROM attendees
+            WHERE event_id = ? AND status = 'attending' AND (? = 1 OR id <= ?)
+          ) > ?
+      `).bind(attendeeId, eventId, existingAttendee ? 1 : 0, attendeeId, event.max_players).run();
+      if (demoteRes.meta && demoteRes.meta.changes === 1) {
+        finalStatus = 'waitlist';
       }
     }
 

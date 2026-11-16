@@ -20,7 +20,7 @@ test('Workerd D1 Concurrency & Atomicity (Promise.all races)', async (t) => {
       method: 'POST',
       headers: { Cookie: orgCookie },
       body: {
-        title: 'Final Spot Race Game',
+        title: 'Final Spot Race Event',
         location: 'Bushrod Park Field 1',
         event_date: new Date(Date.now() + 7 * 86400 * 1000).toISOString(),
         max_players: 3,
@@ -77,7 +77,7 @@ test('Workerd D1 Concurrency & Atomicity (Promise.all races)', async (t) => {
       method: 'POST',
       headers: { Cookie: orgCookie },
       body: {
-        title: 'Waitlist Promotion Race Game',
+        title: 'Waitlist Promotion Race Event',
         location: 'Bushrod Park Field 1',
         event_date: new Date(Date.now() + 8 * 86400 * 1000).toISOString(),
         max_players: 2
@@ -148,7 +148,7 @@ test('Workerd D1 Concurrency & Atomicity (Promise.all races)', async (t) => {
       method: 'POST',
       headers: { Cookie: orgCookie },
       body: {
-        title: 'Task Contention Race Game',
+        title: 'Task Contention Race Event',
         location: 'Bushrod Park Field 1',
         event_date: new Date(Date.now() + 5 * 86400 * 1000).toISOString(),
         max_players: 20,
@@ -197,7 +197,7 @@ test('Workerd D1 Concurrency & Atomicity (Promise.all races)', async (t) => {
       method: 'POST',
       headers: { Cookie: orgCookie },
       body: {
-        title: 'BP Slot Race Game',
+        title: 'BP Slot Race Event',
         location: 'Bushrod Park Field 1',
         event_date: new Date(Date.now() + 9 * 86400 * 1000).toISOString(),
         max_players: 20

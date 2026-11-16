@@ -776,9 +776,9 @@ async function runAdminEventAndTaskJourney(browser, server, tracker, record) {
     await session.navigateAndCheck(`${server.baseUrl}/admin.html`, 'admin.html', tracker);
     await session.waitFor('document.getElementById("admin-main-container").style.display === "block" && Boolean(document.getElementById("btn-add-task-row"))');
 
-    await fillInput(session, '#event-title-input', 'Browser Smoke Sandlot Game');
+    await fillInput(session, '#event-title-input', 'Browser Smoke Sandlot Event');
     await fillInput(session, '#event-location-input', 'Bushrod Park Field 2');
-    await fillInput(session, '#event-desc-input', 'Automated CDP browser smoke verification game');
+    await fillInput(session, '#event-desc-input', 'Automated CDP browser smoke verification event');
 
     const initialRowCount = await session.evaluate('document.querySelectorAll("#task-builder-list .editable-task-row").length');
     await clickEl(session, '#btn-add-task-row');
@@ -800,7 +800,7 @@ async function runAdminEventAndTaskJourney(browser, server, tracker, record) {
 
     await clickEl(session, '#create-event-btn');
     await session.waitFor('window.location.pathname.endsWith("/event.html") && window.location.search.includes("id=")', 10000);
-    await session.waitFor('document.getElementById("event-title") && document.getElementById("event-title").textContent.includes("Browser Smoke Sandlot Game")');
+    await session.waitFor('document.getElementById("event-title") && document.getElementById("event-title").textContent.includes("Browser Smoke Sandlot Event")');
 
     const dutiesText = await session.evaluate('document.getElementById("rsvp-duties-list").textContent');
     assert(dutiesText.includes('Scorekeeper'), 'Custom Volunteer Task "Scorekeeper" rendered on newly created Event page');

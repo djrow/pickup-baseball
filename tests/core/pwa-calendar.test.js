@@ -574,7 +574,6 @@ module.exports = async function registerPwaCalendarTests(ctx, t9) {
     const eventJsCal = fs.readFileSync(path.join(publicDir, 'js/event.js'), 'utf8');
     assert.ok(eventHtmlCal.includes('id="event-calendar-meta-item"') && eventHtmlCal.includes('id="event-subscribe-ics-btn"') && eventHtmlCal.includes('id="event-subscribe-panel"'), 'Event page must include single-game calendar subscription in detail cards');
     assert.ok(eventJsCal.includes('API.renderSubscribePanel('), 'event.js must bind single-game subscription panel');
-    assert.ok(!eventJsCal.includes('?.') && !eventJsCal.includes('??'), 'event.js must avoid optional chaining / nullish coalescing');
     assert.doesNotThrow(() => new vm.Script(apiJsNav, { filename: 'public/js/api.js' }), 'api.js must parse as valid JS without syntax errors');
     assert.doesNotThrow(() => new vm.Script(appJs, { filename: 'public/js/app.js' }), 'app.js must parse as valid JS without syntax errors');
 

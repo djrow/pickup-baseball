@@ -216,6 +216,23 @@ function shouldLogError(status, code) {
     code === ERROR_CODES.MAIL_ERROR;
 }
 
+function logResponseError(c, status, code, message, requestId, alreadyLogged = false) {
+  const ctxLogged = Boolean(c && typeof c.get === 'function' && c.get('errorLogged'));
+  if (!shouldLogError(status, code) || alreadyLogged || ctxLogged) return;
+
+  logEvent('error', 'api_error', {
+    requestId,
+    code,
+    route: getRoutePath(c),
+    method: getReqMethod(c),
+    status,
+    msg: message
+  });
+  if (c && typeof c.set === 'function') {
+    c.set('errorLogged', true);
+  }
+}
+
 /**
  * Sends a structured `{ error, code, requestId }` JSON error response with `X-Request-Id` header.
  * Emits a single-line JSON log only for `5xx`, `STORAGE_ERROR`, or `MAIL_ERROR`.
@@ -241,27 +258,15 @@ export function jsonError(c, status, code, message, extra = null) {
 
   /** @type {Record<string, any>} */
   let extraFields = {};
-  let alreadyLogged = Boolean(c && typeof c.get === 'function' && c.get('errorLogged'));
+  let alreadyLogged = false;
   if (extra && typeof extra === 'object') {
     extraFields = Object.assign({}, extra);
-    if (extraFields._alreadyLogged) alreadyLogged = true;
+    alreadyLogged = Boolean(extraFields._alreadyLogged);
     delete extraFields._alreadyLogged;
     delete extraFields._allowDomainCode;
   }
 
-  if (shouldLogError(safeStatus, canonicalCode) && !alreadyLogged) {
-    logEvent('error', 'api_error', {
-      requestId,
-      code: canonicalCode,
-      route: getRoutePath(c),
-      method: getReqMethod(c),
-      status: safeStatus,
-      msg: safeMessage
-    });
-    if (c && typeof c.set === 'function') {
-      c.set('errorLogged', true);
-    }
-  }
+  logResponseError(c, safeStatus, canonicalCode, safeMessage, requestId, alreadyLogged);
 
   const payload = Object.assign({}, extraFields, {
     error: safeMessage,
@@ -282,85 +287,56 @@ export async function normalizeApiErrorResponse(c) {
 
   const requestId = getRequestId(c);
   const status = c.res.status;
-  const contentType = (c.res.headers && c.res.headers.get('content-type')) || '';
   const alreadyNormalized = Boolean(typeof c.get === 'function' && c.get('errorPayloadNormalized'));
-
-  if (alreadyNormalized) {
-    if (!c.res.headers.get('x-request-id')) {
-      const headers = new Headers(c.res.headers);
-      headers.set('X-Request-Id', requestId);
-      c.res = new Response(c.res.body, {
-        status,
-        statusText: c.res.statusText,
-        headers
-      });
-    }
+  if (alreadyNormalized && c.res.headers.get('x-request-id')) {
     return;
   }
 
-  if (contentType.toLowerCase().includes('application/json')) {
-    let parsed;
-    try {
-      const rawText = await c.res.text();
-      parsed = rawText ? JSON.parse(rawText) : {};
-    } catch (e) {
-      parsed = null;
-    }
-
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      const code = normalizeErrorCode(parsed.code, status, true);
-      const rawMsg = parsed.error !== undefined ? parsed.error : parsed.message;
-      const safeError = sanitizePublicErrorMessage(status, rawMsg, code);
-
-      if (shouldLogError(status, code) && !(typeof c.get === 'function' && c.get('errorLogged'))) {
-        logEvent('error', 'api_error', {
-          requestId,
-          code,
-          route: getRoutePath(c),
-          method: getReqMethod(c),
-          status,
-          msg: safeError
-        });
-        if (typeof c.set === 'function') {
-          c.set('errorLogged', true);
-        }
-      }
-
-      const normalizedBody = Object.assign({}, parsed, {
-        error: safeError,
-        code,
-        requestId
-      });
-      const headers = new Headers(c.res.headers);
-      headers.delete('content-length');
-      headers.set('X-Request-Id', requestId);
-      c.res = new Response(JSON.stringify(normalizedBody), {
-        status,
-        statusText: c.res.statusText,
-        headers
-      });
-      return;
-    }
-  }
-
-  // Non-JSON >= 400 response (e.g. text/plain 404/500): attach X-Request-Id and log 5xx
-  if (status >= 500 && !(typeof c.get === 'function' && c.get('errorLogged'))) {
-    logEvent('error', 'api_error', {
-      requestId,
-      code: ERROR_CODES.INTERNAL_ERROR,
-      route: getRoutePath(c),
-      method: getReqMethod(c),
-      status,
-      msg: 'Non-JSON server error response'
-    });
-    if (typeof c.set === 'function') {
-      c.set('errorLogged', true);
-    }
-  }
-
+  /** @type {BodyInit|null} */
+  let nextBody = c.res.body;
   const headers = new Headers(c.res.headers);
   headers.set('X-Request-Id', requestId);
-  c.res = new Response(c.res.body, {
+
+  if (!alreadyNormalized) {
+    const contentType = (c.res.headers && c.res.headers.get('content-type')) || '';
+    let handledJson = false;
+    if (contentType.toLowerCase().includes('application/json')) {
+      let rawText = null;
+      let parsed;
+      try {
+        rawText = await c.res.text();
+        parsed = rawText ? JSON.parse(rawText) : {};
+      } catch (e) {
+        parsed = null;
+      }
+
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const code = normalizeErrorCode(parsed.code, status, true);
+        const rawMsg = parsed.error !== undefined ? parsed.error : parsed.message;
+        const safeError = sanitizePublicErrorMessage(status, rawMsg, code);
+
+        logResponseError(c, status, code, safeError, requestId);
+
+        const normalizedBody = Object.assign({}, parsed, {
+          error: safeError,
+          code,
+          requestId
+        });
+        headers.delete('content-length');
+        nextBody = JSON.stringify(normalizedBody);
+        handledJson = true;
+      } else if (rawText !== null) {
+        headers.delete('content-length');
+        nextBody = rawText;
+      }
+    }
+
+    if (!handledJson) {
+      logResponseError(c, status, ERROR_CODES.INTERNAL_ERROR, 'Non-JSON server error response', requestId);
+    }
+  }
+
+  c.res = new Response(nextBody, {
     status,
     statusText: c.res.statusText,
     headers
