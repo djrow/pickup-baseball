@@ -368,29 +368,34 @@ function checkSecretAndFileHygiene() {
 /**
  * 7. npm dependency vulnerability audit (runtime deps, moderate+).
  */
-function checkNpmAudit() {
-  if (skipAudit) {
-    record('WARN', 'npm Dependency Audit', 'Skipped via --skip-audit');
-    return;
+function checkNpmAudit(options = {}) {
+  const shouldSkip = typeof options.skipAudit === 'boolean' ? options.skipAudit : skipAudit;
+  const report = typeof options.record === 'function' ? options.record : record;
+  const runExec = typeof options.execSync === 'function' ? options.execSync : execSync;
+  if (shouldSkip) {
+    report('WARN', 'npm Dependency Audit', 'Skipped via --skip-audit');
+    return { status: 'WARN', skipped: true };
   }
   try {
-    execSync('npm audit --omit=dev --audit-level=moderate --json', {
+    runExec('npm audit --omit=dev --audit-level=moderate --json', {
       cwd: ROOT,
       stdio: ['ignore', 'pipe', 'pipe']
     });
-    record('PASS', 'npm Dependency Audit', '0 moderate/high/critical runtime vulnerabilities');
+    report('PASS', 'npm Dependency Audit', '0 moderate/high/critical runtime vulnerabilities');
+    return { status: 'PASS', skipped: false };
   } catch (err) {
     const stdout = err.stdout ? err.stdout.toString('utf8') : '';
     try {
-      const report = JSON.parse(stdout || '{}');
-      const vulns = (report.metadata && report.metadata.vulnerabilities) || {};
+      const reportJson = JSON.parse(stdout || '{}');
+      const vulns = (reportJson.metadata && reportJson.metadata.vulnerabilities) || {};
       const count = (vulns.moderate || 0) + (vulns.high || 0) + (vulns.critical || 0);
       if (count > 0) {
-        record('FAIL', 'npm Dependency Audit', `moderate=${vulns.moderate || 0}, high=${vulns.high || 0}, critical=${vulns.critical || 0}`);
-        return;
+        report('FAIL', 'npm Dependency Audit', `moderate=${vulns.moderate || 0}, high=${vulns.high || 0}, critical=${vulns.critical || 0}`);
+        return { status: 'FAIL', skipped: false, vulnerabilities: vulns };
       }
     } catch { /* ignore unparseable npm audit output */ }
-    record('WARN', 'npm Dependency Audit', 'Could not complete audit (possibly offline)');
+    report('WARN', 'npm Dependency Audit', 'Could not complete audit (possibly offline)');
+    return { status: 'WARN', skipped: false, offline: true };
   }
 }
 
@@ -640,6 +645,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  checkNpmAudit,
   checkPwaAssetSync,
   walkFiles
 };

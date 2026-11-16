@@ -152,11 +152,122 @@ test('Security Scan: Recursive PWA Asset & Version Parity', async (t) => {
     }
   });
 
-  await t.test('CLI invocation exits 0 and reports PWA Asset & Version Parity', () => {
+  await t.test('CLI invocation with --skip-audit exits 0, skips npm audit, and reports PWA Asset & Version Parity', () => {
     const output = execFileSync(process.execPath, [path.join(ROOT_DIR, 'scripts', 'security-scan.js'), '--skip-audit'], {
       cwd: ROOT_DIR,
       encoding: 'utf8'
     });
     assert.match(output, /\[PASS\] PWA Asset & Version Parity/);
+    assert.match(output, /\[WARN\] npm Dependency Audit — Skipped via --skip-audit/);
+  });
+
+  await t.test('checkNpmAudit respects skipAudit option and handles pass/fail/offline outcomes', () => {
+    const { checkNpmAudit } = require('../../scripts/security-scan.js');
+    assert.equal(typeof checkNpmAudit, 'function', 'security-scan.js must export checkNpmAudit');
+
+    let execCalled = false;
+    const skippedRecords = [];
+    const skipped = checkNpmAudit({
+      skipAudit: true,
+      record: (status, name, detail) => skippedRecords.push({ status, name, detail }),
+      execSync: () => {
+        execCalled = true;
+      }
+    });
+    assert.equal(execCalled, false, 'npm audit must not execute when skipAudit is true');
+    assert.equal(skipped.status, 'WARN');
+    assert.equal(skipped.skipped, true);
+    assert.deepEqual(skippedRecords, [
+      { status: 'WARN', name: 'npm Dependency Audit', detail: 'Skipped via --skip-audit' }
+    ]);
+
+    const commands = [];
+    const passRecords = [];
+    const passed = checkNpmAudit({
+      skipAudit: false,
+      record: (status, name, detail) => passRecords.push({ status, name, detail }),
+      execSync: (cmd) => {
+        commands.push(cmd);
+        return Buffer.from('{}');
+      }
+    });
+    assert.deepEqual(commands, ['npm audit --omit=dev --audit-level=moderate --json']);
+    assert.equal(passed.status, 'PASS');
+    assert.equal(passRecords[0].status, 'PASS');
+
+    const failRecords = [];
+    const failed = checkNpmAudit({
+      skipAudit: false,
+      record: (status, name, detail) => failRecords.push({ status, name, detail }),
+      execSync: () => {
+        const err = new Error('audit failed');
+        err.stdout = Buffer.from(JSON.stringify({
+          metadata: { vulnerabilities: { moderate: 1, high: 2, critical: 0 } }
+        }));
+        throw err;
+      }
+    });
+    assert.equal(failed.status, 'FAIL');
+    assert.match(failRecords[0].detail, /moderate=1, high=2, critical=0/);
+
+    const offlineRecords = [];
+    const offline = checkNpmAudit({
+      skipAudit: false,
+      record: (status, name, detail) => offlineRecords.push({ status, name, detail }),
+      execSync: () => {
+        throw new Error('ENOTFOUND registry.npmjs.org');
+      }
+    });
+    assert.equal(offline.status, 'WARN');
+    assert.match(offlineRecords[0].detail, /Could not complete audit/);
+  });
+});
+
+test('Unified Check, Release Gate & Decoupled CI Matrix Invariants (Ticket #26)', async (t) => {
+  await t.test('package.json defines unified check script running all 6 gates with full security:scan', () => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT_DIR, 'package.json'), 'utf8'));
+    assert.equal(
+      pkg.scripts && pkg.scripts.check,
+      'npm run lint && npm run typecheck && npm test && npm run test:workerd && npm run test:browser && npm run security:scan'
+    );
+  });
+
+  await t.test('scripts/ship.ps1 runs npm run check pre-deploy (honoring -SkipTest) and security:scan:live post-deploy', () => {
+    const shipPs1 = fs.readFileSync(path.join(ROOT_DIR, 'scripts', 'ship.ps1'), 'utf8');
+    assert.match(shipPs1, /if\s*\(\s*-not\s*\$SkipTest\s*\)\s*\{[\s\S]*?npm run check[\s\S]*?\}/);
+    assert.doesNotMatch(shipPs1, /Invoke-Step[^\n]*npm test\b/);
+    assert.doesNotMatch(shipPs1, /Invoke-Step[^\n]*npm run security:scan\b(?!:live)/);
+    assert.match(shipPs1, /npm run security:scan:live/);
+  });
+
+  await t.test('.github/workflows/security.yml enforces blocking verification matrix and isolates dependency-audit', () => {
+    const workflow = fs.readFileSync(path.join(ROOT_DIR, '.github', 'workflows', 'security.yml'), 'utf8');
+    assert.match(workflow, /push:\s*\r?\n\s*branches:\s*\[trunk\]/);
+    assert.match(workflow, /pull_request:\s*\r?\n\s*branches:\s*\[trunk\]/);
+    assert.match(workflow, /schedule:\s*\r?\n\s*-\s*cron:/);
+    assert.match(workflow, /node-version:\s*['"]22['"]/);
+
+    const requiredCommands = [
+      'npm run lint',
+      'npm run typecheck',
+      'npm test',
+      'npm run test:workerd',
+      'npm run test:browser',
+      'npm run security:scan -- --skip-audit'
+    ];
+    for (const cmd of requiredCommands) {
+      assert.ok(workflow.includes(cmd), `workflow must run blocking command: ${cmd}`);
+    }
+    assert.match(workflow, /^\s{2}codeql:/m);
+    assert.match(workflow, /github\/codeql-action\/analyze@v3/);
+
+    const auditJobMatch = workflow.match(/\n\s{2}dependency-audit:\r?\n([\s\S]*?)(?:\n\s{2}[a-zA-Z0-9_-]+:\r?\n|$)/);
+    assert.ok(auditJobMatch, 'workflow must define a separate dependency-audit job');
+    const auditJobBody = auditJobMatch[1];
+    assert.match(auditJobBody, /continue-on-error:\s*\$\{\{\s*github\.event_name\s*!=\s*'schedule'\s*\}\}/);
+    assert.match(auditJobBody, /npm audit --audit-level=high/);
+
+    const nonAuditPart = workflow.replace(auditJobMatch[0], '\n');
+    assert.doesNotMatch(nonAuditPart, /npm audit\b/, 'npm audit must not run in blocking verify/codeql jobs');
   });
 });

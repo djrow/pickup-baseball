@@ -7,7 +7,7 @@
   Default flow:
     1. Verify current git branch matches $DefaultBranch (unless -AllowWrongBranch)
     2. Bump app & cache version (npm run bump)
-    3. Run the full test suite on the bumped files (npm test)
+    3. Run the unified verification gate on the bumped files (npm run check)
     4. Show `git status --short`, confirm staging, prompt for commit summary if -Message wasn't passed, and commit
     5. Create git tag `v<version>`
     6. Deploy to Cloudflare Pages (`npm run deploy`)
@@ -84,10 +84,9 @@ try {
     Invoke-Step -Label 'Bumping app & asset version (npm run bump)' -Command { npm run bump }
   }
 
-  # 3. Run full verification suite & security scan
+  # 3. Run unified verification gate (lint, typecheck, test, test:workerd, test:browser, security:scan)
   if (-not $SkipTest) {
-    Invoke-Step -Label 'Running test suite (npm test)' -Command { npm test }
-    Invoke-Step -Label 'Running security scan (npm run security:scan)' -Command { npm run security:scan }
+    Invoke-Step -Label 'Running unified verification gate (npm run check)' -Command { npm run check }
   }
 
   $VersionSrc = Get-Content (Join-Path $RepoRoot 'src\app\version.js') -Raw
