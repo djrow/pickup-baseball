@@ -354,5 +354,18 @@
   "rtc_turn_available_note": "TURN 프라이버시 릴레이 서버가 구성되어 준비되었습니다.",
   "rtc_turn_blocked_warning": "TURN 릴레이 서버가 구성되지 않아 프라이버시 릴레이 모드가 직접 P2P 음성을 차단했습니다.",
   "waiver.age_attestation_label": "본인은 만 18세 이상이거나, 미성년자 참가자를 대신하여 서명하는 부모 또는 법정 대리인임을 확인합니다.",
-  "waiver.age_attestation_error": "만 18세 이상이거나 미성년자를 대신해 서명하는 부모/법정 대리인임을 확인해야 합니다."
+  "waiver.age_attestation_error": "만 18세 이상이거나 미성년자를 대신해 서명하는 부모/법정 대리인임을 확인해야 합니다.",
+  "profile.export_title": "📦 내 데이터 다운로드",
+  "profile.export_desc": "프로필, 동의 내역, 참석 응답, 자원봉사 작업, 서명된 면책 동의서 및 클럽하우스 메시지가 포함된 JSON 아카이브를 다운로드합니다.",
+  "profile.export_btn": "📥 JSON 내보내기 다운로드",
+  "profile.export_decrypt_label": "저장하기 전에 브라우저에서 암호화된 클럽하우스 메시지 복호화",
+  "profile.export_working": "⏳ 내보내기 준비 중...",
+  "profile.export_success": "개인 데이터 내보내기가 다운로드되었습니다.",
+  "profile.export_success_decrypted": "개인 데이터 내보내기(복호화된 E2EE 메시지 {count}건 포함)가 다운로드되었습니다.",
+  "profile.export_failed": "데이터 내보내기에 실패했습니다: {error}",
+  "profile.export_passphrase_title": "🔐 E2EE 키 보관함 잠금 해제",
+  "profile.export_passphrase_msg": "저장하기 전에 브라우저에서 암호화된 클럽하우스 메시지를 복호화하려면 E2EE 키 보관함 암호를 입력하세요:",
+  "profile.export_passphrase_placeholder": "보관함 암호 입력...",
+  "profile.export_passphrase_confirm": "잠금 해제 및 복호화",
+  "profile.export_wrong_passphrase": "E2EE 보관함 암호가 올바르지 않습니다. 암호화된 메시지를 복호화할 수 없습니다."
 }

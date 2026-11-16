@@ -354,5 +354,18 @@
   "rtc_turn_available_note": "El servidor TURN de retransmisión de privacidad está configurado y listo.",
   "rtc_turn_blocked_warning": "El Modo de Retransmisión de Privacidad bloqueó la voz P2P directa porque no hay un servidor TURN configurado.",
   "waiver.age_attestation_label": "Confirmo que tengo 18 años o más, o que soy el padre, la madre o el tutor legal que firma en nombre de un participante menor de edad.",
-  "waiver.age_attestation_error": "Debes confirmar que tienes 18 años o más (o que eres el padre/madre o tutor legal que firma en nombre de un menor)."
+  "waiver.age_attestation_error": "Debes confirmar que tienes 18 años o más (o que eres el padre/madre o tutor legal que firma en nombre de un menor).",
+  "profile.export_title": "📦 Descargar tus datos",
+  "profile.export_desc": "Descarga un archivo JSON con tu perfil, historial de consentimientos, confirmaciones, tareas de voluntariado, exenciones firmadas y mensajes del Clubhouse.",
+  "profile.export_btn": "📥 Descargar exportación JSON",
+  "profile.export_decrypt_label": "Descifrar mis mensajes cifrados del Clubhouse en el navegador antes de guardar",
+  "profile.export_working": "⏳ Preparando exportación...",
+  "profile.export_success": "Se ha descargado la exportación de tus datos personales.",
+  "profile.export_success_decrypted": "Se descargó la exportación de tus datos personales (con {count} mensaje(s) E2EE descifrado(s)).",
+  "profile.export_failed": "No se pudieron exportar tus datos: {error}",
+  "profile.export_passphrase_title": "🔐 Desbloquear bóveda de claves E2EE",
+  "profile.export_passphrase_msg": "Ingresa la frase de contraseña de tu bóveda de claves E2EE para descifrar tus mensajes en el navegador antes de guardar:",
+  "profile.export_passphrase_placeholder": "Ingresa la frase de contraseña de la bóveda...",
+  "profile.export_passphrase_confirm": "Desbloquear y descifrar",
+  "profile.export_wrong_passphrase": "Frase de contraseña incorrecta. No se pudieron descifrar los mensajes cifrados."
 }

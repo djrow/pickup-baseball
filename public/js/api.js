@@ -369,7 +369,20 @@ const EN_DICT = {
   "backup_failed": "Database backup failed: {error}",
   "rtc_turn_unavailable_note": "Unavailable: No TURN privacy relay server is configured on this deployment.",
   "rtc_turn_available_note": "TURN privacy relay server is configured and ready.",
-  "rtc_turn_blocked_warning": "Privacy Relay Mode blocked direct P2P voice because no TURN relay server is configured."
+  "rtc_turn_blocked_warning": "Privacy Relay Mode blocked direct P2P voice because no TURN relay server is configured.",
+  "profile.export_title": "📦 Download Your Data",
+  "profile.export_desc": "Download a JSON archive of your profile, consent history, RSVPs, volunteer tasks, signed waivers, and Clubhouse messages.",
+  "profile.export_btn": "📥 Download JSON Export",
+  "profile.export_decrypt_label": "Decrypt my encrypted Clubhouse messages in-browser before saving",
+  "profile.export_working": "⏳ Preparing export...",
+  "profile.export_success": "Your personal data export has been downloaded.",
+  "profile.export_success_decrypted": "Your personal data export (with {count} decrypted E2EE message(s)) has been downloaded.",
+  "profile.export_failed": "Failed to export your data: {error}",
+  "profile.export_passphrase_title": "🔐 Unlock E2EE Key Vault",
+  "profile.export_passphrase_msg": "Enter your E2EE Key Vault passphrase to decrypt your encrypted Clubhouse messages in-browser before saving:",
+  "profile.export_passphrase_placeholder": "Enter vault passphrase...",
+  "profile.export_passphrase_confirm": "Unlock & Decrypt",
+  "profile.export_wrong_passphrase": "Incorrect E2EE vault passphrase. Encrypted messages could not be decrypted."
 };
 
 const KNOWN_PHRASE_KEYS = {
@@ -1785,6 +1798,10 @@ const API = {
 
   async logoutOtherDevices() {
     return this.request('POST', '/api/auth/logout-other-devices', {});
+  },
+
+  async exportMyData() {
+    return this.request('GET', '/api/auth/export', null, { noStore: true });
   },
 
   async updateProfile(name, bio) {

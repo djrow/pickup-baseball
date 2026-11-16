@@ -276,4 +276,5 @@ require('../tests/core/backup-dr.test.js')();
 require('../tests/core/key-rotation-audit.test.js')();
 require('../tests/core/turn-relay.test.js')();
 require('../tests/core/visitor-privacy.test.js')();
+require('../tests/core/data-export.test.js')();
 require('../tests/clubhouse/index.js')();
