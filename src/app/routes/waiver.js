@@ -19,6 +19,7 @@ import {
 import { isGDriveConfigured, uploadGDriveTextFile } from '../gdrive.js';
 import { sendWaiverConfirmationEmail } from '../mailer.js';
 import { logEvent } from '../errors.js';
+import { resolveConfig, PRESET_PICKUP_BASEBALL } from '../config.js';
 
 export const waiverRouter = /** @type {AppHono} */ (new Hono());
 
@@ -36,6 +37,48 @@ export const OFFICIAL_WAIVER_TEXT = [
   ...WAIVER_PARAGRAPHS,
   WAIVER_DOC_VERSION
 ].join('\n\n');
+
+export const GENERIC_WAIVER_DOC_VERSION = 'community-waiver-v1';
+
+/**
+ * Resolve preset-appropriate waiver text, version, and branding.
+ * Preserves byte-identical OFFICIAL_WAIVER_TEXT under `pickup-baseball`
+ * so existing sealed waiver SHA-256 hashes remain valid.
+ * @param {Record<string, any> | null | undefined} env
+ */
+export function getWaiverSpec(env) {
+  const cfg = resolveConfig(env);
+  if (cfg.COMMUNITY_PRESET === PRESET_PICKUP_BASEBALL) {
+    return {
+      documentVersion: WAIVER_DOC_VERSION,
+      paragraphs: WAIVER_PARAGRAPHS,
+      officialText: OFFICIAL_WAIVER_TEXT,
+      organizationLabel: 'Pickup Baseball Foundation',
+      certificatePrefix: 'PBF-WVR'
+    };
+  }
+
+  const communityName = cfg.COMMUNITY_NAME;
+  const paragraphs = [
+    `I wish to participate in the community events and activities (the “Activities”) organized with ${communityName} volunteers and other participants (collectively, the “Participants”). I understand that the Released Parties will not permit me to participate in the Activities if I do not sign this Consent, Waiver and Indemnity, because the possibility of liability for them is too great to accept.`,
+    WAIVER_PARAGRAPHS[1],
+    WAIVER_PARAGRAPHS[2],
+    WAIVER_PARAGRAPHS[3]
+  ];
+  const officialText = [
+    'CONSENT, WAIVER AND INDEMNITY',
+    ...paragraphs,
+    GENERIC_WAIVER_DOC_VERSION
+  ].join('\n\n');
+
+  return {
+    documentVersion: GENERIC_WAIVER_DOC_VERSION,
+    paragraphs,
+    officialText,
+    organizationLabel: communityName,
+    certificatePrefix: 'WVR'
+  };
+}
 
 function getSubtleCrypto() {
   if (typeof crypto !== 'undefined' && crypto && crypto.subtle) {
@@ -114,12 +157,12 @@ export async function computeProvenanceSeal(env, payloadStr, db = null) {
     .join('');
 }
 
-function generateCertificateId(signedDateStr) {
+function generateCertificateId(signedDateStr, prefix = 'PBF-WVR') {
   const dateCompact = String(signedDateStr || new Date().toISOString().slice(0, 10)).replace(/[^0-9]/g, '').slice(0, 8) || '20260101';
   const randBytes = new Uint8Array(5);
   crypto.getRandomValues(randBytes);
   const randHex = Array.from(randBytes).map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
-  return `PBF-WVR-${dateCompact}-${randHex}`;
+  return `${prefix}-${dateCompact}-${randHex}`;
 }
 
 export function buildCanonicalWaiverPayload({
@@ -144,13 +187,21 @@ export function buildCanonicalWaiverPayload({
   });
 }
 
-export function renderSignedWaiverCertificateHtml(waiverRow, integrityVerified = true, includePii = false) {
+export function renderSignedWaiverCertificateHtml(waiverRow, integrityVerified = true, includePii = false, env = null) {
+  const spec = waiverRow.document_version === WAIVER_DOC_VERSION
+    ? {
+        documentVersion: WAIVER_DOC_VERSION,
+        paragraphs: WAIVER_PARAGRAPHS,
+        organizationLabel: 'Pickup Baseball Foundation'
+      }
+    : getWaiverSpec(env);
+  const safeOrgLabel = escapeHtml(spec.organizationLabel);
   const safeName = includePii ? escapeHtml(waiverRow.printed_name || '') : 'Redacted (sign in as owner or organizer to view)';
   const safeEmail = includePii ? escapeHtml(waiverRow.email || '') : 'Redacted (sign in as owner or organizer to view)';
   const safeDate = escapeHtml(waiverRow.signed_date || '');
   const safeSignedAt = escapeHtml(waiverRow.signed_at || '');
   const safeCertId = escapeHtml(waiverRow.certificate_id || '');
-  const safeDocVer = escapeHtml(waiverRow.document_version || WAIVER_DOC_VERSION);
+  const safeDocVer = escapeHtml(waiverRow.document_version || spec.documentVersion);
   const safeTextHash = escapeHtml(waiverRow.waiver_text_sha256 || '');
   const safeDocHash = escapeHtml(waiverRow.document_sha256 || '');
   const safeSeal = escapeHtml(waiverRow.provenance_seal || '');
@@ -164,7 +215,7 @@ export function renderSignedWaiverCertificateHtml(waiverRow, integrityVerified =
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Signed Waiver Certificate (${safeCertId}) - Pickup Baseball Foundation</title>
+  <title>Signed Waiver Certificate (${safeCertId}) - ${safeOrgLabel}</title>
   <style>
     body {
       font-family: Georgia, "Times New Roman", Times, serif;
@@ -319,7 +370,7 @@ export function renderSignedWaiverCertificateHtml(waiverRow, integrityVerified =
 <body>
   <div class="toolbar">
     <div>
-      <strong>🔏 Pickup Baseball Foundation — Signed Waiver Record</strong>
+      <strong>🔏 ${safeOrgLabel} — Signed Waiver Record</strong>
       <span style="font-size: 0.8rem; opacity: 0.85; margin-left: 8px;">(${safeCertId})</span>
     </div>
     <div>
@@ -331,10 +382,10 @@ export function renderSignedWaiverCertificateHtml(waiverRow, integrityVerified =
   <div class="sheet">
     <h1>CONSENT, WAIVER AND INDEMNITY</h1>
 
-    <p>${escapeHtml(WAIVER_PARAGRAPHS[0])}</p>
-    <p>${escapeHtml(WAIVER_PARAGRAPHS[1])}</p>
-    <p>${escapeHtml(WAIVER_PARAGRAPHS[2])}</p>
-    <p class="bold-clause">${escapeHtml(WAIVER_PARAGRAPHS[3])}</p>
+    <p>${escapeHtml(spec.paragraphs[0])}</p>
+    <p>${escapeHtml(spec.paragraphs[1])}</p>
+    <p>${escapeHtml(spec.paragraphs[2])}</p>
+    <p class="bold-clause">${escapeHtml(spec.paragraphs[3])}</p>
 
     <div class="sig-grid">
       <div>
@@ -387,16 +438,17 @@ export function renderSignedWaiverCertificateHtml(waiverRow, integrityVerified =
 // GET /api/waiver or /api/waiver/status
 async function getWaiverStatusHandler(c) {
   const user = c.get('user');
-  const waiverTextSha256 = await sha256Hex(OFFICIAL_WAIVER_TEXT);
+  const spec = getWaiverSpec(c.env);
+  const waiverTextSha256 = await sha256Hex(spec.officialText);
 
   if (!user) {
     return c.json({
       authenticated: false,
       waiver_status: 'none',
       waiver_signed: false,
-      document_version: WAIVER_DOC_VERSION,
+      document_version: spec.documentVersion,
       waiver_text_sha256: waiverTextSha256,
-      paragraphs: WAIVER_PARAGRAPHS,
+      paragraphs: spec.paragraphs,
       latest_waiver: null
     });
   }
@@ -425,9 +477,9 @@ async function getWaiverStatusHandler(c) {
     waiver_status: effectiveStatus,
     waiver_signed: effectiveStatus === 'digital' || effectiveStatus === 'paper',
     waiver_signed_at: (dbUser && dbUser.waiver_signed_at) || (latestWaiver && latestWaiver.signed_at) || null,
-    document_version: WAIVER_DOC_VERSION,
+    document_version: spec.documentVersion,
     waiver_text_sha256: waiverTextSha256,
-    paragraphs: WAIVER_PARAGRAPHS,
+    paragraphs: spec.paragraphs,
     latest_waiver: latestWaiver || null
   });
 }
@@ -510,10 +562,11 @@ waiverRouter.post('/sign', requireAuth, async (c) => {
     return c.json({ error: 'Signature image must be a valid PNG file.' }, 400);
   }
 
-  const waiverTextSha256 = await sha256Hex(OFFICIAL_WAIVER_TEXT);
+  const spec = getWaiverSpec(c.env);
+  const waiverTextSha256 = await sha256Hex(spec.officialText);
   const signatureSha256 = await sha256Hex(signatureData);
   const canonicalPayload = buildCanonicalWaiverPayload({
-    document_version: WAIVER_DOC_VERSION,
+    document_version: spec.documentVersion,
     waiver_text_sha256: waiverTextSha256,
     email: user.email,
     printed_name: printedName,
@@ -523,7 +576,7 @@ waiverRouter.post('/sign', requireAuth, async (c) => {
     electronic_consent: true
   });
   const documentSha256 = await sha256Hex(canonicalPayload);
-  const certificateId = generateCertificateId(signedDate);
+  const certificateId = generateCertificateId(signedDate, spec.certificatePrefix);
   const provenanceSeal = await computeProvenanceSeal(c.env, `${certificateId}:${documentSha256}`, c.env.DB);
   const signedAtIso = new Date().toISOString();
   const userAgent = (c.req.header('User-Agent') || 'unknown').slice(0, 250);
@@ -544,7 +597,7 @@ waiverRouter.post('/sign', requireAuth, async (c) => {
       signedDate,
       signatureType,
       signatureData,
-      WAIVER_DOC_VERSION,
+      spec.documentVersion,
       waiverTextSha256,
       documentSha256,
       provenanceSeal,
@@ -565,7 +618,7 @@ waiverRouter.post('/sign', requireAuth, async (c) => {
     signed_date: signedDate,
     signature_type: signatureType,
     signature_data: signatureData,
-    document_version: WAIVER_DOC_VERSION,
+    document_version: spec.documentVersion,
     waiver_text_sha256: waiverTextSha256,
     document_sha256: documentSha256,
     provenance_seal: provenanceSeal,
@@ -579,7 +632,7 @@ waiverRouter.post('/sign', requireAuth, async (c) => {
   const backgroundWork = (async () => {
     try {
       if (isGDriveConfigured(c.env)) {
-        const htmlCert = renderSignedWaiverCertificateHtml(waiverRow, true, true);
+        const htmlCert = renderSignedWaiverCertificateHtml(waiverRow, true, true, c.env);
         const safeFileNamePart = printedName.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40) || 'Player';
         const fileName = `Waiver_${safeFileNamePart}_${signedDate}_${certificateId}.html`;
         const driveFileId = await uploadGDriveTextFile(c.env, {
@@ -609,9 +662,16 @@ waiverRouter.post('/sign', requireAuth, async (c) => {
     }
   })();
 
-  if (c.executionCtx && typeof c.executionCtx.waitUntil === 'function') {
-    c.executionCtx.waitUntil(backgroundWork);
-  } else {
+  let scheduledInBackground = false;
+  try {
+    if (c.executionCtx && typeof c.executionCtx.waitUntil === 'function') {
+      c.executionCtx.waitUntil(backgroundWork);
+      scheduledInBackground = true;
+    }
+  } catch (e) {
+    /* executionCtx unavailable outside Cloudflare Workers runtime */
+  }
+  if (!scheduledInBackground) {
     await backgroundWork;
   }
 
@@ -625,7 +685,7 @@ waiverRouter.post('/sign', requireAuth, async (c) => {
       email: user.email.toLowerCase(),
       signed_date: signedDate,
       signed_at: signedAtIso,
-      document_version: WAIVER_DOC_VERSION,
+      document_version: spec.documentVersion,
       waiver_text_sha256: waiverTextSha256,
       document_sha256: documentSha256,
       provenance_seal: provenanceSeal
@@ -685,7 +745,7 @@ waiverRouter.get('/certificate/:id', async (c) => {
   const canViewPii = Boolean(user && (user.isAdmin || user.id === row.user_id));
 
   if (c.req.query('format') === 'html') {
-    const html = renderSignedWaiverCertificateHtml(row, integrityVerified, canViewPii);
+    const html = renderSignedWaiverCertificateHtml(row, integrityVerified, canViewPii, c.env);
     return new Response(html, {
       status: 200,
       headers: {

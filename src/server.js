@@ -5,6 +5,7 @@ const { createNodeHttpBridge, getFullRequestUrl, sendWebResponse } = require('./
 const { app: honoApp } = require('./app/index.js');
 const { CURRENT_APP_VERSION } = require('./app/version.js');
 const { renderFeedXmlResponse } = require('./app/feeds.js');
+const { resolveConfig } = require('./app/config.js');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -26,8 +27,12 @@ const uploadsDir = path.join(process.env.DATA_DIR || path.join(__dirname, '..', 
 app.use('/uploads/avatars', express.static(uploadsDir));
 
 app.get(['/handbook', '/rules'], (req, res) => {
+  const handbookUrl = resolveConfig(process.env).HANDBOOK_URL;
+  if (!handbookUrl) {
+    return res.status(404).type('text/plain').send('Community handbook link is not configured.');
+  }
   res.writeHead(301, {
-    'Location': 'https://github.com/djrow/pickup-baseball/blob/trunk/HANDBOOK.md',
+    'Location': handbookUrl,
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'DENY',
     'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
@@ -54,7 +59,7 @@ app.get('/health', (req, res) => {
 });
 
 app.get('/feed.xml', async (req, res) => {
-  const webRes = await renderFeedXmlResponse(d1, getFullRequestUrl(req));
+  const webRes = await renderFeedXmlResponse(d1, getFullRequestUrl(req), process.env);
   await sendWebResponse(webRes, res);
 });
 
@@ -88,7 +93,9 @@ process.on('SIGINT', shutdown);
 initDatabase()
   .then(() => {
     server = app.listen(PORT, '0.0.0.0', () => {
-      console.log(`⚾ Sunday Pickup Baseball running on http://localhost:${PORT} (v${CURRENT_APP_VERSION})`);
+      const cfg = resolveConfig(process.env);
+      const icon = cfg.COMMUNITY_PRESET === 'pickup-baseball' ? '⚾' : '🌐';
+      console.log(`${icon} ${cfg.COMMUNITY_NAME} running on http://localhost:${PORT} (v${CURRENT_APP_VERSION})`);
     });
   })
   .catch((err) => {

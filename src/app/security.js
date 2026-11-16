@@ -14,6 +14,7 @@
  */
 
 import { ERROR_CODES, jsonError } from './errors.js';
+import { resolveConfig } from './config.js';
 
 export const SESSION_COOKIE_NAME = 'baseball_session';
 export const SESSION_DURATION_SECONDS = 90 * 24 * 60 * 60; // 90 days
@@ -115,9 +116,9 @@ export function getSafeRelativeRedirect(redirectParam) {
     return '/index.html?logged_in=1';
   }
   try {
-    const parsed = new URL(trimmed, 'https://www.pickupbaseballfoundation.org');
+    const parsed = new URL(trimmed, 'https://example.invalid');
     if (
-      parsed.origin === 'https://www.pickupbaseballfoundation.org' &&
+      parsed.origin === 'https://example.invalid' &&
       parsed.pathname.startsWith('/') &&
       !parsed.pathname.startsWith('//')
     ) {
@@ -226,33 +227,27 @@ export function getClientIp(c) {
 }
 
 export function getSafePublicOrigin(c) {
-  const configured = c && c.env && c.env.PUBLIC_ORIGIN ? String(c.env.PUBLIC_ORIGIN).trim() : '';
-  if (configured) {
-    try {
-      return new URL(configured).origin;
-    } catch (e) {
-      /* ignore invalid configured PUBLIC_ORIGIN */
-    }
+  const cfg = resolveConfig(c && c.env);
+  if (cfg.PUBLIC_ORIGIN) {
+    return cfg.PUBLIC_ORIGIN;
   }
   try {
     const parsed = new URL(c.req.url);
     const host = parsed.hostname.toLowerCase();
     const isTestEnv = Boolean(c && c.env && c.env.NODE_ENV === 'test');
     if (
-      host === 'www.pickupbaseballfoundation.org' ||
-      host === 'pickupbaseballfoundation.org' ||
-      host.endsWith('.pickupbaseballfoundation.org') ||
       host === 'localhost' ||
       host === '127.0.0.1' ||
       host === '[::1]' ||
+      host.endsWith('.pages.dev') ||
       isTestEnv
     ) {
       return parsed.origin;
     }
   } catch (e) {
-    /* ignore unparseable request URL and fall back to canonical origin */
+    /* ignore unparseable request URL */
   }
-  return 'https://www.pickupbaseballfoundation.org';
+  return '';
 }
 
 export async function checkRateLimit(db, key, maxRequests, windowSeconds, env, options = {}) {

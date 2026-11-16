@@ -13,7 +13,6 @@ import {
   BASEBALL_MIGRATIONS,
   CHAT_MIGRATIONS,
   buildDefaultChatChannelStatements,
-  seedSampleMediaIfEmpty,
   ensureClubhouseOptInBackfill
 } from './migrations.js';
 
@@ -271,7 +270,7 @@ async function runWithDbLock(db, force, doneSet, inFlightMap, workerFn) {
 
 export async function ensureD1Schema(db, force = false) {
   return runWithDbLock(db, force, migratedDbs, inFlightBaseballMigrations, async () => {
-    const result = await runVersionedMigrations(db, {
+    await runVersionedMigrations(db, {
       metaTable: 'app_settings',
       migrations: BASEBALL_MIGRATIONS,
       force,
@@ -280,10 +279,6 @@ export async function ensureD1Schema(db, force = false) {
         db.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('schema_version', ?)").bind(String(targetVersion))
       ]
     });
-
-    if (result.mode !== 'noop') {
-      await seedSampleMediaIfEmpty(db);
-    }
   });
 }
 

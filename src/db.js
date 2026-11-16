@@ -33,15 +33,6 @@ const db = baseballDb;
 const d1 = baseballD1;
 
 function seedNodeBootstrapDefaults() {
-  const adminCount = baseballDb.prepare("SELECT COUNT(*) as c FROM users WHERE role = 'admin' OR is_admin = 1").get().c;
-  if (adminCount === 0) {
-    const targetUser = baseballDb.prepare("SELECT id, email FROM users WHERE email = 'pickupbaseballfoundation@gmail.com'").get();
-    if (targetUser) {
-      baseballDb.prepare("UPDATE users SET role = 'admin', is_admin = 1 WHERE id = ?").run(targetUser.id);
-      console.log(`[Database] Auto-promoted foundation user ${targetUser.email} to Administrator.`);
-    }
-  }
-
   const defaultDutiesCount = baseballDb.prepare('SELECT COUNT(*) as c FROM default_duties').get().c;
   if (defaultDutiesCount === 0) {
     const insertDefault = baseballDb.prepare(

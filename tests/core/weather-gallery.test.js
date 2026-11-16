@@ -478,19 +478,23 @@ module.exports = async function registerWeatherGalleryTests(ctx, t9) {
     assert.equal(delCmt.status, 200);
 
     // 4. SQL database backup export (both BASEBALL_DB and CHAT_DB)
+    const cfgRes = await apiReq('GET', '/api/config/public');
+    assert.equal(cfgRes.status, 200);
+    const communityName = cfgRes.data.communityName;
+
     const backupRes = await fetch(`${baseUrl}/api/events/admin/backup-db`, {
       headers: { Cookie: seedAdminCookie }
     });
     assert.equal(backupRes.status, 200);
     const sqlDump = await backupRes.text();
-    assert.ok(sqlDump.includes('-- Sunday Pickup Baseball Database Backup') && sqlDump.includes('INSERT OR IGNORE INTO "users"'), 'Backup dump must contain backup header and user rows');
+    assert.ok(sqlDump.includes(`-- ${communityName} Database Backup`) && sqlDump.includes('INSERT OR IGNORE INTO "users"'), 'Backup dump must contain backup header and user rows');
 
     const chatBackupRes = await fetch(`${baseUrl}/api/events/admin/backup-db?db=chat`, {
       headers: { Cookie: seedAdminCookie }
     });
     assert.equal(chatBackupRes.status, 200);
     const chatSqlDump = await chatBackupRes.text();
-    assert.ok(chatSqlDump.includes('-- Sunday Pickup Baseball Clubhouse (CHAT_DB) Database Backup') && chatSqlDump.includes('INSERT OR IGNORE INTO "channels"'), 'Chat backup dump must contain CHAT_DB header and channels rows');
+    assert.ok(chatSqlDump.includes(`-- ${communityName} Clubhouse (CHAT_DB) Database Backup`) && chatSqlDump.includes('INSERT OR IGNORE INTO "channels"'), 'Chat backup dump must contain CHAT_DB header and channels rows');
 
     const badBackupRes = await apiReq('GET', '/api/events/admin/backup-db?db=invalid', seedAdminCookie);
     assert.equal(badBackupRes.status, 400, 'Unknown backup db target must return 400');
@@ -632,13 +636,21 @@ module.exports = async function registerWeatherGalleryTests(ctx, t9) {
     assert.ok(styleCss.includes('.photo-card'), 'style.css must define .photo-card');
     assert.ok(styleCss.includes('.video-facade-container'), 'style.css must define .video-facade-container');
 
-    // 4. API Acceptance: Query GET /api/media
+    // 4. API Acceptance: Query GET /api/media (fresh DB has zero demo media; seed 3 fixture items for ordering tests)
     const getRes = await fetch(`${baseUrl}/api/media`);
     assert.equal(getRes.status, 200, 'GET /api/media must return 200');
     const initialData = await getRes.json();
     assert.ok(Array.isArray(initialData.media), 'GET /api/media must return media array');
     assert.ok(Array.isArray(initialData.albums), 'GET /api/media must return albums array');
-    assert.ok(initialData.media.length >= 3, 'GET /api/media must contain seeded media items');
+    assert.equal(initialData.media.length, 0, 'Fresh DB must start with zero demo media items');
+
+    const insertSeedMedia = db.prepare(`
+      INSERT INTO media_items (title, caption, media_type, original_url, file_url, album, date_taken, contributor_name, is_approved)
+      VALUES (?, ?, 'youtube', ?, ?, ?, ?, ?, 1)
+    `);
+    insertSeedMedia.run('Opening Day Highlights', 'First test item', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'Opening Weekend', '2026-08-16', 'Test Fixture');
+    insertSeedMedia.run('Mid-Season Recap', 'Second test item', 'https://www.youtube.com/watch?v=L_LUpnjgPso', 'https://www.youtube.com/watch?v=L_LUpnjgPso', 'Mid-Season', '2026-10-12', 'Test Fixture');
+    insertSeedMedia.run('Late-Season Highlights', 'Third test item', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'Late-Season', '2026-10-20', 'Test Fixture');
 
     // 5. Zero-Login Submission with YouTube link (leave YouTube links as links)
     const ytSubmitRes = await fetch(`${baseUrl}/api/media`, {

@@ -5,6 +5,26 @@
 import { CURRENT_APP_VERSION } from './version.js';
 import { parseAllowedEmails, canUserAccessEvent } from './policy.js';
 import { sanitizeHttpUrl, getSafePublicOrigin } from './security.js';
+import { resolveConfig, PRESET_PICKUP_BASEBALL } from './config.js';
+
+function extractOriginHost(originStr) {
+  try {
+    if (originStr) {
+      return new URL(originStr).hostname || 'community.local';
+    }
+  } catch (e) {
+    /* ignore invalid origin */
+  }
+  return 'community.local';
+}
+
+function extractEmailAddress(raw) {
+  const str = String(raw || '').trim();
+  if (!str) return '';
+  const angleMatch = str.match(/<([^>\s]+@[^>\s]+)>/);
+  if (angleMatch) return angleMatch[1];
+  return str.includes('@') ? str : '';
+}
 
 function getSafeFeedMediaUrl(rawUrl, origin) {
   if (!rawUrl) return '';
@@ -50,17 +70,23 @@ function formatRfc822Date(dateInput) {
   return isNaN(d.getTime()) ? new Date().toUTCString() : d.toUTCString();
 }
 
-export function buildRssFeedXml(posts, origin = 'https://www.pickupbaseballfoundation.org') {
+export function buildRssFeedXml(posts, origin = '', options = {}) {
+  const cfg = resolveConfig(options && options.env);
+  const safeOrigin = (origin && String(origin).trim()) || cfg.PUBLIC_ORIGIN || '';
+  const feedHost = extractOriginHost(safeOrigin);
+  const feedEmail = extractEmailAddress(cfg.FROM_EMAIL) || cfg.REPLY_TO_EMAIL || cfg.ADMIN_EMAIL || `noreply@${feedHost}`;
+  const isPickupPreset = cfg.COMMUNITY_PRESET === PRESET_PICKUP_BASEBALL;
+  const guidPrefix = isPickupPreset ? 'pickup-baseball-post' : 'community-post';
   const nowRfc822 = new Date().toUTCString();
-  const feedSelfUrl = `${origin}/feed.xml`;
+  const feedSelfUrl = `${safeOrigin}/feed.xml`;
 
   let itemsXml = '';
   for (const post of posts) {
-    const postUrl = `${origin}/index.html#post-${post.id}`;
-    const guid = `pickup-baseball-post-${post.id}@pickupbaseballfoundation.org`;
+    const postUrl = `${safeOrigin}/index.html#post-${post.id}`;
+    const guid = `${guidPrefix}-${post.id}@${feedHost}`;
     const pubDate = formatRfc822Date(post.created_at);
     const mType = post.media_type || parseMediaType(post.media_url);
-    const mUrl = getSafeFeedMediaUrl(post.media_url, origin);
+    const mUrl = getSafeFeedMediaUrl(post.media_url, safeOrigin);
 
     let mediaTags = '';
     let richHtmlDesc = `<p>${escapeXml(post.content).replace(/\n/g, '<br/>')}</p>`;
@@ -97,7 +123,8 @@ export function buildRssFeedXml(posts, origin = 'https://www.pickupbaseballfound
     }
 
     if (post.event_id && post.event_title) {
-      richHtmlDesc += `<p><small>⚾ Game: <a href="${origin}/event.html?id=${post.event_id}">${escapeXml(post.event_title)}</a></small></p>`;
+      const eventPrefix = isPickupPreset ? '⚾ Game:' : '📅 Event:';
+      richHtmlDesc += `<p><small>${eventPrefix} <a href="${safeOrigin}/event.html?id=${post.event_id}">${escapeXml(post.event_title)}</a></small></p>`;
     }
 
     itemsXml += `
@@ -106,11 +133,15 @@ export function buildRssFeedXml(posts, origin = 'https://www.pickupbaseballfound
       <link>${postUrl}</link>
       <guid isPermaLink="false">${guid}</guid>
       <pubDate>${pubDate}</pubDate>
-      <author>games@pickupbaseballfoundation.org (${escapeXml(post.author_name || 'Pickup Baseball Foundation')})</author>
+      <author>${escapeXml(feedEmail)} (${escapeXml(post.author_name || cfg.COMMUNITY_NAME)})</author>
       <description><![CDATA[${escapeCdata(richHtmlDesc)}]]></description>
       ${mediaTags}
     </item>`;
   }
+
+  const channelDesc = isPickupPreset
+    ? `Community pickup baseball highlights, game recaps, video clips, photos, and announcements from ${cfg.COMMUNITY_NAME}.`
+    : `Community highlights, recaps, video clips, photos, and announcements from ${cfg.COMMUNITY_NAME}.`;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" 
@@ -118,16 +149,16 @@ export function buildRssFeedXml(posts, origin = 'https://www.pickupbaseballfound
   xmlns:atom="http://www.w3.org/2005/Atom"
   xmlns:media="http://search.yahoo.com/mrss/">
   <channel>
-    <title>Sunday Pickup Baseball — Highlights &amp; Updates</title>
-    <link>${origin}</link>
-    <description>Community pickup baseball highlights, game recaps, video clips, photos, and announcements from the Pickup Baseball Foundation.</description>
+    <title>${escapeXml(cfg.COMMUNITY_NAME)} — Highlights &amp; Updates</title>
+    <link>${safeOrigin}</link>
+    <description>${escapeXml(channelDesc)}</description>
     <language>en-us</language>
     <lastBuildDate>${nowRfc822}</lastBuildDate>
     <atom:link href="${feedSelfUrl}" rel="self" type="application/rss+xml" />
     <image>
-      <url>${origin}/logo.svg</url>
-      <title>Sunday Pickup Baseball</title>
-      <link>${origin}</link>
+      <url>${safeOrigin}/logo.svg</url>
+      <title>${escapeXml(cfg.COMMUNITY_NAME)}</title>
+      <link>${safeOrigin}</link>
     </image>${itemsXml}
   </channel>
 </rss>
@@ -153,7 +184,7 @@ export async function renderFeedXmlResponse(db, requestUrl, env = null) {
     }
     const runtimeEnv = env || (typeof process !== 'undefined' && process.env ? process.env : undefined);
     const origin = getSafePublicOrigin({ req: { url: requestUrl }, env: runtimeEnv });
-    const xml = buildRssFeedXml(posts, origin);
+    const xml = buildRssFeedXml(posts, origin, { env: runtimeEnv });
     return new Response(xml, {
       status: 200,
       headers: {
@@ -195,20 +226,27 @@ function formatIcsUtcDate(d) {
     pad(d.getUTCSeconds()) + 'Z';
 }
 
-export function buildCalendarIcs(allEvents, origin = 'https://www.pickupbaseballfoundation.org', options = {}) {
+export function buildCalendarIcs(allEvents, origin = '', options = {}) {
+  const cfg = resolveConfig(options && options.env);
+  const safeOrigin = (origin && String(origin).trim()) || cfg.PUBLIC_ORIGIN || '';
+  const calHost = extractOriginHost(safeOrigin);
+  const isPickupPreset = cfg.COMMUNITY_PRESET === PRESET_PICKUP_BASEBALL;
   const viewerUser = (options && options.viewerUser) ? options.viewerUser : null;
   const visibleEvents = (allEvents || []).filter(ev => canUserAccessEvent(viewerUser, ev));
   const nowStamp = formatIcsUtcDate(new Date());
-  const defaultCalName = viewerUser ? 'Sunday Pickup Baseball (Personal Feed)' : 'Sunday Pickup Baseball';
+  const defaultCalName = viewerUser ? `${cfg.COMMUNITY_NAME} (Personal Feed)` : cfg.COMMUNITY_NAME;
   const calendarName = (options && options.calendarName) ? String(options.calendarName) : defaultCalName;
+  const defaultCalDesc = safeOrigin
+    ? `Live ${isPickupPreset ? 'game' : 'event'} schedule from ${cfg.COMMUNITY_NAME} (${calHost})`
+    : `Live ${isPickupPreset ? 'game' : 'event'} schedule from ${cfg.COMMUNITY_NAME}`;
   const calendarDesc = (options && options.calendarDesc)
     ? String(options.calendarDesc)
-    : 'Live game schedule from Pickup Baseball Foundation (www.pickupbaseballfoundation.org)';
+    : defaultCalDesc;
 
   const icsLines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//Pickup Baseball Foundation//NONSGML Pickup Baseball Calendar//EN',
+    `PRODID:-//${escapeIcsText(cfg.COMMUNITY_NAME)}//NONSGML ${isPickupPreset ? 'Pickup Baseball Calendar' : 'Community Calendar'}//EN`,
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
     `X-WR-CALNAME:${escapeIcsText(calendarName)}`,
@@ -218,18 +256,23 @@ export function buildCalendarIcs(allEvents, origin = 'https://www.pickupbaseball
     'X-PUBLISHED-TTL:PT1H'
   ];
 
+  const uidPrefix = isPickupPreset ? 'pickup-baseball-event' : 'event';
+  const defaultSummaryIntro = isPickupPreset
+    ? 'Free community pickup baseball. Check live roster, coordinate gear & volunteer for tasks:'
+    : `Community event from ${cfg.COMMUNITY_NAME}. Check live roster, coordinate gear & volunteer for tasks:`;
+
   for (const ev of visibleEvents) {
     const startDate = new Date(ev.event_date);
     if (isNaN(startDate.getTime())) continue;
     const endDate = new Date(startDate.getTime() + 3 * 60 * 60 * 1000);
     const isRainout = ev.status === 'rainout';
-    const baseTitle = ev.title || 'Sunday Pickup Baseball - Noon Game';
+    const baseTitle = ev.title || cfg.COMMUNITY_NAME;
     const summary = isRainout ? `🌧️ RAINED OUT: ${baseTitle}` : baseTitle;
-    const eventUrl = `${origin}/event.html?id=${ev.id}`;
+    const eventUrl = `${safeOrigin}/event.html?id=${ev.id}`;
     const descParts = [
       isRainout
-        ? (ev.rainout_note ? `RAINED OUT — "${ev.rainout_note}"` : 'RAINED OUT — Check event page for field updates.')
-        : 'Free community pickup baseball. Check live roster, coordinate gear & volunteer for tasks:',
+        ? (ev.rainout_note ? `RAINED OUT — "${ev.rainout_note}"` : 'RAINED OUT — Check event page for updates.')
+        : defaultSummaryIntro,
       eventUrl
     ];
     if (ev.description && ev.description.trim()) {
@@ -238,12 +281,12 @@ export function buildCalendarIcs(allEvents, origin = 'https://www.pickupbaseball
 
     icsLines.push(
       'BEGIN:VEVENT',
-      `UID:pickup-baseball-event-${ev.id}@pickupbaseballfoundation.org`,
+      `UID:${uidPrefix}-${ev.id}@${calHost}`,
       `DTSTAMP:${nowStamp}`,
       `DTSTART:${formatIcsUtcDate(startDate)}`,
       `DTEND:${formatIcsUtcDate(endDate)}`,
       `SUMMARY:${escapeIcsText(summary)}`,
-      `LOCATION:${escapeIcsText(ev.location || 'Bushrod Park Field 1, Oakland, CA')}`,
+      `LOCATION:${escapeIcsText(ev.location || 'TBA')}`,
       `DESCRIPTION:${escapeIcsText(descParts.join('\n\n'))}`,
       `URL:${eventUrl}`,
       'STATUS:CONFIRMED',

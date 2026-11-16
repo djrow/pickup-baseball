@@ -49,12 +49,13 @@ test('Clubhouse Frontend & Native Waiver Verification', async (t) => {
   });
 
   await t.test('Check 8.3: Native Digital & Paper Waiver Provenance & Admin Status Control', async () => {
-    // 1. Check anonymous waiver status returns official Form 41335\14760738.1 text and SHA-256
+    // 1. Check anonymous waiver status returns neutral community-named waiver text under generic-community preset
     const anonStatus = await apiReq('GET', '/api/waiver/status');
     assert.equal(anonStatus.status, 200);
-    assert.equal(anonStatus.data.document_version, '41335\\14760738.1');
+    assert.equal(anonStatus.data.document_version, 'community-waiver-v1');
     assert.equal(anonStatus.data.waiver_text_sha256.length, 64);
     assert.equal(anonStatus.data.paragraphs.length, 4);
+    assert.ok(anonStatus.data.paragraphs[0].includes('Community Hub'));
 
     // 2. Admin marks player account as 'paper' waiver on file
     const paperRes = await apiReq('PUT', `/api/auth/users/${seedPlayerId}/badges`, seedAdminCookie, {
@@ -68,7 +69,7 @@ test('Clubhouse Frontend & Native Waiver Verification', async (t) => {
     assert.equal(playerStatusPaper.data.waiver_status, 'paper');
     assert.equal(playerStatusPaper.data.waiver_signed, true);
 
-    // 3. Player executes digital signature on Form 41335\14760738.1
+    // 3. Player executes digital signature on community waiver
     const samplePngSig = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
     const signRes = await apiReq('POST', '/api/waiver/sign', seedPlayerCookie, {
       printed_name: 'Alex Johnson',
@@ -79,7 +80,7 @@ test('Clubhouse Frontend & Native Waiver Verification', async (t) => {
     });
     assert.equal(signRes.status, 201);
     assert.equal(signRes.data.waiver_status, 'digital');
-    assert.ok(signRes.data.waiver.certificate_id.startsWith('PBF-WVR-20261111-'));
+    assert.ok(signRes.data.waiver.certificate_id.startsWith('WVR-20261111-'));
     assert.equal(signRes.data.waiver.document_sha256.length, 64);
     assert.equal(signRes.data.waiver.provenance_seal.length, 64);
 
@@ -97,7 +98,8 @@ test('Clubhouse Frontend & Native Waiver Verification', async (t) => {
     const certHtml = await certHtmlRes.text();
     assert.ok(certHtml.includes('CONSENT, WAIVER AND INDEMNITY'));
     assert.ok(certHtml.includes('Cryptographic Seal Verified'));
-    assert.ok(certHtml.includes('41335\\14760738.1'));
+    assert.ok(certHtml.includes('community-waiver-v1'));
+    assert.ok(certHtml.includes('Community Hub'));
     assert.ok(!certHtml.includes(samplePngSig), 'Anonymous HTML certificate must redact raw signature image data');
 
     const anonCertJson = await apiReq('GET', `/api/waiver/certificate/${certId}`, null);

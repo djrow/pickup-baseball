@@ -10,6 +10,7 @@ import {
 } from '../../mailer.js';
 import { getSafePublicOrigin } from '../../security.js';
 import { ERROR_CODES, logEvent } from '../../errors.js';
+import { resolveConfig } from '../../config.js';
 
 /** SQL projection normalizing inline data-URI avatars to cached endpoint URLs. */
 export const AVATAR_EXPR = `CASE WHEN u.avatar_url LIKE 'data:%' THEN '/api/users/' || u.id || '/avatar?v=' || length(u.avatar_url) ELSE COALESCE(u.avatar_url, '') END`;
@@ -175,7 +176,8 @@ export async function sendRemindersForEventD1(db, env, origin, event) {
  * @param {string} [origin] - Public site origin URL.
  * @returns {Promise<number>} Count of events processed.
  */
-export async function processUpcomingEventRemindersD1(db, env, origin = 'https://www.pickupbaseballfoundation.org') {
+export async function processUpcomingEventRemindersD1(db, env, origin = '') {
+  const safeOrigin = origin || resolveConfig(env).PUBLIC_ORIGIN || '';
   const now = new Date();
   const windowStart = now.toISOString();
   const windowEnd = new Date(now.getTime() + 36 * 60 * 60 * 1000).toISOString();
@@ -187,7 +189,7 @@ export async function processUpcomingEventRemindersD1(db, env, origin = 'https:/
 
   const list = upcomingEvents || [];
   for (const ev of list) {
-    await sendRemindersForEventD1(db, env, origin, ev);
+    await sendRemindersForEventD1(db, env, safeOrigin, ev);
   }
   return list.length;
 }

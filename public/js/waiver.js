@@ -39,6 +39,32 @@
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
+  function renderWaiverDocument(statusData) {
+    if (!statusData || !Array.isArray(statusData.paragraphs) || statusData.paragraphs.length === 0) {
+      return;
+    }
+    var container = document.getElementById('waiver-paragraphs');
+    if (container) {
+      var html = '';
+      for (var i = 0; i < statusData.paragraphs.length; i++) {
+        var isLast = i === statusData.paragraphs.length - 1;
+        html += '<p' + (isLast ? ' class="waiver-bold"' : '') + '>' + API.escapeHtml(statusData.paragraphs[i]) + '</p>';
+      }
+      container.innerHTML = html;
+    }
+    var docVer = statusData.document_version || '';
+    if (docVer) {
+      var formLabel = document.getElementById('waiver-form-id-label');
+      if (formLabel) {
+        formLabel.textContent = 'Form ID: ' + docVer + ' • SHA-256 Provenance Sealed';
+      }
+      var printFormId = document.getElementById('waiver-print-form-id');
+      if (printFormId) {
+        printFormId.textContent = docVer;
+      }
+    }
+  }
+
   function renderStatusBanner(statusData) {
     var banner = document.getElementById('waiver-status-banner');
     if (!banner) return;
@@ -258,6 +284,7 @@
     API.renderNav(currentUser);
 
     if (statusData) {
+      renderWaiverDocument(statusData);
       renderStatusBanner(statusData);
     }
 
