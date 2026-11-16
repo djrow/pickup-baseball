@@ -29,6 +29,7 @@ document.addEventListener('DOMContentLoaded', async function() {
   setupDataExport();
   setupAvatarUpload();
   setupProfileForm();
+  setupAccountErasure();
   setupLogoutButtons();
 });
 
@@ -485,6 +486,115 @@ function setupProfileForm() {
       saveBtn.textContent = 'Save Changes';
     }
   });
+}
+
+function setupAccountErasure() {
+  const sendCodeBtn = document.getElementById('btn-erasure-send-code');
+  const confirmPanel = document.getElementById('erasure-confirm-panel');
+  const codeInput = document.getElementById('erasure-otp-code');
+  const confirmBtn = document.getElementById('btn-erasure-confirm');
+  const cancelBtn = document.getElementById('btn-erasure-cancel');
+  const keepGalleryChk = document.getElementById('erasure-keep-gallery');
+  const alertBox = document.getElementById('erasure-alert');
+
+  function setErasureAlert(msg, isError) {
+    if (!alertBox) return;
+    if (!msg) {
+      alertBox.innerHTML = '';
+      return;
+    }
+    alertBox.innerHTML = '<div class="alert ' + (isError ? 'alert-error' : 'alert-success') + '" style="font-size: 0.82rem; margin: 0;">' + API.escapeHtml(msg) + '</div>';
+  }
+
+  if (sendCodeBtn) {
+    sendCodeBtn.addEventListener('click', async function() {
+      if (!currentUser || !currentUser.email) return;
+      sendCodeBtn.disabled = true;
+      const origText = sendCodeBtn.textContent;
+      sendCodeBtn.textContent = 'Sending code...';
+      setErasureAlert('', false);
+      try {
+        const res = await API.sendLoginCode(currentUser.email, currentUser.name || '', false);
+        if (res && res.error) {
+          setErasureAlert(res.error, true);
+        } else {
+          if (confirmPanel) confirmPanel.style.display = 'block';
+          if (codeInput) codeInput.focus();
+          setErasureAlert(API.t('profile.erasure_code_sent', 'Verification code sent to your email. Enter the 6-digit code below to confirm deletion.'), false);
+        }
+      } catch (err) {
+        setErasureAlert('Failed to send verification code.', true);
+      } finally {
+        sendCodeBtn.disabled = false;
+        sendCodeBtn.textContent = origText;
+      }
+    });
+  }
+
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', function() {
+      if (confirmPanel) confirmPanel.style.display = 'none';
+      if (codeInput) codeInput.value = '';
+      setErasureAlert('', false);
+    });
+  }
+
+  if (confirmBtn) {
+    confirmBtn.addEventListener('click', async function() {
+      const code = codeInput ? codeInput.value.trim() : '';
+      if (!code || code.length < 6) {
+        setErasureAlert('Please enter the 6-digit verification code sent to your email.', true);
+        return;
+      }
+
+      const confirmMsg = API.t(
+        'profile.erasure_confirm_dialog',
+        'Permanently delete your account and personal data? This cannot be undone. Any signed liability waiver will stay in restricted 3-year legal-defense quarantine before automatic purge.'
+      );
+      const ok = window.PBFDialog
+        ? await window.PBFDialog.confirm(confirmMsg, {
+            title: API.t('profile.erasure_title', 'Delete Account & Erase Data'),
+            confirmLabel: API.t('profile.erasure_confirm_btn', 'Permanently Delete My Account'),
+            danger: true
+          })
+        : false;
+      if (!ok) return;
+
+      confirmBtn.disabled = true;
+      const origText = confirmBtn.textContent;
+      confirmBtn.textContent = 'Deleting...';
+      setErasureAlert('', false);
+      try {
+        const res = await API.deleteMyAccount({
+          code: code,
+          keep_approved_gallery: Boolean(keepGalleryChk && keepGalleryChk.checked)
+        });
+        if (res && res.error) {
+          setErasureAlert(res.error, true);
+          return;
+        }
+
+        API.clearDataCaches(true);
+        API.clearDiagnostics();
+        if (typeof window !== 'undefined' && window.ClubhouseCrypto && typeof window.ClubhouseCrypto.clearMemoryKeys === 'function') {
+          window.ClubhouseCrypto.clearMemoryKeys();
+        }
+        await API.clearClubhouseIndexedDb();
+
+        if (window.PBFDialog) {
+          await window.PBFDialog.alert(
+            (res && (res.waiverRetentionNotice || res.message)) || 'Your account has been deleted.'
+          );
+        }
+        window.location.href = '/index.html';
+      } catch (err) {
+        setErasureAlert('Failed to delete account. Please try again.', true);
+      } finally {
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = origText;
+      }
+    });
+  }
 }
 
 function showAlert(msg, isError) {

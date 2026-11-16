@@ -366,5 +366,15 @@
   "profile.export_passphrase_msg": "Entrez la phrase secrète de votre coffre de clés E2EE pour déchiffrer vos messages dans le navigateur avant l’enregistrement :",
   "profile.export_passphrase_placeholder": "Entrez la phrase secrète du coffre...",
   "profile.export_passphrase_confirm": "Déverrouiller et déchiffrer",
-  "profile.export_wrong_passphrase": "Phrase secrète incorrecte. Les messages chiffrés n’ont pas pu être déchiffrés."
+  "profile.export_wrong_passphrase": "Phrase secrète incorrecte. Les messages chiffrés n’ont pas pu être déchiffrés.",
+  "profile.erasure_title": "🗑️ Supprimer le compte et effacer les données",
+  "profile.erasure_notice": "La suppression de votre compte efface immédiatement votre profil, vos sessions, codes de connexion, consentements, inscriptions futures, tâches et créneaux de frappe. Les présences passées, discussions et publications sont anonymisées. Avis de conservation de décharge : les décharges de responsabilité signées restent scellées en quarantaine restreinte réservée aux administrateurs pendant 3 ans après la signature ou votre dernier événement avant suppression définitive.",
+  "profile.erasure_keep_gallery": "Conserver mes photos/vidéos approuvées dans la galerie sous le nom anonyme « Community Member » (les éléments non approuvés sont toujours supprimés)",
+  "profile.erasure_send_code_btn": "📧 Envoyer le code de vérification pour supprimer le compte",
+  "profile.erasure_code_label": "Entrez le code de vérification à 6 chiffres",
+  "profile.erasure_code_placeholder": "123456",
+  "profile.erasure_confirm_btn": "Supprimer définitivement mon compte",
+  "profile.erasure_cancel_btn": "Annuler",
+  "profile.erasure_confirm_dialog": "Supprimer définitivement votre compte et vos données personnelles ? Cette action est irréversible. Toute décharge signée restera en quarantaine juridique restreinte de 3 ans avant purge automatique.",
+  "profile.erasure_code_sent": "Code de vérification envoyé par e-mail. Saisissez le code à 6 chiffres ci-dessous pour confirmer."
 }

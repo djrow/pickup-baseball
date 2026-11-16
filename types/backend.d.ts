@@ -21,6 +21,7 @@ interface AppBindings {
   TURN_ICE_SERVERS_JSON?: string;
   WAIVER_SIGNING_SECRET?: string;
   WAIVER_RETENTION_YEARS?: string | number;
+  MEDIA_BUCKET?: R2BucketLike;
   FEATURE_BATTING_PRACTICE?: string | number | boolean;
   FEATURE_CERTIFIED_SHIFTS?: string | number | boolean;
   FEATURE_SUNDAY_PRIORITY?: string | number | boolean;
@@ -57,6 +58,10 @@ interface ResolvedBootConfig {
   FEATURE_BATTING_PRACTICE: boolean;
   FEATURE_CERTIFIED_SHIFTS: boolean;
   FEATURE_SUNDAY_PRIORITY: boolean;
+}
+
+interface R2BucketLike {
+  delete(keys: string | string[]): Promise<void>;
 }
 
 interface AppUser {
