@@ -116,50 +116,50 @@ eventsCoreRouter.get('/', async (c) => {
   }
 });
 
-const BACKUP_PAGE_SIZE = 100;
+const BACKUP_PAGE_SIZE = 500;
 const SECRET_APP_SETTING_KEYS = new Set(['waiver_provenance_secret', 'appscript_upload_url', 'rate_limit_hmac_secret']);
 const SCRUBBED_APP_SETTING_KEYS = new Set(['schema_version', 'require_login_to_rsvp', 'disallow_zero_login_media']);
 
 const SCRUBBED_TABLE_QUERIES = {
-  events: 'SELECT * FROM "events" LIMIT ? OFFSET ?',
-  event_duties: 'SELECT * FROM "event_duties" LIMIT ? OFFSET ?',
-  default_duties: 'SELECT * FROM "default_duties" LIMIT ? OFFSET ?',
-  posts: 'SELECT * FROM "posts" LIMIT ? OFFSET ?',
-  media_items: 'SELECT * FROM "media_items" WHERE is_approved = 1 LIMIT ? OFFSET ?',
-  app_settings: `SELECT * FROM "app_settings" WHERE key IN ('schema_version', 'require_login_to_rsvp', 'disallow_zero_login_media') LIMIT ? OFFSET ?`,
-  channels: `SELECT * FROM "channels" WHERE channel_type NOT IN ('dm', 'group_dm') LIMIT ? OFFSET ?`,
-  clubhouse_gifs: 'SELECT * FROM "clubhouse_gifs" LIMIT ? OFFSET ?'
+  events: 'SELECT rowid AS __backup_rowid, * FROM "events" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  event_duties: 'SELECT rowid AS __backup_rowid, * FROM "event_duties" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  default_duties: 'SELECT rowid AS __backup_rowid, * FROM "default_duties" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  posts: 'SELECT rowid AS __backup_rowid, * FROM "posts" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  media_items: 'SELECT rowid AS __backup_rowid, * FROM "media_items" WHERE is_approved = 1 AND rowid > ? ORDER BY rowid ASC LIMIT ?',
+  app_settings: `SELECT rowid AS __backup_rowid, * FROM "app_settings" WHERE key IN ('schema_version', 'require_login_to_rsvp', 'disallow_zero_login_media') AND rowid > ? ORDER BY rowid ASC LIMIT ?`,
+  channels: `SELECT rowid AS __backup_rowid, * FROM "channels" WHERE channel_type NOT IN ('dm', 'group_dm') AND rowid > ? ORDER BY rowid ASC LIMIT ?`,
+  clubhouse_gifs: 'SELECT rowid AS __backup_rowid, * FROM "clubhouse_gifs" WHERE is_public = 1 AND rowid > ? ORDER BY rowid ASC LIMIT ?'
 };
 
 const DR_TABLE_QUERIES = {
-  users: 'SELECT * FROM "users" LIMIT ? OFFSET ?',
-  events: 'SELECT * FROM "events" LIMIT ? OFFSET ?',
-  event_duties: 'SELECT * FROM "event_duties" LIMIT ? OFFSET ?',
-  attendees: 'SELECT * FROM "attendees" LIMIT ? OFFSET ?',
-  duty_assignments: 'SELECT * FROM "duty_assignments" LIMIT ? OFFSET ?',
-  comments: 'SELECT * FROM "comments" LIMIT ? OFFSET ?',
-  default_duties: 'SELECT * FROM "default_duties" LIMIT ? OFFSET ?',
-  posts: 'SELECT * FROM "posts" LIMIT ? OFFSET ?',
-  media_items: 'SELECT * FROM "media_items" LIMIT ? OFFSET ?',
-  banned_emails: 'SELECT * FROM "banned_emails" LIMIT ? OFFSET ?',
-  app_settings: `SELECT * FROM "app_settings" WHERE key NOT IN ('waiver_provenance_secret', 'appscript_upload_url', 'rate_limit_hmac_secret') LIMIT ? OFFSET ?`,
-  batting_practice_signups: 'SELECT * FROM "batting_practice_signups" LIMIT ? OFFSET ?',
-  waivers: 'SELECT * FROM "waivers" LIMIT ? OFFSET ?',
-  consent_records: 'SELECT * FROM "consent_records" LIMIT ? OFFSET ?',
-  email_suppressions: 'SELECT * FROM "email_suppressions" LIMIT ? OFFSET ?',
-  channels: 'SELECT * FROM "channels" LIMIT ? OFFSET ?',
-  channel_members: 'SELECT * FROM "channel_members" LIMIT ? OFFSET ?',
-  messages: 'SELECT * FROM "messages" LIMIT ? OFFSET ?',
-  message_reactions: 'SELECT * FROM "message_reactions" LIMIT ? OFFSET ?',
-  chat_attachments: 'SELECT * FROM "chat_attachments" LIMIT ? OFFSET ?',
-  user_crypto_keys: 'SELECT * FROM "user_crypto_keys" LIMIT ? OFFSET ?',
-  channel_key_shares: 'SELECT * FROM "channel_key_shares" LIMIT ? OFFSET ?',
-  sync_events: 'SELECT * FROM "sync_events" LIMIT ? OFFSET ?',
-  chat_reports: 'SELECT * FROM "chat_reports" LIMIT ? OFFSET ?',
-  user_mutes: 'SELECT * FROM "user_mutes" LIMIT ? OFFSET ?',
-  user_blocks: 'SELECT * FROM "user_blocks" LIMIT ? OFFSET ?',
-  clubhouse_gifs: 'SELECT * FROM "clubhouse_gifs" LIMIT ? OFFSET ?',
-  clubhouse_opted_out: 'SELECT * FROM "clubhouse_opted_out" LIMIT ? OFFSET ?'
+  users: 'SELECT rowid AS __backup_rowid, * FROM "users" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  events: 'SELECT rowid AS __backup_rowid, * FROM "events" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  event_duties: 'SELECT rowid AS __backup_rowid, * FROM "event_duties" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  attendees: 'SELECT rowid AS __backup_rowid, * FROM "attendees" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  duty_assignments: 'SELECT rowid AS __backup_rowid, * FROM "duty_assignments" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  comments: 'SELECT rowid AS __backup_rowid, * FROM "comments" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  default_duties: 'SELECT rowid AS __backup_rowid, * FROM "default_duties" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  posts: 'SELECT rowid AS __backup_rowid, * FROM "posts" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  media_items: 'SELECT rowid AS __backup_rowid, * FROM "media_items" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  banned_emails: 'SELECT rowid AS __backup_rowid, * FROM "banned_emails" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  app_settings: `SELECT rowid AS __backup_rowid, * FROM "app_settings" WHERE key NOT IN ('waiver_provenance_secret', 'appscript_upload_url', 'rate_limit_hmac_secret') AND rowid > ? ORDER BY rowid ASC LIMIT ?`,
+  batting_practice_signups: 'SELECT rowid AS __backup_rowid, * FROM "batting_practice_signups" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  waivers: 'SELECT rowid AS __backup_rowid, * FROM "waivers" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  consent_records: 'SELECT rowid AS __backup_rowid, * FROM "consent_records" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  email_suppressions: 'SELECT rowid AS __backup_rowid, * FROM "email_suppressions" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  channels: 'SELECT rowid AS __backup_rowid, * FROM "channels" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  channel_members: 'SELECT rowid AS __backup_rowid, * FROM "channel_members" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  messages: 'SELECT rowid AS __backup_rowid, * FROM "messages" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  message_reactions: 'SELECT rowid AS __backup_rowid, * FROM "message_reactions" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  chat_attachments: 'SELECT rowid AS __backup_rowid, * FROM "chat_attachments" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  user_crypto_keys: 'SELECT rowid AS __backup_rowid, * FROM "user_crypto_keys" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  channel_key_shares: 'SELECT rowid AS __backup_rowid, * FROM "channel_key_shares" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  sync_events: 'SELECT rowid AS __backup_rowid, * FROM "sync_events" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  chat_reports: 'SELECT rowid AS __backup_rowid, * FROM "chat_reports" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  user_mutes: 'SELECT rowid AS __backup_rowid, * FROM "user_mutes" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  user_blocks: 'SELECT rowid AS __backup_rowid, * FROM "user_blocks" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  clubhouse_gifs: 'SELECT rowid AS __backup_rowid, * FROM "clubhouse_gifs" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  clubhouse_opted_out: 'SELECT rowid AS __backup_rowid, * FROM "clubhouse_opted_out" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?'
 };
 
 function resolveBackupTargetConfig(c, dbParam, dateStr) {
@@ -211,6 +211,7 @@ function scrubBackupRow(table, row, mode) {
   }
 
   const out = { ...row };
+  delete out.__backup_rowid;
   if (table === 'users') {
     out.calendar_token = null;
   } else if (table === 'attendees') {
@@ -240,7 +241,8 @@ function scrubBackupRow(table, row, mode) {
   } else if (table === 'events' && mode === 'scrubbed') {
     out.allowed_emails = null;
   } else if (table === 'posts' && mode === 'scrubbed') {
-    if ('author_email' in out) out.author_email = null;
+    out.author_id = null;
+    out.author_name = 'Community Organizer';
   }
   return out;
 }
@@ -263,15 +265,15 @@ async function writeBackupTables(db, tables, mode, onChunk) {
   for (const table of tables) {
     const tableQuery = queryMap[table];
     if (!tableQuery) continue;
-    let offset = 0;
+    let lastRowid = Number.MIN_SAFE_INTEGER;
     let headerWritten = false;
     while (true) {
       let rows;
       try {
-        const res = await db.prepare(tableQuery).bind(BACKUP_PAGE_SIZE, offset).all();
+        const res = await db.prepare(tableQuery).bind(lastRowid, BACKUP_PAGE_SIZE).all();
         rows = res && res.results ? res.results : [];
       } catch (err) {
-        if (err && /no such table/i.test(String(err.message || err))) {
+        if (err && /no such table/i.test(String(err.message || ''))) {
           break;
         }
         throw err;
@@ -291,7 +293,10 @@ async function writeBackupTables(db, tables, mode, onChunk) {
         onChunk(chunk);
       }
       if (rows.length < BACKUP_PAGE_SIZE) break;
-      offset += rows.length;
+      const tailRow = rows[rows.length - 1];
+      const nextRowid = tailRow ? Number(tailRow.__backup_rowid) : NaN;
+      if (!Number.isFinite(nextRowid) || nextRowid <= lastRowid) break;
+      lastRowid = nextRowid;
     }
     if (headerWritten) {
       onChunk('\n');
@@ -344,7 +349,7 @@ eventsCoreRouter.get('/admin/backup-db', requireAdmin, async (c) => {
           });
           controller.close();
         } catch (streamErr) {
-          console.error('[Backup] Stream error:', streamErr);
+          logEvent('error', 'backup_scrubbed_stream_failed', { err: streamErr });
           controller.error(streamErr);
         }
       }
@@ -361,7 +366,7 @@ eventsCoreRouter.get('/admin/backup-db', requireAdmin, async (c) => {
       }
     });
   } catch (err) {
-    console.error('[Backup] Error creating SQL dump:', err);
+    logEvent('error', 'backup_scrubbed_export_failed', { err });
     return c.text('Failed to generate database backup.', 500);
   }
 });
@@ -461,7 +466,7 @@ eventsCoreRouter.post('/admin/backup-db', requireAdmin, async (c) => {
       }
     });
   } catch (err) {
-    console.error('[Backup] Error creating encrypted DR backup:', err);
+    logEvent('error', 'backup_dr_export_failed', { err });
     return c.json({ error: 'Failed to generate encrypted disaster-recovery backup.' }, 500);
   }
 });

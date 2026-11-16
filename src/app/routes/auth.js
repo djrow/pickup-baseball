@@ -43,6 +43,7 @@ import { executeTwoTierErasure } from '../erasure.js';
 import {
   CONSENT_TYPES,
   getConsentPolicyMetadata,
+  hashSubjectEmail,
   parseOptionalBoolean,
   recordConsentChange
 } from '../consent.js';
@@ -411,6 +412,7 @@ authRouter.get('/verify-magic', async (c) => {
 authRouter.get('/me', (c) => c.json({ user: c.get('user') }));
 
 async function fetchBaseballExportData(db, userId, userEmail) {
+  const visitorEmailHash = await hashSubjectEmail(userEmail);
   const [
     profileRow,
     consentRes,
@@ -444,13 +446,21 @@ async function fetchBaseballExportData(db, userId, userEmail) {
       FROM users
       WHERE id = ?
     `).bind(userId).first(),
-    db.prepare(`
-      SELECT id, subject_type, user_id, consent_type, policy_version, policy_sha256,
-             status, granted_at, withdrawn_at, created_at
-      FROM consent_records
-      WHERE user_id = ?
-      ORDER BY id ASC
-    `).bind(userId).all(),
+    visitorEmailHash
+      ? db.prepare(`
+          SELECT id, subject_type, user_id, consent_type, policy_version, policy_sha256,
+                 status, granted_at, withdrawn_at, created_at
+          FROM consent_records
+          WHERE user_id = ? OR (subject_type = 'visitor' AND subject_email_hash = ?)
+          ORDER BY id ASC
+        `).bind(userId, visitorEmailHash).all()
+      : db.prepare(`
+          SELECT id, subject_type, user_id, consent_type, policy_version, policy_sha256,
+                 status, granted_at, withdrawn_at, created_at
+          FROM consent_records
+          WHERE user_id = ?
+          ORDER BY id ASC
+        `).bind(userId).all(),
     db.prepare(`
       SELECT a.id, a.event_id, a.user_id, a.name, a.email, a.is_guest, a.status,
              a.gear_bringing, a.notes, a.players_count, a.spectators_count,
@@ -790,7 +800,7 @@ authRouter.post('/erasure/request', async (c) => {
       try {
         await sendErasureVerificationCode(c.env, origin, {
           email: cleanEmail,
-          name: recordInfo.name || 'Player',
+          name: recordInfo.name || 'Member',
           code
         });
       } catch (mailErr) {
@@ -916,7 +926,7 @@ const MEMBER_CONSENT_SPECS = [
   { snake: 'notify_community_updates', camel: 'notifyCommunityUpdates', consentType: CONSENT_TYPES.NOTIFY_COMMUNITY_UPDATES, defaultVal: 0 }
 ];
 
-async function applyMemberProfileAndConsents(db, user, body, profileFields) {
+async function applyMemberProfileAndConsents(db, user, body, profileFields, env = null) {
   /** @type {Record<string, any> | null} */
   const currentRow = await db.prepare(`
     SELECT
@@ -996,7 +1006,7 @@ async function applyMemberProfileAndConsents(db, user, body, profileFields) {
       userId: user.id,
       consentType: tr.consentType,
       granted: tr.granted
-    });
+    }, env);
   }
 }
 
@@ -1013,7 +1023,7 @@ authRouter.put('/profile', requireAuth, async (c) => {
     const cleanName = String(name).trim().slice(0, 120);
     const cleanBio = String(bio || '').trim().slice(0, 280);
 
-    await applyMemberProfileAndConsents(db, user, body || {}, { cleanName, cleanBio });
+    await applyMemberProfileAndConsents(db, user, body || {}, { cleanName, cleanBio }, c.env);
 
     return c.json({ success: true, message: 'Profile updated successfully.', user });
   } catch (err) {
@@ -1029,7 +1039,7 @@ authRouter.get('/consent', requireAuth, async (c) => {
 
   try {
     const [{ policyVersion, policySha256 }, recordsRes] = await Promise.all([
-      getConsentPolicyMetadata(),
+      getConsentPolicyMetadata(c.env),
       db.prepare(`
         SELECT id, subject_type, user_id, consent_type, policy_version, policy_sha256,
                status, granted_at, withdrawn_at, created_at
@@ -1054,7 +1064,7 @@ authRouter.get('/consent', requireAuth, async (c) => {
       records: (recordsRes && recordsRes.results) || []
     });
   } catch (err) {
-    console.error('[Auth] Error loading consent records:', err);
+    logEvent('error', 'auth_consent_load_failed', { userId: user.id, err });
     return c.json({ error: 'Failed to load consent preferences.' }, 500);
   }
 });
@@ -1066,8 +1076,8 @@ authRouter.put('/consent', requireAuth, async (c) => {
 
   try {
     const body = await c.req.json().catch(() => ({}));
-    await applyMemberProfileAndConsents(db, user, body, null);
-    const { policyVersion, policySha256 } = await getConsentPolicyMetadata();
+    await applyMemberProfileAndConsents(db, user, body, null, c.env);
+    const { policyVersion, policySha256 } = await getConsentPolicyMetadata(c.env);
     return c.json({
       success: true,
       policy_version: policyVersion,
@@ -1075,7 +1085,7 @@ authRouter.put('/consent', requireAuth, async (c) => {
       user
     });
   } catch (err) {
-    console.error('[Auth] Error updating consent preferences:', err);
+    logEvent('error', 'auth_consent_update_failed', { userId: user.id, err });
     return c.json({ error: 'Failed to update consent preferences.' }, 500);
   }
 });
@@ -1108,7 +1118,7 @@ async function handleClubhouseOptInToggle(c) {
         userId: user.id,
         consentType: CONSENT_TYPES.CLUBHOUSE_OPT_IN,
         granted: optedIn
-      });
+      }, c.env);
     }
 
     if (chatDb) {

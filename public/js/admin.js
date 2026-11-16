@@ -1575,13 +1575,25 @@ function setupAdminUserManagement(currentUser) {
         const targetUserEmail = e.currentTarget.getAttribute('data-user-email');
         if (!window.PBFDialog) return;
         const choice = await window.PBFDialog.confirmWithCheckbox(
-          'Permanently remove user account ' + targetUserEmail + '? Profile, future RSVPs, and media will be erased, past records anonymized, and any signed liability waiver will be held in 3-year legal-defense quarantine.',
-          'Also permanently BAN ' + targetUserEmail + ' from re-registering or signing in again',
-          { title: 'Remove User Account', confirmLabel: 'Remove User', danger: true }
+          API.t(
+            'admin.remove_user_confirm',
+            'Permanently remove member account {email}? Profile, future RSVPs, and media will be erased, past records anonymized, and any signed liability waiver will be held in 3-year legal-defense quarantine.',
+            { email: targetUserEmail }
+          ),
+          API.t(
+            'admin.remove_user_ban_checkbox',
+            'Also permanently BAN {email} from re-registering or signing in again',
+            { email: targetUserEmail }
+          ),
+          {
+            title: API.t('admin.remove_user_title', 'Remove Member Account'),
+            confirmLabel: API.t('admin.remove_user_confirm_btn', 'Remove Member'),
+            danger: true
+          }
         );
         if (!choice || !choice.confirmed) return;
         const alsoBan = Boolean(choice.checked);
-        setUserMgmtAlert('info', 'Removing ' + API.escapeHtml(targetUserEmail) + '...');
+        setUserMgmtAlert('info', API.escapeHtml(API.t('admin.removing_user', 'Removing {email}...', { email: targetUserEmail })));
 
         try {
           const deleteRes = await API.deleteUser(targetUserId, alsoBan, 'Banned by admin');
@@ -1593,7 +1605,7 @@ function setupAdminUserManagement(currentUser) {
             if (alsoBan && typeof reloadBannedEmailsFn === 'function') await reloadBannedEmailsFn();
           }
         } catch (err) {
-          setUserMgmtAlert('error', 'Failed to remove user account.');
+          setUserMgmtAlert('error', API.escapeHtml(API.t('admin.remove_user_failed', 'Failed to remove member account.')));
         }
       });
     });
@@ -2009,14 +2021,15 @@ function setupAdminSecurity() {
 
   async function loadQuarantinedWaivers() {
     if (!quarantinedTableBody) return;
-    quarantinedTableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 10px;">Loading quarantined waivers...</td></tr>';
+    quarantinedTableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 10px;">' + API.escapeHtml(API.t('admin.quarantined_loading', 'Loading quarantined waivers...')) + '</td></tr>';
     try {
       const res = await API.getQuarantinedWaivers();
       const list = (res && res.waivers) ? res.waivers : [];
       if (list.length === 0) {
-        quarantinedTableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 10px;">No quarantined waivers on legal hold.</td></tr>';
+        quarantinedTableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 10px;">' + API.escapeHtml(API.t('admin.quarantined_empty', 'No quarantined waivers on legal hold.')) + '</td></tr>';
         return;
       }
+      const inspectLabel = API.escapeHtml(API.t('admin.quarantined_inspect', '📄 Inspect'));
       quarantinedTableBody.innerHTML = list.map(function(w) {
         const certId = w.certificate_id || String(w.id);
         const signedDay = w.signed_date || (w.signed_at ? String(w.signed_at).slice(0, 10) : '');
@@ -2031,13 +2044,13 @@ function setupAdminSecurity() {
             <td style="font-size: 0.8rem; white-space: nowrap;">${API.escapeHtml(signedDay)}</td>
             <td style="font-size: 0.8rem; white-space: nowrap;">${API.escapeHtml(retentionDay)}</td>
             <td style="white-space: nowrap;">
-              <a href="/api/waiver/admin/quarantined/${encodeURIComponent(certId)}?format=html" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm" style="font-size: 0.74rem; padding: 2px 8px; height: 26px; line-height: 1.2;">📄 Inspect</a>
+              <a href="/api/waiver/admin/quarantined/${encodeURIComponent(certId)}?format=html" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm" style="font-size: 0.74rem; padding: 2px 8px; height: 26px; line-height: 1.2;">${inspectLabel}</a>
             </td>
           </tr>
         `;
       }).join('');
     } catch (e) {
-      quarantinedTableBody.innerHTML = '<tr><td colspan="5" style="color: var(--danger); text-align: center; padding: 10px;">Failed to load quarantined waivers.</td></tr>';
+      quarantinedTableBody.innerHTML = '<tr><td colspan="5" style="color: var(--danger); text-align: center; padding: 10px;">' + API.escapeHtml(API.t('admin.quarantined_load_failed', 'Failed to load quarantined waivers.')) + '</td></tr>';
     }
   }
 
@@ -2051,12 +2064,12 @@ function setupAdminSecurity() {
         const res = await API.purgeQuarantinedWaivers();
         const count = res && typeof res.purgedCount === 'number' ? res.purgedCount : 0;
         if (quarantinedAlert) {
-          quarantinedAlert.innerHTML = '<div class="alert alert-success" style="font-size: 0.84rem;">✓ Purged ' + count + ' expired quarantined waiver(s).</div>';
+          quarantinedAlert.innerHTML = '<div class="alert alert-success" style="font-size: 0.84rem;">' + API.escapeHtml(API.t('admin.quarantined_purged', '✓ Purged {count} expired quarantined waiver(s).', { count: count })) + '</div>';
         }
         await loadQuarantinedWaivers();
       } catch (err) {
         if (quarantinedAlert) {
-          quarantinedAlert.innerHTML = '<div class="alert alert-error" style="font-size: 0.84rem;">Failed to purge expired quarantined waivers.</div>';
+          quarantinedAlert.innerHTML = '<div class="alert alert-error" style="font-size: 0.84rem;">' + API.escapeHtml(API.t('admin.quarantined_purge_failed', 'Failed to purge expired quarantined waivers.')) + '</div>';
         }
       } finally {
         purgeQuarantinedBtn.disabled = false;

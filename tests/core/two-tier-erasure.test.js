@@ -1019,9 +1019,134 @@ function registerTwoTierErasureTests() {
         assert.equal(ClubhouseStore.state.user, null);
       } finally {
         delete globalThis.ClubhouseCrypto;
+        delete globalThis.ClubhouseStore;
+        delete require.cache[require.resolve('../../public/js/crypto.js')];
+        delete require.cache[require.resolve('../../public/js/store.js')];
         globalThis.fetch = prevFetch;
         globalThis.indexedDB = prevIndexedDB;
         if (prevWindow !== undefined) globalThis.window = prevWindow;
+        ctx.close();
+      }
+    });
+
+    await t.test('9. D1 query budget: purgeExpiredQuarantinedWaivers, executeTwoTierErasure, and cleanupClubhouseUserState use chunked db.batch (<=50) instead of per-row loops', async () => {
+      const ctx = await createErasureTestEnv();
+      const { purgeExpiredQuarantinedWaivers, executeTwoTierErasure } = await import('../../src/app/erasure.js');
+
+      function wrapDbCounter(d1Db) {
+        const stats = { batchCalls: 0, maxBatchLen: 0, runCalls: 0 };
+        function wrapStmt(stmt) {
+          return {
+            _inner: stmt,
+            bind(...args) { return wrapStmt(stmt.bind(...args)); },
+            first(col) { return stmt.first(col); },
+            all() { return stmt.all(); },
+            raw() { return stmt.raw(); },
+            run() {
+              stats.runCalls += 1;
+              return stmt.run();
+            }
+          };
+        }
+        const wrapped = {
+          prepare(sql) { return wrapStmt(d1Db.prepare(sql)); },
+          async batch(stmts) {
+            stats.batchCalls += 1;
+            if (stmts.length > stats.maxBatchLen) stats.maxBatchLen = stmts.length;
+            return d1Db.batch(stmts.map((s) => (s && s._inner ? s._inner : s)));
+          }
+        };
+        return { db: wrapped, stats };
+      }
+
+      try {
+        // 9a. 60 expired quarantined waivers -> chunked batch (max 50 per batch, 0 individual .run() deletes)
+        const insWaiver = ctx.baseballSqlite.prepare(`
+          INSERT INTO waivers (
+            certificate_id, email, printed_name, signed_date, signature_data,
+            waiver_text_sha256, document_sha256, provenance_seal, status, retention_until
+          ) VALUES (?, 'q60@example.org', 'Quarantine Batch', '2020-01-01', ?, 't', 'd', 's', 'quarantined', '2021-01-01T00:00:00Z')
+        `);
+        ctx.baseballSqlite.transaction(() => {
+          for (let i = 1; i <= 60; i++) {
+            insWaiver.run(`CERT-BATCH-${i}`, SAMPLE_PNG_SIG);
+          }
+        })();
+
+        const purgeTracked = wrapDbCounter(ctx.baseballD1);
+        const purgeRes = await purgeExpiredQuarantinedWaivers(purgeTracked.db, ctx.env);
+        assert.equal(purgeRes.purgedCount, 60);
+        assert.equal(purgeRes.certificateIds.length, 60);
+        assert.equal(purgeTracked.stats.runCalls, 0, 'purgeExpiredQuarantinedWaivers must not execute per-row DELETE .run() calls');
+        assert.equal(purgeTracked.stats.batchCalls, 2, '60 rows must execute in 2 chunked batches of <= 50');
+        assert.ok(purgeTracked.stats.maxBatchLen <= 50);
+
+        // 9b. Multi-row erasure across waivers, past/future attendees, comments, and chat reply threads
+        const userId = Number(ctx.baseballSqlite.prepare(
+          "INSERT INTO users (name, email, role, is_admin, clubhouse_opted_in) VALUES ('Batch Erasure', 'batch_erasure@example.org', 'member', 0, 1)"
+        ).run().lastInsertRowid);
+        const peerId = Number(ctx.baseballSqlite.prepare(
+          "INSERT INTO users (name, email, role, is_admin, clubhouse_opted_in) VALUES ('Peer Parent', 'peer_parent@example.org', 'member', 0, 1)"
+        ).run().lastInsertRowid);
+
+        for (let i = 1; i <= 15; i++) {
+          const pastEvId = Number(ctx.baseballSqlite.prepare(
+            `INSERT INTO events (title, location, event_date, status) VALUES ('Past ${i}', 'Park', '2024-01-01T12:00:00Z', 'active')`
+          ).run().lastInsertRowid);
+          const futEvId = Number(ctx.baseballSqlite.prepare(
+            `INSERT INTO events (title, location, event_date, status) VALUES ('Future ${i}', 'Park', '2099-01-01T12:00:00Z', 'active')`
+          ).run().lastInsertRowid);
+          const pastAttId = Number(ctx.baseballSqlite.prepare(
+            "INSERT INTO attendees (event_id, user_id, name, email, status) VALUES (?, ?, 'Batch Erasure', 'batch_erasure@example.org', 'attending')"
+          ).run(pastEvId, userId).lastInsertRowid);
+          const futAttId = Number(ctx.baseballSqlite.prepare(
+            "INSERT INTO attendees (event_id, user_id, name, email, status) VALUES (?, ?, 'Batch Erasure', 'batch_erasure@example.org', 'attending')"
+          ).run(futEvId, userId).lastInsertRowid);
+          ctx.baseballSqlite.prepare(
+            "INSERT INTO batting_practice_signups (event_id, user_id, attendee_id, slot_number, player_name) VALUES (?, ?, ?, 1, 'Batch Erasure')"
+          ).run(futEvId, userId, futAttId);
+          ctx.baseballSqlite.prepare(
+            "INSERT INTO comments (event_id, user_id, author_name, author_email, content) VALUES (?, ?, 'Batch Erasure', 'batch_erasure@example.org', 'Cmt')"
+          ).run(pastEvId, userId);
+          ctx.baseballSqlite.prepare(`
+            INSERT INTO waivers (certificate_id, user_id, email, printed_name, signed_date, signature_data, waiver_text_sha256, document_sha256, provenance_seal)
+            VALUES (?, ?, 'batch_erasure@example.org', 'Batch Erasure', '2026-01-01', ?, 't', 'd', 's')
+          `).run(`CERT-E-${i}`, userId, SAMPLE_PNG_SIG);
+          assert.ok(pastAttId > 0);
+        }
+
+        const generalChId = Number(ctx.chatSqlite.prepare("SELECT id FROM channels WHERE slug = 'general'").get().id);
+        for (let i = 1; i <= 15; i++) {
+          const parentId = Number(ctx.chatSqlite.prepare(
+            "INSERT INTO messages (channel_id, author_id, author_name, content, reply_count) VALUES (?, ?, 'Peer Parent', 'Root', 1)"
+          ).run(generalChId, peerId).lastInsertRowid);
+          ctx.chatSqlite.prepare(
+            "INSERT INTO messages (channel_id, parent_message_id, author_id, author_name, content) VALUES (?, ?, ?, 'Batch Erasure', 'Reply')"
+          ).run(generalChId, parentId, userId);
+        }
+
+        const baseballTracked = wrapDbCounter(ctx.baseballD1);
+        const chatTracked = wrapDbCounter(ctx.chatD1);
+        const eraseRes = await executeTwoTierErasure({
+          db: baseballTracked.db,
+          chatDb: chatTracked.db,
+          env: ctx.env,
+          userId,
+          email: 'batch_erasure@example.org',
+          actorType: 'member',
+          actorId: userId
+        });
+
+        assert.equal(eraseRes.counts.waiversQuarantined, 15);
+        assert.equal(eraseRes.counts.futureAttendeesDeleted, 15);
+        assert.equal(eraseRes.counts.pastAttendeesAnonymized, 15);
+        assert.equal(eraseRes.counts.commentsAnonymized, 15);
+        assert.equal(eraseRes.counts.bpSignupsDeleted, 15);
+        assert.ok(baseballTracked.stats.runCalls <= 5, `Expected O(1) .run() calls on BASEBALL_DB, got ${baseballTracked.stats.runCalls}`);
+        assert.ok(baseballTracked.stats.batchCalls >= 1 && baseballTracked.stats.maxBatchLen <= 50);
+        assert.ok(chatTracked.stats.runCalls <= 8, `Expected O(1) .run() calls on CHAT_DB (no per-parent reply_count loop), got ${chatTracked.stats.runCalls}`);
+        assert.ok(chatTracked.stats.batchCalls >= 2 && chatTracked.stats.maxBatchLen <= 50);
+      } finally {
         ctx.close();
       }
     });

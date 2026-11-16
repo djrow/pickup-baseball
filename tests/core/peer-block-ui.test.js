@@ -406,7 +406,7 @@ function registerPeerBlockUiTests() {
         fetchImpl: async () => ({ ok: true, status: 200, headers: { get: () => '' }, text: async () => '{}' })
       });
       const Store = sandbox.ClubhouseStore;
-      const UI = sandbox.ClubhouseUI;
+      const UI = sandbox.module.exports;
 
       assert.equal(typeof UI.buildMessageCardHtml, 'function', 'ClubhouseUI.buildMessageCardHtml must be exposed for testing');
       assert.equal(typeof UI.shouldCollapseMessageForPeerBlock, 'function', 'ClubhouseUI.shouldCollapseMessageForPeerBlock must be exposed');
@@ -607,7 +607,7 @@ function registerPeerBlockUiTests() {
 
       const { sandbox, elementsById, dialogs } = createUiSandbox({ enDict, fetchImpl: fetchMock });
       const Store = sandbox.ClubhouseStore;
-      const UI = sandbox.ClubhouseUI;
+      const UI = sandbox.module.exports;
 
       Store.state.user = { id: 10, name: 'Alice', role: 'member' };
       Store.state.members = [
@@ -666,6 +666,147 @@ function registerPeerBlockUiTests() {
         const missing = enKeys.filter((k) => !(k in dict));
         assert.deepEqual(missing, [], `${lang}.json must contain all EN_DICT keys`);
       }
+    });
+
+    await t.test('5. Browser global isolation for ClubhouseUI, Wave 1b i18n wiring & Glossary Member/Event terminology', async () => {
+      const enDict = loadApiEnDict();
+      const { sandbox } = createUiSandbox({
+        enDict,
+        fetchImpl: async () => ({ ok: true, status: 200, headers: { get: () => '' }, text: async () => '{}' })
+      });
+      assert.equal(sandbox.ClubhouseUI, undefined, 'clubhouse.js must not attach ClubhouseUI to root/window when module.exports is present');
+      assert.equal(typeof sandbox.module.exports.buildMessageCardHtml, 'function', 'clubhouse.js must still export via module.exports');
+
+      // Browser-mode sandbox (no module object) must also not attach window.ClubhouseUI
+      const browserSandbox = {
+        console,
+        setTimeout,
+        clearTimeout,
+        setInterval,
+        clearInterval,
+        Promise,
+        JSON,
+        Math,
+        Date,
+        Object,
+        Array,
+        String,
+        Number,
+        Boolean,
+        RegExp,
+        Error,
+        encodeURIComponent,
+        document: {
+          readyState: 'loading',
+          addEventListener() {},
+          getElementById() { return null; },
+          querySelector() { return null; },
+          querySelectorAll() { return []; },
+          createElement() { return createFakeElement('', 'div'); }
+        }
+      };
+      browserSandbox.window = browserSandbox;
+      browserSandbox.globalThis = browserSandbox;
+      browserSandbox.addEventListener = function () {};
+      browserSandbox.ClubhouseStore = { state: { channels: [], voiceParticipants: [], members: [] }, subscribe() { return function () {}; } };
+      browserSandbox.ClubhouseRTC = {};
+      const clubhouseSrc = fs.readFileSync(path.join(PUBLIC_DIR, 'js', 'clubhouse.js'), 'utf8');
+      vm.runInNewContext(clubhouseSrc, browserSandbox, { filename: 'public/js/clubhouse.js' });
+      assert.equal(browserSandbox.ClubhouseUI, undefined, 'clubhouse.js must not attach window.ClubhouseUI in browser mode');
+
+      // Verify Wave 1b UI files wire new strings through data-i18n / API.t / tClubhouse
+      const adminHtml = fs.readFileSync(path.join(PUBLIC_DIR, 'admin.html'), 'utf8');
+      const adminJs = fs.readFileSync(path.join(PUBLIC_DIR, 'js', 'admin.js'), 'utf8');
+      const profileJs = fs.readFileSync(path.join(PUBLIC_DIR, 'js', 'profile.js'), 'utf8');
+      const loginJs = fs.readFileSync(path.join(PUBLIC_DIR, 'js', 'login.js'), 'utf8');
+      const clubhouseHtml = fs.readFileSync(path.join(PUBLIC_DIR, 'clubhouse.html'), 'utf8');
+
+      const requiredKeys = [
+        'admin.quarantined_title',
+        'admin.quarantined_desc',
+        'admin.quarantined_refresh',
+        'admin.quarantined_purge',
+        'admin.quarantined_col_cert',
+        'admin.quarantined_col_signer',
+        'admin.quarantined_col_signed',
+        'admin.quarantined_col_retention',
+        'admin.quarantined_col_action',
+        'admin.quarantined_loading',
+        'admin.quarantined_empty',
+        'admin.quarantined_inspect',
+        'admin.quarantined_load_failed',
+        'admin.quarantined_purged',
+        'admin.quarantined_purge_failed',
+        'admin.remove_user_title',
+        'admin.remove_user_confirm',
+        'admin.remove_user_ban_checkbox',
+        'admin.remove_user_confirm_btn',
+        'admin.removing_user',
+        'admin.remove_user_failed',
+        'profile.saving_btn',
+        'profile.updated_success',
+        'profile.update_failed',
+        'profile.erasure_sending_code',
+        'profile.erasure_send_failed',
+        'profile.erasure_enter_code',
+        'profile.erasure_deleting_btn',
+        'profile.erasure_deleted_fallback',
+        'profile.erasure_delete_failed',
+        'visitor_erasure.sending',
+        'visitor_erasure.sent_fallback',
+        'visitor_erasure.network_error',
+        'visitor_erasure.erasing',
+        'visitor_erasure.erased_fallback',
+        'visitor_erasure.erasure_failed',
+        'clubhouse.verify_key_btn',
+        'clubhouse.verify_key_changed_btn',
+        'clubhouse.verify_key_verified_btn',
+        'clubhouse.verify_modal_title',
+        'clubhouse.verify_modal_desc',
+        'clubhouse.verify_warning_title',
+        'clubhouse.verify_warning_desc',
+        'clubhouse.verify_safety_number_label',
+        'clubhouse.verify_copy_btn',
+        'clubhouse.verify_done_btn',
+        'clubhouse.verify_computing',
+        'clubhouse.verify_unsupported',
+        'clubhouse.verify_your_fp',
+        'clubhouse.verify_not_enrolled',
+        'clubhouse.verify_reverify_btn',
+        'clubhouse.verify_verified_badge',
+        'clubhouse.verify_mark_btn',
+        'clubhouse.verify_no_vault',
+        'clubhouse.verify_waiting_member',
+        'clubhouse.verify_last_rotated',
+        'clubhouse.verify_pinned_success',
+        'clubhouse.verify_error',
+        'clubhouse.verify_load_failed',
+        'clubhouse.verify_own_fp',
+        'clubhouse.audit_notice_title',
+        'clubhouse.audit_sender_name',
+        'clubhouse.audit_verified_badge'
+      ];
+      for (const k of requiredKeys) {
+        assert.ok(k in enDict, `EN_DICT must define Wave 1b key ${k}`);
+      }
+      assert.ok(adminHtml.includes('data-i18n="admin.quarantined_title"'), 'admin.html must wire quarantined waivers panel title');
+      assert.ok(adminJs.includes('admin.quarantined_empty'), 'admin.js must use API.t for quarantined waivers table');
+      assert.ok(adminJs.includes('admin.remove_user_confirm'), 'admin.js must use API.t for account removal confirmation');
+      assert.ok(profileJs.includes('profile.updated_success') && profileJs.includes('profile.erasure_delete_failed'), 'profile.js must wire new Wave 1b strings via API.t');
+      assert.ok(loginJs.includes('visitor_erasure.sent_fallback') && loginJs.includes('visitor_erasure.erased_fallback'), 'login.js must wire visitor erasure strings via API.t');
+      assert.ok(clubhouseHtml.includes('data-i18n="clubhouse.verify_modal_title"'), 'clubhouse.html must wire key-verify modal via data-i18n');
+      assert.ok(clubhouseSrc.includes('clubhouse.verify_key_btn') && clubhouseSrc.includes('clubhouse.audit_sender_name'), 'clubhouse.js must wire key verification & audit strings via tClubhouse');
+
+      // Verify Glossary Member/Event terminology in newly added Wave 1b copy
+      const keysRouteSrc = fs.readFileSync(path.join(ROOT_DIR, 'src/app/routes/keys.js'), 'utf8');
+      const authRouteSrc = fs.readFileSync(path.join(ROOT_DIR, 'src/app/routes/auth.js'), 'utf8');
+      assert.ok(keysRouteSrc.includes('`Member #${user.id}`'), 'keys.js key-rotation audit fallback name must use Member');
+      assert.ok(!keysRouteSrc.includes('Player #'), 'keys.js must not use Player # fallback');
+      assert.ok(authRouteSrc.includes("recordInfo.name || 'Member'"), 'auth.js erasure code email fallback name must use Member');
+      assert.ok(!clubhouseSrc.includes("'Player #'"), 'clubhouse.js must not use Player # fallback');
+      assert.match(enDict['event.comments_members_only'], /^Event discussion/i);
+      assert.match(enDict['profile.notify_reminders_label'], /^Pre-event reminder/i);
+      assert.match(enDict['event.visitor_notify_emails_label'], /event reminder/i);
     });
   });
 }

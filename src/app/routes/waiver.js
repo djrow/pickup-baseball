@@ -7,6 +7,7 @@ import { Hono } from 'hono';
 import {
   escapeHtml,
   sha256Hex,
+  hmacSha256Hex,
   base64ToUint8Array,
   isValidRasterImageBuffer,
   getClientIp,
@@ -20,7 +21,9 @@ import { isGDriveConfigured, uploadGDriveTextFile } from '../gdrive.js';
 import { sendWaiverConfirmationEmail } from '../mailer.js';
 import { logEvent } from '../errors.js';
 import { resolveConfig, PRESET_PICKUP_BASEBALL } from '../config.js';
-import { purgeExpiredQuarantinedWaivers } from '../erasure.js';
+import { purgeExpiredQuarantinedWaivers, scrubExpiredWaiverTelemetry } from '../erasure.js';
+
+export { scrubExpiredWaiverTelemetry };
 
 export const waiverRouter = /** @type {AppHono} */ (new Hono());
 
@@ -81,35 +84,7 @@ export function getWaiverSpec(env) {
   };
 }
 
-function getSubtleCrypto() {
-  if (typeof crypto !== 'undefined' && crypto && crypto.subtle) {
-    return crypto.subtle;
-  }
-  return null;
-}
-
 let ephemeralProvenanceSecret = null;
-
-/**
- * @param {string} secretMaterial
- * @param {string} payloadStr
- * @returns {Promise<string>}
- */
-async function hmacSha256Hex(secretMaterial, payloadStr) {
-  const subtle = getSubtleCrypto();
-  const keyBytes = new TextEncoder().encode(String(secretMaterial));
-  const cryptoKey = await subtle.importKey(
-    'raw',
-    keyBytes,
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
-  );
-  const sigBuffer = await subtle.sign('HMAC', cryptoKey, new TextEncoder().encode(String(payloadStr || '')));
-  return Array.from(new Uint8Array(sigBuffer))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-}
 
 /**
  * @param {string} sessionSecret
@@ -224,26 +199,6 @@ export async function verifyWaiverProvenanceSeal(env, payloadStr, storedSeal, db
   }
 
   return false;
-}
-
-/**
- * Idempotently scrub auxiliary anti-fraud telemetry (`signer_ip` and `user_agent`)
- * on waiver rows older than the 30-day anti-fraud window without mutating sealed columns.
- *
- * @param {D1Database | null | undefined} db
- * @returns {Promise<number>}
- */
-export async function scrubExpiredWaiverTelemetry(db) {
-  if (!db || typeof db.prepare !== 'function') return 0;
-  try {
-    const res = await db.prepare(
-      "UPDATE waivers SET signer_ip = NULL, user_agent = NULL, signer_ip_scrubbed_at = CURRENT_TIMESTAMP WHERE (signer_ip IS NOT NULL OR user_agent IS NOT NULL OR signer_ip_scrubbed_at IS NULL) AND datetime(signed_at) <= datetime('now', '-30 days')"
-    ).run();
-    return Number((res && res.meta && res.meta.changes) || (res && /** @type {any} */ (res).changes) || 0);
-  } catch (err) {
-    logEvent('warn', 'waiver_telemetry_scrub_failed', { err });
-    return 0;
-  }
 }
 
 function generateCertificateId(signedDateStr, prefix = 'PBF-WVR') {

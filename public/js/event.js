@@ -609,7 +609,7 @@ function renderComments() {
   if (!API.currentUser) {
     container.innerHTML = `
       <p style="color: var(--text-muted); font-style: italic;">
-        🔒 ${API.escapeHtml(API.t('event.comments_members_only', 'Game discussion is visible to signed-in members only.'))}
+        🔒 ${API.escapeHtml(API.t('event.comments_members_only', 'Event discussion is visible to signed-in members only.'))}
       </p>
     `;
     return;

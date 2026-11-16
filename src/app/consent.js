@@ -7,16 +7,27 @@
 
 import { sha256Hex } from './security.js';
 import { logEvent } from './errors.js';
+import { resolveConfig } from './config.js';
 
 export const PRIVACY_POLICY_VERSION = '2026-11-v1';
 
-export const PRIVACY_POLICY_SUMMARY = [
-  'Pickup Baseball Foundation Community Privacy & Consent Policy (v2026-11-v1).',
-  'Member rosters default to First L. abbreviation and hide gear, companions, bio, and avatar from peers unless explicit Privacy Consent (roster_visibility, profile_sharing) is granted.',
-  'Visitor RSVPs default to First L. abbreviation (roster_consent = 0) and opt-out of topic notifications (notify_emails = 0) unless explicitly checked.',
-  'Clubhouse chat & voice require explicit Feature Opt-In (clubhouse_opt_in).',
-  'All consent grants and withdrawals are recorded in an append-only ledger with policy version and SHA-256 digest, without logging raw IP addresses or User-Agent strings.'
-].join(' ');
+/**
+ * Builds the community-branded Privacy & Consent Policy summary string (ADR-0001 §1).
+ * @param {Record<string, any> | null | undefined} [env]
+ * @returns {string}
+ */
+export function buildPrivacyPolicySummary(env = null) {
+  const cfg = resolveConfig(env);
+  return [
+    `${cfg.COMMUNITY_NAME} Community Privacy & Consent Policy (${PRIVACY_POLICY_VERSION}).`,
+    'Member rosters default to First L. abbreviation and hide gear, companions, bio, and avatar from peers unless explicit Privacy Consent (roster_visibility, profile_sharing) is granted.',
+    'Visitor RSVPs default to First L. abbreviation (roster_consent = 0) and opt-out of topic notifications (notify_emails = 0) unless explicitly checked.',
+    'Clubhouse chat & voice require explicit Feature Opt-In (clubhouse_opt_in).',
+    'All consent grants and withdrawals are recorded in an append-only ledger with policy version and SHA-256 digest, without logging raw IP addresses or User-Agent strings.'
+  ].join(' ');
+}
+
+export const PRIVACY_POLICY_SUMMARY = buildPrivacyPolicySummary();
 
 export const CONSENT_TYPES = Object.freeze({
   ROSTER_VISIBILITY: 'roster_visibility',
@@ -30,21 +41,28 @@ export const CONSENT_TYPES = Object.freeze({
   VISITOR_NOTIFY_EMAILS: 'visitor_notify_emails'
 });
 
-/** @type {Promise<{ policyVersion: string, policySha256: string }> | null} */
-let cachedPolicyMetaPromise = null;
+/** @type {Map<string, Promise<{ policyVersion: string, policySha256: string }>>} */
+const policyMetaCache = new Map();
 
 /**
  * Returns the current Privacy & Consent policy version and SHA-256 hex digest.
+ * @param {Record<string, any> | null | undefined} [env]
  * @returns {Promise<{ policyVersion: string, policySha256: string }>}
  */
-export async function getConsentPolicyMetadata() {
-  if (!cachedPolicyMetaPromise) {
-    cachedPolicyMetaPromise = sha256Hex(PRIVACY_POLICY_SUMMARY).then((policySha256) => ({
-      policyVersion: PRIVACY_POLICY_VERSION,
-      policySha256
-    }));
+export async function getConsentPolicyMetadata(env = null) {
+  const cfg = resolveConfig(env);
+  const cacheKey = cfg.COMMUNITY_NAME;
+  if (!policyMetaCache.has(cacheKey)) {
+    const summary = buildPrivacyPolicySummary(cfg);
+    policyMetaCache.set(
+      cacheKey,
+      sha256Hex(summary).then((policySha256) => ({
+        policyVersion: PRIVACY_POLICY_VERSION,
+        policySha256
+      }))
+    );
   }
-  return cachedPolicyMetaPromise;
+  return /** @type {Promise<{ policyVersion: string, policySha256: string }>} */ (policyMetaCache.get(cacheKey));
 }
 
 /**
@@ -89,12 +107,14 @@ export async function hashSubjectEmail(email) {
  *   subjectEmailHash?: string | null,
  *   consentType: string,
  *   granted: boolean,
- *   timestamp?: string | null
+ *   timestamp?: string | null,
+ *   env?: Record<string, any> | null
  * }} entry
+ * @param {Record<string, any> | null | undefined} [env]
  * @returns {Promise<{ recorded: boolean, status: 'granted' | 'withdrawn', policyVersion: string, policySha256: string }>}
  */
-export async function recordConsentChange(db, entry) {
-  const { policyVersion, policySha256 } = await getConsentPolicyMetadata();
+export async function recordConsentChange(db, entry, env = null) {
+  const { policyVersion, policySha256 } = await getConsentPolicyMetadata(env || (entry && entry.env));
   const status = entry.granted ? 'granted' : 'withdrawn';
   if (!db) {
     return { recorded: false, status, policyVersion, policySha256 };

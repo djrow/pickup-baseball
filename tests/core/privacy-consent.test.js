@@ -537,6 +537,26 @@ function registerPrivacyConsentTests() {
       assert.equal(nullEmailConsent[0].status, 'granted');
     });
 
+    await t.test('5b. Fork branding (ADR-0001 §1): consent policy summary and SHA-256 reflect COMMUNITY_NAME from env', async () => {
+      const consentMod = await import('../../src/app/consent.js');
+      assert.equal(typeof consentMod.buildPrivacyPolicySummary, 'function', 'buildPrivacyPolicySummary must be exported');
+      const oakSummary = consentMod.buildPrivacyPolicySummary({ COMMUNITY_NAME: 'Oakridge Sandlot' });
+      assert.ok(oakSummary.includes('Oakridge Sandlot Community Privacy & Consent Policy'));
+      assert.equal(oakSummary.includes('Pickup Baseball Foundation'), false);
+
+      const defaultMeta = await consentMod.getConsentPolicyMetadata({ COMMUNITY_PRESET: 'pickup-baseball' });
+      const oakMeta = await consentMod.getConsentPolicyMetadata({ COMMUNITY_NAME: 'Oakridge Sandlot' });
+      assert.notEqual(oakMeta.policySha256, defaultMeta.policySha256, 'Custom COMMUNITY_NAME must alter policySha256');
+
+      const oakReq = await honoApp.fetch(new Request('https://community.example.org/api/auth/consent', {
+        method: 'GET',
+        headers: { Cookie: memberA.cookie }
+      }), { ...ctx.env, COMMUNITY_NAME: 'Oakridge Sandlot' });
+      assert.equal(oakReq.status, 200);
+      const oakJson = await oakReq.json();
+      assert.equal(oakJson.policy_sha256, oakMeta.policySha256, 'GET /api/auth/consent must thread c.env to getConsentPolicyMetadata');
+    });
+
     await t.test('6. Frontend profile.html/profile.js & event.html/event.js wire privacy toggles cleanly without inline handlers', async () => {
       const profileHtml = fs.readFileSync(path.join(ROOT_DIR, 'public', 'profile.html'), 'utf8');
       const profileJs = fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'profile.js'), 'utf8');

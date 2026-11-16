@@ -181,11 +181,21 @@ function registerDataExportTests() {
           "UPDATE users SET chat_muted = 1, chat_muted_reason = 'Cool down', chat_muted_by = ?, chat_muted_at = '2026-11-10T00:00:00Z' WHERE id = ?"
         ).run(mod.userId, alice.userId);
 
-        // Consent records (Alice + Bob)
+        // Consent records (Alice member + Alice prior visitor stage + Bob member + Bob visitor)
+        const aliceEmailHash = crypto.createHash('sha256').update('alice_export@example.org', 'utf8').digest('hex');
+        const bobEmailHash = crypto.createHash('sha256').update('bob_peer_secret@example.org', 'utf8').digest('hex');
+        ctx.baseballSqlite.prepare(`
+          INSERT INTO consent_records (subject_type, user_id, subject_email_hash, consent_type, policy_version, policy_sha256, status, granted_at)
+          VALUES ('visitor', NULL, ?, 'roster_consent', 'v1', 'sha_policy_visitor', 'granted', '2026-10-15T00:00:00Z')
+        `).run(aliceEmailHash);
         ctx.baseballSqlite.prepare(`
           INSERT INTO consent_records (subject_type, user_id, consent_type, policy_version, policy_sha256, status, granted_at)
           VALUES ('member', ?, 'roster_visibility', 'v1', 'sha_policy_1', 'granted', '2026-11-01T00:00:00Z')
         `).run(alice.userId);
+        ctx.baseballSqlite.prepare(`
+          INSERT INTO consent_records (subject_type, user_id, subject_email_hash, consent_type, policy_version, policy_sha256, status, granted_at)
+          VALUES ('visitor', NULL, ?, 'roster_consent', 'v1', 'sha_policy_bob_visitor', 'granted', '2026-10-15T00:00:00Z')
+        `).run(bobEmailHash);
         ctx.baseballSqlite.prepare(`
           INSERT INTO consent_records (subject_type, user_id, consent_type, policy_version, policy_sha256, status, granted_at)
           VALUES ('member', ?, 'profile_sharing', 'v1', 'sha_policy_bob', 'granted', '2026-11-01T00:00:00Z')
@@ -415,8 +425,14 @@ function registerDataExportTests() {
           hero_credits: 3
         });
 
-        assert.equal(exp.baseball.consent_records.length, 1);
-        assert.equal(exp.baseball.consent_records[0].consent_type, 'roster_visibility');
+        assert.equal(exp.baseball.consent_records.length, 2);
+        assert.deepEqual(
+          exp.baseball.consent_records.map((r) => [r.subject_type, r.consent_type]),
+          [
+            ['visitor', 'roster_consent'],
+            ['member', 'roster_visibility']
+          ]
+        );
 
         assert.equal(exp.baseball.attendees.length, 1);
         assert.equal(exp.baseball.attendees[0].gear_bringing, 'Wood bat');

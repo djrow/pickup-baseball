@@ -470,12 +470,12 @@
       <div class="subpanel-card" style="padding: 18px; margin-top: 20px;">
         <div class="flex-between" style="margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
           <div>
-            <h3 style="margin: 0; color: var(--secondary); font-size: 1.05rem;">🔒 Quarantined Waivers (Legal-Defense Hold)</h3>
-            <p class="text-muted-sm" style="margin-top: 2px; font-size: 0.82rem;">Sealed waivers retained for 3 years after account erasure (all lookups are audit-logged and auto-purged after retention expires).</p>
+            <h3 style="margin: 0; color: var(--secondary); font-size: 1.05rem;" data-i18n="admin.quarantined_title">🔒 Quarantined Waivers (Legal-Defense Hold)</h3>
+            <p class="text-muted-sm" style="margin-top: 2px; font-size: 0.82rem;" data-i18n="admin.quarantined_desc">Sealed waivers retained for 3 years after account erasure (all lookups are audit-logged and auto-purged after retention expires).</p>
           </div>
           <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-            <button type="button" id="refresh-quarantined-waivers-btn" class="btn btn-outline btn-sm">🔄 Refresh</button>
-            <button type="button" id="purge-quarantined-waivers-btn" class="btn btn-outline btn-sm" style="color: var(--danger); border-color: var(--danger);">🧹 Purge Expired</button>
+            <button type="button" id="refresh-quarantined-waivers-btn" class="btn btn-outline btn-sm" data-i18n="admin.quarantined_refresh">🔄 Refresh</button>
+            <button type="button" id="purge-quarantined-waivers-btn" class="btn btn-outline btn-sm" style="color: var(--danger); border-color: var(--danger);" data-i18n="admin.quarantined_purge">🧹 Purge Expired</button>
           </div>
         </div>
         <div id="quarantined-waivers-alert"></div>
@@ -483,15 +483,15 @@
           <table class="data-table data-table-compact">
             <thead>
               <tr>
-                <th style="min-width: 150px;">Certificate ID</th>
-                <th style="min-width: 170px;">Signer</th>
-                <th style="min-width: 100px;">Signed</th>
-                <th style="min-width: 110px;">Retention Until</th>
-                <th style="min-width: 90px;">Action</th>
+                <th style="min-width: 150px;" data-i18n="admin.quarantined_col_cert">Certificate ID</th>
+                <th style="min-width: 170px;" data-i18n="admin.quarantined_col_signer">Signer</th>
+                <th style="min-width: 100px;" data-i18n="admin.quarantined_col_signed">Signed</th>
+                <th style="min-width: 110px;" data-i18n="admin.quarantined_col_retention">Retention Until</th>
+                <th style="min-width: 90px;" data-i18n="admin.quarantined_col_action">Action</th>
               </tr>
             </thead>
             <tbody id="quarantined-waivers-table-body">
-              <tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 12px;">Loading quarantined waivers...</td></tr>
+              <tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 12px;" data-i18n="admin.quarantined_loading">Loading quarantined waivers...</td></tr>
             </tbody>
           </table>
         </div>

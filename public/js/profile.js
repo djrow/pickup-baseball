@@ -499,7 +499,7 @@ function setupProfileForm() {
     e.preventDefault();
     const saveBtn = document.getElementById('btn-save-profile');
     saveBtn.disabled = true;
-    saveBtn.textContent = 'Saving...';
+    saveBtn.textContent = API.t('profile.saving_btn', 'Saving...');
 
     const name = document.getElementById('profile-name').value.trim();
     const bio = document.getElementById('profile-bio').value.trim();
@@ -534,14 +534,14 @@ function setupProfileForm() {
         if (res.user.notifyEventReminders !== undefined) currentUser.notifyEventReminders = Boolean(res.user.notifyEventReminders);
         if (res.user.notifyCommunityUpdates !== undefined) currentUser.notifyCommunityUpdates = Boolean(res.user.notifyCommunityUpdates);
         renderPrivacyAndNotificationToggles();
-        showAlert('Profile and privacy settings updated successfully!', false);
+        showAlert(API.t('profile.updated_success', 'Profile and privacy settings updated successfully!'), false);
         API.renderNav(currentUser);
       }
     } catch (err) {
-      showAlert('Error updating profile.', true);
+      showAlert(API.t('profile.update_failed', 'Error updating profile.'), true);
     } finally {
       saveBtn.disabled = false;
-      saveBtn.textContent = 'Save Changes';
+      saveBtn.textContent = API.t('profile.save_btn', 'Save Changes');
     }
   });
 }
@@ -569,7 +569,7 @@ function setupAccountErasure() {
       if (!currentUser || !currentUser.email) return;
       sendCodeBtn.disabled = true;
       const origText = sendCodeBtn.textContent;
-      sendCodeBtn.textContent = 'Sending code...';
+      sendCodeBtn.textContent = API.t('profile.erasure_sending_code', 'Sending code...');
       setErasureAlert('', false);
       try {
         const res = await API.sendLoginCode(currentUser.email, currentUser.name || '', false);
@@ -581,7 +581,7 @@ function setupAccountErasure() {
           setErasureAlert(API.t('profile.erasure_code_sent', 'Verification code sent to your email. Enter the 6-digit code below to confirm deletion.'), false);
         }
       } catch (err) {
-        setErasureAlert('Failed to send verification code.', true);
+        setErasureAlert(API.t('profile.erasure_send_failed', 'Failed to send verification code.'), true);
       } finally {
         sendCodeBtn.disabled = false;
         sendCodeBtn.textContent = origText;
@@ -601,7 +601,7 @@ function setupAccountErasure() {
     confirmBtn.addEventListener('click', async function() {
       const code = codeInput ? codeInput.value.trim() : '';
       if (!code || code.length < 6) {
-        setErasureAlert('Please enter the 6-digit verification code sent to your email.', true);
+        setErasureAlert(API.t('profile.erasure_enter_code', 'Please enter the 6-digit verification code sent to your email.'), true);
         return;
       }
 
@@ -620,7 +620,7 @@ function setupAccountErasure() {
 
       confirmBtn.disabled = true;
       const origText = confirmBtn.textContent;
-      confirmBtn.textContent = 'Deleting...';
+      confirmBtn.textContent = API.t('profile.erasure_deleting_btn', 'Deleting...');
       setErasureAlert('', false);
       try {
         const res = await API.deleteMyAccount({
@@ -641,12 +641,12 @@ function setupAccountErasure() {
 
         if (window.PBFDialog) {
           await window.PBFDialog.alert(
-            (res && (res.waiverRetentionNotice || res.message)) || 'Your account has been deleted.'
+            (res && (res.waiverRetentionNotice || res.message)) || API.t('profile.erasure_deleted_fallback', 'Your account has been deleted.')
           );
         }
         window.location.href = '/index.html';
       } catch (err) {
-        setErasureAlert('Failed to delete account. Please try again.', true);
+        setErasureAlert(API.t('profile.erasure_delete_failed', 'Failed to delete account. Please try again.'), true);
       } finally {
         confirmBtn.disabled = false;
         confirmBtn.textContent = origText;

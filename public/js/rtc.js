@@ -642,9 +642,9 @@
         rtcState.peerConnections[peerIds[i]].close();
       } catch (e) { /* best-effort peer connection close */ }
     }
-    rtcState.peerConnections = {};
-    rtcState.dataChannels = {};
-    rtcState.remoteStreams = {};
+    rtcState.peerConnections = Object.create(null);
+    rtcState.dataChannels = Object.create(null);
+    rtcState.remoteStreams = Object.create(null);
 
     if (rtcState.localAudioStream) {
       var aTracks = rtcState.localAudioStream.getTracks();

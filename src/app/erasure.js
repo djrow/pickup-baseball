@@ -21,6 +21,35 @@ import {
   validateAppscriptRedirectUrl
 } from './security.js';
 
+const D1_BATCH_CHUNK_SIZE = 50;
+
+/**
+ * Executes D1 statements in chunked `db.batch()` calls (<= 50 statements each),
+ * falling back to sequential `.run()` only when the adapter does not expose `.batch()`.
+ * @param {D1Database} db
+ * @param {D1PreparedStatement[]} stmts
+ * @returns {Promise<Array<Record<string, any>>>}
+ */
+async function runChunkedBatch(db, stmts) {
+  if (!stmts || stmts.length === 0) return [];
+  if (typeof db.batch === 'function') {
+    const out = [];
+    for (let i = 0; i < stmts.length; i += D1_BATCH_CHUNK_SIZE) {
+      const chunk = stmts.slice(i, i + D1_BATCH_CHUNK_SIZE);
+      const res = await db.batch(chunk);
+      if (Array.isArray(res)) {
+        out.push(...res);
+      }
+    }
+    return out;
+  }
+  const out = [];
+  for (const s of stmts) {
+    out.push(await s.run());
+  }
+  return out;
+}
+
 /**
  * Add calendar years in UTC to an ISO/date string and return an ISO-8601 timestamp.
  * @param {string|number|Date|null|undefined} dateInput
@@ -377,13 +406,17 @@ export async function cleanupClubhouseUserState({ db = null, chatDb, userId, env
     const delMsgRes = await chatDb.prepare('DELETE FROM messages WHERE author_id = ?').bind(targetUserId).run();
     stats.chatMessagesDeleted = Number((delMsgRes && delMsgRes.meta && delMsgRes.meta.changes) || 0);
 
+    const replyStmts = [];
     for (const rc of replyCountRows) {
       if (rc && rc.parent_message_id && Number(rc.cnt) > 0) {
-        await chatDb.prepare(
-          'UPDATE messages SET reply_count = MAX(0, reply_count - ?) WHERE id = ?'
-        ).bind(Number(rc.cnt), rc.parent_message_id).run();
+        replyStmts.push(
+          chatDb.prepare(
+            'UPDATE messages SET reply_count = MAX(0, reply_count - ?) WHERE id = ?'
+          ).bind(Number(rc.cnt), rc.parent_message_id)
+        );
       }
     }
+    await runChunkedBatch(chatDb, replyStmts);
 
     // 5. Scrub moderator/creator/GIF attribution and moderation report reporter references (preserving report history)
     const scrubRepRes = await chatDb.prepare(
@@ -446,19 +479,28 @@ export async function purgeExpiredQuarantinedWaivers(db, env = null) {
   }
 
   const gdriveReady = isGDriveConfigured(env);
+  if (gdriveReady) {
+    for (const row of expiredRows) {
+      if (row.gdrive_file_id) {
+        await deleteGDriveFile(env, row.gdrive_file_id).catch(() => {});
+      }
+    }
+  }
+
+  const delStmts = expiredRows.map((row) =>
+    db.prepare("DELETE FROM waivers WHERE id = ? AND status = 'quarantined'").bind(row.id)
+  );
+  const delResults = await runChunkedBatch(db, delStmts);
+
   const certificateIds = [];
   let purgedCount = 0;
-
-  for (const row of expiredRows) {
-    if (gdriveReady && row.gdrive_file_id) {
-      await deleteGDriveFile(env, row.gdrive_file_id).catch(() => {});
-    }
-    const delRes = await db.prepare(
-      "DELETE FROM waivers WHERE id = ? AND status = 'quarantined'"
-    ).bind(row.id).run();
+  for (let i = 0; i < expiredRows.length; i++) {
+    const delRes = delResults[i];
     if (delRes && delRes.meta && delRes.meta.changes > 0) {
       purgedCount += Number(delRes.meta.changes);
-      if (row.certificate_id) certificateIds.push(String(row.certificate_id));
+      if (expiredRows[i].certificate_id) {
+        certificateIds.push(String(expiredRows[i].certificate_id));
+      }
     }
   }
 
@@ -470,6 +512,26 @@ export async function purgeExpiredQuarantinedWaivers(db, env = null) {
   }
 
   return { purgedCount, certificateIds };
+}
+
+/**
+ * Idempotently scrub auxiliary anti-fraud telemetry (`signer_ip` and `user_agent`)
+ * on waiver rows older than the 30-day anti-fraud window without mutating sealed columns.
+ *
+ * @param {D1Database | null | undefined} db
+ * @returns {Promise<number>}
+ */
+export async function scrubExpiredWaiverTelemetry(db) {
+  if (!db || typeof db.prepare !== 'function') return 0;
+  try {
+    const res = await db.prepare(
+      "UPDATE waivers SET signer_ip = NULL, user_agent = NULL, signer_ip_scrubbed_at = CURRENT_TIMESTAMP WHERE (signer_ip IS NOT NULL OR user_agent IS NOT NULL OR signer_ip_scrubbed_at IS NULL) AND datetime(signed_at) <= datetime('now', '-30 days')"
+    ).run();
+    return Number((res && res.meta && res.meta.changes) || (res && /** @type {any} */ (res).changes) || 0);
+  } catch (err) {
+    logEvent('warn', 'waiver_telemetry_scrub_failed', { err });
+    return 0;
+  }
 }
 
 /**
@@ -487,8 +549,6 @@ export async function purgeExpiredQuarantinedWaivers(db, env = null) {
  *   banEmail?: boolean,
  *   banReason?: string,
  *   keepApprovedGallery?: boolean,
- *   skipChatCleanup?: boolean,
- *   onChatCleanup?: ((ctx: { chatDb: D1Database, userId: number, email: string, env: any }) => Promise<void>)|null,
  *   now?: Date
  * }} params
  * @returns {Promise<{
@@ -532,8 +592,6 @@ export async function executeTwoTierErasure(params) {
     banEmail = false,
     banReason = 'Banned by administrator',
     keepApprovedGallery = false,
-    skipChatCleanup = false,
-    onChatCleanup = null,
     now = new Date()
   } = params || {};
 
@@ -622,6 +680,7 @@ export async function executeTwoTierErasure(params) {
       : await db.prepare('SELECT id, certificate_id, signed_at, signed_date, erasure_requested_at FROM waivers WHERE LOWER(email) = LOWER(?)').bind(cleanEmail).all());
   const waiverRows = (waiverQueryRes && waiverQueryRes.results) || [];
   const quarantinedWaivers = [];
+  const waiverStmts = [];
   let latestRetentionMs = 0;
 
   for (const w of waiverRows) {
@@ -633,17 +692,19 @@ export async function executeTwoTierErasure(params) {
       latestRetentionMs = retentionMs;
     }
 
-    await db.prepare(`
-      UPDATE waivers
-      SET status = 'quarantined',
-          user_id = NULL,
-          signer_ip = NULL,
-          user_agent = NULL,
-          signer_ip_scrubbed_at = COALESCE(signer_ip_scrubbed_at, ?),
-          erasure_requested_at = COALESCE(erasure_requested_at, ?),
-          retention_until = ?
-      WHERE id = ?
-    `).bind(nowIso, nowIso, retentionUntil, w.id).run();
+    waiverStmts.push(
+      db.prepare(`
+        UPDATE waivers
+        SET status = 'quarantined',
+            user_id = NULL,
+            signer_ip = NULL,
+            user_agent = NULL,
+            signer_ip_scrubbed_at = COALESCE(signer_ip_scrubbed_at, ?),
+            erasure_requested_at = COALESCE(erasure_requested_at, ?),
+            retention_until = ?
+        WHERE id = ?
+      `).bind(nowIso, nowIso, retentionUntil, w.id)
+    );
 
     counts.waiversQuarantined += 1;
     quarantinedWaivers.push({
@@ -653,6 +714,7 @@ export async function executeTwoTierErasure(params) {
       retention_until: retentionUntil
     });
   }
+  await runChunkedBatch(db, waiverStmts);
 
   // 4. Delete future attendees/duties/BP signups & anonymize past attendees (preserving headcount)
   const attendeeRes = targetUserId && cleanEmail
@@ -695,26 +757,36 @@ export async function executeTwoTierErasure(params) {
   }
 
   // Delete BP signups (by user_id or any matching attendee_id)
+  const bpStmts = [];
   if (targetUserId) {
-    const bpUserRes = await db.prepare('DELETE FROM batting_practice_signups WHERE user_id = ?').bind(targetUserId).run();
-    counts.bpSignupsDeleted += Number((bpUserRes && bpUserRes.meta && bpUserRes.meta.changes) || 0);
+    bpStmts.push(db.prepare('DELETE FROM batting_practice_signups WHERE user_id = ?').bind(targetUserId));
   }
   for (const att of allAttendees) {
-    const bpAttRes = await db.prepare('DELETE FROM batting_practice_signups WHERE attendee_id = ?').bind(att.id).run();
-    counts.bpSignupsDeleted += Number((bpAttRes && bpAttRes.meta && bpAttRes.meta.changes) || 0);
+    bpStmts.push(db.prepare('DELETE FROM batting_practice_signups WHERE attendee_id = ?').bind(att.id));
+  }
+  const bpResults = await runChunkedBatch(db, bpStmts);
+  for (const res of bpResults) {
+    counts.bpSignupsDeleted += Number((res && res.meta && res.meta.changes) || 0);
   }
 
   // Delete future duty_assignments and future attendees
-  for (const att of futureAttendees) {
-    await db.prepare('DELETE FROM duty_assignments WHERE attendee_id = ?').bind(att.id).run();
-    const delAtt = await db.prepare('DELETE FROM attendees WHERE id = ?').bind(att.id).run();
-    counts.futureAttendeesDeleted += Number((delAtt && delAtt.meta && delAtt.meta.changes) || 0);
+  const futureDutyDelStmts = futureAttendees.map((att) =>
+    db.prepare('DELETE FROM duty_assignments WHERE attendee_id = ?').bind(att.id)
+  );
+  await runChunkedBatch(db, futureDutyDelStmts);
+
+  const futureAttDelStmts = futureAttendees.map((att) =>
+    db.prepare('DELETE FROM attendees WHERE id = ?').bind(att.id)
+  );
+  const futureAttResults = await runChunkedBatch(db, futureAttDelStmts);
+  for (const res of futureAttResults) {
+    counts.futureAttendeesDeleted += Number((res && res.meta && res.meta.changes) || 0);
   }
 
   // Anonymize past attendees with unique non-deliverable placeholder email (satisfies UNIQUE(event_id, email))
-  for (const att of pastAttendees) {
+  const pastAttStmts = pastAttendees.map((att) => {
     const anonymizedEmail = `deleted+att-${att.id}@noemail.invalid`;
-    const anonAtt = await db.prepare(`
+    return db.prepare(`
       UPDATE attendees
       SET user_id = NULL,
           name = 'Deleted Member',
@@ -726,8 +798,11 @@ export async function executeTwoTierErasure(params) {
           notify_emails = 0,
           roster_consent = 0
       WHERE id = ?
-    `).bind(anonymizedEmail, att.id).run();
-    counts.pastAttendeesAnonymized += Number((anonAtt && anonAtt.meta && anonAtt.meta.changes) || 0);
+    `).bind(anonymizedEmail, att.id);
+  });
+  const pastAttResults = await runChunkedBatch(db, pastAttStmts);
+  for (const res of pastAttResults) {
+    counts.pastAttendeesAnonymized += Number((res && res.meta && res.meta.changes) || 0);
   }
 
   // 5. Anonymize event discussion comments
@@ -736,23 +811,19 @@ export async function executeTwoTierErasure(params) {
     : (targetUserId
       ? await db.prepare('SELECT id FROM comments WHERE user_id = ?').bind(targetUserId).all()
       : await db.prepare('SELECT id FROM comments WHERE LOWER(author_email) = LOWER(?)').bind(cleanEmail).all());
-  for (const row of (commentRowsRes && commentRowsRes.results) || []) {
+  const commentStmts = ((commentRowsRes && commentRowsRes.results) || []).map((row) => {
     const anonCommentEmail = `deleted+cmt-${row.id}@noemail.invalid`;
-    const upd = await db.prepare(
+    return db.prepare(
       "UPDATE comments SET user_id = NULL, author_name = 'Deleted Member', author_email = ? WHERE id = ?"
-    ).bind(anonCommentEmail, row.id).run();
-    counts.commentsAnonymized += Number((upd && upd.meta && upd.meta.changes) || 0);
+    ).bind(anonCommentEmail, row.id);
+  });
+  const commentResults = await runChunkedBatch(db, commentStmts);
+  for (const res of commentResults) {
+    counts.commentsAnonymized += Number((res && res.meta && res.meta.changes) || 0);
   }
 
   // 6. Anonymize community highlight posts & 7. Handle Gallery media_items
   if (targetUserId) {
-    const postUpd = await db.prepare(
-      "UPDATE posts SET author_id = NULL, author_name = 'Community Member' WHERE author_id = ?"
-    ).bind(targetUserId).run();
-    counts.postsAnonymized += Number((postUpd && postUpd.meta && postUpd.meta.changes) || 0);
-
-    await db.prepare('UPDATE media_items SET approved_by = NULL WHERE approved_by = ?').bind(targetUserId).run();
-
     const mediaRes = await db.prepare(`
       SELECT id, file_data, file_url, original_url, file_size, storage_provider, r2_key, is_approved
       FROM media_items
@@ -760,81 +831,121 @@ export async function executeTwoTierErasure(params) {
     `).bind(targetUserId).all();
     const mediaRows = (mediaRes && mediaRes.results) || [];
     const mediaToDelete = [];
+    let hasApprovedToKeep = false;
 
     for (const m of mediaRows) {
       if (keepApprovedGallery && Number(m.is_approved) === 1) {
-        const updMedia = await db.prepare(`
+        hasApprovedToKeep = true;
+      } else {
+        mediaToDelete.push(m);
+      }
+    }
+
+    const postAndMediaStmts = [
+      db.prepare("UPDATE posts SET author_id = NULL, author_name = 'Community Member' WHERE author_id = ?").bind(targetUserId),
+      db.prepare('UPDATE media_items SET approved_by = NULL WHERE approved_by = ?').bind(targetUserId)
+    ];
+    if (hasApprovedToKeep) {
+      postAndMediaStmts.push(
+        db.prepare(`
           UPDATE media_items
           SET contributor_id = NULL,
               contributor_name = 'Community Member',
               delete_token = NULL,
               upload_token_hash = NULL
-          WHERE id = ?
-        `).bind(m.id).run();
-        counts.mediaAnonymized += Number((updMedia && updMedia.meta && updMedia.meta.changes) || 0);
-      } else {
-        mediaToDelete.push(m);
-      }
+          WHERE contributor_id = ? AND is_approved = 1
+        `).bind(targetUserId)
+      );
+    }
+    const postAndMediaRes = await runChunkedBatch(db, postAndMediaStmts);
+    counts.postsAnonymized += Number((postAndMediaRes[0] && postAndMediaRes[0].meta && postAndMediaRes[0].meta.changes) || 0);
+    if (hasApprovedToKeep && postAndMediaRes[2]) {
+      counts.mediaAnonymized += Number((postAndMediaRes[2].meta && postAndMediaRes[2].meta.changes) || 0);
     }
 
     if (mediaToDelete.length > 0) {
       const appscriptUrl = await resolveAppscriptUrl(db, env);
       for (const m of mediaToDelete) {
         await deleteMediaStorageAssets({ db, chatDb, env, row: m, appscriptUrl });
-        if (chatDb) {
-          try {
-            await chatDb.prepare(
-              'UPDATE chat_attachments SET promoted_media_id = NULL WHERE promoted_media_id = ?'
-            ).bind(m.id).run();
-          } catch (e) {
-            logEvent('warn', 'erasure_chat_unpromote_failed', { mediaId: m.id, err: e });
-          }
+      }
+      if (chatDb) {
+        try {
+          const chatUnpromoteStmts = mediaToDelete.map((m) =>
+            chatDb.prepare('UPDATE chat_attachments SET promoted_media_id = NULL WHERE promoted_media_id = ?').bind(m.id)
+          );
+          await runChunkedBatch(chatDb, chatUnpromoteStmts);
+        } catch (e) {
+          logEvent('warn', 'erasure_chat_unpromote_failed', { err: e });
         }
-        const delMedia = await db.prepare('DELETE FROM media_items WHERE id = ?').bind(m.id).run();
-        counts.mediaDeleted += Number((delMedia && delMedia.meta && delMedia.meta.changes) || 0);
+      }
+      const mediaDelStmts = mediaToDelete.map((m) =>
+        db.prepare('DELETE FROM media_items WHERE id = ?').bind(m.id)
+      );
+      const mediaDelResults = await runChunkedBatch(db, mediaDelStmts);
+      for (const res of mediaDelResults) {
+        counts.mediaDeleted += Number((res && res.meta && res.meta.changes) || 0);
       }
     }
   }
 
   // 8. Delete consent_records, sessions, auth_codes, clear FK refs, and delete user row
+  const step8Entries = [];
   if (targetUserId) {
-    const cUserRes = await db.prepare('DELETE FROM consent_records WHERE user_id = ?').bind(targetUserId).run();
-    counts.consentRecordsDeleted += Number((cUserRes && cUserRes.meta && cUserRes.meta.changes) || 0);
+    step8Entries.push({
+      counterKey: 'consentRecordsDeleted',
+      stmt: db.prepare('DELETE FROM consent_records WHERE user_id = ?').bind(targetUserId)
+    });
   }
   if (cleanEmail) {
     const emailHash = await sha256Hex(cleanEmail);
-    const cHashRes = await db.prepare('DELETE FROM consent_records WHERE subject_email_hash = ?').bind(emailHash).run();
-    counts.consentRecordsDeleted += Number((cHashRes && cHashRes.meta && cHashRes.meta.changes) || 0);
-
-    const acRes = await db.prepare('DELETE FROM auth_codes WHERE LOWER(email) = LOWER(?)').bind(cleanEmail).run();
-    counts.authCodesDeleted += Number((acRes && acRes.meta && acRes.meta.changes) || 0);
+    step8Entries.push({
+      counterKey: 'consentRecordsDeleted',
+      stmt: db.prepare('DELETE FROM consent_records WHERE subject_email_hash = ?').bind(emailHash)
+    });
+    step8Entries.push({
+      counterKey: 'authCodesDeleted',
+      stmt: db.prepare('DELETE FROM auth_codes WHERE LOWER(email) = LOWER(?)').bind(cleanEmail)
+    });
   }
   if (targetUserId) {
-    const sessRes = await db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(targetUserId).run();
-    counts.sessionsDeleted += Number((sessRes && sessRes.meta && sessRes.meta.changes) || 0);
-
-    await db.prepare('UPDATE events SET created_by = NULL WHERE created_by = ?').bind(targetUserId).run();
-    await db.prepare('DELETE FROM users WHERE id = ?').bind(targetUserId).run();
+    step8Entries.push({
+      counterKey: 'sessionsDeleted',
+      stmt: db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(targetUserId)
+    });
+    step8Entries.push({
+      counterKey: null,
+      stmt: db.prepare('UPDATE events SET created_by = NULL WHERE created_by = ?').bind(targetUserId)
+    });
+    step8Entries.push({
+      counterKey: null,
+      stmt: db.prepare('DELETE FROM users WHERE id = ?').bind(targetUserId)
+    });
+  }
+  if (step8Entries.length > 0) {
+    const step8Results = await runChunkedBatch(db, step8Entries.map((e) => e.stmt));
+    for (let i = 0; i < step8Entries.length; i++) {
+      const key = step8Entries[i].counterKey;
+      const res = step8Results[i];
+      if (key && res && res.meta) {
+        counts[key] += Number(res.meta.changes || 0);
+      }
+    }
   }
 
-  // 9. CHAT_DB cleanup (full Clubhouse cleanup + user_erased sync tombstone, or custom hook)
-  if (targetUserId && chatDb && !skipChatCleanup) {
-    if (typeof onChatCleanup === 'function') {
-      await onChatCleanup({ chatDb, userId: targetUserId, email: cleanEmail, env });
-    } else {
-      const chatStats = await cleanupClubhouseUserState({
-        db,
-        chatDb,
-        userId: targetUserId,
-        env,
-        now
-      });
-      counts.chatMessagesDeleted = chatStats.chatMessagesDeleted;
-      counts.chatReactionsDeleted = chatStats.chatReactionsDeleted;
-      counts.chatAttachmentsDeleted = chatStats.chatAttachmentsDeleted;
-      counts.chatReportsScrubbed = chatStats.chatReportsScrubbed;
-      counts.userErasedTombstoneEmitted = chatStats.userErasedTombstoneEmitted;
-    }
+  // 9. CHAT_DB cleanup (full Clubhouse cleanup + user_erased sync tombstone)
+  if (targetUserId && chatDb) {
+    const chatStats = await cleanupClubhouseUserState({
+      db,
+      chatDb,
+      userId: targetUserId,
+      env,
+      now
+    });
+    counts.chatMessagesDeleted = chatStats.chatMessagesDeleted;
+    counts.chatReactionsDeleted = chatStats.chatReactionsDeleted;
+    counts.chatAttachmentsDeleted = chatStats.chatAttachmentsDeleted;
+    counts.chatReportsScrubbed = chatStats.chatReportsScrubbed;
+    counts.userErasedTombstoneEmitted = chatStats.userErasedTombstoneEmitted;
   }
 
   const latestRetentionUntil = latestRetentionMs > 0 ? new Date(latestRetentionMs).toISOString() : null;

@@ -405,7 +405,7 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
           subjectEmail: consentEmail,
           consentType: tr.consentType,
           granted: tr.granted
-        });
+        }, c.env);
       }
     }
 

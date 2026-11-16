@@ -467,6 +467,49 @@ function registerWaiverTelemetryTests() {
         assert.equal(oppAfter.user_agent, null, 'Opportunistic scrub on /api/waiver/sign must clear aged user_agent');
         assert.ok(oppAfter.signer_ip_scrubbed_at, 'Opportunistic scrub must set signer_ip_scrubbed_at');
       });
+
+      await t.test('5. pruneEphemeralBaseballRows(db) triggers scrubExpiredWaiverTelemetry alongside quarantine purge', async () => {
+        const { pruneEphemeralBaseballRows } = await import('../../src/app/schema.js');
+        const spec = getWaiverSpec(baseEnv);
+        const waiverTextSha = sha256HexSync(spec.officialText);
+        const sigSha = sha256HexSync(SAMPLE_PNG_SIG);
+
+        const agedIso = new Date(Date.now() - 35 * 86400 * 1000).toISOString();
+        const agedPayload = buildCanonicalWaiverPayload({
+          document_version: spec.documentVersion,
+          waiver_text_sha256: waiverTextSha,
+          email: 'waiver.t48@example.org',
+          printed_name: 'Prune Scrub Target',
+          signed_date: agedIso.slice(0, 10),
+          signature_type: 'drawn',
+          signature_sha256: sigSha,
+          electronic_consent: true
+        });
+        const agedDocSha = sha256HexSync(agedPayload);
+        const agedCertId = 'WVR-PRUNE-35D-001';
+        const agedSeal = await computeProvenanceSeal(baseEnv, `${agedCertId}:${agedDocSha}`, d1);
+
+        rawDb.prepare(`
+          INSERT INTO waivers (
+            certificate_id, user_id, email, printed_name, signed_date,
+            signature_type, signature_data, document_version,
+            waiver_text_sha256, document_sha256, provenance_seal,
+            signer_ip, user_agent, electronic_consent, signed_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+        `).run(
+          agedCertId, userId, 'waiver.t48@example.org', 'Prune Scrub Target', agedIso.slice(0, 10),
+          'drawn', SAMPLE_PNG_SIG, spec.documentVersion,
+          waiverTextSha, agedDocSha, agedSeal,
+          '203.0.113.177', 'PruneAgent/3.0', agedIso
+        );
+
+        await pruneEphemeralBaseballRows(d1, Date.now(), { force: true });
+
+        const agedAfter = rawDb.prepare('SELECT signer_ip, user_agent, signer_ip_scrubbed_at FROM waivers WHERE certificate_id = ?').get(agedCertId);
+        assert.equal(agedAfter.signer_ip, null, 'pruneEphemeralBaseballRows must scrub >30d signer_ip');
+        assert.equal(agedAfter.user_agent, null, 'pruneEphemeralBaseballRows must scrub >30d user_agent');
+        assert.ok(agedAfter.signer_ip_scrubbed_at, 'pruneEphemeralBaseballRows must stamp signer_ip_scrubbed_at');
+      });
     } finally {
       rawDb.close();
       try { fs.unlinkSync(tmpDbPath); } catch (e) { /* ignore */ }

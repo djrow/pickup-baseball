@@ -257,7 +257,7 @@ function setupVisitorErasure() {
     const origLabel = reqBtn ? reqBtn.textContent : '';
     if (reqBtn) {
       reqBtn.disabled = true;
-      reqBtn.textContent = 'Sending...';
+      reqBtn.textContent = API.t('visitor_erasure.sending', 'Sending...');
     }
 
     try {
@@ -270,14 +270,14 @@ function setupVisitorErasure() {
       reqForm.style.display = 'none';
       confirmForm.style.display = 'block';
       if (sentNotice) {
-        sentNotice.textContent = (res && res.message) || 'If records matching that email address exist, a 6-digit erasure verification code has been sent. It expires in 10 minutes.';
+        sentNotice.textContent = (res && res.message) || API.t('visitor_erasure.sent_fallback', 'If records matching that email address exist, a 6-digit erasure verification code has been sent. It expires in 10 minutes.');
       }
       if (codeInput) {
         codeInput.value = '';
         codeInput.focus();
       }
     } catch (err) {
-      setErasureAlert('Error contacting server. Please try again.', true);
+      setErasureAlert(API.t('visitor_erasure.network_error', 'Error contacting server. Please try again.'), true);
     } finally {
       if (reqBtn) {
         reqBtn.disabled = false;
@@ -321,7 +321,7 @@ function setupVisitorErasure() {
     const origLabel = confirmBtn ? confirmBtn.textContent : '';
     if (confirmBtn) {
       confirmBtn.disabled = true;
-      confirmBtn.textContent = 'Erasing...';
+      confirmBtn.textContent = API.t('visitor_erasure.erasing', 'Erasing...');
     }
 
     try {
@@ -344,7 +344,7 @@ function setupVisitorErasure() {
       } catch (storageErr) { /* localStorage unavailable */ }
 
       API.clearDataCaches(true);
-      const noticeMsg = (res && (res.waiverRetentionNotice || res.message)) || 'Your personal data and RSVPs have been erased.';
+      const noticeMsg = (res && (res.waiverRetentionNotice || res.message)) || API.t('visitor_erasure.erased_fallback', 'Your personal data and RSVPs have been erased.');
       if (window.PBFDialog) {
         await window.PBFDialog.alert(noticeMsg);
       }
@@ -355,7 +355,7 @@ function setupVisitorErasure() {
       if (codeInput) codeInput.value = '';
       setErasureAlert(noticeMsg, false);
     } catch (err) {
-      setErasureAlert('Failed to complete erasure. Please try again.', true);
+      setErasureAlert(API.t('visitor_erasure.erasure_failed', 'Failed to complete erasure. Please try again.'), true);
     } finally {
       if (confirmBtn) {
         confirmBtn.disabled = false;

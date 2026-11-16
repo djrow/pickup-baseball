@@ -247,8 +247,13 @@ async function createBackupTestEnv(envOverrides = {}) {
     `).run(memberUserId);
 
     chatSqlite.prepare(`
-      INSERT INTO clubhouse_gifs (id, title, tags, file_size, storage_provider, drive_file_id, local_data_base64, added_by, added_by_name)
-      VALUES ('gif_batflip_1', 'Bat Flip Celebration', 'baseball,celebration', 2048, 'gdrive', 'gdrive_gif_file_123', 'INLINE_GIF_BASE64_SHOULD_BE_SCRUBBED', ?, 'Alice Private Member')
+      INSERT INTO clubhouse_gifs (id, title, tags, file_size, storage_provider, drive_file_id, local_data_base64, is_public, added_by, added_by_name)
+      VALUES ('gif_batflip_1', 'Bat Flip Celebration', 'baseball,celebration', 2048, 'gdrive', 'gdrive_gif_file_123', 'INLINE_GIF_BASE64_SHOULD_BE_SCRUBBED', 1, ?, 'Alice Private Member')
+    `).run(memberUserId);
+
+    chatSqlite.prepare(`
+      INSERT INTO clubhouse_gifs (id, title, tags, file_size, storage_provider, drive_file_id, local_data_base64, is_public, added_by, added_by_name)
+      VALUES ('gif_private_1', 'Private Dugout Clip', 'private', 1024, 'gdrive', 'gdrive_gif_private_456', 'PRIVATE_GIF_BASE64', 0, ?, 'Alice Private Member')
     `).run(memberUserId);
 
     chatSqlite.prepare(`
@@ -301,6 +306,7 @@ function registerBackupDrTests() {
         assert.ok(sql.includes('INSERT OR IGNORE INTO "event_duties"'), 'Must export event_duties');
         assert.ok(sql.includes('INSERT OR IGNORE INTO "default_duties"'), 'Must export default_duties');
         assert.ok(sql.includes('INSERT OR IGNORE INTO "posts"'), 'Must export posts');
+        assert.ok(sql.includes("'Community Organizer'"), 'Must scrub posts.author_name to Community Organizer');
         assert.ok(sql.includes('INSERT OR IGNORE INTO "media_items"'), 'Must export approved media_items');
         assert.ok(sql.includes('Approved Team Photo'), 'Approved media metadata must be exported');
         assert.ok(sql.includes('INSERT OR IGNORE INTO "app_settings"'), 'Must export non-secret app_settings');
@@ -322,6 +328,7 @@ function registerBackupDrTests() {
           'INSERT OR IGNORE INTO "email_suppressions"',
           'admin_pii@example.org',
           'alice_pii_member@example.org',
+          'Admin Author',
           'vip_whitelist_secret@example.org',
           'coach_private@example.org',
           'cal_tok_admin_secret_111',
@@ -389,6 +396,9 @@ function registerBackupDrTests() {
           "'dm'",
           "'group_dm'",
           'INLINE_GIF_BASE64_SHOULD_BE_SCRUBBED',
+          'gif_private_1',
+          'Private Dugout Clip',
+          'gdrive_gif_private_456',
           'Alice Private Member',
           'INSERT OR IGNORE INTO "channel_members"',
           'INSERT OR IGNORE INTO "messages"',
@@ -627,6 +637,7 @@ function registerBackupDrTests() {
         assert.ok(chatSql.includes('INSERT OR IGNORE INTO "user_mutes"'));
         assert.ok(chatSql.includes('INSERT OR IGNORE INTO "user_blocks"'));
         assert.ok(chatSql.includes('INSERT OR IGNORE INTO "clubhouse_opted_out"'));
+        assert.ok(chatSql.includes('Private Dugout Clip'), 'DR chat backup preserves private GIFs');
 
         // Verify ephemeral tables & vault columns are excluded from Chat DR backup
         const drChatForbidden = [
@@ -675,6 +686,36 @@ function registerBackupDrTests() {
       } finally {
         ctx.close();
         fs.rmSync(tmpDir, { recursive: true, force: true });
+      }
+    });
+
+    await t.test('4b. Keyset pagination exports >500 rows cleanly across multiple pages without __backup_rowid leakage', async () => {
+      const ctx = await createBackupTestEnv();
+      try {
+        const admin = ctx.seedUser({ name: 'Admin', email: 'admin@example.org', role: 'admin', isAdmin: 1 });
+        const insDuty = ctx.baseballSqlite.prepare(
+          'INSERT INTO default_duties (title, description, slots_needed, sort_order) VALUES (?, ?, 1, ?)'
+        );
+        const tx = ctx.baseballSqlite.transaction(() => {
+          for (let i = 1; i <= 525; i++) {
+            insDuty.run(`Keyset Duty #${String(i).padStart(3, '0')}`, 'Desc', i);
+          }
+        });
+        tx();
+
+        const res = await ctx.apiFetch('/api/events/admin/backup-db?db=baseball', {
+          method: 'GET',
+          cookie: admin.cookie
+        });
+        assert.equal(res.status, 200);
+        const sql = res.text;
+        assert.equal(sql.includes('__backup_rowid'), false, 'Internal keyset rowid column must never appear in SQL dump');
+        for (let i = 1; i <= 525; i++) {
+          const marker = `Keyset Duty #${String(i).padStart(3, '0')}`;
+          assert.ok(sql.includes(marker), `Multi-page keyset export missing row: ${marker}`);
+        }
+      } finally {
+        ctx.close();
       }
     });
 

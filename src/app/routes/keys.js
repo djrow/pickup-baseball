@@ -261,7 +261,7 @@ keysRouter.put('/identity', requireAuth, async (c) => {
 
       const auditChannels = activeEncryptedChannels || [];
       if (auditChannels.length > 0) {
-        const displayName = user.name || `Player #${user.id}`;
+        const displayName = user.name || `Member #${user.id}`;
         const noticeContent = `🔐 ${displayName} rotated their E2EE identity key (v${nextKeyVersion}). Verify their safety number before sending new messages.`;
         const auditMeta = JSON.stringify({
           audit_type: 'key_rotated',

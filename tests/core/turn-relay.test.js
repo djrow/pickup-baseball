@@ -343,7 +343,7 @@ function registerTurnRelayTests() {
       sandbox.module = { exports: {} };
       vm.runInNewContext(clubhouseSrc, sandbox, { filename: 'public/js/clubhouse.js' });
 
-      const ClubhouseUI = sandbox.ClubhouseUI;
+      const ClubhouseUI = sandbox.module.exports;
       const ClubhouseRTC = sandbox.ClubhouseRTC;
       assert.ok(ClubhouseUI, 'ClubhouseUI facade must be exposed');
 

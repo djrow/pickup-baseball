@@ -735,6 +735,7 @@ function registerKeyRotationAuditTests() {
         globalThis.indexedDB = prevIndexedDB;
         globalThis.localStorage = prevLocalStorage;
         delete globalThis.ClubhouseCrypto;
+        delete globalThis.ClubhouseStore;
         delete require.cache[require.resolve('../../public/js/crypto.js')];
         delete require.cache[require.resolve('../../public/js/store.js')];
       }
