@@ -540,7 +540,7 @@ test('T3: User Role Management & Session Persistence', async (t) => {
     assert.equal(legacyUserBefore.role, 'facilitator');
 
     // Run schema / migration logic
-    initDatabase();
+    await initDatabase(true);
 
     // Verify user was migrated to 'organizer'
     const legacyUserAfter = db.prepare("SELECT id, role FROM users WHERE email = ?").get(legacyEmail);

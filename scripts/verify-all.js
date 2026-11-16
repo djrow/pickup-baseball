@@ -40,7 +40,6 @@ const testDataDir = path.join(os.tmpdir(), `pickup_verify_data_${Date.now()}`);
 process.env.DATA_DIR = testDataDir;
 
 const { db, chatDb, d1, baseballD1, chatD1, initDatabase, getDefaultDuties } = require('../src/db');
-initDatabase();
 
 const { createSession } = require('../src/auth');
 const { createNodeHttpBridge, getFullRequestUrl, sendWebResponse } = require('../src/d1-sqlite');
@@ -172,6 +171,7 @@ const ctx = {
 };
 
 test.before(async () => {
+  await initDatabase();
   await new Promise((resolve) => {
     server = app.listen(0, '127.0.0.1', () => {
       server.unref();
@@ -262,6 +262,7 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
 require('../tests/core/clubhouse-waiver.test.js')(ctx);
 require('../tests/core/security-scan.test.js');
 require('../tests/core/schema-barrel.test.js')();
+require('../tests/core/migration-engine.test.js')();
 require('../tests/core/typecheck.test.js')();
 require('../tests/core/lint.test.js')();
 require('../tests/core/error-telemetry.test.js')(ctx);

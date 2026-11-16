@@ -10,6 +10,7 @@
     "deploy": "npx wrangler pages deploy public --project-name pickup-baseball --branch trunk --commit-dirty=true",
     "d1:backup": "npx wrangler d1 export pickup-baseball-db --remote --output ./d1_backup.sql",
     "d1:backup:chat": "npx wrangler d1 export pickup-chat-db --remote --output ./d1_chat_backup.sql",
+    "db:migrate": "node scripts/migrate-db.js",
     "seed": "node src/seed.js",
     "setup:gdrive": "node scripts/setup-gdrive-secrets.js",
     "bump": "node scripts/bump-version.js",

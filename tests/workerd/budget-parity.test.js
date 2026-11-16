@@ -20,15 +20,19 @@ test('Workerd Subrequest & D1 Query Budget Parity (Cloudflare Free <= 50 ceiling
     await harness.dispose();
   });
 
-  await t.test('Cold-boot fresh DB ensureD1Schema + GET /api/events stays <= 50 D1 queries and 0 outbound fetches', async () => {
+  await t.test('Cold-boot fresh DB fast-path ensureD1Schema + GET /api/events stays <= 20 D1 queries and 0 outbound fetches', async () => {
     const coldRes = await harness.apiFetch('/api/events');
     assert.equal(coldRes.status, 200);
     const coldCounts = parseD1Counts(coldRes);
 
     assert.equal(coldCounts.outboundFetches, 0, 'Cold-boot GET /api/events must make 0 outbound fetches');
     assert.ok(
-      coldCounts.queries <= 50,
-      `Cold-boot fresh DB D1 queries (${coldCounts.queries}) must stay <= 50 Cloudflare Free ceiling (batches=${coldCounts.batches}, direct=${coldCounts.direct}, statements=${coldCounts.statements})`
+      coldCounts.queries <= 20,
+      `Cold-boot fresh DB fast-path D1 queries (${coldCounts.queries}) must stay <= 20 (down from 49; batches=${coldCounts.batches}, direct=${coldCounts.direct}, statements=${coldCounts.statements})`
+    );
+    assert.ok(
+      coldCounts.batches <= 4,
+      `Cold-boot fresh DB fast-path D1 batches (${coldCounts.batches}) must stay <= 4`
     );
     assert.equal(harness.outboundCalls.length, 0);
 
