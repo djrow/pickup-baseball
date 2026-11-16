@@ -37,7 +37,7 @@ import {
 } from '../security.js';
 import { getRequireLoginSetting, getDisallowZeroLoginMediaSetting, pruneEphemeralBaseballRows } from '../schema.js';
 import { resolveConfig } from '../config.js';
-import { sendAuthCode } from '../mailer.js';
+import { sendAuthCode, sendErasureVerificationCode } from '../mailer.js';
 import { ERROR_CODES, jsonError, logEvent } from '../errors.js';
 import { executeTwoTierErasure } from '../erasure.js';
 import {
@@ -46,9 +46,13 @@ import {
   parseOptionalBoolean,
   recordConsentChange
 } from '../consent.js';
-import { promoteNextWaitlistedPlayer } from './events/helpers.js';
+import { promoteNextWaitlistedPlayer, isDeliverableEmail } from './events/helpers.js';
 
 export const authRouter = /** @type {AppHono} */ (new Hono());
+
+const ERASURE_TOKEN_PREFIX = 'erasure:';
+const ERASURE_REQUEST_GENERIC_MSG = 'If records matching that email address exist, a 6-digit erasure verification code has been sent. It expires in 10 minutes.';
+const ERASURE_CONFIRM_INVALID_MSG = 'Invalid or expired verification code. Please request a new code.';
 
 async function upsertUserAndCreateSession(c, cleanEmail, fallbackName, { sharedDevice = false } = {}) {
   const db = c.env.DB;
@@ -143,7 +147,7 @@ async function handleSendCode(c) {
     const expiresAt = new Date(Date.now() + AUTH_CODE_EXPIRY_MS).toISOString();
 
     await c.env.DB.batch([
-      c.env.DB.prepare('UPDATE auth_codes SET used_at = CURRENT_TIMESTAMP WHERE email = ? AND used_at IS NULL').bind(email),
+      c.env.DB.prepare("UPDATE auth_codes SET used_at = CURRENT_TIMESTAMP WHERE LOWER(email) = LOWER(?) AND used_at IS NULL AND token NOT LIKE 'erasure:%'").bind(email),
       c.env.DB.prepare(
         'INSERT INTO auth_codes (email, name, code, token, attempts, shared_device, expires_at) VALUES (?, ?, ?, ?, 0, ?, ?)'
       ).bind(email, name, storedCode, storedToken, sharedDevice ? 1 : 0, expiresAt)
@@ -168,15 +172,25 @@ async function handleSendCode(c) {
 authRouter.post('/send-code', handleSendCode);
 authRouter.post('/request-code', handleSendCode);
 
-async function verifyAndConsumeAuthCode(db, env, cleanEmail, cleanCode) {
-  const latestActive = await db.prepare(`
-    SELECT * FROM auth_codes
-    WHERE LOWER(email) = LOWER(?) AND used_at IS NULL AND datetime(expires_at) > datetime('now')
-    ORDER BY id DESC LIMIT 1
-  `).bind(cleanEmail).first();
+async function verifyAndConsumeAuthCode(db, env, cleanEmail, cleanCode, options = {}) {
+  const erasureOnly = Boolean(options.erasureOnly);
+  const genericFailMsg = erasureOnly
+    ? ERASURE_CONFIRM_INVALID_MSG
+    : 'Invalid or expired code. Please request a new code.';
+  const latestActive = erasureOnly
+    ? await db.prepare(`
+        SELECT * FROM auth_codes
+        WHERE LOWER(email) = LOWER(?) AND token LIKE 'erasure:%' AND used_at IS NULL AND datetime(expires_at) > datetime('now')
+        ORDER BY id DESC LIMIT 1
+      `).bind(cleanEmail).first()
+    : await db.prepare(`
+        SELECT * FROM auth_codes
+        WHERE LOWER(email) = LOWER(?) AND token NOT LIKE 'erasure:%' AND used_at IS NULL AND datetime(expires_at) > datetime('now')
+        ORDER BY id DESC LIMIT 1
+      `).bind(cleanEmail).first();
 
   if (!latestActive) {
-    return { ok: false, status: 400, error: 'Invalid or expired code. Please request a new code.' };
+    return { ok: false, status: 400, error: genericFailMsg };
   }
 
   const isTest = Boolean(env && env.NODE_ENV === 'test');
@@ -190,6 +204,9 @@ async function verifyAndConsumeAuthCode(db, env, cleanEmail, cleanCode) {
           used_at = CASE WHEN COALESCE(attempts, 0) + 1 >= ? THEN CURRENT_TIMESTAMP ELSE used_at END
       WHERE id = ? AND used_at IS NULL
     `).bind(MAX_CODE_VERIFY_ATTEMPTS, latestActive.id).run();
+    if (erasureOnly) {
+      return { ok: false, status: 400, error: ERASURE_CONFIRM_INVALID_MSG };
+    }
     const updatedRow = await db.prepare('SELECT attempts FROM auth_codes WHERE id = ?').bind(latestActive.id).first();
     const newAttempts = updatedRow ? Number(updatedRow.attempts || 0) : (Number(latestActive.attempts || 0) + 1);
     if (newAttempts >= MAX_CODE_VERIFY_ATTEMPTS) {
@@ -202,7 +219,7 @@ async function verifyAndConsumeAuthCode(db, env, cleanEmail, cleanCode) {
     'UPDATE auth_codes SET used_at = CURRENT_TIMESTAMP WHERE id = ? AND used_at IS NULL AND COALESCE(attempts, 0) < ?'
   ).bind(latestActive.id, MAX_CODE_VERIFY_ATTEMPTS).run();
   if (!consumeRes || !consumeRes.meta || consumeRes.meta.changes === 0) {
-    return { ok: false, status: 400, error: 'Invalid or expired code. Please request a new code.' };
+    return { ok: false, status: 400, error: genericFailMsg };
   }
 
   return { ok: true, authCode: latestActive };
@@ -223,6 +240,7 @@ async function verifyRecentOtpForUser(c, db, user, providedCode) {
   const recentVerified = await db.prepare(`
     SELECT id FROM auth_codes
     WHERE LOWER(email) = LOWER(?)
+      AND token NOT LIKE 'erasure:%'
       AND used_at IS NOT NULL
       AND COALESCE(attempts, 0) < ?
       AND datetime(used_at) >= datetime('now', '-10 minutes')
@@ -250,13 +268,36 @@ async function promoteFutureEventWaitlists(c, eventIds) {
   }
 }
 
-function buildWaiverRetentionNotice(result) {
+function buildWaiverRetentionNotice(result, isVisitorOnly = false) {
   const yrs = result.retentionYears || 3;
+  const subjectLabel = isVisitorOnly ? 'Your personal data and RSVPs' : 'Your account and personal data';
   if (result.waivers && result.waivers.length > 0) {
     const untilDate = result.latestRetentionUntil ? result.latestRetentionUntil.slice(0, 10) : `${yrs} years`;
-    return `Your account and personal data have been erased. ${result.waivers.length} signed liability waiver(s) have been placed in restricted Legal-Defense Quarantine until ${untilDate} (${yrs} years from signing or last attendance) and will then be permanently purged.`;
+    return `${subjectLabel} have been erased. ${result.waivers.length} signed liability waiver(s) have been placed in restricted Legal-Defense Quarantine until ${untilDate} (${yrs} years from signing or last attendance) and will then be permanently purged.`;
   }
-  return `Your account and personal data have been permanently erased. (Signed liability waivers are retained in restricted Admin-only quarantine for ${yrs} years when present; none were on file for your account.)`;
+  return `${subjectLabel} have been permanently erased. (Signed liability waivers are retained in restricted Admin-only quarantine for ${yrs} years when present; none were on file.)`;
+}
+
+async function hasErasableRecordsForEmail(db, cleanEmail) {
+  if (!cleanEmail || !isDeliverableEmail(cleanEmail)) {
+    return { exists: false, name: '' };
+  }
+  const emailHash = await sha256Hex(cleanEmail);
+  const [userRow, attRow, waiverRow, commentRow, consentRow] = await Promise.all([
+    db.prepare('SELECT id, name FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1').bind(cleanEmail).first(),
+    db.prepare('SELECT id, name FROM attendees WHERE LOWER(email) = LOWER(?) LIMIT 1').bind(cleanEmail).first(),
+    db.prepare("SELECT id, printed_name FROM waivers WHERE LOWER(email) = LOWER(?) AND COALESCE(status, 'active') != 'quarantined' LIMIT 1").bind(cleanEmail).first(),
+    db.prepare('SELECT id, author_name FROM comments WHERE LOWER(author_email) = LOWER(?) LIMIT 1').bind(cleanEmail).first(),
+    db.prepare('SELECT id FROM consent_records WHERE subject_email_hash = ? LIMIT 1').bind(emailHash).first()
+  ]);
+
+  const exists = Boolean(userRow || attRow || waiverRow || commentRow || consentRow);
+  const name = (userRow && userRow.name)
+    || (attRow && attRow.name)
+    || (waiverRow && waiverRow.printed_name)
+    || (commentRow && commentRow.author_name)
+    || '';
+  return { exists, name: String(name || '').trim() };
 }
 
 authRouter.post('/verify-code', async (c) => {
@@ -331,11 +372,11 @@ authRouter.get('/verify-magic', async (c) => {
     const authRecord = isTest
       ? await c.env.DB.prepare(`
           SELECT * FROM auth_codes
-          WHERE (token = ? OR token = ?) AND used_at IS NULL AND datetime(expires_at) > datetime('now')
+          WHERE (token = ? OR token = ?) AND token NOT LIKE 'erasure:%' AND used_at IS NULL AND datetime(expires_at) > datetime('now')
         `).bind(tokenHash, token).first()
       : await c.env.DB.prepare(`
           SELECT * FROM auth_codes
-          WHERE token = ? AND used_at IS NULL AND datetime(expires_at) > datetime('now')
+          WHERE token = ? AND token NOT LIKE 'erasure:%' AND used_at IS NULL AND datetime(expires_at) > datetime('now')
         `).bind(tokenHash).first();
 
     if (!authRecord) {
@@ -698,6 +739,148 @@ authRouter.delete('/me', requireAuth, async (c) => {
     keepApprovedGallery: result.keepApprovedGallery,
     counts: result.counts
   });
+});
+
+authRouter.post('/erasure/request', async (c) => {
+  try {
+    const db = c.env && (c.env.BASEBALL_DB || c.env.DB);
+    if (!db) return c.json({ error: 'Database unavailable.' }, 500);
+
+    const clientIp = getClientIp(c);
+    const ipLimit = await checkRateLimit(db, `erasure_request_ip:${clientIp}`, 5, 600, c.env);
+    if (!ipLimit.allowed) {
+      return c.json({ error: 'Too many erasure requests from your network. Please wait 10 minutes and try again.' }, 429);
+    }
+
+    const body = await c.req.json().catch(() => ({}));
+    const rawEmail = body && body.email != null ? String(body.email) : '';
+    if (!isValidEmailAddress(rawEmail)) {
+      return c.json({ error: 'A valid email address is required.' }, 400);
+    }
+
+    const cleanEmail = rawEmail.trim().toLowerCase();
+    if (!(await verifyTurnstileIfConfigured(c.env, body.cf_turnstile_response, clientIp))) {
+      return c.json({ error: 'Bot verification failed. Please refresh and try again.' }, 403);
+    }
+
+    const emailLimit = await checkRateLimit(db, `erasure_request_email:${cleanEmail}`, 3, 600, c.env);
+    if (!emailLimit.allowed) {
+      return c.json({ error: 'Too many erasure requests for this email. Please check your inbox or wait 10 minutes.' }, 429);
+    }
+
+    const recordInfo = await hasErasableRecordsForEmail(db, cleanEmail);
+    if (recordInfo.exists) {
+      const code = generateCode();
+      const rawToken = generateToken();
+      const isTest = Boolean(c.env && c.env.NODE_ENV === 'test');
+      const storedCode = isTest ? code : await sha256Hex(code);
+      const storedToken = `${ERASURE_TOKEN_PREFIX}${isTest ? rawToken : await sha256Hex(rawToken)}`;
+      const expiresAt = new Date(Date.now() + AUTH_CODE_EXPIRY_MS).toISOString();
+
+      await db.batch([
+        db.prepare(
+          "UPDATE auth_codes SET used_at = CURRENT_TIMESTAMP WHERE LOWER(email) = LOWER(?) AND used_at IS NULL AND token LIKE 'erasure:%'"
+        ).bind(cleanEmail),
+        db.prepare(
+          'INSERT INTO auth_codes (email, name, code, token, attempts, shared_device, expires_at) VALUES (?, ?, ?, ?, 0, 0, ?)'
+        ).bind(cleanEmail, recordInfo.name || null, storedCode, storedToken, expiresAt)
+      ]);
+
+      const origin = getSafePublicOrigin(c);
+      try {
+        await sendErasureVerificationCode(c.env, origin, {
+          email: cleanEmail,
+          name: recordInfo.name || 'Player',
+          code
+        });
+      } catch (mailErr) {
+        logEvent('error', 'erasure_verification_email_failed', {
+          code: ERROR_CODES.MAIL_ERROR,
+          msg: mailErr && mailErr.message ? mailErr.message : 'Failed to dispatch erasure verification email'
+        });
+      }
+    }
+
+    return c.json({
+      success: true,
+      message: ERASURE_REQUEST_GENERIC_MSG
+    });
+  } catch (err) {
+    return jsonError(c, 500, ERROR_CODES.INTERNAL_ERROR, 'Failed to process erasure request.');
+  }
+});
+
+authRouter.post('/erasure/confirm', async (c) => {
+  try {
+    const db = c.env && (c.env.BASEBALL_DB || c.env.DB);
+    if (!db) return c.json({ error: 'Database unavailable.' }, 500);
+
+    const clientIp = getClientIp(c);
+    const ipLimit = await checkRateLimit(db, `erasure_confirm_ip:${clientIp}`, 10, 600, c.env);
+    if (!ipLimit.allowed) {
+      return c.json({ error: 'Too many verification attempts. Please wait 10 minutes before trying again.' }, 429);
+    }
+
+    const body = await c.req.json().catch(() => ({}));
+    const rawEmail = body && body.email != null ? String(body.email) : '';
+    const rawCode = body && body.code != null ? String(body.code) : '';
+    if (!isValidEmailAddress(rawEmail) || !rawCode.trim()) {
+      return c.json({ error: 'Email and 6-digit verification code are required.' }, 400);
+    }
+
+    const cleanEmail = rawEmail.trim().toLowerCase();
+    const cleanCode = rawCode.trim();
+
+    const emailLimit = await checkRateLimit(db, `erasure_confirm_email:${cleanEmail}`, 10, 600, c.env);
+    if (!emailLimit.allowed) {
+      return c.json({ error: 'Too many verification attempts for this email. Please wait 10 minutes before trying again.' }, 429);
+    }
+
+    const checkRes = await verifyAndConsumeAuthCode(db, c.env, cleanEmail, cleanCode, { erasureOnly: true });
+    if (!checkRes.ok) {
+      return c.json({ error: checkRes.error }, /** @type {any} */ (checkRes.status));
+    }
+
+    const keepApprovedGallery = body.keep_approved_gallery === true
+      || body.keep_approved_gallery === 'true';
+
+    const existingUser = await db.prepare('SELECT id, email FROM users WHERE LOWER(email) = LOWER(?)').bind(cleanEmail).first();
+    const targetUserId = existingUser && existingUser.id ? Number(existingUser.id) : null;
+
+    const result = await executeTwoTierErasure({
+      db,
+      chatDb: c.env && c.env.CHAT_DB,
+      env: c.env,
+      userId: targetUserId,
+      email: cleanEmail,
+      actorType: targetUserId ? 'member' : 'visitor',
+      actorId: targetUserId,
+      banEmail: false,
+      keepApprovedGallery
+    });
+
+    await promoteFutureEventWaitlists(c, result.affectedFutureEventIds);
+
+    const callerUser = c.get('user');
+    if (targetUserId || (callerUser && String(callerUser.email || '').trim().toLowerCase() === cleanEmail)) {
+      deleteCookie(c, SESSION_COOKIE_NAME, { path: '/' });
+    }
+
+    const notice = buildWaiverRetentionNotice(result, !targetUserId);
+    return c.json({
+      success: true,
+      message: notice,
+      waiverRetentionNotice: notice,
+      waiversQuarantined: result.counts.waiversQuarantined,
+      retentionYears: result.retentionYears,
+      latestRetentionUntil: result.latestRetentionUntil,
+      keepApprovedGallery: result.keepApprovedGallery,
+      counts: result.counts
+    });
+  } catch (err) {
+    logEvent('error', 'visitor_erasure_confirm_failed', { err });
+    return jsonError(c, 500, ERROR_CODES.INTERNAL_ERROR, 'Failed to process erasure confirmation.');
+  }
 });
 
 authRouter.post('/calendar-token/regenerate', requireAuth, async (c) => {

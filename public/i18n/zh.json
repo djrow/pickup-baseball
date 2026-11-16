@@ -412,5 +412,21 @@
   "clubhouse.peer_blocked_unblock_short": "取消屏蔽",
   "clubhouse.peer_blocked_dm_notice": "🚫 你与此成员之间的私信已被屏蔽。",
   "clubhouse.peer_blocked_dm_self": "取消屏蔽此成员后即可发起或发送一对一私信。",
-  "clubhouse.peer_blocked_voice_notice": "🚫 你与此成员之间的语音通话已被屏蔽。"
+  "clubhouse.peer_blocked_voice_notice": "🚫 你与此成员之间的语音通话已被屏蔽。",
+  "footer.erase_data": "删除我的数据",
+  "privacy.erase_link": "删除您的访客 / 报名数据 →",
+  "visitor_erasure.title": "🗑️ 删除访客 / 报名数据",
+  "visitor_erasure.summary_hint": "无需登录即可删除报名或个人数据",
+  "visitor_erasure.notice": "使用 6 位验证码验证您的邮箱，即可永久删除未来比赛报名、任务分配、击球练习名额和同意记录，并对历史出席记录和评论进行匿名化处理。法律免责声明保留提示：已签署的免责声明将在签署或最后一次参加活动起 3 年内封存于仅限管理员访问的受限隔离区，期满后自动永久删除。",
+  "visitor_erasure.email_label": "电子邮箱 *",
+  "visitor_erasure.email_placeholder": "you@example.com",
+  "visitor_erasure.keep_gallery": "如果存在账号，请将我已批准的图库照片/视频以匿名“Community Member”保留（未批准项目将始终删除）",
+  "visitor_erasure.send_code_btn": "📧 发送删除验证码",
+  "visitor_erasure.code_label": "输入 6 位删除验证码",
+  "visitor_erasure.code_placeholder": "123456",
+  "visitor_erasure.confirm_btn": "永久删除我的数据",
+  "visitor_erasure.cancel_btn": "取消",
+  "visitor_erasure.confirm_dialog": "确认永久删除与此邮箱匹配的个人数据和报名记录吗？此操作无法撤销。所有已签署的免责声明将在自动清除前于受限法律隔离区保留 3 年。",
+  "visitor_erasure.invalid_email": "请输入有效的电子邮箱地址。",
+  "visitor_erasure.invalid_code": "请输入发送到您邮箱的 6 位验证码。"
 }

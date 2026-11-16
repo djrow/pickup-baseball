@@ -292,6 +292,16 @@ const PUBLIC_OR_TOKEN_ROUTE_MANIFEST = [
     route: 'POST /api/auth/logout',
     reason: 'Clears caller session cookie and revokes hashed server session row'
   },
+  {
+    ast: 'auth.js:POST:/erasure/request',
+    route: 'POST /api/auth/erasure/request',
+    reason: 'Public Visitor/Member self-service erasure OTP request (Turnstile + HMAC IP/email rate limited + non-disclosing)'
+  },
+  {
+    ast: 'auth.js:POST:/erasure/confirm',
+    route: 'POST /api/auth/erasure/confirm',
+    reason: 'Public Visitor/Member self-service erasure OTP confirmation (HMAC IP/email rate limited + constant-time SHA-256 OTP + non-disclosing)'
+  },
 
   // Batting practice & volunteer task template routes in src/app/routes/events/bp-duties.js
   {

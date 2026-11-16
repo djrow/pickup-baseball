@@ -412,5 +412,21 @@
   "clubhouse.peer_blocked_unblock_short": "Desbloquear",
   "clubhouse.peer_blocked_dm_notice": "🚫 Mensagens diretas estão bloqueadas entre você e este membro.",
   "clubhouse.peer_blocked_dm_self": "Desbloqueie este membro para iniciar ou enviar uma mensagem direta 1:1.",
-  "clubhouse.peer_blocked_voice_notice": "🚫 Chamadas de voz estão bloqueadas entre você e este membro."
+  "clubhouse.peer_blocked_voice_notice": "🚫 Chamadas de voz estão bloqueadas entre você e este membro.",
+  "footer.erase_data": "Apagar meus dados",
+  "privacy.erase_link": "Apagar seus dados de visitante / RSVP →",
+  "visitor_erasure.title": "🗑️ Apagar dados de visitante / RSVP",
+  "visitor_erasure.summary_hint": "Remova RSVPs ou dados sem entrar na conta",
+  "visitor_erasure.notice": "Verifique seu e-mail com um código de 6 dígitos para excluir permanentemente RSVPs futuros, tarefas atribuídas, horários de treino de rebatida e registros de consentimento, além de anonimizar presenças e comentários anteriores. Aviso de retenção legal: termos de responsabilidade assinados permanecem selados em quarentena restrita apenas para administradores por 3 anos após a assinatura ou último evento frequentado antes da exclusão definitiva.",
+  "visitor_erasure.email_label": "Endereço de e-mail *",
+  "visitor_erasure.email_placeholder": "you@example.com",
+  "visitor_erasure.keep_gallery": "Se existir uma conta, manter minhas fotos/vídeos aprovados da Galeria atribuídos anonimamente a \"Community Member\" (itens não aprovados são sempre excluídos)",
+  "visitor_erasure.send_code_btn": "📧 Enviar código de verificação de exclusão",
+  "visitor_erasure.code_label": "Digite o código de exclusão de 6 dígitos",
+  "visitor_erasure.code_placeholder": "123456",
+  "visitor_erasure.confirm_btn": "Apagar meus dados permanentemente",
+  "visitor_erasure.cancel_btn": "Cancelar",
+  "visitor_erasure.confirm_dialog": "Apagar permanentemente todos os dados pessoais e RSVPs correspondentes a este e-mail? Isso não pode ser desfeito. Qualquer termo de responsabilidade assinado permanecerá em quarentena jurídica restrita por 3 anos antes da exclusão automática.",
+  "visitor_erasure.invalid_email": "Por favor, insira um endereço de e-mail válido.",
+  "visitor_erasure.invalid_code": "Por favor, insira o código de verificação de 6 dígitos enviado ao seu e-mail."
 }

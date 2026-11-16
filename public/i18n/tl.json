@@ -412,5 +412,21 @@
   "clubhouse.peer_blocked_unblock_short": "I-unblock",
   "clubhouse.peer_blocked_dm_notice": "🚫 Naka-block ang direct messages sa pagitan mo at ng miyembrong ito.",
   "clubhouse.peer_blocked_dm_self": "I-unblock ang miyembrong ito para makapagsimula o makapagpadala ng 1:1 Direct Message.",
-  "clubhouse.peer_blocked_voice_notice": "🚫 Naka-block ang voice calls sa pagitan mo at ng miyembrong ito."
+  "clubhouse.peer_blocked_voice_notice": "🚫 Naka-block ang voice calls sa pagitan mo at ng miyembrong ito.",
+  "footer.erase_data": "Burahin ang Aking Data",
+  "privacy.erase_link": "Burahin ang iyong data ng bisita / RSVP →",
+  "visitor_erasure.title": "🗑️ Burahin ang Data ng Bisita / RSVP",
+  "visitor_erasure.summary_hint": "Alisin ang mga RSVP o data nang hindi nagla-log in",
+  "visitor_erasure.notice": "I-verify ang iyong email gamit ang 6-digit na code upang permanenteng mabura ang mga susunod na RSVP, nakatalagang gawain, batting practice slots, at tala ng pahintulot, at gawing anonymous ang nakaraang pagdalo at mga komento. Paunawa sa Pagpapanatili ng Legal na Waiver: Ang mga nilagdaang liability waiver ay mananatiling naka-seal sa limitadong quarantine para sa Admin lamang sa loob ng 3 taon mula sa paglagda o huling dinaluhang laro bago tuluyang mabura.",
+  "visitor_erasure.email_label": "Email Address *",
+  "visitor_erasure.email_placeholder": "you@example.com",
+  "visitor_erasure.keep_gallery": "Kung may account, panatilihin ang aking mga aprubadong larawan/video sa Gallery na naka-attribute nang anonymous sa \"Community Member\" (palaging binubura ang mga hindi aprubado)",
+  "visitor_erasure.send_code_btn": "📧 Mag-email ng Verification Code para sa Pagbura",
+  "visitor_erasure.code_label": "Ilagay ang 6-Digit na Code sa Pagbura",
+  "visitor_erasure.code_placeholder": "123456",
+  "visitor_erasure.confirm_btn": "Permanenteng Burahin ang Aking Data",
+  "visitor_erasure.cancel_btn": "Kanselahin",
+  "visitor_erasure.confirm_dialog": "Permanenteng burahin ang lahat ng personal na data at RSVP na tumutugma sa email na ito? Hindi na ito maibabalik. Ang anumang nilagdaang liability waiver ay mananatili sa 3-taong limitadong legal quarantine bago awtomatikong mabura.",
+  "visitor_erasure.invalid_email": "Mangyaring maglagay ng wastong email address.",
+  "visitor_erasure.invalid_code": "Mangyaring ilagay ang 6-digit na verification code na ipinadala sa iyong email."
 }

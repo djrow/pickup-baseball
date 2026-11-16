@@ -412,5 +412,21 @@
   "clubhouse.peer_blocked_unblock_short": "رفع مسدودیت",
   "clubhouse.peer_blocked_dm_notice": "🚫 پیام‌های مستقیم بین شما و این عضو مسدود است.",
   "clubhouse.peer_blocked_dm_self": "برای شروع یا ارسال پیام مستقیم دونفره، مسدودیت این عضو را بردارید.",
-  "clubhouse.peer_blocked_voice_notice": "🚫 تماس‌های صوتی بین شما و این عضو مسدود است."
+  "clubhouse.peer_blocked_voice_notice": "🚫 تماس‌های صوتی بین شما و این عضو مسدود است.",
+  "footer.erase_data": "پاک کردن داده‌های من",
+  "privacy.erase_link": "پاک کردن داده‌های بازدیدکننده / RSVP ←",
+  "visitor_erasure.title": "🗑️ پاک کردن داده‌های بازدیدکننده / RSVP",
+  "visitor_erasure.summary_hint": "حذف RSVPها یا داده‌ها بدون ورود به حساب",
+  "visitor_erasure.notice": "ایمیل خود را با کد ۶ رقمی تأیید کنید تا RSVPهای آینده، وظایف محول‌شده، نوبت‌های تمرین ضربه و سوابق رضایت برای همیشه حذف شوند و حضور و نظرات گذشته ناشناس شوند. اطلاعیه نگهداری رضایت‌نامه قانونی: رضایت‌نامه‌های امضاشده به مدت ۳ سال از زمان امضا یا آخرین رویداد شرکت‌کرده پیش از حذف دائمی، در قرنطینه محدود فقط برای مدیران باقی می‌مانند.",
+  "visitor_erasure.email_label": "نشانی ایمیل *",
+  "visitor_erasure.email_placeholder": "you@example.com",
+  "visitor_erasure.keep_gallery": "اگر حسابی وجود دارد، عکس‌ها/ویدیوهای تأییدشده گالری من به‌صورت ناشناس به نام \"Community Member\" حفظ شوند (موارد تأییدنشده همیشه حذف می‌شوند)",
+  "visitor_erasure.send_code_btn": "📧 ارسال کد تأیید پاک‌سازی",
+  "visitor_erasure.code_label": "کد پاک‌سازی ۶ رقمی را وارد کنید",
+  "visitor_erasure.code_placeholder": "123456",
+  "visitor_erasure.confirm_btn": "پاک کردن دائمی داده‌های من",
+  "visitor_erasure.cancel_btn": "انصراف",
+  "visitor_erasure.confirm_dialog": "آیا همه داده‌های شخصی و RSVPهای مطابق با این ایمیل برای همیشه پاک شوند؟ این کار قابل بازگشت نیست. هر رضایت‌نامه امضاشده پیش از پاک‌سازی خودکار به مدت ۳ سال در قرنطینه قانونی محدود باقی می‌ماند.",
+  "visitor_erasure.invalid_email": "لطفاً یک نشانی ایمیل معتبر وارد کنید.",
+  "visitor_erasure.invalid_code": "لطفاً کد تأیید ۶ رقمی ارسال‌شده به ایمیل خود را وارد کنید."
 }

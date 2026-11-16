@@ -412,5 +412,21 @@
   "clubhouse.peer_blocked_unblock_short": "Bỏ chặn",
   "clubhouse.peer_blocked_dm_notice": "🚫 Tin nhắn trực tiếp đã bị chặn giữa bạn và thành viên này.",
   "clubhouse.peer_blocked_dm_self": "Hãy bỏ chặn thành viên này để bắt đầu hoặc gửi tin nhắn trực tiếp 1:1.",
-  "clubhouse.peer_blocked_voice_notice": "🚫 Cuộc gọi thoại đã bị chặn giữa bạn và thành viên này."
+  "clubhouse.peer_blocked_voice_notice": "🚫 Cuộc gọi thoại đã bị chặn giữa bạn và thành viên này.",
+  "footer.erase_data": "Xóa dữ liệu của tôi",
+  "privacy.erase_link": "Xóa dữ liệu khách / RSVP của bạn →",
+  "visitor_erasure.title": "🗑️ Xóa dữ liệu khách / RSVP",
+  "visitor_erasure.summary_hint": "Xóa RSVP hoặc dữ liệu mà không cần đăng nhập",
+  "visitor_erasure.notice": "Xác minh email của bạn bằng mã 6 chữ số để xóa vĩnh viễn các RSVP sắp tới, nhiệm vụ được giao, lượt tập đánh bóng và hồ sơ đồng ý, đồng thời ẩn danh lịch sử tham dự và bình luận trước đây. Thông báo lưu giữ miễn trừ pháp lý: Các bản miễn trừ trách nhiệm đã ký sẽ được niêm phong trong khu vực cách ly hạn chế chỉ dành cho Quản trị viên trong 3 năm kể từ ngày ký hoặc sự kiện tham dự gần nhất trước khi bị xóa vĩnh viễn.",
+  "visitor_erasure.email_label": "Địa chỉ Email *",
+  "visitor_erasure.email_placeholder": "you@example.com",
+  "visitor_erasure.keep_gallery": "Nếu có tài khoản, giữ lại ảnh/video Thư viện đã được duyệt của tôi dưới tên ẩn danh \"Community Member\" (mục chưa duyệt luôn bị xóa)",
+  "visitor_erasure.send_code_btn": "📧 Gửi mã xác minh xóa dữ liệu qua email",
+  "visitor_erasure.code_label": "Nhập mã xóa 6 chữ số",
+  "visitor_erasure.code_placeholder": "123456",
+  "visitor_erasure.confirm_btn": "Xóa vĩnh viễn dữ liệu của tôi",
+  "visitor_erasure.cancel_btn": "Hủy",
+  "visitor_erasure.confirm_dialog": "Xóa vĩnh viễn toàn bộ dữ liệu cá nhân và RSVP khớp với email này? Hành động này không thể hoàn tác. Mọi bản miễn trừ trách nhiệm đã ký sẽ được giữ trong khu vực cách ly pháp lý hạn chế 3 năm trước khi tự động xóa.",
+  "visitor_erasure.invalid_email": "Vui lòng nhập địa chỉ email hợp lệ.",
+  "visitor_erasure.invalid_code": "Vui lòng nhập mã xác minh 6 chữ số đã gửi tới email của bạn."
 }

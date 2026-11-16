@@ -412,5 +412,21 @@
   "clubhouse.peer_blocked_unblock_short": "إلغاء الحظر",
   "clubhouse.peer_blocked_dm_notice": "🚫 الرسائل المباشرة محظورة بينك وبين هذا العضو.",
   "clubhouse.peer_blocked_dm_self": "قم بإلغاء حظر هذا العضو لبدء رسالة مباشرة فردية أو إرسالها.",
-  "clubhouse.peer_blocked_voice_notice": "🚫 المكالمات الصوتية محظورة بينك وبين هذا العضو."
+  "clubhouse.peer_blocked_voice_notice": "🚫 المكالمات الصوتية محظورة بينك وبين هذا العضو.",
+  "footer.erase_data": "حذف بياناتي",
+  "privacy.erase_link": "امسح بيانات الزائر / تأكيد الحضور ←",
+  "visitor_erasure.title": "🗑️ مسح بيانات الزائر / تأكيد الحضور",
+  "visitor_erasure.summary_hint": "إزالة تأكيدات الحضور أو البيانات دون تسجيل الدخول",
+  "visitor_erasure.notice": "تحقق من بريدك الإلكتروني برمز مكوّن من 6 أرقام لحذف تأكيدات الحضور المستقبلية وتعيينات المهام وأدوار التدريب وسجلات الموافقة نهائيًا، وإخفاء هوية سجلات الحضور والتعليقات السابقة. إشعار الاحتفاظ بالتنازل القانوني: تظل تنازلات المسؤولية الموقعة محفوظة في حجر مقيد للمسؤولين فقط لمدة 3 سنوات من التوقيع أو آخر فعالية حضرتها قبل الحذف النهائي.",
+  "visitor_erasure.email_label": "عنوان البريد الإلكتروني *",
+  "visitor_erasure.email_placeholder": "you@example.com",
+  "visitor_erasure.keep_gallery": "إذا كان هناك حساب، احتفظ بصور/مقاطع فيديو المعرض المعتمدة منسوبة بشكل مجهول إلى \"Community Member\" (تُحذف العناصر غير المعتمدة دائمًا)",
+  "visitor_erasure.send_code_btn": "📧 إرسال رمز التحقق للمسح",
+  "visitor_erasure.code_label": "أدخل رمز المسح المكوّن من 6 أرقام",
+  "visitor_erasure.code_placeholder": "123456",
+  "visitor_erasure.confirm_btn": "امسح بياناتي نهائيًا",
+  "visitor_erasure.cancel_btn": "إلغاء",
+  "visitor_erasure.confirm_dialog": "هل تريد مسح جميع البيانات الشخصية وتأكيدات الحضور المطابقة لهذا البريد الإلكتروني نهائيًا؟ لا يمكن التراجع عن ذلك. سيبقى أي تنازل مسؤولية موقع في حجر قانوني مقيد لمدة 3 سنوات قبل الحذف التلقائي.",
+  "visitor_erasure.invalid_email": "يرجى إدخال عنوان بريد إلكتروني صالح.",
+  "visitor_erasure.invalid_code": "يرجى إدخال رمز التحقق المكوّن من 6 أرقام المرسل إلى بريدك الإلكتروني."
 }

@@ -412,5 +412,21 @@
   "clubhouse.peer_blocked_unblock_short": "ਅਨਬਲੌਕ",
   "clubhouse.peer_blocked_dm_notice": "🚫 ਤੁਹਾਡੇ ਅਤੇ ਇਸ ਮੈਂਬਰ ਵਿਚਕਾਰ ਸਿੱਧੇ ਸੁਨੇਹੇ ਬਲੌਕ ਹਨ।",
   "clubhouse.peer_blocked_dm_self": "1:1 ਸਿੱਧਾ ਸੁਨੇਹਾ ਸ਼ੁਰੂ ਕਰਨ ਜਾਂ ਭੇਜਣ ਲਈ ਇਸ ਮੈਂਬਰ ਨੂੰ ਅਨਬਲੌਕ ਕਰੋ।",
-  "clubhouse.peer_blocked_voice_notice": "🚫 ਤੁਹਾਡੇ ਅਤੇ ਇਸ ਮੈਂਬਰ ਵਿਚਕਾਰ ਵੌਇਸ ਕਾਲਾਂ ਬਲੌਕ ਹਨ।"
+  "clubhouse.peer_blocked_voice_notice": "🚫 ਤੁਹਾਡੇ ਅਤੇ ਇਸ ਮੈਂਬਰ ਵਿਚਕਾਰ ਵੌਇਸ ਕਾਲਾਂ ਬਲੌਕ ਹਨ।",
+  "footer.erase_data": "ਮੇਰਾ ਡੇਟਾ ਮਿਟਾਓ",
+  "privacy.erase_link": "ਆਪਣਾ ਵਿਜ਼ਿਟਰ / RSVP ਡੇਟਾ ਮਿਟਾਓ →",
+  "visitor_erasure.title": "🗑️ ਵਿਜ਼ਿਟਰ / RSVP ਡੇਟਾ ਮਿਟਾਓ",
+  "visitor_erasure.summary_hint": "ਸਾਈਨ ਇਨ ਕੀਤੇ ਬਿਨਾਂ RSVP ਜਾਂ ਡੇਟਾ ਹਟਾਓ",
+  "visitor_erasure.notice": "ਭਵਿੱਖ ਦੇ RSVP, ਕੰਮਾਂ, ਬੈਟਿੰਗ ਪ੍ਰੈਕਟਿਸ ਸਲਾਟਾਂ ਅਤੇ ਸਹਿਮਤੀ ਰਿਕਾਰਡਾਂ ਨੂੰ ਪੱਕੇ ਤੌਰ 'ਤੇ ਮਿਟਾਉਣ ਅਤੇ ਪਿਛਲੀ ਹਾਜ਼ਰੀ ਤੇ ਟਿੱਪਣੀਆਂ ਨੂੰ ਗੁਮਨਾਮ ਕਰਨ ਲਈ 6-ਅੰਕਾਂ ਦੇ ਕੋਡ ਨਾਲ ਆਪਣੀ ਈਮੇਲ ਦੀ ਪੁਸ਼ਟੀ ਕਰੋ। ਕਾਨੂੰਨੀ ਛੋਟ ਸੰਭਾਲ ਨੋਟਿਸ: ਦਸਤਖਤ ਕੀਤੀਆਂ ਜ਼ਿੰਮੇਵਾਰੀ ਛੋਟਾਂ ਪੱਕੇ ਤੌਰ 'ਤੇ ਮਿਟਾਉਣ ਤੋਂ ਪਹਿਲਾਂ ਦਸਤਖਤ ਜਾਂ ਆਖਰੀ ਹਾਜ਼ਰੀ ਤੋਂ 3 ਸਾਲ ਤੱਕ ਸਿਰਫ਼ ਐਡਮਿਨ ਲਈ ਸੀਮਤ ਕੁਆਰੰਟੀਨ ਵਿੱਚ ਸੀਲ ਰਹਿੰਦੀਆਂ ਹਨ।",
+  "visitor_erasure.email_label": "ਈਮੇਲ ਪਤਾ *",
+  "visitor_erasure.email_placeholder": "you@example.com",
+  "visitor_erasure.keep_gallery": "ਜੇ ਖਾਤਾ ਮੌਜੂਦ ਹੈ, ਤਾਂ ਮੇਰੀਆਂ ਮਨਜ਼ੂਰਸ਼ੁਦਾ ਗੈਲਰੀ ਫੋਟੋਆਂ/ਵੀਡੀਓ ਨੂੰ ਗੁਮਨਾਮ ਤੌਰ 'ਤੇ \"Community Member\" ਦੇ ਨਾਮ ਹੇਠ ਰੱਖੋ (ਗੈਰ-ਮਨਜ਼ੂਰਸ਼ੁਦਾ ਆਈਟਮਾਂ ਹਮੇਸ਼ਾ ਮਿਟਾ ਦਿੱਤੀਆਂ ਜਾਂਦੀਆਂ ਹਨ)",
+  "visitor_erasure.send_code_btn": "📧 ਡੇਟਾ ਮਿਟਾਉਣ ਦਾ ਪੁਸ਼ਟੀਕਰਨ ਕੋਡ ਭੇਜੋ",
+  "visitor_erasure.code_label": "6-ਅੰਕਾਂ ਦਾ ਡੇਟਾ ਮਿਟਾਉਣ ਵਾਲਾ ਕੋਡ ਦਰਜ ਕਰੋ",
+  "visitor_erasure.code_placeholder": "123456",
+  "visitor_erasure.confirm_btn": "ਮੇਰਾ ਡੇਟਾ ਪੱਕੇ ਤੌਰ 'ਤੇ ਮਿਟਾਓ",
+  "visitor_erasure.cancel_btn": "ਰੱਦ ਕਰੋ",
+  "visitor_erasure.confirm_dialog": "ਕੀ ਇਸ ਈਮੇਲ ਨਾਲ ਮੇਲ ਖਾਂਦਾ ਸਾਰਾ ਨਿੱਜੀ ਡੇਟਾ ਅਤੇ RSVP ਪੱਕੇ ਤੌਰ 'ਤੇ ਮਿਟਾਉਣਾ ਹੈ? ਇਸਨੂੰ ਵਾਪਸ ਨਹੀਂ ਲਿਆ ਜਾ ਸਕਦਾ। ਕੋਈ ਵੀ ਦਸਤਖਤ ਕੀਤੀ ਜ਼ਿੰਮੇਵਾਰੀ ਛੋਟ ਆਪਣੇ-ਆਪ ਮਿਟਣ ਤੋਂ ਪਹਿਲਾਂ 3 ਸਾਲ ਦੇ ਸੀਮਤ ਕਾਨੂੰਨੀ ਕੁਆਰੰਟੀਨ ਵਿੱਚ ਰਹੇਗੀ।",
+  "visitor_erasure.invalid_email": "ਕਿਰਪਾ ਕਰਕੇ ਇੱਕ ਵੈਧ ਈਮੇਲ ਪਤਾ ਦਰਜ ਕਰੋ।",
+  "visitor_erasure.invalid_code": "ਕਿਰਪਾ ਕਰਕੇ ਆਪਣੀ ਈਮੇਲ 'ਤੇ ਭੇਜਿਆ 6-ਅੰਕਾਂ ਦਾ ਪੁਸ਼ਟੀਕਰਨ ਕੋਡ ਦਰਜ ਕਰੋ।"
 }
