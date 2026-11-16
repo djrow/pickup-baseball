@@ -348,5 +348,8 @@
   "backup_dr_passphrase_short": "백업 암호문은 최소 8자 이상이어야 합니다.",
   "backup_scrubbed_success": "비식별 운영 SQL 백업이 다운로드되었습니다.",
   "backup_dr_success": "암호화된 재해복구 백업(.pbfenc)이 다운로드되었습니다.",
-  "backup_failed": "데이터베이스 백업 실패: {error}"
+  "backup_failed": "데이터베이스 백업 실패: {error}",
+  "rtc_turn_unavailable_note": "사용 불가: 이 배포 환경에 TURN 프라이버시 릴레이 서버가 구성되어 있지 않습니다.",
+  "rtc_turn_available_note": "TURN 프라이버시 릴레이 서버가 구성되어 준비되었습니다.",
+  "rtc_turn_blocked_warning": "TURN 릴레이 서버가 구성되지 않아 프라이버시 릴레이 모드가 직접 P2P 음성을 차단했습니다."
 }

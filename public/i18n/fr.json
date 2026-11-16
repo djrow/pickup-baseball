@@ -348,5 +348,8 @@
   "backup_dr_passphrase_short": "La phrase secrète doit contenir au moins 8 caractères.",
   "backup_scrubbed_success": "Sauvegarde SQL opérationnelle expurgée téléchargée.",
   "backup_dr_success": "Sauvegarde de reprise chiffrée (.pbfenc) téléchargée.",
-  "backup_failed": "Échec de la sauvegarde de la base de données : {error}"
+  "backup_failed": "Échec de la sauvegarde de la base de données : {error}",
+  "rtc_turn_unavailable_note": "Indisponible : aucun serveur relais de confidentialité TURN n’est configuré sur ce déploiement.",
+  "rtc_turn_available_note": "Le serveur relais de confidentialité TURN est configuré et prêt.",
+  "rtc_turn_blocked_warning": "Le mode relais de confidentialité a bloqué la voix P2P directe car aucun serveur relais TURN n’est configuré."
 }

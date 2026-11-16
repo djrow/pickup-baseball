@@ -348,5 +348,8 @@
   "backup_dr_passphrase_short": "备份加密口令至少需要 8 个字符。",
   "backup_scrubbed_success": "脱敏运维 SQL 备份已下载。",
   "backup_dr_success": "加密灾难恢复备份 (.pbfenc) 已下载。",
-  "backup_failed": "数据库备份失败：{error}"
+  "backup_failed": "数据库备份失败：{error}",
+  "rtc_turn_unavailable_note": "不可用：此部署未配置 TURN 隐私中继服务器。",
+  "rtc_turn_available_note": "TURN 隐私中继服务器已配置并就绪。",
+  "rtc_turn_blocked_warning": "由于未配置 TURN 中继服务器，隐私中继模式已阻止直接 P2P 语音连接。"
 }

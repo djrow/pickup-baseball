@@ -130,6 +130,86 @@ function resolveStorageProvider(env) {
   return 'local';
 }
 
+const VALID_ICE_URL_SCHEME_RX = /^(?:stuns?|turns?):[^\s]+$/i;
+const TURN_URL_SCHEME_RX = /^turns?:/i;
+
+/**
+ * Parse and sanitize optional `TURN_ICE_SERVERS_JSON` from environment bindings.
+ * Invalid JSON or non-array values fall back safely to `[]`.
+ *
+ * @param {any} rawVal
+ * @returns {Array<{ urls: string | string[], username?: string, credential?: string }>}
+ */
+function parseTurnIceServers(rawVal) {
+  if (rawVal === undefined || rawVal === null || rawVal === '') return [];
+  let parsed = rawVal;
+  if (typeof rawVal === 'string') {
+    const trimmed = rawVal.trim();
+    if (!trimmed) return [];
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch (e) {
+      return [];
+    }
+  }
+  if (!Array.isArray(parsed)) return [];
+
+  /** @type {Array<{ urls: string | string[], username?: string, credential?: string }>} */
+  const out = [];
+  for (const item of parsed) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+    const rawUrls = item.urls !== undefined ? item.urls : item.url;
+    /** @type {string | string[] | null} */
+    let urls = null;
+    if (typeof rawUrls === 'string') {
+      const u = rawUrls.trim();
+      if (VALID_ICE_URL_SCHEME_RX.test(u)) {
+        urls = u;
+      }
+    } else if (Array.isArray(rawUrls)) {
+      const validList = [];
+      for (const candidate of rawUrls) {
+        if (typeof candidate === 'string') {
+          const u = candidate.trim();
+          if (VALID_ICE_URL_SCHEME_RX.test(u)) {
+            validList.push(u);
+          }
+        }
+      }
+      if (validList.length > 0) {
+        urls = validList;
+      }
+    }
+    if (!urls) continue;
+
+    /** @type {{ urls: string | string[], username?: string, credential?: string }} */
+    const entry = { urls };
+    if (typeof item.username === 'string' && item.username.trim()) {
+      entry.username = item.username.trim();
+    }
+    if (typeof item.credential === 'string' && item.credential.trim()) {
+      entry.credential = item.credential.trim();
+    }
+    out.push(entry);
+  }
+  return out;
+}
+
+/**
+ * Returns true iff at least one entry in `servers` has a `turn:` or `turns:` URL scheme.
+ *
+ * @param {Array<{ urls: string | string[] }>} servers
+ * @returns {boolean}
+ */
+function hasTurnServerScheme(servers) {
+  if (!Array.isArray(servers) || servers.length === 0) return false;
+  return servers.some((entry) => {
+    if (!entry || !entry.urls) return false;
+    const urlList = Array.isArray(entry.urls) ? entry.urls : [entry.urls];
+    return urlList.some((u) => typeof u === 'string' && TURN_URL_SCHEME_RX.test(u.trim()));
+  });
+}
+
 /**
  * Resolve boot configuration from environment bindings and selected preset.
  * Performs zero D1 reads.
@@ -151,6 +231,8 @@ export function resolveConfig(env) {
   const COMMUNITY_NAME = cleanString(source.COMMUNITY_NAME) || cleanString(source.APP_NAME) || defaults.COMMUNITY_NAME;
   const PUBLIC_ORIGIN = normalizePublicOrigin(source.PUBLIC_ORIGIN);
   const LOCK_PREVIEW_ORIGIN = source.LOCK_PREVIEW_ORIGIN === 1 || cleanString(source.LOCK_PREVIEW_ORIGIN) === '1';
+  const TURN_ICE_SERVERS = parseTurnIceServers(source.TURN_ICE_SERVERS_JSON);
+  const TURN_CONFIGURED = hasTurnServerScheme(TURN_ICE_SERVERS);
 
   const config = {
     COMMUNITY_PRESET,
@@ -163,6 +245,8 @@ export function resolveConfig(env) {
     HANDBOOK_URL: sanitizeHandbookUrl(source.HANDBOOK_URL, defaults.HANDBOOK_URL),
     MAIL_PROVIDER: resolveMailProvider(source),
     STORAGE_PROVIDER: resolveStorageProvider(source),
+    TURN_ICE_SERVERS,
+    TURN_CONFIGURED,
     FEATURE_BATTING_PRACTICE: parseBooleanFlag(source.FEATURE_BATTING_PRACTICE, defaults.FEATURE_BATTING_PRACTICE),
     FEATURE_CERTIFIED_SHIFTS: parseBooleanFlag(source.FEATURE_CERTIFIED_SHIFTS, defaults.FEATURE_CERTIFIED_SHIFTS),
     FEATURE_SUNDAY_PRIORITY: parseBooleanFlag(source.FEATURE_SUNDAY_PRIORITY, defaults.FEATURE_SUNDAY_PRIORITY)
@@ -235,7 +319,7 @@ export function getPreviewOriginLockout(reqUrl, envOrConfig) {
  * Never includes emails, secrets, or internal provider credentials.
  *
  * @param {Record<string, any> | ResolvedBootConfig | null | undefined} envOrConfig
- * @returns {{ preset: string, communityName: string, publicOrigin: string | null, handbookUrl: string | null, features: { battingPractice: boolean, certifiedShifts: boolean, sundayPriority: boolean } }}
+ * @returns {{ preset: string, communityName: string, publicOrigin: string | null, handbookUrl: string | null, turnConfigured: boolean, features: { battingPractice: boolean, certifiedShifts: boolean, sundayPriority: boolean } }}
  */
 export function getPublicConfig(envOrConfig) {
   const cfg = ensureResolvedConfig(envOrConfig);
@@ -244,6 +328,7 @@ export function getPublicConfig(envOrConfig) {
     communityName: cfg.COMMUNITY_NAME,
     publicOrigin: cfg.PUBLIC_ORIGIN || null,
     handbookUrl: cfg.HANDBOOK_URL || null,
+    turnConfigured: Boolean(cfg.TURN_CONFIGURED),
     features: {
       battingPractice: cfg.FEATURE_BATTING_PRACTICE,
       certifiedShifts: cfg.FEATURE_CERTIFIED_SHIFTS,

@@ -348,5 +348,8 @@
   "backup_dr_passphrase_short": "La frase de contraseña debe tener al menos 8 caracteres.",
   "backup_scrubbed_success": "Copia SQL operativa depurada descargada.",
   "backup_dr_success": "Copia de recuperación cifrada (.pbfenc) descargada.",
-  "backup_failed": "Error en la copia de seguridad: {error}"
+  "backup_failed": "Error en la copia de seguridad: {error}",
+  "rtc_turn_unavailable_note": "No disponible: No hay ningún servidor TURN de retransmisión de privacidad configurado en este despliegue.",
+  "rtc_turn_available_note": "El servidor TURN de retransmisión de privacidad está configurado y listo.",
+  "rtc_turn_blocked_warning": "El Modo de Retransmisión de Privacidad bloqueó la voz P2P directa porque no hay un servidor TURN configurado."
 }

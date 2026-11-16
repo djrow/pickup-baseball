@@ -348,5 +348,8 @@
   "backup_dr_passphrase_short": "Cụm mật khẩu sao lưu phải có ít nhất 8 ký tự.",
   "backup_scrubbed_success": "Đã tải xuống bản sao lưu SQL vận hành.",
   "backup_dr_success": "Đã tải xuống bản sao lưu DR mã hóa (.pbfenc).",
-  "backup_failed": "Sao lưu cơ sở dữ liệu thất bại: {error}"
+  "backup_failed": "Sao lưu cơ sở dữ liệu thất bại: {error}",
+  "rtc_turn_unavailable_note": "Không khả dụng: Chưa cấu hình máy chủ chuyển tiếp bảo mật TURN trên hệ thống này.",
+  "rtc_turn_available_note": "Máy chủ chuyển tiếp bảo mật TURN đã được cấu hình và sẵn sàng.",
+  "rtc_turn_blocked_warning": "Chế độ Chuyển tiếp Bảo mật đã chặn kết nối thoại P2P trực tiếp vì chưa cấu hình máy chủ TURN."
 }

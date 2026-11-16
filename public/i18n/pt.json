@@ -348,5 +348,8 @@
   "backup_dr_passphrase_short": "A frase-senha do backup deve ter pelo menos 8 caracteres.",
   "backup_scrubbed_success": "Backup SQL operacional anonimizado baixado.",
   "backup_dr_success": "Backup de recuperação criptografado (.pbfenc) baixado.",
-  "backup_failed": "Falha no backup do banco de dados: {error}"
+  "backup_failed": "Falha no backup do banco de dados: {error}",
+  "rtc_turn_unavailable_note": "Indisponível: Nenhum servidor TURN de retransmissão de privacidade está configurado nesta implantação.",
+  "rtc_turn_available_note": "Servidor TURN de retransmissão de privacidade configurado e pronto.",
+  "rtc_turn_blocked_warning": "O Modo de Retransmissão de Privacidade bloqueou a voz P2P direta porque nenhum servidor TURN está configurado."
 }

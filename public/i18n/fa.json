@@ -348,5 +348,8 @@
   "backup_dr_passphrase_short": "عبارت عبور پشتیبان باید حداقل ۸ نویسه باشد.",
   "backup_scrubbed_success": "پشتیبان SQL عملیاتی دانلود شد.",
   "backup_dr_success": "پشتیبان بازیابی بحران رمزنگاری‌شده (.pbfenc) دانلود شد.",
-  "backup_failed": "پشتیبان‌گیری از پایگاه داده ناموفق بود: {error}"
+  "backup_failed": "پشتیبان‌گیری از پایگاه داده ناموفق بود: {error}",
+  "rtc_turn_unavailable_note": "غیرفعال: هیچ سرور رله حریم خصوصی TURN در این استقرار پیکربندی نشده است.",
+  "rtc_turn_available_note": "سرور رله حریم خصوصی TURN پیکربندی و آماده است.",
+  "rtc_turn_blocked_warning": "حالت رله حریم خصوصی تماس صوتی مستقیم P2P را مسدود کرد زیرا سرور TURN پیکربندی نشده است."
 }

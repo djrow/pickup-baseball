@@ -363,7 +363,10 @@ const EN_DICT = {
   "backup_dr_passphrase_short": "Backup passphrase must be at least 8 characters.",
   "backup_scrubbed_success": "Scrubbed operational SQL backup downloaded.",
   "backup_dr_success": "Encrypted disaster-recovery backup (.pbfenc) downloaded.",
-  "backup_failed": "Database backup failed: {error}"
+  "backup_failed": "Database backup failed: {error}",
+  "rtc_turn_unavailable_note": "Unavailable: No TURN privacy relay server is configured on this deployment.",
+  "rtc_turn_available_note": "TURN privacy relay server is configured and ready.",
+  "rtc_turn_blocked_warning": "Privacy Relay Mode blocked direct P2P voice because no TURN relay server is configured."
 };
 
 const KNOWN_PHRASE_KEYS = {
@@ -1498,6 +1501,7 @@ const API = {
       communityName: 'Community Hub',
       publicOrigin: null,
       handbookUrl: null,
+      turnConfigured: false,
       features: {
         battingPractice: false,
         certifiedShifts: false,

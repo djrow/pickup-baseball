@@ -348,5 +348,8 @@
   "backup_dr_passphrase_short": "يجب أن تتكون عبارة مرور النسخة الاحتياطية من 8 أحرف على الأقل.",
   "backup_scrubbed_success": "تم تنزيل نسخة SQL التشغيلية المنقحة.",
   "backup_dr_success": "تم تنزيل نسخة استعادة الكوارث المشفرة (.pbfenc).",
-  "backup_failed": "فشل النسخ الاحتياطي لقاعدة البيانات: {error}"
+  "backup_failed": "فشل النسخ الاحتياطي لقاعدة البيانات: {error}",
+  "rtc_turn_unavailable_note": "غير متاح: لم يتم تكوين خادم ترحيل الخصوصية TURN في هذا النشر.",
+  "rtc_turn_available_note": "تم تكوين خادم ترحيل الخصوصية TURN وهو جاهز.",
+  "rtc_turn_blocked_warning": "حظر وضع ترحيل الخصوصية الاتصال الصوتي المباشر P2P لعدم تكوين خادم ترحيل TURN."
 }

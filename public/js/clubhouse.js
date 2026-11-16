@@ -69,10 +69,91 @@
   }
 
   function isClubhouseCertifiedShiftsEnabled() {
-    if (window.API && typeof window.API.isFeatureEnabled === 'function') {
+    if (typeof window !== 'undefined' && window.API && typeof window.API.isFeatureEnabled === 'function') {
       return window.API.isFeatureEnabled('certifiedShifts', uiState.publicConfig);
     }
     return true;
+  }
+
+  function tClubhouse(key, fallback) {
+    if (typeof window !== 'undefined' && window.API && typeof window.API.t === 'function') {
+      return window.API.t(key, fallback);
+    }
+    return fallback;
+  }
+
+  function isClubhouseTurnConfigured() {
+    if (uiState.publicConfig && typeof uiState.publicConfig.turnConfigured === 'boolean') {
+      if (uiState.publicConfig.turnConfigured) return true;
+    }
+    if (RtcEngine && typeof RtcEngine.isTurnConfigured === 'function') {
+      return Boolean(RtcEngine.isTurnConfigured());
+    }
+    return false;
+  }
+
+  function syncPrivacyRelayToggleUi() {
+    var relayCheckbox = el('ch-privacy-relay-toggle');
+    if (!relayCheckbox) return;
+    var turnConfigured = isClubhouseTurnConfigured();
+    var u = Store && Store.state ? Store.state.user : null;
+    var userWantsRelay = Boolean(u && (u.privacyRelayMode || u.privacy_relay_mode));
+
+    var noteEl = el('ch-privacy-relay-turn-note');
+    if (!noteEl && typeof document !== 'undefined' && relayCheckbox.parentNode) {
+      noteEl = document.createElement('div');
+      noteEl.id = 'ch-privacy-relay-turn-note';
+      noteEl.style.cssText = 'font-size:11.5px;margin-top:-8px;margin-bottom:12px;';
+      if (relayCheckbox.parentNode.parentNode && typeof relayCheckbox.parentNode.parentNode.insertBefore === 'function') {
+        relayCheckbox.parentNode.parentNode.insertBefore(noteEl, relayCheckbox.parentNode.nextSibling || null);
+      } else if (typeof relayCheckbox.parentNode.appendChild === 'function') {
+        relayCheckbox.parentNode.appendChild(noteEl);
+      }
+    }
+
+    if (!turnConfigured) {
+      relayCheckbox.checked = false;
+      relayCheckbox.disabled = true;
+      if (typeof relayCheckbox.setAttribute === 'function') {
+        relayCheckbox.setAttribute('aria-disabled', 'true');
+      }
+      var unavailMsg = tClubhouse(
+        'rtc_turn_unavailable_note',
+        'Unavailable: No TURN privacy relay server is configured on this deployment.'
+      );
+      relayCheckbox.title = unavailMsg;
+      if (noteEl) {
+        noteEl.textContent = unavailMsg;
+        if (noteEl.style) noteEl.style.color = '#fbbf24';
+        if (noteEl.classList && typeof noteEl.classList.remove === 'function') {
+          noteEl.classList.remove('hidden');
+        }
+      }
+      if (RtcEngine && RtcEngine.state) {
+        RtcEngine.state.privacyRelayMode = false;
+      }
+    } else {
+      relayCheckbox.disabled = false;
+      if (typeof relayCheckbox.removeAttribute === 'function') {
+        relayCheckbox.removeAttribute('aria-disabled');
+      }
+      relayCheckbox.checked = userWantsRelay;
+      var availMsg = tClubhouse(
+        'rtc_turn_available_note',
+        'TURN privacy relay server is configured and ready.'
+      );
+      relayCheckbox.title = availMsg;
+      if (noteEl) {
+        noteEl.textContent = availMsg;
+        if (noteEl.style) noteEl.style.color = 'var(--ch-text-secondary)';
+        if (noteEl.classList && typeof noteEl.classList.remove === 'function') {
+          noteEl.classList.remove('hidden');
+        }
+      }
+      if (RtcEngine && RtcEngine.state) {
+        RtcEngine.state.privacyRelayMode = relayCheckbox.checked;
+      }
+    }
   }
 
   function isMemberRole(role) {
@@ -396,13 +477,7 @@
       facCard.style.display = showFac ? 'block' : 'none';
     }
 
-    var relayCheckbox = el('ch-privacy-relay-toggle');
-    if (relayCheckbox) {
-      relayCheckbox.checked = Boolean(u.privacyRelayMode || u.privacy_relay_mode);
-      if (RtcEngine && RtcEngine.state) {
-        RtcEngine.state.privacyRelayMode = relayCheckbox.checked;
-      }
-    }
+    syncPrivacyRelayToggleUi();
   }
 
   function handleClubhouseOptToggle(nextOptIn, btnEl) {
@@ -2683,6 +2758,7 @@
     if (vaultBtn && vaultModal) {
       vaultBtn.addEventListener('click', function () {
         vaultModal.classList.remove('hidden');
+        syncPrivacyRelayToggleUi();
         loadStorageStatusWidget();
         refreshOwnVaultFingerprint();
       });
@@ -2690,6 +2766,7 @@
     if (dmOpenVaultBtn && vaultModal) {
       dmOpenVaultBtn.addEventListener('click', function () {
         vaultModal.classList.remove('hidden');
+        syncPrivacyRelayToggleUi();
         loadStorageStatusWidget();
         refreshOwnVaultFingerprint();
       });
@@ -2757,7 +2834,17 @@
     }
     var relayToggleEl = el('ch-privacy-relay-toggle');
     if (relayToggleEl) {
+      syncPrivacyRelayToggleUi();
       relayToggleEl.addEventListener('change', function () {
+        if (!isClubhouseTurnConfigured()) {
+          relayToggleEl.checked = false;
+          relayToggleEl.disabled = true;
+          if (RtcEngine && RtcEngine.state) {
+            RtcEngine.state.privacyRelayMode = false;
+          }
+          syncPrivacyRelayToggleUi();
+          return;
+        }
         if (RtcEngine && RtcEngine.state) {
           RtcEngine.state.privacyRelayMode = relayToggleEl.checked;
         }
@@ -2774,7 +2861,8 @@
           return;
         }
         if (statusEl) statusEl.textContent = 'Generating ECDH/ECDSA P-256 keys & deriving 600,000-iteration PBKDF2 vault...';
-        CryptoEngine.enrollIdentityWithPassphrase(pass, relayToggle && relayToggle.checked).then(function () {
+        var usePrivacyRelay = Boolean(isClubhouseTurnConfigured() && relayToggle && !relayToggle.disabled && relayToggle.checked);
+        CryptoEngine.enrollIdentityWithPassphrase(pass, usePrivacyRelay).then(function () {
           if (statusEl) statusEl.textContent = '✓ E2EE Identity Keys enrolled & encrypted backup vault stored!';
           Store.clearCachedDmKeys();
           return Store.redecryptChannelMessages(uiState.activeChannelId);
@@ -2995,8 +3083,13 @@
               warnEl.style.cssText = 'margin:6px 0;padding:8px 10px;border-radius:6px;background:rgba(245,158,11,0.14);border:1px solid rgba(245,158,11,0.45);color:#fbbf24;font-size:12px;';
               mediaStage.insertBefore(warnEl, mediaStage.firstChild);
             }
-            warnEl.textContent = 'Privacy Relay Mode blocked direct P2P voice because no TURN relay server is configured.';
+            warnEl.textContent = tClubhouse(
+              'rtc_turn_blocked_warning',
+              'Privacy Relay Mode blocked direct P2P voice because no TURN relay server is configured.'
+            );
           }
+        } else if (evType === 'turn_config_updated') {
+          syncPrivacyRelayToggleUi();
         }
       });
     }
@@ -3007,6 +3100,13 @@
     if (typeof window !== 'undefined' && window.API && typeof window.API.getPublicConfig === 'function') {
       window.API.getPublicConfig().then(function (cfg) {
         uiState.publicConfig = cfg;
+        if (RtcEngine && typeof RtcEngine.setTurnConfigured === 'function') {
+          RtcEngine.setTurnConfigured(Boolean(cfg && cfg.turnConfigured));
+        }
+        if (cfg && cfg.turnConfigured && RtcEngine && typeof RtcEngine.loadIceServers === 'function' && Store && Store.state && Store.state.user) {
+          RtcEngine.loadIceServers();
+        }
+        syncPrivacyRelayToggleUi();
         if (uiState.upcomingData) {
           renderSundayCard(uiState.upcomingData);
         } else if (!isClubhouseBpEnabled()) {
@@ -3250,6 +3350,23 @@
     wrap.appendChild(menu);
     wrap.appendChild(btn);
     quickActions.appendChild(wrap);
+  }
+
+  var ClubhouseUI = {
+    uiState: uiState,
+    isClubhouseTurnConfigured: isClubhouseTurnConfigured,
+    syncPrivacyRelayToggleUi: syncPrivacyRelayToggleUi,
+    setPublicConfig: function (cfg) {
+      uiState.publicConfig = cfg;
+      if (RtcEngine && typeof RtcEngine.setTurnConfigured === 'function') {
+        RtcEngine.setTurnConfigured(Boolean(cfg && cfg.turnConfigured));
+      }
+      syncPrivacyRelayToggleUi();
+    }
+  };
+  root.ClubhouseUI = ClubhouseUI;
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = ClubhouseUI;
   }
 
   if (typeof document !== 'undefined') {

@@ -7,12 +7,25 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-module.exports = function registerConfigTests(ctx) {
-  const { apiReq, rootDir } = ctx;
+function registerConfigTests(ctx) {
+  const rootDir = (ctx && ctx.rootDir) || path.join(__dirname, '..', '..');
+  const { app: honoApp } = require(path.join(rootDir, 'src', 'app', 'index.js'));
+  const apiReq = (ctx && ctx.apiReq) || (async (method, endpoint) => {
+    const res = await honoApp.fetch(new Request(`https://community.example.org${endpoint}`, { method }), {
+      COMMUNITY_PRESET: 'pickup-baseball'
+    });
+    const text = await res.text();
+    let data = null;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      /* non-json */
+    }
+    return { status: res.status, headers: res.headers, data };
+  });
 
   test('Boot Config Layer, Presets, /api/config/public & Lockout Matrix (Ticket #28)', async (t) => {
     const configModPath = path.join(rootDir, 'src', 'app', 'config.js');
-    const { app: honoApp } = require(path.join(rootDir, 'src', 'app', 'index.js'));
 
     await t.test('src/app/config.js resolves generic-community default with zero D1 reads', () => {
       assert.ok(fs.existsSync(configModPath), 'src/app/config.js must exist');
@@ -43,6 +56,8 @@ module.exports = function registerConfigTests(ctx) {
       assert.equal(cfg.HANDBOOK_URL, '');
       assert.equal(cfg.MAIL_PROVIDER, 'mock');
       assert.equal(cfg.STORAGE_PROVIDER, 'local');
+      assert.deepEqual(cfg.TURN_ICE_SERVERS, []);
+      assert.equal(cfg.TURN_CONFIGURED, false);
       assert.equal(cfg.FEATURE_BATTING_PRACTICE, false);
       assert.equal(cfg.FEATURE_CERTIFIED_SHIFTS, false);
       assert.equal(cfg.FEATURE_SUNDAY_PRIORITY, false);
@@ -54,6 +69,7 @@ module.exports = function registerConfigTests(ctx) {
       const pub = getPublicConfig(cfg);
       assert.equal(pub.preset, 'generic-community');
       assert.equal(pub.communityName, 'Community Hub');
+      assert.equal(pub.turnConfigured, false);
       assert.deepEqual(pub.features, {
         battingPractice: false,
         certifiedShifts: false,
@@ -166,6 +182,7 @@ module.exports = function registerConfigTests(ctx) {
         communityName: 'Sandlot Collective',
         publicOrigin: 'https://community.example.org',
         handbookUrl: 'https://community.example.org/handbook',
+        turnConfigured: false,
         features: {
           battingPractice: true,
           certifiedShifts: true,
@@ -241,10 +258,17 @@ module.exports = function registerConfigTests(ctx) {
         'STORAGE_PROVIDER',
         'FEATURE_BATTING_PRACTICE',
         'FEATURE_CERTIFIED_SHIFTS',
-        'FEATURE_SUNDAY_PRIORITY'
+        'FEATURE_SUNDAY_PRIORITY',
+        'TURN_ICE_SERVERS_JSON'
       ]) {
         assert.ok(raw.includes(`${key}=`), `.env.example must document ${key}`);
       }
     });
   });
-};
+}
+
+module.exports = registerConfigTests;
+
+if (require.main === module) {
+  registerConfigTests();
+}

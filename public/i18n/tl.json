@@ -348,5 +348,8 @@
   "backup_dr_passphrase_short": "Ang backup passphrase ay dapat hindi bababa sa 8 character.",
   "backup_scrubbed_success": "Na-download na ang scrubbed operational SQL backup.",
   "backup_dr_success": "Na-download na ang naka-encrypt na disaster-recovery backup (.pbfenc).",
-  "backup_failed": "Nabigo ang database backup: {error}"
+  "backup_failed": "Nabigo ang database backup: {error}",
+  "rtc_turn_unavailable_note": "Hindi available: Walang TURN privacy relay server na naka-configure sa deployment na ito.",
+  "rtc_turn_available_note": "Naka-configure at handa na ang TURN privacy relay server.",
+  "rtc_turn_blocked_warning": "Hinarangan ng Privacy Relay Mode ang direktang P2P voice dahil walang naka-configure na TURN relay server."
 }
