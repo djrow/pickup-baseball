@@ -148,27 +148,273 @@ async function deleteMediaStorageAssets({ db, chatDb, env, row, appscriptUrl }) 
 }
 
 /**
- * Best-effort baseline CHAT_DB cleanup for removed Member accounts.
- * Ticket #50 extends/replaces this hook with full message deletion and `user_erased` sync tombstones.
- * @param {D1Database|null|undefined} chatDb
- * @param {number} userId
+ * Best-effort deletion of external R2 / Google Drive / Apps Script assets for deleted
+ * `chat_attachments` and private `clubhouse_gifs`.
+ * @param {{
+ *   db?: D1Database|null,
+ *   chatDb: D1Database,
+ *   env?: Record<string, any>|null,
+ *   rows: Array<Record<string, any>>,
+ *   appscriptUrl?: string|null
+ * }} opts
  */
-async function cleanupBaselineChatState(chatDb, userId) {
-  if (!chatDb || !userId) return;
-  try {
-    await chatDb.batch([
-      chatDb.prepare('DELETE FROM user_crypto_keys WHERE user_id = ?').bind(userId),
-      chatDb.prepare('DELETE FROM channel_members WHERE user_id = ?').bind(userId),
-      chatDb.prepare('DELETE FROM channel_key_shares WHERE recipient_user_id = ? OR sender_user_id = ?').bind(userId, userId),
-      chatDb.prepare('DELETE FROM voice_participants WHERE user_id = ?').bind(userId),
-      chatDb.prepare('DELETE FROM rtc_signals WHERE sender_user_id = ? OR recipient_user_id = ?').bind(userId, userId),
-      chatDb.prepare('DELETE FROM user_mutes WHERE muter_user_id = ? OR muted_user_id = ?').bind(userId, userId),
-      chatDb.prepare('DELETE FROM user_blocks WHERE blocker_id = ? OR blocked_id = ?').bind(userId, userId),
-      chatDb.prepare('DELETE FROM clubhouse_opted_out WHERE user_id = ?').bind(userId)
-    ]);
-  } catch (chatErr) {
-    logEvent('warn', 'erasure_chat_cleanup_failed', { userId, err: chatErr });
+async function deleteChatStorageAssets({ db = null, chatDb, env = null, rows = [], appscriptUrl = null }) {
+  if (!Array.isArray(rows) || rows.length === 0) return;
+
+  const bucket = (env && (env.MEDIA_BUCKET || env.R2_BUCKET)) || null;
+  const seenR2 = new Set();
+  const seenDrive = new Set();
+
+  let resolvedAppscriptUrl = appscriptUrl;
+  const needsAppscriptCheck = rows.some((r) => Boolean(r && r.drive_file_id));
+  if (!resolvedAppscriptUrl && needsAppscriptCheck) {
+    resolvedAppscriptUrl = await resolveAppscriptUrl(db, env);
   }
+
+  for (const row of rows) {
+    if (!row) continue;
+
+    // Skip deleting external assets if a kept approved gallery item still points to them
+    if (row.promoted_media_id && db) {
+      try {
+        const promoStillExists = await db.prepare(
+          'SELECT 1 FROM media_items WHERE id = ? LIMIT 1'
+        ).bind(row.promoted_media_id).first();
+        if (promoStillExists) continue;
+      } catch (e) {
+        logEvent('warn', 'erasure_chat_promo_ref_check_failed', { mediaId: row.promoted_media_id, err: e });
+      }
+    }
+
+    if (row.r2_key && bucket && typeof bucket.delete === 'function') {
+      const r2Key = String(row.r2_key);
+      if (!seenR2.has(r2Key)) {
+        seenR2.add(r2Key);
+        let stillReferenced = false;
+        if (db) {
+          try {
+            const mediaR2Ref = await db.prepare(
+              'SELECT 1 FROM media_items WHERE r2_key = ? LIMIT 1'
+            ).bind(r2Key).first();
+            if (mediaR2Ref) stillReferenced = true;
+          } catch (e) {
+            logEvent('warn', 'erasure_chat_r2_media_ref_failed', { r2Key, err: e });
+          }
+        }
+        if (!stillReferenced) {
+          try {
+            const attR2Ref = await chatDb.prepare(
+              'SELECT 1 FROM chat_attachments WHERE r2_key = ? LIMIT 1'
+            ).bind(r2Key).first();
+            const gifR2Ref = await chatDb.prepare(
+              'SELECT 1 FROM clubhouse_gifs WHERE r2_key = ? LIMIT 1'
+            ).bind(r2Key).first();
+            if (attR2Ref || gifR2Ref) stillReferenced = true;
+          } catch (e) {
+            logEvent('warn', 'erasure_chat_r2_ref_failed', { r2Key, err: e });
+          }
+        }
+        if (!stillReferenced) {
+          try {
+            await bucket.delete(r2Key);
+          } catch (err) {
+            logEvent('warn', 'erasure_chat_r2_delete_failed', { r2Key, err });
+          }
+        }
+      }
+    }
+
+    if (row.drive_file_id) {
+      const driveId = String(row.drive_file_id);
+      if (!seenDrive.has(driveId)) {
+        seenDrive.add(driveId);
+        let stillReferenced = false;
+        if (db) {
+          try {
+            const likePattern = `%${driveId}%`;
+            const mediaDriveRef = await db.prepare(
+              'SELECT 1 FROM media_items WHERE file_url LIKE ? OR original_url LIKE ? LIMIT 1'
+            ).bind(likePattern, likePattern).first();
+            if (mediaDriveRef) stillReferenced = true;
+          } catch (e) {
+            logEvent('warn', 'erasure_chat_drive_media_ref_failed', { driveId, err: e });
+          }
+        }
+        if (!stillReferenced) {
+          try {
+            const attDriveRef = await chatDb.prepare(
+              'SELECT 1 FROM chat_attachments WHERE drive_file_id = ? LIMIT 1'
+            ).bind(driveId).first();
+            const gifDriveRef = await chatDb.prepare(
+              'SELECT 1 FROM clubhouse_gifs WHERE drive_file_id = ? LIMIT 1'
+            ).bind(driveId).first();
+            if (attDriveRef || gifDriveRef) stillReferenced = true;
+          } catch (e) {
+            logEvent('warn', 'erasure_chat_drive_ref_failed', { driveId, err: e });
+          }
+        }
+        if (!stillReferenced) {
+          if (isGDriveConfigured(env)) {
+            await deleteGDriveFile(env, driveId).catch(() => {});
+          }
+          if (resolvedAppscriptUrl && APPSCRIPT_EXEC_URL_RE.test(resolvedAppscriptUrl)) {
+            await safeFetchExternalUrl(
+              resolvedAppscriptUrl,
+              {
+                method: 'POST',
+                validator: validateAppscriptRedirectUrl,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'delete', fileId: driveId })
+              },
+              3,
+              8000
+            ).catch((err) => {
+              logEvent('warn', 'erasure_chat_appscript_delete_failed', { driveId, err });
+            });
+          }
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Full CHAT_DB erasure pipeline for removed Member accounts (ADR-0005 §4, Ticket #50):
+ * - Deletes user_crypto_keys (incl. vault), channel_members, channel_key_shares (recipient & sender),
+ *   voice_participants, rtc_signals, user_mutes, user_blocks, clubhouse_opted_out, private GIFs
+ * - Hard-deletes authored messages (incl. original_content/iv), decrements parent reply_count,
+ *   deletes reactions (both by user and on user's messages), and deletes chat_attachments + R2/Drive files
+ * - Scrubs moderator/channel creator attribution and chat_reports reporter_id/reporter_name without
+ *   deleting moderation report history
+ * - Emits a PII-free `user_erased` sync_events tombstone so active clients evict cached messages/keys
+ *
+ * @param {{
+ *   db?: D1Database|null,
+ *   chatDb: D1Database,
+ *   userId: number,
+ *   env?: AppBindings|Record<string, any>|null,
+ *   now?: Date
+ * }} params
+ * @returns {Promise<{
+ *   chatMessagesDeleted: number,
+ *   chatReactionsDeleted: number,
+ *   chatAttachmentsDeleted: number,
+ *   chatReportsScrubbed: number,
+ *   userErasedTombstoneEmitted: boolean
+ * }>}
+ */
+export async function cleanupClubhouseUserState({ db = null, chatDb, userId, env = null, now = new Date() }) {
+  const stats = {
+    chatMessagesDeleted: 0,
+    chatReactionsDeleted: 0,
+    chatAttachmentsDeleted: 0,
+    chatReportsScrubbed: 0,
+    userErasedTombstoneEmitted: false
+  };
+  if (!chatDb || !userId) return stats;
+
+  const targetUserId = Number(userId);
+  const tsDate = (now instanceof Date && !Number.isNaN(now.getTime())) ? now : new Date();
+  const nowSec = Math.floor(tsDate.getTime() / 1000);
+  const nowIso = tsDate.toISOString();
+
+  try {
+    // 1. Collect chat_attachments & private clubhouse_gifs BEFORE deleting messages (handles message_id ON DELETE SET NULL)
+    const attRowsRes = await chatDb.prepare(`
+      SELECT id, drive_file_id, r2_key, promoted_media_id
+      FROM chat_attachments
+      WHERE uploader_id = ?
+         OR message_id IN (SELECT id FROM messages WHERE author_id = ?)
+    `).bind(targetUserId, targetUserId).all();
+    const attachmentRows = (attRowsRes && attRowsRes.results) || [];
+
+    const privGifRowsRes = await chatDb.prepare(`
+      SELECT id, drive_file_id, r2_key
+      FROM clubhouse_gifs
+      WHERE added_by = ? AND is_public = 0
+    `).bind(targetUserId).all();
+    const privateGifRows = (privGifRowsRes && privGifRowsRes.results) || [];
+
+    // 2. Collect parent message reply counts to decrement for erased replies on peer threads
+    const replyCountsRes = await chatDb.prepare(`
+      SELECT parent_message_id, COUNT(*) as cnt
+      FROM messages
+      WHERE author_id = ? AND parent_message_id IS NOT NULL AND deleted_at IS NULL
+      GROUP BY parent_message_id
+    `).bind(targetUserId).all();
+    const replyCountRows = (replyCountsRes && replyCountsRes.results) || [];
+
+    // 3. Delete chat_attachments & private GIF rows first so external asset ref-checks see them removed
+    if (attachmentRows.length > 0) {
+      const delAttRes = await chatDb.prepare(`
+        DELETE FROM chat_attachments
+        WHERE uploader_id = ?
+           OR message_id IN (SELECT id FROM messages WHERE author_id = ?)
+      `).bind(targetUserId, targetUserId).run();
+      stats.chatAttachmentsDeleted = Number((delAttRes && delAttRes.meta && delAttRes.meta.changes) || 0);
+    }
+
+    if (privateGifRows.length > 0) {
+      await chatDb.prepare('DELETE FROM clubhouse_gifs WHERE added_by = ? AND is_public = 0').bind(targetUserId).run();
+    }
+
+    // Best-effort external R2 / Google Drive / Apps Script asset deletion
+    await deleteChatStorageAssets({
+      db,
+      chatDb,
+      env,
+      rows: [...attachmentRows, ...privateGifRows]
+    });
+
+    // 4. Delete reactions by this user or on this user's messages, then hard-delete authored messages
+    const delRxRes = await chatDb.prepare(`
+      DELETE FROM message_reactions
+      WHERE user_id = ?
+         OR message_id IN (SELECT id FROM messages WHERE author_id = ?)
+    `).bind(targetUserId, targetUserId).run();
+    stats.chatReactionsDeleted = Number((delRxRes && delRxRes.meta && delRxRes.meta.changes) || 0);
+
+    const delMsgRes = await chatDb.prepare('DELETE FROM messages WHERE author_id = ?').bind(targetUserId).run();
+    stats.chatMessagesDeleted = Number((delMsgRes && delMsgRes.meta && delMsgRes.meta.changes) || 0);
+
+    for (const rc of replyCountRows) {
+      if (rc && rc.parent_message_id && Number(rc.cnt) > 0) {
+        await chatDb.prepare(
+          'UPDATE messages SET reply_count = MAX(0, reply_count - ?) WHERE id = ?'
+        ).bind(Number(rc.cnt), rc.parent_message_id).run();
+      }
+    }
+
+    // 5. Scrub moderator/creator/GIF attribution and moderation report reporter references (preserving report history)
+    const scrubRepRes = await chatDb.prepare(
+      "UPDATE chat_reports SET reporter_id = 0, reporter_name = 'Deleted Member' WHERE reporter_id = ?"
+    ).bind(targetUserId).run();
+    stats.chatReportsScrubbed = Number((scrubRepRes && scrubRepRes.meta && scrubRepRes.meta.changes) || 0);
+
+    await chatDb.batch([
+      chatDb.prepare("UPDATE messages SET hidden_by = NULL, hidden_by_name = 'Deleted Moderator' WHERE hidden_by = ?").bind(targetUserId),
+      chatDb.prepare('UPDATE chat_reports SET reviewed_by = NULL, reviewed_by_name = NULL WHERE reviewed_by = ?').bind(targetUserId),
+      chatDb.prepare('UPDATE channels SET created_by = NULL WHERE created_by = ?').bind(targetUserId),
+      chatDb.prepare("UPDATE clubhouse_gifs SET added_by = 0, added_by_name = 'Community Member' WHERE added_by = ?").bind(targetUserId),
+      chatDb.prepare('DELETE FROM user_crypto_keys WHERE user_id = ?').bind(targetUserId),
+      chatDb.prepare('DELETE FROM channel_members WHERE user_id = ?').bind(targetUserId),
+      chatDb.prepare('DELETE FROM channel_key_shares WHERE recipient_user_id = ? OR sender_user_id = ?').bind(targetUserId, targetUserId),
+      chatDb.prepare('DELETE FROM voice_participants WHERE user_id = ?').bind(targetUserId),
+      chatDb.prepare('DELETE FROM rtc_signals WHERE sender_user_id = ? OR recipient_user_id = ?').bind(targetUserId, targetUserId),
+      chatDb.prepare('DELETE FROM user_mutes WHERE muter_user_id = ? OR muted_user_id = ?').bind(targetUserId, targetUserId),
+      chatDb.prepare('DELETE FROM user_blocks WHERE blocker_id = ? OR blocked_id = ?').bind(targetUserId, targetUserId),
+      chatDb.prepare('DELETE FROM clubhouse_opted_out WHERE user_id = ?').bind(targetUserId),
+      chatDb.prepare(`
+        INSERT INTO sync_events (channel_id, event_type, target_id, payload_json, created_at)
+        VALUES (0, 'user_erased', ?, ?, ?)
+      `).bind(targetUserId, JSON.stringify({ user_id: targetUserId, erased_at: nowIso }), nowSec)
+    ]);
+    stats.userErasedTombstoneEmitted = true;
+  } catch (chatErr) {
+    logEvent('warn', 'erasure_chat_cleanup_failed', { userId: targetUserId, err: chatErr });
+  }
+
+  return stats;
 }
 
 /**
@@ -262,7 +508,12 @@ export async function purgeExpiredQuarantinedWaivers(db, env = null) {
  *     mediaDeleted: number,
  *     mediaAnonymized: number,
  *     bpSignupsDeleted: number,
- *     waiversQuarantined: number
+ *     waiversQuarantined: number,
+ *     chatMessagesDeleted: number,
+ *     chatReactionsDeleted: number,
+ *     chatAttachmentsDeleted: number,
+ *     chatReportsScrubbed: number,
+ *     userErasedTombstoneEmitted: boolean
  *   },
  *   waivers: Array<{ id: number, certificate_id: string, signed_at: string|null, retention_until: string }>,
  *   latestRetentionUntil: string|null,
@@ -310,7 +561,12 @@ export async function executeTwoTierErasure(params) {
     mediaDeleted: 0,
     mediaAnonymized: 0,
     bpSignupsDeleted: 0,
-    waiversQuarantined: 0
+    waiversQuarantined: 0,
+    chatMessagesDeleted: 0,
+    chatReactionsDeleted: 0,
+    chatAttachmentsDeleted: 0,
+    chatReportsScrubbed: 0,
+    userErasedTombstoneEmitted: false
   };
 
   // 1. Optional Admin conduct ban (only when explicitly requested)
@@ -561,12 +817,23 @@ export async function executeTwoTierErasure(params) {
     await db.prepare('DELETE FROM users WHERE id = ?').bind(targetUserId).run();
   }
 
-  // 9. CHAT_DB cleanup (plug-in hook for Ticket #50, or baseline cleanup)
+  // 9. CHAT_DB cleanup (full Clubhouse cleanup + user_erased sync tombstone, or custom hook)
   if (targetUserId && chatDb && !skipChatCleanup) {
     if (typeof onChatCleanup === 'function') {
       await onChatCleanup({ chatDb, userId: targetUserId, email: cleanEmail, env });
     } else {
-      await cleanupBaselineChatState(chatDb, targetUserId);
+      const chatStats = await cleanupClubhouseUserState({
+        db,
+        chatDb,
+        userId: targetUserId,
+        env,
+        now
+      });
+      counts.chatMessagesDeleted = chatStats.chatMessagesDeleted;
+      counts.chatReactionsDeleted = chatStats.chatReactionsDeleted;
+      counts.chatAttachmentsDeleted = chatStats.chatAttachmentsDeleted;
+      counts.chatReportsScrubbed = chatStats.chatReportsScrubbed;
+      counts.userErasedTombstoneEmitted = chatStats.userErasedTombstoneEmitted;
     }
   }
 

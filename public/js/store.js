@@ -321,6 +321,50 @@
     });
   }
 
+  function evictErasedUserMessagesFromIdb(erasedUserId) {
+    var targetUid = Number(erasedUserId);
+    if (!targetUid) return Promise.resolve();
+    return openStoreDb().then(function (db) {
+      if (!db || !db.objectStoreNames.contains('messages')) return;
+      return new Promise(function (resolve) {
+        try {
+          var tx = db.transaction(['messages'], 'readwrite');
+          tx.oncomplete = function () { resolve(); };
+          tx.onerror = function () { resolve(); };
+          tx.onabort = function () { resolve(); };
+          var store = tx.objectStore('messages');
+          var req = store.openCursor();
+          req.onsuccess = function (ev) {
+            var cursor = ev.target.result;
+            if (!cursor) return;
+            var val = cursor.value;
+            if (val && Number(val.author_id) === targetUid) {
+              cursor.delete();
+            } else if (val && Array.isArray(val.reactions)) {
+              var filteredRx = [];
+              var changed = false;
+              for (var i = 0; i < val.reactions.length; i++) {
+                if (val.reactions[i] && Number(val.reactions[i].user_id) === targetUid) {
+                  changed = true;
+                } else {
+                  filteredRx.push(val.reactions[i]);
+                }
+              }
+              if (changed) {
+                val.reactions = filteredRx;
+                cursor.update(val);
+              }
+            }
+            cursor.continue();
+          };
+          req.onerror = function () { resolve(); };
+        } catch (e) {
+          resolve();
+        }
+      });
+    });
+  }
+
   function apiRequest(method, url, body) {
     var opts = {
       method: method,
@@ -1993,7 +2037,158 @@
       bootstrap().then(function () {
         emit('member_opt_changed', payload);
       }).catch(function () {});
+    } else if (ev.event_type === 'user_erased') {
+      var erasedUid = Number((payload && payload.user_id) || ev.target_id || 0);
+      if (erasedUid) {
+        return evictErasedUserState(erasedUid, payload);
+      }
     }
+  }
+
+  function evictErasedUserState(erasedUid, payload) {
+    var targetUid = Number(erasedUid);
+    if (!targetUid) return Promise.resolve();
+
+    if (state.user && Number(state.user.id) === targetUid) {
+      return clearLocalSessionData().then(function () {
+        emit('auth_required', { reason: 'user_erased', userId: targetUid });
+      });
+    }
+
+    var nextMembers = [];
+    for (var mIdx = 0; mIdx < state.members.length; mIdx++) {
+      if (state.members[mIdx] && Number(state.members[mIdx].id) !== targetUid) {
+        nextMembers.push(state.members[mIdx]);
+      }
+    }
+    state.members = nextMembers;
+
+    var nextMuted = [];
+    for (var muIdx = 0; muIdx < state.mutedUserIds.length; muIdx++) {
+      if (Number(state.mutedUserIds[muIdx]) !== targetUid) {
+        nextMuted.push(state.mutedUserIds[muIdx]);
+      }
+    }
+    state.mutedUserIds = nextMuted;
+
+    if (Array.isArray(state.blockedUserIds)) {
+      var nextBlocked = [];
+      for (var blIdx = 0; blIdx < state.blockedUserIds.length; blIdx++) {
+        if (Number(state.blockedUserIds[blIdx]) !== targetUid) {
+          nextBlocked.push(state.blockedUserIds[blIdx]);
+        }
+      }
+      state.blockedUserIds = nextBlocked;
+    }
+
+    var nextVoice = [];
+    for (var vIdx = 0; vIdx < state.voiceParticipants.length; vIdx++) {
+      if (state.voiceParticipants[vIdx] && Number(state.voiceParticipants[vIdx].user_id) !== targetUid) {
+        nextVoice.push(state.voiceParticipants[vIdx]);
+      }
+    }
+    state.voiceParticipants = nextVoice;
+
+    var asyncTasks = [];
+    for (var cIdx = 0; cIdx < state.channels.length; cIdx++) {
+      var ch = state.channels[cIdx];
+      if (!ch) continue;
+      var chNum = Number(ch.id);
+      var pIds = getChannelParticipantIds(ch);
+      var involvesUser = pIds.indexOf(targetUid) !== -1 || Number(ch.created_by) === targetUid;
+      if (Array.isArray(ch.member_ids)) {
+        var filteredMids = [];
+        for (var pm = 0; pm < ch.member_ids.length; pm++) {
+          if (Number(ch.member_ids[pm]) !== targetUid) {
+            filteredMids.push(ch.member_ids[pm]);
+          }
+        }
+        ch.member_ids = filteredMids;
+      }
+      if (Number(ch.created_by) === targetUid) {
+        ch.created_by = null;
+      }
+      if (involvesUser && requiresE2eeChannel(ch)) {
+        verifiedEpochByChannel[chNum] = false;
+        if (ch.channel_type === 'dm') {
+          var keyPrefix = 'dm_aes_ch_' + String(chNum) + '_';
+          var cacheKeys = Object.keys(dmChannelKeyCache);
+          for (var ck = 0; ck < cacheKeys.length; ck++) {
+            if (cacheKeys[ck].indexOf(keyPrefix) === 0) {
+              delete dmChannelKeyCache[cacheKeys[ck]];
+            }
+          }
+          var flightKeys = Object.keys(dmKeyInFlight);
+          for (var fk = 0; fk < flightKeys.length; fk++) {
+            if (flightKeys[fk].indexOf(keyPrefix) === 0) {
+              delete dmKeyInFlight[flightKeys[fk]];
+            }
+          }
+          delete activeKeyEpochByChannel[chNum];
+          delete verifiedEpochByChannel[chNum];
+          if (root.ClubhouseCrypto) {
+            if (typeof root.ClubhouseCrypto.idbDeleteByPrefix === 'function') {
+              asyncTasks.push(root.ClubhouseCrypto.idbDeleteByPrefix(keyPrefix));
+            }
+            if (typeof root.ClubhouseCrypto.idbDelete === 'function') {
+              asyncTasks.push(root.ClubhouseCrypto.idbDelete('dm_epoch_' + String(chNum)));
+            }
+          }
+        }
+      }
+    }
+
+    var msgChKeys = Object.keys(state.messagesByChannel);
+    for (var mc = 0; mc < msgChKeys.length; mc++) {
+      var chKey = msgChKeys[mc];
+      var list = state.messagesByChannel[chKey] || [];
+      var kept = [];
+      for (var mi = 0; mi < list.length; mi++) {
+        var msg = list[mi];
+        if (!msg) continue;
+        if (Number(msg.author_id) === targetUid) {
+          if (Array.isArray(msg.attachments)) {
+            for (var ai = 0; ai < msg.attachments.length; ai++) {
+              var att = msg.attachments[ai];
+              if (att && att.id && decryptedAttBlobUrls[String(att.id)]) {
+                try {
+                  if (typeof URL !== 'undefined' && typeof URL.revokeObjectURL === 'function') {
+                    URL.revokeObjectURL(decryptedAttBlobUrls[String(att.id)]);
+                  }
+                } catch (e) { /* best-effort blob URL cleanup */ }
+                delete decryptedAttBlobUrls[String(att.id)];
+              }
+            }
+          }
+          continue;
+        }
+        if (Number(msg.hidden_by) === targetUid) {
+          msg.hidden_by = null;
+          msg.hidden_by_name = 'Deleted Moderator';
+        }
+        if (Array.isArray(msg.reactions)) {
+          var nextRx = [];
+          for (var ri = 0; ri < msg.reactions.length; ri++) {
+            if (msg.reactions[ri] && Number(msg.reactions[ri].user_id) !== targetUid) {
+              nextRx.push(msg.reactions[ri]);
+            }
+          }
+          msg.reactions = nextRx;
+        }
+        kept.push(msg);
+      }
+      state.messagesByChannel[chKey] = kept;
+    }
+
+    asyncTasks.push(saveChannelsToIdb(state.channels));
+    asyncTasks.push(evictErasedUserMessagesFromIdb(targetUid));
+    if (root.ClubhouseCrypto && typeof root.ClubhouseCrypto.clearPeerVerificationPin === 'function') {
+      asyncTasks.push(root.ClubhouseCrypto.clearPeerVerificationPin(targetUid));
+    }
+
+    return Promise.all(asyncTasks).catch(function () {}).then(function () {
+      emit('user_erased', { userId: targetUid, payload: payload });
+    });
   }
 
   function setClubhouseOptIn(optedIn) {
