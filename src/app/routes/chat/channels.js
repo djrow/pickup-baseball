@@ -21,7 +21,9 @@ import {
   isPrivateEncryptedBoard,
   canUserAccessChannel,
   getAccessibleChannels,
-  chunkArray
+  chunkArray,
+  isPeerBlocked,
+  rejectIfDmPeerBlocked
 } from './helpers.js';
 
 export const chatChannelsRouter = /** @type {AppHono} */ (new Hono());
@@ -154,6 +156,14 @@ chatChannelsRouter.post('/channels', requireAuth, async (c) => {
       }
       if (otherIds.some((uid) => !validSet.has(Number(uid)))) {
         return c.json({ error: 'One or more target members do not exist, are banned, or have opted out of Clubhouse.' }, 403);
+      }
+    }
+    if (channelType === 'dm' && otherIds.length === 1) {
+      if (await isPeerBlocked(chatDb, user.id, otherIds[0])) {
+        return c.json({
+          error: 'Direct messages are blocked between you and this member.',
+          code: 'PEER_BLOCKED'
+        }, 403);
       }
     }
   }
@@ -548,6 +558,10 @@ async function setDmChannelHiddenState(c, hidden) {
   }
   if (!(await canUserAccessChannel(chatDb, user, channel, 'read'))) {
     return c.json({ error: 'Access denied: you are not a participant in this conversation.' }, 403);
+  }
+  if (!hidden) {
+    const blockResp = await rejectIfDmPeerBlocked(c, chatDb, channel, user.id);
+    if (blockResp) return blockResp;
   }
 
   const hiddenFlag = hidden ? 1 : 0;

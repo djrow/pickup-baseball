@@ -6,7 +6,7 @@
 import { Hono } from 'hono';
 import { requireAuth, rejectIfChatMuted, rejectIfClubhouseOptedOut, CANONICAL_MEMBER_ROLE } from '../security.js';
 import { resolveConfig } from '../config.js';
-import { resolveChannel, canUserAccessChannel } from './chat.js';
+import { resolveChannel, canUserAccessChannel, isPeerBlocked, rejectIfDmPeerBlocked } from './chat.js';
 import { logEvent } from '../errors.js';
 
 export const voiceRouter = /** @type {AppHono} */ (new Hono());
@@ -50,6 +50,8 @@ voiceRouter.post('/:channelId/join', requireAuth, async (c) => {
   if (!(await canUserAccessChannel(chatDb, user, channel, 'write'))) {
     return c.json({ error: 'Access denied: insufficient permissions to join this voice room.' }, 403);
   }
+  const blockResp = await rejectIfDmPeerBlocked(c, chatDb, channel, user.id, 'Voice calls are blocked between you and this member.');
+  if (blockResp) return blockResp;
 
   const nowSecJoin = Math.floor(Date.now() / 1000);
   const joinRateKey = `user_${user.id}_voice_join`;
@@ -152,6 +154,8 @@ voiceRouter.post('/:channelId/state', requireAuth, async (c) => {
   if (!(await canUserAccessChannel(chatDb, user, channel, 'write'))) {
     return c.json({ error: 'Access denied.' }, 403);
   }
+  const blockResp = await rejectIfDmPeerBlocked(c, chatDb, channel, user.id, 'Voice calls are blocked between you and this member.');
+  if (blockResp) return blockResp;
 
   const nowSecState = Math.floor(Date.now() / 1000);
   const stateRateKey = `user_${user.id}_voice_state`;
@@ -421,6 +425,13 @@ rtcRouter.post('/signal', requireAuth, async (c) => {
     if (!(await canUserAccessChannel(chatDb, recipientNorm, channel, 'read'))) {
       return c.json({ error: 'Recipient does not have permission to access this channel.' }, 403);
     }
+  }
+
+  if (await isPeerBlocked(chatDb, user.id, recipientUserId)) {
+    return c.json({
+      error: 'WebRTC signaling is blocked between you and this member.',
+      code: 'PEER_BLOCKED'
+    }, 403);
   }
 
   // Require sender to have an active voice participant presence in this room (prevents stealth wiretapping)
