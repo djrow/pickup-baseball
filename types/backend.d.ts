@@ -6,12 +6,22 @@ interface AppBindings {
   DB: D1Database;
   BASEBALL_DB: D1Database;
   CHAT_DB: D1Database;
+  COMMUNITY_PRESET?: string;
+  COMMUNITY_NAME?: string;
   APP_NAME?: string;
+  PUBLIC_ORIGIN?: string;
+  LOCK_PREVIEW_ORIGIN?: string | number | boolean;
   FROM_EMAIL?: string;
   REPLY_TO_EMAIL?: string;
   ADMIN_EMAIL?: string;
   ADMIN_NAME?: string;
-  PUBLIC_ORIGIN?: string;
+  HANDBOOK_URL?: string;
+  MAIL_PROVIDER?: string;
+  STORAGE_PROVIDER?: string;
+  FEATURE_BATTING_PRACTICE?: string | number | boolean;
+  FEATURE_CERTIFIED_SHIFTS?: string | number | boolean;
+  FEATURE_SUNDAY_PRIORITY?: string | number | boolean;
+  BREVO_API_KEY?: string;
   NODE_ENV?: string;
   TURNSTILE_SECRET_KEY?: string;
   RESEND_API_KEY?: string;
@@ -22,6 +32,22 @@ interface AppBindings {
   GDRIVE_GIFS_FOLDER_ID?: string;
   APPSCRIPT_UPLOAD_URL?: string;
   [key: string]: any;
+}
+
+interface ResolvedBootConfig {
+  COMMUNITY_PRESET: 'generic-community' | 'pickup-baseball';
+  COMMUNITY_NAME: string;
+  PUBLIC_ORIGIN: string;
+  LOCK_PREVIEW_ORIGIN: boolean;
+  ADMIN_EMAIL: string;
+  FROM_EMAIL: string;
+  REPLY_TO_EMAIL: string;
+  HANDBOOK_URL: string;
+  MAIL_PROVIDER: 'resend' | 'brevo' | 'mock';
+  STORAGE_PROVIDER: 'r2' | 'gdrive' | 'local';
+  FEATURE_BATTING_PRACTICE: boolean;
+  FEATURE_CERTIFIED_SHIFTS: boolean;
+  FEATURE_SUNDAY_PRIORITY: boolean;
 }
 
 interface AppUser {

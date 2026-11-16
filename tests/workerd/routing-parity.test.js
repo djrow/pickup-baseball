@@ -136,3 +136,92 @@ test('Workerd Pages Functions Routing & WAF Parity', async (t) => {
     assert.ok(feedPost.text.includes('Direct origin/preview feed access is disabled'));
   });
 });
+
+test('Workerd No-Lockout Fork Defaults Serve *.pages.dev Without Redirect', async (t) => {
+  const harness = await createWorkerdHarness({
+    instrumented: true,
+    bindings: {
+      COMMUNITY_PRESET: 'generic-community',
+      COMMUNITY_NAME: 'Fork Community',
+      APP_NAME: '',
+      PUBLIC_ORIGIN: '',
+      LOCK_PREVIEW_ORIGIN: '0',
+      ADMIN_EMAIL: 'secret-admin@example.org',
+      FROM_EMAIL: 'Fork <noreply@example.org>',
+      REPLY_TO_EMAIL: 'secret-reply@example.org'
+    }
+  });
+  t.after(async () => {
+    await harness.dispose();
+  });
+
+  await t.test('GET /api/config/public on *.pages.dev returns 200 with zero D1 reads and no secrets', async () => {
+    const res = await harness.apiFetch('https://fork-preview.pages.dev/api/config/public', {
+      redirect: 'manual'
+    });
+    assert.equal(res.status, 200);
+    assert.match(res.headers.get('cache-control') || '', /public/i);
+    assert.match(res.headers.get('cache-control') || '', /max-age=300/i);
+    assert.deepEqual(res.json, {
+      preset: 'generic-community',
+      communityName: 'Fork Community',
+      publicOrigin: null,
+      handbookUrl: null,
+      features: {
+        battingPractice: false,
+        certifiedShifts: false,
+        sundayPriority: false
+      }
+    });
+    assert.equal(res.text.includes('secret-admin@example.org'), false);
+    assert.equal(res.text.includes('secret-reply@example.org'), false);
+
+    const d1Counts = JSON.parse(res.headers.get('x-test-d1-counts') || '{}');
+    assert.equal(d1Counts.queries, 0, 'GET /api/config/public must execute zero D1 queries in workerd');
+  });
+
+  await t.test('API and feed routes serve *.pages.dev normally when lockout is disabled', async () => {
+    const eventsGet = await harness.apiFetch('https://fork-preview.pages.dev/api/events', {
+      redirect: 'manual'
+    });
+    assert.equal(eventsGet.status, 200);
+    assert.ok(Array.isArray(eventsGet.json.events));
+
+    const logoutPost = await harness.apiFetch('https://fork-preview.pages.dev/api/auth/logout', {
+      method: 'POST',
+      redirect: 'manual'
+    });
+    assert.equal(logoutPost.status, 200);
+
+    const feedGet = await harness.apiFetch('https://fork-preview.pages.dev/feed.xml', {
+      redirect: 'manual'
+    });
+    assert.equal(feedGet.status, 200);
+    assert.ok((feedGet.headers.get('content-type') || '').includes('xml'));
+    assert.ok(feedGet.text.includes('<rss version="2.0"'));
+  });
+});
+
+test('Workerd Lockout Stays Off When PUBLIC_ORIGIN Is Set But LOCK_PREVIEW_ORIGIN=0', async (t) => {
+  const harness = await createWorkerdHarness({
+    bindings: {
+      COMMUNITY_PRESET: 'generic-community',
+      PUBLIC_ORIGIN: 'https://custom.example.org',
+      LOCK_PREVIEW_ORIGIN: '0'
+    }
+  });
+  t.after(async () => {
+    await harness.dispose();
+  });
+
+  const apiGet = await harness.apiFetch('https://fork-preview.pages.dev/api/config/public', {
+    redirect: 'manual'
+  });
+  assert.equal(apiGet.status, 200);
+  assert.equal(apiGet.json.publicOrigin, 'https://custom.example.org');
+
+  const feedGet = await harness.apiFetch('https://fork-preview.pages.dev/feed.xml', {
+    redirect: 'manual'
+  });
+  assert.equal(feedGet.status, 200);
+});
