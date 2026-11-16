@@ -1097,16 +1097,22 @@ async function setupRsvpState(preserveAlertHtml) {
   if (interactiveTop) interactiveTop.style.display = 'block';
   if (interactiveBottom) interactiveBottom.style.display = 'block';
 
+  const visitorConsentWrap = document.getElementById('visitor-consent-wrap');
+  const rsvpRosterConsentEl = document.getElementById('rsvp-roster-consent');
+  const rsvpNotifyEmailsEl = document.getElementById('rsvp-notify-emails');
+
   if (user) {
     if (loginPrompt) loginPrompt.style.display = 'none';
     if (editLinkBox) editLinkBox.style.display = 'none';
     if (guestFields) guestFields.style.display = 'none';
+    if (visitorConsentWrap) visitorConsentWrap.style.display = 'none';
     document.getElementById('rsvp-name').required = false;
     document.getElementById('rsvp-email').required = false;
   } else {
     if (loginPrompt) loginPrompt.style.display = 'flex';
     if (editLinkBox) editLinkBox.style.display = 'block';
     if (guestFields) guestFields.style.display = 'grid';
+    if (visitorConsentWrap) visitorConsentWrap.style.display = 'block';
     document.getElementById('rsvp-name').required = true;
     document.getElementById('rsvp-email').required = false;
   }
@@ -1154,6 +1160,8 @@ async function setupRsvpState(preserveAlertHtml) {
     if (myRsvp.email) document.getElementById('rsvp-email').value = myRsvp.email;
     if (gearInput) gearInput.value = myRsvp.gear_bringing || '';
     if (guestNamesInput) guestNamesInput.value = myRsvp.guest_names || '';
+    if (rsvpRosterConsentEl) rsvpRosterConsentEl.checked = Boolean(myRsvp.roster_consent);
+    if (rsvpNotifyEmailsEl) rsvpNotifyEmailsEl.checked = Boolean(myRsvp.notify_emails);
 
     if (myRsvp.status !== 'declined') {
       const pCount = myRsvp.players_count != null ? myRsvp.players_count : (1 + (myRsvp.additional_guests || 0));
@@ -1173,6 +1181,8 @@ async function setupRsvpState(preserveAlertHtml) {
     if (cancelBtn) cancelBtn.style.display = 'none';
     if (playersInput) playersInput.value = '1';
     if (spectatorsInput) spectatorsInput.value = '0';
+    if (rsvpRosterConsentEl) rsvpRosterConsentEl.checked = false;
+    if (rsvpNotifyEmailsEl) rsvpNotifyEmailsEl.checked = false;
     if (!preserveAlertHtml && isFull && alertDiv) {
       alertDiv.innerHTML = `
         <div class="alert alert-warning" style="border-left: 4px solid var(--primary); border-inline-start: 4px solid var(--primary); background: var(--bg-subtle); margin-bottom: 14px;">
@@ -1660,6 +1670,13 @@ function setupRsvpForm() {
       bp_signup: bpSignup,
       management_token: guestToken
     };
+
+    if (!API.currentUser) {
+      const rosterConsentEl = document.getElementById('rsvp-roster-consent');
+      const notifyEmailsEl = document.getElementById('rsvp-notify-emails');
+      payload.roster_consent = Boolean(rosterConsentEl && rosterConsentEl.checked);
+      payload.notify_emails = Boolean(notifyEmailsEl && notifyEmailsEl.checked);
+    }
 
     try {
       const res = await API.postRsvp(eventId, payload);

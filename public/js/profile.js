@@ -127,7 +127,42 @@ function populateProfileData() {
   }
 
   renderClubhouseOptInState();
+  renderPrivacyAndNotificationToggles();
   renderAvatarPreview();
+}
+
+function renderPrivacyAndNotificationToggles() {
+  const rosterVisEl = document.getElementById('profile-roster-visibility');
+  const profileShareEl = document.getElementById('profile-profile-sharing');
+  const notifyRsvpEl = document.getElementById('profile-notify-rsvp');
+  const notifyRainEl = document.getElementById('profile-notify-rainouts');
+  const notifyRemEl = document.getElementById('profile-notify-reminders');
+  const notifyCommEl = document.getElementById('profile-notify-community');
+
+  if (rosterVisEl) {
+    rosterVisEl.checked = Boolean(currentUser && (currentUser.rosterVisibility || currentUser.roster_visibility === 1));
+  }
+  if (profileShareEl) {
+    profileShareEl.checked = Boolean(currentUser && (currentUser.profileSharing || currentUser.profile_sharing === 1));
+  }
+  if (notifyRsvpEl) {
+    notifyRsvpEl.checked = currentUser && currentUser.notifyRsvpConfirm !== undefined
+      ? Boolean(currentUser.notifyRsvpConfirm)
+      : !(currentUser && currentUser.notify_rsvp_confirm === 0);
+  }
+  if (notifyRainEl) {
+    notifyRainEl.checked = currentUser && currentUser.notifyRainouts !== undefined
+      ? Boolean(currentUser.notifyRainouts)
+      : !(currentUser && currentUser.notify_rainouts === 0);
+  }
+  if (notifyRemEl) {
+    notifyRemEl.checked = currentUser && currentUser.notifyEventReminders !== undefined
+      ? Boolean(currentUser.notifyEventReminders)
+      : !(currentUser && currentUser.notify_event_reminders === 0);
+  }
+  if (notifyCommEl) {
+    notifyCommEl.checked = Boolean(currentUser && (currentUser.notifyCommunityUpdates || currentUser.notify_community_updates === 1));
+  }
 }
 
 function renderClubhouseOptInState() {
@@ -468,15 +503,38 @@ function setupProfileForm() {
 
     const name = document.getElementById('profile-name').value.trim();
     const bio = document.getElementById('profile-bio').value.trim();
+    const rosterVisEl = document.getElementById('profile-roster-visibility');
+    const profileShareEl = document.getElementById('profile-profile-sharing');
+    const notifyRsvpEl = document.getElementById('profile-notify-rsvp');
+    const notifyRainEl = document.getElementById('profile-notify-rainouts');
+    const notifyRemEl = document.getElementById('profile-notify-reminders');
+    const notifyCommEl = document.getElementById('profile-notify-community');
+
+    const consentPayload = {};
+    if (rosterVisEl) consentPayload.roster_visibility = Boolean(rosterVisEl.checked);
+    if (profileShareEl) consentPayload.profile_sharing = Boolean(profileShareEl.checked);
+    if (notifyRsvpEl) consentPayload.notify_rsvp_confirm = Boolean(notifyRsvpEl.checked);
+    if (notifyRainEl) consentPayload.notify_rainouts = Boolean(notifyRainEl.checked);
+    if (notifyRemEl) consentPayload.notify_event_reminders = Boolean(notifyRemEl.checked);
+    if (notifyCommEl) consentPayload.notify_community_updates = Boolean(notifyCommEl.checked);
 
     try {
-      const res = await API.updateProfile(name, bio);
+      const res = await API.updateProfile(name, bio, consentPayload);
       if (res.error) {
         showAlert(res.error, true);
       } else {
         currentUser.name = res.user.name;
         currentUser.bio = res.user.bio;
-        showAlert('Profile and bio updated successfully!', false);
+        if (res.user.rosterVisibility !== undefined) currentUser.rosterVisibility = Boolean(res.user.rosterVisibility);
+        if (res.user.roster_visibility !== undefined) currentUser.roster_visibility = res.user.roster_visibility ? 1 : 0;
+        if (res.user.profileSharing !== undefined) currentUser.profileSharing = Boolean(res.user.profileSharing);
+        if (res.user.profile_sharing !== undefined) currentUser.profile_sharing = res.user.profile_sharing ? 1 : 0;
+        if (res.user.notifyRsvpConfirm !== undefined) currentUser.notifyRsvpConfirm = Boolean(res.user.notifyRsvpConfirm);
+        if (res.user.notifyRainouts !== undefined) currentUser.notifyRainouts = Boolean(res.user.notifyRainouts);
+        if (res.user.notifyEventReminders !== undefined) currentUser.notifyEventReminders = Boolean(res.user.notifyEventReminders);
+        if (res.user.notifyCommunityUpdates !== undefined) currentUser.notifyCommunityUpdates = Boolean(res.user.notifyCommunityUpdates);
+        renderPrivacyAndNotificationToggles();
+        showAlert('Profile and privacy settings updated successfully!', false);
         API.renderNav(currentUser);
       }
     } catch (err) {

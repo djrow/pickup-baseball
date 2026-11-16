@@ -40,6 +40,12 @@ import { resolveConfig } from '../config.js';
 import { sendAuthCode } from '../mailer.js';
 import { ERROR_CODES, jsonError, logEvent } from '../errors.js';
 import { executeTwoTierErasure } from '../erasure.js';
+import {
+  CONSENT_TYPES,
+  getConsentPolicyMetadata,
+  parseOptionalBoolean,
+  recordConsentChange
+} from '../consent.js';
 import { promoteNextWaitlistedPlayer } from './events/helpers.js';
 
 export const authRouter = /** @type {AppHono} */ (new Hono());
@@ -718,24 +724,176 @@ authRouter.post('/calendar-token/regenerate', requireAuth, async (c) => {
   }
 });
 
+const MEMBER_CONSENT_SPECS = [
+  { snake: 'roster_visibility', camel: 'rosterVisibility', consentType: CONSENT_TYPES.ROSTER_VISIBILITY, defaultVal: 0 },
+  { snake: 'profile_sharing', camel: 'profileSharing', consentType: CONSENT_TYPES.PROFILE_SHARING, defaultVal: 0 },
+  { snake: 'notify_rsvp_confirm', camel: 'notifyRsvpConfirm', consentType: CONSENT_TYPES.NOTIFY_RSVP_CONFIRM, defaultVal: 1 },
+  { snake: 'notify_rainouts', camel: 'notifyRainouts', consentType: CONSENT_TYPES.NOTIFY_RAINOUTS, defaultVal: 1 },
+  { snake: 'notify_event_reminders', camel: 'notifyEventReminders', consentType: CONSENT_TYPES.NOTIFY_EVENT_REMINDERS, defaultVal: 1 },
+  { snake: 'notify_community_updates', camel: 'notifyCommunityUpdates', consentType: CONSENT_TYPES.NOTIFY_COMMUNITY_UPDATES, defaultVal: 0 }
+];
+
+async function applyMemberProfileAndConsents(db, user, body, profileFields) {
+  /** @type {Record<string, any> | null} */
+  const currentRow = await db.prepare(`
+    SELECT
+      COALESCE(roster_visibility, 0) as roster_visibility,
+      COALESCE(profile_sharing, 0) as profile_sharing,
+      COALESCE(notify_rsvp_confirm, 1) as notify_rsvp_confirm,
+      COALESCE(notify_rainouts, 1) as notify_rainouts,
+      COALESCE(notify_event_reminders, 1) as notify_event_reminders,
+      COALESCE(notify_community_updates, 0) as notify_community_updates
+    FROM users
+    WHERE id = ?
+  `).bind(user.id).first();
+
+  const nextValues = Object.create(null);
+  const transitions = [];
+
+  for (const spec of MEMBER_CONSENT_SPECS) {
+    const rawCurrent = currentRow && currentRow[spec.snake] !== undefined ? Number(currentRow[spec.snake]) : spec.defaultVal;
+    const prevVal = rawCurrent ? 1 : 0;
+    const rawInput = body && body[spec.snake] !== undefined ? body[spec.snake] : (body ? body[spec.camel] : undefined);
+    const parsed = parseOptionalBoolean(rawInput);
+    const nextVal = parsed !== undefined ? (parsed ? 1 : 0) : prevVal;
+    nextValues[spec.snake] = nextVal;
+    if (nextVal !== prevVal) {
+      transitions.push({ consentType: spec.consentType, granted: Boolean(nextVal) });
+    }
+  }
+
+  if (profileFields) {
+    await db.prepare(`
+      UPDATE users
+      SET name = ?, bio = ?,
+          roster_visibility = ?, profile_sharing = ?,
+          notify_rsvp_confirm = ?, notify_rainouts = ?,
+          notify_event_reminders = ?, notify_community_updates = ?
+      WHERE id = ?
+    `).bind(
+      profileFields.cleanName,
+      profileFields.cleanBio,
+      nextValues.roster_visibility,
+      nextValues.profile_sharing,
+      nextValues.notify_rsvp_confirm,
+      nextValues.notify_rainouts,
+      nextValues.notify_event_reminders,
+      nextValues.notify_community_updates,
+      user.id
+    ).run();
+    user.name = profileFields.cleanName;
+    user.bio = profileFields.cleanBio;
+  } else {
+    await db.prepare(`
+      UPDATE users
+      SET roster_visibility = ?, profile_sharing = ?,
+          notify_rsvp_confirm = ?, notify_rainouts = ?,
+          notify_event_reminders = ?, notify_community_updates = ?
+      WHERE id = ?
+    `).bind(
+      nextValues.roster_visibility,
+      nextValues.profile_sharing,
+      nextValues.notify_rsvp_confirm,
+      nextValues.notify_rainouts,
+      nextValues.notify_event_reminders,
+      nextValues.notify_community_updates,
+      user.id
+    ).run();
+  }
+
+  for (const spec of MEMBER_CONSENT_SPECS) {
+    const val = nextValues[spec.snake];
+    user[spec.camel] = Boolean(val);
+    user[spec.snake] = val;
+  }
+
+  for (const tr of transitions) {
+    await recordConsentChange(db, {
+      subjectType: 'member',
+      userId: user.id,
+      consentType: tr.consentType,
+      granted: tr.granted
+    });
+  }
+}
+
 authRouter.put('/profile', requireAuth, async (c) => {
   const user = c.get('user');
+  const db = c.env && (c.env.BASEBALL_DB || c.env.DB);
+  if (!db) return c.json({ error: 'Database unavailable.' }, 500);
   try {
-    const { name, bio } = await c.req.json();
+    const body = await c.req.json();
+    const { name, bio } = body || {};
     if (!name || !String(name).trim()) {
       return c.json({ error: 'Name cannot be empty.' }, 400);
     }
     const cleanName = String(name).trim().slice(0, 120);
     const cleanBio = String(bio || '').trim().slice(0, 280);
 
-    await c.env.DB.prepare('UPDATE users SET name = ?, bio = ? WHERE id = ?').bind(cleanName, cleanBio, user.id).run();
-    user.name = cleanName;
-    user.bio = cleanBio;
+    await applyMemberProfileAndConsents(db, user, body || {}, { cleanName, cleanBio });
 
     return c.json({ success: true, message: 'Profile updated successfully.', user });
   } catch (err) {
     console.error('[Auth] Error updating profile:', err);
     return c.json({ error: 'Failed to update profile.' }, 500);
+  }
+});
+
+authRouter.get('/consent', requireAuth, async (c) => {
+  const user = c.get('user');
+  const db = c.env && (c.env.BASEBALL_DB || c.env.DB);
+  if (!db) return c.json({ error: 'Database unavailable.' }, 500);
+
+  try {
+    const [{ policyVersion, policySha256 }, recordsRes] = await Promise.all([
+      getConsentPolicyMetadata(),
+      db.prepare(`
+        SELECT id, subject_type, user_id, consent_type, policy_version, policy_sha256,
+               status, granted_at, withdrawn_at, created_at
+        FROM consent_records
+        WHERE user_id = ?
+        ORDER BY id ASC
+      `).bind(user.id).all()
+    ]);
+
+    return c.json({
+      policy_version: policyVersion,
+      policy_sha256: policySha256,
+      consents: {
+        roster_visibility: Boolean(user.rosterVisibility),
+        profile_sharing: Boolean(user.profileSharing),
+        clubhouse_opted_in: Boolean(user.clubhouseOptedIn),
+        notify_rsvp_confirm: Boolean(user.notifyRsvpConfirm),
+        notify_rainouts: Boolean(user.notifyRainouts),
+        notify_event_reminders: Boolean(user.notifyEventReminders),
+        notify_community_updates: Boolean(user.notifyCommunityUpdates)
+      },
+      records: (recordsRes && recordsRes.results) || []
+    });
+  } catch (err) {
+    console.error('[Auth] Error loading consent records:', err);
+    return c.json({ error: 'Failed to load consent preferences.' }, 500);
+  }
+});
+
+authRouter.put('/consent', requireAuth, async (c) => {
+  const user = c.get('user');
+  const db = c.env && (c.env.BASEBALL_DB || c.env.DB);
+  if (!db) return c.json({ error: 'Database unavailable.' }, 500);
+
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    await applyMemberProfileAndConsents(db, user, body, null);
+    const { policyVersion, policySha256 } = await getConsentPolicyMetadata();
+    return c.json({
+      success: true,
+      policy_version: policyVersion,
+      policy_sha256: policySha256,
+      user
+    });
+  } catch (err) {
+    console.error('[Auth] Error updating consent preferences:', err);
+    return c.json({ error: 'Failed to update consent preferences.' }, 500);
   }
 });
 
@@ -751,10 +909,24 @@ async function handleClubhouseOptInToggle(c) {
     if (rawFlag === undefined) {
       return c.json({ error: 'opted_in boolean is required.' }, 400);
     }
-    const optedIn = Boolean(rawFlag);
+    const optedIn = Boolean(parseOptionalBoolean(rawFlag));
     const val = optedIn ? 1 : 0;
 
+    const currentRow = await db.prepare(
+      'SELECT COALESCE(clubhouse_opted_in, 0) as clubhouse_opted_in FROM users WHERE id = ?'
+    ).bind(user.id).first();
+    const prevOptedIn = Boolean(currentRow ? currentRow.clubhouse_opted_in : user.clubhouseOptedIn);
+
     await db.prepare('UPDATE users SET clubhouse_opted_in = ? WHERE id = ?').bind(val, user.id).run();
+
+    if (prevOptedIn !== optedIn) {
+      await recordConsentChange(db, {
+        subjectType: 'member',
+        userId: user.id,
+        consentType: CONSENT_TYPES.CLUBHOUSE_OPT_IN,
+        granted: optedIn
+      });
+    }
 
     if (chatDb) {
       if (optedIn) {
