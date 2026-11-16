@@ -268,8 +268,9 @@ async function createWorkerdHarness(options = {}) {
     }
 
     const sessionId = crypto.randomBytes(24).toString('hex');
+    const hashedSessionId = `sha256:${crypto.createHash('sha256').update(sessionId).digest('hex')}`;
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-    await db.prepare('INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)').bind(sessionId, userId, expiresAt).run();
+    await db.prepare('INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)').bind(hashedSessionId, userId, expiresAt).run();
     return {
       userId,
       sessionId,

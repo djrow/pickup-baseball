@@ -1652,7 +1652,7 @@ module.exports = async function runTier5(t, ctx) {
     ).run();
     const eveId = Number(uRes.lastInsertRowid);
     const eveSess = 'sess_eve_' + Date.now();
-    ctx.baseballDb.prepare('INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)').run(eveSess, eveId, futureExpiry);
+    ctx.baseballDb.prepare('INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)').run(ctx.hashSessionId(eveSess), eveId, futureExpiry);
     const eveCookie = `baseball_session=${eveSess}`;
 
     // Verify Eve is NOT in Clubhouse members list and cannot post/react/join voice while opted out

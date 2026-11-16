@@ -13,7 +13,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createClubhouseTestContext } = require('../helpers/test-harness');
+const { createClubhouseTestContext, hashSessionId } = require('../helpers/test-harness');
 const {
   generateIdentityKeyPair,
   generateChannelKey,
@@ -50,7 +50,7 @@ async function runTier3(t, ctx) {
       // 1. Create a valid temporary session for Charlie Player in BASEBALL_DB
       const tempExpiry = new Date(Date.now() + 60000).toISOString();
       const tempSessionId = `sync_session_${Date.now()}`;
-      baseballDb.prepare('INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)').run(tempSessionId, playerUser.id, tempExpiry);
+      baseballDb.prepare('INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)').run(hashSessionId(tempSessionId), playerUser.id, tempExpiry);
       const tempCookie = `baseball_session=${tempSessionId}`;
 
       try {
@@ -61,13 +61,13 @@ async function runTier3(t, ctx) {
         assert.ok(Array.isArray(res1.data.events), 'Initial sync response must include events array');
 
         // 3. Revoke/expire session mid-loop in BASEBALL_DB
-        baseballDb.prepare('DELETE FROM sessions WHERE id = ?').run(tempSessionId);
+        baseballDb.prepare('DELETE FROM sessions WHERE id = ?').run(hashSessionId(tempSessionId));
 
         // 4. Subsequent delta sync query with revoked session must be rejected with HTTP 401
         const res2 = await apiReq('GET', '/api/sync?since_msg_id=0&since_event_id=0', tempCookie);
         assert.equal(res2.status, 401, 'Delta sync query with revoked session must return HTTP 401 Unauthorized');
       } finally {
-        baseballDb.prepare('DELETE FROM sessions WHERE id = ?').run(tempSessionId);
+        baseballDb.prepare('DELETE FROM sessions WHERE id = ?').run(hashSessionId(tempSessionId));
       }
     });
 

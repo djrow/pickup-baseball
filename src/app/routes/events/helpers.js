@@ -242,8 +242,7 @@ const ALLOWED_ATTENDEE_COLUMNS = new Set([
 ]);
 
 /**
- * Prepares a parameterized D1 statement looking up an attendee by management token
- * (checking both the `sha256:` hash and legacy raw token during migration rollout).
+ * Prepares a parameterized D1 statement looking up an attendee by hashed `sha256:` management token.
  * Returns `null` if `rawToken` is empty/invalid or neither `eventId` nor `attendeeId` is supplied.
  * @param {D1Database} db
  * @param {{ eventId?: number|null, attendeeId?: number|null, rawToken: unknown, columns?: string, userIdIsNull?: boolean }} opts
@@ -265,12 +264,12 @@ export async function prepareAttendeeByManagementToken(db, {
   if (scopeVal == null) return null;
 
   const userNullSql = userIdIsNull ? ' AND a.user_id IS NULL' : '';
-  const sql = `SELECT ${selectClause} FROM attendees a WHERE ${scopeCol} = ? AND a.management_token IN (?, ?)${userNullSql}`;
-  return db.prepare(sql).bind(scopeVal, candidates.hashed, candidates.legacy);
+  const sql = `SELECT ${selectClause} FROM attendees a WHERE ${scopeCol} = ? AND a.management_token = ?${userNullSql}`;
+  return db.prepare(sql).bind(scopeVal, candidates.hashed);
 }
 
 /**
- * Looks up a single attendee row by management token (hashed + legacy fallback).
+ * Looks up a single attendee row by hashed `sha256:` management token.
  * @param {D1Database} db
  * @param {{ eventId?: number|null, attendeeId?: number|null, rawToken: unknown, columns?: string, userIdIsNull?: boolean }} opts
  * @returns {Promise<Record<string, any>|null>}

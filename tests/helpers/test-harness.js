@@ -33,6 +33,10 @@ function generateSessionId() {
   return crypto.randomBytes(32).toString('hex');
 }
 
+function hashSessionId(rawId) {
+  return `sha256:${crypto.createHash('sha256').update(String(rawId)).digest('hex')}`;
+}
+
 /**
  * Seed default volunteer duties for test baseball DB
  */
@@ -89,7 +93,7 @@ async function createClubhouseTestContext(_options = {}) {
   `).run();
   const adminId = adminRes.lastInsertRowid;
   const adminSessionId = generateSessionId();
-  baseballDb.prepare('INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)').run(adminSessionId, adminId, futureExpiry);
+  baseballDb.prepare('INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)').run(hashSessionId(adminSessionId), adminId, futureExpiry);
   const adminCookie = `baseball_session=${adminSessionId}`;
 
   // 2. Organizer
@@ -99,7 +103,7 @@ async function createClubhouseTestContext(_options = {}) {
   `).run();
   const orgId = orgRes.lastInsertRowid;
   const orgSessionId = generateSessionId();
-  baseballDb.prepare('INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)').run(orgSessionId, orgId, futureExpiry);
+  baseballDb.prepare('INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)').run(hashSessionId(orgSessionId), orgId, futureExpiry);
   const orgCookie = `baseball_session=${orgSessionId}`;
 
   // 3. Regular Player
@@ -109,7 +113,7 @@ async function createClubhouseTestContext(_options = {}) {
   `).run();
   const playerId = playerRes.lastInsertRowid;
   const playerSessionId = generateSessionId();
-  baseballDb.prepare('INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)').run(playerSessionId, playerId, futureExpiry);
+  baseballDb.prepare('INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)').run(hashSessionId(playerSessionId), playerId, futureExpiry);
   const playerCookie = `baseball_session=${playerSessionId}`;
 
   // 4. Facilitator Player (Assigned 'Game Facilitator' volunteer task)
@@ -119,7 +123,7 @@ async function createClubhouseTestContext(_options = {}) {
   `).run();
   const facilitatorId = facRes.lastInsertRowid;
   const facilitatorSessionId = generateSessionId();
-  baseballDb.prepare('INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)').run(facilitatorSessionId, facilitatorId, futureExpiry);
+  baseballDb.prepare('INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)').run(hashSessionId(facilitatorSessionId), facilitatorId, futureExpiry);
   const facilitatorCookie = `baseball_session=${facilitatorSessionId}`;
 
   // 5. Banned User
@@ -130,7 +134,7 @@ async function createClubhouseTestContext(_options = {}) {
   const bannedId = bannedRes.lastInsertRowid;
   baseballDb.prepare("INSERT INTO banned_emails (email, reason) VALUES ('banned@pickupbaseball.org', 'Code of conduct violation')").run();
   const bannedSessionId = generateSessionId();
-  baseballDb.prepare('INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)').run(bannedSessionId, bannedId, futureExpiry);
+  baseballDb.prepare('INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)').run(hashSessionId(bannedSessionId), bannedId, futureExpiry);
   const bannedCookie = `baseball_session=${bannedSessionId}`;
 
   // 6. Expired Session User
@@ -140,7 +144,7 @@ async function createClubhouseTestContext(_options = {}) {
   `).run();
   const expiredId = expiredRes.lastInsertRowid;
   const expiredSessionId = generateSessionId();
-  baseballDb.prepare('INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)').run(expiredSessionId, expiredId, pastExpiry);
+  baseballDb.prepare('INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)').run(hashSessionId(expiredSessionId), expiredId, pastExpiry);
   const expiredCookie = `baseball_session=${expiredSessionId}`;
 
   // -------------------------------------------------------------------------
@@ -359,11 +363,13 @@ async function createClubhouseTestContext(_options = {}) {
     bannedUser: { id: bannedId, email: 'banned@pickupbaseball.org' },
     testEventId,
     apiReq,
+    hashSessionId,
     isEndpointAvailable,
     cleanup
   };
 }
 
 module.exports = {
-  createClubhouseTestContext
+  createClubhouseTestContext,
+  hashSessionId
 };

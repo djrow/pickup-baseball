@@ -25,7 +25,7 @@ function createSession(userId) {
 function deleteSession(sessionId) {
   if (!sessionId) return;
   const hashedId = hashSessionIdSync(sessionId);
-  db.prepare("DELETE FROM sessions WHERE id = ? OR (id = ? AND id NOT LIKE 'sha256:%')").run(hashedId, sessionId);
+  db.prepare('DELETE FROM sessions WHERE id = ?').run(hashedId);
 }
 
 module.exports = {

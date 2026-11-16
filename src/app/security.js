@@ -111,22 +111,20 @@ export async function hashManagementToken(rawToken) {
 }
 
 /**
- * Builds dual-lookup candidates `[hashed, legacy]` for `attendees.management_token` queries.
- * Rejects `sha256:`-prefixed inputs from matching the legacy raw slot.
+ * Builds the hashed lookup candidate `{ raw, hashed }` for `attendees.management_token` queries.
  * @param {unknown} rawToken
- * @returns {Promise<{ raw: string, hashed: string, legacy: string } | null>}
+ * @returns {Promise<{ raw: string, hashed: string } | null>}
  */
 export async function getManagementTokenCandidates(rawToken) {
   const trimmed = typeof rawToken === 'string' ? rawToken.trim() : '';
   if (!trimmed) return null;
   const hashed = await hashManagementToken(trimmed);
-  const legacy = trimmed.startsWith(MANAGEMENT_TOKEN_PREFIX) ? hashed : trimmed;
-  return { raw: trimmed, hashed, legacy };
+  return { raw: trimmed, hashed };
 }
 
 /**
  * Constant-time verification of a caller-supplied RSVP management token against a stored
- * `sha256:<hex>` hash (or legacy unhashed token during the migration rollout window).
+ * `sha256:<hex>` hash. Unhashed legacy database values are rejected.
  * @param {unknown} rawToken
  * @param {unknown} storedToken
  * @returns {Promise<boolean>}
@@ -134,13 +132,9 @@ export async function getManagementTokenCandidates(rawToken) {
 export async function verifyManagementToken(rawToken, storedToken) {
   const trimmed = typeof rawToken === 'string' ? rawToken.trim() : '';
   const stored = typeof storedToken === 'string' ? storedToken : '';
-  if (!trimmed || !stored) return false;
-  if (stored.startsWith(MANAGEMENT_TOKEN_PREFIX)) {
-    const hashed = await hashManagementToken(trimmed);
-    return constantTimeEqual(hashed, stored);
-  }
-  if (trimmed.startsWith(MANAGEMENT_TOKEN_PREFIX)) return false;
-  return constantTimeEqual(trimmed, stored);
+  if (!trimmed || !stored || !stored.startsWith(MANAGEMENT_TOKEN_PREFIX)) return false;
+  const hashed = await hashManagementToken(trimmed);
+  return constantTimeEqual(hashed, stored);
 }
 
 export function escapeHtml(str) {
@@ -457,10 +451,10 @@ export async function getUserFromSession(db, sessionId, chatDb, options = {}) {
       END as facilitator_flag
     FROM sessions s
     JOIN users u ON s.user_id = u.id
-    WHERE (s.id = ? OR (s.id = ? AND s.id NOT LIKE 'sha256:%'))
+    WHERE s.id = ?
       AND datetime(s.expires_at) > datetime('now')
       AND NOT EXISTS (SELECT 1 FROM banned_emails b WHERE b.email = u.email)
-  `).bind(hashedSessionId, sessionId).first();
+  `).bind(hashedSessionId).first();
 
   if (!session) return null;
 

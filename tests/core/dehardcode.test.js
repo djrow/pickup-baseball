@@ -284,7 +284,8 @@ module.exports = function registerDehardcodeTests(ctx) {
         const uRes = raw.prepare("INSERT INTO users (name, email, role, is_admin) VALUES ('Signer One', 'signer@example.org', 'member', 0)").run();
         const userId = uRes.lastInsertRowid;
         const sessId = crypto.randomBytes(24).toString('hex');
-        raw.prepare("INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, '2099-01-01T00:00:00Z')").run(sessId, userId);
+        const hashedSessId = `sha256:${crypto.createHash('sha256').update(sessId).digest('hex')}`;
+        raw.prepare("INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, '2099-01-01T00:00:00Z')").run(hashedSessId, userId);
         const cookie = `baseball_session=${sessId}`;
 
         // A. pickup-baseball preset

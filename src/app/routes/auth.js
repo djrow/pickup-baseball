@@ -2,7 +2,6 @@ import { Hono } from 'hono';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import {
   SESSION_COOKIE_NAME,
-  SESSION_HASH_PREFIX,
   SESSION_DURATION_SECONDS,
   TEMPORARY_SESSION_DURATION_SECONDS,
   MAX_SESSIONS_PER_USER,
@@ -717,9 +716,7 @@ authRouter.get('/sessions', requireAuth, async (c) => {
 
   const rows = results || [];
   const sessions = rows.map((row) => ({
-    isCurrent: row.id === currentSessionHash || (
-      !String(row.id || '').startsWith(SESSION_HASH_PREFIX) && row.id === currentSessionId
-    ),
+    isCurrent: row.id === currentSessionHash,
     isTemporary: Boolean(row.is_temporary),
     createdAt: row.created_at,
     expiresAt: row.expires_at
@@ -740,10 +737,9 @@ authRouter.post('/logout-other-devices', requireAuth, async (c) => {
 
   const currentSessionId = getCookie(c, SESSION_COOKIE_NAME) || '';
   const currentSessionHash = currentSessionId ? await hashSessionId(currentSessionId) : '';
-  const legacySessionId = currentSessionId && !currentSessionId.startsWith(SESSION_HASH_PREFIX) ? currentSessionId : '';
   const delRes = await db.prepare(
-    'DELETE FROM sessions WHERE user_id = ? AND id != ? AND id != ?'
-  ).bind(user.id, currentSessionHash, legacySessionId).run();
+    'DELETE FROM sessions WHERE user_id = ? AND id != ?'
+  ).bind(user.id, currentSessionHash).run();
   const revokedCount = (delRes && delRes.meta && typeof delRes.meta.changes === 'number') ? delRes.meta.changes : 0;
 
   const countRow = await db.prepare(
@@ -768,8 +764,8 @@ authRouter.post('/logout', async (c) => {
     try {
       const hashedId = await hashSessionId(sessionId);
       await c.env.DB.prepare(
-        "DELETE FROM sessions WHERE id = ? OR (id = ? AND id NOT LIKE 'sha256:%')"
-      ).bind(hashedId, sessionId).run();
+        'DELETE FROM sessions WHERE id = ?'
+      ).bind(hashedId).run();
     } catch (e) {
       logEvent('warn', 'auth_logout_session_delete_failed', { err: e });
     }

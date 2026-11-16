@@ -774,36 +774,44 @@ test('Ticket #33: Hashed RSVP Management Tokens & On-Demand Fresh Edit Link', as
     assert.equal(blockedRes.status, 429, '4th edit-link request for same email within window must be rate-limited (429)');
   });
 
-  await t.test('5. Legacy unhashed management_token rows work via dual-lookup and upgrade cleanly', async () => {
-    const legacyRaw = 'legacy_unhashed_token_t33_' + Date.now();
-    db.prepare(`
+  await t.test('5. Unhashed management_token rows are rejected after #35 cutover while sha256: hashes verify', async () => {
+    const { verifyManagementToken } = await import('../../src/app/security.js');
+    const rawStoredToken = 'raw_unhashed_token_t35_' + Date.now();
+    const rawAttIns = db.prepare(`
       INSERT INTO attendees (event_id, user_id, name, email, is_guest, status, players_count, management_token)
-      VALUES (?, NULL, 'Legacy Guest', 't33_legacy@example.org', 1, 'attending', 1, ?)
-    `).run(eventId, legacyRaw);
+      VALUES (?, NULL, 'Unhashed Legacy Guest', 't35_raw@example.org', 1, 'attending', 1, ?)
+    `).run(eventId, rawStoredToken);
+    const rawAttendeeId = Number(rawAttIns.lastInsertRowid);
+    const linkedBpIns = db.prepare(`
+      INSERT INTO batting_practice_signups (event_id, user_id, attendee_id, slot_number, player_name)
+      VALUES (?, NULL, ?, 8, 'Unhashed Legacy Guest')
+    `).run(eventId, rawAttendeeId);
+    const linkedBpId = Number(linkedBpIns.lastInsertRowid);
 
-    const legacyGet = await apiReq('GET', `/api/events/${eventId}?token=${encodeURIComponent(legacyRaw)}`);
-    assert.equal(legacyGet.status, 200);
-    assert.ok(legacyGet.data.myRsvp, 'Legacy unhashed token must resolve myRsvp via dual-lookup');
-    assert.equal(legacyGet.data.myRsvp.name, 'Legacy Guest');
+    const rawGet = await apiReq('GET', `/api/events/${eventId}?token=${encodeURIComponent(rawStoredToken)}`);
+    assert.equal(rawGet.status, 200);
+    assert.equal(rawGet.data.myRsvp, null, 'Unhashed management_token row must not resolve myRsvp after #35');
 
-    const legacyBp = await apiReq('POST', `/api/events/${eventId}/bp-order`, null, {
-      player_name: 'Legacy Guest',
-      slot_number: 8,
-      management_token: legacyRaw
+    const rawBpEdit = await apiReq('PUT', `/api/events/${eventId}/bp-order/${linkedBpId}`, null, {
+      slot_number: 9,
+      management_token: rawStoredToken
     });
-    assert.equal(legacyBp.status, 200, 'Legacy unhashed token must authorize BP signup');
+    assert.equal(rawBpEdit.status, 403, 'Unhashed management_token row must not authorize editing linked BP signup');
 
-    const legacyUpdate = await apiReq('POST', `/api/events/${eventId}/rsvp`, null, {
-      name: 'Legacy Guest Updated',
-      email: 't33_legacy@example.org',
+    const rawBpDel = await apiReq('DELETE', `/api/events/${eventId}/bp-order/${linkedBpId}?token=${encodeURIComponent(rawStoredToken)}`);
+    assert.equal(rawBpDel.status, 403, 'Unhashed management_token row must not authorize deleting linked BP signup');
+
+    const rawUpdate = await apiReq('POST', `/api/events/${eventId}/rsvp`, null, {
+      name: 'Unhashed Legacy Guest Updated',
+      email: 't35_raw@example.org',
       gear_bringing: 'Catcher gear',
-      management_token: legacyRaw,
+      management_token: rawStoredToken,
       status: 'attending'
     });
-    assert.equal(legacyUpdate.status, 200, 'Legacy unhashed token must authorize RSVP update');
+    assert.equal(rawUpdate.status, 403, 'Unhashed management_token row must be rejected with 403 on RSVP mutation');
 
-    const rowAfterUpdate = db.prepare('SELECT management_token FROM attendees WHERE event_id = ? AND email = ?').get(eventId, 't33_legacy@example.org');
-    assert.equal(rowAfterUpdate.management_token, hashTokenForAssert(legacyRaw), 'Updating legacy row must store hashed token, not plaintext');
+    assert.equal(await verifyManagementToken(rawStoredToken, rawStoredToken), false, 'verifyManagementToken must reject unhashed stored tokens');
+    assert.equal(await verifyManagementToken(rawStoredToken, hashTokenForAssert(rawStoredToken)), true, 'verifyManagementToken must accept sha256: hashed tokens');
 
     // Keep waitlistToken used so eslint has no unused var
     assert.ok(waitlistToken);

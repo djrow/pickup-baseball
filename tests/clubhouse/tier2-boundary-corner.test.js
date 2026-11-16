@@ -16,7 +16,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createClubhouseTestContext } = require('../helpers/test-harness');
+const { createClubhouseTestContext, hashSessionId } = require('../helpers/test-harness');
 const {
   generateChannelKey,
   encryptPayload,
@@ -148,7 +148,7 @@ async function runTier2(t, ctx) {
       const uRes = baseballDb.prepare("INSERT INTO users (name, email, role) VALUES ('Mid Ban', ?, 'player')").run(tempEmail);
       const sId = `session_mid_${Date.now()}`;
       const expiry = new Date(Date.now() + 86400000).toISOString();
-      baseballDb.prepare('INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)').run(sId, uRes.lastInsertRowid, expiry);
+      baseballDb.prepare('INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)').run(hashSessionId(sId), uRes.lastInsertRowid, expiry);
 
       // 1. Valid before ban
       const res1 = await apiReq('GET', '/api/auth/me', `baseball_session=${sId}`);
