@@ -261,8 +261,10 @@ test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
 });
 
 require('../tests/core/clubhouse-waiver.test.js')(ctx);
+require('../tests/core/waiver-telemetry.test.js')();
 require('../tests/core/security-scan.test.js');
 require('../tests/core/schema-barrel.test.js')();
+require('../tests/core/security-barrel.test.js')();
 require('../tests/core/migration-engine.test.js')();
 require('../tests/core/typecheck.test.js')();
 require('../tests/core/lint.test.js')();
@@ -270,4 +272,14 @@ require('../tests/core/error-telemetry.test.js')(ctx);
 require('../tests/core/config.test.js')(ctx);
 require('../tests/core/dehardcode.test.js')(ctx);
 require('../tests/core/duty-feature-flags.test.js')();
+require('../tests/core/backup-dr.test.js')();
+require('../tests/core/key-rotation-audit.test.js')();
+require('../tests/core/turn-relay.test.js')();
+require('../tests/core/visitor-privacy.test.js')();
+require('../tests/core/rate-limit-hmac.test.js')();
+require('../tests/core/data-export.test.js')();
+require('../tests/core/two-tier-erasure.test.js')();
+require('../tests/core/privacy-consent.test.js')();
+require('../tests/core/visitor-erasure.test.js')();
+require('../tests/core/peer-block-ui.test.js')();
 require('../tests/clubhouse/index.js')();

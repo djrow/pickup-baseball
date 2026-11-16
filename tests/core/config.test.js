@@ -7,12 +7,25 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-module.exports = function registerConfigTests(ctx) {
-  const { apiReq, rootDir } = ctx;
+function registerConfigTests(ctx) {
+  const rootDir = (ctx && ctx.rootDir) || path.join(__dirname, '..', '..');
+  const { app: honoApp } = require(path.join(rootDir, 'src', 'app', 'index.js'));
+  const apiReq = (ctx && ctx.apiReq) || (async (method, endpoint) => {
+    const res = await honoApp.fetch(new Request(`https://community.example.org${endpoint}`, { method }), {
+      COMMUNITY_PRESET: 'pickup-baseball'
+    });
+    const text = await res.text();
+    let data = null;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      /* non-json */
+    }
+    return { status: res.status, headers: res.headers, data };
+  });
 
   test('Boot Config Layer, Presets, /api/config/public & Lockout Matrix (Ticket #28)', async (t) => {
     const configModPath = path.join(rootDir, 'src', 'app', 'config.js');
-    const { app: honoApp } = require(path.join(rootDir, 'src', 'app', 'index.js'));
 
     await t.test('src/app/config.js resolves generic-community default with zero D1 reads', () => {
       assert.ok(fs.existsSync(configModPath), 'src/app/config.js must exist');
@@ -43,9 +56,13 @@ module.exports = function registerConfigTests(ctx) {
       assert.equal(cfg.HANDBOOK_URL, '');
       assert.equal(cfg.MAIL_PROVIDER, 'mock');
       assert.equal(cfg.STORAGE_PROVIDER, 'local');
+      assert.deepEqual(cfg.TURN_ICE_SERVERS, []);
+      assert.equal(cfg.TURN_CONFIGURED, false);
       assert.equal(cfg.FEATURE_BATTING_PRACTICE, false);
       assert.equal(cfg.FEATURE_CERTIFIED_SHIFTS, false);
       assert.equal(cfg.FEATURE_SUNDAY_PRIORITY, false);
+      assert.equal(cfg.WAIVER_SIGNING_SECRET, '');
+      assert.equal(cfg.WAIVER_RETENTION_YEARS, 3);
       assert.equal(isPreviewOriginLocked(cfg), false);
 
       // No pickupbaseballfoundation literals in generic preset
@@ -54,6 +71,7 @@ module.exports = function registerConfigTests(ctx) {
       const pub = getPublicConfig(cfg);
       assert.equal(pub.preset, 'generic-community');
       assert.equal(pub.communityName, 'Community Hub');
+      assert.equal(pub.turnConfigured, false);
       assert.deepEqual(pub.features, {
         battingPractice: false,
         certifiedShifts: false,
@@ -97,6 +115,8 @@ module.exports = function registerConfigTests(ctx) {
         HANDBOOK_URL: '/about.html',
         MAIL_PROVIDER: 'brevo',
         STORAGE_PROVIDER: 'r2',
+        WAIVER_SIGNING_SECRET: '  isolated-waiver-secret  ',
+        WAIVER_RETENTION_YEARS: '5',
         FEATURE_BATTING_PRACTICE: '0',
         FEATURE_CERTIFIED_SHIFTS: 'false',
         FEATURE_SUNDAY_PRIORITY: 'off'
@@ -105,9 +125,16 @@ module.exports = function registerConfigTests(ctx) {
       assert.equal(overridden.HANDBOOK_URL, '/about.html');
       assert.equal(overridden.MAIL_PROVIDER, 'brevo');
       assert.equal(overridden.STORAGE_PROVIDER, 'r2');
+      assert.equal(overridden.WAIVER_SIGNING_SECRET, 'isolated-waiver-secret');
+      assert.equal(overridden.WAIVER_RETENTION_YEARS, 5);
       assert.equal(overridden.FEATURE_BATTING_PRACTICE, false);
       assert.equal(overridden.FEATURE_CERTIFIED_SHIFTS, false);
       assert.equal(overridden.FEATURE_SUNDAY_PRIORITY, false);
+
+      // Invalid WAIVER_RETENTION_YEARS falls back safely to 3
+      for (const badYears of ['0', '-2', 'abc', '']) {
+        assert.equal(resolveConfig({ WAIVER_RETENTION_YEARS: badYears }).WAIVER_RETENTION_YEARS, 3);
+      }
 
       // Unsafe HANDBOOK_URL schemes are rejected back to preset default
       const unsafeUrl = resolveConfig({
@@ -152,6 +179,7 @@ module.exports = function registerConfigTests(ctx) {
         RESEND_API_KEY: 'test-resend-key-secret-value',
         TURNSTILE_SECRET_KEY: 'turnstile_secret_value',
         SESSION_SECRET: 'session_secret_value',
+        WAIVER_SIGNING_SECRET: 'waiver_signing_secret_value',
         GDRIVE_CLIENT_SECRET: 'gdrive_secret_value'
       });
 
@@ -166,6 +194,7 @@ module.exports = function registerConfigTests(ctx) {
         communityName: 'Sandlot Collective',
         publicOrigin: 'https://community.example.org',
         handbookUrl: 'https://community.example.org/handbook',
+        turnConfigured: false,
         features: {
           battingPractice: true,
           certifiedShifts: true,
@@ -181,6 +210,7 @@ module.exports = function registerConfigTests(ctx) {
         'RESEND_API_KEY', 'test-resend-key-secret-value',
         'TURNSTILE_SECRET_KEY', 'turnstile_secret_value',
         'SESSION_SECRET', 'session_secret_value',
+        'WAIVER_SIGNING_SECRET', 'waiver_signing_secret_value',
         'GDRIVE_CLIENT_SECRET', 'gdrive_secret_value'
       ]) {
         assert.equal(text.includes(secretKey), false, `GET /api/config/public must never leak ${secretKey}`);
@@ -241,10 +271,19 @@ module.exports = function registerConfigTests(ctx) {
         'STORAGE_PROVIDER',
         'FEATURE_BATTING_PRACTICE',
         'FEATURE_CERTIFIED_SHIFTS',
-        'FEATURE_SUNDAY_PRIORITY'
+        'FEATURE_SUNDAY_PRIORITY',
+        'TURN_ICE_SERVERS_JSON',
+        'WAIVER_SIGNING_SECRET',
+        'WAIVER_RETENTION_YEARS'
       ]) {
         assert.ok(raw.includes(`${key}=`), `.env.example must document ${key}`);
       }
     });
   });
-};
+}
+
+module.exports = registerConfigTests;
+
+if (require.main === module) {
+  registerConfigTests();
+}

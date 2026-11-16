@@ -11,6 +11,7 @@ import {
   requireModerator,
   rejectIfChatMuted,
   rejectIfClubhouseOptedOut,
+  checkRateLimit,
   CANONICAL_MEMBER_ROLE,
   isMemberRole,
   normalizeMemberRole
@@ -21,7 +22,9 @@ import {
   isPrivateEncryptedBoard,
   canUserAccessChannel,
   getAccessibleChannels,
-  chunkArray
+  chunkArray,
+  isPeerBlocked,
+  rejectIfDmPeerBlocked
 } from './helpers.js';
 
 export const chatChannelsRouter = /** @type {AppHono} */ (new Hono());
@@ -115,23 +118,13 @@ chatChannelsRouter.post('/channels', requireAuth, async (c) => {
   }
   const isPrivateBoard = !isDm && channelType !== 'voice' && Boolean(body.is_private || requestedRead === 'invite');
 
-  const nowSecCreate = Math.floor(Date.now() / 1000);
-  const chRateKey = `user_${user.id}_channel_create`;
-  const chCutoff = nowSecCreate - 60;
-  try {
-    await chatDb.prepare(`
-      INSERT INTO chat_rate_limits (key, count, window_start)
-      VALUES (?, 1, ?)
-      ON CONFLICT(key) DO UPDATE SET
-        count = CASE WHEN chat_rate_limits.window_start <= ? THEN 1 ELSE chat_rate_limits.count + 1 END,
-        window_start = CASE WHEN chat_rate_limits.window_start <= ? THEN ? ELSE chat_rate_limits.window_start END
-    `).bind(chRateKey, nowSecCreate, chCutoff, chCutoff, nowSecCreate).run();
-    const chRateRow = await chatDb.prepare('SELECT count FROM chat_rate_limits WHERE key = ?').bind(chRateKey).first();
-    if (chRateRow && Number(chRateRow.count) > 20) {
-      return c.json({ error: 'Too many channel creation requests. Please wait a minute.' }, 429);
-    }
-  } catch (e) {
-    logEvent('warn', 'chat_channel_create_rate_limit_failed', { err: e });
+  const chRate = await checkRateLimit(chatDb, `chat_channel_create:${user.id}`, 20, 60, c.env, {
+    table: 'chat_rate_limits',
+    failClosed: false,
+    enforceInTest: true
+  });
+  if (!chRate.allowed) {
+    return c.json({ error: 'Too many channel creation requests. Please wait a minute.' }, 429);
   }
 
   if (isDm || isPrivateBoard) {
@@ -154,6 +147,14 @@ chatChannelsRouter.post('/channels', requireAuth, async (c) => {
       }
       if (otherIds.some((uid) => !validSet.has(Number(uid)))) {
         return c.json({ error: 'One or more target members do not exist, are banned, or have opted out of Clubhouse.' }, 403);
+      }
+    }
+    if (channelType === 'dm' && otherIds.length === 1) {
+      if (await isPeerBlocked(chatDb, user.id, otherIds[0])) {
+        return c.json({
+          error: 'Direct messages are blocked between you and this member.',
+          code: 'PEER_BLOCKED'
+        }, 403);
       }
     }
   }
@@ -548,6 +549,10 @@ async function setDmChannelHiddenState(c, hidden) {
   }
   if (!(await canUserAccessChannel(chatDb, user, channel, 'read'))) {
     return c.json({ error: 'Access denied: you are not a participant in this conversation.' }, 403);
+  }
+  if (!hidden) {
+    const blockResp = await rejectIfDmPeerBlocked(c, chatDb, channel, user.id);
+    if (blockResp) return blockResp;
   }
 
   const hiddenFlag = hidden ? 1 : 0;

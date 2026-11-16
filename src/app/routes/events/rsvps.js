@@ -30,6 +30,7 @@ import {
 import { resolveConfig } from '../../config.js';
 import { sendRsvpConfirmation, sendWaitlistConfirmation, sendRsvpEditLinkEmail } from '../../mailer.js';
 import { ERROR_CODES, logEvent } from '../../errors.js';
+import { CONSENT_TYPES, parseOptionalBoolean, recordConsentChange } from '../../consent.js';
 import {
   GUEST_NO_EMAIL_SUFFIX,
   isDeliverableEmail,
@@ -96,7 +97,8 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
       name, email, gear_bringing, duty_ids, redeem_hero_credit,
       management_token, status, players_count, spectators_count,
       additional_guests, guest_names, cf_turnstile_response,
-      bp_signup, bp_slot, resend_confirmation, send_confirmation_email
+      bp_signup, bp_slot, resend_confirmation, send_confirmation_email,
+      roster_consent, notify_emails
     } = await c.req.json();
     if (!management_token) {
       management_token = c.req.query('token');
@@ -332,6 +334,12 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
       }
     }
 
+    const parsedRosterConsent = !user ? parseOptionalBoolean(roster_consent) : undefined;
+    const parsedNotifyEmails = !user ? parseOptionalBoolean(notify_emails) : undefined;
+    let nextRosterConsent = 0;
+    let nextNotifyEmails = 0;
+    const visitorConsentTransitions = [];
+
     let attendeeId;
     if (existingAttendee) {
       if (!user && (!existingAttendee.management_token || !(await verifyManagementToken(management_token, existingAttendee.management_token)))) {
@@ -350,18 +358,55 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
           return c.json({ error: 'An RSVP with this email address already exists for this game.' }, 409);
         }
       }
+
+      if (!user) {
+        const prevRosterConsent = existingAttendee.roster_consent ? 1 : 0;
+        const prevNotifyEmails = existingAttendee.notify_emails ? 1 : 0;
+        nextRosterConsent = parsedRosterConsent !== undefined ? (parsedRosterConsent ? 1 : 0) : prevRosterConsent;
+        nextNotifyEmails = parsedNotifyEmails !== undefined ? (parsedNotifyEmails ? 1 : 0) : prevNotifyEmails;
+        if (nextRosterConsent !== prevRosterConsent) {
+          visitorConsentTransitions.push({ consentType: CONSENT_TYPES.ROSTER_CONSENT, granted: Boolean(nextRosterConsent) });
+        }
+        if (nextNotifyEmails !== prevNotifyEmails) {
+          visitorConsentTransitions.push({ consentType: CONSENT_TYPES.VISITOR_NOTIFY_EMAILS, granted: Boolean(nextNotifyEmails) });
+        }
+      }
+
       attendeeId = existingAttendee.id;
       await db.prepare(`
         UPDATE attendees
-        SET name = ?, email = ?, status = ?, gear_bringing = ?, players_count = ?, spectators_count = ?, additional_guests = ?, guest_names = ?, user_id = COALESCE(?, user_id), is_guest = ?, management_token = ?
+        SET name = ?, email = ?, status = ?, gear_bringing = ?, players_count = ?, spectators_count = ?, additional_guests = ?, guest_names = ?, user_id = COALESCE(?, user_id), is_guest = ?, management_token = ?, notify_emails = ?, roster_consent = ?
         WHERE id = ?
-      `).bind(name, storedEmail, finalStatus, cleanGear, playersCount, spectatorsCount, additionalGuests, cleanGuestNames, userId, isGuest, storedTokenHash, attendeeId).run();
+      `).bind(name, storedEmail, finalStatus, cleanGear, playersCount, spectatorsCount, additionalGuests, cleanGuestNames, userId, isGuest, storedTokenHash, nextNotifyEmails, nextRosterConsent, attendeeId).run();
     } else {
+      if (!user) {
+        nextRosterConsent = parsedRosterConsent === true ? 1 : 0;
+        nextNotifyEmails = parsedNotifyEmails === true ? 1 : 0;
+        if (nextRosterConsent === 1) {
+          visitorConsentTransitions.push({ consentType: CONSENT_TYPES.ROSTER_CONSENT, granted: true });
+        }
+        if (nextNotifyEmails === 1) {
+          visitorConsentTransitions.push({ consentType: CONSENT_TYPES.VISITOR_NOTIFY_EMAILS, granted: true });
+        }
+      }
+
       const ins = await db.prepare(`
-        INSERT INTO attendees (event_id, user_id, name, email, is_guest, status, gear_bringing, players_count, spectators_count, additional_guests, guest_names, management_token)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).bind(eventId, userId, name, storedEmail, isGuest, finalStatus, cleanGear, playersCount, spectatorsCount, additionalGuests, cleanGuestNames, freshTokenHash).run();
+        INSERT INTO attendees (event_id, user_id, name, email, is_guest, status, gear_bringing, players_count, spectators_count, additional_guests, guest_names, management_token, notify_emails, roster_consent)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(eventId, userId, name, storedEmail, isGuest, finalStatus, cleanGear, playersCount, spectatorsCount, additionalGuests, cleanGuestNames, freshTokenHash, nextNotifyEmails, nextRosterConsent).run();
       attendeeId = ins.meta.last_row_id;
+    }
+
+    if (!user && visitorConsentTransitions.length > 0) {
+      const consentEmail = isDeliverableEmail(storedEmail) ? storedEmail : null;
+      for (const tr of visitorConsentTransitions) {
+        await recordConsentChange(db, {
+          subjectType: 'visitor',
+          subjectEmail: consentEmail,
+          consentType: tr.consentType,
+          granted: tr.granted
+        }, c.env);
+      }
     }
 
     if (finalStatus === 'attending' && playersCount > 0 && event.max_players && Number(event.max_players) > 0 && (!wasAttending || playersCount > Number(prevPlayersCount))) {
@@ -704,7 +749,7 @@ eventsRsvpsRouter.post('/:id/rsvp/edit-link', async (c) => {
   }
 });
 
-eventsRsvpsRouter.post('/:id/comments', async (c) => {
+eventsRsvpsRouter.post('/:id/comments', requireAuth, async (c) => {
   try {
     const eventId = parseInt(c.req.param('id'), 10);
     if (!eventId || isNaN(eventId) || eventId <= 0) {
@@ -722,10 +767,10 @@ eventsRsvpsRouter.post('/:id/comments', async (c) => {
     const event = await db.prepare('SELECT id, allowed_emails FROM events WHERE id = ?').bind(eventId).first();
     if (!event) return c.json({ error: 'Event not found.' }, 404);
     if (!canUserAccessEvent(user, event)) {
-      return c.json({ error: user ? 'This event is restricted to invited players.' : 'Authentication required for private events.' }, user ? 403 : 401);
+      return c.json({ error: 'This event is restricted to invited players.' }, 403);
     }
 
-    const { content, author_name, author_email, cf_turnstile_response, turnstile_token } = await c.req.json();
+    const { content } = await c.req.json();
     const cleanComment = String(content || '').trim();
     if (!cleanComment) {
       return c.json({ error: 'Comment message cannot be empty.' }, 400);
@@ -734,31 +779,9 @@ eventsRsvpsRouter.post('/:id/comments', async (c) => {
       return c.json({ error: 'Comment message must not exceed 2000 characters.' }, 400);
     }
 
-    if (!user && !(await verifyTurnstileIfConfigured(c.env, cf_turnstile_response || turnstile_token, clientIp))) {
-      return c.json({ error: 'Bot verification failed. Please refresh and try again.' }, 403);
-    }
-
-    const requireLogin = await getRequireLoginSetting(db, c.env);
-    if (requireLogin && !user) {
-      return c.json({ error: 'Sign-in required to post comments.' }, 401);
-    }
-
-    let name = '';
-    let email = '';
-    let userId = null;
-    if (user) {
-      name = user.name;
-      email = user.email;
-      userId = user.id;
-    } else {
-      name = String(author_name || '').trim().slice(0, 120);
-      const rawGuestEmail = String(author_email || '').trim().toLowerCase().slice(0, 254);
-      if (rawGuestEmail && !isValidEmailAddress(rawGuestEmail)) {
-        return c.json({ error: 'Please enter a valid email address or leave it blank.' }, 400);
-      }
-      email = rawGuestEmail;
-      if (!name) return c.json({ error: 'Please enter your name to post a comment.' }, 400);
-    }
+    const name = user.name;
+    const email = user.email;
+    const userId = user.id;
 
     if (email) {
       const banRecord = await db.prepare('SELECT id FROM banned_emails WHERE LOWER(email) = LOWER(?)').bind(email).first();
@@ -767,7 +790,7 @@ eventsRsvpsRouter.post('/:id/comments', async (c) => {
 
     const ins = await db.prepare(
       'INSERT INTO comments (event_id, user_id, author_name, author_email, content) VALUES (?, ?, ?, ?, ?)'
-    ).bind(eventId, userId, name, email || 'guest', String(content).trim().slice(0, 2000)).run();
+    ).bind(eventId, userId, name, email || 'member', cleanComment.slice(0, 2000)).run();
 
     const newComment = await db.prepare(
       'SELECT id, event_id, user_id, author_name, content, created_at FROM comments WHERE id = ?'

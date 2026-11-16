@@ -487,7 +487,12 @@ module.exports = async function registerWeatherGalleryTests(ctx, t9) {
     });
     assert.equal(backupRes.status, 200);
     const sqlDump = await backupRes.text();
-    assert.ok(sqlDump.includes(`-- ${communityName} Database Backup`) && sqlDump.includes('INSERT OR IGNORE INTO "users"'), 'Backup dump must contain backup header and user rows');
+    assert.ok(
+      sqlDump.includes(`-- ${communityName} Database Backup`) &&
+      sqlDump.includes('INSERT OR IGNORE INTO "events"') &&
+      !sqlDump.includes('INSERT OR IGNORE INTO "users"'),
+      'Scrubbed operational SQL backup must contain backup header and event rows without user PII'
+    );
 
     const chatBackupRes = await fetch(`${baseUrl}/api/events/admin/backup-db?db=chat`, {
       headers: { Cookie: seedAdminCookie }
@@ -1174,13 +1179,19 @@ module.exports = async function registerWeatherGalleryTests(ctx, t9) {
     const rsvpBpData = await rsvpWithBpRes.json();
     assert.ok(rsvpBpData.message.includes('Batting Practice slot #1'));
 
-    // Verify 3 signups exist now when signed in (still hidden from anonymous callers)
+    // Verify 3 signups exist now when signed in (peer Member sees First L., Organizer sees full name, anonymous blocked)
     const orderAfterRsvp = await (await fetch(`${baseUrl}/api/events/${bpEvent.id}/bp-order`, {
       headers: { 'Cookie': seedPlayerCookie }
     })).json();
     assert.equal(orderAfterRsvp.bp_signups.length, 3);
     const slot1Occupant = orderAfterRsvp.bp_signups.find(s => s.slot_number === 1);
-    assert.ok(slot1Occupant && slot1Occupant.player_name.includes('Alex Slugger'));
+    assert.ok(slot1Occupant && slot1Occupant.player_name === 'Alex S.', 'Peer Member must see abbreviated First L. for unconsented BP player');
+
+    const orgOrderAfterRsvp = await (await fetch(`${baseUrl}/api/events/${bpEvent.id}/bp-order`, {
+      headers: { 'Cookie': seedOrgCookie }
+    })).json();
+    const orgSlot1Occupant = orgOrderAfterRsvp.bp_signups.find(s => s.slot_number === 1);
+    assert.ok(orgSlot1Occupant && orgSlot1Occupant.player_name.includes('Alex Slugger'), 'Organizer must see full BP player name');
 
     // Verify invite-only event batting order blocks uninvited signed-in users (403) and allows invited/organizer (200)
     const privBpCreate = await apiReq('POST', '/api/events', seedOrgCookie, {

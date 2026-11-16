@@ -61,7 +61,8 @@
       <div class="flex-row-wrap">
         <a href="#admin-media-carousel-section" class="btn btn-outline">🖼️ Carousels Media</a>
         <a href="#admin-security-section" id="admin-security-nav-btn" class="btn btn-outline">🛡️ Access Control &amp; Guest Policy</a>
-        <a href="/api/events/admin/backup-db" id="btn-backup-db" class="btn btn-outline" download>📥 Backup Both DBs (.zip)</a>
+        <a href="/api/events/admin/backup-db" id="btn-backup-db" class="btn btn-outline" download data-i18n="backup_scrubbed_btn">📥 Operational SQL (.zip)</a>
+        <button type="button" id="btn-backup-dr" class="btn btn-outline" data-i18n="backup_dr_btn">🔐 Encrypted DR Backup (.pbfenc)</button>
         <button id="quick-sunday-btn" class="btn btn-primary">⚡ 1-Click: Post Next Sunday @ Noon</button>
       </div>
     </div>
@@ -460,6 +461,37 @@
             </thead>
             <tbody id="banned-emails-table-body">
               <tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 12px;">Loading banned list...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Quarantined Liability Waivers (Admin Legal-Defense Hold) -->
+      <div class="subpanel-card" style="padding: 18px; margin-top: 20px;">
+        <div class="flex-between" style="margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+          <div>
+            <h3 style="margin: 0; color: var(--secondary); font-size: 1.05rem;" data-i18n="admin.quarantined_title">🔒 Quarantined Waivers (Legal-Defense Hold)</h3>
+            <p class="text-muted-sm" style="margin-top: 2px; font-size: 0.82rem;" data-i18n="admin.quarantined_desc">Sealed waivers retained for 3 years after account erasure (all lookups are audit-logged and auto-purged after retention expires).</p>
+          </div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button type="button" id="refresh-quarantined-waivers-btn" class="btn btn-outline btn-sm" data-i18n="admin.quarantined_refresh">🔄 Refresh</button>
+            <button type="button" id="purge-quarantined-waivers-btn" class="btn btn-outline btn-sm" style="color: var(--danger); border-color: var(--danger);" data-i18n="admin.quarantined_purge">🧹 Purge Expired</button>
+          </div>
+        </div>
+        <div id="quarantined-waivers-alert"></div>
+        <div class="table-responsive admin-users-scroll-container" style="max-height: 240px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-sm);">
+          <table class="data-table data-table-compact">
+            <thead>
+              <tr>
+                <th style="min-width: 150px;" data-i18n="admin.quarantined_col_cert">Certificate ID</th>
+                <th style="min-width: 170px;" data-i18n="admin.quarantined_col_signer">Signer</th>
+                <th style="min-width: 100px;" data-i18n="admin.quarantined_col_signed">Signed</th>
+                <th style="min-width: 110px;" data-i18n="admin.quarantined_col_retention">Retention Until</th>
+                <th style="min-width: 90px;" data-i18n="admin.quarantined_col_action">Action</th>
+              </tr>
+            </thead>
+            <tbody id="quarantined-waivers-table-body">
+              <tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 12px;" data-i18n="admin.quarantined_loading">Loading quarantined waivers...</td></tr>
             </tbody>
           </table>
         </div>

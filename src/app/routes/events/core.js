@@ -13,7 +13,9 @@ import {
   resolveUserByCalendarToken,
   constantTimeEqual,
   checkRateLimit,
-  getSafePublicOrigin
+  getSafePublicOrigin,
+  arrayBufferToBase64,
+  base64ToUint8Array
 } from '../../security.js';
 import { getDefaultDuties, getRequireLoginSetting } from '../../schema.js';
 import {
@@ -24,7 +26,12 @@ import {
   getDutyType,
   getDutyTier1Cap,
   getUserRollingShifts,
-  normalizeDutyFlags
+  normalizeDutyFlags,
+  isViewerOrganizer,
+  sanitizeAttendeesForViewer,
+  sanitizeCommentsForViewer,
+  sanitizeBpSignupsForViewer,
+  sanitizeDutyAssignedPlayers
 } from '../../policy.js';
 import { buildCalendarIcs } from '../../feeds.js';
 import { sendRainoutEmail, sendReopenEmail } from '../../mailer.js';
@@ -109,10 +116,211 @@ eventsCoreRouter.get('/', async (c) => {
   }
 });
 
+const BACKUP_PAGE_SIZE = 500;
+const SECRET_APP_SETTING_KEYS = new Set(['waiver_provenance_secret', 'appscript_upload_url', 'rate_limit_hmac_secret']);
+const SCRUBBED_APP_SETTING_KEYS = new Set(['schema_version', 'require_login_to_rsvp', 'disallow_zero_login_media']);
+
+const SCRUBBED_TABLE_QUERIES = {
+  events: 'SELECT rowid AS __backup_rowid, * FROM "events" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  event_duties: 'SELECT rowid AS __backup_rowid, * FROM "event_duties" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  default_duties: 'SELECT rowid AS __backup_rowid, * FROM "default_duties" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  posts: 'SELECT rowid AS __backup_rowid, * FROM "posts" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  media_items: 'SELECT rowid AS __backup_rowid, * FROM "media_items" WHERE is_approved = 1 AND rowid > ? ORDER BY rowid ASC LIMIT ?',
+  app_settings: `SELECT rowid AS __backup_rowid, * FROM "app_settings" WHERE key IN ('schema_version', 'require_login_to_rsvp', 'disallow_zero_login_media') AND rowid > ? ORDER BY rowid ASC LIMIT ?`,
+  channels: `SELECT rowid AS __backup_rowid, * FROM "channels" WHERE channel_type NOT IN ('dm', 'group_dm') AND rowid > ? ORDER BY rowid ASC LIMIT ?`,
+  clubhouse_gifs: 'SELECT rowid AS __backup_rowid, * FROM "clubhouse_gifs" WHERE is_public = 1 AND rowid > ? ORDER BY rowid ASC LIMIT ?'
+};
+
+const DR_TABLE_QUERIES = {
+  users: 'SELECT rowid AS __backup_rowid, * FROM "users" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  events: 'SELECT rowid AS __backup_rowid, * FROM "events" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  event_duties: 'SELECT rowid AS __backup_rowid, * FROM "event_duties" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  attendees: 'SELECT rowid AS __backup_rowid, * FROM "attendees" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  duty_assignments: 'SELECT rowid AS __backup_rowid, * FROM "duty_assignments" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  comments: 'SELECT rowid AS __backup_rowid, * FROM "comments" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  default_duties: 'SELECT rowid AS __backup_rowid, * FROM "default_duties" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  posts: 'SELECT rowid AS __backup_rowid, * FROM "posts" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  media_items: 'SELECT rowid AS __backup_rowid, * FROM "media_items" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  banned_emails: 'SELECT rowid AS __backup_rowid, * FROM "banned_emails" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  app_settings: `SELECT rowid AS __backup_rowid, * FROM "app_settings" WHERE key NOT IN ('waiver_provenance_secret', 'appscript_upload_url', 'rate_limit_hmac_secret') AND rowid > ? ORDER BY rowid ASC LIMIT ?`,
+  batting_practice_signups: 'SELECT rowid AS __backup_rowid, * FROM "batting_practice_signups" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  waivers: 'SELECT rowid AS __backup_rowid, * FROM "waivers" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  consent_records: 'SELECT rowid AS __backup_rowid, * FROM "consent_records" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  email_suppressions: 'SELECT rowid AS __backup_rowid, * FROM "email_suppressions" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  channels: 'SELECT rowid AS __backup_rowid, * FROM "channels" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  channel_members: 'SELECT rowid AS __backup_rowid, * FROM "channel_members" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  messages: 'SELECT rowid AS __backup_rowid, * FROM "messages" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  message_reactions: 'SELECT rowid AS __backup_rowid, * FROM "message_reactions" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  chat_attachments: 'SELECT rowid AS __backup_rowid, * FROM "chat_attachments" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  user_crypto_keys: 'SELECT rowid AS __backup_rowid, * FROM "user_crypto_keys" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  channel_key_shares: 'SELECT rowid AS __backup_rowid, * FROM "channel_key_shares" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  sync_events: 'SELECT rowid AS __backup_rowid, * FROM "sync_events" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  chat_reports: 'SELECT rowid AS __backup_rowid, * FROM "chat_reports" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  user_mutes: 'SELECT rowid AS __backup_rowid, * FROM "user_mutes" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  user_blocks: 'SELECT rowid AS __backup_rowid, * FROM "user_blocks" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  clubhouse_gifs: 'SELECT rowid AS __backup_rowid, * FROM "clubhouse_gifs" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?',
+  clubhouse_opted_out: 'SELECT rowid AS __backup_rowid, * FROM "clubhouse_opted_out" WHERE rowid > ? ORDER BY rowid ASC LIMIT ?'
+};
+
+function resolveBackupTargetConfig(c, dbParam, dateStr) {
+  const { COMMUNITY_NAME } = resolveConfig(c.env);
+  const configs = {
+    baseball: {
+      db: c.env && (c.env.BASEBALL_DB || c.env.DB),
+      scrubbedHeader: `-- ${COMMUNITY_NAME} Database Backup (Scrubbed Operational SQL)\n-- Mode: scrubbed-operational`,
+      drHeader: `-- ${COMMUNITY_NAME} Database Backup (Full Disaster Recovery)\n-- Mode: encrypted-dr`,
+      scrubbedFilename: `baseball_operational_${dateStr}.sql`,
+      drFilename: `baseball_dr_backup_${dateStr}.pbfenc`,
+      scrubbedTables: [
+        'events', 'event_duties', 'default_duties',
+        'posts', 'media_items', 'app_settings'
+      ],
+      drTables: [
+        'users', 'events', 'event_duties', 'attendees',
+        'duty_assignments', 'comments', 'default_duties',
+        'posts', 'media_items', 'banned_emails', 'app_settings',
+        'batting_practice_signups', 'waivers', 'consent_records', 'email_suppressions'
+      ]
+    },
+    chat: {
+      db: c.env && c.env.CHAT_DB,
+      scrubbedHeader: `-- ${COMMUNITY_NAME} Clubhouse (CHAT_DB) Database Backup (Scrubbed Operational SQL)\n-- Mode: scrubbed-operational`,
+      drHeader: `-- ${COMMUNITY_NAME} Clubhouse (CHAT_DB) Database Backup (Full Disaster Recovery)\n-- Mode: encrypted-dr`,
+      scrubbedFilename: `clubhouse_chat_operational_${dateStr}.sql`,
+      drFilename: `clubhouse_chat_dr_backup_${dateStr}.pbfenc`,
+      scrubbedTables: [
+        'channels', 'clubhouse_gifs'
+      ],
+      drTables: [
+        'channels', 'channel_members', 'messages', 'message_reactions',
+        'chat_attachments', 'user_crypto_keys', 'channel_key_shares',
+        'sync_events', 'chat_reports', 'user_mutes', 'user_blocks',
+        'clubhouse_gifs', 'clubhouse_opted_out'
+      ]
+    }
+  };
+  return configs[dbParam] || null;
+}
+
+function scrubBackupRow(table, row, mode) {
+  if (!row || typeof row !== 'object') return null;
+  if (table === 'app_settings') {
+    const settingKey = String(row.key || '');
+    if (SECRET_APP_SETTING_KEYS.has(settingKey)) return null;
+    if (mode === 'scrubbed' && !SCRUBBED_APP_SETTING_KEYS.has(settingKey)) return null;
+  }
+
+  const out = { ...row };
+  delete out.__backup_rowid;
+  if (table === 'users') {
+    out.calendar_token = null;
+  } else if (table === 'attendees') {
+    out.management_token = null;
+  } else if (table === 'user_crypto_keys') {
+    out.encrypted_private_vault = null;
+    out.vault_salt = null;
+    out.vault_iv = null;
+  } else if (table === 'media_items') {
+    out.delete_token = null;
+    out.upload_token_hash = null;
+    if (mode === 'scrubbed') {
+      out.file_data = null;
+      out.contributor_name = null;
+      out.contributor_id = null;
+      if ('uploader_email' in out) out.uploader_email = null;
+      if ('uploader_name' in out) out.uploader_name = null;
+    }
+  } else if (table === 'clubhouse_gifs') {
+    out.local_data_base64 = null;
+    if (mode === 'scrubbed') {
+      out.added_by = 0;
+      out.added_by_name = '';
+    }
+  } else if (table === 'chat_attachments') {
+    out.resumable_session_uri = null;
+  } else if (table === 'events' && mode === 'scrubbed') {
+    out.allowed_emails = null;
+  } else if (table === 'posts' && mode === 'scrubbed') {
+    out.author_id = null;
+    out.author_name = 'Community Organizer';
+  }
+  return out;
+}
+
+function formatSqlInsertRow(table, row) {
+  const cols = Object.keys(row).map((k) => `"${String(k).replace(/"/g, '""')}"`).join(', ');
+  const vals = Object.values(row).map((v) => {
+    if (v === null || v === undefined) return 'NULL';
+    if (typeof v === 'number') return Number.isFinite(v) ? String(v) : 'NULL';
+    if (v instanceof Uint8Array) {
+      return `X'${Array.from(v, (b) => b.toString(16).padStart(2, '0')).join('')}'`;
+    }
+    return `'${String(v).replace(/\0/g, '').replace(/'/g, "''")}'`;
+  }).join(', ');
+  return `INSERT OR IGNORE INTO "${table}" (${cols}) VALUES (${vals});\n`;
+}
+
+async function writeBackupTables(db, tables, mode, onChunk) {
+  const queryMap = mode === 'scrubbed' ? SCRUBBED_TABLE_QUERIES : DR_TABLE_QUERIES;
+  for (const table of tables) {
+    const tableQuery = queryMap[table];
+    if (!tableQuery) continue;
+    let lastRowid = Number.MIN_SAFE_INTEGER;
+    let headerWritten = false;
+    while (true) {
+      let rows;
+      try {
+        const res = await db.prepare(tableQuery).bind(lastRowid, BACKUP_PAGE_SIZE).all();
+        rows = res && res.results ? res.results : [];
+      } catch (err) {
+        if (err && /no such table/i.test(String(err.message || ''))) {
+          break;
+        }
+        throw err;
+      }
+      if (!rows || rows.length === 0) break;
+      let chunk = '';
+      for (const rawRow of rows) {
+        const scrubbed = scrubBackupRow(table, rawRow, mode);
+        if (!scrubbed) continue;
+        chunk += formatSqlInsertRow(table, scrubbed);
+      }
+      if (chunk) {
+        if (!headerWritten) {
+          onChunk(`-- Table: ${table}\n`);
+          headerWritten = true;
+        }
+        onChunk(chunk);
+      }
+      if (rows.length < BACKUP_PAGE_SIZE) break;
+      const tailRow = rows[rows.length - 1];
+      const nextRowid = tailRow ? Number(tailRow.__backup_rowid) : NaN;
+      if (!Number.isFinite(nextRowid) || nextRowid <= lastRowid) break;
+      lastRowid = nextRowid;
+    }
+    if (headerWritten) {
+      onChunk('\n');
+    }
+  }
+}
+
+function decodeStrictBase64Bytes(raw) {
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(trimmed)) {
+    return null;
+  }
+  try {
+    return base64ToUint8Array(trimmed);
+  } catch {
+    return null;
+  }
+}
+
 eventsCoreRouter.get('/admin/backup-db', requireAdmin, async (c) => {
   try {
     const user = c.get('user');
-    const backupLimit = await checkRateLimit(c.env.DB, `admin_backup_${user ? user.id : 'anon'}`, 5, 3600, c.env);
+    const backupLimit = await checkRateLimit(c.env.DB, `admin_backup:${user ? user.id : 'anon'}`, 5, 3600, c.env);
     if (!backupLimit.allowed) {
       return c.json({ error: 'Too many database backup requests. Please wait before exporting again.' }, 429);
     }
@@ -120,32 +328,7 @@ eventsCoreRouter.get('/admin/backup-db', requireAdmin, async (c) => {
     const timestamp = new Date().toISOString();
     const dateStr = timestamp.slice(0, 10);
 
-    const { COMMUNITY_NAME } = resolveConfig(c.env);
-    const backupConfigs = {
-      baseball: {
-        db: c.env && (c.env.BASEBALL_DB || c.env.DB),
-        header: `-- ${COMMUNITY_NAME} Database Backup`,
-        filename: `baseball_backup_${dateStr}.sql`,
-        tables: [
-          'users', 'events', 'event_duties', 'attendees',
-          'duty_assignments', 'comments', 'default_duties',
-          'posts', 'banned_emails', 'app_settings', 'batting_practice_signups', 'waivers'
-        ]
-      },
-      chat: {
-        db: c.env && c.env.CHAT_DB,
-        header: `-- ${COMMUNITY_NAME} Clubhouse (CHAT_DB) Database Backup`,
-        filename: `clubhouse_chat_backup_${dateStr}.sql`,
-        tables: [
-          'channels', 'channel_members', 'messages', 'message_reactions',
-          'chat_attachments', 'user_crypto_keys', 'channel_key_shares',
-          'voice_participants', 'rtc_signals', 'sync_events',
-          'chat_reports', 'user_mutes', 'clubhouse_gifs'
-        ]
-      }
-    };
-
-    const config = backupConfigs[dbParam];
+    const config = resolveBackupTargetConfig(c, dbParam, dateStr);
     if (!config) {
       return c.json({ error: 'Invalid database target. Use "baseball" or "chat".' }, 400);
     }
@@ -154,51 +337,19 @@ eventsCoreRouter.get('/admin/backup-db', requireAdmin, async (c) => {
     }
 
     const db = config.db;
-    const tables = config.tables;
+    const tables = config.scrubbedTables;
     const encoder = new TextEncoder();
-    const PAGE_SIZE = 100;
 
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          controller.enqueue(encoder.encode(`${config.header}\n-- Exported: ${timestamp}\n\n`));
-          for (const table of tables) {
-            let offset = 0;
-            let headerWritten = false;
-            const tableQuery = table === 'app_settings'
-              ? `SELECT * FROM "app_settings" WHERE key NOT IN ('waiver_provenance_secret', 'appscript_upload_url') LIMIT ? OFFSET ?`
-              : `SELECT * FROM "${table}" LIMIT ? OFFSET ?`;
-            while (true) {
-              const { results: rows } = await db.prepare(tableQuery).bind(PAGE_SIZE, offset).all();
-              if (!rows || rows.length === 0) break;
-              if (!headerWritten) {
-                controller.enqueue(encoder.encode(`-- Table: ${table}\n`));
-                headerWritten = true;
-              }
-              let chunk = '';
-              for (const row of rows) {
-                const cols = Object.keys(row).map(k => `"${String(k).replace(/"/g, '""')}"`).join(', ');
-                const vals = Object.values(row).map(v => {
-                  if (v === null || v === undefined) return 'NULL';
-                  if (typeof v === 'number') return Number.isFinite(v) ? v : 'NULL';
-                  if (v instanceof Uint8Array) {
-                    return `X'${Array.from(v, (b) => b.toString(16).padStart(2, '0')).join('')}'`;
-                  }
-                  return `'${String(v).replace(/\0/g, '').replace(/'/g, "''")}'`;
-                }).join(', ');
-                chunk += `INSERT OR IGNORE INTO "${table}" (${cols}) VALUES (${vals});\n`;
-              }
-              controller.enqueue(encoder.encode(chunk));
-              if (rows.length < PAGE_SIZE) break;
-              offset += rows.length;
-            }
-            if (headerWritten) {
-              controller.enqueue(encoder.encode('\n'));
-            }
-          }
+          controller.enqueue(encoder.encode(`${config.scrubbedHeader}\n-- Exported: ${timestamp}\n\n`));
+          await writeBackupTables(db, tables, 'scrubbed', (textChunk) => {
+            controller.enqueue(encoder.encode(textChunk));
+          });
           controller.close();
         } catch (streamErr) {
-          console.error('[Backup] Stream error:', streamErr);
+          logEvent('error', 'backup_scrubbed_stream_failed', { err: streamErr });
           controller.error(streamErr);
         }
       }
@@ -208,15 +359,115 @@ eventsCoreRouter.get('/admin/backup-db', requireAdmin, async (c) => {
       status: 200,
       headers: {
         'Content-Type': 'application/sql; charset=utf-8',
-        'Content-Disposition': `attachment; filename="${config.filename}"`,
+        'Content-Disposition': `attachment; filename="${config.scrubbedFilename}"`,
         'Cache-Control': 'no-store',
         'X-Content-Type-Options': 'nosniff',
         'X-Frame-Options': 'DENY'
       }
     });
   } catch (err) {
-    console.error('[Backup] Error creating SQL dump:', err);
+    logEvent('error', 'backup_scrubbed_export_failed', { err });
     return c.text('Failed to generate database backup.', 500);
+  }
+});
+
+eventsCoreRouter.post('/admin/backup-db', requireAdmin, async (c) => {
+  try {
+    const user = c.get('user');
+    const backupLimit = await checkRateLimit(c.env.DB, `admin_backup_dr:${user ? user.id : 'anon'}`, 5, 3600, c.env);
+    if (!backupLimit.allowed) {
+      return c.json({ error: 'Too many database backup requests. Please wait before exporting again.' }, 429);
+    }
+    const dbParam = (c.req.query('db') || 'baseball').toLowerCase();
+    const timestamp = new Date().toISOString();
+    const dateStr = timestamp.slice(0, 10);
+
+    const config = resolveBackupTargetConfig(c, dbParam, dateStr);
+    if (!config) {
+      return c.json({ error: 'Invalid database target. Use "baseball" or "chat".' }, 400);
+    }
+    if (!config.db) {
+      return c.json({ error: `Database binding for "${dbParam}" is unavailable.` }, 503);
+    }
+
+    let body = null;
+    try {
+      body = await c.req.json();
+    } catch {
+      body = null;
+    }
+    if (!body || typeof body !== 'object') {
+      return c.json({ error: 'Invalid JSON request body for encrypted DR backup.' }, 400);
+    }
+
+    const wrappingKeyBytes = decodeStrictBase64Bytes(body.wrappingKey);
+    if (!wrappingKeyBytes || wrappingKeyBytes.byteLength !== 32 || !wrappingKeyBytes.some((b) => b !== 0)) {
+      return c.json({ error: 'Invalid or missing 256-bit wrappingKey (expected 32 base64-encoded random bytes).' }, 400);
+    }
+
+    const saltBytes = decodeStrictBase64Bytes(body.kdfSalt);
+    if (!saltBytes || saltBytes.byteLength < 16 || saltBytes.byteLength > 64 || !saltBytes.some((b) => b !== 0)) {
+      wrappingKeyBytes.fill(0);
+      return c.json({ error: 'Invalid or missing kdfSalt (expected 16-64 base64-encoded random bytes).' }, 400);
+    }
+
+    const iterations = Number(body.kdfIterations);
+    if (!Number.isInteger(iterations) || iterations < 100000 || iterations > 10000000) {
+      wrappingKeyBytes.fill(0);
+      return c.json({ error: 'Invalid or missing kdfIterations (expected integer between 100000 and 10000000).' }, 400);
+    }
+
+    const sqlParts = [`${config.drHeader}\n-- Exported: ${timestamp}\n\n`];
+    await writeBackupTables(config.db, config.drTables, 'dr', (textChunk) => {
+      sqlParts.push(textChunk);
+    });
+    const plainBytes = new TextEncoder().encode(sqlParts.join(''));
+
+    const ivBytes = new Uint8Array(12);
+    crypto.getRandomValues(ivBytes);
+    const cryptoKey = await crypto.subtle.importKey(
+      'raw',
+      wrappingKeyBytes,
+      { name: 'AES-GCM' },
+      false,
+      ['encrypt']
+    );
+    wrappingKeyBytes.fill(0);
+
+    const cipherBuffer = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv: ivBytes, tagLength: 128 },
+      cryptoKey,
+      plainBytes
+    );
+
+    const envelope = {
+      format: 'pbf-dr-backup-v1',
+      cipher: 'AES-256-GCM',
+      db: dbParam,
+      exportedAt: timestamp,
+      iv: arrayBufferToBase64(ivBytes),
+      ciphertext: arrayBufferToBase64(cipherBuffer),
+      kdf: {
+        algorithm: 'PBKDF2',
+        hash: 'SHA-256',
+        iterations,
+        salt: String(body.kdfSalt).trim()
+      }
+    };
+
+    return new Response(JSON.stringify(envelope), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Content-Disposition': `attachment; filename="${config.drFilename}"`,
+        'Cache-Control': 'no-store',
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY'
+      }
+    });
+  } catch (err) {
+    logEvent('error', 'backup_dr_export_failed', { err });
+    return c.json({ error: 'Failed to generate encrypted disaster-recovery backup.' }, 500);
   }
 });
 
@@ -369,9 +620,17 @@ eventsCoreRouter.get('/:id', async (c) => {
       db.prepare(`
         SELECT d.*,
           COALESCE((
-            SELECT json_group_array(json_object('attendee_id', a.id, 'name', a.name))
+            SELECT json_group_array(json_object(
+              'attendee_id', a.id,
+              'user_id', a.user_id,
+              'name', a.name,
+              'email', a.email,
+              'roster_consent', COALESCE(a.roster_consent, 0),
+              'roster_visibility', COALESCE(u.roster_visibility, 0)
+            ))
             FROM duty_assignments da
             JOIN attendees a ON da.attendee_id = a.id
+            LEFT JOIN users u ON a.user_id = u.id
             WHERE da.duty_id = d.id AND a.status = 'attending'
           ), '[]') as assigned_players
         FROM event_duties d
@@ -379,12 +638,15 @@ eventsCoreRouter.get('/:id', async (c) => {
         ORDER BY d.sort_order ASC, d.id ASC
       `).bind(eventId),
       db.prepare(`
-        SELECT a.id, a.name, a.status, a.gear_bringing,
+        SELECT a.id, a.user_id, a.name, a.email, a.status, a.gear_bringing, a.notes,
           COALESCE(a.players_count, 1 + COALESCE(a.additional_guests, 0)) as players_count,
           COALESCE(a.spectators_count, 0) as spectators_count,
           a.additional_guests, a.guest_names, a.is_guest, a.created_at,
+          COALESCE(a.roster_consent, 0) as roster_consent,
           u.bio,
           COALESCE(u.waiver_status, 'none') as waiver_status,
+          COALESCE(u.roster_visibility, 0) as roster_visibility,
+          COALESCE(u.profile_sharing, 0) as profile_sharing,
           ${AVATAR_EXPR} as avatar_url,
           (
             SELECT group_concat(d.title, ', ')
@@ -398,11 +660,15 @@ eventsCoreRouter.get('/:id', async (c) => {
         ORDER BY a.created_at ASC
       `).bind(eventId),
       db.prepare(`
-        SELECT a.id, a.name, a.status,
+        SELECT a.id, a.user_id, a.name, a.email, a.status, a.gear_bringing, a.notes,
           COALESCE(a.players_count, 1 + COALESCE(a.additional_guests, 0)) as players_count,
           COALESCE(a.spectators_count, 0) as spectators_count,
           a.additional_guests, a.guest_names, a.is_guest, a.created_at,
+          COALESCE(a.roster_consent, 0) as roster_consent,
           u.bio,
+          COALESCE(u.waiver_status, 'none') as waiver_status,
+          COALESCE(u.roster_visibility, 0) as roster_visibility,
+          COALESCE(u.profile_sharing, 0) as profile_sharing,
           ${AVATAR_EXPR} as avatar_url
         FROM attendees a
         LEFT JOIN users u ON a.user_id = u.id
@@ -411,6 +677,8 @@ eventsCoreRouter.get('/:id', async (c) => {
       `).bind(eventId),
       db.prepare(`
         SELECT c.id, c.author_name, c.content, c.created_at, c.user_id,
+          COALESCE(u.roster_visibility, 0) as roster_visibility,
+          COALESCE(u.profile_sharing, 0) as profile_sharing,
           ${AVATAR_EXPR} as avatar_url,
           u.bio
         FROM comments c
@@ -421,10 +689,14 @@ eventsCoreRouter.get('/:id', async (c) => {
       db.prepare(`
         SELECT bp.id, bp.event_id, bp.user_id, bp.attendee_id, bp.slot_number,
           bp.player_name, bp.notes, bp.created_at,
+          COALESCE(a.roster_consent, 0) as roster_consent,
+          COALESCE(u.roster_visibility, 0) as roster_visibility,
+          COALESCE(u.profile_sharing, 0) as profile_sharing,
           ${AVATAR_EXPR} as avatar_url,
           u.role as user_role
         FROM batting_practice_signups bp
         LEFT JOIN users u ON bp.user_id = u.id
+        LEFT JOIN attendees a ON bp.attendee_id = a.id
         WHERE bp.event_id = ?
         ORDER BY bp.slot_number ASC
       `).bind(eventId)
@@ -437,6 +709,8 @@ eventsCoreRouter.get('/:id', async (c) => {
             COALESCE(a.players_count, 1 + COALESCE(a.additional_guests, 0)) as players_count,
             COALESCE(a.spectators_count, 0) as spectators_count,
             a.additional_guests, a.guest_names,
+            COALESCE(a.notify_emails, 0) as notify_emails,
+            COALESCE(a.roster_consent, 0) as roster_consent,
             (SELECT json_group_array(duty_id) FROM duty_assignments WHERE attendee_id = a.id) as duty_ids
           FROM attendees a
           WHERE a.event_id = ? AND (a.user_id = ? OR a.email = ?)
@@ -507,7 +781,7 @@ eventsCoreRouter.get('/:id', async (c) => {
     const certifiedShiftsEnabled = cfg.FEATURE_CERTIFIED_SHIFTS;
     const battingPracticeEnabled = cfg.FEATURE_BATTING_PRACTICE;
 
-    const isOrganizer = Boolean(user && user.canManageEvents);
+    const isOrganizer = isViewerOrganizer(user);
     const canViewRoster = Boolean(user || (myRsvp && myRsvp.id));
     const tierInfo = certifiedShiftsEnabled
       ? getTaskTier(event.event_date)
@@ -578,15 +852,10 @@ eventsCoreRouter.get('/:id', async (c) => {
 
       return {
         ...d,
-        assigned_players: (d.assigned_players || []).map(p => {
-          const canSeeVolunteerName = Boolean(
-            (user && canViewRoster) ||
-            (!user && myRsvp && p.attendee_id === myRsvp.id)
-          );
-          return {
-            attendee_id: p.attendee_id,
-            name: canSeeVolunteerName ? p.name : ''
-          };
+        assigned_players: sanitizeDutyAssignedPlayers(d.assigned_players || [], {
+          user,
+          isOrganizer,
+          myRsvp
         }),
         duty_type: dType.type,
         is_paid: dType.isPaid,
@@ -643,21 +912,27 @@ eventsCoreRouter.get('/:id', async (c) => {
     }
 
     const canViewBpOrder = Boolean(battingPracticeEnabled && user && canUserAccessEvent(user, earlyAllowedList));
-    const visibleBpSignups = canViewBpOrder ? decoratedBpSignups : [];
+    const visibleBpSignups = canViewBpOrder
+      ? sanitizeBpSignupsForViewer(decoratedBpSignups, { user, isOrganizer, myRsvp })
+      : [];
 
-    const visibleAttendees = !canViewRoster
+    const rawVisibleAttendees = !canViewRoster
       ? []
       : (user ? attendees : attendees.filter(a => myRsvp && a.id === myRsvp.id));
-    const visibleWaitlist = !canViewRoster
+    const rawVisibleWaitlist = !canViewRoster
       ? []
       : (user ? waitlist : waitlist.filter(w => myRsvp && w.id === myRsvp.id));
+
+    const visibleAttendees = sanitizeAttendeesForViewer(rawVisibleAttendees, { user, isOrganizer, myRsvp });
+    const visibleWaitlist = sanitizeAttendeesForViewer(rawVisibleWaitlist, { user, isOrganizer, myRsvp });
+    const visibleComments = sanitizeCommentsForViewer(comments, { user, isOrganizer });
 
     return c.json({
       event: safeEventObj,
       duties: sanitizedDuties,
       attendees: visibleAttendees,
       waitlist: visibleWaitlist,
-      comments,
+      comments: visibleComments,
       bp_signups: visibleBpSignups,
       bpCount: battingPracticeEnabled ? bpSignups.length : 0,
       canViewBpOrder,

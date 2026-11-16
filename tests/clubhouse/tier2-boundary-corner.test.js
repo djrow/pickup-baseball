@@ -837,14 +837,12 @@ async function runTier2(t, ctx) {
         assert.equal(capRes.status, 429, 'Voice room at 24 active participants must reject a 25th entrant');
         chatDb.prepare('DELETE FROM voice_participants WHERE user_id BETWEEN 9101 AND 9124').run();
 
-        // 3. Regular player cannot spoof message_type: 'system'
+        // 3. Regular player cannot spoof message_type: 'system' (fail-closed 403 per Ticket #42)
         const spoofMsg = await apiReq('POST', '/api/channels/general/messages', playerCookie, {
           content: 'Fake system notice',
           message_type: 'system'
         });
-        assert.equal(spoofMsg.status, 201);
-        assert.equal(spoofMsg.data.message.message_type, 'text', 'Player message_type: system must be coerced to text');
-        chatDb.prepare('DELETE FROM messages WHERE id = ?').run(spoofMsg.data.message.id);
+        assert.equal(spoofMsg.status, 403, 'Player submitting message_type: system must be rejected with 403');
 
         // 4. Stale key_epoch enforcement on E2EE private board (when key_epoch 2 exists in channel_key_shares)
         chatDb.prepare(`
@@ -1074,6 +1072,8 @@ async function runTier2(t, ctx) {
 
     const origRtcPeerConn = global.RTCPeerConnection;
     const origRtcDesc = global.RTCSessionDescription;
+    const prevStore = global.ClubhouseStore;
+    delete global.ClubhouseStore;
     let capturedPc = null;
     try {
       global.RTCSessionDescription = function (d) { return d; };
@@ -1113,6 +1113,7 @@ async function runTier2(t, ctx) {
       ClubhouseRTC.leaveVoiceChannel();
       global.RTCPeerConnection = origRtcPeerConn;
       global.RTCSessionDescription = origRtcDesc;
+      if (prevStore !== undefined) global.ClubhouseStore = prevStore;
     }
 
     // 2. Backend security helpers: expanded IPv6 SSRF block, guest/public channel rank, email validation

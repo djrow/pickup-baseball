@@ -52,6 +52,7 @@
     collapsedCategories: loadCollapsedCategories(),
     remoteStreams: {},
     revealedMutedMsgIds: {},
+    revealedBlockedMsgIds: {},
     reasonAction: null,
     starterGifs: [],
     starterGifsLoaded: false,
@@ -69,10 +70,158 @@
   }
 
   function isClubhouseCertifiedShiftsEnabled() {
-    if (window.API && typeof window.API.isFeatureEnabled === 'function') {
+    if (typeof window !== 'undefined' && window.API && typeof window.API.isFeatureEnabled === 'function') {
       return window.API.isFeatureEnabled('certifiedShifts', uiState.publicConfig);
     }
     return true;
+  }
+
+  function tClubhouse(key, fallback, vars) {
+    if (typeof window !== 'undefined' && window.API && typeof window.API.t === 'function') {
+      return window.API.t(key, fallback, vars);
+    }
+    var str = fallback;
+    if (vars && typeof vars === 'object') {
+      var keys = Object.keys(vars);
+      for (var i = 0; i < keys.length; i++) {
+        str = str.replace(new RegExp('\\{' + keys[i] + '\\}', 'g'), String(vars[keys[i]]));
+      }
+    }
+    return str;
+  }
+
+  function findChannelInStore(channelId) {
+    var list = (Store && Store.state && Array.isArray(Store.state.channels)) ? Store.state.channels : [];
+    for (var i = 0; i < list.length; i++) {
+      if (Number(list[i].id) === Number(channelId)) return list[i];
+    }
+    return null;
+  }
+
+  function isAnnouncementChannel(ch) {
+    return Boolean(ch && (ch.channel_type === 'announcement' || ch.slug === 'announcements'));
+  }
+
+  function isChannelBlockedDm(ch) {
+    if (!ch || ch.channel_type !== 'dm' || !Store || typeof Store.isPeerBlockedByMe !== 'function') {
+      return false;
+    }
+    var myId = (Store.state && Store.state.user && Store.state.user.id) ? Number(Store.state.user.id) : 0;
+    if (Array.isArray(ch.member_ids) && ch.member_ids.length > 0) {
+      for (var i = 0; i < ch.member_ids.length; i++) {
+        var uid = Number(ch.member_ids[i]);
+        if (uid > 0 && uid !== myId && Store.isPeerBlockedByMe(uid)) return true;
+      }
+    }
+    if (typeof ch.slug === 'string') {
+      var m = /^dm-(\d+)-(\d+)$/.exec(ch.slug);
+      if (m) {
+        var id1 = Number(m[1]);
+        var id2 = Number(m[2]);
+        if (id1 > 0 && id1 !== myId && Store.isPeerBlockedByMe(id1)) return true;
+        if (id2 > 0 && id2 !== myId && Store.isPeerBlockedByMe(id2)) return true;
+      }
+    }
+    return false;
+  }
+
+  function showPeerBlockedFeedback(message) {
+    var text = String(message || tClubhouse('clubhouse.peer_blocked_dm_notice', '🚫 Direct messages are blocked between you and this member.'));
+    var typingEl = el('ch-typing-indicator');
+    if (typingEl) typingEl.textContent = text;
+    if (typeof window !== 'undefined' && window.PBFDialog) {
+      if (typeof window.PBFDialog.toast === 'function') {
+        window.PBFDialog.toast(text, { type: 'error' });
+        return;
+      }
+      if (typeof window.PBFDialog.alert === 'function') {
+        window.PBFDialog.alert(text, { title: tClubhouse('clubhouse.peer_block_confirm_title', '🚫 Block Member') });
+      }
+    }
+  }
+
+  function handlePeerActionError(err, fallbackMsg) {
+    if (err && err.code === 'PEER_BLOCKED') {
+      showPeerBlockedFeedback(err.message);
+      return;
+    }
+    if (typeof window !== 'undefined' && window.PBFDialog && typeof window.PBFDialog.toast === 'function') {
+      window.PBFDialog.toast((err && err.message) || fallbackMsg || 'Action failed.', { type: 'error' });
+    }
+  }
+
+  function isClubhouseTurnConfigured() {
+    if (uiState.publicConfig && typeof uiState.publicConfig.turnConfigured === 'boolean') {
+      if (uiState.publicConfig.turnConfigured) return true;
+    }
+    if (RtcEngine && typeof RtcEngine.isTurnConfigured === 'function') {
+      return Boolean(RtcEngine.isTurnConfigured());
+    }
+    return false;
+  }
+
+  function syncPrivacyRelayToggleUi() {
+    var relayCheckbox = el('ch-privacy-relay-toggle');
+    if (!relayCheckbox) return;
+    var turnConfigured = isClubhouseTurnConfigured();
+    var u = Store && Store.state ? Store.state.user : null;
+    var userWantsRelay = Boolean(u && (u.privacyRelayMode || u.privacy_relay_mode));
+
+    var noteEl = el('ch-privacy-relay-turn-note');
+    if (!noteEl && typeof document !== 'undefined' && relayCheckbox.parentNode) {
+      noteEl = document.createElement('div');
+      noteEl.id = 'ch-privacy-relay-turn-note';
+      noteEl.style.cssText = 'font-size:11.5px;margin-top:-8px;margin-bottom:12px;';
+      if (relayCheckbox.parentNode.parentNode && typeof relayCheckbox.parentNode.parentNode.insertBefore === 'function') {
+        relayCheckbox.parentNode.parentNode.insertBefore(noteEl, relayCheckbox.parentNode.nextSibling || null);
+      } else if (typeof relayCheckbox.parentNode.appendChild === 'function') {
+        relayCheckbox.parentNode.appendChild(noteEl);
+      }
+    }
+
+    if (!turnConfigured) {
+      relayCheckbox.checked = false;
+      relayCheckbox.disabled = true;
+      if (typeof relayCheckbox.setAttribute === 'function') {
+        relayCheckbox.setAttribute('aria-disabled', 'true');
+      }
+      var unavailMsg = tClubhouse(
+        'rtc_turn_unavailable_note',
+        'Unavailable: No TURN privacy relay server is configured on this deployment.'
+      );
+      relayCheckbox.title = unavailMsg;
+      if (noteEl) {
+        noteEl.textContent = unavailMsg;
+        if (noteEl.style) noteEl.style.color = '#fbbf24';
+        if (noteEl.classList && typeof noteEl.classList.remove === 'function') {
+          noteEl.classList.remove('hidden');
+        }
+      }
+      if (RtcEngine && RtcEngine.state) {
+        RtcEngine.state.privacyRelayMode = false;
+      }
+    } else {
+      relayCheckbox.disabled = false;
+      if (typeof relayCheckbox.removeAttribute === 'function') {
+        relayCheckbox.removeAttribute('aria-disabled');
+      }
+      relayCheckbox.checked = userWantsRelay;
+      var availMsg = tClubhouse(
+        'rtc_turn_available_note',
+        'TURN privacy relay server is configured and ready.'
+      );
+      relayCheckbox.title = availMsg;
+      if (noteEl) {
+        noteEl.textContent = availMsg;
+        if (noteEl.style) noteEl.style.color = 'var(--ch-text-secondary)';
+        if (noteEl.classList && typeof noteEl.classList.remove === 'function') {
+          noteEl.classList.remove('hidden');
+        }
+      }
+      if (RtcEngine && RtcEngine.state) {
+        RtcEngine.state.privacyRelayMode = relayCheckbox.checked;
+      }
+    }
   }
 
   function isMemberRole(role) {
@@ -150,7 +299,7 @@
         ? '<span style="color:var(--ch-green);font-size:11px;">🔐 E2EE</span>'
         : '<span style="color:#fbbf24;font-size:11px;">⏳ Needs Vault</span>';
       html += '<label style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 2px;font-size:12px;cursor:pointer;">';
-      html += '<span><input type="checkbox" class="board-invite-member-cb" value="' + Number(m.id) + '"' + checkedAttr + ' /> ' + escapeHtml(m.name || ('Player #' + m.id)) + '</span>';
+      html += '<span><input type="checkbox" class="board-invite-member-cb" value="' + Number(m.id) + '"' + checkedAttr + ' /> ' + escapeHtml(m.name || ('Member #' + m.id)) + '</span>';
       html += keyBadge + '</label>';
     }
     listEl.innerHTML = html || '<div style="font-size:12px;color:var(--ch-text-muted);">Only you (creator) will be added for now.</div>';
@@ -396,13 +545,7 @@
       facCard.style.display = showFac ? 'block' : 'none';
     }
 
-    var relayCheckbox = el('ch-privacy-relay-toggle');
-    if (relayCheckbox) {
-      relayCheckbox.checked = Boolean(u.privacyRelayMode || u.privacy_relay_mode);
-      if (RtcEngine && RtcEngine.state) {
-        RtcEngine.state.privacyRelayMode = relayCheckbox.checked;
-      }
-    }
+    syncPrivacyRelayToggleUi();
   }
 
   function handleClubhouseOptToggle(nextOptIn, btnEl) {
@@ -654,6 +797,14 @@
 
     var ch = channel || uiState.activeChannel;
     var isE2eeCh = Store.requiresE2eeChannel ? Store.requiresE2eeChannel(ch) : (ch && (ch.channel_type === 'dm' || ch.channel_type === 'group_dm' || ch.is_private === 1));
+    if (isChannelBlockedDm(ch) && Store.state.user) {
+      bannerEl.classList.remove('hidden');
+      if (textEl) {
+        textEl.textContent = tClubhouse('clubhouse.peer_blocked_dm_notice', '🚫 Direct messages are blocked between you and this member.');
+      }
+      if (vaultBtn) vaultBtn.style.display = 'none';
+      return;
+    }
     if (!ch || !isE2eeCh || !Store.state.user) {
       bannerEl.classList.add('hidden');
       return;
@@ -670,7 +821,7 @@
         if (textEl) {
           textEl.textContent = (status.isPrivateBoard)
             ? '⏳ Private Board E2EE requires all invited members to set up 🔐 E2EE Key Vault. Waiting on invited member(s) to enroll.'
-            : '⏳ Direct Messages require both players to set up 🔐 E2EE Key Vault. Waiting on recipient to enroll their key vault.';
+            : '⏳ Direct Messages require both members to set up 🔐 E2EE Key Vault. Waiting on recipient to enroll their key vault.';
         }
         if (vaultBtn) vaultBtn.style.display = 'none';
       } else {
@@ -692,22 +843,22 @@
       return;
     }
     btn.classList.remove('hidden');
-    btn.textContent = '🛡️ Verify Key';
+    btn.textContent = tClubhouse('clubhouse.verify_key_btn', '🛡️ Verify Key');
     btn.style.color = '';
     btn.style.borderColor = '';
     Store.getChannelVerificationInfo(ch.id).then(function (info) {
       if (!uiState.activeChannel || Number(uiState.activeChannel.id) !== Number(ch.id)) return;
       if (!info || !info.supported) return;
       if (info.anyKeyChanged) {
-        btn.textContent = '⚠️ Key Changed!';
+        btn.textContent = tClubhouse('clubhouse.verify_key_changed_btn', '⚠️ Key Changed!');
         btn.style.color = '#fde68a';
         btn.style.borderColor = '#f59e0b';
       } else if (info.allVerified) {
-        btn.textContent = '✓ Key Verified';
+        btn.textContent = tClubhouse('clubhouse.verify_key_verified_btn', '✓ Key Verified');
         btn.style.color = '#6ee7b7';
         btn.style.borderColor = 'rgba(16,185,129,0.5)';
       } else {
-        btn.textContent = '🛡️ Verify Key';
+        btn.textContent = tClubhouse('clubhouse.verify_key_btn', '🛡️ Verify Key');
         btn.style.color = '';
         btn.style.borderColor = '';
       }
@@ -724,12 +875,20 @@
     if (!modal || !uiState.activeChannel || typeof Store.getChannelVerificationInfo !== 'function') return;
 
     if (statusEl) statusEl.textContent = '';
-    if (peersEl) peersEl.innerHTML = '<div style="color:var(--ch-text-muted);">Computing cryptographic fingerprints...</div>';
+    if (peersEl) {
+      peersEl.innerHTML = '<div style="color:var(--ch-text-muted);">' +
+        escapeHtml(tClubhouse('clubhouse.verify_computing', 'Computing cryptographic fingerprints...')) +
+        '</div>';
+    }
     modal.classList.remove('hidden');
 
     Store.getChannelVerificationInfo(uiState.activeChannel.id).then(function (info) {
       if (!info || !info.supported) {
-        if (peersEl) peersEl.innerHTML = '<div>Key verification is available on E2EE DMs and Private Boards.</div>';
+        if (peersEl) {
+          peersEl.innerHTML = '<div>' +
+            escapeHtml(tClubhouse('clubhouse.verify_unsupported', 'Key verification is available on E2EE DMs and Private Boards.')) +
+            '</div>';
+        }
         return;
       }
       if (warnEl) {
@@ -748,30 +907,34 @@
 
       var html = '';
       html += '<div style="padding:8px;border:1px solid var(--ch-border);border-radius:6px;margin-bottom:8px;">';
-      html += '<div style="font-weight:700;margin-bottom:3px;">Your Key Fingerprint</div>';
+      html += '<div style="font-weight:700;margin-bottom:3px;">' + escapeHtml(tClubhouse('clubhouse.verify_your_fp', 'Your Key Fingerprint')) + '</div>';
       html += '<div style="font-family:monospace;font-size:11.5px;color:var(--ch-text-secondary);word-break:break-word;">' +
-        escapeHtml(info.myFingerprint || 'Not enrolled on this browser yet') + '</div></div>';
+        escapeHtml(info.myFingerprint || tClubhouse('clubhouse.verify_not_enrolled', 'Not enrolled on this browser yet')) + '</div></div>';
 
       var peers = info.peers || [];
       for (var i = 0; i < peers.length; i++) {
         var p = peers[i];
         html += '<div style="padding:8px;border:1px solid var(--ch-border);border-radius:6px;margin-bottom:8px;">';
         html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px;">';
-        html += '<strong>' + escapeHtml(p.name) + '</strong>';
+        var verBadge = (p.hasKey && p.keyVersion) ? (' <span style="font-size:11px;color:var(--ch-text-muted);font-weight:400;">(v' + Number(p.keyVersion) + ')</span>') : '';
+        html += '<strong>' + escapeHtml(p.name) + verBadge + '</strong>';
         if (p.hasKey) {
           if (p.keyChangedWarning) {
-            html += '<button type="button" class="ch-promote-btn btn-verify-peer-fp" data-peer-id="' + Number(p.userId) + '" data-fp="' + escapeHtml(p.fingerprint) + '" style="border-color:#f59e0b;color:#fde68a;">⚠️ Re-Verify New Key</button>';
+            html += '<button type="button" class="ch-promote-btn btn-verify-peer-fp" data-peer-id="' + Number(p.userId) + '" data-fp="' + escapeHtml(p.fingerprint) + '" style="border-color:#f59e0b;color:#fde68a;">' + escapeHtml(tClubhouse('clubhouse.verify_reverify_btn', '⚠️ Re-Verify New Key')) + '</button>';
           } else if (p.verified) {
-            html += '<span style="color:#6ee7b7;font-weight:700;">✓ Verified</span>';
+            html += '<span style="color:#6ee7b7;font-weight:700;">' + escapeHtml(tClubhouse('clubhouse.verify_verified_badge', '✓ Verified')) + '</span>';
           } else {
-            html += '<button type="button" class="ch-promote-btn btn-verify-peer-fp" data-peer-id="' + Number(p.userId) + '" data-fp="' + escapeHtml(p.fingerprint) + '">✓ Mark Verified</button>';
+            html += '<button type="button" class="ch-promote-btn btn-verify-peer-fp" data-peer-id="' + Number(p.userId) + '" data-fp="' + escapeHtml(p.fingerprint) + '">' + escapeHtml(tClubhouse('clubhouse.verify_mark_btn', '✓ Mark Verified')) + '</button>';
           }
         } else {
-          html += '<span style="color:#fbbf24;">⏳ No E2EE Vault</span>';
+          html += '<span style="color:#fbbf24;">' + escapeHtml(tClubhouse('clubhouse.verify_no_vault', '⏳ No E2EE Vault')) + '</span>';
         }
         html += '</div>';
         html += '<div style="font-family:monospace;font-size:11.5px;color:var(--ch-text-secondary);word-break:break-word;">' +
-          escapeHtml(p.fingerprint || 'Waiting for member to enroll key vault') + '</div>';
+          escapeHtml(p.fingerprint || tClubhouse('clubhouse.verify_waiting_member', 'Waiting for member to enroll key vault')) + '</div>';
+        if (p.keyRotatedAt) {
+          html += '<div style="font-size:11px;color:var(--ch-text-muted);margin-top:3px;">' + escapeHtml(tClubhouse('clubhouse.verify_last_rotated', 'Last rotated: {date}', { date: String(p.keyRotatedAt) })) + '</div>';
+        }
         html += '</div>';
       }
       if (peersEl) {
@@ -782,17 +945,21 @@
             var uid = Number(this.getAttribute('data-peer-id'));
             var fp = this.getAttribute('data-fp');
             Store.verifyPeerIdentityKey(uid, fp).then(function () {
-              if (statusEl) statusEl.textContent = '✓ Key fingerprint pinned & marked verified on this device.';
+              if (statusEl) statusEl.textContent = tClubhouse('clubhouse.verify_pinned_success', '✓ Key fingerprint pinned & marked verified on this device.');
               refreshVerifyKeyButton();
               openVerifyKeysModal();
             }).catch(function (err) {
-              if (statusEl) statusEl.textContent = 'Error: ' + err.message;
+              if (statusEl) statusEl.textContent = tClubhouse('clubhouse.verify_error', 'Error: {message}', { message: (err && err.message) || '' });
             });
           });
         }
       }
     }).catch(function (err) {
-      if (peersEl) peersEl.innerHTML = '<div style="color:#ff8a80;">Failed to load key info: ' + escapeHtml(err && err.message || '') + '</div>';
+      if (peersEl) {
+        peersEl.innerHTML = '<div style="color:#ff8a80;">' +
+          escapeHtml(tClubhouse('clubhouse.verify_load_failed', 'Failed to load key info: {message}', { message: (err && err.message) || '' })) +
+          '</div>';
+      }
     });
   }
 
@@ -806,7 +973,7 @@
       }
       return CryptoEngine.computeKeyFingerprint(keys.ecdhPublicJwk).then(function (fp) {
         if (fp) {
-          fpBox.textContent = 'Your ECDH Identity Key Fingerprint: ' + fp;
+          fpBox.textContent = tClubhouse('clubhouse.verify_own_fp', 'Your ECDH Identity Key Fingerprint: {fp}', { fp: fp });
           fpBox.classList.remove('hidden');
         }
       });
@@ -954,6 +1121,8 @@
         var emoji = target.getAttribute('data-rx-emoji');
         Store.toggleReaction(mId, emoji).then(function () {
           renderMessageStream();
+        }).catch(function (err) {
+          handlePeerActionError(err, 'Failed to toggle reaction.');
         });
       } else if (target.hasAttribute('data-thread-msg')) {
         openThreadDrawer(Number(target.getAttribute('data-thread-msg')));
@@ -973,6 +1142,8 @@
             if (nextText !== null && nextText.trim() && nextText.trim() !== currentText) {
               Store.editMessage(editId, nextText.trim(), Number(uiState.activeChannelId)).then(function () {
                 renderMessageStream();
+              }).catch(function (err) {
+                handlePeerActionError(err, 'Failed to edit message.');
               });
             }
           });
@@ -1039,12 +1210,37 @@
           renderMessageStream();
           renderMembersDirectory();
         });
+      } else if (target.hasAttribute('data-reveal-blocked-msg')) {
+        uiState.revealedBlockedMsgIds[Number(target.getAttribute('data-reveal-blocked-msg'))] = true;
+        renderMessageStream();
+      } else if (target.hasAttribute('data-unblock-peer')) {
+        confirmAndTogglePeerBlock(
+          Number(target.getAttribute('data-unblock-peer')),
+          target.getAttribute('data-unblock-peer-name') || 'Member'
+        );
+      } else if (target.hasAttribute('data-peer-block-uid')) {
+        confirmAndTogglePeerBlock(
+          Number(target.getAttribute('data-peer-block-uid')),
+          target.getAttribute('data-peer-block-name') || 'Member'
+        );
       }
     });
   }
 
+  function isSystemNoticeMsg(msg) {
+    if (!msg) return false;
+    if (msg.message_type === 'system' || msg.is_system) return true;
+    if (msg.metadata && typeof msg.metadata === 'object' && (msg.metadata.is_system || msg.metadata.audit_type === 'key_rotated')) {
+      return true;
+    }
+    return false;
+  }
+
   function getSafeMessageDisplayContent(msg) {
     if (!msg) return '';
+    if (isSystemNoticeMsg(msg)) {
+      return msg.decrypted_content || msg.content || '';
+    }
     var ch = null;
     for (var i = 0; i < Store.state.channels.length; i++) {
       if (Number(Store.state.channels[i].id) === Number(msg.channel_id || uiState.activeChannelId)) {
@@ -1061,16 +1257,73 @@
     return msg.decrypted_content || msg.content || '';
   }
 
+  function shouldCollapseMessageForPeerBlock(msg, channel) {
+    if (!msg || !msg.author_id) return false;
+    if (isSystemNoticeMsg(msg)) return false;
+    if (msg.is_hidden || msg.hidden_at) return false;
+    var ch = channel || findChannelInStore(msg.channel_id || uiState.activeChannelId) || uiState.activeChannel;
+    if (isAnnouncementChannel(ch)) return false;
+    if (!Store || typeof Store.isPeerBlockedByMe !== 'function' || !Store.isPeerBlockedByMe(msg.author_id)) {
+      return false;
+    }
+    if (uiState.revealedBlockedMsgIds && uiState.revealedBlockedMsgIds[msg.id]) {
+      return false;
+    }
+    return true;
+  }
+
+  function buildBlockedStubInnerHtml(msg, isMod, isReply) {
+    var key = isReply ? 'clubhouse.peer_blocked_reply_stub' : 'clubhouse.peer_blocked_msg_stub';
+    var fallback = isReply
+      ? '🚫 Reply from blocked member {name} hidden.'
+      : '🚫 Message from blocked member {name} hidden from your view.';
+    var templateHtml = escapeHtml(tClubhouse(key, fallback));
+    var textHtml = templateHtml.replace(/\{name\}/g, '<strong>' + escapeHtml(msg.author_name || 'Member') + '</strong>');
+    var html = '<div class="ch-msg-muted-stub ch-msg-blocked-stub">';
+    html += '<span>' + textHtml + '</span>';
+    html += '<span style="display:flex;gap:6px;flex-wrap:wrap;">';
+    html += '<button type="button" class="ch-thread-btn" data-reveal-blocked-msg="' + msg.id + '">' + escapeHtml(tClubhouse('clubhouse.peer_blocked_show_once', 'Show once')) + '</button>';
+    html += '<button type="button" class="ch-thread-btn" data-unblock-peer="' + msg.author_id + '" data-unblock-peer-name="' + escapeHtml(msg.author_name || 'Member') + '">' + escapeHtml(tClubhouse('clubhouse.peer_blocked_unblock_short', 'Unblock')) + '</button>';
+    if (isMod && !isReply) {
+      html += '<button type="button" class="ch-thread-btn" data-hide-msg="' + msg.id + '" title="Hide message for a stated reason">🙈 Hide</button>';
+    }
+    html += '</span></div>';
+    return html;
+  }
+
   function buildMessageCardHtml(msg, currentUser, isMod) {
     var html = '';
     var isHiddenByMod = Boolean(msg.is_hidden || msg.hidden_at);
-    var isMutedAuthor = Boolean(msg.author_id && Store.isUserMutedByMe(msg.author_id) && !uiState.revealedMutedMsgIds[msg.id]);
+    var isSystemMsg = isSystemNoticeMsg(msg);
+    var msgChannel = findChannelInStore(msg.channel_id || uiState.activeChannelId) || uiState.activeChannel;
+    var isBlockedAuthor = shouldCollapseMessageForPeerBlock(msg, msgChannel);
+    var isMutedAuthor = Boolean(!isSystemMsg && !isHiddenByMod && msg.author_id && Store.isUserMutedByMe && Store.isUserMutedByMe(msg.author_id) && !uiState.revealedMutedMsgIds[msg.id]);
     var displayContent = getSafeMessageDisplayContent(msg);
-    var initial = (msg.author_name || 'P').charAt(0).toUpperCase();
+    var initial = isSystemMsg ? '🛡️' : (msg.author_name || 'P').charAt(0).toUpperCase();
     var attachments = (!isHiddenByMod && Array.isArray(msg.attachments)) ? msg.attachments : [];
     var reactions = (!isHiddenByMod) ? groupReactions(msg.reactions) : [];
-    var isAuthor = Boolean(currentUser && Number(msg.author_id) === Number(currentUser.id));
-    var canDeleteMsg = Boolean(isAuthor || isMod || (currentUser && currentUser.role === 'organizer'));
+    var isAuthor = Boolean(!isSystemMsg && currentUser && Number(msg.author_id) === Number(currentUser.id));
+    var canDeleteMsg = Boolean(!isSystemMsg && (isAuthor || isMod || (currentUser && currentUser.role === 'organizer')));
+
+    if (isSystemMsg && !isHiddenByMod) {
+      html += '<article class="ch-msg-card ch-msg-system-audit" data-msg-id="' + msg.id + '" data-audit-type="' + escapeHtml((msg.metadata && msg.metadata.audit_type) || 'system') + '">';
+      html += '<div class="ch-msg-avatar" title="' + escapeHtml(tClubhouse('clubhouse.audit_notice_title', 'Server Security Audit Notice')) + '">🛡️</div>';
+      html += '<div class="ch-msg-body">';
+      html += '<div class="ch-msg-header">';
+      html += '<span class="ch-msg-author">' + escapeHtml(tClubhouse('clubhouse.audit_sender_name', 'Clubhouse Security Audit')) + '</span>';
+      html += '<span class="ch-badge role-organizer">' + escapeHtml(tClubhouse('clubhouse.audit_verified_badge', '🔐 Server Verified')) + '</span>';
+      html += '<span class="ch-msg-time">' + escapeHtml(formatTime(msg.created_at)) + '</span>';
+      html += '</div>';
+      html += '<div class="ch-msg-content" style="color:#fde68a;">' + escapeHtml(displayContent) + '</div>';
+      html += '</div></article>';
+      return html;
+    }
+
+    if (isBlockedAuthor) {
+      html += '<article class="ch-msg-card" data-msg-id="' + msg.id + '">';
+      html += '<div class="ch-msg-body">' + buildBlockedStubInnerHtml(msg, isMod, false) + '</div></article>';
+      return html;
+    }
 
     if (isMutedAuthor) {
       html += '<article class="ch-msg-card" data-msg-id="' + msg.id + '">';
@@ -1145,6 +1398,10 @@
     }
     if (!isAuthor && currentUser) {
       html += '<button type="button" class="ch-thread-btn" data-report-msg="' + msg.id + '" data-report-author="' + escapeHtml(msg.author_name) + '" title="Report message for a stated reason">🚩 Report</button>';
+      if (msg.author_id && !isSystemMsg) {
+        var authorBlocked = Boolean(Store.isPeerBlockedByMe && Store.isPeerBlockedByMe(msg.author_id));
+        html += '<button type="button" class="ch-thread-btn" data-peer-block-uid="' + msg.author_id + '" data-peer-block-name="' + escapeHtml(msg.author_name || 'Member') + '" data-peer-block-active="' + (authorBlocked ? '1' : '0') + '" title="' + escapeHtml(authorBlocked ? tClubhouse('clubhouse.peer_unblock_title', 'Unblock this member') : tClubhouse('clubhouse.peer_block_title', 'Block this member (hides their shared-channel messages and prevents 1:1 DMs and voice)')) + '">' + escapeHtml(authorBlocked ? tClubhouse('clubhouse.peer_unblock_btn', '🔓 Unblock') : tClubhouse('clubhouse.peer_block_btn', '🚫 Block')) + '</button>';
+      }
       if (isMod && msg.author_id) {
         html += '<button type="button" class="ch-thread-btn" data-mod-mute-uid="' + msg.author_id + '" data-mod-mute-name="' + escapeHtml(msg.author_name) + '" title="Blanket-mute this user in Clubhouse">🔇 Mod Mute</button>';
       }
@@ -1164,6 +1421,7 @@
     bindMessageStreamDelegation(streamEl);
 
     var chId = Number(uiState.activeChannelId);
+    var activeCh = findChannelInStore(chId) || uiState.activeChannel;
     var allMsgs = Store.state.messagesByChannel[chId] || [];
     var query = (uiState.searchQuery || '').toLowerCase().trim();
 
@@ -1171,9 +1429,12 @@
     for (var i = 0; i < allMsgs.length; i++) {
       var m = allMsgs[i];
       if (m.parent_message_id) continue;
-      var text = String(m.decrypted_content || m.content || '');
-      if (query && text.toLowerCase().indexOf(query) === -1 && String(m.author_name || '').toLowerCase().indexOf(query) === -1) {
-        continue;
+      if (query) {
+        if (shouldCollapseMessageForPeerBlock(m, activeCh)) continue;
+        var text = String(m.decrypted_content || m.content || '');
+        if (text.toLowerCase().indexOf(query) === -1 && String(m.author_name || '').toLowerCase().indexOf(query) === -1) {
+          continue;
+        }
       }
       filtered.push(m);
     }
@@ -1268,6 +1529,26 @@
     var container = el('ch-thread-messages');
     if (!container || !uiState.activeChannelId) return;
 
+    if (!container._threadBlockDelegationBound && typeof container.addEventListener === 'function') {
+      container._threadBlockDelegationBound = true;
+      container.addEventListener('click', function (ev) {
+        var btn = ev.target && typeof ev.target.closest === 'function' ? ev.target.closest('button') : null;
+        if (!btn || !container.contains(btn)) return;
+        if (btn.hasAttribute('data-reveal-blocked-msg')) {
+          uiState.revealedBlockedMsgIds[Number(btn.getAttribute('data-reveal-blocked-msg'))] = true;
+          loadThreadReplies(parentMessageId);
+        } else if (btn.hasAttribute('data-unblock-peer')) {
+          confirmAndTogglePeerBlock(
+            Number(btn.getAttribute('data-unblock-peer')),
+            btn.getAttribute('data-unblock-peer-name') || 'Member'
+          );
+        }
+      });
+    }
+
+    var activeCh = findChannelInStore(uiState.activeChannelId) || uiState.activeChannel;
+    var isMod = isModeratorUser(Store.state.user);
+
     Store.fetchChannelMessages(uiState.activeChannelId, { parentId: parentMessageId }).then(function (rows) {
       var replies = [];
       for (var k = 0; k < (rows || []).length; k++) {
@@ -1282,7 +1563,11 @@
       var html = '';
       for (var i = 0; i < replies.length; i++) {
         var r = replies[i];
-        if (Store.isUserMutedByMe(r.author_id)) {
+        if (shouldCollapseMessageForPeerBlock(r, activeCh)) {
+          html += '<div style="margin-bottom:6px;">' + buildBlockedStubInnerHtml(r, isMod, true) + '</div>';
+          continue;
+        }
+        if (Store.isUserMutedByMe && Store.isUserMutedByMe(r.author_id)) {
           html += '<div class="ch-msg-muted-stub" style="margin-bottom:6px;">🔇 Reply from muted user ' + escapeHtml(r.author_name) + ' hidden.</div>';
           continue;
         }
@@ -1474,7 +1759,7 @@
 
   function handleJoinVoiceLounge(channelId) {
     var userId = Store.state.user ? Store.state.user.id : null;
-    RtcEngine.joinVoiceChannel(channelId, userId).then(function (data) {
+    return RtcEngine.joinVoiceChannel(channelId, userId).then(function (data) {
       var mediaStage = el('ch-media-stage');
       if (mediaStage) mediaStage.classList.remove('hidden');
       if (data && Array.isArray(data.participants)) {
@@ -1482,7 +1767,15 @@
         renderChannelSidebar();
         renderVoiceVideoTiles();
       }
-    }).catch(function () {});
+      return data;
+    }).catch(function (err) {
+      if (err && err.code === 'PEER_BLOCKED') {
+        showPeerBlockedFeedback(err.message || tClubhouse('clubhouse.peer_blocked_voice_notice', '🚫 Voice calls are blocked between you and this member.'));
+      } else {
+        handlePeerActionError(err, 'Unable to join voice lounge.');
+      }
+      return null;
+    });
   }
 
   function renderVoiceVideoTiles() {
@@ -1521,7 +1814,7 @@
       if (vidEl && uiState.remoteStreams[pid]) {
         try {
           vidEl.srcObject = uiState.remoteStreams[pid];
-          vidEl.muted = Boolean(Store.isUserMutedByMe(pid));
+          vidEl.muted = Boolean((Store.isUserMutedByMe && Store.isUserMutedByMe(pid)) || (Store.isPeerBlockedByMe && Store.isPeerBlockedByMe(pid)));
           vidEl.style.display = 'block';
         } catch (e) { /* ignore video element srcObject attachment failure */ }
       }
@@ -1543,8 +1836,12 @@
   }
 
   function openOrCreateDmWithUser(targetUserId, targetUserName) {
-    if (!Store.state.user) return;
-    Store.createChannel({
+    if (!Store.state.user) return Promise.resolve(null);
+    if (Store.isPeerBlockedByMe && Store.isPeerBlockedByMe(targetUserId)) {
+      showPeerBlockedFeedback(tClubhouse('clubhouse.peer_blocked_dm_self', 'Unblock this member to start or send a 1:1 Direct Message.'));
+      return Promise.resolve(null);
+    }
+    return Store.createChannel({
       name: 'DM: ' + (targetUserName || 'Player'),
       category: 'Direct Messages',
       channel_type: 'dm',
@@ -1555,7 +1852,70 @@
         renderChannelSidebar();
         selectTextChannel(ch.id);
       }
-    }).catch(function () {});
+      return ch;
+    }).catch(function (err) {
+      if (err && err.code === 'PEER_BLOCKED') {
+        showPeerBlockedFeedback(err.message || tClubhouse('clubhouse.peer_blocked_dm_notice', '🚫 Direct messages are blocked between you and this member.'));
+      } else {
+        handlePeerActionError(err, 'Unable to open Direct Message.');
+      }
+      return null;
+    });
+  }
+
+  function confirmAndTogglePeerBlock(targetUserId, targetUserName) {
+    var uid = Number(targetUserId);
+    if (!uid || !Store || !Store.state || !Store.state.user) return Promise.resolve(false);
+    if (Number(Store.state.user.id) === uid) return Promise.resolve(false);
+    var uname = targetUserName || ('Member #' + uid);
+    var currentlyBlocked = Boolean(Store.isPeerBlockedByMe && Store.isPeerBlockedByMe(uid));
+    var title = currentlyBlocked
+      ? tClubhouse('clubhouse.peer_unblock_confirm_title', '🔓 Unblock Member')
+      : tClubhouse('clubhouse.peer_block_confirm_title', '🚫 Block Member');
+    var confirmMsg = currentlyBlocked
+      ? tClubhouse(
+          'clubhouse.peer_unblock_confirm_msg',
+          'Unblock {name}? You will be able to exchange 1:1 Direct Messages and voice calls again, and their shared-channel messages will be visible.',
+          { name: uname }
+        )
+      : tClubhouse(
+          'clubhouse.peer_block_confirm_msg',
+          'Block {name}? This prevents 1:1 Direct Messages and voice calls between you two, and hides their messages in shared channels and group DMs for you. Announcement boards and Moderator actions are not affected.',
+          { name: uname }
+        );
+    var confirmLabel = currentlyBlocked
+      ? tClubhouse('clubhouse.peer_unblock_btn_confirm', 'Unblock Member')
+      : tClubhouse('clubhouse.peer_block_btn_confirm', 'Block Member');
+
+    var confirmPromise = (typeof window !== 'undefined' && window.PBFDialog && typeof window.PBFDialog.confirm === 'function')
+      ? window.PBFDialog.confirm(confirmMsg, { title: title, danger: !currentlyBlocked, confirmLabel: confirmLabel })
+      : Promise.resolve(true);
+
+    return confirmPromise.then(function (confirmed) {
+      if (!confirmed) return false;
+      var op = currentlyBlocked ? Store.unblockPeer(uid) : Store.blockPeer(uid);
+      return Promise.resolve(op).then(function () {
+        renderMembersDirectory();
+        renderMessageStream();
+        renderVoiceVideoTiles();
+        refreshDmE2eeNotice();
+        if (uiState.activeThreadRoot) {
+          loadThreadReplies(uiState.activeThreadRoot.id);
+        }
+        if (typeof window !== 'undefined' && window.PBFDialog && typeof window.PBFDialog.toast === 'function') {
+          window.PBFDialog.toast(
+            currentlyBlocked
+              ? tClubhouse('clubhouse.peer_unblock_success', '{name} has been unblocked.', { name: uname })
+              : tClubhouse('clubhouse.peer_block_success', '{name} has been blocked.', { name: uname }),
+            { type: 'success' }
+          );
+        }
+        return true;
+      }).catch(function (err) {
+        handlePeerActionError(err, tClubhouse('clubhouse.peer_block_error', 'Unable to update block status.'));
+        return false;
+      });
+    });
   }
 
   /**
@@ -1662,7 +2022,8 @@
       var isPlaying = Boolean(sundayUserIds[mId] || m.status === 'attending');
       var isMod = Boolean(m.isModerator || m.is_moderator || m.role === 'admin');
       var isChatMuted = Boolean(m.chatMuted || m.chat_muted);
-      var isPersonallyMuted = Boolean(mId && Store.isUserMutedByMe(mId));
+      var isPersonallyMuted = Boolean(mId && Store.isUserMutedByMe && Store.isUserMutedByMe(mId));
+      var isPeerBlocked = Boolean(mId && Store.isPeerBlockedByMe && Store.isPeerBlockedByMe(mId));
 
       html += '<div style="padding:6px;border-bottom:1px solid var(--ch-border);display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">';
       html += '<div style="min-width:0;"><span>' + escapeHtml(memberDisplayName) + '</span> ';
@@ -1675,11 +2036,15 @@
       if (isChatMuted) {
         html += '<span class="ch-badge badge-muted">🔇 Muted</span> ';
       }
+      if (isPeerBlocked) {
+        html += '<span class="ch-badge badge-blocked">' + escapeHtml(tClubhouse('clubhouse.peer_block_badge', '🚫 Blocked')) + '</span> ';
+      }
       html += '</div>';
       if (u && mId) {
         html += '<div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">';
-        html += '<button type="button" class="ch-thread-btn" data-dm-uid="' + mId + '" data-dm-name="' + escapeHtml(memberDisplayName) + '" title="Direct Message">💬 DM</button>';
+        html += '<button type="button" class="ch-thread-btn" data-dm-uid="' + mId + '" data-dm-name="' + escapeHtml(memberDisplayName) + '" title="' + escapeHtml(isPeerBlocked ? tClubhouse('clubhouse.peer_blocked_dm_self', 'Unblock this member to start or send a 1:1 Direct Message.') : 'Direct Message') + '">💬 DM</button>';
         html += '<button type="button" class="ch-thread-btn" data-personal-mute-uid="' + mId + '" data-personal-mute-active="' + (isPersonallyMuted ? '1' : '0') + '" title="Mute/Unmute this player in Clubhouse only">' + (isPersonallyMuted ? '🔊 Unmute' : '🔇 Mute') + '</button>';
+        html += '<button type="button" class="ch-thread-btn" data-peer-block-uid="' + mId + '" data-peer-block-name="' + escapeHtml(memberDisplayName) + '" data-peer-block-active="' + (isPeerBlocked ? '1' : '0') + '" title="' + escapeHtml(isPeerBlocked ? tClubhouse('clubhouse.peer_unblock_title', 'Unblock this member') : tClubhouse('clubhouse.peer_block_title', 'Block this member (hides their shared-channel messages and prevents 1:1 DMs and voice)')) + '">' + escapeHtml(isPeerBlocked ? tClubhouse('clubhouse.peer_unblock_btn', '🔓 Unblock') : tClubhouse('clubhouse.peer_block_btn', '🚫 Block')) + '</button>';
         html += '<button type="button" class="ch-thread-btn" data-report-uid="' + mId + '" data-report-uname="' + escapeHtml(memberDisplayName) + '" title="Report User to Moderators">🚩 Report</button>';
         html += '</div>';
       }
@@ -1707,6 +2072,15 @@
           renderMessageStream();
           renderVoiceVideoTiles();
         }).catch(function () {});
+      });
+    }
+
+    var blockBtns = dirEl.querySelectorAll('[data-peer-block-uid]');
+    for (var pb = 0; pb < blockBtns.length; pb++) {
+      blockBtns[pb].addEventListener('click', function () {
+        var uid = Number(this.getAttribute('data-peer-block-uid'));
+        var uname = this.getAttribute('data-peer-block-name') || 'Member';
+        confirmAndTogglePeerBlock(uid, uname);
       });
     }
 
@@ -2108,6 +2482,9 @@
       if (err && err.code === 'E2EE_IDENTITY_REQUIRED') {
         var vm = el('ch-vault-modal');
         if (vm) vm.classList.remove('hidden');
+      } else if (err && err.code === 'PEER_BLOCKED') {
+        closeGifPicker();
+        showPeerBlockedFeedback(err.message);
       } else {
         var statusEl = el('ch-gif-import-status');
         if (statusEl) statusEl.textContent = '⚠️ ' + ((err && err.message) || 'Failed to send GIF.');
@@ -2277,6 +2654,8 @@
           if (err && err.code === 'E2EE_IDENTITY_REQUIRED') {
             var vm = el('ch-vault-modal');
             if (vm) vm.classList.remove('hidden');
+          } else if (err && err.code === 'PEER_BLOCKED') {
+            showPeerBlockedFeedback(err.message);
           } else if (err && err.message) {
             var typingEl = el('ch-typing-indicator');
             if (typingEl) typingEl.textContent = '⚠️ ' + err.message;
@@ -2582,6 +2961,9 @@
         }).then(function () {
           loadThreadReplies(uiState.activeThreadRoot.id);
           Store.fetchChannelMessages(uiState.activeChannelId);
+        }).catch(function (err) {
+          threadInput.value = text;
+          handlePeerActionError(err, 'Failed to send reply.');
         });
       });
     }
@@ -2652,6 +3034,7 @@
     if (vaultBtn && vaultModal) {
       vaultBtn.addEventListener('click', function () {
         vaultModal.classList.remove('hidden');
+        syncPrivacyRelayToggleUi();
         loadStorageStatusWidget();
         refreshOwnVaultFingerprint();
       });
@@ -2659,6 +3042,7 @@
     if (dmOpenVaultBtn && vaultModal) {
       dmOpenVaultBtn.addEventListener('click', function () {
         vaultModal.classList.remove('hidden');
+        syncPrivacyRelayToggleUi();
         loadStorageStatusWidget();
         refreshOwnVaultFingerprint();
       });
@@ -2726,7 +3110,17 @@
     }
     var relayToggleEl = el('ch-privacy-relay-toggle');
     if (relayToggleEl) {
+      syncPrivacyRelayToggleUi();
       relayToggleEl.addEventListener('change', function () {
+        if (!isClubhouseTurnConfigured()) {
+          relayToggleEl.checked = false;
+          relayToggleEl.disabled = true;
+          if (RtcEngine && RtcEngine.state) {
+            RtcEngine.state.privacyRelayMode = false;
+          }
+          syncPrivacyRelayToggleUi();
+          return;
+        }
         if (RtcEngine && RtcEngine.state) {
           RtcEngine.state.privacyRelayMode = relayToggleEl.checked;
         }
@@ -2743,7 +3137,8 @@
           return;
         }
         if (statusEl) statusEl.textContent = 'Generating ECDH/ECDSA P-256 keys & deriving 600,000-iteration PBKDF2 vault...';
-        CryptoEngine.enrollIdentityWithPassphrase(pass, relayToggle && relayToggle.checked).then(function () {
+        var usePrivacyRelay = Boolean(isClubhouseTurnConfigured() && relayToggle && !relayToggle.disabled && relayToggle.checked);
+        CryptoEngine.enrollIdentityWithPassphrase(pass, usePrivacyRelay).then(function () {
           if (statusEl) statusEl.textContent = '✓ E2EE Identity Keys enrolled & encrypted backup vault stored!';
           Store.clearCachedDmKeys();
           return Store.redecryptChannelMessages(uiState.activeChannelId);
@@ -2788,6 +3183,7 @@
     uiState.activeChannel = null;
     uiState.activeThreadRoot = null;
     uiState.revealedMutedMsgIds = {};
+    uiState.revealedBlockedMsgIds = {};
     var titleEl = el('ch-active-channel-name');
     var topicEl = el('ch-active-channel-topic');
     var e2eeBadge = el('ch-active-e2ee-badge');
@@ -2903,6 +3299,14 @@
         renderMessageStream();
         renderMembersDirectory();
         renderVoiceVideoTiles();
+      } else if (eventType === 'peer_blocks_changed') {
+        renderMembersDirectory();
+        renderMessageStream();
+        renderVoiceVideoTiles();
+        refreshDmE2eeNotice();
+        if (uiState.activeThreadRoot) {
+          loadThreadReplies(uiState.activeThreadRoot.id);
+        }
       } else if (eventType === 'member_opt_changed') {
         renderUserBar();
         renderChannelSidebar();
@@ -2912,6 +3316,25 @@
             renderMessageStream();
           }).catch(function () {});
         }
+      } else if (eventType === 'key_rotated') {
+        refreshVerifyKeyButton();
+        refreshDmE2eeNotice();
+        renderMembersDirectory();
+        renderMessageStream();
+      } else if (eventType === 'user_erased') {
+        var erasedUid = Number((detail && detail.userId) || 0);
+        if (uiState.activeThreadRoot && erasedUid && Number(uiState.activeThreadRoot.author_id) === erasedUid) {
+          uiState.activeThreadRoot = null;
+          switchContextTab('sunday');
+        } else if (uiState.activeThreadRoot) {
+          loadThreadReplies(uiState.activeThreadRoot.id);
+        }
+        renderChannelSidebar();
+        renderMembersDirectory();
+        renderMessageStream();
+        renderVoiceVideoTiles();
+        refreshVerifyKeyButton();
+        refreshDmE2eeNotice();
       } else if (eventType === 'rtc_signals' && RtcEngine) {
         RtcEngine.handleIncomingSignals(detail);
       }
@@ -2959,8 +3382,15 @@
               warnEl.style.cssText = 'margin:6px 0;padding:8px 10px;border-radius:6px;background:rgba(245,158,11,0.14);border:1px solid rgba(245,158,11,0.45);color:#fbbf24;font-size:12px;';
               mediaStage.insertBefore(warnEl, mediaStage.firstChild);
             }
-            warnEl.textContent = 'Privacy Relay Mode blocked direct P2P voice because no TURN relay server is configured.';
+            warnEl.textContent = tClubhouse(
+              'rtc_turn_blocked_warning',
+              'Privacy Relay Mode blocked direct P2P voice because no TURN relay server is configured.'
+            );
           }
+        } else if (evType === 'turn_config_updated') {
+          syncPrivacyRelayToggleUi();
+        } else if (evType === 'peer_blocked' && detail && detail.message) {
+          showPeerBlockedFeedback(detail.message);
         }
       });
     }
@@ -2971,6 +3401,13 @@
     if (typeof window !== 'undefined' && window.API && typeof window.API.getPublicConfig === 'function') {
       window.API.getPublicConfig().then(function (cfg) {
         uiState.publicConfig = cfg;
+        if (RtcEngine && typeof RtcEngine.setTurnConfigured === 'function') {
+          RtcEngine.setTurnConfigured(Boolean(cfg && cfg.turnConfigured));
+        }
+        if (cfg && cfg.turnConfigured && RtcEngine && typeof RtcEngine.loadIceServers === 'function' && Store && Store.state && Store.state.user) {
+          RtcEngine.loadIceServers();
+        }
+        syncPrivacyRelayToggleUi();
         if (uiState.upcomingData) {
           renderSundayCard(uiState.upcomingData);
         } else if (!isClubhouseBpEnabled()) {
@@ -3214,6 +3651,29 @@
     wrap.appendChild(menu);
     wrap.appendChild(btn);
     quickActions.appendChild(wrap);
+  }
+
+  var ClubhouseUI = {
+    uiState: uiState,
+    isClubhouseTurnConfigured: isClubhouseTurnConfigured,
+    syncPrivacyRelayToggleUi: syncPrivacyRelayToggleUi,
+    shouldCollapseMessageForPeerBlock: shouldCollapseMessageForPeerBlock,
+    buildMessageCardHtml: buildMessageCardHtml,
+    renderMessageStream: renderMessageStream,
+    renderMembersDirectory: renderMembersDirectory,
+    confirmAndTogglePeerBlock: confirmAndTogglePeerBlock,
+    openOrCreateDmWithUser: openOrCreateDmWithUser,
+    handleJoinVoiceLounge: handleJoinVoiceLounge,
+    setPublicConfig: function (cfg) {
+      uiState.publicConfig = cfg;
+      if (RtcEngine && typeof RtcEngine.setTurnConfigured === 'function') {
+        RtcEngine.setTurnConfigured(Boolean(cfg && cfg.turnConfigured));
+      }
+      syncPrivacyRelayToggleUi();
+    }
+  };
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = ClubhouseUI;
   }
 
   if (typeof document !== 'undefined') {

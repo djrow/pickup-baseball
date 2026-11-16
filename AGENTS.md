@@ -9,7 +9,7 @@ Mounted under `/api` in `src/app/index.js`:
 - **Core & Security:**
   - `src/app/index.js` — Hono app, global security headers, `.pages.dev` redirect/WAF, CSRF origin check, session middleware, router mounts.
   - `src/app/errors.js` — Structured 9-code error taxonomy, correlation `X-Request-Id`, PII-scrubbed JSON logging, and error response normalization.
-  - `src/app/security.js` — Sessions (`baseball_session`), role middleware (`requireAuth`, `requireOrganizer`, `requireModerator`, `requireAdmin`), `checkRateLimit`, SSRF validation (`validateExternalGifUrl`), HTML escaping, base64 helpers.
+  - `src/app/security.js` — Stable re-export barrel over `src/app/security/` (`crypto.js`, `session.js`, `guards.js`, `ssrf.js`) for sessions (`baseball_session`), role middleware (`requireAuth`, `requireOrganizer`, `requireModerator`, `requireAdmin`), `checkRateLimit`, SSRF validation (`validateExternalGifUrl`), HTML escaping, and base64 helpers.
   - `src/app/schema.js` — Stable re-export barrel over `src/app/schema/` (`baseball-ddl.js`, `chat-ddl.js`, `migrations.js`, `engine.js`) for DDL, idempotent migrations, pruning, and settings helpers (`ensureD1Schema`, `ensureChatD1Schema`, `ensureClubhouseOptInBackfill`).
   - `src/app/policy.js` — Roster privacy & guest-hiding helpers.
   - `src/app/gdrive.js` — Google Drive OAuth2 refresh token + resumable uploads, metadata, byte-range streaming.

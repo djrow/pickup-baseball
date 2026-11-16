@@ -4,7 +4,14 @@
  */
 
 import { Hono } from 'hono';
-import { requireAuth, canAccessChannel, rejectIfChatMuted, rejectIfClubhouseOptedOut } from '../security.js';
+import {
+  requireAuth,
+  canAccessChannel,
+  rejectIfChatMuted,
+  rejectIfClubhouseOptedOut,
+  checkRateLimit,
+  normalizeMemberRole
+} from '../security.js';
 import { resolveChannel, canUserAccessChannel, isPrivateEncryptedBoard } from './chat.js';
 import { chunkArray } from './chat/helpers.js';
 
@@ -15,6 +22,8 @@ const MAX_VAULT_META_CHARS = 256;
 const MAX_WRAPPED_KEY_CHARS = 8192;
 
 function formatIdentityRow(row, includePrivateVault) {
+  const keyVersion = row.key_version !== undefined && row.key_version !== null ? Number(row.key_version) : 1;
+  const keyRotatedAt = row.key_rotated_at || null;
   const base = {
     user_id: row.user_id,
     userId: row.user_id,
@@ -22,7 +31,11 @@ function formatIdentityRow(row, includePrivateVault) {
     ecdsa_public_key_jwk: row.ecdsa_public_key_jwk,
     privacy_relay_mode: row.privacy_relay_mode || 0,
     privacyRelayMode: row.privacy_relay_mode || 0,
-    status_text: row.status_text || ''
+    status_text: row.status_text || '',
+    key_version: keyVersion,
+    keyVersion,
+    key_rotated_at: keyRotatedAt,
+    keyRotatedAt
   };
   if (includePrivateVault) {
     base.encrypted_private_vault = row.encrypted_private_vault;
@@ -44,7 +57,7 @@ async function handleGetSelfIdentity(c) {
 
   try {
     const row = await chatDb.prepare(`
-      SELECT user_id, ecdh_public_key_jwk, ecdsa_public_key_jwk, encrypted_private_vault, vault_salt, vault_iv, privacy_relay_mode, status_text
+      SELECT user_id, ecdh_public_key_jwk, ecdsa_public_key_jwk, encrypted_private_vault, vault_salt, vault_iv, privacy_relay_mode, status_text, key_version, key_rotated_at
       FROM user_crypto_keys
       WHERE user_id = ?
     `).bind(user.id).first();
@@ -160,6 +173,40 @@ keysRouter.put('/identity', requireAuth, async (c) => {
       if (mutedResp) return mutedResp;
     }
 
+    const existing = await chatDb.prepare(`
+      SELECT ecdh_public_key_jwk, ecdsa_public_key_jwk, key_version, key_rotated_at
+      FROM user_crypto_keys
+      WHERE user_id = ?
+    `).bind(user.id).first();
+
+    const isKeyRotation = Boolean(
+      existing && (
+        existing.ecdh_public_key_jwk !== ecdhJwkStr ||
+        existing.ecdsa_public_key_jwk !== ecdsaJwkStr
+      )
+    );
+
+    if (isKeyRotation) {
+      const rotRate = await checkRateLimit(chatDb, `chat_key_rotate:${user.id}`, 5, 3600, c.env, {
+        table: 'chat_rate_limits',
+        failClosed: true,
+        enforceInTest: true
+      });
+      if (!rotRate.allowed) {
+        c.header('Retry-After', String(rotRate.retryAfter || 3600));
+        return c.json({
+          error: 'Too many E2EE key rotations (rate limit exceeded: max 5 rotations per hour). Please wait before rotating keys again.'
+        }, 429);
+      }
+    }
+
+    const nextKeyVersion = existing
+      ? (isKeyRotation ? (Number(existing.key_version || 1) + 1) : Number(existing.key_version || 1))
+      : 1;
+    const rotatedIso = isKeyRotation
+      ? new Date().toISOString()
+      : (existing ? (existing.key_rotated_at || null) : null);
+
     await chatDb.prepare(`
       INSERT INTO user_crypto_keys (
         user_id,
@@ -170,8 +217,10 @@ keysRouter.put('/identity', requireAuth, async (c) => {
         vault_iv,
         privacy_relay_mode,
         status_text,
+        key_version,
+        key_rotated_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
       ON CONFLICT(user_id) DO UPDATE SET
         ecdh_public_key_jwk = excluded.ecdh_public_key_jwk,
         ecdsa_public_key_jwk = excluded.ecdsa_public_key_jwk,
@@ -180,6 +229,8 @@ keysRouter.put('/identity', requireAuth, async (c) => {
         vault_iv = excluded.vault_iv,
         privacy_relay_mode = excluded.privacy_relay_mode,
         status_text = excluded.status_text,
+        key_version = excluded.key_version,
+        key_rotated_at = excluded.key_rotated_at,
         updated_at = CURRENT_TIMESTAMP
     `).bind(
       user.id,
@@ -189,12 +240,87 @@ keysRouter.put('/identity', requireAuth, async (c) => {
       vaultSalt,
       vaultIv,
       privacyRelayMode,
-      statusText
+      statusText,
+      nextKeyVersion,
+      rotatedIso
     ).run();
 
+    if (isKeyRotation) {
+      const nowSec = Math.floor(Date.now() / 1000);
+      const { results: activeEncryptedChannels } = await chatDb.prepare(`
+        SELECT DISTINCT c.id
+        FROM channels c
+        JOIN channel_members cm ON cm.channel_id = c.id
+        WHERE cm.user_id = ?
+          AND (
+            c.channel_type IN ('dm', 'group_dm')
+            OR c.is_private = 1
+            OR c.min_role_read = 'invite'
+          )
+      `).bind(user.id).all();
+
+      const auditChannels = activeEncryptedChannels || [];
+      if (auditChannels.length > 0) {
+        const displayName = user.name || `Member #${user.id}`;
+        const noticeContent = `🔐 ${displayName} rotated their E2EE identity key (v${nextKeyVersion}). Verify their safety number before sending new messages.`;
+        const auditMeta = JSON.stringify({
+          audit_type: 'key_rotated',
+          is_system: 1,
+          user_id: user.id,
+          user_name: displayName,
+          key_version: nextKeyVersion,
+          key_rotated_at: rotatedIso
+        });
+        const syncPayload = JSON.stringify({
+          user_id: user.id,
+          user_name: displayName,
+          key_version: nextKeyVersion,
+          key_rotated_at: rotatedIso
+        });
+        const authorRole = normalizeMemberRole(user.role);
+        const authorBadges = JSON.stringify({
+          role: authorRole,
+          is_system: 1
+        });
+
+        const auditBatch = [];
+        for (const ch of auditChannels) {
+          auditBatch.push(
+            chatDb.prepare(`
+              INSERT INTO sync_events (channel_id, event_type, target_id, payload_json, created_at)
+              VALUES (?, 'key_rotated', ?, ?, ?)
+            `).bind(ch.id, user.id, syncPayload, nowSec)
+          );
+          auditBatch.push(
+            chatDb.prepare(`
+              INSERT INTO messages (
+                channel_id, parent_message_id, author_id, author_name, author_role,
+                author_badges, content, iv, key_epoch, message_type, metadata_json
+              ) VALUES (?, NULL, ?, ?, ?, ?, ?, NULL, 1, 'system', ?)
+            `).bind(ch.id, user.id, displayName, authorRole, authorBadges, noticeContent, auditMeta)
+          );
+        }
+        await chatDb.batch(auditBatch);
+      }
+    }
+
+    const savedRow = await chatDb.prepare(`
+      SELECT user_id, ecdh_public_key_jwk, ecdsa_public_key_jwk, encrypted_private_vault, vault_salt, vault_iv, privacy_relay_mode, status_text, key_version, key_rotated_at
+      FROM user_crypto_keys
+      WHERE user_id = ?
+    `).bind(user.id).first();
+
     return c.json({
+      ...(savedRow ? formatIdentityRow(savedRow, false) : {}),
+      key_version: nextKeyVersion,
+      keyVersion: nextKeyVersion,
+      key_rotated_at: rotatedIso,
+      keyRotatedAt: rotatedIso,
+      rotated: isKeyRotation,
       success: true,
-      message: 'Identity keys registered successfully.'
+      message: isKeyRotation
+        ? 'Identity keys rotated successfully.'
+        : 'Identity keys registered successfully.'
     });
   } catch (err) {
     console.error('[Keys] Error updating identity keys:', err);
@@ -227,7 +353,7 @@ keysRouter.get('/users', requireAuth, async (c) => {
       }
       const placeholders = ids.map(() => '?').join(',');
       const queryRes = await chatDb.prepare(`
-        SELECT user_id, ecdh_public_key_jwk, ecdsa_public_key_jwk, privacy_relay_mode, status_text
+        SELECT user_id, ecdh_public_key_jwk, ecdsa_public_key_jwk, privacy_relay_mode, status_text, key_version, key_rotated_at
         FROM user_crypto_keys
         WHERE user_id IN (${placeholders})
           AND user_id NOT IN (SELECT user_id FROM clubhouse_opted_out)
@@ -235,7 +361,7 @@ keysRouter.get('/users', requireAuth, async (c) => {
       results = queryRes.results || [];
     } else {
       const queryRes = await chatDb.prepare(`
-        SELECT user_id, ecdh_public_key_jwk, ecdsa_public_key_jwk, privacy_relay_mode, status_text
+        SELECT user_id, ecdh_public_key_jwk, ecdsa_public_key_jwk, privacy_relay_mode, status_text, key_version, key_rotated_at
         FROM user_crypto_keys
         WHERE user_id NOT IN (SELECT user_id FROM clubhouse_opted_out)
         ORDER BY user_id ASC
@@ -244,15 +370,7 @@ keysRouter.get('/users', requireAuth, async (c) => {
       results = queryRes.results || [];
     }
 
-    const users = results.map((r) => ({
-      user_id: r.user_id,
-      userId: r.user_id,
-      ecdh_public_key_jwk: r.ecdh_public_key_jwk,
-      ecdsa_public_key_jwk: r.ecdsa_public_key_jwk,
-      privacy_relay_mode: r.privacy_relay_mode || 0,
-      privacyRelayMode: r.privacy_relay_mode || 0,
-      status_text: r.status_text || ''
-    }));
+    const users = results.map((r) => formatIdentityRow(r, false));
 
     return c.json({ users });
   } catch (err) {
@@ -296,7 +414,7 @@ keysRouter.get('/identity/:id', requireAuth, async (c) => {
 
   try {
     const row = await chatDb.prepare(`
-      SELECT user_id, ecdh_public_key_jwk, ecdsa_public_key_jwk, privacy_relay_mode, status_text
+      SELECT user_id, ecdh_public_key_jwk, ecdsa_public_key_jwk, privacy_relay_mode, status_text, key_version, key_rotated_at
       FROM user_crypto_keys
       WHERE user_id = ?
         AND user_id NOT IN (SELECT user_id FROM clubhouse_opted_out)

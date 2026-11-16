@@ -655,9 +655,16 @@ async function runVisitorRsvpJourney(browser, server, tracker, record) {
     await fillInput(session, '#rsvp-gear', '2 wood bats');
     await clickEl(session, '#rsvp-submit-btn');
 
-    await session.waitFor('document.querySelector("#rsvp-alert .alert-success") && document.getElementById("rsvp-cancel-btn").style.display !== "none"');
-    const rosterAfterCreate = await session.evaluate('document.getElementById("attendees-container").textContent');
-    assert(rosterAfterCreate.includes('Alex V.'), 'Visitor RSVP appears on public attendee roster after creation');
+    await session.waitFor('document.querySelector("#rsvp-alert .alert-success") && document.getElementById("rsvp-cancel-btn").style.display !== "none" && !document.getElementById("rsvp-submit-btn").disabled');
+    const createdUiState = await session.evaluate(`({
+      playersCount: document.getElementById("rsvp-players-count").value,
+      gear: document.getElementById("rsvp-gear").value,
+      submitText: document.getElementById("rsvp-submit-btn").textContent.trim(),
+      badgeText: document.getElementById("rsvp-badge-container").textContent.trim(),
+      alertText: document.querySelector("#rsvp-alert .alert-success").textContent.trim()
+    })`);
+    assert(createdUiState.playersCount === '2' && createdUiState.gear === '2 wood bats', 'Visitor RSVP confirmation form retains submitted headcount and gear');
+    assert(createdUiState.submitText.includes('Update') && createdUiState.badgeText.length > 0 && createdUiState.alertText.length > 0, 'Visitor RSVP confirmation UI switches to Update mode with attending badge and success alert');
 
     const dbRowCreated = server.baseballDb.prepare(
       'SELECT status, players_count, gear_bringing FROM attendees WHERE event_id = ? AND email = ?'
@@ -670,9 +677,10 @@ async function runVisitorRsvpJourney(browser, server, tracker, record) {
     await fillInput(session, '#rsvp-gear', '3 baseballs');
     const submitLabelEdit = await session.evaluate('document.getElementById("rsvp-submit-btn").textContent.trim()');
     assert(submitLabelEdit.includes('Update'), `Expected Update RSVP button label, got "${submitLabelEdit}"`);
+    await session.evaluate('document.getElementById("rsvp-alert").innerHTML = ""');
     await clickEl(session, '#rsvp-submit-btn');
 
-    await session.waitFor('document.querySelector("#rsvp-alert .alert-success") && document.getElementById("attendees-container").textContent.includes("3 baseballs")');
+    await session.waitFor('document.querySelector("#rsvp-alert .alert-success") && !document.getElementById("rsvp-submit-btn").disabled && document.getElementById("rsvp-players-count").value === "1" && document.getElementById("rsvp-gear").value === "3 baseballs"');
     const dbRowEdited = server.baseballDb.prepare(
       'SELECT status, players_count, gear_bringing FROM attendees WHERE event_id = ? AND email = ?'
     ).get(server.testEventId, 'visitor@example.com');
@@ -744,6 +752,10 @@ async function runMemberLoginAndWaiverJourney(browser, server, tracker, record) 
     await session.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: endX, y: endY, button: 'left', clickCount: 1 });
 
     await session.evaluate(`(() => {
+      const ageCb = document.getElementById('waiver-age-attestation');
+      if (!ageCb) throw new Error('Missing 18+ age attestation checkbox');
+      ageCb.checked = true;
+      ageCb.dispatchEvent(new Event('change', { bubbles: true }));
       const cb = document.getElementById('waiver-consent-checkbox');
       if (!cb) throw new Error('Missing consent checkbox');
       cb.checked = true;

@@ -5,7 +5,10 @@
  */
 
 import { canAccessChannel } from '../../security.js';
+import { abbreviateMemberNames } from '../../policy.js';
 import { logEvent } from '../../errors.js';
+
+export { abbreviateMemberNames };
 
 /**
  * Split an array into chunks (keeps Cloudflare D1 `IN (...)` bound parameters well below 100).
@@ -22,40 +25,6 @@ export function chunkArray(items, chunkSize = 80) {
     chunks.push(list.slice(i, i + chunkSize));
   }
   return chunks;
-}
-
-/**
- * Abbreviate last names in a member directory ("First L.", or "First La."
- * when multiple distinct users share the same first name and last initial).
- * @param {Array<{user_id?: number, id?: number, name?: string}>} records
- * @returns {string[]}
- */
-export function abbreviateMemberNames(records) {
-  const list = Array.isArray(records) ? records : [];
-  const seenIds = new Set();
-  const keyCounts = Object.create(null);
-
-  const parsed = list.map((rec, idx) => {
-    const raw = rec && rec.name ? String(rec.name).trim() : '';
-    const parts = raw ? raw.split(/\s+/) : [];
-    const first = parts.length > 1 ? parts.slice(0, -1).join(' ') : (parts[0] || '');
-    const last = parts.length > 1 ? parts[parts.length - 1].replace(/\.+$/, '') : '';
-    const key = (first && last) ? (first.toLowerCase() + '|' + last.charAt(0).toLowerCase()) : '';
-    const uid = rec && (rec.user_id || rec.id);
-    const personId = uid ? ('u:' + String(uid)) : ('i:' + idx);
-    if (key && !seenIds.has(personId)) {
-      seenIds.add(personId);
-      keyCounts[key] = (keyCounts[key] || 0) + 1;
-    }
-    return { raw, first, last, key };
-  });
-
-  return parsed.map((p) => {
-    if (!p.raw) return 'Player';
-    if (!p.last) return p.raw;
-    const len = keyCounts[p.key] > 1 ? 2 : 1;
-    return p.first + ' ' + p.last.slice(0, len) + '.';
-  });
 }
 
 /**
@@ -251,10 +220,13 @@ export function normalizeMessageRow(msg, reactionsByMsg = new Map(), attachments
   delete sanitized.original_content;
   delete sanitized.original_iv;
 
+  const isSystem = Boolean(sanitized.message_type === 'system' || (parsedMetadata && parsedMetadata.is_system));
+
   if (sanitized.hidden_at) {
     return {
       ...sanitized,
       is_hidden: true,
+      is_system: isSystem,
       content: '[Message hidden by moderator]',
       iv: null,
       encryption_iv: null,
@@ -268,6 +240,7 @@ export function normalizeMessageRow(msg, reactionsByMsg = new Map(), attachments
   return {
     ...sanitized,
     is_hidden: false,
+    is_system: isSystem,
     encryption_iv: sanitized.iv || null,
     author_badges_obj: parsedBadges,
     metadata: parsedMetadata,
@@ -325,4 +298,125 @@ export async function hydrateMessages(chatDb, messages) {
   }
 
   return messages.map((m) => normalizeMessageRow(m, reactionsByMsg, attachmentsByMsg));
+}
+
+/**
+ * List user IDs personally blocked by `userId`.
+ * @param {D1Database} chatDb
+ * @param {number} userId
+ * @returns {Promise<number[]>}
+ */
+export async function getBlockedUserIds(chatDb, userId) {
+  if (!chatDb || !userId) return [];
+  try {
+    const { results } = await chatDb.prepare(
+      'SELECT blocked_id FROM user_blocks WHERE blocker_id = ? ORDER BY created_at DESC'
+    ).bind(userId).all();
+    return (results || []).map((r) => Number(r.blocked_id)).filter((n) => Number.isFinite(n) && n > 0);
+  } catch (e) {
+    logEvent('warn', 'chat_blocked_users_load_failed', { userId, err: e });
+    return [];
+  }
+}
+
+/**
+ * Return true if either member has blocked the other in `user_blocks`.
+ * @param {D1Database} chatDb
+ * @param {number} userAId
+ * @param {number} userBId
+ * @returns {Promise<boolean>}
+ */
+export async function isPeerBlocked(chatDb, userAId, userBId) {
+  const a = Number(userAId);
+  const b = Number(userBId);
+  if (!chatDb || !a || !b || a === b) return false;
+  const row = await chatDb.prepare(
+    'SELECT 1 FROM user_blocks WHERE (blocker_id = ? AND blocked_id = ?) OR (blocker_id = ? AND blocked_id = ?) LIMIT 1'
+  ).bind(a, b, b, a).first();
+  return Boolean(row);
+}
+
+/**
+ * Resolve the peer user IDs of a 1:1 DM channel for `actorUserId`.
+ * @param {D1Database} chatDb
+ * @param {Record<string, any>|null} channel
+ * @param {number} actorUserId
+ * @returns {Promise<number[]>}
+ */
+export async function getDmPeerIds(chatDb, channel, actorUserId) {
+  if (!chatDb || !channel || channel.channel_type !== 'dm') return [];
+  const actor = Number(actorUserId);
+  const peerSet = new Set();
+
+  const { results: memberRows } = await chatDb.prepare(
+    'SELECT user_id FROM channel_members WHERE channel_id = ?'
+  ).bind(channel.id).all();
+  for (const row of (memberRows || [])) {
+    const uid = Number(row.user_id);
+    if (uid > 0 && uid !== actor) {
+      peerSet.add(uid);
+    }
+  }
+
+  // Fallback to canonical `dm-<a>-<b>` slug if channel_members is incomplete
+  if (peerSet.size === 0 && typeof channel.slug === 'string') {
+    const m = /^dm-(\d+)-(\d+)$/.exec(channel.slug);
+    if (m) {
+      const id1 = Number(m[1]);
+      const id2 = Number(m[2]);
+      if (id1 > 0 && id1 !== actor) peerSet.add(id1);
+      if (id2 > 0 && id2 !== actor) peerSet.add(id2);
+    }
+  }
+
+  return Array.from(peerSet);
+}
+
+/**
+ * Return true if `userId` has a bidirectional block with any user in `peerIds`.
+ * @param {D1Database} chatDb
+ * @param {number} userId
+ * @param {number[]} peerIds
+ * @returns {Promise<boolean>}
+ */
+export async function isAnyPeerBlocked(chatDb, userId, peerIds) {
+  const actor = Number(userId);
+  const targets = Array.from(new Set((peerIds || []).map(Number).filter((n) => Number.isFinite(n) && n > 0 && n !== actor)));
+  if (!chatDb || !actor || targets.length === 0) return false;
+
+  for (const idChunk of chunkArray(targets, 40)) {
+    const placeholders = idChunk.map(() => '?').join(',');
+    const row = await chatDb.prepare(
+      `SELECT 1 FROM user_blocks
+       WHERE (blocker_id = ? AND blocked_id IN (${placeholders}))
+          OR (blocked_id = ? AND blocker_id IN (${placeholders}))
+       LIMIT 1`
+    ).bind(actor, ...idChunk, actor, ...idChunk).first();
+    if (row) return true;
+  }
+  return false;
+}
+
+/**
+ * Return a 403 PEER_BLOCKED response if `channel` is a 1:1 DM with a blocked peer.
+ * @param {AppContext} c
+ * @param {D1Database} chatDb
+ * @param {Record<string, any>|null} channel
+ * @param {number} userId
+ * @param {string} [errorMessage]
+ * @returns {Promise<Response|null>}
+ */
+export async function rejectIfDmPeerBlocked(
+  c,
+  chatDb,
+  channel,
+  userId,
+  errorMessage = 'Direct messages are blocked between you and this member.'
+) {
+  if (!channel || channel.channel_type !== 'dm') return null;
+  const peerIds = await getDmPeerIds(chatDb, channel, userId);
+  if (await isAnyPeerBlocked(chatDb, userId, peerIds)) {
+    return c.json({ error: errorMessage, code: 'PEER_BLOCKED' }, 403);
+  }
+  return null;
 }

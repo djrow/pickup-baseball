@@ -395,3 +395,31 @@ export async function sendWaiverConfirmationEmail(env, origin, { email, printedN
 
   return dispatchEmail(env, { to: email, subject, text, html });
 }
+
+export async function sendErasureVerificationCode(env, origin, { email, name, code }) {
+  const cfg = resolveConfig(env);
+  const appName = cfg.COMMUNITY_NAME;
+  const subject = `Data Erasure Verification Code for ${appName}: ${code}`;
+  const text = `Hi ${name || 'there'},\n\nYou requested permanent erasure of your personal data and RSVPs from ${appName}.\n\nYour 6-digit erasure verification code is: ${code}\n\nThis code expires in 10 minutes and is invalidated after 5 failed attempts.\n\nImportant: Confirming this code permanently deletes your profile, consent records, future RSVPs, task assignments, and batting practice slots, and anonymizes past attendance counts and comments. Any signed liability waiver remains sealed in restricted Admin-only legal-defense quarantine for 3 years before permanent deletion.\n\nIf you did not request data erasure, you can safely ignore this email — no data has been deleted.\n\n- ${appName} Team`;
+
+  const html = renderEmailLayout({
+    origin,
+    topColor: '#b91c1c',
+    headingColor: '#991b1b',
+    headingHtml: 'Confirm Data Erasure',
+    bodyHtml: `
+      <p style="color: #0c1f1a; font-size: 16px;">Hi <strong>${escapeHtml(name || 'there')}</strong>,</p>
+      <p style="color: #546e66; font-size: 15px;">Enter the 6-digit verification code below to confirm permanent erasure of your personal data and RSVPs from <strong>${escapeHtml(appName)}</strong>:</p>
+      <div style="background: #fef2f2; border: 1px solid #fecaca; padding: 18px; border-radius: 8px; text-align: center; margin: 24px 0;">
+        <span style="font-size: 34px; font-weight: 800; letter-spacing: 6px; color: #991b1b;">${escapeHtml(code)}</span>
+      </div>
+      <p style="color: #7f1d1d; background: #fef2f2; border-left: 4px solid #b91c1c; padding: 10px 12px; border-radius: 4px; font-size: 13px; margin: 14px 0 0;">
+        <strong>Legal Waiver Retention Notice:</strong> Future RSVPs, tasks, consent records, and any member account are deleted immediately, while past attendance headcounts and comments are anonymized. Any signed liability waiver stays sealed in restricted Admin-only quarantine for 3 years before automatic purge.
+      </p>`,
+    ctaUrl: '',
+    ctaLabel: '',
+    footerText: 'This code expires in 10 minutes and is invalidated after 5 failed attempts. If you did not request erasure, ignore this email — no changes have been made.'
+  });
+
+  return dispatchEmail(env, { to: email, subject, text, html });
+}

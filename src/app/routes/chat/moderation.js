@@ -7,7 +7,7 @@
  */
 
 import { Hono } from 'hono';
-import { requireAuth, requireModerator, rejectIfChatMuted, rejectIfClubhouseOptedOut } from '../../security.js';
+import { requireAuth, requireModerator, rejectIfChatMuted, rejectIfClubhouseOptedOut, checkRateLimit } from '../../security.js';
 import { logEvent } from '../../errors.js';
 import { resolveChannel, canUserAccessChannel, chunkArray, abbreviateMemberNames } from './helpers.js';
 
@@ -32,23 +32,13 @@ chatModerationRouter.post('/reports', requireAuth, async (c) => {
     return c.json({ error: 'A stated reason (3–500 characters) is required.' }, 400);
   }
 
-  const nowSec = Math.floor(Date.now() / 1000);
-  const reportRateKey = `user_${user.id}_reports`;
-  const reportCutoff = nowSec - 600;
-  try {
-    await chatDb.prepare(`
-      INSERT INTO chat_rate_limits (key, count, window_start)
-      VALUES (?, 1, ?)
-      ON CONFLICT(key) DO UPDATE SET
-        count = CASE WHEN chat_rate_limits.window_start <= ? THEN 1 ELSE chat_rate_limits.count + 1 END,
-        window_start = CASE WHEN chat_rate_limits.window_start <= ? THEN ? ELSE chat_rate_limits.window_start END
-    `).bind(reportRateKey, nowSec, reportCutoff, reportCutoff, nowSec).run();
-    const updatedRate = await chatDb.prepare('SELECT count FROM chat_rate_limits WHERE key = ?').bind(reportRateKey).first();
-    if (updatedRate && Number(updatedRate.count) > 10) {
-      return c.json({ error: 'Too many reports submitted recently. Please wait before submitting more.' }, 429);
-    }
-  } catch (e) {
-    logEvent('warn', 'chat_report_rate_limit_failed', { err: e });
+  const reportRate = await checkRateLimit(chatDb, `chat_reports:${user.id}`, 10, 600, c.env, {
+    table: 'chat_rate_limits',
+    failClosed: false,
+    enforceInTest: true
+  });
+  if (!reportRate.allowed) {
+    return c.json({ error: 'Too many reports submitted recently. Please wait before submitting more.' }, 429);
   }
 
   let targetMessageId = null;
@@ -182,7 +172,7 @@ chatModerationRouter.get('/moderation/reports', requireModerator, async (c) => {
     const visibleDetails = canViewChannel && !selfTargeted;
     return {
       ...r,
-      reporter_id: visibleDetails ? r.reporter_id : null,
+      reporter_id: visibleDetails ? (r.reporter_id || null) : null,
       reporter_name: visibleDetails ? r.reporter_name : 'Redacted',
       target_user_id: visibleDetails ? r.target_user_id : null,
       target_user_name: visibleDetails ? r.target_user_name : (selfTargeted ? '[Redacted]' : 'Redacted'),

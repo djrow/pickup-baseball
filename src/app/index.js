@@ -8,7 +8,7 @@ import { getCookie } from 'hono/cookie';
 import { CURRENT_APP_VERSION } from './version.js';
 import { resolveConfig, getPublicConfig, getPreviewOriginLockout } from './config.js';
 import { ensureD1Schema, ensureChatD1Schema, ensureClubhouseOptInBackfill } from './schema.js';
-import { SESSION_COOKIE_NAME, getUserFromSession, requireAdmin } from './security.js';
+import { SESSION_COOKIE_NAME, getUserFromSession, requireAdmin, requireAuth } from './security.js';
 import { ERROR_CODES, getRequestId, jsonError, logEvent, normalizeApiErrorResponse } from './errors.js';
 import { renderFeedXmlResponse } from './feeds.js';
 import { authRouter, serveUserAvatar, getSettingsHandler, putSettingsHandler, testAppscriptHandler } from './routes/auth.js';
@@ -147,8 +147,7 @@ app.use('*', async (c, next) => {
 
   const skipSessionLookup =
     isStatelessEndpoint ||
-    pathName === '/api/auth/logout' ||
-    /^\/api\/users\/\d+\/avatar$/.test(pathName);
+    pathName === '/api/auth/logout';
 
   const sessionId = !skipSessionLookup ? getCookie(c, SESSION_COOKIE_NAME) : null;
   if (sessionId && c.env && c.env.DB) {
@@ -196,7 +195,7 @@ app.get('/config/public', (c) => {
   return c.json(getPublicConfig(c.env));
 });
 
-app.get('/users/:id/avatar', serveUserAvatar);
+app.get('/users/:id/avatar', requireAuth, serveUserAvatar);
 app.get('/settings', getSettingsHandler);
 app.put('/settings', requireAdmin, putSettingsHandler);
 app.post('/settings/test-appscript', requireAdmin, testAppscriptHandler);

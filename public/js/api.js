@@ -80,6 +80,7 @@ const EN_DICT = {
   "footer.about_site": "Prototyped with Google Gemini in October 2026 for simplicity and durability. Free & open-source",
   "footer.handbook": "Handbook & Field Rules",
   "footer.copyright": "© 2026 Pickup Baseball Foundation. Licensed under Apache License 2.0.",
+  "footer.erase_data": "Erase My Data",
   "hero.handbook_btn": "📖 Handbook & Field Rules ↗",
   "rules.summary": "⚾ Typical Rules of Play on Sundays: Casual, all skill levels, pitching machine, continuous batting, and safety first.",
   "rules.full_link": "📖 Read the Complete Sunday Rules of Play in the Webapp Handbook ↗",
@@ -103,6 +104,7 @@ const EN_DICT = {
   "privacy.b4": "Your handwritten signature is only on a paper waiver we keep on file. We <strong>never share it</strong>.",
   "privacy.b5": "If you make a player account, the site will also email you sign-in codes and game confirmations or reminders. Anything extra you add to your profile (like a bio or photo) is optional.",
   "privacy.contact_prefix": "Questions or want your info removed? Email",
+  "privacy.erase_link": "Erase your Visitor / RSVP data →",
   "home.welcome_signed_in": "Welcome, {name}! You are signed in.",
   "home.scheduled_games": "Scheduled Games",
   "home.future_games": "Future Scheduled Games",
@@ -240,6 +242,7 @@ const EN_DICT = {
   "event.discussion_title": "💬 Game Discussion Board",
   "event.discussion_desc": "Coordinate carpools, ask about gear, discuss weather, or post post-game highlights!",
   "event.no_comments_yet": "No discussion yet. Have a question about field location or gear? Start the conversation below!",
+  "event.comments_members_only": "Event discussion is visible to signed-in members only.",
   "event.signin_to_comment": "Please sign in to join the game discussion and coordinate gear with teammates.",
   "event.signin_email_btn": "Sign In with Email →",
   "event.leave_message": "Leave a Message",
@@ -293,6 +296,16 @@ const EN_DICT = {
   "profile.sessions_title": "🔐 Signed-In Devices",
   "profile.sessions_desc": "Accounts stay signed in on up to 5 devices at once. If you forgot to log out on a friend's phone, sign out everywhere else below.",
   "profile.logout_other_devices_btn": "Sign Out of All Other Devices",
+  "profile.erasure_title": "🗑️ Delete Account & Erase Data",
+  "profile.erasure_notice": "Deleting your account immediately removes your profile, sessions, login codes, consent records, future RSVPs, task assignments, and batting practice slots. Past attendance counts, discussions, and posts are anonymized. Legal Waiver Retention Notice: Signed liability waivers remain sealed in restricted Admin-only quarantine for 3 years from signing or your last attended event before permanent deletion.",
+  "profile.erasure_keep_gallery": "Keep my approved Gallery photos/videos anonymously attributed to \"Community Member\" (unapproved items are always deleted)",
+  "profile.erasure_send_code_btn": "📧 Email Verification Code to Delete Account",
+  "profile.erasure_code_label": "Enter 6-Digit Verification Code",
+  "profile.erasure_code_placeholder": "123456",
+  "profile.erasure_confirm_btn": "Permanently Delete My Account",
+  "profile.erasure_cancel_btn": "Cancel",
+  "profile.erasure_confirm_dialog": "Permanently delete your account and personal data? This cannot be undone. Any signed liability waiver will stay in restricted 3-year legal-defense quarantine before automatic purge.",
+  "profile.erasure_code_sent": "Verification code sent to your email. Enter the 6-digit code below to confirm deletion.",
   "donate.hero_pill": "❤️ Support Free Community Baseball",
   "donate.hero_title": "Help Keep the Games Free",
   "donate.hero_desc": "Pickup Baseball Foundation provides free, welcoming Sunday baseball for everyone in the community. Your donation helps us buy equipment, maintain gear, and keep the games open to all.",
@@ -347,11 +360,153 @@ const EN_DICT = {
   "waiver.sign_online_title": "🔏 Sign Online with Verified Email Provenance",
   "waiver.sign_cta": "⚾ Sign In with Email to Sign Waiver →",
   "waiver.execute_sig": "✍️ Execute Digital Signature",
+  "waiver.age_attestation_label": "I confirm that I am 18 years of age or older, or that I am the parent or legal guardian signing on behalf of a minor participant.",
+  "waiver.age_attestation_error": "You must confirm that you are 18 years of age or older (or a parent/legal guardian signing on behalf of a minor).",
   "gallery.photos_reel": "Community Photos Reel",
   "gallery.videos_reel": "Video Releases & Highlights Reel",
   "gallery.drop_links_btn": "📥 Drop Photos / Links",
   "gallery.mod_queue_title": "Admin Moderation Queue",
-  "gallery.all_albums": "🌟 All Albums"
+  "gallery.all_albums": "🌟 All Albums",
+  "backup_scrubbed_btn": "📥 Operational SQL (.zip)",
+  "backup_dr_btn": "🔐 Encrypted DR Backup (.pbfenc)",
+  "backup_scrubbed_working": "⏳ Exporting scrubbed SQL...",
+  "backup_dr_working": "⏳ Encrypting DR backup...",
+  "backup_dr_prompt_title": "🔐 Encrypted Full DR Backup",
+  "backup_dr_prompt_msg": "Enter a passphrase (at least 8 characters) to encrypt this full disaster-recovery backup. Keep it safe — you will need it with scripts/restore-backup.js:",
+  "backup_dr_prompt_placeholder": "Enter backup encryption passphrase...",
+  "backup_dr_confirm_btn": "Encrypt & Download",
+  "backup_dr_passphrase_short": "Backup passphrase must be at least 8 characters.",
+  "backup_scrubbed_success": "Scrubbed operational SQL backup downloaded.",
+  "backup_dr_success": "Encrypted disaster-recovery backup (.pbfenc) downloaded.",
+  "backup_failed": "Database backup failed: {error}",
+  "rtc_turn_unavailable_note": "Unavailable: No TURN privacy relay server is configured on this deployment.",
+  "rtc_turn_available_note": "TURN privacy relay server is configured and ready.",
+  "rtc_turn_blocked_warning": "Privacy Relay Mode blocked direct P2P voice because no TURN relay server is configured.",
+  "profile.export_title": "📦 Download Your Data",
+  "profile.export_desc": "Download a JSON archive of your profile, consent history, RSVPs, volunteer tasks, signed waivers, and Clubhouse messages.",
+  "profile.export_btn": "📥 Download JSON Export",
+  "profile.export_decrypt_label": "Decrypt my encrypted Clubhouse messages in-browser before saving",
+  "profile.export_working": "⏳ Preparing export...",
+  "profile.export_success": "Your personal data export has been downloaded.",
+  "profile.export_success_decrypted": "Your personal data export (with {count} decrypted E2EE message(s)) has been downloaded.",
+  "profile.export_failed": "Failed to export your data: {error}",
+  "profile.export_passphrase_title": "🔐 Unlock E2EE Key Vault",
+  "profile.export_passphrase_msg": "Enter your E2EE Key Vault passphrase to decrypt your encrypted Clubhouse messages in-browser before saving:",
+  "profile.export_passphrase_placeholder": "Enter vault passphrase...",
+  "profile.export_passphrase_confirm": "Unlock & Decrypt",
+  "profile.export_wrong_passphrase": "Incorrect E2EE vault passphrase. Encrypted messages could not be decrypted.",
+  "profile.privacy_consent_title": "🔒 Privacy Consent",
+  "profile.privacy_consent_desc": "By default, signed-in members see only your First L. initial and RSVP status. Toggle below to share full details with peers.",
+  "profile.roster_visibility_label": "Show my full name, shared gear, and companion names to signed-in members",
+  "profile.roster_visibility_help": "When off, peer members see \"First L.\" only (organizers always see full details).",
+  "profile.profile_sharing_label": "Share my bio and profile picture with signed-in members",
+  "profile.profile_sharing_help": "Controls whether your short bio and avatar appear to peers on rosters, comments, and Clubhouse.",
+  "profile.notify_title": "📬 Notification Preferences",
+  "profile.notify_rsvp_label": "RSVP confirmation emails",
+  "profile.notify_rainouts_label": "Rainout and field change alerts",
+  "profile.notify_reminders_label": "Pre-event reminder emails",
+  "profile.notify_community_label": "Community updates and announcements",
+  "event.visitor_privacy_title": "🔒 Privacy & Notification Choices (Optional)",
+  "event.visitor_roster_consent_label": "Show my full name, shared gear, and companion names to signed-in members on the roster (otherwise shown as \"First L.\")",
+  "event.visitor_notify_emails_label": "Send me event reminder and rainout notification emails for this event (if email provided)",
+  "visitor_erasure.title": "🗑️ Erase Visitor / RSVP Data",
+  "visitor_erasure.summary_hint": "Remove RSVPs or data without signing in",
+  "visitor_erasure.notice": "Verify your email with a 6-digit code to permanently delete future RSVPs, task assignments, batting practice slots, and consent records, and anonymize past attendance and comments. Legal Waiver Retention Notice: Signed liability waivers remain sealed in restricted Admin-only quarantine for 3 years from signing or your last attended event before permanent deletion.",
+  "visitor_erasure.email_label": "Email Address *",
+  "visitor_erasure.email_placeholder": "you@example.com",
+  "visitor_erasure.keep_gallery": "If an account exists, keep my approved Gallery photos/videos anonymously attributed to \"Community Member\" (unapproved items are always deleted)",
+  "visitor_erasure.send_code_btn": "📧 Email Erasure Verification Code",
+  "visitor_erasure.code_label": "Enter 6-Digit Erasure Code",
+  "visitor_erasure.code_placeholder": "123456",
+  "visitor_erasure.confirm_btn": "Permanently Erase My Data",
+  "visitor_erasure.cancel_btn": "Cancel",
+  "visitor_erasure.confirm_dialog": "Permanently erase all personal data and RSVPs matching this email? This cannot be undone. Any signed liability waiver will stay in restricted 3-year legal-defense quarantine before automatic purge.",
+  "visitor_erasure.invalid_email": "Please enter a valid email address.",
+  "visitor_erasure.invalid_code": "Please enter the 6-digit verification code sent to your email.",
+  "clubhouse.peer_block_btn": "🚫 Block",
+  "clubhouse.peer_unblock_btn": "🔓 Unblock",
+  "clubhouse.peer_block_badge": "🚫 Blocked",
+  "clubhouse.peer_block_title": "Block this member (hides their shared-channel messages and prevents 1:1 DMs and voice)",
+  "clubhouse.peer_unblock_title": "Unblock this member",
+  "clubhouse.peer_block_confirm_title": "🚫 Block Member",
+  "clubhouse.peer_block_confirm_msg": "Block {name}? This prevents 1:1 Direct Messages and voice calls between you two, and hides their messages in shared channels and group DMs for you. Announcement boards and Moderator actions are not affected.",
+  "clubhouse.peer_block_btn_confirm": "Block Member",
+  "clubhouse.peer_unblock_confirm_title": "🔓 Unblock Member",
+  "clubhouse.peer_unblock_confirm_msg": "Unblock {name}? You will be able to exchange 1:1 Direct Messages and voice calls again, and their shared-channel messages will be visible.",
+  "clubhouse.peer_unblock_btn_confirm": "Unblock Member",
+  "clubhouse.peer_block_success": "{name} has been blocked.",
+  "clubhouse.peer_unblock_success": "{name} has been unblocked.",
+  "clubhouse.peer_block_error": "Unable to update block status.",
+  "clubhouse.peer_blocked_msg_stub": "🚫 Message from blocked member {name} hidden from your view.",
+  "clubhouse.peer_blocked_reply_stub": "🚫 Reply from blocked member {name} hidden.",
+  "clubhouse.peer_blocked_show_once": "Show once",
+  "clubhouse.peer_blocked_unblock_short": "Unblock",
+  "clubhouse.peer_blocked_dm_notice": "🚫 Direct messages are blocked between you and this member.",
+  "clubhouse.peer_blocked_dm_self": "Unblock this member to start or send a 1:1 Direct Message.",
+  "clubhouse.peer_blocked_voice_notice": "🚫 Voice calls are blocked between you and this member.",
+  "admin.quarantined_title": "🔒 Quarantined Waivers (Legal-Defense Hold)",
+  "admin.quarantined_desc": "Sealed waivers retained for 3 years after account erasure (all lookups are audit-logged and auto-purged after retention expires).",
+  "admin.quarantined_refresh": "🔄 Refresh",
+  "admin.quarantined_purge": "🧹 Purge Expired",
+  "admin.quarantined_col_cert": "Certificate ID",
+  "admin.quarantined_col_signer": "Signer",
+  "admin.quarantined_col_signed": "Signed",
+  "admin.quarantined_col_retention": "Retention Until",
+  "admin.quarantined_col_action": "Action",
+  "admin.quarantined_loading": "Loading quarantined waivers...",
+  "admin.quarantined_empty": "No quarantined waivers on legal hold.",
+  "admin.quarantined_inspect": "📄 Inspect",
+  "admin.quarantined_load_failed": "Failed to load quarantined waivers.",
+  "admin.quarantined_purged": "✓ Purged {count} expired quarantined waiver(s).",
+  "admin.quarantined_purge_failed": "Failed to purge expired quarantined waivers.",
+  "admin.remove_user_title": "Remove Member Account",
+  "admin.remove_user_confirm": "Permanently remove member account {email}? Profile, future RSVPs, and media will be erased, past records anonymized, and any signed liability waiver will be held in 3-year legal-defense quarantine.",
+  "admin.remove_user_ban_checkbox": "Also permanently BAN {email} from re-registering or signing in again",
+  "admin.remove_user_confirm_btn": "Remove Member",
+  "admin.removing_user": "Removing {email}...",
+  "admin.remove_user_failed": "Failed to remove member account.",
+  "profile.saving_btn": "Saving...",
+  "profile.updated_success": "Profile and privacy settings updated successfully!",
+  "profile.update_failed": "Error updating profile.",
+  "profile.erasure_sending_code": "Sending code...",
+  "profile.erasure_send_failed": "Failed to send verification code.",
+  "profile.erasure_enter_code": "Please enter the 6-digit verification code sent to your email.",
+  "profile.erasure_deleting_btn": "Deleting...",
+  "profile.erasure_deleted_fallback": "Your account has been deleted.",
+  "profile.erasure_delete_failed": "Failed to delete account. Please try again.",
+  "visitor_erasure.sending": "Sending...",
+  "visitor_erasure.sent_fallback": "If records matching that email address exist, a 6-digit erasure verification code has been sent. It expires in 10 minutes.",
+  "visitor_erasure.network_error": "Error contacting server. Please try again.",
+  "visitor_erasure.erasing": "Erasing...",
+  "visitor_erasure.erased_fallback": "Your personal data and RSVPs have been erased.",
+  "visitor_erasure.erasure_failed": "Failed to complete erasure. Please try again.",
+  "clubhouse.verify_key_btn": "🛡️ Verify Key",
+  "clubhouse.verify_key_changed_btn": "⚠️ Key Changed!",
+  "clubhouse.verify_key_verified_btn": "✓ Key Verified",
+  "clubhouse.verify_modal_title": "🛡️ Verify E2EE Security Keys",
+  "clubhouse.verify_modal_desc": "Compare these numbers in person or on a trusted call to verify there is no active man-in-the-middle key swap.",
+  "clubhouse.verify_warning_title": "⚠️ Security Key Changed!",
+  "clubhouse.verify_warning_desc": "One or more participants' ECDH public keys differ from what you previously saw. Re-verify before sending sensitive messages.",
+  "clubhouse.verify_safety_number_label": "Shared 60-Digit Safety Number",
+  "clubhouse.verify_copy_btn": "📋 Copy",
+  "clubhouse.verify_done_btn": "Done",
+  "clubhouse.verify_computing": "Computing cryptographic fingerprints...",
+  "clubhouse.verify_unsupported": "Key verification is available on E2EE DMs and Private Boards.",
+  "clubhouse.verify_your_fp": "Your Key Fingerprint",
+  "clubhouse.verify_not_enrolled": "Not enrolled on this browser yet",
+  "clubhouse.verify_reverify_btn": "⚠️ Re-Verify New Key",
+  "clubhouse.verify_verified_badge": "✓ Verified",
+  "clubhouse.verify_mark_btn": "✓ Mark Verified",
+  "clubhouse.verify_no_vault": "⏳ No E2EE Vault",
+  "clubhouse.verify_waiting_member": "Waiting for member to enroll key vault",
+  "clubhouse.verify_last_rotated": "Last rotated: {date}",
+  "clubhouse.verify_pinned_success": "✓ Key fingerprint pinned & marked verified on this device.",
+  "clubhouse.verify_error": "Error: {message}",
+  "clubhouse.verify_load_failed": "Failed to load key info: {message}",
+  "clubhouse.verify_own_fp": "Your ECDH Identity Key Fingerprint: {fp}",
+  "clubhouse.audit_notice_title": "Server Security Audit Notice",
+  "clubhouse.audit_sender_name": "Clubhouse Security Audit",
+  "clubhouse.audit_verified_badge": "🔐 Server Verified"
 };
 
 const KNOWN_PHRASE_KEYS = {
@@ -884,7 +1039,7 @@ const API = {
             </a>
           </div>
           <p style="margin-top: 12px; font-size: 0.8rem; color: #94a3b8; line-height: 1.5;">
-            <span data-i18n="footer.about_site">${this.escapeHtml(this.t('footer.about_site', 'Prototyped with Google Gemini in October 2026 for simplicity and durability. Free & open-source'))}</span> on <a href="https://github.com/djrow/pickup-baseball" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">GitHub</a> • <a href="/about.html" data-i18n="nav.about" style="color: inherit; text-decoration: underline;">About Us</a> • <a href="/waiver.html" style="color: inherit; text-decoration: underline;">Player Waiver</a>.
+            <span data-i18n="footer.about_site">${this.escapeHtml(this.t('footer.about_site', 'Prototyped with Google Gemini in October 2026 for simplicity and durability. Free & open-source'))}</span> on <a href="https://github.com/djrow/pickup-baseball" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">GitHub</a> • <a href="/about.html" data-i18n="nav.about" style="color: inherit; text-decoration: underline;">About Us</a> • <a href="/waiver.html" style="color: inherit; text-decoration: underline;">Player Waiver</a> • <a href="/login.html#erase-data" data-i18n="footer.erase_data" style="color: inherit; text-decoration: underline;">${this.escapeHtml(this.t('footer.erase_data', 'Erase My Data'))}</a>.
           </p>
           <p style="margin-top: 6px; font-size: 0.75rem; color: #64748b; line-height: 1.4;">
             <a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;" data-i18n="footer.copyright">${this.escapeHtml(this.t('footer.copyright', '© 2026 Pickup Baseball Foundation. Licensed under Apache License 2.0.'))}</a> • <span id="footer-app-version" class="footer-app-version" title="Loaded web app version">v${this.escapeHtml(this.CLIENT_VERSION)}</span>
@@ -1486,6 +1641,7 @@ const API = {
       communityName: 'Community Hub',
       publicOrigin: null,
       handbookUrl: null,
+      turnConfigured: false,
       features: {
         battingPractice: false,
         certifiedShifts: false,
@@ -1768,8 +1924,28 @@ const API = {
     return this.request('POST', '/api/auth/logout-other-devices', {});
   },
 
-  async updateProfile(name, bio) {
-    return this.request('PUT', '/api/auth/profile', { name: name, bio: bio });
+  async exportMyData() {
+    return this.request('GET', '/api/auth/export', null, { noStore: true });
+  },
+
+  async updateProfile(name, bio, extra) {
+    const payload = { name: name, bio: bio };
+    if (extra && typeof extra === 'object') {
+      Object.keys(extra).forEach(function(k) {
+        if (extra[k] !== undefined) {
+          payload[k] = extra[k];
+        }
+      });
+    }
+    return this.request('PUT', '/api/auth/profile', payload);
+  },
+
+  async getConsent() {
+    return this.request('GET', '/api/auth/consent', null, { noStore: true });
+  },
+
+  async updateConsent(payload) {
+    return this.request('PUT', '/api/auth/consent', payload || {});
   },
 
   async setClubhouseOptIn(optedIn) {
@@ -1883,6 +2059,26 @@ const API = {
 
   async deleteUser(userId, ban = false, reason = '') {
     return this.request('DELETE', '/api/auth/users/' + encodeURIComponent(userId) + '?ban=' + (ban ? 'true' : 'false') + '&reason=' + encodeURIComponent(reason));
+  },
+
+  async deleteMyAccount(payload) {
+    return this.request('DELETE', '/api/auth/me', payload || {});
+  },
+
+  async requestVisitorErasure(email) {
+    return this.request('POST', '/api/auth/erasure/request', { email: email });
+  },
+
+  async confirmVisitorErasure(payload) {
+    return this.request('POST', '/api/auth/erasure/confirm', payload || {});
+  },
+
+  async getQuarantinedWaivers() {
+    return this.request('GET', '/api/waiver/admin/quarantined', null, { noStore: true });
+  },
+
+  async purgeQuarantinedWaivers() {
+    return this.request('POST', '/api/waiver/admin/quarantined/purge', {});
   },
 
   async getBannedEmails() {

@@ -66,7 +66,7 @@
           <button type="button" class="ch-icon-btn ch-mobile-toggle-btn" id="btn-mobile-sidebar" aria-label="Open channels and DMs" title="Channels &amp; DMs">☰</button>
           <span class="ch-stage-title" id="ch-active-channel-name">#general</span>
           <span class="ch-e2ee-badge" id="ch-active-e2ee-badge">🛡️ Moderated Board</span>
-          <button type="button" class="ch-promote-btn hidden" id="btn-dm-verify-key" title="Verify E2EE Key Fingerprints & Safety Number">🛡️ Verify Key</button>
+          <button type="button" class="ch-promote-btn hidden" id="btn-dm-verify-key" title="Verify E2EE Key Fingerprints & Safety Number" data-i18n="clubhouse.verify_key_btn">🛡️ Verify Key</button>
           <span class="ch-stage-topic" id="ch-active-channel-topic">Main community hangout for all players.</span>
         </div>
         <div class="ch-stage-actions">
@@ -278,6 +278,7 @@
         <input type="checkbox" id="ch-privacy-relay-toggle" />
         <span><strong>Hide My IP (Privacy Relay Mode)</strong> — Force WebRTC voice/video to use TURN relay candidates only</span>
       </label>
+      <div id="ch-privacy-relay-turn-note" class="hidden" style="font-size:11.5px;margin-top:-8px;margin-bottom:12px;"></div>
 
       <div style="display:flex;gap:8px;margin-bottom:16px;">
         <button type="button" class="ch-send-btn" id="btn-enroll-keys">Enroll &amp; Backup Keys</button>
@@ -367,21 +368,21 @@
   <div class="ch-modal-backdrop hidden" id="ch-verify-modal">
     <div class="ch-modal" role="dialog" aria-labelledby="ch-verify-modal-title">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <h3 id="ch-verify-modal-title" style="margin:0;font-size:17px;">🛡️ Verify E2EE Security Keys</h3>
+        <h3 id="ch-verify-modal-title" style="margin:0;font-size:17px;" data-i18n="clubhouse.verify_modal_title">🛡️ Verify E2EE Security Keys</h3>
         <button type="button" class="ch-icon-btn" id="btn-close-verify-modal">✕</button>
       </div>
-      <p style="font-size:12.5px;color:var(--ch-text-secondary);margin-top:0;">
+      <p style="font-size:12.5px;color:var(--ch-text-secondary);margin-top:0;" data-i18n="clubhouse.verify_modal_desc">
         Compare these numbers in person or on a trusted call to verify there is no active man-in-the-middle key swap.
       </p>
 
       <div id="ch-verify-warning" class="hidden" style="background:rgba(245,158,11,0.16);border:1px solid rgba(245,158,11,0.5);color:#fde68a;border-radius:6px;padding:8px 10px;font-size:12px;margin-bottom:10px;">
-        ⚠️ <strong>Security Key Changed!</strong> One or more participants' ECDH public keys differ from what you previously saw. Re-verify before sending sensitive messages.
+        <strong data-i18n="clubhouse.verify_warning_title">⚠️ Security Key Changed!</strong> <span data-i18n="clubhouse.verify_warning_desc">One or more participants' ECDH public keys differ from what you previously saw. Re-verify before sending sensitive messages.</span>
       </div>
 
       <div id="ch-verify-safety-wrap" class="hidden" style="margin-bottom:12px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-          <span style="font-size:12px;font-weight:700;">Shared 60-Digit Safety Number</span>
-          <button type="button" class="ch-promote-btn" id="btn-copy-safety-number">📋 Copy</button>
+          <span style="font-size:12px;font-weight:700;" data-i18n="clubhouse.verify_safety_number_label">Shared 60-Digit Safety Number</span>
+          <button type="button" class="ch-promote-btn" id="btn-copy-safety-number" data-i18n="clubhouse.verify_copy_btn">📋 Copy</button>
         </div>
         <div id="ch-verify-safety-number" style="font-family:monospace;font-size:13.5px;letter-spacing:0.6px;line-height:1.65;background:rgba(0,0,0,0.28);border:1px solid var(--ch-border);border-radius:6px;padding:10px;text-align:center;user-select:all;"></div>
       </div>
@@ -389,7 +390,7 @@
       <div id="ch-verify-peers-list" style="max-height:190px;overflow-y:auto;margin-bottom:10px;font-size:12px;"></div>
       <div id="ch-verify-status-msg" style="font-size:12px;color:var(--ch-green);margin-bottom:8px;"></div>
       <div style="display:flex;justify-content:flex-end;">
-        <button type="button" class="ch-rsvp-btn" id="btn-done-verify-modal">Done</button>
+        <button type="button" class="ch-rsvp-btn" id="btn-done-verify-modal" data-i18n="clubhouse.verify_done_btn">Done</button>
       </div>
     </div>
   </div>

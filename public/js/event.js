@@ -149,14 +149,20 @@ async function loadEventData(preserveAlertHtml) {
       if (cachedRaw) {
         const cachedRes = JSON.parse(cachedRaw);
         if (cachedRes && cachedRes.event && !cachedRes.event.is_restricted) {
-          if (!API.currentUser && Array.isArray(cachedRes.duties)) {
-            cachedRes.duties = cachedRes.duties.map(function(d) {
-              return Object.assign({}, d, {
-                assigned_players: (d.assigned_players || []).map(function(p) {
-                  return { attendee_id: p.attendee_id, name: '' };
-                })
+          if (!API.currentUser) {
+            cachedRes.attendees = [];
+            cachedRes.waitlist = [];
+            cachedRes.comments = [];
+            cachedRes.bp_signups = [];
+            if (Array.isArray(cachedRes.duties)) {
+              cachedRes.duties = cachedRes.duties.map(function(d) {
+                return Object.assign({}, d, {
+                  assigned_players: (d.assigned_players || []).map(function(p) {
+                    return { attendee_id: p.attendee_id, name: '' };
+                  })
+                });
               });
-            });
+            }
           }
           applyLoadedEventToDom(cachedRes, false);
         }
@@ -196,7 +202,8 @@ async function loadEventData(preserveAlertHtml) {
             });
           }),
           attendees: [],
-          comments: res.comments,
+          waitlist: [],
+          comments: [],
           bp_signups: [],
           totalAttendees: res.totalAttendees,
           totalSpectators: res.totalSpectators,
@@ -475,7 +482,7 @@ function renderAttendeesRoster() {
     rosterHtml = `
       <ul class="roster-list">
         ${attendees.map(function(a, idx) {
-          const displayName = attendeeAbbr[idx] || API.formatDisplayName(a.name, 'Player');
+          const displayName = a.show_full_name ? (a.name || 'Player') : (attendeeAbbr[idx] || API.formatDisplayName(a.name, 'Player'));
           const safeAvatar = API.safeAvatarUrl(a.avatar_url);
           const avatarImg = safeAvatar
             ? `<img src="${API.escapeHtml(safeAvatar)}" alt="${API.escapeHtml(displayName)}" class="roster-avatar" loading="lazy" decoding="async">`
@@ -550,7 +557,7 @@ function renderAttendeesRoster() {
         </div>
         <ul class="roster-list" style="opacity: 0.95;">
           ${waitlist.map(function(w, idx) {
-            const wDisplayName = waitlistAbbr[idx] || API.formatDisplayName(w.name, 'Player');
+            const wDisplayName = w.show_full_name ? (w.name || 'Player') : (waitlistAbbr[idx] || API.formatDisplayName(w.name, 'Player'));
             const safeAvatar = API.safeAvatarUrl(w.avatar_url);
             const avatarImg = safeAvatar
               ? `<img src="${API.escapeHtml(safeAvatar)}" alt="${API.escapeHtml(wDisplayName)}" class="roster-avatar" loading="lazy" decoding="async">`
@@ -599,6 +606,15 @@ function renderComments() {
   const container = document.getElementById('comments-container');
   const comments = eventData.comments || [];
 
+  if (!API.currentUser) {
+    container.innerHTML = `
+      <p style="color: var(--text-muted); font-style: italic;">
+        🔒 ${API.escapeHtml(API.t('event.comments_members_only', 'Event discussion is visible to signed-in members only.'))}
+      </p>
+    `;
+    return;
+  }
+
   if (comments.length === 0) {
     container.innerHTML = `
       <p style="color: var(--text-muted); font-style: italic;">
@@ -610,7 +626,7 @@ function renderComments() {
 
   const commentAbbr = API.abbreviateDisplayNames(comments, 'author_name', 'user_id', 'Player');
   container.innerHTML = comments.map(function(c, idx) {
-    const authorDisplay = commentAbbr[idx] || API.formatDisplayName(c.author_name, 'Player');
+    const authorDisplay = c.show_full_name ? (c.author_name || 'Player') : (commentAbbr[idx] || API.formatDisplayName(c.author_name, 'Player'));
     const safeAvatar = API.safeAvatarUrl(c.avatar_url);
     const avatarImg = safeAvatar
       ? `<img src="${API.escapeHtml(safeAvatar)}" alt="${API.escapeHtml(authorDisplay)}" class="comment-avatar" loading="lazy" decoding="async">`
@@ -733,7 +749,9 @@ function renderTasksChecklist(isInteractive) {
     const isCompletelyFull = totalFilledCount >= d.slots_needed;
     const assignedAbbr = API.abbreviateDisplayNames(assigned, 'name', 'user_id', 'Player');
     const volunteerNames = assigned.map(function(p, idx) {
-      return API.escapeHtml(assignedAbbr[idx] || API.formatDisplayName(p.name, 'Player'));
+      if (!p || !p.name) return '';
+      const display = p.show_full_name ? p.name : (assignedAbbr[idx] || API.formatDisplayName(p.name, 'Player'));
+      return API.escapeHtml(display);
     }).filter(Boolean).join(', ');
     const translatedTitle = API.translatePhrase(d.title);
     const translatedDesc = API.translatePhrase(d.description || '');
@@ -959,29 +977,31 @@ async function setupRsvpState(preserveAlertHtml) {
   const isRestricted = Boolean(eventData && eventData.event && eventData.event.is_restricted);
   const isAllowed = Boolean(eventData && eventData.event && eventData.event.is_allowed_to_rsvp);
 
-  // Comment form auth state
+  // Comment form auth state (signing in is always required to view or post comments)
   if (user) {
-    if (commentGuestFields) commentGuestFields.style.display = 'none';
+    if (commentForm && commentForm.dataset.lockedRendered === 'true' && commentForm.dataset.originalHtml) {
+      commentForm.innerHTML = commentForm.dataset.originalHtml;
+      delete commentForm.dataset.lockedRendered;
+    }
+    const activeGuestFields = document.getElementById('comment-guest-fields') || commentGuestFields;
+    if (activeGuestFields) activeGuestFields.style.display = 'none';
     const cName = document.getElementById('comment-author-name');
     if (cName) cName.required = false;
-  } else if (requireLogin) {
-    if (commentForm && !commentForm.dataset.lockedRendered) {
-      commentForm.dataset.lockedRendered = 'true';
-      commentForm.innerHTML = `
-        <div style="background: var(--bg-subtle); border: 1.5px dashed var(--border); border-radius: var(--radius-sm); padding: 18px; text-align: center;">
-          <p style="margin: 0 0 10px 0; color: var(--text-muted); font-size: 0.9rem;">
-            ${API.escapeHtml(API.t('event.signin_to_comment'))}
-          </p>
-          <a href="/login.html?redirect=${encodeURIComponent(window.location.href)}" class="btn btn-outline btn-sm" style="font-weight: 700;">
-            ${API.escapeHtml(API.t('event.signin_email_btn'))}
-          </a>
-        </div>
-      `;
+  } else if (commentForm && !commentForm.dataset.lockedRendered) {
+    if (!commentForm.dataset.originalHtml) {
+      commentForm.dataset.originalHtml = commentForm.innerHTML;
     }
-  } else {
-    if (commentGuestFields) commentGuestFields.style.display = 'grid';
-    const cName = document.getElementById('comment-author-name');
-    if (cName) cName.required = true;
+    commentForm.dataset.lockedRendered = 'true';
+    commentForm.innerHTML = `
+      <div style="background: var(--bg-subtle); border: 1.5px dashed var(--border); border-radius: var(--radius-sm); padding: 18px; text-align: center;">
+        <p style="margin: 0 0 10px 0; color: var(--text-muted); font-size: 0.9rem;">
+          ${API.escapeHtml(API.t('event.signin_to_comment'))}
+        </p>
+        <a href="/login.html?redirect=${encodeURIComponent(window.location.href)}" class="btn btn-outline btn-sm" style="font-weight: 700;">
+          ${API.escapeHtml(API.t('event.signin_email_btn'))}
+        </a>
+      </div>
+    `;
   }
 
   // 1. Rainout state: close RSVP inputs, keep tasks visible in read-only mode
@@ -1077,16 +1097,22 @@ async function setupRsvpState(preserveAlertHtml) {
   if (interactiveTop) interactiveTop.style.display = 'block';
   if (interactiveBottom) interactiveBottom.style.display = 'block';
 
+  const visitorConsentWrap = document.getElementById('visitor-consent-wrap');
+  const rsvpRosterConsentEl = document.getElementById('rsvp-roster-consent');
+  const rsvpNotifyEmailsEl = document.getElementById('rsvp-notify-emails');
+
   if (user) {
     if (loginPrompt) loginPrompt.style.display = 'none';
     if (editLinkBox) editLinkBox.style.display = 'none';
     if (guestFields) guestFields.style.display = 'none';
+    if (visitorConsentWrap) visitorConsentWrap.style.display = 'none';
     document.getElementById('rsvp-name').required = false;
     document.getElementById('rsvp-email').required = false;
   } else {
     if (loginPrompt) loginPrompt.style.display = 'flex';
     if (editLinkBox) editLinkBox.style.display = 'block';
     if (guestFields) guestFields.style.display = 'grid';
+    if (visitorConsentWrap) visitorConsentWrap.style.display = 'block';
     document.getElementById('rsvp-name').required = true;
     document.getElementById('rsvp-email').required = false;
   }
@@ -1134,6 +1160,8 @@ async function setupRsvpState(preserveAlertHtml) {
     if (myRsvp.email) document.getElementById('rsvp-email').value = myRsvp.email;
     if (gearInput) gearInput.value = myRsvp.gear_bringing || '';
     if (guestNamesInput) guestNamesInput.value = myRsvp.guest_names || '';
+    if (rsvpRosterConsentEl) rsvpRosterConsentEl.checked = Boolean(myRsvp.roster_consent);
+    if (rsvpNotifyEmailsEl) rsvpNotifyEmailsEl.checked = Boolean(myRsvp.notify_emails);
 
     if (myRsvp.status !== 'declined') {
       const pCount = myRsvp.players_count != null ? myRsvp.players_count : (1 + (myRsvp.additional_guests || 0));
@@ -1153,6 +1181,8 @@ async function setupRsvpState(preserveAlertHtml) {
     if (cancelBtn) cancelBtn.style.display = 'none';
     if (playersInput) playersInput.value = '1';
     if (spectatorsInput) spectatorsInput.value = '0';
+    if (rsvpRosterConsentEl) rsvpRosterConsentEl.checked = false;
+    if (rsvpNotifyEmailsEl) rsvpNotifyEmailsEl.checked = false;
     if (!preserveAlertHtml && isFull && alertDiv) {
       alertDiv.innerHTML = `
         <div class="alert alert-warning" style="border-left: 4px solid var(--primary); border-inline-start: 4px solid var(--primary); background: var(--bg-subtle); margin-bottom: 14px;">
@@ -1641,6 +1671,13 @@ function setupRsvpForm() {
       management_token: guestToken
     };
 
+    if (!API.currentUser) {
+      const rosterConsentEl = document.getElementById('rsvp-roster-consent');
+      const notifyEmailsEl = document.getElementById('rsvp-notify-emails');
+      payload.roster_consent = Boolean(rosterConsentEl && rosterConsentEl.checked);
+      payload.notify_emails = Boolean(notifyEmailsEl && notifyEmailsEl.checked);
+    }
+
     try {
       const res = await API.postRsvp(eventId, payload);
       delete submitBtn.dataset.submitting;
@@ -1958,7 +1995,7 @@ function renderBpOrder() {
   const bpAbbrList = API.abbreviateDisplayNames(signups, 'player_name', 'user_id', 'Player');
   const bpDisplayById = new Map();
   signups.forEach(function(s, idx) {
-    bpDisplayById.set(s.slot_number, bpAbbrList[idx] || API.formatDisplayName(s.player_name, 'Player'));
+    bpDisplayById.set(s.slot_number, s.show_full_name ? (s.player_name || 'Player') : (bpAbbrList[idx] || API.formatDisplayName(s.player_name, 'Player')));
   });
 
   let html = '';
@@ -2070,7 +2107,7 @@ function openBpModal(preferredSlot, existingSignupOrId) {
   const bpOptionAbbr = API.abbreviateDisplayNames(signups, 'player_name', 'user_id', 'Player');
   const bpOptionDisplay = new Map();
   signups.forEach(function(s, idx) {
-    bpOptionDisplay.set(s.slot_number, bpOptionAbbr[idx] || API.formatDisplayName(s.player_name, 'Player'));
+    bpOptionDisplay.set(s.slot_number, s.show_full_name ? (s.player_name || 'Player') : (bpOptionAbbr[idx] || API.formatDisplayName(s.player_name, 'Player')));
   });
   let selectHtml = '';
   for (let i = 1; i <= maxSlot; i++) {

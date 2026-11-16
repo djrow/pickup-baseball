@@ -152,6 +152,70 @@
         💡 New here? Just enter your name and email above — we'll email you a code, and your account is created automatically.
       </div>
     </div>
+
+    <!-- Unauthenticated Visitor Self-Service Erasure Card -->
+    <section class="card" id="visitor-erasure-card" style="box-shadow: var(--shadow-md); margin-top: 20px;" aria-labelledby="visitor-erasure-heading">
+      <div id="erase-data"></div>
+      <details id="visitor-erasure-details">
+        <summary id="visitor-erasure-heading" style="cursor: pointer; font-weight: 700; color: var(--danger); font-size: 0.96rem; display: flex; align-items: center; justify-content: space-between; gap: 8px; list-style: none;">
+          <span data-i18n="visitor_erasure.title">🗑️ Erase Visitor / RSVP Data</span>
+          <span style="font-size: 0.78rem; font-weight: 500; color: var(--text-muted);" data-i18n="visitor_erasure.summary_hint">Remove RSVPs or data without signing in</span>
+        </summary>
+
+        <div style="margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border);">
+          <p id="visitor-erasure-notice" style="font-size: 0.82rem; color: var(--text-muted); margin: 0 0 12px 0; line-height: 1.45;" data-i18n="visitor_erasure.notice">
+            Verify your email with a 6-digit code to permanently delete future RSVPs, task assignments, batting practice slots, and consent records, and anonymize past attendance and comments. Legal Waiver Retention Notice: Signed liability waivers remain sealed in restricted Admin-only quarantine for 3 years from signing or your last attended event before permanent deletion.
+          </p>
+
+          <div id="visitor-erasure-alert" style="margin-bottom: 10px;"></div>
+
+          <form id="visitor-erasure-request-form">
+            <div class="form-group">
+              <label for="visitor-erasure-email" data-i18n="visitor_erasure.email_label">Email Address *</label>
+              <input type="email" id="visitor-erasure-email" placeholder="you@example.com" data-i18n-placeholder="visitor_erasure.email_placeholder" required autocomplete="email">
+            </div>
+
+            <label style="display: flex; align-items: flex-start; gap: 8px; font-size: 0.82rem; color: var(--text-main); margin-bottom: 14px; cursor: pointer;">
+              <input type="checkbox" id="visitor-erasure-keep-gallery" style="width: 16px; height: 16px; margin-top: 2px; cursor: pointer;">
+              <span data-i18n="visitor_erasure.keep_gallery">If an account exists, keep my approved Gallery photos/videos anonymously attributed to "Community Member" (unapproved items are always deleted)</span>
+            </label>
+
+            <button type="submit" id="btn-visitor-erasure-request" class="btn btn-outline" style="width: 100%; color: var(--danger); border-color: var(--danger); font-weight: 700;" data-i18n="visitor_erasure.send_code_btn">
+              📧 Email Erasure Verification Code
+            </button>
+          </form>
+
+          <form id="visitor-erasure-confirm-form" style="display: none; margin-top: 12px;">
+            <div class="alert alert-info" id="visitor-erasure-sent-notice" style="font-size: 0.84rem; margin-bottom: 12px;"></div>
+
+            <div class="form-group" style="text-align: center;">
+              <label for="visitor-erasure-code" style="font-size: 0.92rem; font-weight: 600;" data-i18n="visitor_erasure.code_label">Enter 6-Digit Erasure Code</label>
+              <input
+                type="text"
+                id="visitor-erasure-code"
+                maxlength="6"
+                inputmode="numeric"
+                autocomplete="one-time-code"
+                placeholder="123456"
+                data-i18n-placeholder="visitor_erasure.code_placeholder"
+                pattern="[0-9]{6}"
+                required
+                style="font-size: 1.6rem; text-align: center; letter-spacing: 5px; font-weight: bold; width: 200px; margin: 0 auto;"
+              >
+            </div>
+
+            <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px;">
+              <button type="submit" id="btn-visitor-erasure-confirm" class="btn" style="flex: 1; background: var(--danger); color: #ffffff; border: 1px solid var(--danger); font-weight: 700;" data-i18n="visitor_erasure.confirm_btn">
+                Permanently Erase My Data
+              </button>
+              <button type="button" id="btn-visitor-erasure-cancel" class="btn btn-outline" data-i18n="visitor_erasure.cancel_btn">
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      </details>
+    </section>
   </main>
 
   <footer id="site-footer" class="site-footer"></footer>

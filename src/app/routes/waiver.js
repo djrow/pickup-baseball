@@ -7,6 +7,7 @@ import { Hono } from 'hono';
 import {
   escapeHtml,
   sha256Hex,
+  hmacSha256Hex,
   base64ToUint8Array,
   isValidRasterImageBuffer,
   getClientIp,
@@ -20,6 +21,9 @@ import { isGDriveConfigured, uploadGDriveTextFile } from '../gdrive.js';
 import { sendWaiverConfirmationEmail } from '../mailer.js';
 import { logEvent } from '../errors.js';
 import { resolveConfig, PRESET_PICKUP_BASEBALL } from '../config.js';
+import { purgeExpiredQuarantinedWaivers, scrubExpiredWaiverTelemetry } from '../erasure.js';
+
+export { scrubExpiredWaiverTelemetry };
 
 export const waiverRouter = /** @type {AppHono} */ (new Hono());
 
@@ -80,32 +84,30 @@ export function getWaiverSpec(env) {
   };
 }
 
-function getSubtleCrypto() {
-  if (typeof crypto !== 'undefined' && crypto && crypto.subtle) {
-    return crypto.subtle;
-  }
-  return null;
-}
-
 let ephemeralProvenanceSecret = null;
 
+/**
+ * @param {string} sessionSecret
+ * @returns {Promise<string>}
+ */
+async function deriveLegacySessionProvenanceSecret(sessionSecret) {
+  return hmacSha256Hex(String(sessionSecret), 'pickup-waiver-provenance-key-v1');
+}
+
+/**
+ * Resolve isolated waiver provenance HMAC secret material (never coupled to SESSION_SECRET).
+ *
+ * @param {Record<string, any> | null | undefined} env
+ * @param {D1Database | null} [db]
+ * @returns {Promise<string>}
+ */
 async function getProvenanceSecretMaterial(env, db = null) {
   const e = env || (typeof process !== 'undefined' ? process.env : {}) || {};
-  if (e.WAIVER_SIGNING_SECRET) {
-    return String(e.WAIVER_SIGNING_SECRET);
-  }
-  const baseSecret = e.SESSION_SECRET;
-  if (baseSecret) {
-    const subtle = getSubtleCrypto();
-    const baseKey = await subtle.importKey(
-      'raw',
-      new TextEncoder().encode(String(baseSecret)),
-      { name: 'HMAC', hash: 'SHA-256' },
-      false,
-      ['sign']
-    );
-    const derived = await subtle.sign('HMAC', baseKey, new TextEncoder().encode('pickup-waiver-provenance-key-v1'));
-    return Array.from(new Uint8Array(derived), (b) => b.toString(16).padStart(2, '0')).join('');
+  const explicitWaiverSecret = e.WAIVER_SIGNING_SECRET !== undefined && e.WAIVER_SIGNING_SECRET !== null
+    ? String(e.WAIVER_SIGNING_SECRET).trim()
+    : '';
+  if (explicitWaiverSecret) {
+    return explicitWaiverSecret;
   }
 
   const targetDb = db || e.DB || e.BASEBALL_DB || null;
@@ -142,19 +144,61 @@ async function getProvenanceSecretMaterial(env, db = null) {
 
 export async function computeProvenanceSeal(env, payloadStr, db = null) {
   const secretMaterial = await getProvenanceSecretMaterial(env, db);
-  const subtle = getSubtleCrypto();
-  const keyBytes = new TextEncoder().encode(secretMaterial);
-  const cryptoKey = await subtle.importKey(
-    'raw',
-    keyBytes,
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
-  );
-  const sigBuffer = await subtle.sign('HMAC', cryptoKey, new TextEncoder().encode(String(payloadStr || '')));
-  return Array.from(new Uint8Array(sigBuffer))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
+  return hmacSha256Hex(secretMaterial, payloadStr);
+}
+
+/**
+ * Verify a waiver provenance seal against the isolated `WAIVER_SIGNING_SECRET` /
+ * `app_settings.waiver_provenance_secret`, with backward-compatible fallback
+ * to DB-stored secret (if WAIVER_SIGNING_SECRET was added later) and the legacy
+ * `SESSION_SECRET`-derived HMAC key for pre-cutover waivers.
+ *
+ * @param {Record<string, any> | null | undefined} env
+ * @param {string} payloadStr
+ * @param {string} storedSeal
+ * @param {D1Database | null} [db]
+ * @returns {Promise<boolean>}
+ */
+export async function verifyWaiverProvenanceSeal(env, payloadStr, storedSeal, db = null) {
+  if (!storedSeal || typeof storedSeal !== 'string') {
+    return false;
+  }
+  const primarySeal = await computeProvenanceSeal(env, payloadStr, db);
+  if (constantTimeEqual(primarySeal, storedSeal)) {
+    return true;
+  }
+
+  const e = env || (typeof process !== 'undefined' ? process.env : {}) || {};
+  const explicitWaiverSecret = e.WAIVER_SIGNING_SECRET !== undefined && e.WAIVER_SIGNING_SECRET !== null
+    ? String(e.WAIVER_SIGNING_SECRET).trim()
+    : '';
+  const targetDb = db || e.DB || e.BASEBALL_DB || null;
+  if (explicitWaiverSecret && targetDb) {
+    try {
+      const existing = await targetDb.prepare("SELECT value FROM app_settings WHERE key = 'waiver_provenance_secret'").first();
+      if (existing && existing.value) {
+        const dbSeal = await hmacSha256Hex(String(existing.value), payloadStr);
+        if (constantTimeEqual(dbSeal, storedSeal)) {
+          return true;
+        }
+      }
+    } catch (err) {
+      logEvent('warn', 'waiver_provenance_legacy_db_lookup_failed', { err });
+    }
+  }
+
+  const legacySessionSecret = e.SESSION_SECRET !== undefined && e.SESSION_SECRET !== null
+    ? String(e.SESSION_SECRET)
+    : '';
+  if (legacySessionSecret) {
+    const legacyMaterial = await deriveLegacySessionProvenanceSecret(legacySessionSecret);
+    const legacySeal = await hmacSha256Hex(legacyMaterial, payloadStr);
+    if (constantTimeEqual(legacySeal, storedSeal)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function generateCertificateId(signedDateStr, prefix = 'PBF-WVR') {
@@ -205,8 +249,6 @@ export function renderSignedWaiverCertificateHtml(waiverRow, integrityVerified =
   const safeTextHash = escapeHtml(waiverRow.waiver_text_sha256 || '');
   const safeDocHash = escapeHtml(waiverRow.document_sha256 || '');
   const safeSeal = escapeHtml(waiverRow.provenance_seal || '');
-  const safeIp = includePii ? escapeHtml(waiverRow.signer_ip || 'recorded') : 'Redacted';
-  const safeUa = includePii ? escapeHtml(waiverRow.user_agent || 'browser') : 'Verification View';
   const sigData = includePii ? String(waiverRow.signature_data || '') : '';
   const isImgSig = includePii && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(sigData);
 
@@ -419,7 +461,7 @@ export function renderSignedWaiverCertificateHtml(waiverRow, integrityVerified =
         <div class="prov-label">Executed Timestamp (UTC):</div>
         <div class="prov-val">${safeSignedAt}</div>
         <div class="prov-label">Client IP &amp; User-Agent:</div>
-        <div class="prov-val">${safeIp} • ${safeUa}</div>
+        <div class="prov-val">Redacted (30-day anti-fraud window)</div>
         <div class="prov-label">Electronic Consent:</div>
         <div class="prov-val">Explicitly affirmed by signer prior to execution</div>
         <div class="prov-label">Waiver Text SHA-256:</div>
@@ -453,6 +495,8 @@ async function getWaiverStatusHandler(c) {
     });
   }
 
+  await scrubExpiredWaiverTelemetry(c.env.DB);
+
   const dbUser = await c.env.DB.prepare(
     "SELECT COALESCE(waiver_status, 'none') as waiver_status, waiver_signed_at FROM users WHERE id = ?"
   ).bind(user.id).first();
@@ -461,7 +505,8 @@ async function getWaiverStatusHandler(c) {
     SELECT certificate_id, printed_name, email, signed_date, signature_type, document_version,
            waiver_text_sha256, document_sha256, provenance_seal, gdrive_file_id, signed_at
     FROM waivers
-    WHERE user_id = ? OR LOWER(email) = LOWER(?)
+    WHERE (user_id = ? OR LOWER(email) = LOWER(?))
+      AND COALESCE(status, 'active') != 'quarantined'
     ORDER BY id DESC LIMIT 1
   `).bind(user.id, user.email).first();
 
@@ -491,7 +536,7 @@ waiverRouter.get('/status', getWaiverStatusHandler);
 waiverRouter.post('/sign', requireAuth, async (c) => {
   const user = c.get('user');
   const clientIp = getClientIp(c);
-  const rl = await checkRateLimit(c.env.DB, `waiver_sign_${user.id}`, 10, 3600, c.env);
+  const rl = await checkRateLimit(c.env.DB, `waiver_sign:${user.id}`, 10, 3600, c.env);
   if (!rl.allowed) {
     return c.json({ error: 'Too many waiver submissions. Please try again later.' }, 429);
   }
@@ -535,6 +580,13 @@ waiverRouter.post('/sign', requireAuth, async (c) => {
     signedDate = rawDate;
   }
 
+  const rawAgeAttestation = body.age_attestation !== undefined ? body.age_attestation : body.attested_18_plus;
+  if (rawAgeAttestation !== true && rawAgeAttestation !== 1) {
+    return c.json({
+      error: 'You must confirm that you are 18 years of age or older (or a parent/legal guardian signing on behalf of a minor).'
+    }, 400);
+  }
+
   if (body.electronic_consent !== true) {
     return c.json({ error: 'You must check the box consenting to sign this Consent, Waiver and Indemnity electronically.' }, 400);
   }
@@ -562,6 +614,7 @@ waiverRouter.post('/sign', requireAuth, async (c) => {
     return c.json({ error: 'Signature image must be a valid PNG file.' }, 400);
   }
 
+  const cfg = resolveConfig(c.env);
   const spec = getWaiverSpec(c.env);
   const waiverTextSha256 = await sha256Hex(spec.officialText);
   const signatureSha256 = await sha256Hex(signatureData);
@@ -578,7 +631,11 @@ waiverRouter.post('/sign', requireAuth, async (c) => {
   const documentSha256 = await sha256Hex(canonicalPayload);
   const certificateId = generateCertificateId(signedDate, spec.certificatePrefix);
   const provenanceSeal = await computeProvenanceSeal(c.env, `${certificateId}:${documentSha256}`, c.env.DB);
-  const signedAtIso = new Date().toISOString();
+  const signedAtDate = new Date();
+  const signedAtIso = signedAtDate.toISOString();
+  const retentionUntilDate = new Date(signedAtDate.getTime());
+  retentionUntilDate.setUTCFullYear(retentionUntilDate.getUTCFullYear() + cfg.WAIVER_RETENTION_YEARS);
+  const retentionUntilIso = retentionUntilDate.toISOString();
   const userAgent = (c.req.header('User-Agent') || 'unknown').slice(0, 250);
 
   await c.env.DB.batch([
@@ -587,8 +644,8 @@ waiverRouter.post('/sign', requireAuth, async (c) => {
         certificate_id, user_id, email, printed_name, signed_date,
         signature_type, signature_data, document_version,
         waiver_text_sha256, document_sha256, provenance_seal,
-        signer_ip, user_agent, electronic_consent, signed_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+        signer_ip, user_agent, electronic_consent, signed_at, retention_until
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
     `).bind(
       certificateId,
       user.id,
@@ -603,7 +660,8 @@ waiverRouter.post('/sign', requireAuth, async (c) => {
       provenanceSeal,
       clientIp,
       userAgent,
-      signedAtIso
+      signedAtIso,
+      retentionUntilIso
     ),
     c.env.DB.prepare(
       "UPDATE users SET waiver_status = 'digital', waiver_signed_at = ? WHERE id = ?"
@@ -622,14 +680,13 @@ waiverRouter.post('/sign', requireAuth, async (c) => {
     waiver_text_sha256: waiverTextSha256,
     document_sha256: documentSha256,
     provenance_seal: provenanceSeal,
-    signer_ip: clientIp,
-    user_agent: userAgent,
     signed_at: signedAtIso
   };
 
   const origin = getSafePublicOrigin(c);
 
   const backgroundWork = (async () => {
+    await scrubExpiredWaiverTelemetry(c.env.DB);
     try {
       if (isGDriveConfigured(c.env)) {
         const htmlCert = renderSignedWaiverCertificateHtml(waiverRow, true, true, c.env);
@@ -693,37 +750,7 @@ waiverRouter.post('/sign', requireAuth, async (c) => {
   }, 201);
 });
 
-// GET /api/waiver/certificate/:id — Retrieve or print a signed waiver certificate with live integrity verification
-waiverRouter.get('/certificate/:id', async (c) => {
-  const paramId = String(c.req.param('id') || '').trim();
-  const user = c.get('user');
-
-  if ((!user || !user.isAdmin) && c.env && c.env.DB) {
-    const certLimit = await checkRateLimit(c.env.DB, 'waiver_cert_' + getClientIp(c), 30, 600, c.env);
-    if (!certLimit.allowed) {
-      return c.json({ error: 'Too many certificate lookup requests. Please try again later.' }, 429);
-    }
-  }
-
-  let row;
-  if (/^\d+$/.test(paramId)) {
-    if (!user || (!user.isAdmin && user.id !== parseInt(paramId, 10))) {
-      return c.json({ error: 'Unauthorized to view this user waiver.' }, 403);
-    }
-    row = await c.env.DB.prepare(
-      'SELECT * FROM waivers WHERE user_id = ? ORDER BY id DESC LIMIT 1'
-    ).bind(parseInt(paramId, 10)).first();
-  } else {
-    row = await c.env.DB.prepare(
-      'SELECT * FROM waivers WHERE certificate_id = ?'
-    ).bind(paramId).first();
-  }
-
-  if (!row) {
-    return c.json({ error: 'Signed waiver certificate not found.' }, 404);
-  }
-
-  // Re-verify cryptographic provenance hash and HMAC seal
+async function verifyWaiverIntegrity(env, row, db) {
   const sigSha256 = await sha256Hex(row.signature_data);
   const expectedCanonical = buildCanonicalWaiverPayload({
     document_version: row.document_version,
@@ -736,26 +763,75 @@ waiverRouter.get('/certificate/:id', async (c) => {
     electronic_consent: Boolean(row.electronic_consent)
   });
   const recomputedDocSha256 = await sha256Hex(expectedCanonical);
-  const recomputedSeal = await computeProvenanceSeal(c.env, `${row.certificate_id}:${recomputedDocSha256}`, c.env.DB);
-  const integrityVerified = (
-    constantTimeEqual(recomputedDocSha256, row.document_sha256) &&
-    constantTimeEqual(recomputedSeal, row.provenance_seal)
+  const sealVerified = await verifyWaiverProvenanceSeal(
+    env,
+    `${row.certificate_id}:${recomputedDocSha256}`,
+    row.provenance_seal,
+    db
   );
+  return Boolean(
+    constantTimeEqual(recomputedDocSha256, row.document_sha256) &&
+    sealVerified
+  );
+}
+
+function renderWaiverHtmlResponse(row, integrityVerified, includePii, env) {
+  const html = renderSignedWaiverCertificateHtml(row, integrityVerified, includePii, env);
+  return new Response(html, {
+    status: 200,
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'DENY',
+      'Content-Security-Policy': "default-src 'self'; img-src 'self' data:; style-src 'unsafe-inline'; script-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'; frame-ancestors 'none';"
+    }
+  });
+}
+
+// GET /api/waiver/certificate/:id — Retrieve or print a signed waiver certificate with live integrity verification
+waiverRouter.get('/certificate/:id', async (c) => {
+  const paramId = String(c.req.param('id') || '').trim();
+  const user = c.get('user');
+
+  if ((!user || !user.isAdmin) && c.env && c.env.DB) {
+    const certLimit = await checkRateLimit(c.env.DB, `waiver_cert:${getClientIp(c)}`, 30, 600, c.env);
+    if (!certLimit.allowed) {
+      return c.json({ error: 'Too many certificate lookup requests. Please try again later.' }, 429);
+    }
+  }
+
+  let row;
+  if (/^\d+$/.test(paramId)) {
+    if (!user || (!user.isAdmin && user.id !== parseInt(paramId, 10))) {
+      return c.json({ error: 'Unauthorized to view this user waiver.' }, 403);
+    }
+    row = await c.env.DB.prepare(
+      "SELECT * FROM waivers WHERE user_id = ? AND COALESCE(status, 'active') != 'quarantined' ORDER BY id DESC LIMIT 1"
+    ).bind(parseInt(paramId, 10)).first();
+  } else {
+    row = await c.env.DB.prepare(
+      'SELECT * FROM waivers WHERE certificate_id = ?'
+    ).bind(paramId).first();
+  }
+
+  if (!row || row.status === 'quarantined') {
+    return c.json({ error: 'Signed waiver certificate not found.' }, 404);
+  }
+
+  if (c.env && c.env.DB && row.signed_at && (row.signer_ip !== null || row.user_agent !== null || !row.signer_ip_scrubbed_at)) {
+    const signedMs = Date.parse(String(row.signed_at));
+    if (Number.isFinite(signedMs) && signedMs <= Date.now() - 30 * 86400 * 1000) {
+      await scrubExpiredWaiverTelemetry(c.env.DB);
+    }
+  }
+
+  const integrityVerified = await verifyWaiverIntegrity(c.env, row, c.env.DB);
 
   const canViewPii = Boolean(user && (user.isAdmin || user.id === row.user_id));
 
   if (c.req.query('format') === 'html') {
-    const html = renderSignedWaiverCertificateHtml(row, integrityVerified, canViewPii, c.env);
-    return new Response(html, {
-      status: 200,
-      headers: {
-        'Content-Type': 'text/html; charset=utf-8',
-        'Cache-Control': 'no-store',
-        'X-Content-Type-Options': 'nosniff',
-        'X-Frame-Options': 'DENY',
-        'Content-Security-Policy': "default-src 'self'; img-src 'self' data:; style-src 'unsafe-inline'; script-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'; frame-ancestors 'none';"
-      }
-    });
+    return renderWaiverHtmlResponse(row, integrityVerified, canViewPii, c.env);
   }
 
   return c.json({
@@ -773,6 +849,107 @@ waiverRouter.get('/certificate/:id', async (c) => {
       provenance_seal: row.provenance_seal,
       gdrive_file_id: canViewPii ? (row.gdrive_file_id || null) : null,
       signed_at: canViewPii ? row.signed_at : null,
+      integrity_verified: integrityVerified
+    }
+  });
+});
+
+// GET /api/waiver/admin/quarantined — Audited Admin legal-defense listing of Quarantined Waivers
+waiverRouter.get('/admin/quarantined', requireAdmin, async (c) => {
+  const user = c.get('user');
+  const db = c.env && (c.env.BASEBALL_DB || c.env.DB);
+  if (!db) return c.json({ error: 'Database unavailable.' }, 500);
+
+  await purgeExpiredQuarantinedWaivers(db, c.env);
+
+  const { results } = await db.prepare(`
+    SELECT id, certificate_id, email, printed_name, signed_date, signed_at,
+           document_version, waiver_locale, status, erasure_requested_at, retention_until,
+           document_sha256, provenance_seal, gdrive_file_id
+    FROM waivers
+    WHERE status = 'quarantined'
+    ORDER BY erasure_requested_at DESC, id DESC
+    LIMIT 200
+  `).all();
+
+  const waivers = results || [];
+  logEvent('info', 'admin_quarantined_waiver_list', {
+    adminId: user.id,
+    count: waivers.length
+  });
+
+  return c.json({ waivers });
+});
+
+// POST /api/waiver/admin/quarantined/purge — Idempotent Admin purge of expired Quarantined Waivers
+waiverRouter.post('/admin/quarantined/purge', requireAdmin, async (c) => {
+  const user = c.get('user');
+  const db = c.env && (c.env.BASEBALL_DB || c.env.DB);
+  if (!db) return c.json({ error: 'Database unavailable.' }, 500);
+
+  const result = await purgeExpiredQuarantinedWaivers(db, c.env);
+  logEvent('info', 'admin_quarantined_waiver_purge', {
+    adminId: user.id,
+    purgedCount: result.purgedCount
+  });
+
+  return c.json({
+    success: true,
+    purgedCount: result.purgedCount,
+    certificateIds: result.certificateIds
+  });
+});
+
+// GET /api/waiver/admin/quarantined/:id — Audited Admin legal-defense inspection of a Quarantined Waiver
+waiverRouter.get('/admin/quarantined/:id', requireAdmin, async (c) => {
+  const user = c.get('user');
+  const db = c.env && (c.env.BASEBALL_DB || c.env.DB);
+  if (!db) return c.json({ error: 'Database unavailable.' }, 500);
+
+  const paramId = String(c.req.param('id') || '').trim();
+  const row = /^\d+$/.test(paramId)
+    ? await db.prepare("SELECT * FROM waivers WHERE id = ? AND status = 'quarantined'").bind(parseInt(paramId, 10)).first()
+    : await db.prepare("SELECT * FROM waivers WHERE certificate_id = ? AND status = 'quarantined'").bind(paramId).first();
+
+  if (!row) {
+    return c.json({ error: 'Quarantined waiver record not found.' }, 404);
+  }
+
+  const integrityVerified = await verifyWaiverIntegrity(c.env, row, db);
+  const format = c.req.query('format') === 'html' ? 'html' : 'json';
+
+  logEvent('info', 'admin_quarantined_waiver_access', {
+    adminId: user.id,
+    waiverId: row.id,
+    certificateId: row.certificate_id,
+    format,
+    integrityVerified
+  });
+
+  if (format === 'html') {
+    return renderWaiverHtmlResponse(row, integrityVerified, true, c.env);
+  }
+
+  return c.json({
+    waiver: {
+      id: row.id,
+      certificate_id: row.certificate_id,
+      user_id: row.user_id,
+      email: row.email,
+      printed_name: row.printed_name,
+      signed_date: row.signed_date,
+      signature_type: row.signature_type,
+      signature_data: row.signature_data,
+      document_version: row.document_version,
+      waiver_text_sha256: row.waiver_text_sha256,
+      document_sha256: row.document_sha256,
+      provenance_seal: row.provenance_seal,
+      waiver_locale: row.waiver_locale || 'en',
+      status: row.status,
+      erasure_requested_at: row.erasure_requested_at || null,
+      retention_until: row.retention_until || null,
+      gdrive_file_id: row.gdrive_file_id || null,
+      signed_at: row.signed_at || null,
       integrity_verified: integrityVerified
     }
   });

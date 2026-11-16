@@ -26,6 +26,8 @@ document.addEventListener('DOMContentLoaded', async function() {
     if (headerSec) headerSec.style.display = 'none';
     const footerHint = document.getElementById('login-footer-hint');
     if (footerHint) footerHint.style.display = 'none';
+    const visitorErasureCard = document.getElementById('visitor-erasure-card');
+    if (visitorErasureCard) visitorErasureCard.style.display = 'none';
 
     const mainContainer = document.getElementById('login-main-container');
     if (mainContainer) mainContainer.style.maxWidth = '560px';
@@ -198,4 +200,167 @@ document.addEventListener('DOMContentLoaded', async function() {
     sendBtn.disabled = false;
     sendBtn.textContent = 'Send Sign-In Code';
   });
+
+  setupVisitorErasure();
 });
+
+function setupVisitorErasure() {
+  const card = document.getElementById('visitor-erasure-card');
+  const details = document.getElementById('visitor-erasure-details');
+  const alertBox = document.getElementById('visitor-erasure-alert');
+  const reqForm = document.getElementById('visitor-erasure-request-form');
+  const confirmForm = document.getElementById('visitor-erasure-confirm-form');
+  const emailInput = document.getElementById('visitor-erasure-email');
+  const keepGalleryBox = document.getElementById('visitor-erasure-keep-gallery');
+  const reqBtn = document.getElementById('btn-visitor-erasure-request');
+  const sentNotice = document.getElementById('visitor-erasure-sent-notice');
+  const codeInput = document.getElementById('visitor-erasure-code');
+  const confirmBtn = document.getElementById('btn-visitor-erasure-confirm');
+  const cancelBtn = document.getElementById('btn-visitor-erasure-cancel');
+
+  if (!card || !reqForm || !confirmForm) return;
+
+  let erasureEmail = '';
+
+  function openIfHashTargetsErasure() {
+    if (window.location.hash === '#erase-data' && details) {
+      details.open = true;
+      card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (emailInput && !emailInput.value) {
+        emailInput.focus();
+      }
+    }
+  }
+
+  openIfHashTargetsErasure();
+  window.addEventListener('hashchange', openIfHashTargetsErasure);
+
+  function setErasureAlert(msg, isError) {
+    if (!alertBox) return;
+    if (!msg) {
+      alertBox.innerHTML = '';
+      return;
+    }
+    alertBox.innerHTML = '<div class="alert ' + (isError ? 'alert-error' : 'alert-success') + '" style="font-size: 0.84rem; margin: 0;">' + API.escapeHtml(msg) + '</div>';
+  }
+
+  reqForm.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    setErasureAlert('', false);
+
+    const email = emailInput ? emailInput.value.trim().toLowerCase() : '';
+    if (!email || email.indexOf('@') === -1) {
+      setErasureAlert(API.t('visitor_erasure.invalid_email', 'Please enter a valid email address.'), true);
+      return;
+    }
+
+    const origLabel = reqBtn ? reqBtn.textContent : '';
+    if (reqBtn) {
+      reqBtn.disabled = true;
+      reqBtn.textContent = API.t('visitor_erasure.sending', 'Sending...');
+    }
+
+    try {
+      const res = await API.requestVisitorErasure(email);
+      if (res && res.error) {
+        setErasureAlert(res.error, true);
+        return;
+      }
+      erasureEmail = email;
+      reqForm.style.display = 'none';
+      confirmForm.style.display = 'block';
+      if (sentNotice) {
+        sentNotice.textContent = (res && res.message) || API.t('visitor_erasure.sent_fallback', 'If records matching that email address exist, a 6-digit erasure verification code has been sent. It expires in 10 minutes.');
+      }
+      if (codeInput) {
+        codeInput.value = '';
+        codeInput.focus();
+      }
+    } catch (err) {
+      setErasureAlert(API.t('visitor_erasure.network_error', 'Error contacting server. Please try again.'), true);
+    } finally {
+      if (reqBtn) {
+        reqBtn.disabled = false;
+        reqBtn.textContent = origLabel || API.t('visitor_erasure.send_code_btn', '📧 Email Erasure Verification Code');
+      }
+    }
+  });
+
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', function() {
+      setErasureAlert('', false);
+      confirmForm.style.display = 'none';
+      reqForm.style.display = 'block';
+      if (codeInput) codeInput.value = '';
+    });
+  }
+
+  confirmForm.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    setErasureAlert('', false);
+
+    const code = codeInput ? codeInput.value.trim() : '';
+    if (!code || code.length !== 6) {
+      setErasureAlert(API.t('visitor_erasure.invalid_code', 'Please enter the 6-digit verification code sent to your email.'), true);
+      return;
+    }
+
+    const confirmMsg = API.t(
+      'visitor_erasure.confirm_dialog',
+      'Permanently erase all personal data and RSVPs matching this email? This cannot be undone. Any signed liability waiver will stay in restricted 3-year legal-defense quarantine before automatic purge.'
+    );
+    const ok = window.PBFDialog
+      ? await window.PBFDialog.confirm(confirmMsg, {
+          title: API.t('visitor_erasure.title', 'Erase Visitor / RSVP Data'),
+          confirmLabel: API.t('visitor_erasure.confirm_btn', 'Permanently Erase My Data'),
+          danger: true
+        })
+      : false;
+    if (!ok) return;
+
+    const origLabel = confirmBtn ? confirmBtn.textContent : '';
+    if (confirmBtn) {
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = API.t('visitor_erasure.erasing', 'Erasing...');
+    }
+
+    try {
+      const res = await API.confirmVisitorErasure({
+        email: erasureEmail,
+        code: code,
+        keep_approved_gallery: Boolean(keepGalleryBox && keepGalleryBox.checked)
+      });
+      if (res && res.error) {
+        setErasureAlert(res.error, true);
+        return;
+      }
+
+      try {
+        const savedEmail = localStorage.getItem('pickup_remembered_email');
+        if (savedEmail && savedEmail.trim().toLowerCase() === erasureEmail) {
+          localStorage.removeItem('pickup_remembered_email');
+          localStorage.removeItem('pickup_remembered_name');
+        }
+      } catch (storageErr) { /* localStorage unavailable */ }
+
+      API.clearDataCaches(true);
+      const noticeMsg = (res && (res.waiverRetentionNotice || res.message)) || API.t('visitor_erasure.erased_fallback', 'Your personal data and RSVPs have been erased.');
+      if (window.PBFDialog) {
+        await window.PBFDialog.alert(noticeMsg);
+      }
+
+      confirmForm.style.display = 'none';
+      reqForm.style.display = 'block';
+      if (emailInput) emailInput.value = '';
+      if (codeInput) codeInput.value = '';
+      setErasureAlert(noticeMsg, false);
+    } catch (err) {
+      setErasureAlert(API.t('visitor_erasure.erasure_failed', 'Failed to complete erasure. Please try again.'), true);
+    } finally {
+      if (confirmBtn) {
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = origLabel || API.t('visitor_erasure.confirm_btn', 'Permanently Erase My Data');
+      }
+    }
+  });
+}

@@ -6,7 +6,7 @@
 
 import { Hono } from 'hono';
 import { requireAuth, rejectIfClubhouseOptedOut, CANONICAL_MEMBER_ROLE } from '../../security.js';
-import { canUserAccessEvent } from '../../policy.js';
+import { canUserAccessEvent, isViewerOrganizer } from '../../policy.js';
 import { resolveConfig } from '../../config.js';
 import { pruneEphemeralChatRows } from '../../schema.js';
 import { logEvent } from '../../errors.js';
@@ -16,7 +16,8 @@ import {
   resolveChannel,
   isPublicGuestChannel,
   getAccessibleChannels,
-  hydrateMessages
+  hydrateMessages,
+  getBlockedUserIds
 } from './helpers.js';
 
 export const chatSyncRouter = /** @type {AppHono} */ (new Hono());
@@ -72,6 +73,7 @@ chatSyncRouter.get('/bootstrap', requireAuth, async (c) => {
       unread_counts: {},
       members: [],
       muted_user_ids: [],
+      blocked_user_ids: [],
       upcoming_game,
       last_message_id: 0,
       last_event_id: 0
@@ -136,6 +138,7 @@ chatSyncRouter.get('/bootstrap', requireAuth, async (c) => {
         SELECT id, name, role, is_admin, COALESCE(is_moderator, 0) as is_moderator,
                COALESCE(chat_muted, 0) as chat_muted, chat_muted_reason,
                machine_badge, field_badge, hero_credits,
+               COALESCE(profile_sharing, 0) as profile_sharing,
                CASE
                  WHEN avatar_url LIKE 'data:%' THEN '/api/users/' || id || '/avatar?v=' || length(avatar_url)
                  ELSE COALESCE(avatar_url, '')
@@ -152,7 +155,7 @@ chatSyncRouter.get('/bootstrap', requireAuth, async (c) => {
       for (const idChunk of chunkArray(memberIds, 80)) {
         const ph = idChunk.map(() => '?').join(',');
         const cryptoRes = await chatDb.prepare(
-          `SELECT user_id, status_text, (ecdh_public_key_jwk IS NOT NULL) as has_key FROM user_crypto_keys WHERE user_id IN (${ph})`
+          `SELECT user_id, status_text, key_version, key_rotated_at, (ecdh_public_key_jwk IS NOT NULL) as has_key FROM user_crypto_keys WHERE user_id IN (${ph})`
         ).bind(...idChunk).all();
         if (cryptoRes && Array.isArray(cryptoRes.results)) {
           cryptoRows.push(...cryptoRes.results);
@@ -160,9 +163,11 @@ chatSyncRouter.get('/bootstrap', requireAuth, async (c) => {
       }
       const cryptoMap = new Map(cryptoRows.map((r) => [r.user_id, r]));
 
+      const isOrgViewer = isViewerOrganizer(user);
       const abbreviatedNames = abbreviateMemberNames(usersList || []);
       members = (usersList || []).map((u, idx) => {
         const ck = cryptoMap.get(u.id);
+        const canSeeAvatar = Boolean(isOrgViewer || Number(u.id) === Number(user.id) || u.profile_sharing);
         return {
           id: u.id,
           name: abbreviatedNames[idx] || u.name,
@@ -176,8 +181,12 @@ chatSyncRouter.get('/bootstrap', requireAuth, async (c) => {
           machineBadge: Boolean(u.machine_badge),
           fieldBadge: Boolean(u.field_badge),
           heroCredits: u.hero_credits || 0,
-          avatarUrl: u.avatar_url || '',
+          avatarUrl: canSeeAvatar ? (u.avatar_url || '') : '',
           hasKeys: Boolean(ck),
+          key_version: ck ? Number(ck.key_version || 1) : null,
+          keyVersion: ck ? Number(ck.key_version || 1) : null,
+          key_rotated_at: ck ? (ck.key_rotated_at || null) : null,
+          keyRotatedAt: ck ? (ck.key_rotated_at || null) : null,
           statusText: (ck && ck.status_text) || ''
         };
       });
@@ -195,6 +204,8 @@ chatSyncRouter.get('/bootstrap', requireAuth, async (c) => {
   } catch (e) {
     logEvent('warn', 'chat_bootstrap_mutes_load_failed', { err: e });
   }
+
+  const blocked_user_ids = await getBlockedUserIds(chatDb, user.id);
 
   let last_message_id = 0;
   let last_event_id = 0;
@@ -214,6 +225,7 @@ chatSyncRouter.get('/bootstrap', requireAuth, async (c) => {
     unread_counts,
     members,
     muted_user_ids,
+    blocked_user_ids,
     upcoming_game,
     last_message_id,
     last_event_id
@@ -247,9 +259,17 @@ chatSyncRouter.get('/sync', requireAuth, async (c) => {
       SELECT
         (SELECT COALESCE(MAX(id), 0) FROM messages) as max_msg_id,
         (SELECT COALESCE(MAX(id), 0) FROM sync_events) as max_event_id,
-        EXISTS(SELECT 1 FROM rtc_signals WHERE recipient_user_id = ? AND created_at > ? AND id > ?) as has_signals,
+        EXISTS(
+          SELECT 1 FROM rtc_signals
+          WHERE recipient_user_id = ? AND created_at > ? AND id > ?
+            AND sender_user_id NOT IN (
+              SELECT blocked_id FROM user_blocks WHERE blocker_id = ?
+              UNION
+              SELECT blocker_id FROM user_blocks WHERE blocked_id = ?
+            )
+        ) as has_signals,
         EXISTS(SELECT 1 FROM voice_participants WHERE heartbeat_at > ?) as has_voice
-    `).bind(user.id, nowSec - 60, sinceSignalId, nowSec - 25).first();
+    `).bind(user.id, nowSec - 60, sinceSignalId, user.id, user.id, nowSec - 25).first();
 
     if (
       watermark &&
@@ -335,9 +355,14 @@ chatSyncRouter.get('/sync', requireAuth, async (c) => {
   const { results: rawSignals } = await chatDb.prepare(
     `SELECT * FROM rtc_signals
      WHERE recipient_user_id = ? AND created_at > ? AND id > ?
+       AND sender_user_id NOT IN (
+         SELECT blocked_id FROM user_blocks WHERE blocker_id = ?
+         UNION
+         SELECT blocker_id FROM user_blocks WHERE blocked_id = ?
+       )
      ORDER BY id DESC
      LIMIT 100`
-  ).bind(user.id, nowSec - 60, sinceSignalId).all();
+  ).bind(user.id, nowSec - 60, sinceSignalId, user.id, user.id).all();
 
   const rtc_signals = (rawSignals || []).slice().reverse();
 
@@ -347,6 +372,7 @@ chatSyncRouter.get('/sync', requireAuth, async (c) => {
 
   const accessibleSet = new Set(accessibleChannels.map((ch) => ch.id));
   const voice_participants = (rawVoice || []).filter((vp) => accessibleSet.has(vp.channel_id));
+  const blocked_user_ids = await getBlockedUserIds(chatDb, user.id);
 
   const latest_msg_id = messages.length > 0 ? messages[messages.length - 1].id : sinceMsgId;
   const latest_event_id = events.length > 0 ? events[events.length - 1].id : sinceEventId;
@@ -356,6 +382,7 @@ chatSyncRouter.get('/sync', requireAuth, async (c) => {
     events,
     rtc_signals,
     voice_participants,
+    blocked_user_ids,
     latest_msg_id,
     latest_event_id
   });

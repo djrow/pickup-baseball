@@ -167,6 +167,7 @@ test('Workerd No-Lockout Fork Defaults Serve *.pages.dev Without Redirect', asyn
       communityName: 'Fork Community',
       publicOrigin: null,
       handbookUrl: null,
+      turnConfigured: false,
       features: {
         battingPractice: false,
         certifiedShifts: false,

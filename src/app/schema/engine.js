@@ -10,6 +10,7 @@
 import { DEFAULT_BASEBALL_DUTIES, DEFAULT_GENERIC_DUTIES, CREATE_TABLES_SQL } from './baseball-ddl.js';
 import { CREATE_CHAT_TABLES_SQL } from './chat-ddl.js';
 import { resolveConfig, PRESET_PICKUP_BASEBALL } from '../config.js';
+import { purgeExpiredQuarantinedWaivers, scrubExpiredWaiverTelemetry } from '../erasure.js';
 import {
   BASEBALL_MIGRATIONS,
   CHAT_MIGRATIONS,
@@ -335,45 +336,65 @@ const lastBaseballPruneByDb = new WeakMap();
 const lastChatPruneByDb = new WeakMap();
 const PRUNE_INTERVAL_MS = 10 * 60 * 1000;
 
-/** Opportunistically prunes expired sessions, auth codes, and stale rate-limit windows at most once per 10 minutes per isolate. */
-export async function pruneEphemeralBaseballRows(db) {
+/**
+ * Opportunistically prunes expired sessions, auth codes, and rate-limit rows at most once per 10 minutes per isolate.
+ * @param {D1Database|null|undefined} db
+ * @param {number} [nowMsOverride]
+ * @param {{ force?: boolean }} [options]
+ */
+export async function pruneEphemeralBaseballRows(db, nowMsOverride = Date.now(), options = {}) {
   if (!db || typeof db.prepare !== 'function') return;
-  const nowMs = Date.now();
+  const nowMs = typeof nowMsOverride === 'number' && Number.isFinite(nowMsOverride) ? nowMsOverride : Date.now();
+  const force = Boolean(options && options.force);
   const last = lastBaseballPruneByDb.get(db) || 0;
-  if (nowMs - last < PRUNE_INTERVAL_MS) return;
+  if (!force && nowMs - last < PRUNE_INTERVAL_MS) return;
   lastBaseballPruneByDb.set(db, nowMs);
 
   const nowIso = new Date(nowMs).toISOString();
-  const rateCutoff = Math.floor(nowMs / 1000) - 2 * 60 * 60;
+  const nowSec = Math.floor(nowMs / 1000);
+  const legacyRateCutoff = nowSec - 2 * 60 * 60;
   try {
     const stmts = [
       db.prepare('DELETE FROM sessions WHERE expires_at <= ?').bind(nowIso),
       db.prepare('DELETE FROM auth_codes WHERE expires_at <= ?').bind(nowIso),
-      db.prepare('DELETE FROM rate_limits WHERE window_start <= ?').bind(rateCutoff)
+      db.prepare(
+        'DELETE FROM rate_limits WHERE (expires_at > 0 AND expires_at <= ?) OR (expires_at <= 0 AND window_start <= ?)'
+      ).bind(nowSec, legacyRateCutoff)
     ];
     if (typeof db.batch === 'function') {
       await db.batch(stmts);
     } else {
       for (const s of stmts) await s.run();
     }
+    await purgeExpiredQuarantinedWaivers(db);
+    await scrubExpiredWaiverTelemetry(db);
   } catch (e) {
     /* best-effort opportunistic cleanup; non-fatal if DB is busy */
   }
 }
 
-/** Opportunistically prunes stale WebRTC signals, chat rate limits, and aged sync tombstones at most once per 10 minutes per isolate. */
-export async function pruneEphemeralChatRows(chatDb) {
+/**
+ * Opportunistically prunes stale WebRTC signals, expired chat rate limits, and aged sync tombstones at most once per 10 minutes per isolate.
+ * @param {D1Database|null|undefined} chatDb
+ * @param {number} [nowMsOverride]
+ * @param {{ force?: boolean }} [options]
+ */
+export async function pruneEphemeralChatRows(chatDb, nowMsOverride = Date.now(), options = {}) {
   if (!chatDb || typeof chatDb.prepare !== 'function') return;
-  const nowMs = Date.now();
+  const nowMs = typeof nowMsOverride === 'number' && Number.isFinite(nowMsOverride) ? nowMsOverride : Date.now();
+  const force = Boolean(options && options.force);
   const last = lastChatPruneByDb.get(chatDb) || 0;
-  if (nowMs - last < PRUNE_INTERVAL_MS) return;
+  if (!force && nowMs - last < PRUNE_INTERVAL_MS) return;
   lastChatPruneByDb.set(chatDb, nowMs);
 
   const nowSec = Math.floor(nowMs / 1000);
+  const legacyRateCutoff = nowSec - 7200;
   try {
     const stmts = [
       chatDb.prepare('DELETE FROM rtc_signals WHERE created_at <= ?').bind(nowSec - 300),
-      chatDb.prepare('DELETE FROM chat_rate_limits WHERE window_start <= ?').bind(nowSec - 7200),
+      chatDb.prepare(
+        'DELETE FROM chat_rate_limits WHERE (expires_at > 0 AND expires_at <= ?) OR (expires_at <= 0 AND window_start <= ?)'
+      ).bind(nowSec, legacyRateCutoff),
       chatDb.prepare('DELETE FROM sync_events WHERE created_at <= ?').bind(nowSec - 7 * 86400)
     ];
     if (typeof chatDb.batch === 'function') {

@@ -25,6 +25,18 @@ interface PBFUser {
   is_muted?: boolean | number;
   clubhouseOptedIn?: boolean;
   clubhouse_opted_in?: boolean | number;
+  rosterVisibility?: boolean;
+  roster_visibility?: boolean | number;
+  profileSharing?: boolean;
+  profile_sharing?: boolean | number;
+  notifyRsvpConfirm?: boolean;
+  notify_rsvp_confirm?: boolean | number;
+  notifyRainouts?: boolean;
+  notify_rainouts?: boolean | number;
+  notifyEventReminders?: boolean;
+  notify_event_reminders?: boolean | number;
+  notifyCommunityUpdates?: boolean;
+  notify_community_updates?: boolean | number;
   avatarUrl?: string;
   bio?: string;
   badges?: string[];
@@ -183,7 +195,9 @@ interface PBFApiFacade {
   verifyLoginCode(email: string, code: string, sharedDevice?: boolean): Promise<any>;
   getActiveSessions(): Promise<any>;
   logoutOtherDevices(): Promise<any>;
-  updateProfile(name: string, bio?: string): Promise<any>;
+  updateProfile(name: string, bio?: string, extra?: Record<string, any>): Promise<any>;
+  getConsent(): Promise<any>;
+  updateConsent(payload: Record<string, any>): Promise<any>;
   setClubhouseOptIn(optedIn: boolean): Promise<any>;
   uploadAvatar(file: File | Blob): Promise<any>;
   deleteAvatar(): Promise<any>;
@@ -317,6 +331,10 @@ interface ClubhouseStoreFacade {
   muteUserPersonal(userId: number): Promise<any>;
   unmuteUserPersonal(userId: number): Promise<any>;
   isUserMutedByMe(userId: number): boolean;
+  fetchBlockedPeers(): Promise<any>;
+  blockPeer(userId: number): Promise<any>;
+  unblockPeer(userId: number): Promise<any>;
+  isPeerBlockedByMe(userId: number): boolean;
   uploadAttachment(channelId: number, file: File | Blob, opts?: Record<string, any>): Promise<any>;
   getDmE2eeStatus(channelId: number): Record<string, any>;
   ensureChannelE2eeKey(channelId: number): Promise<any>;
@@ -340,8 +358,12 @@ interface ClubhouseStoreFacade {
 interface ClubhouseRTCFacade {
   state: Record<string, any>;
   onRtcEvent(listener: (eventName: string, payload?: any) => void): () => void;
-  getIceConfiguration(): Promise<RTCConfiguration>;
-  joinVoiceChannel(channelId: number, opts?: Record<string, any>): Promise<any>;
+  setTurnConfigured(configured: boolean): boolean;
+  isTurnConfigured(): boolean;
+  setIceServers(servers: any[]): any[];
+  loadIceServers(): Promise<{ turnConfigured: boolean; iceServers: any[] }>;
+  getIceConfiguration(privacyRelayMode?: boolean): RTCConfiguration;
+  joinVoiceChannel(channelId: number | string, currentUserId?: number): Promise<any>;
   updateVoiceState(patch: Record<string, any>): Promise<any>;
   toggleScreenShare(): Promise<any>;
   leaveVoiceChannel(): Promise<void>;

@@ -226,59 +226,845 @@ function checkSqlQueries() {
 }
 
 /**
- * 4. Audit every mutating route (POST/PUT/PATCH/DELETE) in src/app/routes/*.js
- *    to ensure middleware auth guards are never accidentally omitted.
+ * 4. Dual Static AST + Live Hono Route Introspection Auth-Guard & Role-Tier Scanner.
+ *    Inspects all HTTP methods (GET, POST, PUT, PATCH, DELETE, ALL) and router .use()/.on()
+ *    across src/app/index.js and src/app/routes/** as well as mounted Hono app.routes.
  */
-function checkRouteAuthGuards() {
-  const routeFiles = walkFiles(path.join(ROOT, 'src', 'app', 'routes'), (n) => n.endsWith('.js'));
+const AUTH_GUARD_NAMES = ['requireAuth', 'requireModerator', 'requireOrganizer', 'requireAdmin'];
 
-  // Explicitly reviewed intentionally unauthenticated or token-guarded mutating routes
-  const PUBLIC_OR_TOKEN_ROUTES = new Set([
-    'auth.js:POST:/send-code',          // Public OTP request (Turnstile + rate limited)
-    'auth.js:POST:/request-code',       // Alias of /send-code (Turnstile + rate limited)
-    'auth.js:POST:/verify-code',        // Public OTP verification (rate limited + SHA-256 code)
-    'auth.js:POST:/logout',             // Clears own session cookie
-    'rsvps.js:POST:/:id/rsvp',          // Conditional require_login + Turnstile + management_token
-    'rsvps.js:POST:/:id/rsvp/edit-link', // Public visitor edit-link rotation (Turnstile + IP/email rate limited + non-disclosing)
-    'rsvps.js:POST:/:id/comments',      // Conditional require_login + Turnstile + attendee validation
-    'bp-duties.js:POST:/:id/bp-order',  // Verified by signed-in user or valid RSVP token
-    'bp-duties.js:PUT:/:id/bp-order/:signupId',
-    'bp-duties.js:DELETE:/:id/bp-order/:signupId',
-    'media.js:POST:/',                  // Intentional zero-login photo drop (Turnstile + magic/file checks)
-    'media.js:DELETE:/:id',             // Protected inside handleMediaDelete via organizer OR delete_token
-    'media.js:POST:/:id/delete'         // Protected inside handleMediaDelete via organizer OR delete_token
-  ]);
+// Explicitly reviewed intentionally unauthenticated or token-guarded routes
+const PUBLIC_OR_TOKEN_ROUTE_MANIFEST = [
+  // Top-level stateless & public feeds in src/app/index.js
+  {
+    ast: 'index.js:GET:/version',
+    route: 'GET /api/version',
+    reason: 'Public stateless app version & storage provider health metadata'
+  },
+  {
+    ast: 'index.js:GET:/health',
+    route: 'GET /api/health',
+    reason: 'Public stateless uptime & environment health check'
+  },
+  {
+    ast: 'index.js:GET:/config/public',
+    route: 'GET /api/config/public',
+    reason: 'Public community/fork branding & feature-flag configuration (ADR-0001)'
+  },
+  {
+    ast: 'index.js:GET:/settings',
+    route: 'GET /api/settings',
+    reason: 'Public login/upload policy flags (admin-only appscript_upload_url gated inside handler)'
+  },
+  {
+    ast: 'index.js:GET:/feed.xml',
+    route: 'GET /api/feed.xml',
+    reason: 'Public Media RSS 2.0 XML syndication feed'
+  },
 
-  const AUTH_MIDDLEWARE_RX = /\b(requireAuth|requireModerator|requireOrganizer|requireAdmin)\b/;
-  const unguarded = [];
-  let totalChecked = 0;
+  // Authentication & session bootstrap endpoints in src/app/routes/auth.js
+  {
+    ast: 'auth.js:POST:/send-code',
+    route: 'POST /api/auth/send-code',
+    reason: 'Public email OTP login code request (Turnstile + IP/email rate limited)'
+  },
+  {
+    ast: 'auth.js:POST:/request-code',
+    route: 'POST /api/auth/request-code',
+    reason: 'Alias of /send-code (Turnstile + IP/email rate limited)'
+  },
+  {
+    ast: 'auth.js:POST:/verify-code',
+    route: 'POST /api/auth/verify-code',
+    reason: 'Public 6-digit OTP verification (rate limited + constant-time SHA-256 comparison)'
+  },
+  {
+    ast: 'auth.js:GET:/verify-magic',
+    route: 'GET /api/auth/verify-magic',
+    reason: 'Public magic-link login consumption (rate limited + one-time SHA-256 token)'
+  },
+  {
+    ast: 'auth.js:GET:/me',
+    route: 'GET /api/auth/me',
+    reason: 'Public session bootstrap probe returning { user: null } when signed out'
+  },
+  {
+    ast: 'auth.js:POST:/logout',
+    route: 'POST /api/auth/logout',
+    reason: 'Clears caller session cookie and revokes hashed server session row'
+  },
+  {
+    ast: 'auth.js:POST:/erasure/request',
+    route: 'POST /api/auth/erasure/request',
+    reason: 'Public Visitor/Member self-service erasure OTP request (Turnstile + HMAC IP/email rate limited + non-disclosing)'
+  },
+  {
+    ast: 'auth.js:POST:/erasure/confirm',
+    route: 'POST /api/auth/erasure/confirm',
+    reason: 'Public Visitor/Member self-service erasure OTP confirmation (HMAC IP/email rate limited + constant-time SHA-256 OTP + non-disclosing)'
+  },
 
-  for (const file of routeFiles) {
+  // Batting practice & volunteer task template routes in src/app/routes/events/bp-duties.js
+  {
+    ast: 'bp-duties.js:GET:/default-duties',
+    route: 'GET /api/events/default-duties',
+    reason: 'Public default volunteer task template list'
+  },
+  {
+    ast: 'bp-duties.js:GET:/:id/bp-order',
+    route: 'GET /api/events/:id/bp-order',
+    reason: 'Feature-flag check followed by inline 401 (!user) and invite-list ACL enforcement'
+  },
+  {
+    ast: 'bp-duties.js:POST:/:id/bp-order',
+    route: 'POST /api/events/:id/bp-order',
+    reason: 'Verified by signed-in user or valid RSVP management_token + Turnstile + rate limit'
+  },
+  {
+    ast: 'bp-duties.js:PUT:/:id/bp-order/:signupId',
+    route: 'PUT /api/events/:id/bp-order/:signupId',
+    reason: 'Protected inside authorizeBpSignupMutation via organizer, signed-in owner, or management_token'
+  },
+  {
+    ast: 'bp-duties.js:DELETE:/:id/bp-order/:signupId',
+    route: 'DELETE /api/events/:id/bp-order/:signupId',
+    reason: 'Protected inside authorizeBpSignupMutation via organizer, signed-in owner, or management_token'
+  },
+
+  // Event RSVP routes in src/app/routes/events/rsvps.js
+  {
+    ast: 'rsvps.js:POST:/:id/rsvp',
+    route: 'POST /api/events/:id/rsvp',
+    reason: 'Conditional require_login_to_rsvp + Turnstile + hashed management_token verification'
+  },
+  {
+    ast: 'rsvps.js:POST:/:id/rsvp/edit-link',
+    route: 'POST /api/events/:id/rsvp/edit-link',
+    reason: 'Public visitor edit-link rotation (Turnstile + IP/email rate limited + non-disclosing)'
+  },
+
+  // Core game schedule, iCalendar & cron reminder routes in src/app/routes/events/core.js
+  {
+    ast: 'core.js:GET:/',
+    route: 'GET /api/events',
+    reason: 'Public upcoming/past game schedule listing (invite-only games filtered via canUserAccessEvent)'
+  },
+  {
+    ast: 'core.js:GET:/calendar.ics',
+    route: 'GET /api/events/calendar.ics',
+    reason: 'Public or cal_token-authenticated iCalendar schedule feed (resolveIcsViewer)'
+  },
+  {
+    ast: 'core.js:GET:/:id/calendar.ics',
+    route: 'GET /api/events/:id/calendar.ics',
+    reason: 'Public or cal_token-authenticated single-game iCalendar feed (resolveIcsViewer + ACL)'
+  },
+  {
+    ast: 'core.js:ALL:/reminders/check',
+    route: 'ALL /api/events/reminders/check',
+    reason: 'Cron reminder trigger protected by constant-time CRON_SECRET/REMINDERS_SECRET or organizer/admin session'
+  },
+  {
+    ast: 'core.js:GET:/:id',
+    route: 'GET /api/events/:id',
+    reason: 'Public game detail view (enforces invite-list ACLs and redacts roster PII for unauthenticated visitors)'
+  },
+
+  // Community highlight posts in src/app/routes/posts.js
+  {
+    ast: 'posts.js:GET:/',
+    route: 'GET /api/posts',
+    reason: 'Public community highlights feed (filters invite-restricted event posts)'
+  },
+  {
+    ast: 'posts.js:GET:/:id',
+    route: 'GET /api/posts/:id',
+    reason: 'Public single community highlight view (filters invite-restricted event posts)'
+  },
+
+  // Community gallery & attachment streaming in src/app/routes/media.js
+  {
+    ast: 'media.js:GET:/',
+    route: 'GET /api/media',
+    reason: 'Public approved media gallery listing (pending queue restricted to organizer/admin)'
+  },
+  {
+    ast: 'media.js:GET:/:id/file',
+    route: 'GET /api/media/:id/file',
+    reason: 'Public approved gallery media file proxy (unapproved & invite-only event media restricted)'
+  },
+  {
+    ast: 'media.js:POST:/',
+    route: 'POST /api/media',
+    reason: 'Intentional zero-login community photo drop (Turnstile + disallow_zero_login_media + magic-byte checks)'
+  },
+  {
+    ast: 'media.js:DELETE:/:id',
+    route: 'DELETE /api/media/:id',
+    reason: 'Protected inside handleMediaDelete via organizer/admin, uploader session, or constant-time delete_token'
+  },
+  {
+    ast: 'media.js:POST:/:id/delete',
+    route: 'POST /api/media/:id/delete',
+    reason: 'Protected inside handleMediaDelete via organizer/admin, uploader session, or constant-time delete_token'
+  },
+  {
+    ast: 'media.js:GET:/:id/stream',
+    route: 'GET /api/attachments/:id/stream',
+    reason: 'Public only when promoted to approved public gallery; otherwise enforces 401 (!user) and channel read ACL'
+  },
+
+  // Sunday pickup widget summary in src/app/routes/baseball.js
+  {
+    ast: 'baseball.js:GET:/upcoming',
+    route: 'GET /api/baseball/upcoming',
+    reason: 'Public next-game summary widget (redacts attendee and BP names when unauthenticated)'
+  },
+
+  // Liability waiver spec & certificate verification in src/app/routes/waiver.js
+  {
+    ast: 'waiver.js:GET:/',
+    route: 'GET /api/waiver',
+    reason: 'Public waiver text & SHA-256 spec (returns authenticated: false when signed out)'
+  },
+  {
+    ast: 'waiver.js:GET:/status',
+    route: 'GET /api/waiver/status',
+    reason: 'Alias of GET /api/waiver'
+  },
+  {
+    ast: 'waiver.js:GET:/certificate/:id',
+    route: 'GET /api/waiver/certificate/:id',
+    reason: 'Public provenance seal verification by certificate_id (signer PII redacted unless owner or admin)'
+  },
+
+  // Clubhouse public GIF streaming in src/app/routes/gifs.js
+  {
+    ast: 'gifs.js:GET:/:id/stream',
+    route: 'GET /api/gifs/:id/stream',
+    reason: 'Streams is_public=1 GIFs with immutable edge cache; requires auth (401) for unlisted GIFs'
+  },
+
+  // Clubhouse public guest announcement board discovery & read in src/app/routes/chat/*
+  {
+    ast: 'channels.js:GET:/public/channels',
+    route: 'GET /api/public/channels',
+    reason: 'Public read-only guest channel discovery (#announcements)'
+  },
+  {
+    ast: 'messages.js:GET:/channels/:id/messages',
+    route: 'GET /api/channels/:id/messages',
+    reason: 'Allows logged-out read only for isPublicGuestChannel (#announcements); enforces 401 on all other channels'
+  }
+];
+
+const PUBLIC_OR_TOKEN_ROUTES = new Set();
+for (const item of PUBLIC_OR_TOKEN_ROUTE_MANIFEST) {
+  PUBLIC_OR_TOKEN_ROUTES.add(item.ast);
+  PUBLIC_OR_TOKEN_ROUTES.add(item.route);
+  const parts = item.ast.split(':');
+  if (parts.length >= 3) {
+    const method = parts[1];
+    const localPath = parts.slice(2).join(':');
+    PUBLIC_OR_TOKEN_ROUTES.add(`${method} ${localPath}`);
+  }
+  const spaceIdx = item.route.indexOf(' ');
+  if (spaceIdx !== -1) {
+    PUBLIC_OR_TOKEN_ROUTES.add(item.route.slice(spaceIdx + 1));
+  }
+}
+
+function joinRoutePaths(prefix, subPath) {
+  const p = String(prefix || '').replace(/\/+$/, '');
+  const s = String(subPath || '').trim();
+  if (!s || s === '/') return p || '/';
+  const normalizedSub = s.startsWith('/') ? s : `/${s}`;
+  if (!p || p === '/') return normalizedSub;
+  return `${p}${normalizedSub}`.replace(/\/+/g, '/');
+}
+
+function doesWildcardPatternMatch(pattern, targetPath) {
+  const pat = String(pattern || '*').trim();
+  const target = String(targetPath || '/').trim() || '/';
+  if (pat === '*' || pat === '/*' || pat === '/') return true;
+  if (pat.endsWith('/*')) {
+    const base = pat.slice(0, -2) || '/';
+    if (base === '/') return true;
+    return target === base || target.startsWith(`${base}/`);
+  }
+  return target === pat || target.startsWith(`${pat.replace(/\/+$/, '')}/`);
+}
+
+/**
+ * Determine minimum required RBAC role tier ('admin' | 'moderator' | 'organizer' | 'auth')
+ * for a route based on its HTTP method, mounted path, local path, and router file.
+ */
+function inferRequiredRoleTier(method, fullPath, localPath = '', fileName = '') {
+  const m = String(method || 'GET').toUpperCase();
+  const full = String(fullPath || '');
+  const local = String(localPath || '');
+
+  // 1. Admin tier (requireAdmin)
+  if (
+    /(?:^|\/)admin(?:\/|$)/i.test(full) ||
+    /(?:^|\/)admin(?:\/|$)/i.test(local) ||
+    /^\/api\/auth\/users(?:\/|$)/.test(full) ||
+    /^\/api\/auth\/banned-emails(?:\/|$)/.test(full) ||
+    (fileName === 'auth.js' && (/^\/users(?:\/|$)/.test(local) || /^\/banned-emails(?:\/|$)/.test(local))) ||
+    (full === '/api/settings' && m !== 'GET') ||
+    full.startsWith('/api/settings/') ||
+    (full === '/api/events/default-duties' && m !== 'GET') ||
+    (full === '/api/events/:id' && m === 'DELETE') ||
+    /^\/api\/events\/[^/]+\/send-reminders$/.test(full) ||
+    /^\/api\/attachments\/[^/]+\/promote-to-gallery$/.test(full)
+  ) {
+    return 'admin';
+  }
+
+  // 2. Moderator tier (requireModerator or requireAdmin)
+  if (
+    /(?:^|\/)moderation(?:\/|$)/i.test(full) ||
+    /(?:^|\/)moderation(?:\/|$)/i.test(local) ||
+    /\/messages\/[^/]+\/(?:hide|unhide)$/.test(full) ||
+    /^\/messages\/[^/]+\/(?:hide|unhide)$/.test(local) ||
+    (full === '/api/channels/:id' && m === 'DELETE') ||
+    (fileName === 'channels.js' && local === '/channels/:id' && m === 'DELETE')
+  ) {
+    return 'moderator';
+  }
+
+  // 3. Organizer tier (requireOrganizer or requireAdmin)
+  if (
+    /(?:^|\/)organizer(?:\/|$)/i.test(full) ||
+    /(?:^|\/)organizer(?:\/|$)/i.test(local) ||
+    (full === '/api/events' && m === 'POST') ||
+    (full === '/api/events/:id' && (m === 'PUT' || m === 'PATCH')) ||
+    full === '/api/events/attendee-candidates' ||
+    /^\/api\/events\/[^/]+\/(?:rainout|reopen|send-rainout-email|bp-order\/clear)$/.test(full) ||
+    /^\/api\/events\/[^/]+\/duties(?:\/|$)/.test(full) ||
+    /^\/api\/events\/[^/]+\/attendees(?:\/|$)/.test(full) ||
+    (/^\/api\/posts(?:\/|$)/.test(full) && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(m)) ||
+    (fileName === 'posts.js' && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(m)) ||
+    /^\/api\/media\/[^/]+\/(?:approve|update)$/.test(full) ||
+    (full === '/api/media/:id' && (m === 'PUT' || m === 'PATCH')) ||
+    /^\/api\/baseball\/events\/[^/]+\/sync-channel$/.test(full)
+  ) {
+    return 'organizer';
+  }
+
+  // 4. Default authenticated Member tier (requireAuth or higher)
+  return 'auth';
+}
+
+function doesGuardSatisfyTier(guards, requiredTier) {
+  const list = Array.isArray(guards) ? guards : [];
+  if (list.length === 0) return false;
+  if (requiredTier === 'admin') {
+    return list.includes('requireAdmin');
+  }
+  if (requiredTier === 'moderator') {
+    return list.includes('requireModerator') || list.includes('requireAdmin');
+  }
+  if (requiredTier === 'organizer') {
+    return list.includes('requireOrganizer') || list.includes('requireAdmin');
+  }
+  return list.some((g) => AUTH_GUARD_NAMES.includes(g));
+}
+
+function formatExpectedGuardForTier(requiredTier) {
+  if (requiredTier === 'admin') return 'requireAdmin';
+  if (requiredTier === 'moderator') return 'requireModerator|requireAdmin';
+  if (requiredTier === 'organizer') return 'requireOrganizer|requireAdmin';
+  return 'requireAuth+';
+}
+
+function extractAstGuardsFromNodes(nodes) {
+  const found = [];
+  function visit(node) {
+    if (!node || typeof node !== 'object') return;
+    if (node.type === 'Identifier' && AUTH_GUARD_NAMES.includes(node.name)) {
+      if (!found.includes(node.name)) found.push(node.name);
+      return;
+    }
+    if (node.type === 'ArrayExpression' && Array.isArray(node.elements)) {
+      node.elements.forEach(visit);
+      return;
+    }
+    if (node.type === 'CallExpression' && node.callee) {
+      visit(node.callee);
+    }
+  }
+  for (const n of nodes) visit(n);
+  return found;
+}
+
+function extractStringLiteral(node) {
+  if (!node) return null;
+  if (node.type === 'Literal' && typeof node.value === 'string') {
+    return node.value;
+  }
+  if (node.type === 'TemplateLiteral' && node.expressions.length === 0 && node.quasis.length === 1) {
+    return node.quasis[0].value.cooked || node.quasis[0].value.raw || '';
+  }
+  return null;
+}
+
+function walkEstree(node, visitor) {
+  if (!node || typeof node !== 'object') return;
+  visitor(node);
+  for (const key of Object.keys(node)) {
+    if (key === 'loc' || key === 'range' || key === 'parent') continue;
+    const child = node[key];
+    if (Array.isArray(child)) {
+      for (const item of child) {
+        if (item && typeof item.type === 'string') {
+          walkEstree(item, visitor);
+        }
+      }
+    } else if (child && typeof child.type === 'string') {
+      walkEstree(child, visitor);
+    }
+  }
+}
+
+function isHonoRouterInit(node) {
+  if (!node || typeof node !== 'object') return { isRouter: false, basePath: '' };
+  if (node.type === 'NewExpression' && node.callee && node.callee.type === 'Identifier' && node.callee.name === 'Hono') {
+    return { isRouter: true, basePath: '' };
+  }
+  if (
+    node.type === 'CallExpression' &&
+    node.callee &&
+    node.callee.type === 'MemberExpression' &&
+    node.callee.property &&
+    node.callee.property.type === 'Identifier' &&
+    node.callee.property.name === 'basePath'
+  ) {
+    const inner = isHonoRouterInit(node.callee.object);
+    if (inner.isRouter) {
+      const bp = extractStringLiteral(node.arguments && node.arguments[0]) || '';
+      return { isRouter: true, basePath: bp };
+    }
+  }
+  return { isRouter: false, basePath: '' };
+}
+
+const FALLBACK_ROUTER_PREFIXES = {
+  app: '/api',
+  authRouter: '/api/auth',
+  eventsRouter: '/api/events',
+  eventsCoreRouter: '/api/events',
+  eventsRsvpsRouter: '/api/events',
+  eventsBpDutiesRouter: '/api/events',
+  postsRouter: '/api/posts',
+  mediaRouter: '/api/media',
+  attachmentsRouter: '/api/attachments',
+  keysRouter: '/api/keys',
+  voiceRouter: '/api/voice',
+  rtcRouter: '/api/rtc',
+  baseballRouter: '/api/baseball',
+  waiverRouter: '/api/waiver',
+  gifsRouter: '/api/gifs',
+  chatRouter: '/api',
+  chatSyncRouter: '/api',
+  chatChannelsRouter: '/api',
+  chatMessagesRouter: '/api',
+  chatModerationRouter: '/api'
+};
+
+function scanAstRoutes(rootDir) {
+  const espree = require('espree');
+  const indexPath = path.join(rootDir, 'src', 'app', 'index.js');
+  const routesDir = path.join(rootDir, 'src', 'app', 'routes');
+  const files = [
+    ...(fs.existsSync(indexPath) ? [indexPath] : []),
+    ...walkFiles(routesDir, (n) => n.endsWith('.js'))
+  ];
+
+  const routerBasePaths = new Map();
+  const mountEdges = []; // { parentRouter, prefix, childRouter }
+  const routerUseRules = []; // { routerName, pathPattern, guards, file, line }
+  const rawRoutes = [];
+
+  for (const file of files) {
     const fileName = path.basename(file);
     const src = fs.readFileSync(file, 'utf8');
-    // Match multi-argument route registrations before handler callback
-    const routeRegex = /\b\w+Router\.(post|put|patch|delete)\(\s*(['"`])([^'"`]+)\2\s*,([\s\S]{0,180}?)=>\s*\{|\b\w+Router\.(post|put|patch|delete)\(\s*(['"`])([^'"`]+)\6\s*,\s*([^)]+)\)/g;
+    const ast = espree.parse(src, { ecmaVersion: 'latest', sourceType: 'module', loc: true });
 
-    for (const match of src.matchAll(routeRegex)) {
-      const method = (match[1] || match[5]).toUpperCase();
-      const routePath = match[3] || match[7];
-      const middlePart = match[4] || match[8] || '';
-      totalChecked++;
+    const localRouters = new Set();
+    walkEstree(ast, (node) => {
+      if (node.type === 'VariableDeclarator' && node.id && node.id.type === 'Identifier') {
+        const initInfo = isHonoRouterInit(node.init);
+        if (initInfo.isRouter) {
+          localRouters.add(node.id.name);
+          if (initInfo.basePath) {
+            routerBasePaths.set(node.id.name, initInfo.basePath);
+          }
+        }
+      }
+    });
 
-      if (AUTH_MIDDLEWARE_RX.test(middlePart)) continue;
+    const activeLocalUseRules = [];
 
-      const key = `${fileName}:${method}:${routePath}`;
-      if (!PUBLIC_OR_TOKEN_ROUTES.has(key)) {
-        unguarded.push(key);
+    walkEstree(ast, (node) => {
+      if (
+        node.type !== 'CallExpression' ||
+        !node.callee ||
+        node.callee.type !== 'MemberExpression' ||
+        !node.callee.object ||
+        node.callee.object.type !== 'Identifier' ||
+        !node.callee.property ||
+        node.callee.property.type !== 'Identifier'
+      ) {
+        return;
+      }
+
+      const routerName = node.callee.object.name;
+      if (!localRouters.has(routerName) && !/^(?:app|\w*Router)$/.test(routerName)) {
+        return;
+      }
+
+      const propName = node.callee.property.name.toLowerCase();
+      const args = node.arguments || [];
+      const line = (node.loc && node.loc.start && node.loc.start.line) || 1;
+
+      if (propName === 'route') {
+        const prefix = extractStringLiteral(args[0]);
+        const childIdent = args[1] && args[1].type === 'Identifier' ? args[1].name : null;
+        if (prefix !== null && childIdent) {
+          mountEdges.push({
+            parentRouter: routerName,
+            prefix,
+            childRouter: childIdent,
+            inheritedUseRules: activeLocalUseRules
+              .filter((r) => r.routerName === routerName)
+              .map((r) => ({ ...r }))
+          });
+        }
+        return;
+      }
+
+      if (propName === 'use') {
+        const firstStr = extractStringLiteral(args[0]);
+        const pathPattern = firstStr !== null ? firstStr : '*';
+        const handlerArgs = firstStr !== null ? args.slice(1) : args;
+        const guards = extractAstGuardsFromNodes(handlerArgs);
+        if (guards.length > 0) {
+          const rule = { routerName, pathPattern, guards, file, fileName, line };
+          activeLocalUseRules.push(rule);
+          routerUseRules.push(rule);
+        }
+        return;
+      }
+
+      if (['get', 'post', 'put', 'patch', 'delete', 'all'].includes(propName)) {
+        const routePath = extractStringLiteral(args[0]);
+        if (routePath === null) return;
+        const method = propName.toUpperCase();
+        const directGuards = extractAstGuardsFromNodes(args.slice(1));
+        const inheritedFromRouter = activeLocalUseRules
+          .filter((r) => r.routerName === routerName && doesWildcardPatternMatch(r.pathPattern, routePath))
+          .flatMap((r) => r.guards);
+        const combinedGuards = Array.from(new Set([...inheritedFromRouter, ...directGuards]));
+        rawRoutes.push({
+          file,
+          fileName,
+          line,
+          routerName,
+          method,
+          localPath: routePath,
+          directGuards,
+          guards: combinedGuards
+        });
+        return;
+      }
+
+      if (propName === 'on') {
+        const methodArg = args[0];
+        const routePath = extractStringLiteral(args[1]);
+        if (routePath === null) return;
+        const methods = [];
+        const singleMethod = extractStringLiteral(methodArg);
+        if (singleMethod) {
+          methods.push(singleMethod.toUpperCase());
+        } else if (methodArg && methodArg.type === 'ArrayExpression') {
+          for (const el of methodArg.elements || []) {
+            const mStr = extractStringLiteral(el);
+            if (mStr) methods.push(mStr.toUpperCase());
+          }
+        }
+        const directGuards = extractAstGuardsFromNodes(args.slice(2));
+        const inheritedFromRouter = activeLocalUseRules
+          .filter((r) => r.routerName === routerName && doesWildcardPatternMatch(r.pathPattern, routePath))
+          .flatMap((r) => r.guards);
+        const combinedGuards = Array.from(new Set([...inheritedFromRouter, ...directGuards]));
+        for (const method of methods) {
+          rawRoutes.push({
+            file,
+            fileName,
+            line,
+            routerName,
+            method,
+            localPath: routePath,
+            directGuards,
+            guards: combinedGuards
+          });
+        }
+      }
+    });
+  }
+
+  // Resolve full mounted paths from app -> sub-routers
+  const resolvedRouterPrefixes = new Map();
+  for (const [rName, bp] of routerBasePaths.entries()) {
+    resolvedRouterPrefixes.set(rName, bp);
+  }
+  if (!resolvedRouterPrefixes.has('app')) {
+    resolvedRouterPrefixes.set('app', '/api');
+  }
+
+  const parentInheritedGuards = new Map(); // routerName -> Array<{ fullPattern, guards }>
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const edge of mountEdges) {
+      const parentPrefix = resolvedRouterPrefixes.get(edge.parentRouter);
+      if (parentPrefix !== undefined && !resolvedRouterPrefixes.has(edge.childRouter)) {
+        resolvedRouterPrefixes.set(edge.childRouter, joinRoutePaths(parentPrefix, edge.prefix));
+        changed = true;
+      }
+      if (parentPrefix !== undefined) {
+        const childPrefix = joinRoutePaths(parentPrefix, edge.prefix);
+        const parentRules = [
+          ...(parentInheritedGuards.get(edge.parentRouter) || []),
+          ...(edge.inheritedUseRules || []).map((r) => ({
+            fullPattern: joinRoutePaths(parentPrefix, r.pathPattern),
+            guards: r.guards
+          }))
+        ];
+        if (parentRules.length > 0 && !parentInheritedGuards.has(edge.childRouter)) {
+          parentInheritedGuards.set(
+            edge.childRouter,
+            parentRules.filter((pr) => doesWildcardPatternMatch(pr.fullPattern, childPrefix) || pr.fullPattern.startsWith(childPrefix))
+          );
+          changed = true;
+        }
       }
     }
   }
 
-  if (unguarded.length) {
-    record('FAIL', 'Mutating Route Auth Guard Audit', `Unprotected routes without explicit allowlist: ${unguarded.join(', ')}`);
-  } else {
-    record('PASS', 'Mutating Route Auth Guard Audit', `${totalChecked} mutating routes verified`);
+  return rawRoutes.map((route) => {
+    const prefix = resolvedRouterPrefixes.get(route.routerName)
+      || FALLBACK_ROUTER_PREFIXES[route.routerName]
+      || '/api';
+    const fullPath = route.localPath.startsWith('/api/')
+      ? route.localPath
+      : joinRoutePaths(prefix, route.localPath);
+    const parentRules = parentInheritedGuards.get(route.routerName) || [];
+    const parentGuards = parentRules
+      .filter((pr) => doesWildcardPatternMatch(pr.fullPattern, fullPath))
+      .flatMap((pr) => pr.guards);
+    const guards = Array.from(new Set([...parentGuards, ...route.guards]));
+    const astKey = `${route.fileName}:${route.method}:${route.localPath}`;
+    const mountedKey = `${route.method} ${fullPath}`;
+    return {
+      ...route,
+      fullPath,
+      astKey,
+      mountedKey,
+      guards
+    };
+  });
+}
+
+function resolveGuardNameFromHandler(fn, securityGuards) {
+  if (typeof fn !== 'function') return null;
+  if (securityGuards) {
+    for (const guardName of AUTH_GUARD_NAMES) {
+      if (securityGuards[guardName] === fn) {
+        return guardName;
+      }
+    }
   }
+  if (fn.name && AUTH_GUARD_NAMES.includes(fn.name)) {
+    return fn.name;
+  }
+  return null;
+}
+
+function introspectHonoAppRoutes(honoApp, securityGuards = null) {
+  if (!honoApp || !Array.isArray(honoApp.routes)) {
+    return [];
+  }
+
+  const wildcardGuardRules = [];
+  const grouped = new Map();
+
+  for (const entry of honoApp.routes) {
+    if (!entry || !entry.method || !entry.path) continue;
+    const method = String(entry.method).toUpperCase();
+    const routePath = String(entry.path);
+    const guardName = resolveGuardNameFromHandler(entry.handler, securityGuards);
+
+    if (routePath === '*' || routePath.endsWith('/*')) {
+      if (guardName) {
+        wildcardGuardRules.push({
+          method,
+          pathPattern: routePath,
+          guardName
+        });
+      }
+      continue;
+    }
+
+    if (!['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'ALL'].includes(method)) {
+      continue;
+    }
+
+    const normalizedPath = routePath.length > 1 ? routePath.replace(/\/+$/, '') : routePath;
+    const key = `${method} ${normalizedPath}`;
+    let rec = grouped.get(key);
+    if (!rec) {
+      const inheritedGuards = wildcardGuardRules
+        .filter((w) => (w.method === 'ALL' || w.method === method) && doesWildcardPatternMatch(w.pathPattern, normalizedPath))
+        .map((w) => w.guardName);
+      rec = {
+        method,
+        fullPath: normalizedPath,
+        mountedKey: key,
+        guards: Array.from(new Set(inheritedGuards)),
+        handlerCount: 0
+      };
+      grouped.set(key, rec);
+    }
+    rec.handlerCount += 1;
+    if (guardName && !rec.guards.includes(guardName)) {
+      rec.guards.push(guardName);
+    }
+  }
+
+  return Array.from(grouped.values());
+}
+
+function isRouteAllowlisted(allowlist, { astKey, mountedKey, method, localPath, fullPath }) {
+  if (!allowlist || typeof allowlist.has !== 'function') return false;
+  if (astKey && allowlist.has(astKey)) return true;
+  if (mountedKey && allowlist.has(mountedKey)) return true;
+  if (method && localPath && allowlist.has(`${method} ${localPath}`)) return true;
+  if (fullPath && allowlist.has(fullPath)) return true;
+  return false;
+}
+
+function checkRouteAuthGuards(rootDir = ROOT, options = {}) {
+  const report = typeof options.record === 'function'
+    ? options.record
+    : (options.silent ? () => {} : record);
+  const allowlist = options.allowlist || PUBLIC_OR_TOKEN_ROUTES;
+
+  const astRoutes = scanAstRoutes(rootDir);
+
+  let honoApp = options.honoApp || null;
+  let securityGuards = options.securityGuards || null;
+  if (!securityGuards) {
+    try {
+      securityGuards = require(path.join(ROOT, 'src', 'app', 'security.js'));
+    } catch {
+      securityGuards = null;
+    }
+  }
+  if (!honoApp && path.resolve(rootDir) === path.resolve(ROOT)) {
+    const appMod = require(path.join(rootDir, 'src', 'app', 'index.js'));
+    honoApp = appMod && appMod.app ? appMod.app : null;
+  }
+
+  const liveRoutes = honoApp ? introspectHonoAppRoutes(honoApp, securityGuards) : [];
+
+  const unguardedAstRoutes = [];
+  const unguardedLiveRoutes = [];
+  const roleTierMismatches = [];
+  const astLiveDrift = [];
+
+  for (const r of astRoutes) {
+    const requiredTier = inferRequiredRoleTier(r.method, r.fullPath, r.localPath, r.fileName);
+    if (r.guards.length === 0) {
+      if (!isRouteAllowlisted(allowlist, r)) {
+        unguardedAstRoutes.push(`${r.astKey} (${r.mountedKey})`);
+      }
+    } else if (!doesGuardSatisfyTier(r.guards, requiredTier)) {
+      roleTierMismatches.push(
+        `AST ${r.astKey} (${r.mountedKey}) has [${r.guards.join(', ')}], requires ${formatExpectedGuardForTier(requiredTier)}`
+      );
+    }
+  }
+
+  const astByMountedKey = new Map(astRoutes.map((r) => [r.mountedKey, r]));
+  for (const lr of liveRoutes) {
+    const matchingAst = astByMountedKey.get(lr.mountedKey);
+    const localPath = matchingAst ? matchingAst.localPath : '';
+    const fileName = matchingAst ? matchingAst.fileName : '';
+    const astKey = matchingAst ? matchingAst.astKey : '';
+    const requiredTier = inferRequiredRoleTier(lr.method, lr.fullPath, localPath, fileName);
+
+    if (lr.guards.length === 0) {
+      if (!isRouteAllowlisted(allowlist, { astKey, mountedKey: lr.mountedKey, method: lr.method, localPath, fullPath: lr.fullPath })) {
+        unguardedLiveRoutes.push(lr.mountedKey);
+      }
+    } else if (!doesGuardSatisfyTier(lr.guards, requiredTier)) {
+      const mismatchMsg = `Live ${lr.mountedKey} has [${lr.guards.join(', ')}], requires ${formatExpectedGuardForTier(requiredTier)}`;
+      if (!roleTierMismatches.includes(mismatchMsg)) {
+        roleTierMismatches.push(mismatchMsg);
+      }
+    }
+  }
+
+  // If both full AST and live Hono app from rootDir were inspected, verify 1-to-1 route parity
+  if (honoApp && astRoutes.length > 0 && !options.honoApp) {
+    const liveKeys = new Set(liveRoutes.map((lr) => lr.mountedKey));
+    for (const r of astRoutes) {
+      if (!liveKeys.has(r.mountedKey)) {
+        astLiveDrift.push(`AST route missing from mounted Hono app.routes: ${r.astKey} (${r.mountedKey})`);
+      }
+    }
+    for (const lr of liveRoutes) {
+      if (!astByMountedKey.has(lr.mountedKey)) {
+        astLiveDrift.push(`Live Hono route missing from AST scan: ${lr.mountedKey}`);
+      }
+    }
+  }
+
+  const failureParts = [];
+  if (unguardedAstRoutes.length) {
+    failureParts.push(`unguarded AST routes: ${unguardedAstRoutes.join(', ')}`);
+  }
+  if (unguardedLiveRoutes.length) {
+    failureParts.push(`unguarded live Hono routes: ${unguardedLiveRoutes.join(', ')}`);
+  }
+  if (roleTierMismatches.length) {
+    failureParts.push(`role-tier mismatches: ${roleTierMismatches.join('; ')}`);
+  }
+  if (astLiveDrift.length) {
+    failureParts.push(`AST/live route drift: ${astLiveDrift.join('; ')}`);
+  }
+
+  const status = failureParts.length ? 'FAIL' : 'PASS';
+  const detail = failureParts.length
+    ? failureParts.join(' | ')
+    : `${astRoutes.length} AST routes & ${liveRoutes.length} live Hono routes verified across all HTTP methods`;
+
+  report(status, 'Route Auth Guard & Role-Tier Audit', detail);
+
+  return {
+    status,
+    name: 'Route Auth Guard & Role-Tier Audit',
+    detail,
+    astRoutes,
+    liveRoutes,
+    astRoutesChecked: astRoutes.length,
+    liveRoutesChecked: liveRoutes.length,
+    unguardedAstRoutes,
+    unguardedLiveRoutes,
+    roleTierMismatches,
+    astLiveDrift
+  };
 }
 
 /**
@@ -646,7 +1432,14 @@ if (require.main === module) {
 }
 
 module.exports = {
+  PUBLIC_OR_TOKEN_ROUTE_MANIFEST,
+  PUBLIC_OR_TOKEN_ROUTES,
   checkNpmAudit,
   checkPwaAssetSync,
+  checkRouteAuthGuards,
+  doesGuardSatisfyTier,
+  inferRequiredRoleTier,
+  introspectHonoAppRoutes,
+  scanAstRoutes,
   walkFiles
 };

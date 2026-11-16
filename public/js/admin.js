@@ -45,6 +45,7 @@ function applyRoleUI(user) {
   }
   const toggleIds = [
     ['btn-backup-db', 'inline-flex'],
+    ['btn-backup-dr', 'inline-flex'],
     ['default-template-card', 'block'],
     ['btn-save-as-defaults', 'inline-block'],
     ['admin-user-mgmt-section', 'block'],
@@ -164,58 +165,210 @@ function buildStoreZipBlob(entries) {
   return new Blob([...localParts, ...centralParts, new Uint8Array(eocd)], { type: 'application/zip' });
 }
 
+function bytesToBase64(bytes) {
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+function triggerBlobDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function() { URL.revokeObjectURL(url); }, 5000);
+}
+
+async function deriveAdminBackupWrappingKey(passphrase, iterations) {
+  if (!window.crypto || !window.crypto.subtle || typeof window.crypto.getRandomValues !== 'function') {
+    throw new Error('WebCrypto API is unavailable in this browser.');
+  }
+  const saltBytes = new Uint8Array(16);
+  window.crypto.getRandomValues(saltBytes);
+  const passBytes = new TextEncoder().encode(String(passphrase));
+  const baseKey = await window.crypto.subtle.importKey(
+    'raw',
+    passBytes,
+    { name: 'PBKDF2' },
+    false,
+    ['deriveBits']
+  );
+  const derivedBits = await window.crypto.subtle.deriveBits(
+    {
+      name: 'PBKDF2',
+      salt: saltBytes,
+      iterations: iterations,
+      hash: 'SHA-256'
+    },
+    baseKey,
+    256
+  );
+  const derivedBytes = new Uint8Array(derivedBits);
+  const result = {
+    wrappingKey: bytesToBase64(derivedBytes),
+    kdfSalt: bytesToBase64(saltBytes),
+    kdfIterations: iterations
+  };
+  derivedBytes.fill(0);
+  return result;
+}
+
 function setupAdminBackupButton() {
   const btn = document.getElementById('btn-backup-db');
-  if (!btn || btn.dataset.boundDualBackup) return;
-  btn.dataset.boundDualBackup = '1';
+  if (btn && !btn.dataset.boundDualBackup) {
+    btn.dataset.boundDualBackup = '1';
 
-  btn.addEventListener('click', async function (e) {
-    e.preventDefault();
-    const origText = btn.textContent;
-    btn.style.pointerEvents = 'none';
-    btn.textContent = '⏳ Backing up both DBs...';
-    const dateStr = new Date().toISOString().slice(0, 10);
+    btn.addEventListener('click', async function (e) {
+      e.preventDefault();
+      const origText = btn.textContent;
+      btn.style.pointerEvents = 'none';
+      btn.textContent = API.t('backup_scrubbed_working', '⏳ Exporting scrubbed SQL...');
+      const dateStr = new Date().toISOString().slice(0, 10);
 
-    try {
-      const [baseballRes, chatRes] = await Promise.all([
-        fetch('/api/events/admin/backup-db?db=baseball', { credentials: 'include' }),
-        fetch('/api/events/admin/backup-db?db=chat', { credentials: 'include' })
-      ]);
+      try {
+        const [baseballRes, chatRes] = await Promise.all([
+          fetch('/api/events/admin/backup-db?db=baseball', { credentials: 'include', cache: 'no-store' }),
+          fetch('/api/events/admin/backup-db?db=chat', { credentials: 'include', cache: 'no-store' })
+        ]);
 
-      if (!baseballRes.ok) {
-        throw new Error('Failed to export BASEBALL_DB (HTTP ' + baseballRes.status + ')');
+        if (!baseballRes.ok) {
+          throw new Error('Failed to export BASEBALL_DB (HTTP ' + baseballRes.status + ')');
+        }
+
+        const entries = [{
+          name: `baseball_operational_${dateStr}.sql`,
+          bytes: new Uint8Array(await baseballRes.arrayBuffer())
+        }];
+
+        if (chatRes.ok) {
+          entries.push({
+            name: `clubhouse_chat_operational_${dateStr}.sql`,
+            bytes: new Uint8Array(await chatRes.arrayBuffer())
+          });
+        } else if (chatRes.status !== 503) {
+          throw new Error('Failed to export CHAT_DB (HTTP ' + chatRes.status + ')');
+        }
+
+        const zipBlob = buildStoreZipBlob(entries);
+        triggerBlobDownload(zipBlob, `pickup_baseball_operational_backup_${dateStr}.zip`);
+        if (window.PBFDialog) {
+          window.PBFDialog.toast(
+            API.t('backup_scrubbed_success', 'Scrubbed operational SQL backup downloaded.'),
+            { type: 'info' }
+          );
+        }
+      } catch (err) {
+        if (window.PBFDialog) {
+          window.PBFDialog.toast(
+            API.t('backup_failed', 'Database backup failed: {error}', { error: err.message || 'Unknown error' }),
+            { type: 'error' }
+          );
+        }
+      } finally {
+        btn.style.pointerEvents = '';
+        btn.textContent = origText;
+      }
+    });
+  }
+
+  const drBtn = document.getElementById('btn-backup-dr');
+  if (drBtn && !drBtn.dataset.boundDrBackup) {
+    drBtn.dataset.boundDrBackup = '1';
+
+    drBtn.addEventListener('click', async function (e) {
+      e.preventDefault();
+      const passphrase = window.PBFDialog
+        ? await window.PBFDialog.prompt(
+            API.t(
+              'backup_dr_prompt_msg',
+              'Enter a passphrase (at least 8 characters) to encrypt this full disaster-recovery backup. Keep it safe — you will need it with scripts/restore-backup.js:'
+            ),
+            '',
+            {
+              title: API.t('backup_dr_prompt_title', '🔐 Encrypted Full DR Backup'),
+              inputType: 'password',
+              placeholder: API.t('backup_dr_prompt_placeholder', 'Enter backup encryption passphrase...'),
+              confirmLabel: API.t('backup_dr_confirm_btn', 'Encrypt & Download')
+            }
+          )
+        : null;
+
+      if (passphrase === null) return;
+      if (String(passphrase).length < 8) {
+        if (window.PBFDialog) {
+          window.PBFDialog.toast(
+            API.t('backup_dr_passphrase_short', 'Backup passphrase must be at least 8 characters.'),
+            { type: 'error' }
+          );
+        }
+        return;
       }
 
-      const entries = [{
-        name: `baseball_backup_${dateStr}.sql`,
-        bytes: new Uint8Array(await baseballRes.arrayBuffer())
-      }];
+      const origText = drBtn.textContent;
+      drBtn.disabled = true;
+      drBtn.textContent = API.t('backup_dr_working', '⏳ Encrypting DR backup...');
+      const dateStr = new Date().toISOString().slice(0, 10);
 
-      if (chatRes.ok) {
-        entries.push({
-          name: `clubhouse_chat_backup_${dateStr}.sql`,
-          bytes: new Uint8Array(await chatRes.arrayBuffer())
-        });
-      } else if (chatRes.status !== 503) {
-        throw new Error('Failed to export CHAT_DB (HTTP ' + chatRes.status + ')');
+      try {
+        const kdfMaterial = await deriveAdminBackupWrappingKey(passphrase, 600000);
+        const reqInit = {
+          method: 'POST',
+          credentials: 'include',
+          cache: 'no-store',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(kdfMaterial)
+        };
+
+        const [baseballRes, chatRes] = await Promise.all([
+          fetch('/api/events/admin/backup-db?db=baseball', reqInit),
+          fetch('/api/events/admin/backup-db?db=chat', reqInit)
+        ]);
+
+        if (!baseballRes.ok) {
+          throw new Error('Failed to export encrypted BASEBALL_DB (HTTP ' + baseballRes.status + ')');
+        }
+
+        const baseballJson = await baseballRes.text();
+        triggerBlobDownload(
+          new Blob([baseballJson], { type: 'application/json' }),
+          `baseball_dr_backup_${dateStr}.pbfenc`
+        );
+
+        if (chatRes.ok) {
+          const chatJson = await chatRes.text();
+          triggerBlobDownload(
+            new Blob([chatJson], { type: 'application/json' }),
+            `clubhouse_chat_dr_backup_${dateStr}.pbfenc`
+          );
+        } else if (chatRes.status !== 503) {
+          throw new Error('Failed to export encrypted CHAT_DB (HTTP ' + chatRes.status + ')');
+        }
+
+        if (window.PBFDialog) {
+          window.PBFDialog.toast(
+            API.t('backup_dr_success', 'Encrypted disaster-recovery backup (.pbfenc) downloaded.'),
+            { type: 'info' }
+          );
+        }
+      } catch (err) {
+        if (window.PBFDialog) {
+          window.PBFDialog.toast(
+            API.t('backup_failed', 'Database backup failed: {error}', { error: err.message || 'Unknown error' }),
+            { type: 'error' }
+          );
+        }
+      } finally {
+        drBtn.disabled = false;
+        drBtn.textContent = origText;
       }
-
-      const zipBlob = buildStoreZipBlob(entries);
-      const url = URL.createObjectURL(zipBlob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `pickup_baseball_backup_${dateStr}.zip`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
-    } catch (err) {
-      if (window.PBFDialog) window.PBFDialog.toast('Database backup failed: ' + (err.message || 'Unknown error'), { type: 'error' });
-    } finally {
-      btn.style.pointerEvents = '';
-      btn.textContent = origText;
-    }
-  });
+    });
+  }
 }
 
 async function loadDefaultDuties() {
@@ -1422,13 +1575,25 @@ function setupAdminUserManagement(currentUser) {
         const targetUserEmail = e.currentTarget.getAttribute('data-user-email');
         if (!window.PBFDialog) return;
         const choice = await window.PBFDialog.confirmWithCheckbox(
-          'Are you sure you want to permanently remove user account: ' + targetUserEmail + '?',
-          'Also permanently BAN ' + targetUserEmail + ' from re-registering or signing in again',
-          { title: 'Remove User Account', confirmLabel: 'Remove User', danger: true }
+          API.t(
+            'admin.remove_user_confirm',
+            'Permanently remove member account {email}? Profile, future RSVPs, and media will be erased, past records anonymized, and any signed liability waiver will be held in 3-year legal-defense quarantine.',
+            { email: targetUserEmail }
+          ),
+          API.t(
+            'admin.remove_user_ban_checkbox',
+            'Also permanently BAN {email} from re-registering or signing in again',
+            { email: targetUserEmail }
+          ),
+          {
+            title: API.t('admin.remove_user_title', 'Remove Member Account'),
+            confirmLabel: API.t('admin.remove_user_confirm_btn', 'Remove Member'),
+            danger: true
+          }
         );
         if (!choice || !choice.confirmed) return;
         const alsoBan = Boolean(choice.checked);
-        setUserMgmtAlert('info', 'Removing ' + API.escapeHtml(targetUserEmail) + '...');
+        setUserMgmtAlert('info', API.escapeHtml(API.t('admin.removing_user', 'Removing {email}...', { email: targetUserEmail })));
 
         try {
           const deleteRes = await API.deleteUser(targetUserId, alsoBan, 'Banned by admin');
@@ -1440,7 +1605,7 @@ function setupAdminUserManagement(currentUser) {
             if (alsoBan && typeof reloadBannedEmailsFn === 'function') await reloadBannedEmailsFn();
           }
         } catch (err) {
-          setUserMgmtAlert('error', 'Failed to remove user account.');
+          setUserMgmtAlert('error', API.escapeHtml(API.t('admin.remove_user_failed', 'Failed to remove member account.')));
         }
       });
     });
@@ -1639,6 +1804,10 @@ function setupAdminSecurity() {
   const banForm = document.getElementById('ban-email-form');
   const banSubmitBtn = document.getElementById('ban-submit-btn');
   const refreshBannedBtn = document.getElementById('refresh-banned-btn');
+  const quarantinedTableBody = document.getElementById('quarantined-waivers-table-body');
+  const quarantinedAlert = document.getElementById('quarantined-waivers-alert');
+  const refreshQuarantinedBtn = document.getElementById('refresh-quarantined-waivers-btn');
+  const purgeQuarantinedBtn = document.getElementById('purge-quarantined-waivers-btn');
 
   async function loadSettings() {
     try {
@@ -1850,8 +2019,67 @@ function setupAdminSecurity() {
 
   if (refreshBannedBtn) refreshBannedBtn.addEventListener('click', loadBannedEmails);
 
+  async function loadQuarantinedWaivers() {
+    if (!quarantinedTableBody) return;
+    quarantinedTableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 10px;">' + API.escapeHtml(API.t('admin.quarantined_loading', 'Loading quarantined waivers...')) + '</td></tr>';
+    try {
+      const res = await API.getQuarantinedWaivers();
+      const list = (res && res.waivers) ? res.waivers : [];
+      if (list.length === 0) {
+        quarantinedTableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 10px;">' + API.escapeHtml(API.t('admin.quarantined_empty', 'No quarantined waivers on legal hold.')) + '</td></tr>';
+        return;
+      }
+      const inspectLabel = API.escapeHtml(API.t('admin.quarantined_inspect', '📄 Inspect'));
+      quarantinedTableBody.innerHTML = list.map(function(w) {
+        const certId = w.certificate_id || String(w.id);
+        const signedDay = w.signed_date || (w.signed_at ? String(w.signed_at).slice(0, 10) : '');
+        const retentionDay = w.retention_until ? String(w.retention_until).slice(0, 10) : '';
+        return `
+          <tr>
+            <td style="font-family: monospace; font-size: 0.78rem; font-weight: 700;">${API.escapeHtml(certId)}</td>
+            <td style="font-size: 0.82rem;">
+              <div><strong>${API.escapeHtml(w.printed_name || '')}</strong></div>
+              <div style="font-family: monospace; font-size: 0.75rem; color: var(--text-muted);">${API.escapeHtml(w.email || '')}</div>
+            </td>
+            <td style="font-size: 0.8rem; white-space: nowrap;">${API.escapeHtml(signedDay)}</td>
+            <td style="font-size: 0.8rem; white-space: nowrap;">${API.escapeHtml(retentionDay)}</td>
+            <td style="white-space: nowrap;">
+              <a href="/api/waiver/admin/quarantined/${encodeURIComponent(certId)}?format=html" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm" style="font-size: 0.74rem; padding: 2px 8px; height: 26px; line-height: 1.2;">${inspectLabel}</a>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    } catch (e) {
+      quarantinedTableBody.innerHTML = '<tr><td colspan="5" style="color: var(--danger); text-align: center; padding: 10px;">' + API.escapeHtml(API.t('admin.quarantined_load_failed', 'Failed to load quarantined waivers.')) + '</td></tr>';
+    }
+  }
+
+  if (refreshQuarantinedBtn) {
+    refreshQuarantinedBtn.addEventListener('click', loadQuarantinedWaivers);
+  }
+  if (purgeQuarantinedBtn) {
+    purgeQuarantinedBtn.addEventListener('click', async function() {
+      purgeQuarantinedBtn.disabled = true;
+      try {
+        const res = await API.purgeQuarantinedWaivers();
+        const count = res && typeof res.purgedCount === 'number' ? res.purgedCount : 0;
+        if (quarantinedAlert) {
+          quarantinedAlert.innerHTML = '<div class="alert alert-success" style="font-size: 0.84rem;">' + API.escapeHtml(API.t('admin.quarantined_purged', '✓ Purged {count} expired quarantined waiver(s).', { count: count })) + '</div>';
+        }
+        await loadQuarantinedWaivers();
+      } catch (err) {
+        if (quarantinedAlert) {
+          quarantinedAlert.innerHTML = '<div class="alert alert-error" style="font-size: 0.84rem;">' + API.escapeHtml(API.t('admin.quarantined_purge_failed', 'Failed to purge expired quarantined waivers.')) + '</div>';
+        }
+      } finally {
+        purgeQuarantinedBtn.disabled = false;
+      }
+    });
+  }
+
   loadSettings();
   loadBannedEmails();
+  loadQuarantinedWaivers();
 
   if (window.location.hash === '#admin-security-section' || window.location.hash === '#security-management-section') {
     setTimeout(function() {

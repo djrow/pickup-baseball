@@ -6,7 +6,14 @@
  */
 
 import { Hono } from 'hono';
-import { requireAuth, requireModerator, rejectIfChatMuted, rejectIfClubhouseOptedOut, normalizeMemberRole } from '../../security.js';
+import {
+  requireAuth,
+  requireModerator,
+  rejectIfChatMuted,
+  rejectIfClubhouseOptedOut,
+  checkRateLimit,
+  normalizeMemberRole
+} from '../../security.js';
 import { logEvent } from '../../errors.js';
 import {
   abbreviateMemberNames,
@@ -14,7 +21,8 @@ import {
   isPrivateEncryptedBoard,
   isPublicGuestChannel,
   canUserAccessChannel,
-  hydrateMessages
+  hydrateMessages,
+  rejectIfDmPeerBlocked
 } from './helpers.js';
 
 export const chatMessagesRouter = /** @type {AppHono} */ (new Hono());
@@ -163,26 +171,16 @@ chatMessagesRouter.post('/channels/:id/messages', requireAuth, async (c) => {
   if (!(await canUserAccessChannel(chatDb, user, channel, 'write'))) {
     return c.json({ error: 'Access denied: insufficient permissions to post in this channel.' }, 403);
   }
+  const blockResp = await rejectIfDmPeerBlocked(c, chatDb, channel, user.id);
+  if (blockResp) return blockResp;
 
-  const nowSec = Math.floor(Date.now() / 1000);
-  const rateKey = `user_${user.id}_msgs`;
-  const windowCutoff = nowSec - 60;
-
-  await chatDb.prepare(`
-    INSERT INTO chat_rate_limits (key, count, window_start)
-    VALUES (?, 1, ?)
-    ON CONFLICT(key) DO UPDATE SET
-      count = CASE WHEN chat_rate_limits.window_start <= ? THEN 1 ELSE chat_rate_limits.count + 1 END,
-      window_start = CASE WHEN chat_rate_limits.window_start <= ? THEN ? ELSE chat_rate_limits.window_start END
-  `).bind(rateKey, nowSec, windowCutoff, windowCutoff, nowSec).run();
-
-  const updatedRate = await chatDb.prepare(
-    'SELECT count, window_start FROM chat_rate_limits WHERE key = ?'
-  ).bind(rateKey).first();
-
-  if (updatedRate && Number(updatedRate.count) > 30) {
-    const retryAfter = Math.max(1, 60 - (nowSec - Number(updatedRate.window_start || 0)));
-    c.header('Retry-After', String(retryAfter));
+  const msgRate = await checkRateLimit(chatDb, `chat_msgs:${user.id}`, 30, 60, c.env, {
+    table: 'chat_rate_limits',
+    failClosed: true,
+    enforceInTest: true
+  });
+  if (!msgRate.allowed) {
+    c.header('Retry-After', String(msgRate.retryAfter || 60));
     return c.json({
       error: 'Too many messages (rate limit exceeded: max 30 messages per 60 seconds). Please slow down.'
     }, 429);
@@ -238,16 +236,43 @@ chatMessagesRouter.post('/channels/:id/messages', requireAuth, async (c) => {
       }, 400);
     }
   }
-  const isPrivilegedMsgSender = Boolean(user.isAdmin || user.isModerator || user.canModerateChat || user.canManageEvents);
-  const allowedMessageTypes = new Set(
-    isPrivilegedMsgSender ? ['text', 'system', 'poll', 'image', 'video', 'file'] : ['text', 'poll', 'image', 'video', 'file']
-  );
-  const messageType = allowedMessageTypes.has(String(body.message_type || 'text')) ? String(body.message_type || 'text') : 'text';
-  const metadataJson = body.metadata_json
-    ? (typeof body.metadata_json === 'string' ? body.metadata_json : JSON.stringify(body.metadata_json))
-    : null;
-  if (metadataJson && metadataJson.length > 4096) {
-    return c.json({ error: 'metadata_json exceeds maximum allowed size (4 KB).' }, 400);
+  if (body.is_system !== undefined || body.audit_type !== undefined) {
+    return c.json({ error: 'System and audit message flags are reserved for server-generated notices.' }, 400);
+  }
+  const requestedType = String(body.message_type || 'text').trim().toLowerCase();
+  if (requestedType === 'system' || requestedType === 'audit' || requestedType === 'key_rotated') {
+    return c.json({ error: 'System and audit message types cannot be submitted by clients.' }, 403);
+  }
+  const allowedMessageTypes = new Set(['text', 'poll', 'image', 'video', 'file']);
+  const messageType = allowedMessageTypes.has(requestedType) ? requestedType : 'text';
+  let metadataJson = null;
+  if (body.metadata_json !== undefined && body.metadata_json !== null) {
+    let parsedMeta;
+    if (typeof body.metadata_json === 'string') {
+      if (body.metadata_json.length > 4096) {
+        return c.json({ error: 'metadata_json exceeds maximum allowed size (4 KB).' }, 400);
+      }
+      try {
+        parsedMeta = JSON.parse(body.metadata_json);
+      } catch (e) {
+        return c.json({ error: 'Invalid metadata_json format.' }, 400);
+      }
+    } else if (typeof body.metadata_json === 'object') {
+      parsedMeta = body.metadata_json;
+    } else {
+      return c.json({ error: 'Invalid metadata_json format.' }, 400);
+    }
+    if (
+      parsedMeta &&
+      typeof parsedMeta === 'object' &&
+      (parsedMeta.audit_type !== undefined || parsedMeta.is_system !== undefined || parsedMeta.key_rotated !== undefined)
+    ) {
+      return c.json({ error: 'Reserved system/audit metadata fields are not allowed.' }, 400);
+    }
+    metadataJson = JSON.stringify(parsedMeta);
+    if (metadataJson.length > 4096) {
+      return c.json({ error: 'metadata_json exceeds maximum allowed size (4 KB).' }, 400);
+    }
   }
 
   const authorRole = normalizeMemberRole(user.role);
@@ -315,8 +340,9 @@ chatMessagesRouter.post('/channels/:id/messages', requireAuth, async (c) => {
         WHERE cm.channel_id = ?
           AND COALESCE(cm.hidden, 0) = 1
           AND cm.user_id NOT IN (SELECT muter_user_id FROM user_mutes WHERE muted_user_id = ?)
+          AND cm.user_id NOT IN (SELECT blocker_id FROM user_blocks WHERE blocked_id = ?)
         LIMIT 1
-      `).bind(channel.id, user.id).first();
+      `).bind(channel.id, user.id, user.id).first();
       if (hiddenRow) {
         await chatDb.prepare(`
           UPDATE channel_members
@@ -324,7 +350,8 @@ chatMessagesRouter.post('/channels/:id/messages', requireAuth, async (c) => {
           WHERE channel_id = ?
             AND COALESCE(hidden, 0) = 1
             AND user_id NOT IN (SELECT muter_user_id FROM user_mutes WHERE muted_user_id = ?)
-        `).bind(channel.id, user.id).run();
+            AND user_id NOT IN (SELECT blocker_id FROM user_blocks WHERE blocked_id = ?)
+        `).bind(channel.id, user.id, user.id).run();
         const { results: dmMemRows } = await chatDb.prepare(
           'SELECT user_id FROM channel_members WHERE channel_id = ? AND COALESCE(hidden, 0) = 0'
         ).bind(channel.id).all();
@@ -378,11 +405,16 @@ chatMessagesRouter.patch('/messages/:id', requireAuth, async (c) => {
   if (existing.hidden_at) {
     return c.json({ error: 'Moderated/hidden messages cannot be edited.' }, 403);
   }
+  if (existing.message_type === 'system') {
+    return c.json({ error: 'System audit notices cannot be edited.' }, 403);
+  }
 
   const msgChannel = await resolveChannel(chatDb, String(existing.channel_id || ''));
   if (!msgChannel || !(await canUserAccessChannel(chatDb, user, msgChannel, 'write'))) {
     return c.json({ error: 'Access denied: insufficient permissions to edit messages in this board.' }, 403);
   }
+  const blockResp = await rejectIfDmPeerBlocked(c, chatDb, msgChannel, user.id);
+  if (blockResp) return blockResp;
 
   const isDmMsg = Boolean(msgChannel && (msgChannel.channel_type === 'dm' || msgChannel.channel_type === 'group_dm'));
   const isPrivateMsg = isPrivateEncryptedBoard(msgChannel);
@@ -542,6 +574,8 @@ chatMessagesRouter.post('/messages/:id/reactions', requireAuth, async (c) => {
   if (!channel || !(await canUserAccessChannel(chatDb, user, channel, 'read'))) {
     return c.json({ error: 'Access denied.' }, 403);
   }
+  const blockResp = await rejectIfDmPeerBlocked(c, chatDb, channel, user.id);
+  if (blockResp) return blockResp;
 
   const body = await c.req.json().catch(() => ({}));
   const emoji = typeof body.emoji === 'string' ? body.emoji.trim() : '';
@@ -549,24 +583,15 @@ chatMessagesRouter.post('/messages/:id/reactions', requireAuth, async (c) => {
     return c.json({ error: 'Valid emoji is required.' }, 400);
   }
 
-  const nowSec = Math.floor(Date.now() / 1000);
-  const rxRateKey = `user_${user.id}_rx`;
-  const rxCutoff = nowSec - 60;
-  try {
-    await chatDb.prepare(`
-      INSERT INTO chat_rate_limits (key, count, window_start)
-      VALUES (?, 1, ?)
-      ON CONFLICT(key) DO UPDATE SET
-        count = CASE WHEN chat_rate_limits.window_start <= ? THEN 1 ELSE chat_rate_limits.count + 1 END,
-        window_start = CASE WHEN chat_rate_limits.window_start <= ? THEN ? ELSE chat_rate_limits.window_start END
-    `).bind(rxRateKey, nowSec, rxCutoff, rxCutoff, nowSec).run();
-    const rxRateRow = await chatDb.prepare('SELECT count FROM chat_rate_limits WHERE key = ?').bind(rxRateKey).first();
-    if (rxRateRow && Number(rxRateRow.count) > 60) {
-      return c.json({ error: 'Too many reaction updates. Please wait a moment.' }, 429);
-    }
-  } catch (e) {
-    logEvent('warn', 'chat_reaction_rate_limit_failed', { err: e });
+  const rxRate = await checkRateLimit(chatDb, `chat_rx:${user.id}`, 60, 60, c.env, {
+    table: 'chat_rate_limits',
+    failClosed: false,
+    enforceInTest: true
+  });
+  if (!rxRate.allowed) {
+    return c.json({ error: 'Too many reaction updates. Please wait a moment.' }, 429);
   }
+  const nowSec = Math.floor(Date.now() / 1000);
 
   const existingRx = await chatDb.prepare(
     'SELECT id FROM message_reactions WHERE message_id = ? AND user_id = ? AND emoji = ?'
