@@ -152,7 +152,7 @@ chatSyncRouter.get('/bootstrap', requireAuth, async (c) => {
       for (const idChunk of chunkArray(memberIds, 80)) {
         const ph = idChunk.map(() => '?').join(',');
         const cryptoRes = await chatDb.prepare(
-          `SELECT user_id, status_text, (ecdh_public_key_jwk IS NOT NULL) as has_key FROM user_crypto_keys WHERE user_id IN (${ph})`
+          `SELECT user_id, status_text, key_version, key_rotated_at, (ecdh_public_key_jwk IS NOT NULL) as has_key FROM user_crypto_keys WHERE user_id IN (${ph})`
         ).bind(...idChunk).all();
         if (cryptoRes && Array.isArray(cryptoRes.results)) {
           cryptoRows.push(...cryptoRes.results);
@@ -178,6 +178,10 @@ chatSyncRouter.get('/bootstrap', requireAuth, async (c) => {
           heroCredits: u.hero_credits || 0,
           avatarUrl: u.avatar_url || '',
           hasKeys: Boolean(ck),
+          key_version: ck ? Number(ck.key_version || 1) : null,
+          keyVersion: ck ? Number(ck.key_version || 1) : null,
+          key_rotated_at: ck ? (ck.key_rotated_at || null) : null,
+          keyRotatedAt: ck ? (ck.key_rotated_at || null) : null,
           statusText: (ck && ck.status_text) || ''
         };
       });

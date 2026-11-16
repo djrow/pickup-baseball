@@ -757,7 +757,8 @@
         var p = peers[i];
         html += '<div style="padding:8px;border:1px solid var(--ch-border);border-radius:6px;margin-bottom:8px;">';
         html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px;">';
-        html += '<strong>' + escapeHtml(p.name) + '</strong>';
+        var verBadge = (p.hasKey && p.keyVersion) ? (' <span style="font-size:11px;color:var(--ch-text-muted);font-weight:400;">(v' + Number(p.keyVersion) + ')</span>') : '';
+        html += '<strong>' + escapeHtml(p.name) + verBadge + '</strong>';
         if (p.hasKey) {
           if (p.keyChangedWarning) {
             html += '<button type="button" class="ch-promote-btn btn-verify-peer-fp" data-peer-id="' + Number(p.userId) + '" data-fp="' + escapeHtml(p.fingerprint) + '" style="border-color:#f59e0b;color:#fde68a;">⚠️ Re-Verify New Key</button>';
@@ -772,6 +773,9 @@
         html += '</div>';
         html += '<div style="font-family:monospace;font-size:11.5px;color:var(--ch-text-secondary);word-break:break-word;">' +
           escapeHtml(p.fingerprint || 'Waiting for member to enroll key vault') + '</div>';
+        if (p.keyRotatedAt) {
+          html += '<div style="font-size:11px;color:var(--ch-text-muted);margin-top:3px;">Last rotated: ' + escapeHtml(String(p.keyRotatedAt)) + '</div>';
+        }
         html += '</div>';
       }
       if (peersEl) {
@@ -1043,8 +1047,20 @@
     });
   }
 
+  function isSystemNoticeMsg(msg) {
+    if (!msg) return false;
+    if (msg.message_type === 'system' || msg.is_system) return true;
+    if (msg.metadata && typeof msg.metadata === 'object' && (msg.metadata.is_system || msg.metadata.audit_type === 'key_rotated')) {
+      return true;
+    }
+    return false;
+  }
+
   function getSafeMessageDisplayContent(msg) {
     if (!msg) return '';
+    if (isSystemNoticeMsg(msg)) {
+      return msg.decrypted_content || msg.content || '';
+    }
     var ch = null;
     for (var i = 0; i < Store.state.channels.length; i++) {
       if (Number(Store.state.channels[i].id) === Number(msg.channel_id || uiState.activeChannelId)) {
@@ -1064,13 +1080,28 @@
   function buildMessageCardHtml(msg, currentUser, isMod) {
     var html = '';
     var isHiddenByMod = Boolean(msg.is_hidden || msg.hidden_at);
-    var isMutedAuthor = Boolean(msg.author_id && Store.isUserMutedByMe(msg.author_id) && !uiState.revealedMutedMsgIds[msg.id]);
+    var isSystemMsg = isSystemNoticeMsg(msg);
+    var isMutedAuthor = Boolean(!isSystemMsg && msg.author_id && Store.isUserMutedByMe(msg.author_id) && !uiState.revealedMutedMsgIds[msg.id]);
     var displayContent = getSafeMessageDisplayContent(msg);
-    var initial = (msg.author_name || 'P').charAt(0).toUpperCase();
+    var initial = isSystemMsg ? '🛡️' : (msg.author_name || 'P').charAt(0).toUpperCase();
     var attachments = (!isHiddenByMod && Array.isArray(msg.attachments)) ? msg.attachments : [];
     var reactions = (!isHiddenByMod) ? groupReactions(msg.reactions) : [];
-    var isAuthor = Boolean(currentUser && Number(msg.author_id) === Number(currentUser.id));
-    var canDeleteMsg = Boolean(isAuthor || isMod || (currentUser && currentUser.role === 'organizer'));
+    var isAuthor = Boolean(!isSystemMsg && currentUser && Number(msg.author_id) === Number(currentUser.id));
+    var canDeleteMsg = Boolean(!isSystemMsg && (isAuthor || isMod || (currentUser && currentUser.role === 'organizer')));
+
+    if (isSystemMsg && !isHiddenByMod) {
+      html += '<article class="ch-msg-card ch-msg-system-audit" data-msg-id="' + msg.id + '" data-audit-type="' + escapeHtml((msg.metadata && msg.metadata.audit_type) || 'system') + '">';
+      html += '<div class="ch-msg-avatar" title="Server Security Audit Notice">🛡️</div>';
+      html += '<div class="ch-msg-body">';
+      html += '<div class="ch-msg-header">';
+      html += '<span class="ch-msg-author">Clubhouse Security Audit</span>';
+      html += '<span class="ch-badge role-organizer">🔐 Server Verified</span>';
+      html += '<span class="ch-msg-time">' + escapeHtml(formatTime(msg.created_at)) + '</span>';
+      html += '</div>';
+      html += '<div class="ch-msg-content" style="color:#fde68a;">' + escapeHtml(displayContent) + '</div>';
+      html += '</div></article>';
+      return html;
+    }
 
     if (isMutedAuthor) {
       html += '<article class="ch-msg-card" data-msg-id="' + msg.id + '">';
@@ -2912,6 +2943,11 @@
             renderMessageStream();
           }).catch(function () {});
         }
+      } else if (eventType === 'key_rotated') {
+        refreshVerifyKeyButton();
+        refreshDmE2eeNotice();
+        renderMembersDirectory();
+        renderMessageStream();
       } else if (eventType === 'rtc_signals' && RtcEngine) {
         RtcEngine.handleIncomingSignals(detail);
       }
