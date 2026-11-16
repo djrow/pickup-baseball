@@ -4,7 +4,7 @@
  */
 
 import { Hono } from 'hono';
-import { requireAuth, rejectIfChatMuted, rejectIfClubhouseOptedOut } from '../security.js';
+import { requireAuth, rejectIfChatMuted, rejectIfClubhouseOptedOut, CANONICAL_MEMBER_ROLE } from '../security.js';
 import { resolveChannel, canUserAccessChannel } from './chat.js';
 import { logEvent } from '../errors.js';
 
@@ -351,7 +351,7 @@ rtcRouter.post('/signal', requireAuth, async (c) => {
     const recipientUser = await baseballDb.prepare(`
       SELECT u.id, u.email, u.role, u.is_admin, u.is_moderator, COALESCE(u.clubhouse_opted_in, 0) as clubhouse_opted_in,
              EXISTS(SELECT 1 FROM banned_emails b WHERE LOWER(b.email) = LOWER(u.email)) as is_banned,
-             CASE WHEN COALESCE(u.role, 'player') = 'facilitator' THEN 1 ELSE EXISTS(
+             CASE WHEN COALESCE(u.role, 'member') = 'facilitator' THEN 1 ELSE EXISTS(
                SELECT 1 FROM duty_assignments da
                JOIN event_duties ed ON ed.id = da.duty_id
                JOIN events e ON e.id = ed.event_id
@@ -370,7 +370,7 @@ rtcRouter.post('/signal', requireAuth, async (c) => {
     if (recipientUser.is_banned || Number(recipientUser.clubhouse_opted_in) === 0) {
       return c.json({ error: 'Recipient cannot receive Clubhouse signals.' }, 403);
     }
-    const rRole = String(recipientUser.role || (recipientUser.is_admin === 1 ? 'admin' : 'player')).toLowerCase();
+    const rRole = String(recipientUser.role || (recipientUser.is_admin === 1 ? 'admin' : CANONICAL_MEMBER_ROLE)).toLowerCase();
     const recipientNorm = {
       id: recipientUser.id,
       email: recipientUser.email,

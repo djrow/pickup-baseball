@@ -29,7 +29,10 @@ import {
   requireAdmin,
   ensureUserCalendarToken,
   regenerateUserCalendarToken,
-  enforceUserSessionCap
+  enforceUserSessionCap,
+  CANONICAL_MEMBER_ROLE,
+  isMemberRole,
+  normalizeMemberRole
 } from '../security.js';
 import { getRequireLoginSetting, getDisallowZeroLoginMediaSetting, pruneEphemeralBaseballRows } from '../schema.js';
 import { sendAuthCode } from '../mailer.js';
@@ -44,7 +47,7 @@ async function upsertUserAndCreateSession(c, cleanEmail, fallbackName, { sharedD
     const displayName = (fallbackName || cleanEmail.split('@')[0]).slice(0, 120);
     const configuredAdminEmail = ((c.env && c.env.ADMIN_EMAIL) || 'pickupbaseballfoundation@gmail.com').toLowerCase();
     const shouldBeAdmin = cleanEmail === configuredAdminEmail;
-    const role = shouldBeAdmin ? 'admin' : 'player';
+    const role = shouldBeAdmin ? 'admin' : CANONICAL_MEMBER_ROLE;
     const isAdminFlag = shouldBeAdmin ? 1 : 0;
     const calendarToken = generateToken();
 
@@ -452,7 +455,7 @@ authRouter.get('/users', requireAdmin, async (c) => {
           WHEN u.avatar_url LIKE 'data:%' THEN '/api/users/' || u.id || '/avatar?v=' || length(u.avatar_url)
           ELSE COALESCE(u.avatar_url, '')
         END as avatarUrl,
-        COALESCE(u.role, CASE WHEN u.is_admin = 1 THEN 'admin' ELSE 'player' END) as role,
+        COALESCE(u.role, CASE WHEN u.is_admin = 1 THEN 'admin' ELSE 'member' END) as role,
         u.is_admin as isAdmin,
         COALESCE(u.is_moderator, 0) as is_moderator,
         COALESCE(u.chat_muted, 0) as chat_muted,
@@ -486,10 +489,11 @@ authRouter.put('/users/:id/role', requireAdmin, async (c) => {
   if (!targetId || isNaN(targetId) || targetId <= 0) {
     return c.json({ error: 'Invalid user ID.' }, 400);
   }
-  const { role } = await c.req.json();
-  if (!['admin', 'organizer', 'player'].includes(role)) {
-    return c.json({ error: 'Invalid role. Must be admin, organizer, or player.' }, 400);
+  const { role: rawRole } = await c.req.json();
+  if (!['admin', 'organizer'].includes(rawRole) && !isMemberRole(rawRole)) {
+    return c.json({ error: 'Invalid role. Must be admin, organizer, or member.' }, 400);
   }
+  const role = normalizeMemberRole(rawRole);
 
   /** @type {Record<string, any>|null} */
   const targetUser = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(targetId).first();

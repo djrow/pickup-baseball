@@ -60,6 +60,13 @@
     gifFilter: ''
   };
 
+  function isMemberRole(role) {
+    if (window.API && typeof window.API.isMemberRole === 'function') {
+      return window.API.isMemberRole(role);
+    }
+    return role === 'member' || role === 'player';
+  }
+
   function isModeratorUser(u) {
     var user = u || (Store && Store.state && Store.state.user);
     return Boolean(user && (user.isAdmin || user.role === 'admin' || user.isModerator || user.canModerateChat || user.is_moderator === 1));
@@ -153,7 +160,7 @@
     nameInput.value = ch ? (ch.name || '') : '';
     if (catInput) catInput.value = ch ? (ch.category || 'Text Channels') : 'Text Channels';
     if (typeSel) typeSel.value = ch ? (ch.channel_type || 'text') : 'text';
-    if (writeSel) writeSel.value = ch ? (ch.min_role_write || 'player') : 'player';
+    if (writeSel) writeSel.value = ch ? (isMemberRole(ch.min_role_write) ? 'member' : (ch.min_role_write || 'member')) : 'member';
     if (topicInput) topicInput.value = ch ? (ch.topic || '') : '';
     var isPriv = Boolean(ch && (ch.is_private === 1 || ch.is_private === true || ch.min_role_read === 'invite'));
     if (privCb) privCb.checked = isPriv;
@@ -310,7 +317,7 @@
     if (u.role === 'admin' || u.isAdmin) badges.push('Admin');
     else if (u.isModerator || u.canModerateChat || u.is_moderator === 1) badges.push('🛡️ Moderator');
     else if (u.role === 'organizer') badges.push('Organizer');
-    else badges.push('Player');
+    else badges.push('Member');
 
     var isOptedIn = Boolean(u.clubhouseOptedIn || u.clubhouse_opted_in === 1);
     if (u.isGameFacilitator || u.is_game_facilitator) badges.push('📋 Facilitator');
@@ -453,7 +460,7 @@
           var isDmCh = item.channel_type === 'dm' || item.channel_type === 'group_dm';
           var isPrivateCh = !isDmCh && (item.is_private === 1 || item.is_private === true || item.min_role_read === 'invite');
           var lockBadge = (isDmCh || isPrivateCh) ? '<span class="ch-lock-icon" title="' + (isDmCh ? 'End-to-End Encrypted DM (ECDH)' : 'Private Invite-Only Board (ECDH E2EE)') + '">🔒</span>' : '';
-          var roleIcon = (!isPrivateCh && item.min_role_read && item.min_role_read !== 'player') ? '<span class="ch-lock-icon" title="Role-Gated">🛡️</span>' : '';
+          var roleIcon = (!isPrivateCh && item.min_role_read && !isMemberRole(item.min_role_read)) ? '<span class="ch-lock-icon" title="Role-Gated">🛡️</span>' : '';
           var editBtnHtml = (canEditBoard && !isDmCh)
             ? '<button type="button" class="ch-channel-edit-btn" data-edit-board-id="' + item.id + '" title="Edit or Delete Board">✏️</button>'
             : '';
@@ -1618,7 +1625,7 @@
     if (u) {
       html += '<div style="padding:6px;border-bottom:1px solid var(--ch-border);">';
       html += '<strong>' + escapeHtml(selfDisplayName) + ' (You)</strong> ';
-      html += '<span class="ch-badge role-admin">' + escapeHtml(u.role || 'player') + '</span>';
+      html += '<span class="ch-badge role-admin">' + escapeHtml(isMemberRole(u.role) ? 'member' : (u.role || 'member')) + '</span>';
       if (u.isModerator && u.role !== 'admin') {
         html += ' <span class="ch-badge role-mod">🛡️ Mod</span>';
       }
@@ -2326,7 +2333,7 @@
         var nameVal = (el('board-name-input') && el('board-name-input').value || '').trim();
         var catVal = (el('board-category-input') && el('board-category-input').value || '').trim() || 'Text Channels';
         var typeVal = (el('board-type-select') && el('board-type-select').value) || 'text';
-        var writeVal = (el('board-write-role-select') && el('board-write-role-select').value) || 'player';
+        var writeVal = (el('board-write-role-select') && el('board-write-role-select').value) || 'member';
         var topicVal = (el('board-topic-input') && el('board-topic-input').value || '').trim();
         var isPrivateVal = Boolean(boardPrivCb && boardPrivCb.checked && typeVal !== 'voice');
         var invitedMemberIds = [];

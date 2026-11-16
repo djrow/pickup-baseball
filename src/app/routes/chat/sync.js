@@ -5,7 +5,7 @@
  */
 
 import { Hono } from 'hono';
-import { requireAuth, rejectIfClubhouseOptedOut } from '../../security.js';
+import { requireAuth, rejectIfClubhouseOptedOut, CANONICAL_MEMBER_ROLE } from '../../security.js';
 import { canUserAccessEvent } from '../../policy.js';
 import { pruneEphemeralChatRows } from '../../schema.js';
 import { logEvent } from '../../errors.js';
@@ -164,7 +164,7 @@ chatSyncRouter.get('/bootstrap', requireAuth, async (c) => {
         return {
           id: u.id,
           name: abbreviatedNames[idx] || u.name,
-          role: u.role || (u.is_admin ? 'admin' : 'player'),
+          role: u.role || (u.is_admin ? 'admin' : CANONICAL_MEMBER_ROLE),
           isAdmin: Boolean(u.is_admin || u.role === 'admin'),
           isModerator: Boolean(u.is_moderator || u.is_admin || u.role === 'admin'),
           is_moderator: Boolean(u.is_moderator),

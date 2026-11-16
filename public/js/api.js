@@ -2446,6 +2446,10 @@ const API = {
     });
   },
 
+  isMemberRole(role) {
+    return role === 'member' || role === 'player';
+  },
+
   escapeHtml(str) {
     if (str === null || str === undefined) return '';
     return String(str)

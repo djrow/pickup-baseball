@@ -56,7 +56,7 @@ function populateProfileData() {
     roleBadge.textContent = '🛡️ Event Organizer';
   } else {
     roleBadge.className = 'badge badge-gray';
-    roleBadge.textContent = '👤 Player';
+    roleBadge.textContent = '👤 Member';
   }
 
   const machinePill = document.getElementById('badge-machine-pill');
