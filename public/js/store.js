@@ -774,7 +774,9 @@
 
           if (unwrappedObj && !opts.forceRotate) {
             if (!isPrivate || !unwrappedObj.sharedUserIds || memberSetsEqual(unwrappedObj.sharedUserIds, participantIds)) {
-              return unwrappedObj.key;
+              return verifyCachedDmPeersTofu(ch || { id: chNum }).then(function () {
+                return unwrappedObj.key;
+              });
             }
             // Private board invite list changed: rotate epoch so removed users lose access & new invitees receive a key
             var nextEpoch = Number(unwrappedObj.keyEpoch || 1) + 1;
@@ -862,8 +864,13 @@
       var usersRes = results[1];
       var rows = (usersRes && usersRes.ok && usersRes.data && Array.isArray(usersRes.data.users)) ? usersRes.data.users : [];
       var keyByUid = {};
+      var keyVersionByUid = {};
+      var keyRotatedAtByUid = {};
       for (var i = 0; i < rows.length; i++) {
-        keyByUid[Number(rows[i].user_id || rows[i].userId)] = parseJwkSafe(rows[i].ecdh_public_key_jwk);
+        var rUid = Number(rows[i].user_id || rows[i].userId);
+        keyByUid[rUid] = parseJwkSafe(rows[i].ecdh_public_key_jwk);
+        keyVersionByUid[rUid] = Number(rows[i].key_version || rows[i].keyVersion || 1);
+        keyRotatedAtByUid[rUid] = rows[i].key_rotated_at || rows[i].keyRotatedAt || null;
       }
 
       var myPubJwk = (idKeys && idKeys.ecdhPublicJwk) ? idKeys.ecdhPublicJwk : (keyByUid[myId] || null);
@@ -887,7 +894,9 @@
             hasKey: false,
             fingerprint: '',
             verified: false,
-            keyChangedWarning: false
+            keyChangedWarning: false,
+            keyVersion: null,
+            keyRotatedAt: null
           });
         }
         return root.ClubhouseCrypto.computeKeyFingerprint(peerPub).then(function (fp) {
@@ -900,7 +909,9 @@
               fingerprint: fp,
               verified: Boolean(pinState && pinState.verified),
               keyChangedWarning: Boolean(pinState && pinState.keyChangedWarning),
-              verifiedAt: (pinState && pinState.verifiedAt) || null
+              verifiedAt: (pinState && pinState.verifiedAt) || null,
+              keyVersion: keyVersionByUid[pid] || 1,
+              keyRotatedAt: keyRotatedAtByUid[pid] || null
             };
           });
         });
@@ -953,6 +964,15 @@
     return root.ClubhouseCrypto.markPeerFingerprintVerified(peerUserId, fingerprint);
   }
 
+  function isServerSystemNotice(msg) {
+    if (!msg) return false;
+    if (msg.message_type === 'system' || msg.is_system) return true;
+    if (msg.metadata && typeof msg.metadata === 'object' && (msg.metadata.is_system || msg.metadata.audit_type === 'key_rotated')) {
+      return true;
+    }
+    return false;
+  }
+
   /**
    * Decrypt a message if it carries an encryption_iv/iv and E2EE is available.
    */
@@ -972,6 +992,14 @@
         ? '🔒 Encrypted message — channel details are still loading.'
         : '🔒 Channel details are still loading — message withheld.';
       return Promise.resolve(unknownCopy);
+    }
+    if (isServerSystemNotice(msg)) {
+      var sysCopy = Object.assign({}, msg);
+      sysCopy.is_system = true;
+      sysCopy.is_e2ee_locked = false;
+      sysCopy.is_e2ee_decrypted = false;
+      sysCopy.decrypted_content = msg.content || '';
+      return Promise.resolve(sysCopy);
     }
     if (isE2ee) {
       var lockedLabel = isDmChannel(ch)
@@ -1671,12 +1699,16 @@
         state.voiceParticipants = d.voice_participants;
       }
 
+      var eventPromises = [];
       for (var i = 0; i < events.length; i++) {
         var ev = events[i];
         if (Number(ev.id) > state.lastEventId) {
           state.lastEventId = Number(ev.id);
         }
-        applySyncEventToState(ev);
+        var evPromise = applySyncEventToState(ev);
+        if (evPromise && typeof evPromise.then === 'function') {
+          eventPromises.push(evPromise);
+        }
       }
 
       if (rtcSignals.length > 0) {
@@ -1688,7 +1720,11 @@
         emit('rtc_signals', rtcSignals);
       }
 
-      return decryptMessageList(newMsgs).then(function (decrypted) {
+      return Promise.all([
+        Promise.all(eventPromises),
+        decryptMessageList(newMsgs)
+      ]).then(function (syncResults) {
+        var decrypted = syncResults[1];
         if (decrypted.length > 0) {
           for (var j = 0; j < decrypted.length; j++) {
             upsertMessageInState(decrypted[j]);
@@ -1851,6 +1887,64 @@
       emit('user_mute_updated', payload);
     } else if (ev.event_type === 'voice_update') {
       emit('voice_updated', payload);
+    } else if (ev.event_type === 'key_rotated') {
+      var rotatedUid = Number((payload && payload.user_id) || ev.target_id || 0);
+      var rotatedVer = Number((payload && payload.key_version) || 1);
+      var rotatedAt = (payload && payload.key_rotated_at) || null;
+      if (chId) {
+        verifiedEpochByChannel[chId] = false;
+      }
+      if (rotatedUid) {
+        for (var mr = 0; mr < state.members.length; mr++) {
+          if (Number(state.members[mr].id) === rotatedUid) {
+            state.members[mr].hasKeys = true;
+            state.members[mr].key_version = rotatedVer;
+            state.members[mr].keyVersion = rotatedVer;
+            state.members[mr].key_rotated_at = rotatedAt;
+            state.members[mr].keyRotatedAt = rotatedAt;
+          }
+        }
+        for (var ci = 0; ci < state.channels.length; ci++) {
+          var chItem = state.channels[ci];
+          if (requiresE2eeChannel(chItem)) {
+            var pIds = getChannelParticipantIds(chItem);
+            if (pIds.indexOf(rotatedUid) !== -1) {
+              verifiedEpochByChannel[Number(chItem.id)] = false;
+            }
+          }
+        }
+        var myUserId = state.user && state.user.id ? Number(state.user.id) : 0;
+        if (rotatedUid !== myUserId && root.ClubhouseCrypto && root.ClubhouseCrypto.computeKeyFingerprint && root.ClubhouseCrypto.getPeerVerificationState) {
+          return apiRequest('GET', '/api/keys/identity/' + encodeURIComponent(rotatedUid)).then(function (idRes) {
+            if (!idRes || !idRes.ok || !idRes.data) {
+              emit('key_rotated', { channelId: chId, userId: rotatedUid, keyVersion: rotatedVer, keyRotatedAt: rotatedAt, payload: payload });
+              return;
+            }
+            var pubJwk = parseJwkSafe(idRes.data.ecdh_public_key_jwk);
+            if (!pubJwk) {
+              emit('key_rotated', { channelId: chId, userId: rotatedUid, keyVersion: rotatedVer, keyRotatedAt: rotatedAt, payload: payload });
+              return;
+            }
+            return root.ClubhouseCrypto.computeKeyFingerprint(pubJwk).then(function (fp) {
+              return root.ClubhouseCrypto.getPeerVerificationState(rotatedUid, fp).then(function (pinState) {
+                emit('key_rotated', {
+                  channelId: chId,
+                  userId: rotatedUid,
+                  userName: (payload && payload.user_name) || '',
+                  keyVersion: rotatedVer,
+                  keyRotatedAt: rotatedAt,
+                  fingerprint: fp,
+                  keyChangedWarning: Boolean(pinState && pinState.keyChangedWarning),
+                  payload: payload
+                });
+              });
+            });
+          }).catch(function () {
+            emit('key_rotated', { channelId: chId, userId: rotatedUid, keyVersion: rotatedVer, keyRotatedAt: rotatedAt, payload: payload });
+          });
+        }
+      }
+      emit('key_rotated', { channelId: chId, userId: rotatedUid, keyVersion: rotatedVer, keyRotatedAt: rotatedAt, payload: payload });
     } else if (ev.event_type === 'member_opt_change') {
       state.messagesByChannel = Object.create(null);
       bootstrap().then(function () {

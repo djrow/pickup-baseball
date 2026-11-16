@@ -251,10 +251,13 @@ export function normalizeMessageRow(msg, reactionsByMsg = new Map(), attachments
   delete sanitized.original_content;
   delete sanitized.original_iv;
 
+  const isSystem = Boolean(sanitized.message_type === 'system' || (parsedMetadata && parsedMetadata.is_system));
+
   if (sanitized.hidden_at) {
     return {
       ...sanitized,
       is_hidden: true,
+      is_system: isSystem,
       content: '[Message hidden by moderator]',
       iv: null,
       encryption_iv: null,
@@ -268,6 +271,7 @@ export function normalizeMessageRow(msg, reactionsByMsg = new Map(), attachments
   return {
     ...sanitized,
     is_hidden: false,
+    is_system: isSystem,
     encryption_iv: sanitized.iv || null,
     author_badges_obj: parsedBadges,
     metadata: parsedMetadata,

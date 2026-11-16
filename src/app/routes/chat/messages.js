@@ -238,16 +238,43 @@ chatMessagesRouter.post('/channels/:id/messages', requireAuth, async (c) => {
       }, 400);
     }
   }
-  const isPrivilegedMsgSender = Boolean(user.isAdmin || user.isModerator || user.canModerateChat || user.canManageEvents);
-  const allowedMessageTypes = new Set(
-    isPrivilegedMsgSender ? ['text', 'system', 'poll', 'image', 'video', 'file'] : ['text', 'poll', 'image', 'video', 'file']
-  );
-  const messageType = allowedMessageTypes.has(String(body.message_type || 'text')) ? String(body.message_type || 'text') : 'text';
-  const metadataJson = body.metadata_json
-    ? (typeof body.metadata_json === 'string' ? body.metadata_json : JSON.stringify(body.metadata_json))
-    : null;
-  if (metadataJson && metadataJson.length > 4096) {
-    return c.json({ error: 'metadata_json exceeds maximum allowed size (4 KB).' }, 400);
+  if (body.is_system !== undefined || body.audit_type !== undefined) {
+    return c.json({ error: 'System and audit message flags are reserved for server-generated notices.' }, 400);
+  }
+  const requestedType = String(body.message_type || 'text').trim().toLowerCase();
+  if (requestedType === 'system' || requestedType === 'audit' || requestedType === 'key_rotated') {
+    return c.json({ error: 'System and audit message types cannot be submitted by clients.' }, 403);
+  }
+  const allowedMessageTypes = new Set(['text', 'poll', 'image', 'video', 'file']);
+  const messageType = allowedMessageTypes.has(requestedType) ? requestedType : 'text';
+  let metadataJson = null;
+  if (body.metadata_json !== undefined && body.metadata_json !== null) {
+    let parsedMeta;
+    if (typeof body.metadata_json === 'string') {
+      if (body.metadata_json.length > 4096) {
+        return c.json({ error: 'metadata_json exceeds maximum allowed size (4 KB).' }, 400);
+      }
+      try {
+        parsedMeta = JSON.parse(body.metadata_json);
+      } catch (e) {
+        return c.json({ error: 'Invalid metadata_json format.' }, 400);
+      }
+    } else if (typeof body.metadata_json === 'object') {
+      parsedMeta = body.metadata_json;
+    } else {
+      return c.json({ error: 'Invalid metadata_json format.' }, 400);
+    }
+    if (
+      parsedMeta &&
+      typeof parsedMeta === 'object' &&
+      (parsedMeta.audit_type !== undefined || parsedMeta.is_system !== undefined || parsedMeta.key_rotated !== undefined)
+    ) {
+      return c.json({ error: 'Reserved system/audit metadata fields are not allowed.' }, 400);
+    }
+    metadataJson = JSON.stringify(parsedMeta);
+    if (metadataJson.length > 4096) {
+      return c.json({ error: 'metadata_json exceeds maximum allowed size (4 KB).' }, 400);
+    }
   }
 
   const authorRole = normalizeMemberRole(user.role);
@@ -377,6 +404,9 @@ chatMessagesRouter.patch('/messages/:id', requireAuth, async (c) => {
   }
   if (existing.hidden_at) {
     return c.json({ error: 'Moderated/hidden messages cannot be edited.' }, 403);
+  }
+  if (existing.message_type === 'system') {
+    return c.json({ error: 'System audit notices cannot be edited.' }, 403);
   }
 
   const msgChannel = await resolveChannel(chatDb, String(existing.channel_id || ''));
