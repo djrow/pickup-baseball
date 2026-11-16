@@ -35,6 +35,7 @@ const EXPECTED_CRYPTO_EXPORTS = [
   'getSafeRelativeRedirect',
   'hashManagementToken',
   'hashSessionId',
+  'hmacSha256Hex',
   'isMemberRole',
   'isValidEmailAddress',
   'isValidRasterImageBuffer',
@@ -47,6 +48,7 @@ const EXPECTED_CRYPTO_EXPORTS = [
 
 const EXPECTED_SESSION_EXPORTS = [
   'checkRateLimit',
+  'deriveRateLimitKey',
   'enforceUserSessionCap',
   'ensureUserCalendarToken',
   'getClientIp',

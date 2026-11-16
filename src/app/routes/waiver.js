@@ -579,7 +579,7 @@ waiverRouter.get('/status', getWaiverStatusHandler);
 waiverRouter.post('/sign', requireAuth, async (c) => {
   const user = c.get('user');
   const clientIp = getClientIp(c);
-  const rl = await checkRateLimit(c.env.DB, `waiver_sign_${user.id}`, 10, 3600, c.env);
+  const rl = await checkRateLimit(c.env.DB, `waiver_sign:${user.id}`, 10, 3600, c.env);
   if (!rl.allowed) {
     return c.json({ error: 'Too many waiver submissions. Please try again later.' }, 429);
   }
@@ -799,7 +799,7 @@ waiverRouter.get('/certificate/:id', async (c) => {
   const user = c.get('user');
 
   if ((!user || !user.isAdmin) && c.env && c.env.DB) {
-    const certLimit = await checkRateLimit(c.env.DB, 'waiver_cert_' + getClientIp(c), 30, 600, c.env);
+    const certLimit = await checkRateLimit(c.env.DB, `waiver_cert:${getClientIp(c)}`, 30, 600, c.env);
     if (!certLimit.allowed) {
       return c.json({ error: 'Too many certificate lookup requests. Please try again later.' }, 429);
     }

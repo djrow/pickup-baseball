@@ -4,7 +4,7 @@
  */
 
 import { Hono } from 'hono';
-import { requireAuth, rejectIfChatMuted, rejectIfClubhouseOptedOut, CANONICAL_MEMBER_ROLE } from '../security.js';
+import { requireAuth, rejectIfChatMuted, rejectIfClubhouseOptedOut, checkRateLimit, CANONICAL_MEMBER_ROLE } from '../security.js';
 import { resolveConfig } from '../config.js';
 import { resolveChannel, canUserAccessChannel, isPeerBlocked, rejectIfDmPeerBlocked } from './chat.js';
 import { logEvent } from '../errors.js';
@@ -53,24 +53,15 @@ voiceRouter.post('/:channelId/join', requireAuth, async (c) => {
   const blockResp = await rejectIfDmPeerBlocked(c, chatDb, channel, user.id, 'Voice calls are blocked between you and this member.');
   if (blockResp) return blockResp;
 
-  const nowSecJoin = Math.floor(Date.now() / 1000);
-  const joinRateKey = `user_${user.id}_voice_join`;
-  const joinCutoff = nowSecJoin - 60;
-  try {
-    await chatDb.prepare(`
-      INSERT INTO chat_rate_limits (key, count, window_start)
-      VALUES (?, 1, ?)
-      ON CONFLICT(key) DO UPDATE SET
-        count = CASE WHEN chat_rate_limits.window_start <= ? THEN 1 ELSE chat_rate_limits.count + 1 END,
-        window_start = CASE WHEN chat_rate_limits.window_start <= ? THEN ? ELSE chat_rate_limits.window_start END
-    `).bind(joinRateKey, nowSecJoin, joinCutoff, joinCutoff, nowSecJoin).run();
-    const joinRateRow = await chatDb.prepare('SELECT count FROM chat_rate_limits WHERE key = ?').bind(joinRateKey).first();
-    if (joinRateRow && Number(joinRateRow.count) > 30) {
-      return c.json({ error: 'Too many voice join requests. Please wait a moment.' }, 429);
-    }
-  } catch (e) {
-    logEvent('warn', 'rtc_voice_join_rate_limit_failed', { err: e });
+  const joinRate = await checkRateLimit(chatDb, `chat_voice_join:${user.id}`, 30, 60, c.env, {
+    table: 'chat_rate_limits',
+    failClosed: false,
+    enforceInTest: true
+  });
+  if (!joinRate.allowed) {
+    return c.json({ error: 'Too many voice join requests. Please wait a moment.' }, 429);
   }
+  const nowSecJoin = Math.floor(Date.now() / 1000);
 
   const vpCountRow = await chatDb.prepare(
     'SELECT COUNT(*) as total FROM voice_participants WHERE channel_id = ? AND user_id != ? AND heartbeat_at > ?'
@@ -157,24 +148,15 @@ voiceRouter.post('/:channelId/state', requireAuth, async (c) => {
   const blockResp = await rejectIfDmPeerBlocked(c, chatDb, channel, user.id, 'Voice calls are blocked between you and this member.');
   if (blockResp) return blockResp;
 
-  const nowSecState = Math.floor(Date.now() / 1000);
-  const stateRateKey = `user_${user.id}_voice_state`;
-  const stateCutoff = nowSecState - 60;
-  try {
-    await chatDb.prepare(`
-      INSERT INTO chat_rate_limits (key, count, window_start)
-      VALUES (?, 1, ?)
-      ON CONFLICT(key) DO UPDATE SET
-        count = CASE WHEN chat_rate_limits.window_start <= ? THEN 1 ELSE chat_rate_limits.count + 1 END,
-        window_start = CASE WHEN chat_rate_limits.window_start <= ? THEN ? ELSE chat_rate_limits.window_start END
-    `).bind(stateRateKey, nowSecState, stateCutoff, stateCutoff, nowSecState).run();
-    const stateRateRow = await chatDb.prepare('SELECT count FROM chat_rate_limits WHERE key = ?').bind(stateRateKey).first();
-    if (stateRateRow && Number(stateRateRow.count) > 60) {
-      return c.json({ error: 'Too many voice state requests. Please wait a moment.' }, 429);
-    }
-  } catch (e) {
-    logEvent('warn', 'rtc_voice_state_rate_limit_failed', { err: e });
+  const stateRate = await checkRateLimit(chatDb, `chat_voice_state:${user.id}`, 60, 60, c.env, {
+    table: 'chat_rate_limits',
+    failClosed: false,
+    enforceInTest: true
+  });
+  if (!stateRate.allowed) {
+    return c.json({ error: 'Too many voice state requests. Please wait a moment.' }, 429);
   }
+  const nowSecState = Math.floor(Date.now() / 1000);
 
   const body = await c.req.json().catch(() => ({}));
   const existing = await chatDb.prepare(
@@ -310,24 +292,15 @@ rtcRouter.post('/signal', requireAuth, async (c) => {
 
   if (!chatDb) return c.json({ error: 'Chat database unavailable.' }, 500);
 
-  const nowSec = Math.floor(Date.now() / 1000);
-  const sigRateKey = `user_${user.id}_rtc_sig`;
-  const sigCutoff = nowSec - 60;
-  try {
-    await chatDb.prepare(`
-      INSERT INTO chat_rate_limits (key, count, window_start)
-      VALUES (?, 1, ?)
-      ON CONFLICT(key) DO UPDATE SET
-        count = CASE WHEN chat_rate_limits.window_start <= ? THEN 1 ELSE chat_rate_limits.count + 1 END,
-        window_start = CASE WHEN chat_rate_limits.window_start <= ? THEN ? ELSE chat_rate_limits.window_start END
-    `).bind(sigRateKey, nowSec, sigCutoff, sigCutoff, nowSec).run();
-    const sigRateRow = await chatDb.prepare('SELECT count FROM chat_rate_limits WHERE key = ?').bind(sigRateKey).first();
-    if (sigRateRow && Number(sigRateRow.count) > 120) {
-      return c.json({ error: 'Too many signaling requests. Please wait a moment.' }, 429);
-    }
-  } catch (e) {
-    logEvent('warn', 'rtc_signal_rate_limit_failed', { err: e });
+  const sigRate = await checkRateLimit(chatDb, `chat_rtc_sig:${user.id}`, 120, 60, c.env, {
+    table: 'chat_rate_limits',
+    failClosed: false,
+    enforceInTest: true
+  });
+  if (!sigRate.allowed) {
+    return c.json({ error: 'Too many signaling requests. Please wait a moment.' }, 429);
   }
+  const nowSec = Math.floor(Date.now() / 1000);
 
   const body = await c.req.json().catch(() => ({}));
   const channelParam = body.channel_id;
