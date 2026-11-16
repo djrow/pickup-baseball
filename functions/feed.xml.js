@@ -13,6 +13,25 @@ export async function onRequest(context) {
       headers: { 'Content-Type': 'text/plain; charset=utf-8', 'X-Content-Type-Options': 'nosniff' }
     });
   }
+  const edgeCache = (typeof caches !== 'undefined' && caches && caches.default) ? caches.default : null;
+  const cacheKey = new Request(context.request.url, { method: 'GET' });
+  if (edgeCache) {
+    try {
+      const match = await edgeCache.match(cacheKey);
+      if (match) return match;
+    } catch (e) {
+      /* best-effort edge cache match */
+    }
+  }
+
   const db = context.env && (context.env.BASEBALL_DB || context.env.DB);
-  return renderFeedXmlResponse(db, context.request.url, context.env);
+  const res = await renderFeedXmlResponse(db, context.request.url, context.env);
+  if (edgeCache && res.status === 200) {
+    try {
+      await edgeCache.put(cacheKey, res.clone());
+    } catch (e) {
+      /* best-effort edge cache put */
+    }
+  }
+  return res;
 }

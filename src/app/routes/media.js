@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { purgePublicEdgeCache } from '../edge-cache.js';
 import {
   requireAuth,
   requireOrganizer,
@@ -705,6 +706,7 @@ mediaRouter.put('/:id/approve', requireOrganizer, async (c) => {
     const user = c.get('user');
     const approverId = user ? user.id : null;
     await c.env.DB.prepare('UPDATE media_items SET is_approved = 1, approved_by = ?, approved_at = CURRENT_TIMESTAMP WHERE id = ?').bind(approverId, id).run();
+    await purgePublicEdgeCache(c, { media: true });
     return c.json({ success: true, message: 'Media item approved and published to gallery.' });
   } catch (err) {
     console.error('[Media] Error approving media item:', err);
@@ -720,6 +722,7 @@ mediaRouter.post('/:id/approve', requireOrganizer, async (c) => {
     const user = c.get('user');
     const approverId = user ? user.id : null;
     await c.env.DB.prepare('UPDATE media_items SET is_approved = 1, approved_by = ?, approved_at = CURRENT_TIMESTAMP WHERE id = ?').bind(approverId, id).run();
+    await purgePublicEdgeCache(c, { media: true });
     return c.json({ success: true, message: 'Media item approved and published to gallery.' });
   } catch (err) {
     console.error('[Media] Error approving media item:', err);
@@ -782,6 +785,7 @@ async function handleMediaUpdate(c) {
       WHERE m.id = ?
     `).bind(id).first();
 
+    await purgePublicEdgeCache(c, { media: true });
     return c.json({ success: true, item: updatedItem, message: 'Media item updated successfully.' });
   } catch (err) {
     console.error('[Media] Error updating media item:', err);
@@ -888,6 +892,7 @@ async function handleMediaDelete(c) {
     }
 
     await c.env.DB.prepare('DELETE FROM media_items WHERE id = ?').bind(id).run();
+    await purgePublicEdgeCache(c, { media: true });
     if (c.env && c.env.CHAT_DB) {
       try {
         await c.env.CHAT_DB.prepare('UPDATE chat_attachments SET promoted_media_id = NULL WHERE promoted_media_id = ?').bind(id).run();

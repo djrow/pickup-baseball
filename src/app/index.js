@@ -11,6 +11,7 @@ import { ensureD1Schema, ensureChatD1Schema, ensureClubhouseOptInBackfill } from
 import { SESSION_COOKIE_NAME, getUserFromSession, requireAdmin, requireAuth } from './security.js';
 import { ERROR_CODES, getRequestId, jsonError, logEvent, normalizeApiErrorResponse } from './errors.js';
 import { renderFeedXmlResponse } from './feeds.js';
+import { publicEdgeCacheMiddleware } from './edge-cache.js';
 import { authRouter, serveUserAvatar, getSettingsHandler, putSettingsHandler, testAppscriptHandler } from './routes/auth.js';
 import { eventsRouter } from './routes/events.js';
 import { postsRouter } from './routes/posts.js';
@@ -153,7 +154,14 @@ app.use('*', async (c, next) => {
   if (sessionId && c.env && c.env.DB) {
     try {
       const isLightweightSync = pathName === '/api/sync';
-      c.set('user', await getUserFromSession(c.env.DB, sessionId, c.env.CHAT_DB, { lightweight: isLightweightSync }));
+      const method = c.req.method.toUpperCase();
+      const isMutating = method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE';
+      const isAuthRoute = pathName.startsWith('/api/auth') || pathName.startsWith('/auth');
+      const bypassCache = isMutating || isAuthRoute;
+      c.set('user', await getUserFromSession(c.env.DB, sessionId, c.env.CHAT_DB, {
+        lightweight: isLightweightSync,
+        bypassCache
+      }));
     } catch (e) {
       logEvent('warn', 'auth_session_lookup_failed', {
         requestId: getRequestId(c),
@@ -171,6 +179,8 @@ app.use('*', async (c, next) => {
 
   await next();
 });
+
+app.use('*', publicEdgeCacheMiddleware);
 
 app.get('/version', (c) => {
   return c.json({

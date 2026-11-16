@@ -7,7 +7,7 @@
  */
 
 import { Hono } from 'hono';
-import { requireAuth, requireModerator, rejectIfChatMuted, rejectIfClubhouseOptedOut, checkRateLimit } from '../../security.js';
+import { requireAuth, requireModerator, rejectIfChatMuted, rejectIfClubhouseOptedOut, checkRateLimit, purgeUserSessionCache } from '../../security.js';
 import { logEvent } from '../../errors.js';
 import { resolveChannel, canUserAccessChannel, chunkArray, abbreviateMemberNames } from './helpers.js';
 
@@ -319,6 +319,7 @@ chatModerationRouter.put('/moderation/users/:id/mute', requireModerator, async (
   }
 
   const nowIso = new Date().toISOString();
+  await purgeUserSessionCache(baseballDb, targetId);
   if (shouldMute) {
     await baseballDb.prepare(`
       UPDATE users

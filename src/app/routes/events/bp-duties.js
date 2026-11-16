@@ -11,6 +11,7 @@ import {
   checkRateLimit,
   verifyTurnstileIfConfigured
 } from '../../security.js';
+import { purgePublicEdgeCache } from '../../edge-cache.js';
 import { getDefaultDuties, getRequireLoginSetting } from '../../schema.js';
 import {
   canUserAccessEvent,
@@ -325,6 +326,7 @@ eventsBpDutiesRouter.post('/:id/bp-order', async (c) => {
       if (slotOccupant) {
         if (myCurrentSlot && slotOccupant.id === myCurrentSlot.id) {
           await db.prepare('UPDATE batting_practice_signups SET notes = ?, player_name = ? WHERE id = ?').bind(notes, playerName, slotOccupant.id).run();
+          await purgePublicEdgeCache(c, { events: true, eventId });
           return c.json({ success: true, message: `Updated Batting Practice slot #${candidateSlot}!`, slot_number: candidateSlot });
         }
         return bpSlotClaimedError(c, {
@@ -342,6 +344,7 @@ eventsBpDutiesRouter.post('/:id/bp-order', async (c) => {
           await db.prepare('UPDATE batting_practice_signups SET slot_number = ?, player_name = ?, notes = ? WHERE id = ?').bind(
             candidateSlot, playerName, notes, myCurrentSlot.id
           ).run();
+          await purgePublicEdgeCache(c, { events: true, eventId });
           return c.json({ success: true, message: `Moved to Batting Practice slot #${candidateSlot}!`, slot_number: candidateSlot });
         }
 
@@ -350,6 +353,7 @@ eventsBpDutiesRouter.post('/:id/bp-order', async (c) => {
           VALUES (?, ?, ?, ?, ?, ?)
         `).bind(eventId, targetBpUserId, attendeeId, candidateSlot, playerName, notes).run();
 
+        await purgePublicEdgeCache(c, { events: true, eventId });
         return c.json({
           success: true,
           message: `Signed up for Batting Practice slot #${candidateSlot}!`,
@@ -434,6 +438,7 @@ eventsBpDutiesRouter.put('/:id/bp-order/:signupId', async (c) => {
       throw writeErr;
     }
 
+    await purgePublicEdgeCache(c, { events: true, eventId });
     return c.json({ success: true, message: `Batting practice slot updated to #${targetSlot}.`, slot_number: targetSlot });
   } catch (err) {
     console.error('[BP-Order] Error updating signup:', err);
@@ -453,6 +458,7 @@ eventsBpDutiesRouter.delete('/:id/bp-order/:signupId', async (c) => {
     if (authRes.errorResponse) return authRes.errorResponse;
 
     await db.prepare('DELETE FROM batting_practice_signups WHERE id = ?').bind(signupId).run();
+    await purgePublicEdgeCache(c, { events: true, eventId });
     return c.json({ success: true, message: `Removed from Batting Practice slot #${authRes.existing.slot_number}.` });
   } catch (err) {
     console.error('[BP-Order] Error deleting signup:', err);
@@ -469,6 +475,7 @@ eventsBpDutiesRouter.post('/:id/bp-order/clear', requireOrganizer, async (c) => 
       return c.json({ error: 'Invalid event ID.' }, 400);
     }
     await c.env.DB.prepare('DELETE FROM batting_practice_signups WHERE event_id = ?').bind(eventId).run();
+    await purgePublicEdgeCache(c, { events: true, eventId });
     return c.json({ success: true, message: 'Batting practice order cleared.' });
   } catch (err) {
     console.error('[BP-Order] Error clearing order:', err);
@@ -512,6 +519,7 @@ eventsBpDutiesRouter.post('/:id/duties', requireOrganizer, async (c) => {
     ).run();
 
     const duty = await c.env.DB.prepare('SELECT * FROM event_duties WHERE id = ?').bind(res.meta.last_row_id).first();
+    await purgePublicEdgeCache(c, { events: true, eventId });
     return c.json({ success: true, duty });
   } catch (err) {
     console.error('[Events] Error adding task:', err);
@@ -567,6 +575,7 @@ eventsBpDutiesRouter.put('/:id/duties/:dutyId', requireOrganizer, async (c) => {
     ).run();
 
     const updated = await c.env.DB.prepare('SELECT * FROM event_duties WHERE id = ?').bind(dutyId).first();
+    await purgePublicEdgeCache(c, { events: true, eventId });
     return c.json({ success: true, duty: updated });
   } catch (err) {
     console.error('[Events] Error updating task:', err);
@@ -583,6 +592,7 @@ eventsBpDutiesRouter.delete('/:id/duties/:dutyId', requireOrganizer, async (c) =
     }
     const res = await c.env.DB.prepare('DELETE FROM event_duties WHERE id = ? AND event_id = ?').bind(dutyId, eventId).run();
     if (res.meta.changes === 0) return c.json({ error: 'Task not found.' }, 404);
+    await purgePublicEdgeCache(c, { events: true, eventId });
     return c.json({ success: true, message: 'Task removed.' });
   } catch (err) {
     console.error('[Events] Error deleting task:', err);

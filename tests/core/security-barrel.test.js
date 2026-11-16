@@ -48,14 +48,20 @@ const EXPECTED_CRYPTO_EXPORTS = [
 
 const EXPECTED_SESSION_EXPORTS = [
   'checkRateLimit',
+  'clearSessionMemoryCache',
   'deriveRateLimitKey',
   'enforceUserSessionCap',
   'ensureUserCalendarToken',
   'getClientIp',
   'getSafePublicOrigin',
+  'getSessionFromCache',
+  'getSessionMemoryCacheSize',
   'getUserFromSession',
+  'purgeSessionCache',
+  'purgeUserSessionCache',
   'regenerateUserCalendarToken',
   'resolveUserByCalendarToken',
+  'setSessionInCache',
   'verifyTurnstileIfConfigured'
 ];
 

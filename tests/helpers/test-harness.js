@@ -25,6 +25,8 @@ const {
   DEFAULT_BASEBALL_DUTIES,
   ensureDualD1Schema
 } = require('../../src/app/schema.js');
+const { clearSessionMemoryCache } = require('../../src/app/security.js');
+const { clearPublicEdgeMemoryCache } = require('../../src/app/edge-cache.js');
 
 /**
  * Generate a cryptographically secure hex session ID
@@ -66,9 +68,42 @@ async function createClubhouseTestContext(_options = {}) {
   baseballDb.pragma('journal_mode = WAL');
   baseballDb.pragma('foreign_keys = ON');
 
+  const origBbPrepare = baseballDb.prepare.bind(baseballDb);
+  baseballDb.prepare = function(sql) {
+    const stmt = origBbPrepare(sql);
+    const origRun = stmt.run.bind(stmt);
+    stmt.run = function(...args) {
+      const res = origRun(...args);
+      const upper = String(sql).toUpperCase();
+      if (upper.includes('SESSIONS') || upper.includes('USERS') || upper.includes('DUTY_ASSIGNMENTS') || upper.includes('CLUBHOUSE_OPTED_OUT')) {
+        clearSessionMemoryCache();
+      }
+      if (upper.includes('EVENTS') || upper.includes('ATTENDEES') || upper.includes('MEDIA_ITEMS') || upper.includes('COMMENTS') || upper.includes('BATTING_PRACTICE_SIGNUPS')) {
+        clearPublicEdgeMemoryCache();
+      }
+      return res;
+    };
+    return stmt;
+  };
+
   const chatDb = new Database(testChatDbPath);
   chatDb.pragma('journal_mode = WAL');
   chatDb.pragma('foreign_keys = ON');
+
+  const origChatPrepare = chatDb.prepare.bind(chatDb);
+  chatDb.prepare = function(sql) {
+    const stmt = origChatPrepare(sql);
+    const origRun = stmt.run.bind(stmt);
+    stmt.run = function(...args) {
+      const res = origRun(...args);
+      const upper = String(sql).toUpperCase();
+      if (upper.includes('CLUBHOUSE_OPTED_OUT') || upper.includes('VOICE_PARTICIPANTS')) {
+        clearSessionMemoryCache();
+      }
+      return res;
+    };
+    return stmt;
+  };
 
   // Wrap with Cloudflare D1 adapters and initialize schemas via canonical engine
   const baseballD1 = createD1Adapter(baseballDb);
@@ -307,6 +342,8 @@ async function createClubhouseTestContext(_options = {}) {
    * Teardown and cleanup function
    */
   async function cleanup() {
+    clearSessionMemoryCache();
+    clearPublicEdgeMemoryCache();
     if (server) {
       if (typeof server.closeAllConnections === 'function') {
         server.closeAllConnections();

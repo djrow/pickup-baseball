@@ -14,6 +14,158 @@ import {
   hmacSha256Hex
 } from './crypto.js';
 
+/** @type {Map<string, { user: Record<string, any>, expiresAt: number, userId: number, lightweight?: boolean }>} */
+const sessionMemoryCache = new Map();
+const SESSION_CACHE_TTL_MS = 15000; // 15 seconds read-only TTL
+
+/**
+ * Retrieves a cached user session from memory or caches.default.
+ * @param {string} hashedSessionId
+ * @returns {Promise<Record<string, any>|null>}
+ */
+export async function getSessionFromCache(hashedSessionId) {
+  if (!hashedSessionId) return null;
+  const now = Date.now();
+  const mem = sessionMemoryCache.get(hashedSessionId);
+  if (mem) {
+    if (now < mem.expiresAt) {
+      return structuredClone(mem.user);
+    }
+    sessionMemoryCache.delete(hashedSessionId);
+  }
+
+  if (typeof caches !== 'undefined' && caches && caches.default) {
+    try {
+      const req = new Request(`https://session-cache.internal/${encodeURIComponent(hashedSessionId)}`, { method: 'GET' });
+      const match = await caches.default.match(req);
+      if (match) {
+        const user = await match.json();
+        if (user && user.id) {
+          sessionMemoryCache.set(hashedSessionId, {
+            user,
+            expiresAt: now + SESSION_CACHE_TTL_MS,
+            userId: user.id,
+            lightweight: Boolean(user.__lightweight)
+          });
+          return structuredClone(user);
+        }
+      }
+    } catch (e) {
+      /* best-effort edge cache lookup */
+    }
+  }
+  return null;
+}
+
+/**
+ * Stores a user session in memory cache and caches.default.
+ * @param {string} hashedSessionId
+ * @param {Record<string, any>} user
+ * @returns {Promise<void>}
+ */
+export async function setSessionInCache(hashedSessionId, user) {
+  if (!hashedSessionId || !user || !user.id) return;
+  const now = Date.now();
+  sessionMemoryCache.set(hashedSessionId, {
+    user: structuredClone(user),
+    expiresAt: now + SESSION_CACHE_TTL_MS,
+    userId: user.id,
+    lightweight: Boolean(user.__lightweight)
+  });
+
+  if (typeof caches !== 'undefined' && caches && caches.default) {
+    try {
+      const req = new Request(`https://session-cache.internal/${encodeURIComponent(hashedSessionId)}`, { method: 'GET' });
+      const res = new Response(JSON.stringify(user), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'max-age=15, s-maxage=15'
+        }
+      });
+      await caches.default.put(req, res);
+    } catch (e) {
+      /* best-effort edge cache store */
+    }
+  }
+}
+
+/**
+ * Purges a specific session from memory and edge cache.
+ * @param {string} sessionIdOrHash
+ * @returns {Promise<void>}
+ */
+export async function purgeSessionCache(sessionIdOrHash) {
+  if (!sessionIdOrHash) return;
+  const hash = sessionIdOrHash.startsWith('sha256:')
+    ? sessionIdOrHash
+    : await hashSessionId(sessionIdOrHash);
+  sessionMemoryCache.delete(hash);
+
+  if (typeof caches !== 'undefined' && caches && caches.default) {
+    try {
+      const req = new Request(`https://session-cache.internal/${encodeURIComponent(hash)}`, { method: 'GET' });
+      await caches.default.delete(req);
+    } catch (e) {
+      /* best-effort edge cache delete */
+    }
+  }
+}
+
+/**
+ * Purges all active sessions for a user from memory and edge cache.
+ * @param {D1Database|null|undefined} db
+ * @param {number|string} userId
+ * @param {string|null} [exceptHash=null]
+ * @returns {Promise<void>}
+ */
+export async function purgeUserSessionCache(db, userId, exceptHash = null) {
+  const numUserId = Number(userId);
+  if (!numUserId) return;
+
+  for (const [hash, entry] of sessionMemoryCache.entries()) {
+    if (Number(entry.userId) === numUserId && (!exceptHash || hash !== exceptHash)) {
+      sessionMemoryCache.delete(hash);
+    }
+  }
+
+  if (db && typeof caches !== 'undefined' && caches && caches.default) {
+    try {
+      /** @type {{ results?: Array<{ id: string }> }} */
+      const { results: sessions } = await db.prepare(
+        'SELECT id FROM sessions WHERE user_id = ?'
+      ).bind(numUserId).all();
+      if (sessions && sessions.length > 0) {
+        await Promise.all(
+          sessions
+            .filter((s) => !exceptHash || s.id !== exceptHash)
+            .map((s) => {
+              const req = new Request(`https://session-cache.internal/${encodeURIComponent(s.id)}`, { method: 'GET' });
+              return caches.default.delete(req);
+            })
+        );
+      }
+    } catch (e) {
+      /* best-effort edge cache delete */
+    }
+  }
+}
+
+/**
+ * Clears the memory session cache (for tests).
+ */
+export function clearSessionMemoryCache() {
+  sessionMemoryCache.clear();
+}
+
+/**
+ * Returns current memory session cache size (for tests).
+ * @returns {number}
+ */
+export function getSessionMemoryCacheSize() {
+  return sessionMemoryCache.size;
+}
+
 export function getClientIp(c) {
   const cfIp = (c.req.header('CF-Connecting-IP') || '').trim();
   if (cfIp) return cfIp;
@@ -273,7 +425,7 @@ export async function verifyTurnstileIfConfigured(env, token, remoteip) {
  * @param {D1Database|{ env?: AppBindings }} db - Baseball D1 binding or Hono context holding `.env`.
  * @param {string} sessionId
  * @param {D1Database|null} [chatDb] - Clubhouse D1 binding (`CHAT_DB`).
- * @param {{ lightweight?: boolean }} [options]
+ * @param {{ lightweight?: boolean, bypassCache?: boolean }} [options]
  * @returns {Promise<AppUser|null>} Normalized user object with boolean capability flags, or null.
  */
 export async function getUserFromSession(db, sessionId, chatDb, options = {}) {
@@ -288,7 +440,19 @@ export async function getUserFromSession(db, sessionId, chatDb, options = {}) {
   }
 
   const lightweight = Boolean(options && options.lightweight);
+  const bypassCache = Boolean(options && options.bypassCache);
   const hashedSessionId = await hashSessionId(sessionId);
+
+  if (!bypassCache) {
+    const cached = await getSessionFromCache(hashedSessionId);
+    if (cached) {
+      if (!lightweight && cached.__lightweight) {
+        // Upgrade from lightweight to full session
+      } else {
+        return /** @type {AppUser} */ (cached);
+      }
+    }
+  }
 
   /** @type {Record<string, any>|null} */
   const session = await baseballDb.prepare(`
@@ -364,10 +528,7 @@ export async function getUserFromSession(db, sessionId, chatDb, options = {}) {
   const playingSunday = Boolean(session.playing_sunday_flag);
   const isGameFacilitator = Boolean(session.facilitator_flag);
 
-  let calendarToken = session.calendar_token || null;
-  if (!lightweight && !calendarToken) {
-    calendarToken = await ensureUserCalendarToken(baseballDb, session.id, null);
-  }
+  const calendarToken = session.calendar_token || null;
 
   // E2EE Crypto Key Status from CHAT_DB (skipped on lightweight high-frequency sync polls)
   let hasKeys = false;
@@ -390,7 +551,7 @@ export async function getUserFromSession(db, sessionId, chatDb, options = {}) {
     }
   }
 
-  return {
+  const user = {
     id: session.id,
     name: session.name,
     email: session.email,
@@ -451,6 +612,13 @@ export async function getUserFromSession(db, sessionId, chatDb, options = {}) {
     sessionIsTemporary: Boolean(session.session_is_temporary),
     session_is_temporary: session.session_is_temporary ? 1 : 0
   };
+
+  if (!bypassCache) {
+    user.__lightweight = lightweight;
+    await setSessionInCache(hashedSessionId, user);
+  }
+
+  return user;
 }
 
 /**

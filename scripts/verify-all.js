@@ -41,6 +41,42 @@ const testDataDir = path.join(os.tmpdir(), `pickup_verify_data_${Date.now()}`);
 process.env.DATA_DIR = testDataDir;
 
 const { db, chatDb, d1, baseballD1, chatD1, initDatabase, getDefaultDuties } = require('../src/db');
+const { clearSessionMemoryCache } = require('../src/app/security.js');
+const { clearPublicEdgeMemoryCache } = require('../src/app/edge-cache.js');
+
+// Auto-invalidate in-memory caches when tests execute raw SQL mutations directly on test databases
+const origDbPrepare = db.prepare.bind(db);
+db.prepare = function(sql) {
+  const stmt = origDbPrepare(sql);
+  const origRun = stmt.run.bind(stmt);
+  stmt.run = function(...args) {
+    const res = origRun(...args);
+    const upper = String(sql).toUpperCase();
+    if (upper.includes('SESSIONS') || upper.includes('USERS') || upper.includes('DUTY_ASSIGNMENTS') || upper.includes('CLUBHOUSE_OPTED_OUT')) {
+      clearSessionMemoryCache();
+    }
+    if (upper.includes('EVENTS') || upper.includes('ATTENDEES') || upper.includes('MEDIA_ITEMS') || upper.includes('COMMENTS') || upper.includes('BATTING_PRACTICE_SIGNUPS')) {
+      clearPublicEdgeMemoryCache();
+    }
+    return res;
+  };
+  return stmt;
+};
+
+const origChatDbPrepare = chatDb.prepare.bind(chatDb);
+chatDb.prepare = function(sql) {
+  const stmt = origChatDbPrepare(sql);
+  const origRun = stmt.run.bind(stmt);
+  stmt.run = function(...args) {
+    const res = origRun(...args);
+    const upper = String(sql).toUpperCase();
+    if (upper.includes('CLUBHOUSE_OPTED_OUT') || upper.includes('VOICE_PARTICIPANTS')) {
+      clearSessionMemoryCache();
+    }
+    return res;
+  };
+  return stmt;
+};
 
 const { createSession } = require('../src/auth');
 const { createNodeHttpBridge, getFullRequestUrl, sendWebResponse } = require('../src/d1-sqlite');
@@ -155,6 +191,10 @@ const ctx = {
   rootDir: ROOT_DIR,
   publicDir: PUBLIC_DIR,
   db,
+  d1,
+  baseballD1,
+  chatDb,
+  chatD1,
   initDatabase,
   getDefaultDuties,
   createSession,
@@ -282,4 +322,5 @@ require('../tests/core/two-tier-erasure.test.js')();
 require('../tests/core/privacy-consent.test.js')();
 require('../tests/core/visitor-erasure.test.js')();
 require('../tests/core/peer-block-ui.test.js')();
+require('../tests/core/cache-batching.test.js')(ctx);
 require('../tests/clubhouse/index.js')();

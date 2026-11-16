@@ -15,8 +15,10 @@ import {
   verifyTurnstileIfConfigured,
   isValidEmailAddress,
   requireAuth,
-  requireOrganizer
+  requireOrganizer,
+  purgeUserSessionCache
 } from '../../security.js';
+import { purgePublicEdgeCache } from '../../edge-cache.js';
 import { getRequireLoginSetting } from '../../schema.js';
 import {
   parseAllowedEmails,
@@ -579,6 +581,10 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
         }).catch(e => console.error('[Waitlist Email Error]:', e)));
       }
 
+      await purgePublicEdgeCache(c, { events: true, eventId });
+      const curUser = c.get('user');
+      if (curUser && curUser.id) await purgeUserSessionCache(c.env.DB, curUser.id);
+
       return c.json({
         success: true,
         status: 'waitlist',
@@ -646,6 +652,10 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
         }
       }
 
+      await purgePublicEdgeCache(c, { events: true, eventId });
+      const curUser = c.get('user');
+      if (curUser && curUser.id) await purgeUserSessionCache(c.env.DB, curUser.id);
+
       return c.json({
         success: true,
         status: 'attending',
@@ -655,6 +665,10 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
         message: confirmMsg
       });
     }
+
+    await purgePublicEdgeCache(c, { events: true, eventId });
+    const curUser = c.get('user');
+    if (curUser && curUser.id) await purgeUserSessionCache(c.env.DB, curUser.id);
 
     return c.json({
       success: true,
@@ -796,6 +810,7 @@ eventsRsvpsRouter.post('/:id/comments', requireAuth, async (c) => {
       'SELECT id, event_id, user_id, author_name, content, created_at FROM comments WHERE id = ?'
     ).bind(ins.meta.last_row_id).first();
 
+    await purgePublicEdgeCache(c, { events: true, eventId });
     return c.json({ success: true, comment: newComment });
   } catch (err) {
     console.error('[Comments] Error posting comment:', err);
@@ -817,6 +832,7 @@ eventsRsvpsRouter.delete('/:id/comments/:commentId', requireAuth, async (c) => {
       return c.json({ error: 'Access denied.' }, 403);
     }
     await c.env.DB.prepare('DELETE FROM comments WHERE id = ? AND event_id = ?').bind(commentId, eventId).run();
+    await purgePublicEdgeCache(c, { events: true, eventId });
     return c.json({ success: true, message: 'Comment deleted.' });
   } catch (err) {
     console.error('[Comments] Error deleting comment:', err);
@@ -843,6 +859,8 @@ eventsRsvpsRouter.delete('/:id/attendees/:attendeeId', requireOrganizer, async (
     if (existing.status === 'attending') {
       await promoteNextWaitlistedPlayer(c, getSafePublicOrigin(c), eventId);
     }
+    await purgePublicEdgeCache(c, { events: true, eventId });
+    if (existing && existing.user_id) await purgeUserSessionCache(c.env.DB, Number(existing.user_id));
     return c.json({ success: true, message: 'Attendee removed from roster.' });
   } catch (err) {
     console.error('[RSVP] Error removing attendee:', err);
