@@ -219,7 +219,18 @@
         payload_json: JSON.stringify(payloadObj)
       })
     }).then(function (res) {
-      if (!res.ok) return {};
+      if (!res.ok) {
+        return res.json().catch(function () { return {}; }).then(function (errData) {
+          if (res.status === 403 && errData && errData.code === 'PEER_BLOCKED') {
+            emitRtc('peer_blocked', {
+              channelId: channelId,
+              recipientUserId: Number(recipientUserId),
+              message: errData.error || 'WebRTC signaling is blocked between you and this member.'
+            });
+          }
+          return {};
+        });
+      }
       return res.json().catch(function () { return {}; });
     }).catch(function () {
       return {};
@@ -234,6 +245,9 @@
     rtcState.dataChannels[peerKey] = dc;
     dc.onmessage = function (ev) {
       try {
+        if (root.ClubhouseStore && typeof root.ClubhouseStore.isPeerBlockedByMe === 'function' && root.ClubhouseStore.isPeerBlockedByMe(peerKey)) {
+          return;
+        }
         var msg = JSON.parse(ev.data);
         if (msg && msg.type === 'typing' && msg.channelId) {
           var parsedChId = Number(msg.channelId);
@@ -411,6 +425,9 @@
         if (!sig.channel_id || Number(sig.channel_id) !== Number(rtcState.activeChannelId)) return;
         var senderId = Number(sig.sender_user_id);
         if (!senderId || senderId === Number(rtcState.currentUserId)) return;
+        if (root.ClubhouseStore && typeof root.ClubhouseStore.isPeerBlockedByMe === 'function' && root.ClubhouseStore.isPeerBlockedByMe(senderId)) {
+          return;
+        }
         var payload;
         try {
           payload = typeof sig.payload_json === 'string' ? JSON.parse(sig.payload_json) : (sig.payload_json || {});
@@ -494,7 +511,10 @@
     }).then(function (res) {
       return res.json().then(function (data) {
         if (!res.ok) {
-          throw new Error((data && data.error) || 'Unable to join voice lounge');
+          var err = new Error((data && data.error) || 'Unable to join voice lounge');
+          err.status = res.status;
+          err.code = (data && data.code) ? data.code : '';
+          throw err;
         }
         if (Array.isArray(data.iceServers)) {
           setIceServers(data.iceServers);
