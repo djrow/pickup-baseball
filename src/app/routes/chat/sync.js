@@ -6,7 +6,7 @@
 
 import { Hono } from 'hono';
 import { requireAuth, rejectIfClubhouseOptedOut, CANONICAL_MEMBER_ROLE } from '../../security.js';
-import { canUserAccessEvent } from '../../policy.js';
+import { canUserAccessEvent, isViewerOrganizer } from '../../policy.js';
 import { resolveConfig } from '../../config.js';
 import { pruneEphemeralChatRows } from '../../schema.js';
 import { logEvent } from '../../errors.js';
@@ -136,6 +136,7 @@ chatSyncRouter.get('/bootstrap', requireAuth, async (c) => {
         SELECT id, name, role, is_admin, COALESCE(is_moderator, 0) as is_moderator,
                COALESCE(chat_muted, 0) as chat_muted, chat_muted_reason,
                machine_badge, field_badge, hero_credits,
+               COALESCE(profile_sharing, 0) as profile_sharing,
                CASE
                  WHEN avatar_url LIKE 'data:%' THEN '/api/users/' || id || '/avatar?v=' || length(avatar_url)
                  ELSE COALESCE(avatar_url, '')
@@ -160,9 +161,11 @@ chatSyncRouter.get('/bootstrap', requireAuth, async (c) => {
       }
       const cryptoMap = new Map(cryptoRows.map((r) => [r.user_id, r]));
 
+      const isOrgViewer = isViewerOrganizer(user);
       const abbreviatedNames = abbreviateMemberNames(usersList || []);
       members = (usersList || []).map((u, idx) => {
         const ck = cryptoMap.get(u.id);
+        const canSeeAvatar = Boolean(isOrgViewer || Number(u.id) === Number(user.id) || u.profile_sharing);
         return {
           id: u.id,
           name: abbreviatedNames[idx] || u.name,
@@ -176,7 +179,7 @@ chatSyncRouter.get('/bootstrap', requireAuth, async (c) => {
           machineBadge: Boolean(u.machine_badge),
           fieldBadge: Boolean(u.field_badge),
           heroCredits: u.hero_credits || 0,
-          avatarUrl: u.avatar_url || '',
+          avatarUrl: canSeeAvatar ? (u.avatar_url || '') : '',
           hasKeys: Boolean(ck),
           key_version: ck ? Number(ck.key_version || 1) : null,
           keyVersion: ck ? Number(ck.key_version || 1) : null,

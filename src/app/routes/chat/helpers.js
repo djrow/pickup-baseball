@@ -5,7 +5,10 @@
  */
 
 import { canAccessChannel } from '../../security.js';
+import { abbreviateMemberNames } from '../../policy.js';
 import { logEvent } from '../../errors.js';
+
+export { abbreviateMemberNames };
 
 /**
  * Split an array into chunks (keeps Cloudflare D1 `IN (...)` bound parameters well below 100).
@@ -22,40 +25,6 @@ export function chunkArray(items, chunkSize = 80) {
     chunks.push(list.slice(i, i + chunkSize));
   }
   return chunks;
-}
-
-/**
- * Abbreviate last names in a member directory ("First L.", or "First La."
- * when multiple distinct users share the same first name and last initial).
- * @param {Array<{user_id?: number, id?: number, name?: string}>} records
- * @returns {string[]}
- */
-export function abbreviateMemberNames(records) {
-  const list = Array.isArray(records) ? records : [];
-  const seenIds = new Set();
-  const keyCounts = Object.create(null);
-
-  const parsed = list.map((rec, idx) => {
-    const raw = rec && rec.name ? String(rec.name).trim() : '';
-    const parts = raw ? raw.split(/\s+/) : [];
-    const first = parts.length > 1 ? parts.slice(0, -1).join(' ') : (parts[0] || '');
-    const last = parts.length > 1 ? parts[parts.length - 1].replace(/\.+$/, '') : '';
-    const key = (first && last) ? (first.toLowerCase() + '|' + last.charAt(0).toLowerCase()) : '';
-    const uid = rec && (rec.user_id || rec.id);
-    const personId = uid ? ('u:' + String(uid)) : ('i:' + idx);
-    if (key && !seenIds.has(personId)) {
-      seenIds.add(personId);
-      keyCounts[key] = (keyCounts[key] || 0) + 1;
-    }
-    return { raw, first, last, key };
-  });
-
-  return parsed.map((p) => {
-    if (!p.raw) return 'Player';
-    if (!p.last) return p.raw;
-    const len = keyCounts[p.key] > 1 ? 2 : 1;
-    return p.first + ' ' + p.last.slice(0, len) + '.';
-  });
 }
 
 /**

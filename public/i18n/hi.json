@@ -104,6 +104,7 @@
   "event.discussion_title": "💬 खेल चर्चा बोर्ड",
   "event.discussion_desc": "कारपूल, उपकरण या मौसम के बारे में बातचीत करें!",
   "event.no_comments_yet": "अभी कोई चर्चा नहीं। नीचे बातचीत शुरू करें!",
+  "event.comments_members_only": "गेम चर्चा केवल साइन-इन किए गए सदस्यों को दिखाई देती है।",
   "event.signin_to_comment": "चर्चा में भाग लेने के लिए कृपया साइन इन करें।",
   "event.signin_email_btn": "ईमेल से साइन इन करें →",
   "event.leave_message": "संदेश छोड़ें",

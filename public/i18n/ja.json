@@ -104,6 +104,7 @@
   "event.discussion_title": "💬 試合ディスカッション掲示板",
   "event.discussion_desc": "相乗りの相談、道具の質問、天候の確認、試合後のハイライト投稿などに！",
   "event.no_comments_yet": "まだ投稿がありません。グラウンドや道具について質問があれば下から投稿してください！",
+  "event.comments_members_only": "試合のディスカッションはサインイン済みのメンバーのみ閲覧できます。",
   "event.signin_to_comment": "掲示板に投稿するにはログインしてください。",
   "event.signin_email_btn": "メールでログイン →",
   "event.leave_message": "メッセージを投稿",

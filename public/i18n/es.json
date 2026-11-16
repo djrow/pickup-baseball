@@ -104,6 +104,7 @@
   "event.discussion_title": "💬 Conversación del Juego",
   "event.discussion_desc": "¡Coordina transporte, pregunta por equipo, comenta el clima o destaca jugadas!",
   "event.no_comments_yet": "Aún no hay comentarios. ¿Tienes alguna pregunta sobre el campo o el equipo? ¡Escribe abajo!",
+  "event.comments_members_only": "La conversación del juego es visible solo para miembros que han iniciado sesión.",
   "event.signin_to_comment": "Por favor inicia sesión para participar en la conversación del juego.",
   "event.signin_email_btn": "Iniciar Sesión con Correo →",
   "event.leave_message": "Dejar un Mensaje",

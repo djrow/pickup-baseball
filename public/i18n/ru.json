@@ -104,6 +104,7 @@
   "event.discussion_title": "💬 Обсуждение игры",
   "event.discussion_desc": "Договаривайтесь о поездке, спрашивайте про инвентарь и погоду!",
   "event.no_comments_yet": "Сообщений пока нет. Есть вопрос о поле или экипировке? Напишите ниже!",
+  "event.comments_members_only": "Обсуждение игры доступно только вошедшим участникам.",
   "event.signin_to_comment": "Пожалуйста, войдите, чтобы участвовать в обсуждении игры.",
   "event.signin_email_btn": "Войти по Email →",
   "event.leave_message": "Оставить сообщение",

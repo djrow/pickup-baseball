@@ -104,6 +104,7 @@
   "event.discussion_title": "💬 比赛讨论板",
   "event.discussion_desc": "协调拼车、询问球具、讨论天气或分享赛后亮点！",
   "event.no_comments_yet": "暂无讨论。对球场位置或装备有疑问？在下方发起对话吧！",
+  "event.comments_members_only": "比赛讨论仅对已登录成员可见。",
   "event.signin_to_comment": "请先登录以参与比赛讨论并与队友协调球具。",
   "event.signin_email_btn": "使用邮箱登录 →",
   "event.leave_message": "发表留言",

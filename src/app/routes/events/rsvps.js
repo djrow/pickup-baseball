@@ -704,7 +704,7 @@ eventsRsvpsRouter.post('/:id/rsvp/edit-link', async (c) => {
   }
 });
 
-eventsRsvpsRouter.post('/:id/comments', async (c) => {
+eventsRsvpsRouter.post('/:id/comments', requireAuth, async (c) => {
   try {
     const eventId = parseInt(c.req.param('id'), 10);
     if (!eventId || isNaN(eventId) || eventId <= 0) {
@@ -722,10 +722,10 @@ eventsRsvpsRouter.post('/:id/comments', async (c) => {
     const event = await db.prepare('SELECT id, allowed_emails FROM events WHERE id = ?').bind(eventId).first();
     if (!event) return c.json({ error: 'Event not found.' }, 404);
     if (!canUserAccessEvent(user, event)) {
-      return c.json({ error: user ? 'This event is restricted to invited players.' : 'Authentication required for private events.' }, user ? 403 : 401);
+      return c.json({ error: 'This event is restricted to invited players.' }, 403);
     }
 
-    const { content, author_name, author_email, cf_turnstile_response, turnstile_token } = await c.req.json();
+    const { content } = await c.req.json();
     const cleanComment = String(content || '').trim();
     if (!cleanComment) {
       return c.json({ error: 'Comment message cannot be empty.' }, 400);
@@ -734,31 +734,9 @@ eventsRsvpsRouter.post('/:id/comments', async (c) => {
       return c.json({ error: 'Comment message must not exceed 2000 characters.' }, 400);
     }
 
-    if (!user && !(await verifyTurnstileIfConfigured(c.env, cf_turnstile_response || turnstile_token, clientIp))) {
-      return c.json({ error: 'Bot verification failed. Please refresh and try again.' }, 403);
-    }
-
-    const requireLogin = await getRequireLoginSetting(db, c.env);
-    if (requireLogin && !user) {
-      return c.json({ error: 'Sign-in required to post comments.' }, 401);
-    }
-
-    let name = '';
-    let email = '';
-    let userId = null;
-    if (user) {
-      name = user.name;
-      email = user.email;
-      userId = user.id;
-    } else {
-      name = String(author_name || '').trim().slice(0, 120);
-      const rawGuestEmail = String(author_email || '').trim().toLowerCase().slice(0, 254);
-      if (rawGuestEmail && !isValidEmailAddress(rawGuestEmail)) {
-        return c.json({ error: 'Please enter a valid email address or leave it blank.' }, 400);
-      }
-      email = rawGuestEmail;
-      if (!name) return c.json({ error: 'Please enter your name to post a comment.' }, 400);
-    }
+    const name = user.name;
+    const email = user.email;
+    const userId = user.id;
 
     if (email) {
       const banRecord = await db.prepare('SELECT id FROM banned_emails WHERE LOWER(email) = LOWER(?)').bind(email).first();
@@ -767,7 +745,7 @@ eventsRsvpsRouter.post('/:id/comments', async (c) => {
 
     const ins = await db.prepare(
       'INSERT INTO comments (event_id, user_id, author_name, author_email, content) VALUES (?, ?, ?, ?, ?)'
-    ).bind(eventId, userId, name, email || 'guest', String(content).trim().slice(0, 2000)).run();
+    ).bind(eventId, userId, name, email || 'member', cleanComment.slice(0, 2000)).run();
 
     const newComment = await db.prepare(
       'SELECT id, event_id, user_id, author_name, content, created_at FROM comments WHERE id = ?'
