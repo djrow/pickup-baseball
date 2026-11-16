@@ -113,8 +113,7 @@ export async function promoteNextWaitlistedPlayer(c, origin, eventId) {
       runBackground(c, sendWaitlistPromotionEmail(c.env, origin, {
         email: nextWaitlisted.email,
         name: nextWaitlisted.name,
-        event,
-        managementToken: nextWaitlisted.management_token
+        event
       }).catch(err => logEvent('error', 'waitlist_promotion_email_failed', {
         code: ERROR_CODES.MAIL_ERROR,
         email: nextWaitlisted.email,
@@ -154,8 +153,7 @@ export async function sendRemindersForEventD1(db, env, origin, event) {
         event,
         dutyName: att.duty_name,
         gearBringing: att.gear_bringing,
-        totalAttendees: list.length,
-        managementToken: att.management_token
+        totalAttendees: list.length
       });
     } catch (e) {
       logEvent('error', 'event_reminder_email_failed', {
@@ -212,8 +210,7 @@ export async function notifyConfirmedAttendees(c, event, note, emailFn) {
         email: att.email,
         name: att.name,
         event,
-        note,
-        managementToken: att.management_token
+        note
       });
     } catch (e) {
       logEvent('error', 'event_notice_email_failed', {

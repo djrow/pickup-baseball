@@ -205,6 +205,21 @@
           </a>
         </div>
 
+        <!-- Visitor Fresh Edit Link Request (shown when signed out) -->
+        <div id="rsvp-edit-link-box" style="display: none; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 12px; margin-bottom: 10px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+            <span style="font-size: 0.8rem; color: var(--text-muted);" data-i18n="event.edit_link_prompt">Already RSVPed as a guest?</span>
+            <button type="button" id="rsvp-edit-link-toggle-btn" class="btn btn-outline btn-sm" aria-expanded="false" aria-controls="rsvp-edit-link-form" data-i18n="event.edit_link_btn">
+              🔗 Email me a fresh edit link
+            </button>
+          </div>
+          <form id="rsvp-edit-link-form" style="display: none; margin-top: 8px; gap: 8px; flex-wrap: wrap; align-items: center;">
+            <input type="email" id="rsvp-edit-link-email" placeholder="Enter the email used for your RSVP" data-i18n-placeholder="event.edit_link_email_placeholder" style="flex: 1 1 220px; min-width: 180px;" required>
+            <button type="submit" id="rsvp-edit-link-submit-btn" class="btn btn-primary btn-sm" data-i18n="event.edit_link_send_btn">Send Edit Link</button>
+          </form>
+          <div id="rsvp-edit-link-status" style="margin-top: 6px;"></div>
+        </div>
+
         <form id="rsvp-form">
           <div id="rsvp-interactive-top">
             <!-- Guest Name & Email Fields (hidden when signed in) -->

@@ -201,6 +201,11 @@ const EN_DICT = {
   "event.update_rsvp_btn": "Update RSVP",
   "event.saving_rsvp": "Saving RSVP...",
   "event.rsvp_email_note": "📬 Email confirmation & reminders sent if an email is provided",
+  "event.edit_link_prompt": "Already RSVPed as a guest?",
+  "event.edit_link_btn": "🔗 Email me a fresh edit link",
+  "event.edit_link_email_placeholder": "Enter the email used for your RSVP",
+  "event.edit_link_send_btn": "Send Edit Link",
+  "event.edit_link_sending": "Sending...",
   "event.duty_board_title": "🛡️ Game Day Task Board",
   "event.duty_board_desc": "Essential roles to keep our pickup games safe, fun, and organized.",
   "event.duty_filled": "Filled",
@@ -1600,6 +1605,12 @@ const API = {
   async postRsvp(id, payload) {
     return this.request('POST', '/api/events/' + encodeURIComponent(id) + '/rsvp', payload, {
       invalidateKeys: ['pickup_cached_event_' + id, 'pickup_cached_events_upcoming', 'pickup_cached_events_all']
+    });
+  },
+
+  async requestRsvpEditLink(id, email) {
+    return this.request('POST', '/api/events/' + encodeURIComponent(id) + '/rsvp/edit-link', {
+      email: email
     });
   },
 

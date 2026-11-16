@@ -331,5 +331,10 @@
   "gallery.videos_reel": "ویدئوها و لحظات برگزیده",
   "gallery.drop_links_btn": "📥 ارسال عکس / لینک",
   "gallery.mod_queue_title": "صف بررسی مدیریت",
-  "gallery.all_albums": "🌟 همه آلبوم‌ها"
+  "gallery.all_albums": "🌟 همه آلبوم‌ها",
+  "event.edit_link_prompt": "قبلاً به‌عنوان مهمان اعلام حضور کرده‌اید؟",
+  "event.edit_link_btn": "🔗 لینک جدید ویرایش را برایم ایمیل کن",
+  "event.edit_link_email_placeholder": "ایمیل ثبت‌شده برای اعلام حضور را وارد کنید",
+  "event.edit_link_send_btn": "ارسال لینک ویرایش",
+  "event.edit_link_sending": "در حال ارسال..."
 }

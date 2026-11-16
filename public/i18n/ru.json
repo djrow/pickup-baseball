@@ -331,5 +331,10 @@
   "gallery.videos_reel": "Видео и лучшие моменты",
   "gallery.drop_links_btn": "📥 Добавить фото / ссылки",
   "gallery.mod_queue_title": "Очередь модерации",
-  "gallery.all_albums": "🌟 Все альбомы"
+  "gallery.all_albums": "🌟 Все альбомы",
+  "event.edit_link_prompt": "Уже зарегистрировались как гость?",
+  "event.edit_link_btn": "🔗 Отправить новую ссылку для редактирования",
+  "event.edit_link_email_placeholder": "Введите email, указанный при регистрации",
+  "event.edit_link_send_btn": "Отправить ссылку",
+  "event.edit_link_sending": "Отправка..."
 }

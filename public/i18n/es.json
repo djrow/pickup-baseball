@@ -331,5 +331,10 @@
   "gallery.videos_reel": "Videos y mejores jugadas",
   "gallery.drop_links_btn": "📥 Subir fotos / enlaces",
   "gallery.mod_queue_title": "Cola de moderación",
-  "gallery.all_albums": "🌟 Todos los álbumes"
+  "gallery.all_albums": "🌟 Todos los álbumes",
+  "event.edit_link_prompt": "¿Ya confirmaste asistencia como invitado?",
+  "event.edit_link_btn": "🔗 Envíame un enlace nuevo para editar",
+  "event.edit_link_email_placeholder": "Ingresa el correo usado en tu confirmación",
+  "event.edit_link_send_btn": "Enviar enlace de edición",
+  "event.edit_link_sending": "Enviando..."
 }

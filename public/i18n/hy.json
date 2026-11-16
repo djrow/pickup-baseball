@@ -331,5 +331,10 @@
   "gallery.videos_reel": "Տեսանյութեր և լավագույն դրվագներ",
   "gallery.drop_links_btn": "📥 Ավելացնել նկար / հղում",
   "gallery.mod_queue_title": "Մոդերացիայի հերթ",
-  "gallery.all_albums": "🌟 Բոլոր ալբոմները"
+  "gallery.all_albums": "🌟 Բոլոր ալբոմները",
+  "event.edit_link_prompt": "Արդեն գրանցվե՞լ եք որպես հյուր։",
+  "event.edit_link_btn": "🔗 Ուղարկել խմբագրման նոր հղում",
+  "event.edit_link_email_placeholder": "Մուտքագրեք ձեր գրանցման էլ. հասցեն",
+  "event.edit_link_send_btn": "Ուղարկել հղումը",
+  "event.edit_link_sending": "Ուղարկվում է..."
 }

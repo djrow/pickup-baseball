@@ -68,8 +68,9 @@ async function seed() {
       db.prepare('UPDATE users SET bio = ? WHERE id = ?').run(p.bio, user.id);
     }
 
-    const token = crypto.randomBytes(16).toString('hex');
-    const attRes = insertAttendee.run(eventId, user.id, p.name, p.email, p.gear, token);
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = 'sha256:' + crypto.createHash('sha256').update(rawToken).digest('hex');
+    const attRes = insertAttendee.run(eventId, user.id, p.name, p.email, p.gear, tokenHash);
     if (p.dutyIdx !== null && dutyIds[p.dutyIdx]) {
       db.prepare('INSERT INTO duty_assignments (duty_id, attendee_id) VALUES (?, ?)').run(
         dutyIds[p.dutyIdx],

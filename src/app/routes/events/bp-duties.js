@@ -4,7 +4,14 @@
  */
 
 import { Hono } from 'hono';
-import { requireOrganizer, requireAdmin, getClientIp, checkRateLimit, verifyTurnstileIfConfigured } from '../../security.js';
+import {
+  requireOrganizer,
+  requireAdmin,
+  getClientIp,
+  checkRateLimit,
+  verifyTurnstileIfConfigured,
+  getManagementTokenCandidates
+} from '../../security.js';
 import { getDefaultDuties, getRequireLoginSetting } from '../../schema.js';
 import { canUserAccessEvent, parseAllowedEmails } from '../../policy.js';
 import { AVATAR_EXPR } from './helpers.js';
@@ -61,8 +68,13 @@ async function authorizeBpSignupMutation(c, db, eventId, signupId, actionLabel) 
   const managementToken = body.management_token || c.req.query('token');
   let isGuestOwner = false;
   if (managementToken && existing.attendee_id) {
-    const att = await db.prepare('SELECT id FROM attendees WHERE id = ? AND management_token = ? AND user_id IS NULL').bind(existing.attendee_id, managementToken).first();
-    if (att) isGuestOwner = true;
+    const candidates = await getManagementTokenCandidates(String(managementToken));
+    if (candidates) {
+      const att = await db.prepare(
+        'SELECT id FROM attendees WHERE id = ? AND management_token IN (?, ?) AND user_id IS NULL'
+      ).bind(existing.attendee_id, candidates.hashed, candidates.legacy).first();
+      if (att) isGuestOwner = true;
+    }
   }
 
   if (!isOrganizer && !isOwner && !isGuestOwner) {
@@ -131,7 +143,12 @@ eventsBpDutiesRouter.get('/:id/bp-order', async (c) => {
     if (user) {
       myAttendee = await db.prepare('SELECT id, name FROM attendees WHERE event_id = ? AND (user_id = ? OR email = ?)').bind(eventId, user.id, user.email).first();
     } else if (token) {
-      myAttendee = await db.prepare('SELECT id, name FROM attendees WHERE event_id = ? AND management_token = ?').bind(eventId, token).first();
+      const candidates = await getManagementTokenCandidates(String(token));
+      if (candidates) {
+        myAttendee = await db.prepare(
+          'SELECT id, name FROM attendees WHERE event_id = ? AND management_token IN (?, ?)'
+        ).bind(eventId, candidates.hashed, candidates.legacy).first();
+      }
     }
 
     const { results: rows } = await db.prepare(`
@@ -217,7 +234,12 @@ eventsBpDutiesRouter.post('/:id/bp-order', async (c) => {
       if (user) {
         att = await db.prepare('SELECT id, name FROM attendees WHERE event_id = ? AND (user_id = ? OR email = ?)').bind(eventId, user.id, user.email).first();
       } else if (managementToken) {
-        att = await db.prepare('SELECT id, name FROM attendees WHERE event_id = ? AND management_token = ? AND user_id IS NULL').bind(eventId, managementToken).first();
+        const candidates = await getManagementTokenCandidates(String(managementToken));
+        if (candidates) {
+          att = await db.prepare(
+            'SELECT id, name FROM attendees WHERE event_id = ? AND management_token IN (?, ?) AND user_id IS NULL'
+          ).bind(eventId, candidates.hashed, candidates.legacy).first();
+        }
       }
       if (att) attendeeId = att.id;
     }

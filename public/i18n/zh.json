@@ -331,5 +331,10 @@
   "gallery.videos_reel": "视频集锦与精彩片段",
   "gallery.drop_links_btn": "📥 上传照片 / 链接",
   "gallery.mod_queue_title": "管理员审核队列",
-  "gallery.all_albums": "🌟 全部相册"
+  "gallery.all_albums": "🌟 全部相册",
+  "event.edit_link_prompt": "已以访客身份提交 RSVP？",
+  "event.edit_link_btn": "🔗 发送新的编辑链接到邮箱",
+  "event.edit_link_email_placeholder": "请输入提交 RSVP 时使用的邮箱",
+  "event.edit_link_send_btn": "发送编辑链接",
+  "event.edit_link_sending": "发送中..."
 }

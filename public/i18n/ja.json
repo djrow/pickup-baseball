@@ -331,5 +331,10 @@
   "gallery.videos_reel": "動画・ハイライトリール",
   "gallery.drop_links_btn": "📥 写真・リンクを投稿",
   "gallery.mod_queue_title": "管理者承認キュー",
-  "gallery.all_albums": "🌟 すべてのアルバム"
+  "gallery.all_albums": "🌟 すべてのアルバム",
+  "event.edit_link_prompt": "ゲストとしてすでに参加登録済みですか？",
+  "event.edit_link_btn": "🔗 新しい編集リンクをメールで受け取る",
+  "event.edit_link_email_placeholder": "参加登録に使用したメールアドレスを入力",
+  "event.edit_link_send_btn": "編集リンクを送信",
+  "event.edit_link_sending": "送信中..."
 }

@@ -9,6 +9,8 @@ import {
   requireAuth,
   requireOrganizer,
   generateToken,
+  hashManagementToken,
+  MANAGEMENT_TOKEN_PREFIX,
   getSafePublicOrigin,
   checkRateLimit,
   rejectIfChatMuted,
@@ -257,7 +259,14 @@ baseballRouter.post('/events/:eventId/quick-rsvp', requireAuth, async (c) => {
     }
 
     const shouldRotateClaimToken = Boolean(!existing.user_id || existing.user_id !== user.id || existing.is_guest);
-    const nextToken = shouldRotateClaimToken ? generateToken() : (existing.management_token || generateToken());
+    let nextTokenHash;
+    if (shouldRotateClaimToken || !existing.management_token) {
+      nextTokenHash = await hashManagementToken(generateToken());
+    } else if (String(existing.management_token).startsWith(MANAGEMENT_TOKEN_PREFIX)) {
+      nextTokenHash = existing.management_token;
+    } else {
+      nextTokenHash = await hashManagementToken(String(existing.management_token));
+    }
     await baseballDb.prepare(`
       UPDATE attendees
       SET user_id = ?, name = ?, is_guest = 0, status = ?, players_count = ?, spectators_count = ?,
@@ -272,7 +281,7 @@ baseballRouter.post('/events/:eventId/quick-rsvp', requireAuth, async (c) => {
       additionalGuests,
       gearBringing,
       notes,
-      nextToken,
+      nextTokenHash,
       existing.id
     ).run();
 
@@ -299,7 +308,7 @@ baseballRouter.post('/events/:eventId/quick-rsvp', requireAuth, async (c) => {
       await promoteNextWaitlistedPlayer(c, origin, eventId);
     }
   } else {
-    const mgmtToken = generateToken();
+    const mgmtTokenHash = await hashManagementToken(generateToken());
     const ins = await baseballDb.prepare(`
       INSERT INTO attendees (
         event_id, user_id, name, email, is_guest, status,
@@ -316,7 +325,7 @@ baseballRouter.post('/events/:eventId/quick-rsvp', requireAuth, async (c) => {
       playersCount,
       spectatorsCount,
       additionalGuests,
-      mgmtToken
+      mgmtTokenHash
     ).run();
     const insertedId = ins && ins.meta ? ins.meta.last_row_id : null;
     if (insertedId && finalStatus === 'attending' && playersCount > 0 && event.max_players && Number(event.max_players) > 0) {

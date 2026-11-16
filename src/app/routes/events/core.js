@@ -12,6 +12,7 @@ import {
   requireAdmin,
   resolveUserByCalendarToken,
   constantTimeEqual,
+  getManagementTokenCandidates,
   checkRateLimit,
   getSafePublicOrigin
 } from '../../security.js';
@@ -419,24 +420,27 @@ eventsCoreRouter.get('/:id', async (c) => {
           SELECT a.id, a.event_id, a.user_id, a.name, a.email, a.status, a.gear_bringing,
             COALESCE(a.players_count, 1 + COALESCE(a.additional_guests, 0)) as players_count,
             COALESCE(a.spectators_count, 0) as spectators_count,
-            a.additional_guests, a.guest_names, a.management_token,
+            a.additional_guests, a.guest_names,
             (SELECT json_group_array(duty_id) FROM duty_assignments WHERE attendee_id = a.id) as duty_ids
           FROM attendees a
           WHERE a.event_id = ? AND (a.user_id = ? OR a.email = ?)
         `).bind(eventId, user.id, user.email)
       );
     } else if (token) {
-      batchStmts.push(
-        db.prepare(`
-          SELECT a.id, a.event_id, a.user_id, a.name, a.email, a.status, a.gear_bringing,
-            COALESCE(a.players_count, 1 + COALESCE(a.additional_guests, 0)) as players_count,
-            COALESCE(a.spectators_count, 0) as spectators_count,
-            a.additional_guests, a.guest_names, a.management_token,
-            (SELECT json_group_array(duty_id) FROM duty_assignments WHERE attendee_id = a.id) as duty_ids
-          FROM attendees a
-          WHERE a.event_id = ? AND a.management_token = ? AND a.user_id IS NULL
-        `).bind(eventId, token)
-      );
+      const tokenCandidates = await getManagementTokenCandidates(token);
+      if (tokenCandidates) {
+        batchStmts.push(
+          db.prepare(`
+            SELECT a.id, a.event_id, a.user_id, a.name, a.email, a.status, a.gear_bringing,
+              COALESCE(a.players_count, 1 + COALESCE(a.additional_guests, 0)) as players_count,
+              COALESCE(a.spectators_count, 0) as spectators_count,
+              a.additional_guests, a.guest_names,
+              (SELECT json_group_array(duty_id) FROM duty_assignments WHERE attendee_id = a.id) as duty_ids
+            FROM attendees a
+            WHERE a.event_id = ? AND a.management_token IN (?, ?) AND a.user_id IS NULL
+          `).bind(eventId, tokenCandidates.hashed, tokenCandidates.legacy)
+        );
+      }
     }
 
     const batchRes = await db.batch(batchStmts);

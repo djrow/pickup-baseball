@@ -331,5 +331,10 @@
   "gallery.videos_reel": "شريط الفيديو واللقطات المميزة",
   "gallery.drop_links_btn": "📥 إضافة صور / روابط",
   "gallery.mod_queue_title": "قائمة مراجعة المشرف",
-  "gallery.all_albums": "🌟 كل الألبومات"
+  "gallery.all_albums": "🌟 كل الألبومات",
+  "event.edit_link_prompt": "هل أكدت حضورك مسبقًا كضيف؟",
+  "event.edit_link_btn": "🔗 أرسل لي رابط تعديل جديدًا",
+  "event.edit_link_email_placeholder": "أدخل البريد الإلكتروني المستخدم في تأكيد الحضور",
+  "event.edit_link_send_btn": "إرسال رابط التعديل",
+  "event.edit_link_sending": "جارٍ الإرسال..."
 }

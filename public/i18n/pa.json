@@ -331,5 +331,10 @@
   "gallery.videos_reel": "ਵੀਡੀਓ ਅਤੇ ਖ਼ਾਸ ਝਲਕੀਆਂ",
   "gallery.drop_links_btn": "📥 ਫ਼ੋਟੋਆਂ / ਲਿੰਕ ਭੇਜੋ",
   "gallery.mod_queue_title": "ਪ੍ਰਬੰਧਕ ਸਮੀਖਿਆ ਕਤਾਰ",
-  "gallery.all_albums": "🌟 ਸਾਰੀਆਂ ਐਲਬਮਾਂ"
+  "gallery.all_albums": "🌟 ਸਾਰੀਆਂ ਐਲਬਮਾਂ",
+  "event.edit_link_prompt": "ਕੀ ਤੁਸੀਂ ਪਹਿਲਾਂ ਹੀ ਮਹਿਮਾਨ ਵਜੋਂ RSVP ਕਰ ਚੁੱਕੇ ਹੋ?",
+  "event.edit_link_btn": "🔗 ਮੈਨੂੰ ਨਵਾਂ ਸੰਪਾਦਨ ਲਿੰਕ ਈਮੇਲ ਕਰੋ",
+  "event.edit_link_email_placeholder": "ਆਪਣੇ RSVP ਲਈ ਵਰਤਿਆ ਈਮੇਲ ਦਰਜ ਕਰੋ",
+  "event.edit_link_send_btn": "ਸੰਪਾਦਨ ਲਿੰਕ ਭੇਜੋ",
+  "event.edit_link_sending": "ਭੇਜਿਆ ਜਾ ਰਿਹਾ ਹੈ..."
 }

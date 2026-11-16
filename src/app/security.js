@@ -23,6 +23,7 @@ export const AUTH_CODE_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
 export const MAX_CODE_VERIFY_ATTEMPTS = 5;
 export const CANONICAL_MEMBER_ROLE = 'member';
 export const MEMBER_ROLE_ALIASES = Object.freeze(['member', 'player']);
+export const MANAGEMENT_TOKEN_PREFIX = 'sha256:';
 
 /**
  * Returns true if the given role represents the lowest-privilege community member role
@@ -80,6 +81,52 @@ export async function sha256Hex(input) {
   const data = new TextEncoder().encode(String(input));
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
   return Array.from(new Uint8Array(hashBuffer), b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Hashes a raw RSVP management token (`sha256:<hex>`) for storage and lookup.
+ * Always hashes the supplied input so a leaked `sha256:` digest cannot be replayed verbatim.
+ * @param {string} rawToken
+ * @returns {Promise<string>}
+ */
+export async function hashManagementToken(rawToken) {
+  if (!rawToken || typeof rawToken !== 'string') return '';
+  const trimmed = rawToken.trim();
+  if (!trimmed) return '';
+  return `${MANAGEMENT_TOKEN_PREFIX}${await sha256Hex(trimmed)}`;
+}
+
+/**
+ * Builds dual-lookup candidates `[hashed, legacy]` for `attendees.management_token` queries.
+ * Rejects `sha256:`-prefixed inputs from matching the legacy raw slot.
+ * @param {unknown} rawToken
+ * @returns {Promise<{ raw: string, hashed: string, legacy: string } | null>}
+ */
+export async function getManagementTokenCandidates(rawToken) {
+  const trimmed = typeof rawToken === 'string' ? rawToken.trim() : '';
+  if (!trimmed) return null;
+  const hashed = await hashManagementToken(trimmed);
+  const legacy = trimmed.startsWith(MANAGEMENT_TOKEN_PREFIX) ? hashed : trimmed;
+  return { raw: trimmed, hashed, legacy };
+}
+
+/**
+ * Constant-time verification of a caller-supplied RSVP management token against a stored
+ * `sha256:<hex>` hash (or legacy unhashed token during the migration rollout window).
+ * @param {unknown} rawToken
+ * @param {unknown} storedToken
+ * @returns {Promise<boolean>}
+ */
+export async function verifyManagementToken(rawToken, storedToken) {
+  const trimmed = typeof rawToken === 'string' ? rawToken.trim() : '';
+  const stored = typeof storedToken === 'string' ? storedToken : '';
+  if (!trimmed || !stored) return false;
+  if (stored.startsWith(MANAGEMENT_TOKEN_PREFIX)) {
+    const hashed = await hashManagementToken(trimmed);
+    return constantTimeEqual(hashed, stored);
+  }
+  if (trimmed.startsWith(MANAGEMENT_TOKEN_PREFIX)) return false;
+  return constantTimeEqual(trimmed, stored);
 }
 
 export function escapeHtml(str) {

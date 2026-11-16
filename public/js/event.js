@@ -55,6 +55,7 @@ async function initEvent() {
   });
 
   setupRsvpForm();
+  setupEditLinkForm();
   setupCommentForm();
   setupBpOrderUi();
   await loadEventData();
@@ -140,6 +141,15 @@ async function loadEventData(preserveAlertHtml) {
       try { localStorage.removeItem(cacheKey); } catch (e) { /* localStorage unavailable */ }
       showError(res.error);
       return;
+    }
+
+    if (!API.currentUser && guestToken) {
+      if (res.myRsvp) {
+        try { localStorage.setItem('guest_token_' + eventId, guestToken); } catch (e) { /* localStorage unavailable */ }
+      } else {
+        guestToken = '';
+        try { localStorage.removeItem('guest_token_' + eventId); } catch (e) { /* localStorage unavailable */ }
+      }
     }
 
     try {
@@ -891,6 +901,7 @@ async function setupRsvpState(preserveAlertHtml) {
   const commentGuestFields = document.getElementById('comment-guest-fields');
   const commentForm = document.getElementById('comment-form');
   const rainoutNotice = document.getElementById('rsvp-rainout-notice');
+  const editLinkBox = document.getElementById('rsvp-edit-link-box');
   const alertDiv = document.getElementById('rsvp-alert');
   const cancelBtn = document.getElementById('rsvp-cancel-btn');
 
@@ -947,6 +958,7 @@ async function setupRsvpState(preserveAlertHtml) {
   // 1. Rainout state: close RSVP inputs, keep tasks visible in read-only mode
   if (isRainout) {
     if (loginPrompt) loginPrompt.style.display = 'none';
+    if (editLinkBox) editLinkBox.style.display = 'none';
     if (interactiveTop) interactiveTop.style.display = 'none';
     if (interactiveBottom) interactiveBottom.style.display = 'none';
     if (rsvpForm) rsvpForm.style.display = 'block';
@@ -976,6 +988,7 @@ async function setupRsvpState(preserveAlertHtml) {
 
   // 2. Restricted whitelist locked state
   if (isRestricted && !isAllowed) {
+    if (editLinkBox) editLinkBox.style.display = 'none';
     if (interactiveTop) interactiveTop.style.display = 'none';
     if (interactiveBottom) interactiveBottom.style.display = 'none';
     if (rsvpForm) rsvpForm.style.display = 'block';
@@ -1008,6 +1021,7 @@ async function setupRsvpState(preserveAlertHtml) {
 
   // 3. Sign-in required and user is logged out: show clean sign-in CTA + read-only tasks list
   if (!user && requireLogin) {
+    if (editLinkBox) editLinkBox.style.display = 'none';
     if (interactiveTop) interactiveTop.style.display = 'none';
     if (interactiveBottom) interactiveBottom.style.display = 'none';
     if (rsvpForm) rsvpForm.style.display = 'block';
@@ -1036,11 +1050,13 @@ async function setupRsvpState(preserveAlertHtml) {
 
   if (user) {
     if (loginPrompt) loginPrompt.style.display = 'none';
+    if (editLinkBox) editLinkBox.style.display = 'none';
     if (guestFields) guestFields.style.display = 'none';
     document.getElementById('rsvp-name').required = false;
     document.getElementById('rsvp-email').required = false;
   } else {
     if (loginPrompt) loginPrompt.style.display = 'flex';
+    if (editLinkBox) editLinkBox.style.display = 'block';
     if (guestFields) guestFields.style.display = 'grid';
     document.getElementById('rsvp-name').required = true;
     document.getElementById('rsvp-email').required = false;
@@ -1102,11 +1118,6 @@ async function setupRsvpState(preserveAlertHtml) {
 
     if (optionalDetails) {
       optionalDetails.open = Boolean((myRsvp.gear_bringing && myRsvp.gear_bringing.trim()) || (myRsvp.guest_names && myRsvp.guest_names.trim()));
-    }
-
-    if (myRsvp.management_token) {
-      guestToken = myRsvp.management_token;
-      try { localStorage.setItem('guest_token_' + eventId, guestToken); } catch (e) { /* localStorage unavailable */ }
     }
   } else {
     rsvpBadge.innerHTML = '';
@@ -1623,6 +1634,59 @@ function setupRsvpForm() {
       submitBtn.disabled = false;
       alertBox.innerHTML = '<div class="alert alert-error">Network error. Please try again.</div>';
       updateGroupSummaryUi();
+    }
+  });
+}
+
+function setupEditLinkForm() {
+  const toggleBtn = document.getElementById('rsvp-edit-link-toggle-btn');
+  const form = document.getElementById('rsvp-edit-link-form');
+  const emailInput = document.getElementById('rsvp-edit-link-email');
+  const submitBtn = document.getElementById('rsvp-edit-link-submit-btn');
+  const statusEl = document.getElementById('rsvp-edit-link-status');
+  if (!toggleBtn || !form || !emailInput || !submitBtn) return;
+
+  toggleBtn.addEventListener('click', function() {
+    const isOpen = form.style.display !== 'none';
+    form.style.display = isOpen ? 'none' : 'flex';
+    toggleBtn.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
+    if (!isOpen) {
+      if (!emailInput.value) {
+        const rsvpEmailEl = document.getElementById('rsvp-email');
+        if (rsvpEmailEl && rsvpEmailEl.value) {
+          emailInput.value = rsvpEmailEl.value.trim();
+        }
+      }
+      emailInput.focus();
+    }
+  });
+
+  form.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const email = (emailInput.value || '').trim();
+    if (!email) return;
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = API.t('event.edit_link_sending', 'Sending...');
+    if (statusEl) statusEl.innerHTML = '';
+
+    try {
+      const res = await API.requestRsvpEditLink(eventId, email);
+      if (statusEl) {
+        if (res && res.error) {
+          statusEl.innerHTML = `<div class="alert alert-error" style="font-size: 0.82rem; margin: 0;">${API.escapeHtml(res.error)}</div>`;
+        } else {
+          statusEl.innerHTML = `<div class="alert alert-success" style="font-size: 0.82rem; margin: 0;">${API.escapeHtml((res && res.message) || 'If an RSVP with that email exists for this event, a fresh edit link has been sent.')}</div>`;
+          emailInput.value = '';
+        }
+      }
+    } catch (err) {
+      if (statusEl) {
+        statusEl.innerHTML = '<div class="alert alert-error" style="font-size: 0.82rem; margin: 0;">Network error. Please try again.</div>';
+      }
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = API.t('event.edit_link_send_btn', 'Send Edit Link');
     }
   });
 }

@@ -331,5 +331,10 @@
   "gallery.videos_reel": "동영상 및 하이라이트",
   "gallery.drop_links_btn": "📥 사진 / 링크 올리기",
   "gallery.mod_queue_title": "관리자 승인 대기열",
-  "gallery.all_albums": "🌟 전체 앨범"
+  "gallery.all_albums": "🌟 전체 앨범",
+  "event.edit_link_prompt": "게스트로 이미 RSVP하셨나요?",
+  "event.edit_link_btn": "🔗 새 수정 링크 이메일로 받기",
+  "event.edit_link_email_placeholder": "RSVP에 사용한 이메일을 입력하세요",
+  "event.edit_link_send_btn": "수정 링크 보내기",
+  "event.edit_link_sending": "전송 중..."
 }
