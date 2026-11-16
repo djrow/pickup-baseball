@@ -351,5 +351,18 @@
   "backup_failed": "数据库备份失败：{error}",
   "rtc_turn_unavailable_note": "不可用：此部署未配置 TURN 隐私中继服务器。",
   "rtc_turn_available_note": "TURN 隐私中继服务器已配置并就绪。",
-  "rtc_turn_blocked_warning": "由于未配置 TURN 中继服务器，隐私中继模式已阻止直接 P2P 语音连接。"
+  "rtc_turn_blocked_warning": "由于未配置 TURN 中继服务器，隐私中继模式已阻止直接 P2P 语音连接。",
+  "profile.export_title": "📦 下载您的数据",
+  "profile.export_desc": "下载包含您的个人资料、同意记录、报名记录、志愿任务、已签署免责声明及俱乐部聊天消息的 JSON 存档。",
+  "profile.export_btn": "📥 下载 JSON 导出文件",
+  "profile.export_decrypt_label": "保存前在浏览器中解密我的加密俱乐部消息",
+  "profile.export_working": "⏳ 正在准备导出...",
+  "profile.export_success": "您的个人数据导出已下载。",
+  "profile.export_success_decrypted": "您的个人数据导出（含 {count} 条已解密的端到端加密消息）已下载。",
+  "profile.export_failed": "导出数据失败：{error}",
+  "profile.export_passphrase_title": "🔐 解锁端到端加密密钥库",
+  "profile.export_passphrase_msg": "请输入您的端到端加密密钥库口令，以便在保存前在浏览器中解密您的俱乐部消息：",
+  "profile.export_passphrase_placeholder": "输入密钥库口令...",
+  "profile.export_passphrase_confirm": "解锁并解密",
+  "profile.export_wrong_passphrase": "端到端加密密钥库口令不正确，无法解密加密消息。"
 }

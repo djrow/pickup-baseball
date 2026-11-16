@@ -351,5 +351,18 @@
   "backup_failed": "پشتیبان‌گیری از پایگاه داده ناموفق بود: {error}",
   "rtc_turn_unavailable_note": "غیرفعال: هیچ سرور رله حریم خصوصی TURN در این استقرار پیکربندی نشده است.",
   "rtc_turn_available_note": "سرور رله حریم خصوصی TURN پیکربندی و آماده است.",
-  "rtc_turn_blocked_warning": "حالت رله حریم خصوصی تماس صوتی مستقیم P2P را مسدود کرد زیرا سرور TURN پیکربندی نشده است."
+  "rtc_turn_blocked_warning": "حالت رله حریم خصوصی تماس صوتی مستقیم P2P را مسدود کرد زیرا سرور TURN پیکربندی نشده است.",
+  "profile.export_title": "📦 دانلود داده‌های شما",
+  "profile.export_desc": "بایگانی JSON شامل نمایه، سابقه رضایت‌نامه‌ها، اعلام حضورها، وظایف داوطلبانه، رضایت‌نامه‌های امضاشده و پیام‌های کلاب‌هاوس را دانلود کنید.",
+  "profile.export_btn": "📥 دانلود خروجی JSON",
+  "profile.export_decrypt_label": "رمزگشایی پیام‌های رمزگذاری‌شده کلاب‌هاوس در مرورگر پیش از ذخیره",
+  "profile.export_working": "⏳ در حال آماده‌سازی خروجی...",
+  "profile.export_success": "خروجی داده‌های شخصی شما دانلود شد.",
+  "profile.export_success_decrypted": "خروجی داده‌های شخصی شما (با {count} پیام رمزگشایی‌شده E2EE) دانلود شد.",
+  "profile.export_failed": "خروجی گرفتن از داده‌های شما ناموفق بود: {error}",
+  "profile.export_passphrase_title": "🔐 باز کردن گاوصندوق کلید E2EE",
+  "profile.export_passphrase_msg": "عبارت عبور گاوصندوق کلید E2EE خود را وارد کنید تا پیام‌های کلاب‌هاوس پیش از ذخیره در مرورگر رمزگشایی شوند:",
+  "profile.export_passphrase_placeholder": "عبارت عبور گاوصندوق را وارد کنید...",
+  "profile.export_passphrase_confirm": "باز کردن و رمزگشایی",
+  "profile.export_wrong_passphrase": "عبارت عبور گاوصندوق E2EE نادرست است. پیام‌های رمزگذاری‌شده رمزگشایی نشدند."
 }

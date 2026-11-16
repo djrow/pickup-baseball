@@ -351,5 +351,18 @@
   "backup_failed": "Sao lưu cơ sở dữ liệu thất bại: {error}",
   "rtc_turn_unavailable_note": "Không khả dụng: Chưa cấu hình máy chủ chuyển tiếp bảo mật TURN trên hệ thống này.",
   "rtc_turn_available_note": "Máy chủ chuyển tiếp bảo mật TURN đã được cấu hình và sẵn sàng.",
-  "rtc_turn_blocked_warning": "Chế độ Chuyển tiếp Bảo mật đã chặn kết nối thoại P2P trực tiếp vì chưa cấu hình máy chủ TURN."
+  "rtc_turn_blocked_warning": "Chế độ Chuyển tiếp Bảo mật đã chặn kết nối thoại P2P trực tiếp vì chưa cấu hình máy chủ TURN.",
+  "profile.export_title": "📦 Tải xuống dữ liệu của bạn",
+  "profile.export_desc": "Tải xuống tệp lưu trữ JSON gồm hồ sơ, lịch sử đồng thuận, đăng ký tham gia, nhiệm vụ tình nguyện, giấy miễn trừ đã ký và tin nhắn Clubhouse của bạn.",
+  "profile.export_btn": "📥 Tải xuống bản xuất JSON",
+  "profile.export_decrypt_label": "Giải mã tin nhắn Clubhouse được mã hóa của tôi trên trình duyệt trước khi lưu",
+  "profile.export_working": "⏳ Đang chuẩn bị bản xuất...",
+  "profile.export_success": "Đã tải xuống bản xuất dữ liệu cá nhân của bạn.",
+  "profile.export_success_decrypted": "Đã tải xuống bản xuất dữ liệu cá nhân của bạn (kèm {count} tin nhắn E2EE đã giải mã).",
+  "profile.export_failed": "Không thể xuất dữ liệu của bạn: {error}",
+  "profile.export_passphrase_title": "🔐 Mở khóa kho khóa E2EE",
+  "profile.export_passphrase_msg": "Nhập cụm mật khẩu kho khóa E2EE để giải mã tin nhắn Clubhouse của bạn trên trình duyệt trước khi lưu:",
+  "profile.export_passphrase_placeholder": "Nhập cụm mật khẩu kho khóa...",
+  "profile.export_passphrase_confirm": "Mở khóa & Giải mã",
+  "profile.export_wrong_passphrase": "Cụm mật khẩu kho khóa E2EE không đúng. Không thể giải mã tin nhắn."
 }

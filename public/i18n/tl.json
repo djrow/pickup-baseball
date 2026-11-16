@@ -351,5 +351,18 @@
   "backup_failed": "Nabigo ang database backup: {error}",
   "rtc_turn_unavailable_note": "Hindi available: Walang TURN privacy relay server na naka-configure sa deployment na ito.",
   "rtc_turn_available_note": "Naka-configure at handa na ang TURN privacy relay server.",
-  "rtc_turn_blocked_warning": "Hinarangan ng Privacy Relay Mode ang direktang P2P voice dahil walang naka-configure na TURN relay server."
+  "rtc_turn_blocked_warning": "Hinarangan ng Privacy Relay Mode ang direktang P2P voice dahil walang naka-configure na TURN relay server.",
+  "profile.export_title": "📦 I-download ang Iyong Data",
+  "profile.export_desc": "Mag-download ng JSON archive ng iyong profile, kasaysayan ng pahintulot, mga RSVP, mga gawaing boluntaryo, mga nilagdaang waiver, at mga mensahe sa Clubhouse.",
+  "profile.export_btn": "📥 I-download ang JSON Export",
+  "profile.export_decrypt_label": "I-decrypt ang aking mga naka-encrypt na mensahe sa Clubhouse sa browser bago i-save",
+  "profile.export_working": "⏳ Inihahanda ang export...",
+  "profile.export_success": "Na-download na ang export ng iyong personal na data.",
+  "profile.export_success_decrypted": "Na-download na ang export ng iyong personal na data (may {count} na-decrypt na E2EE na mensahe).",
+  "profile.export_failed": "Nabigong i-export ang iyong data: {error}",
+  "profile.export_passphrase_title": "🔐 I-unlock ang E2EE Key Vault",
+  "profile.export_passphrase_msg": "Ilagay ang passphrase ng iyong E2EE Key Vault upang i-decrypt ang iyong mga mensahe sa browser bago i-save:",
+  "profile.export_passphrase_placeholder": "Ilagay ang vault passphrase...",
+  "profile.export_passphrase_confirm": "I-unlock at I-decrypt",
+  "profile.export_wrong_passphrase": "Maling passphrase ng E2EE vault. Hindi ma-decrypt ang mga naka-encrypt na mensahe."
 }

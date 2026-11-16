@@ -351,5 +351,18 @@
   "backup_failed": "डेटाबेस बैकअप विफल रहा: {error}",
   "rtc_turn_unavailable_note": "अनुपलब्ध: इस परिनियोजन पर कोई TURN गोपनीयता रिले सर्वर कॉन्फ़िगर नहीं है।",
   "rtc_turn_available_note": "TURN गोपनीयता रिले सर्वर कॉन्फ़िगर और तैयार है।",
-  "rtc_turn_blocked_warning": "गोपनीयता रिले मोड ने सीधे P2P वॉइस को रोक दिया क्योंकि कोई TURN रिले सर्वर कॉन्फ़िगर नहीं है।"
+  "rtc_turn_blocked_warning": "गोपनीयता रिले मोड ने सीधे P2P वॉइस को रोक दिया क्योंकि कोई TURN रिले सर्वर कॉन्फ़िगर नहीं है।",
+  "profile.export_title": "📦 अपना डेटा डाउनलोड करें",
+  "profile.export_desc": "अपनी प्रोफ़ाइल, सहमति इतिहास, RSVP, स्वयंसेवी कार्यों, हस्ताक्षरित छूट और क्लबहाउस संदेशों का JSON संग्रह डाउनलोड करें।",
+  "profile.export_btn": "📥 JSON निर्यात डाउनलोड करें",
+  "profile.export_decrypt_label": "सहेजने से पहले ब्राउज़र में मेरे एन्क्रिप्टेड क्लबहाउस संदेशों को डिक्रिप्ट करें",
+  "profile.export_working": "⏳ निर्यात तैयार हो रहा है...",
+  "profile.export_success": "आपका व्यक्तिगत डेटा निर्यात डाउनलोड हो गया है।",
+  "profile.export_success_decrypted": "आपका व्यक्तिगत डेटा निर्यात ({count} डिक्रिप्टेड E2EE संदेशों के साथ) डाउनलोड हो गया है।",
+  "profile.export_failed": "आपका डेटा निर्यात करने में विफल: {error}",
+  "profile.export_passphrase_title": "🔐 E2EE कुंजी वॉल्ट अनलॉक करें",
+  "profile.export_passphrase_msg": "सहेजने से पहले ब्राउज़र में अपने एन्क्रिप्टेड क्लबहाउस संदेशों को डिक्रिप्ट करने के लिए अपना E2EE कुंजी वॉल्ट पासफ़्रेज़ दर्ज करें:",
+  "profile.export_passphrase_placeholder": "वॉल्ट पासफ़्रेज़ दर्ज करें...",
+  "profile.export_passphrase_confirm": "अनलॉक और डिक्रिप्ट करें",
+  "profile.export_wrong_passphrase": "गलत E2EE वॉल्ट पासफ़्रेज़। एन्क्रिप्टेड संदेश डिक्रिप्ट नहीं हो सके।"
 }
