@@ -346,7 +346,7 @@ mediaRouter.post('/', async (c) => {
   try {
     // Rate limit zero-login uploads: 15 submissions per hour per IP
     const clientIp = getClientIp(c);
-    const rateCheck = await checkRateLimit(c.env.DB, 'media_drop_' + clientIp, 15, 3600, c.env);
+    const rateCheck = await checkRateLimit(c.env.DB, `media_drop:${clientIp}`, 15, 3600, c.env);
     if (!rateCheck.allowed) {
       return c.json({ error: 'Too many media uploads from this address. Please wait an hour before submitting more.' }, 429);
     }
@@ -947,23 +947,13 @@ attachmentsRouter.post('/init', requireAuth, async (c) => {
     return c.json({ error: 'thumbnail_base64 must be a valid image base64 data URL.' }, 400);
   }
 
-  const nowSecAtt = Math.floor(Date.now() / 1000);
-  const attRateKey = `user_${user.id}_att_init`;
-  const attCutoff = nowSecAtt - 600;
-  try {
-    await chatDb.prepare(`
-      INSERT INTO chat_rate_limits (key, count, window_start)
-      VALUES (?, 1, ?)
-      ON CONFLICT(key) DO UPDATE SET
-        count = CASE WHEN chat_rate_limits.window_start <= ? THEN 1 ELSE chat_rate_limits.count + 1 END,
-        window_start = CASE WHEN chat_rate_limits.window_start <= ? THEN ? ELSE chat_rate_limits.window_start END
-    `).bind(attRateKey, nowSecAtt, attCutoff, attCutoff, nowSecAtt).run();
-    const attRateRow = await chatDb.prepare('SELECT count FROM chat_rate_limits WHERE key = ?').bind(attRateKey).first();
-    if (attRateRow && Number(attRateRow.count) > 30) {
-      return c.json({ error: 'Too many file uploads initialized. Please wait a few minutes and try again.' }, 429);
-    }
-  } catch (e) {
-    logEvent('warn', 'attachment_init_rate_limit_failed', { err: e });
+  const attRate = await checkRateLimit(chatDb, `chat_att_init:${user.id}`, 30, 600, c.env, {
+    table: 'chat_rate_limits',
+    failClosed: false,
+    enforceInTest: true
+  });
+  if (!attRate.allowed) {
+    return c.json({ error: 'Too many file uploads initialized. Please wait a few minutes and try again.' }, 429);
   }
 
   if (!ALLOWED_ATTACHMENT_MIME_TYPES.has(mimeType)) {

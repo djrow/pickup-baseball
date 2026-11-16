@@ -644,10 +644,7 @@ module.exports = async function runTier5(t, ctx) {
 
   await t.test('T5.10: Direct Messages Real ECDH E2EE Key Exchange, Zero-Knowledge Storage & DM Isolation', async () => {
     const subtle = globalThis.crypto.subtle;
-    ctx.chatDb.prepare('DELETE FROM chat_rate_limits WHERE key IN (?, ?)').run(
-      `user_${ctx.playerUser.id}_msgs`,
-      `user_${ctx.facilitatorUser.id}_msgs`
-    );
+    ctx.chatDb.prepare('DELETE FROM chat_rate_limits').run();
 
     // 1. Both participants generate real ECDH P-256 + ECDSA P-256 identities and publish public keys
     async function enrollKeypair(cookie) {
@@ -1366,7 +1363,7 @@ module.exports = async function runTier5(t, ctx) {
     const syncBeforeRow = ctx.chatDb.prepare('SELECT COALESCE(MAX(id), 0) as m FROM sync_events').get();
     const msgBeforeRow = ctx.chatDb.prepare('SELECT COALESCE(MAX(id), 0) as m FROM messages').get();
 
-    ctx.chatDb.prepare('DELETE FROM chat_rate_limits WHERE key = ?').run(`user_${ctx.facilitatorUser.id}_msgs`);
+    ctx.chatDb.prepare('DELETE FROM chat_rate_limits').run();
     const newMsgRes = await ctx.apiReq('POST', `/api/channels/${dmId}/messages`, ctx.facilitatorCookie, {
       content: 'dGVzdF9jaXBoZXJ0ZXh0',
       iv: 'AAAAAAAAAAAAAAAA'

@@ -23,6 +23,7 @@ export {
   generateCode,
   constantTimeEqual,
   sha256Hex,
+  hmacSha256Hex,
   hashSessionId,
   hashManagementToken,
   getManagementTokenCandidates,
@@ -40,6 +41,7 @@ export {
 export {
   getClientIp,
   getSafePublicOrigin,
+  deriveRateLimitKey,
   checkRateLimit,
   verifyTurnstileIfConfigured,
   getUserFromSession,

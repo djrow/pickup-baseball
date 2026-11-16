@@ -181,7 +181,7 @@ async function runTier3(t, ctx) {
       }
 
       // Ensure clean rate-limit window for player before starting 30-message sliding window test
-      chatDb.prepare('DELETE FROM chat_rate_limits WHERE key = ?').run(`user_${playerUser.id}_msgs`);
+      chatDb.prepare('DELETE FROM chat_rate_limits').run();
 
       // 1. Admin creates a root discussion post via HTTP API in #general (channel id 2)
       const rootRes = await apiReq('POST', '/api/channels/2/messages', adminCookie, {

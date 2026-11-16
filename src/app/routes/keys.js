@@ -4,7 +4,14 @@
  */
 
 import { Hono } from 'hono';
-import { requireAuth, canAccessChannel, rejectIfChatMuted, rejectIfClubhouseOptedOut, normalizeMemberRole } from '../security.js';
+import {
+  requireAuth,
+  canAccessChannel,
+  rejectIfChatMuted,
+  rejectIfClubhouseOptedOut,
+  checkRateLimit,
+  normalizeMemberRole
+} from '../security.js';
 import { resolveChannel, canUserAccessChannel, isPrivateEncryptedBoard } from './chat.js';
 import { chunkArray } from './chat/helpers.js';
 
@@ -180,25 +187,13 @@ keysRouter.put('/identity', requireAuth, async (c) => {
     );
 
     if (isKeyRotation) {
-      const nowSec = Math.floor(Date.now() / 1000);
-      const rateKey = `user_${user.id}_key_rotate`;
-      const windowCutoff = nowSec - 3600;
-
-      await chatDb.prepare(`
-        INSERT INTO chat_rate_limits (key, count, window_start)
-        VALUES (?, 1, ?)
-        ON CONFLICT(key) DO UPDATE SET
-          count = CASE WHEN chat_rate_limits.window_start <= ? THEN 1 ELSE chat_rate_limits.count + 1 END,
-          window_start = CASE WHEN chat_rate_limits.window_start <= ? THEN ? ELSE chat_rate_limits.window_start END
-      `).bind(rateKey, nowSec, windowCutoff, windowCutoff, nowSec).run();
-
-      const updatedRate = await chatDb.prepare(
-        'SELECT count, window_start FROM chat_rate_limits WHERE key = ?'
-      ).bind(rateKey).first();
-
-      if (updatedRate && Number(updatedRate.count) > 5) {
-        const retryAfter = Math.max(1, 3600 - (nowSec - Number(updatedRate.window_start || 0)));
-        c.header('Retry-After', String(retryAfter));
+      const rotRate = await checkRateLimit(chatDb, `chat_key_rotate:${user.id}`, 5, 3600, c.env, {
+        table: 'chat_rate_limits',
+        failClosed: true,
+        enforceInTest: true
+      });
+      if (!rotRate.allowed) {
+        c.header('Retry-After', String(rotRate.retryAfter || 3600));
         return c.json({
           error: 'Too many E2EE key rotations (rate limit exceeded: max 5 rotations per hour). Please wait before rotating keys again.'
         }, 429);

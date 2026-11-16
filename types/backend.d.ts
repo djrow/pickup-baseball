@@ -24,6 +24,8 @@ interface AppBindings {
   FEATURE_SUNDAY_PRIORITY?: string | number | boolean;
   BREVO_API_KEY?: string;
   NODE_ENV?: string;
+  RATE_LIMIT_SECRET?: string;
+  SESSION_SECRET?: string;
   TURNSTILE_SECRET_KEY?: string;
   RESEND_API_KEY?: string;
   GDRIVE_CLIENT_ID?: string;

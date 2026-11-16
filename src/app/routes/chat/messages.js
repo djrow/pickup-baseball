@@ -6,7 +6,14 @@
  */
 
 import { Hono } from 'hono';
-import { requireAuth, requireModerator, rejectIfChatMuted, rejectIfClubhouseOptedOut, normalizeMemberRole } from '../../security.js';
+import {
+  requireAuth,
+  requireModerator,
+  rejectIfChatMuted,
+  rejectIfClubhouseOptedOut,
+  checkRateLimit,
+  normalizeMemberRole
+} from '../../security.js';
 import { logEvent } from '../../errors.js';
 import {
   abbreviateMemberNames,
@@ -164,25 +171,13 @@ chatMessagesRouter.post('/channels/:id/messages', requireAuth, async (c) => {
     return c.json({ error: 'Access denied: insufficient permissions to post in this channel.' }, 403);
   }
 
-  const nowSec = Math.floor(Date.now() / 1000);
-  const rateKey = `user_${user.id}_msgs`;
-  const windowCutoff = nowSec - 60;
-
-  await chatDb.prepare(`
-    INSERT INTO chat_rate_limits (key, count, window_start)
-    VALUES (?, 1, ?)
-    ON CONFLICT(key) DO UPDATE SET
-      count = CASE WHEN chat_rate_limits.window_start <= ? THEN 1 ELSE chat_rate_limits.count + 1 END,
-      window_start = CASE WHEN chat_rate_limits.window_start <= ? THEN ? ELSE chat_rate_limits.window_start END
-  `).bind(rateKey, nowSec, windowCutoff, windowCutoff, nowSec).run();
-
-  const updatedRate = await chatDb.prepare(
-    'SELECT count, window_start FROM chat_rate_limits WHERE key = ?'
-  ).bind(rateKey).first();
-
-  if (updatedRate && Number(updatedRate.count) > 30) {
-    const retryAfter = Math.max(1, 60 - (nowSec - Number(updatedRate.window_start || 0)));
-    c.header('Retry-After', String(retryAfter));
+  const msgRate = await checkRateLimit(chatDb, `chat_msgs:${user.id}`, 30, 60, c.env, {
+    table: 'chat_rate_limits',
+    failClosed: true,
+    enforceInTest: true
+  });
+  if (!msgRate.allowed) {
+    c.header('Retry-After', String(msgRate.retryAfter || 60));
     return c.json({
       error: 'Too many messages (rate limit exceeded: max 30 messages per 60 seconds). Please slow down.'
     }, 429);
@@ -579,24 +574,15 @@ chatMessagesRouter.post('/messages/:id/reactions', requireAuth, async (c) => {
     return c.json({ error: 'Valid emoji is required.' }, 400);
   }
 
-  const nowSec = Math.floor(Date.now() / 1000);
-  const rxRateKey = `user_${user.id}_rx`;
-  const rxCutoff = nowSec - 60;
-  try {
-    await chatDb.prepare(`
-      INSERT INTO chat_rate_limits (key, count, window_start)
-      VALUES (?, 1, ?)
-      ON CONFLICT(key) DO UPDATE SET
-        count = CASE WHEN chat_rate_limits.window_start <= ? THEN 1 ELSE chat_rate_limits.count + 1 END,
-        window_start = CASE WHEN chat_rate_limits.window_start <= ? THEN ? ELSE chat_rate_limits.window_start END
-    `).bind(rxRateKey, nowSec, rxCutoff, rxCutoff, nowSec).run();
-    const rxRateRow = await chatDb.prepare('SELECT count FROM chat_rate_limits WHERE key = ?').bind(rxRateKey).first();
-    if (rxRateRow && Number(rxRateRow.count) > 60) {
-      return c.json({ error: 'Too many reaction updates. Please wait a moment.' }, 429);
-    }
-  } catch (e) {
-    logEvent('warn', 'chat_reaction_rate_limit_failed', { err: e });
+  const rxRate = await checkRateLimit(chatDb, `chat_rx:${user.id}`, 60, 60, c.env, {
+    table: 'chat_rate_limits',
+    failClosed: false,
+    enforceInTest: true
+  });
+  if (!rxRate.allowed) {
+    return c.json({ error: 'Too many reaction updates. Please wait a moment.' }, 429);
   }
+  const nowSec = Math.floor(Date.now() / 1000);
 
   const existingRx = await chatDb.prepare(
     'SELECT id FROM message_reactions WHERE message_id = ? AND user_id = ? AND emoji = ?'
