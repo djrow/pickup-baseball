@@ -377,5 +377,19 @@
   "profile.erasure_confirm_btn": "Supprimer définitivement mon compte",
   "profile.erasure_cancel_btn": "Annuler",
   "profile.erasure_confirm_dialog": "Supprimer définitivement votre compte et vos données personnelles ? Cette action est irréversible. Toute décharge signée restera en quarantaine juridique restreinte de 3 ans avant purge automatique.",
-  "profile.erasure_code_sent": "Code de vérification envoyé par e-mail. Saisissez le code à 6 chiffres ci-dessous pour confirmer."
+  "profile.erasure_code_sent": "Code de vérification envoyé par e-mail. Saisissez le code à 6 chiffres ci-dessous pour confirmer.",
+  "profile.privacy_consent_title": "🔒 Consentement de confidentialité",
+  "profile.privacy_consent_desc": "Par défaut, les membres connectés ne voient que votre Prénom N. et votre statut de présence. Activez les options ci-dessous pour partager plus de détails.",
+  "profile.roster_visibility_label": "Afficher mon nom complet, mon matériel partagé et les noms de mes accompagnants aux membres connectés",
+  "profile.roster_visibility_help": "Lorsque désactivé, les autres membres voient uniquement « Prénom N. » (les organisateurs voient toujours tout).",
+  "profile.profile_sharing_label": "Partager ma bio et ma photo de profil avec les membres connectés",
+  "profile.profile_sharing_help": "Détermine si votre courte bio et votre avatar s'affichent sur les listes, commentaires et dans le Clubhouse.",
+  "profile.notify_title": "📬 Préférences de notification",
+  "profile.notify_rsvp_label": "E-mails de confirmation d'inscription",
+  "profile.notify_rainouts_label": "Alertes météo et changements de terrain",
+  "profile.notify_reminders_label": "E-mails de rappel avant le match",
+  "profile.notify_community_label": "Actualités et annonces de la communauté",
+  "event.visitor_privacy_title": "🔒 Choix de confidentialité et de notification (facultatif)",
+  "event.visitor_roster_consent_label": "Afficher mon nom complet, mon matériel partagé et mes accompagnants aux membres connectés sur la liste (sinon affiché en « Prénom N. »)",
+  "event.visitor_notify_emails_label": "M'envoyer les rappels de match et alertes pluie pour cet événement (si un e-mail est fourni)"
 }

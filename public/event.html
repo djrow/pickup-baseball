@@ -298,6 +298,21 @@
               </label>
             </div>
 
+            <!-- Visitor Privacy Consent & Notification Preferences (unchecked by default, shown only when signed out) -->
+            <div id="visitor-consent-wrap" style="display: none; margin-top: 8px; margin-bottom: 10px; background: var(--bg-subtle); padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+              <div style="font-size: 0.82rem; font-weight: 700; color: var(--secondary); margin-bottom: 6px;" data-i18n="event.visitor_privacy_title">🔒 Privacy &amp; Notification Choices (Optional)</div>
+              <div style="display: flex; flex-direction: column; gap: 6px;">
+                <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer; font-size: 0.81rem; color: var(--text-main); margin-bottom: 0;">
+                  <input type="checkbox" id="rsvp-roster-consent" style="width: 16px; height: 16px; margin-top: 2px; accent-color: var(--primary);">
+                  <span data-i18n="event.visitor_roster_consent_label">Show my full name, shared gear, and companion names to signed-in members on the roster (otherwise shown as "First L.")</span>
+                </label>
+                <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer; font-size: 0.81rem; color: var(--text-main); margin-bottom: 0;">
+                  <input type="checkbox" id="rsvp-notify-emails" style="width: 16px; height: 16px; margin-top: 2px; accent-color: var(--primary);">
+                  <span data-i18n="event.visitor_notify_emails_label">Send me game reminder and rainout notification emails for this event (if email provided)</span>
+                </label>
+              </div>
+            </div>
+
             <div class="rsvp-actions-bar">
               <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                 <button type="submit" id="rsvp-submit-btn" class="btn btn-primary" data-i18n="event.submit_rsvp_btn">

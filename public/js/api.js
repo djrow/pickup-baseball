@@ -392,7 +392,21 @@ const EN_DICT = {
   "profile.export_passphrase_msg": "Enter your E2EE Key Vault passphrase to decrypt your encrypted Clubhouse messages in-browser before saving:",
   "profile.export_passphrase_placeholder": "Enter vault passphrase...",
   "profile.export_passphrase_confirm": "Unlock & Decrypt",
-  "profile.export_wrong_passphrase": "Incorrect E2EE vault passphrase. Encrypted messages could not be decrypted."
+  "profile.export_wrong_passphrase": "Incorrect E2EE vault passphrase. Encrypted messages could not be decrypted.",
+  "profile.privacy_consent_title": "🔒 Privacy Consent",
+  "profile.privacy_consent_desc": "By default, signed-in members see only your First L. initial and RSVP status. Toggle below to share full details with peers.",
+  "profile.roster_visibility_label": "Show my full name, shared gear, and companion names to signed-in members",
+  "profile.roster_visibility_help": "When off, peer members see \"First L.\" only (organizers always see full details).",
+  "profile.profile_sharing_label": "Share my bio and profile picture with signed-in members",
+  "profile.profile_sharing_help": "Controls whether your short bio and avatar appear to peers on rosters, comments, and Clubhouse.",
+  "profile.notify_title": "📬 Notification Preferences",
+  "profile.notify_rsvp_label": "RSVP confirmation emails",
+  "profile.notify_rainouts_label": "Rainout and field change alerts",
+  "profile.notify_reminders_label": "Pre-game reminder emails",
+  "profile.notify_community_label": "Community updates and announcements",
+  "event.visitor_privacy_title": "🔒 Privacy & Notification Choices (Optional)",
+  "event.visitor_roster_consent_label": "Show my full name, shared gear, and companion names to signed-in members on the roster (otherwise shown as \"First L.\")",
+  "event.visitor_notify_emails_label": "Send me game reminder and rainout notification emails for this event (if email provided)"
 };
 
 const KNOWN_PHRASE_KEYS = {
@@ -1814,8 +1828,24 @@ const API = {
     return this.request('GET', '/api/auth/export', null, { noStore: true });
   },
 
-  async updateProfile(name, bio) {
-    return this.request('PUT', '/api/auth/profile', { name: name, bio: bio });
+  async updateProfile(name, bio, extra) {
+    const payload = { name: name, bio: bio };
+    if (extra && typeof extra === 'object') {
+      Object.keys(extra).forEach(function(k) {
+        if (extra[k] !== undefined) {
+          payload[k] = extra[k];
+        }
+      });
+    }
+    return this.request('PUT', '/api/auth/profile', payload);
+  },
+
+  async getConsent() {
+    return this.request('GET', '/api/auth/consent', null, { noStore: true });
+  },
+
+  async updateConsent(payload) {
+    return this.request('PUT', '/api/auth/consent', payload || {});
   },
 
   async setClubhouseOptIn(optedIn) {

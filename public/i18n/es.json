@@ -377,5 +377,19 @@
   "profile.erasure_confirm_btn": "Eliminar mi cuenta permanentemente",
   "profile.erasure_cancel_btn": "Cancelar",
   "profile.erasure_confirm_dialog": "¿Eliminar permanentemente tu cuenta y datos personales? Esta acción no se puede deshacer. Cualquier exención de responsabilidad firmada permanecerá en cuarentena legal restringida de 3 años antes de purgarse automáticamente.",
-  "profile.erasure_code_sent": "Código de verificación enviado a tu correo. Ingresa el código de 6 dígitos abajo para confirmar."
+  "profile.erasure_code_sent": "Código de verificación enviado a tu correo. Ingresa el código de 6 dígitos abajo para confirmar.",
+  "profile.privacy_consent_title": "🔒 Consentimiento de privacidad",
+  "profile.privacy_consent_desc": "De forma predeterminada, los miembros conectados solo ven tu inicial (Nombre A.) y estado de confirmación. Activa las opciones abajo para compartir más detalles.",
+  "profile.roster_visibility_label": "Mostrar mi nombre completo, equipo compartido y nombres de acompañantes a miembros conectados",
+  "profile.roster_visibility_help": "Cuando está desactivado, otros miembros solo ven \"Nombre A.\" (los organizadores siempre ven los detalles completos).",
+  "profile.profile_sharing_label": "Compartir mi biografía y foto de perfil con miembros conectados",
+  "profile.profile_sharing_help": "Controla si tu breve biografía y avatar aparecen en listas, comentarios y el Clubhouse.",
+  "profile.notify_title": "📬 Preferencias de notificaciones",
+  "profile.notify_rsvp_label": "Correos de confirmación de RSVP",
+  "profile.notify_rainouts_label": "Alertas de lluvia y cambios de campo",
+  "profile.notify_reminders_label": "Correos de recordatorio antes del juego",
+  "profile.notify_community_label": "Actualizaciones y anuncios de la comunidad",
+  "event.visitor_privacy_title": "🔒 Opciones de privacidad y notificaciones (opcional)",
+  "event.visitor_roster_consent_label": "Mostrar mi nombre completo, equipo compartido y nombres de acompañantes a miembros conectados en la lista (de lo contrario se muestra como \"Nombre A.\")",
+  "event.visitor_notify_emails_label": "Enviarme recordatorios del partido y alertas de lluvia para este evento (si proporciono correo)"
 }

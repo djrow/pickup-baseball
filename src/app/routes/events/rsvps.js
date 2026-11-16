@@ -30,6 +30,7 @@ import {
 import { resolveConfig } from '../../config.js';
 import { sendRsvpConfirmation, sendWaitlistConfirmation, sendRsvpEditLinkEmail } from '../../mailer.js';
 import { ERROR_CODES, logEvent } from '../../errors.js';
+import { CONSENT_TYPES, parseOptionalBoolean, recordConsentChange } from '../../consent.js';
 import {
   GUEST_NO_EMAIL_SUFFIX,
   isDeliverableEmail,
@@ -96,7 +97,8 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
       name, email, gear_bringing, duty_ids, redeem_hero_credit,
       management_token, status, players_count, spectators_count,
       additional_guests, guest_names, cf_turnstile_response,
-      bp_signup, bp_slot, resend_confirmation, send_confirmation_email
+      bp_signup, bp_slot, resend_confirmation, send_confirmation_email,
+      roster_consent, notify_emails
     } = await c.req.json();
     if (!management_token) {
       management_token = c.req.query('token');
@@ -332,6 +334,12 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
       }
     }
 
+    const parsedRosterConsent = !user ? parseOptionalBoolean(roster_consent) : undefined;
+    const parsedNotifyEmails = !user ? parseOptionalBoolean(notify_emails) : undefined;
+    let nextRosterConsent = 0;
+    let nextNotifyEmails = 0;
+    const visitorConsentTransitions = [];
+
     let attendeeId;
     if (existingAttendee) {
       if (!user && (!existingAttendee.management_token || !(await verifyManagementToken(management_token, existingAttendee.management_token)))) {
@@ -350,18 +358,55 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
           return c.json({ error: 'An RSVP with this email address already exists for this game.' }, 409);
         }
       }
+
+      if (!user) {
+        const prevRosterConsent = existingAttendee.roster_consent ? 1 : 0;
+        const prevNotifyEmails = existingAttendee.notify_emails ? 1 : 0;
+        nextRosterConsent = parsedRosterConsent !== undefined ? (parsedRosterConsent ? 1 : 0) : prevRosterConsent;
+        nextNotifyEmails = parsedNotifyEmails !== undefined ? (parsedNotifyEmails ? 1 : 0) : prevNotifyEmails;
+        if (nextRosterConsent !== prevRosterConsent) {
+          visitorConsentTransitions.push({ consentType: CONSENT_TYPES.ROSTER_CONSENT, granted: Boolean(nextRosterConsent) });
+        }
+        if (nextNotifyEmails !== prevNotifyEmails) {
+          visitorConsentTransitions.push({ consentType: CONSENT_TYPES.VISITOR_NOTIFY_EMAILS, granted: Boolean(nextNotifyEmails) });
+        }
+      }
+
       attendeeId = existingAttendee.id;
       await db.prepare(`
         UPDATE attendees
-        SET name = ?, email = ?, status = ?, gear_bringing = ?, players_count = ?, spectators_count = ?, additional_guests = ?, guest_names = ?, user_id = COALESCE(?, user_id), is_guest = ?, management_token = ?
+        SET name = ?, email = ?, status = ?, gear_bringing = ?, players_count = ?, spectators_count = ?, additional_guests = ?, guest_names = ?, user_id = COALESCE(?, user_id), is_guest = ?, management_token = ?, notify_emails = ?, roster_consent = ?
         WHERE id = ?
-      `).bind(name, storedEmail, finalStatus, cleanGear, playersCount, spectatorsCount, additionalGuests, cleanGuestNames, userId, isGuest, storedTokenHash, attendeeId).run();
+      `).bind(name, storedEmail, finalStatus, cleanGear, playersCount, spectatorsCount, additionalGuests, cleanGuestNames, userId, isGuest, storedTokenHash, nextNotifyEmails, nextRosterConsent, attendeeId).run();
     } else {
+      if (!user) {
+        nextRosterConsent = parsedRosterConsent === true ? 1 : 0;
+        nextNotifyEmails = parsedNotifyEmails === true ? 1 : 0;
+        if (nextRosterConsent === 1) {
+          visitorConsentTransitions.push({ consentType: CONSENT_TYPES.ROSTER_CONSENT, granted: true });
+        }
+        if (nextNotifyEmails === 1) {
+          visitorConsentTransitions.push({ consentType: CONSENT_TYPES.VISITOR_NOTIFY_EMAILS, granted: true });
+        }
+      }
+
       const ins = await db.prepare(`
-        INSERT INTO attendees (event_id, user_id, name, email, is_guest, status, gear_bringing, players_count, spectators_count, additional_guests, guest_names, management_token)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).bind(eventId, userId, name, storedEmail, isGuest, finalStatus, cleanGear, playersCount, spectatorsCount, additionalGuests, cleanGuestNames, freshTokenHash).run();
+        INSERT INTO attendees (event_id, user_id, name, email, is_guest, status, gear_bringing, players_count, spectators_count, additional_guests, guest_names, management_token, notify_emails, roster_consent)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(eventId, userId, name, storedEmail, isGuest, finalStatus, cleanGear, playersCount, spectatorsCount, additionalGuests, cleanGuestNames, freshTokenHash, nextNotifyEmails, nextRosterConsent).run();
       attendeeId = ins.meta.last_row_id;
+    }
+
+    if (!user && visitorConsentTransitions.length > 0) {
+      const consentEmail = isDeliverableEmail(storedEmail) ? storedEmail : null;
+      for (const tr of visitorConsentTransitions) {
+        await recordConsentChange(db, {
+          subjectType: 'visitor',
+          subjectEmail: consentEmail,
+          consentType: tr.consentType,
+          granted: tr.granted
+        });
+      }
     }
 
     if (finalStatus === 'attending' && playersCount > 0 && event.max_players && Number(event.max_players) > 0 && (!wasAttending || playersCount > Number(prevPlayersCount))) {

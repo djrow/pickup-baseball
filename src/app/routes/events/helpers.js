@@ -229,6 +229,8 @@ export const ATTENDEE_DETAIL_COLUMNS = `a.id, a.event_id, a.user_id, a.name, a.e
   COALESCE(a.players_count, 1 + COALESCE(a.additional_guests, 0)) as players_count,
   COALESCE(a.spectators_count, 0) as spectators_count,
   a.additional_guests, a.guest_names,
+  COALESCE(a.notify_emails, 0) as notify_emails,
+  COALESCE(a.roster_consent, 0) as roster_consent,
   (SELECT json_group_array(duty_id) FROM duty_assignments WHERE attendee_id = a.id) as duty_ids`;
 
 const ALLOWED_ATTENDEE_COLUMNS = new Set([
