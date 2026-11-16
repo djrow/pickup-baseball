@@ -58,10 +58,14 @@ Vanilla **ES6** scripts (IIFEs attaching to `window`, loaded via ordered `<scrip
 
 ## 3. Verification Commands
 Always run after changes:
-- `npm test` (`node scripts/verify-all.js`) — full E2E suite (223 tests across `tests/core/` and `tests/clubhouse/` Tiers 1–5).
-- `npm run test:browser` (`node scripts/browser-smoke.js`) — headless Chrome/Edge CDP smoke suite (DOM rendering, `PBFDialog`, `☰ Menu`, RTL/dark mode, responsive overflow, Clubhouse nav).
-- `npm run security:scan` (`node scripts/security-scan.js`) — static CSP, HTML, JS sink/syntax, SQL parameterization, route guard, asset, i18n, and secret hygiene checks (`npm run security:scan:live` checks production headers & endpoints).
-- `npm run bump` (`node scripts/bump-version.js`) — bumps `CURRENT_APP_VERSION`, `sw.js` `CACHE_NAME`, `api.js` `CLIENT_VERSION`, and HTML `?v=` tags before deploy (`scripts/ship.ps1` automates bump, test, scan, commit, tag, deploy, and live scan).
+- `npm run check` — unified release gate running `lint`, `typecheck`, `test`, `test:workerd`, `test:browser`, and `security:scan` in sequence.
+- `npm run lint` (`eslint . --cache --cache-location .eslintcache`) — zero-build ESLint AST & security/compatibility checks.
+- `npm run typecheck` — split zero-build JSDoc typechecks (`tsconfig.backend.json`, `tsconfig.sw.json`, `tsconfig.client.json`).
+- `npm test` (`node scripts/verify-all.js`) — full E2E suite across `tests/core/` and `tests/clubhouse/` Tiers 1–5.
+- `npm run test:workerd` (`node --test tests/workerd/*.test.js`) — Cloudflare `workerd` / Miniflare Pages Functions, D1 concurrency, and subrequest/query budget parity suite.
+- `npm run test:browser` (`node scripts/browser-smoke.js`) — headless Chrome/Edge CDP interactive smoke suite (DOM rendering, `PBFDialog`, `☰ Menu`, RTL/dark mode, forms, Clubhouse E2EE/WebRTC, Service Worker offline).
+- `npm run security:scan` (`node scripts/security-scan.js`) — static CSP, HTML, JS sink/syntax, SQL parameterization, route guard, asset, i18n, secret hygiene, and `npm audit` checks (`--skip-audit` skips `npm audit`; `npm run security:scan:live` checks production headers & endpoints).
+- `npm run bump` (`node scripts/bump-version.js`) — bumps `CURRENT_APP_VERSION`, `sw.js` `CACHE_NAME`, `api.js` `CLIENT_VERSION`, and HTML `?v=` tags before deploy (`scripts/ship.ps1` automates bump, `npm run check`, commit, tag, deploy, and live scan).
 
 ## Agent skills
 
