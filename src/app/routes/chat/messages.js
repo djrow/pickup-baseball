@@ -21,7 +21,8 @@ import {
   isPrivateEncryptedBoard,
   isPublicGuestChannel,
   canUserAccessChannel,
-  hydrateMessages
+  hydrateMessages,
+  rejectIfDmPeerBlocked
 } from './helpers.js';
 
 export const chatMessagesRouter = /** @type {AppHono} */ (new Hono());
@@ -170,6 +171,8 @@ chatMessagesRouter.post('/channels/:id/messages', requireAuth, async (c) => {
   if (!(await canUserAccessChannel(chatDb, user, channel, 'write'))) {
     return c.json({ error: 'Access denied: insufficient permissions to post in this channel.' }, 403);
   }
+  const blockResp = await rejectIfDmPeerBlocked(c, chatDb, channel, user.id);
+  if (blockResp) return blockResp;
 
   const msgRate = await checkRateLimit(chatDb, `chat_msgs:${user.id}`, 30, 60, c.env, {
     table: 'chat_rate_limits',
@@ -337,8 +340,9 @@ chatMessagesRouter.post('/channels/:id/messages', requireAuth, async (c) => {
         WHERE cm.channel_id = ?
           AND COALESCE(cm.hidden, 0) = 1
           AND cm.user_id NOT IN (SELECT muter_user_id FROM user_mutes WHERE muted_user_id = ?)
+          AND cm.user_id NOT IN (SELECT blocker_id FROM user_blocks WHERE blocked_id = ?)
         LIMIT 1
-      `).bind(channel.id, user.id).first();
+      `).bind(channel.id, user.id, user.id).first();
       if (hiddenRow) {
         await chatDb.prepare(`
           UPDATE channel_members
@@ -346,7 +350,8 @@ chatMessagesRouter.post('/channels/:id/messages', requireAuth, async (c) => {
           WHERE channel_id = ?
             AND COALESCE(hidden, 0) = 1
             AND user_id NOT IN (SELECT muter_user_id FROM user_mutes WHERE muted_user_id = ?)
-        `).bind(channel.id, user.id).run();
+            AND user_id NOT IN (SELECT blocker_id FROM user_blocks WHERE blocked_id = ?)
+        `).bind(channel.id, user.id, user.id).run();
         const { results: dmMemRows } = await chatDb.prepare(
           'SELECT user_id FROM channel_members WHERE channel_id = ? AND COALESCE(hidden, 0) = 0'
         ).bind(channel.id).all();
@@ -408,6 +413,8 @@ chatMessagesRouter.patch('/messages/:id', requireAuth, async (c) => {
   if (!msgChannel || !(await canUserAccessChannel(chatDb, user, msgChannel, 'write'))) {
     return c.json({ error: 'Access denied: insufficient permissions to edit messages in this board.' }, 403);
   }
+  const blockResp = await rejectIfDmPeerBlocked(c, chatDb, msgChannel, user.id);
+  if (blockResp) return blockResp;
 
   const isDmMsg = Boolean(msgChannel && (msgChannel.channel_type === 'dm' || msgChannel.channel_type === 'group_dm'));
   const isPrivateMsg = isPrivateEncryptedBoard(msgChannel);
@@ -567,6 +574,8 @@ chatMessagesRouter.post('/messages/:id/reactions', requireAuth, async (c) => {
   if (!channel || !(await canUserAccessChannel(chatDb, user, channel, 'read'))) {
     return c.json({ error: 'Access denied.' }, 403);
   }
+  const blockResp = await rejectIfDmPeerBlocked(c, chatDb, channel, user.id);
+  if (blockResp) return blockResp;
 
   const body = await c.req.json().catch(() => ({}));
   const emoji = typeof body.emoji === 'string' ? body.emoji.trim() : '';

@@ -347,6 +347,8 @@ const EN_DICT = {
   "waiver.sign_online_title": "🔏 Sign Online with Verified Email Provenance",
   "waiver.sign_cta": "⚾ Sign In with Email to Sign Waiver →",
   "waiver.execute_sig": "✍️ Execute Digital Signature",
+  "waiver.age_attestation_label": "I confirm that I am 18 years of age or older, or that I am the parent or legal guardian signing on behalf of a minor participant.",
+  "waiver.age_attestation_error": "You must confirm that you are 18 years of age or older (or a parent/legal guardian signing on behalf of a minor).",
   "gallery.photos_reel": "Community Photos Reel",
   "gallery.videos_reel": "Video Releases & Highlights Reel",
   "gallery.drop_links_btn": "📥 Drop Photos / Links",
