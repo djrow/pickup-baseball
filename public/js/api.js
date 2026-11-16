@@ -372,7 +372,7 @@ const KNOWN_PHRASE_KEYS = {
 
 const API = {
   // Installed Client Application Version
-  CLIENT_VERSION: '149',
+  CLIENT_VERSION: '150',
 
   // Current user cache
   currentUser: null,
