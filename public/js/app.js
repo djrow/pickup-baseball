@@ -9,6 +9,11 @@ let lastCloudSyncedAt = 0;
 let hasCachedFallback = false;
 let isSyncInFlight = false;
 let syncLifecycleBound = false;
+let appPublicConfig = null;
+
+function isAppBpEnabled() {
+  return !(appPublicConfig && appPublicConfig.features && appPublicConfig.features.battingPractice === false);
+}
 
 function formatSyncTimestamp(epochMs) {
   if (!epochMs || epochMs <= 0) return '';
@@ -143,6 +148,16 @@ async function initHome() {
   setupFilters();
   setupCalendarControls();
   setupCloudSyncLifecycle();
+  if (typeof API.getPublicConfig === 'function') {
+    API.getPublicConfig().then(function(cfg) {
+      appPublicConfig = cfg;
+      if (!isAppBpEnabled()) {
+        const routineBpLink = document.getElementById('routine-bp-link');
+        if (routineBpLink) routineBpLink.style.display = 'none';
+        renderCalendar();
+      }
+    }).catch(function() {});
+  }
   loadCommunityFeed();
 
   window.addEventListener('pickup:langchange', () => {
@@ -414,9 +429,11 @@ function renderCalendarDrawer(dateKey, game, isPast) {
           <button type="button" id="drawer-game-subscribe-btn" class="btn btn-outline btn-sm" aria-expanded="false" aria-controls="drawer-game-subscribe-panel" title="Subscribe to live updates for this game or add to Google Calendar">
             ${API.escapeHtml(API.t('calendar.subscribe_game_btn', '🔄 Subscribe Game (.ics)'))}
           </button>
-          <a href="/event.html?id=${game.id}#bp-order-section" class="btn btn-outline btn-sm" style="font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
-            ⚾ BP Signup Sheet
-          </a>
+          ${isAppBpEnabled() ? `
+            <a href="/event.html?id=${game.id}#bp-order-section" class="btn btn-outline btn-sm" style="font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
+              ⚾ BP Signup Sheet
+            </a>
+          ` : ''}
           <a href="/event.html?id=${game.id}" class="btn btn-primary btn-sm" style="font-weight: 700;">
             ${API.escapeHtml(API.t('calendar.view_details', 'RSVP & View Game Details →'))}
           </a>
@@ -575,8 +592,13 @@ function renderCalendar(events) {
     trueNextGameKey = getPacificDateKey(upcomingScheduled[0].event_date);
     const routineBpLink = document.getElementById('routine-bp-link');
     if (routineBpLink) {
-      routineBpLink.href = '/event.html?id=' + upcomingScheduled[0].id + '#bp-order-section';
-      routineBpLink.innerHTML = '⚾ View Next Game BP Signup Sheet →';
+      if (isAppBpEnabled()) {
+        routineBpLink.style.display = 'inline-flex';
+        routineBpLink.href = '/event.html?id=' + upcomingScheduled[0].id + '#bp-order-section';
+        routineBpLink.innerHTML = '⚾ View Next Game BP Signup Sheet →';
+      } else {
+        routineBpLink.style.display = 'none';
+      }
     }
   } else {
     // If no scheduled events exist, the immediate upcoming Sunday from today is the target

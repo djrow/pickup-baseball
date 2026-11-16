@@ -48,6 +48,7 @@
     pendingAttachmentIds: [],
     pendingAttachmentsMeta: [],
     upcomingData: null,
+    publicConfig: null,
     collapsedCategories: loadCollapsedCategories(),
     remoteStreams: {},
     revealedMutedMsgIds: {},
@@ -59,6 +60,14 @@
     gifTab: 'all',
     gifFilter: ''
   };
+
+  function isClubhouseBpEnabled() {
+    return !(uiState.publicConfig && uiState.publicConfig.features && uiState.publicConfig.features.battingPractice === false);
+  }
+
+  function isClubhouseCertifiedShiftsEnabled() {
+    return !(uiState.publicConfig && uiState.publicConfig.features && uiState.publicConfig.features.certifiedShifts === false);
+  }
 
   function isMemberRole(role) {
     if (window.API && typeof window.API.isMemberRole === 'function') {
@@ -816,11 +825,13 @@
     if (badges.playingSunday || badges.playing_sunday) {
       html += '<span class="ch-badge badge-sunday">⚾ Playing Sunday</span>';
     }
-    if (badges.machineBadge || badges.machine_badge || badges.machine) {
-      html += '<span class="ch-badge">⚡ Machine</span>';
-    }
-    if (badges.fieldBadge || badges.field_badge || badges.field) {
-      html += '<span class="ch-badge">🌾 Field Crew</span>';
+    if (isClubhouseCertifiedShiftsEnabled()) {
+      if (badges.machineBadge || badges.machine_badge || badges.machine) {
+        html += '<span class="ch-badge">⚡ Machine</span>';
+      }
+      if (badges.fieldBadge || badges.field_badge || badges.field) {
+        html += '<span class="ch-badge">🌾 Field Crew</span>';
+      }
     }
     return html;
   }
@@ -1313,7 +1324,7 @@
       detailsEl.textContent = 'No upcoming public game scheduled yet.';
       if (guestNoticeEl) guestNoticeEl.classList.add('hidden');
       if (rsvpGroupEl) rsvpGroupEl.classList.toggle('hidden', !isLoggedIn);
-      if (bpCardEl) bpCardEl.classList.toggle('hidden', !isLoggedIn);
+      if (bpCardEl) bpCardEl.classList.toggle('hidden', !isLoggedIn || !isClubhouseBpEnabled());
       if (dutiesCardEl) dutiesCardEl.classList.toggle('hidden', !isLoggedIn);
       if (checklistCardEl) checklistCardEl.classList.toggle('hidden', !isLoggedIn);
       if (bpGrid) bpGrid.innerHTML = '';
@@ -1363,14 +1374,17 @@
       if (syncChanBtn) syncChanBtn.classList.add('hidden');
       if (guestNoticeEl) {
         guestNoticeEl.classList.remove('hidden');
-        guestNoticeEl.innerHTML = '🔒 <a href="/login.html" style="color:var(--ch-gold);text-decoration:underline;font-weight:700;">Sign in</a> to RSVP, claim Batting Practice slots, and view volunteer crew names.';
+        guestNoticeEl.innerHTML = isClubhouseBpEnabled()
+          ? '🔒 <a href="/login.html" style="color:var(--ch-gold);text-decoration:underline;font-weight:700;">Sign in</a> to RSVP, claim Batting Practice slots, and view volunteer crew names.'
+          : '🔒 <a href="/login.html" style="color:var(--ch-gold);text-decoration:underline;font-weight:700;">Sign in</a> to RSVP and view volunteer crew names.';
       }
       return;
     }
 
+    var bpEnabled = isClubhouseBpEnabled();
     if (guestNoticeEl) guestNoticeEl.classList.add('hidden');
     if (rsvpGroupEl) rsvpGroupEl.classList.remove('hidden');
-    if (bpCardEl) bpCardEl.classList.remove('hidden');
+    if (bpCardEl) bpCardEl.classList.toggle('hidden', !bpEnabled);
     if (dutiesCardEl) dutiesCardEl.classList.remove('hidden');
     if (checklistCardEl) checklistCardEl.classList.remove('hidden');
     if (syncChanBtn) syncChanBtn.classList.remove('hidden');
@@ -1379,7 +1393,7 @@
     if (noBtn) noBtn.className = 'ch-rsvp-btn declined' + (myStatus === 'declined' ? ' active' : '');
 
     // Render 28-Slot Batting Practice Grid
-    var bpSignups = Array.isArray(data.bp_signups) ? data.bp_signups : [];
+    var bpSignups = bpEnabled && Array.isArray(data.bp_signups) ? data.bp_signups : [];
     var slotMap = {};
     for (var b = 0; b < bpSignups.length; b++) {
       slotMap[Number(bpSignups[b].slot_number)] = bpSignups[b];
@@ -1387,7 +1401,7 @@
     if (bpCountLabel) {
       bpCountLabel.textContent = bpSignups.length + '/28';
     }
-    if (bpGrid) {
+    if (bpGrid && bpEnabled) {
       var gridHtml = '';
       for (var s = 1; s <= 28; s++) {
         var taken = slotMap[s];
@@ -2947,6 +2961,19 @@
 
     initClubhouseTheme();
     initQuickSiteNav();
+
+    if (typeof window !== 'undefined' && window.API && typeof window.API.getPublicConfig === 'function') {
+      window.API.getPublicConfig().then(function (cfg) {
+        uiState.publicConfig = cfg;
+        if (uiState.upcomingData) {
+          renderSundayCard(uiState.upcomingData);
+        } else if (!isClubhouseBpEnabled()) {
+          var bpCard = el('ch-bp-card');
+          if (bpCard) bpCard.classList.add('hidden');
+        }
+        renderMessageStream();
+      }).catch(function () {});
+    }
 
     Store.bootstrap().then(function () {
       loadUpcomingBaseballCard();

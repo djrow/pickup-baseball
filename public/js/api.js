@@ -1465,6 +1465,61 @@ const API = {
     return data;
   },
 
+  publicConfig: null,
+  _publicConfigPromise: null,
+
+  async getPublicConfig(forceRefresh) {
+    if (!forceRefresh && this.publicConfig) {
+      return this.publicConfig;
+    }
+    if (!forceRefresh && this._publicConfigPromise) {
+      return this._publicConfigPromise;
+    }
+    const self = this;
+    const fallback = {
+      preset: 'pickup-baseball',
+      communityName: 'Sunday Pickup Baseball',
+      publicOrigin: null,
+      handbookUrl: null,
+      features: {
+        battingPractice: true,
+        certifiedShifts: true,
+        sundayPriority: true
+      }
+    };
+    this._publicConfigPromise = (async function() {
+      try {
+        const res = await fetch('/api/config/public');
+        if (res && res.ok) {
+          const data = await res.json();
+          if (data && typeof data === 'object' && data.features) {
+            self.publicConfig = data;
+            try {
+              localStorage.setItem('pbf_public_config', JSON.stringify(data));
+            } catch (e) { /* localStorage unavailable */ }
+            return data;
+          }
+        }
+      } catch (e) {
+        /* network unavailable; fall back to cached config */
+      } finally {
+        self._publicConfigPromise = null;
+      }
+      try {
+        const cached = localStorage.getItem('pbf_public_config');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed && parsed.features) {
+            self.publicConfig = parsed;
+            return parsed;
+          }
+        }
+      } catch (e) { /* localStorage unavailable */ }
+      return fallback;
+    })();
+    return this._publicConfigPromise;
+  },
+
   async getMe() {
     try {
       const data = await this.request('GET', '/api/auth/me');

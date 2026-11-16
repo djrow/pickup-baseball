@@ -23,8 +23,10 @@ import {
   getTaskTier,
   getDutyType,
   getDutyTier1Cap,
-  getUserRollingShifts
+  getUserRollingShifts,
+  normalizeDutyFlags
 } from '../../policy.js';
+import { resolveConfig } from '../../config.js';
 import { buildCalendarIcs } from '../../feeds.js';
 import { sendRainoutEmail, sendReopenEmail } from '../../mailer.js';
 import { ERROR_CODES, jsonError, logEvent } from '../../errors.js';
@@ -461,42 +463,10 @@ eventsCoreRouter.get('/:id', async (c) => {
     }
 
     /** @type {Array<Record<string, any>>} */
-    let duties = (batchRes[1].results || []).map(/** @param {Record<string, any>} d */ d => ({
+    const duties = (batchRes[1].results || []).map(/** @param {Record<string, any>} d */ d => ({
       ...d,
       assigned_players: JSON.parse(d.assigned_players || '[]')
     }));
-
-    if (event.status !== 'cancelled' && duties.length > 0) {
-      const hasFacilitator = duties.some(d => d.title && d.title.toLowerCase().includes('facilitator'));
-      const hasWaterFood = duties.some(d => d.title && (d.title.toLowerCase().includes('water') || d.title.toLowerCase().includes('food')));
-      if (!hasFacilitator || !hasWaterFood) {
-        try {
-          const maxSort = duties.reduce((m, d) => Math.max(m, d.sort_order || 0), 0);
-          if (!hasFacilitator) {
-            const ins = await db.prepare('INSERT INTO event_duties (event_id, title, description, slots_needed, sort_order) VALUES (?, ?, ?, ?, ?)').bind(
-              eventId, 'Game Facilitator', 'Help coordinate teams, batting order, and fair play throughout the game.', 1, maxSort + 1
-            ).run();
-            duties.push({
-              id: ins.meta.last_row_id, event_id: eventId, title: 'Game Facilitator',
-              description: 'Help coordinate teams, batting order, and fair play throughout the game.',
-              slots_needed: 1, sort_order: maxSort + 1, assigned_players: []
-            });
-          }
-          if (!hasWaterFood) {
-            const ins = await db.prepare('INSERT INTO event_duties (event_id, title, description, slots_needed, sort_order) VALUES (?, ?, ?, ?, ?)').bind(
-              eventId, 'Water / Food', 'Bring drinking water, ice, and dugout snacks or fruit for players.', 1, maxSort + 2
-            ).run();
-            duties.push({
-              id: ins.meta.last_row_id, event_id: eventId, title: 'Water / Food',
-              description: 'Bring drinking water, ice, and dugout snacks or fruit for players.',
-              slots_needed: 1, sort_order: maxSort + 2, assigned_players: []
-            });
-          }
-        } catch (e) {
-          console.warn('[EventDuties] Auto-seed error:', e);
-        }
-      }
-    }
 
     /** @type {Array<Record<string, any>>} */
     const attendees = batchRes[2].results || [];
@@ -520,21 +490,27 @@ eventsCoreRouter.get('/:id', async (c) => {
       }
     }
 
+    const cfg = resolveConfig(c.env);
+    const certifiedShiftsEnabled = cfg.FEATURE_CERTIFIED_SHIFTS;
+    const battingPracticeEnabled = cfg.FEATURE_BATTING_PRACTICE;
+
     const isOrganizer = Boolean(user && user.canManageEvents);
     const canViewRoster = Boolean(user || (myRsvp && myRsvp.id));
-    const tierInfo = getTaskTier(event.event_date);
+    const tierInfo = certifiedShiftsEnabled
+      ? getTaskTier(event.event_date)
+      : { tier: 'open', isUnlocked: true, unlockAt: null };
     const viewerId = user ? user.id : (myRsvp && myRsvp.user_id ? myRsvp.user_id : null);
     const [requireLogin, viewerUser, machineCap, fieldCap] = await Promise.all([
       getRequireLoginSetting(db, c.env),
       viewerId
         ? /** @type {Promise<Record<string, any>|null>} */ (db.prepare('SELECT id, machine_badge, field_badge, hero_credits FROM users WHERE id = ?').bind(viewerId).first())
         : Promise.resolve(null),
-      getDutyTier1Cap(db, 'machine'),
-      getDutyTier1Cap(db, 'field')
+      certifiedShiftsEnabled ? getDutyTier1Cap(db, 'machine') : Promise.resolve(null),
+      certifiedShiftsEnabled ? getDutyTier1Cap(db, 'field') : Promise.resolve(null)
     ]);
 
     const hoursUntilEvent = (new Date(event.event_date).getTime() - Date.now()) / (3600 * 1000);
-    const isUrgentCoverWindow = hoursUntilEvent > 0 && hoursUntilEvent < 48;
+    const isUrgentCoverWindow = certifiedShiftsEnabled && hoursUntilEvent > 0 && hoursUntilEvent < 48;
 
     if (myRsvp && viewerUser) {
       myRsvp.hero_credits = viewerUser.hero_credits || 0;
@@ -542,7 +518,7 @@ eventsCoreRouter.get('/:id', async (c) => {
       myRsvp.field_badge = viewerUser.field_badge || 0;
     }
 
-    const [viewerMachineShifts, viewerFieldShifts] = viewerUser
+    const [viewerMachineShifts, viewerFieldShifts] = (certifiedShiftsEnabled && viewerUser)
       ? await Promise.all([
           getUserRollingShifts(db, viewerUser.id, 'machine', event.event_date, event.id),
           getUserRollingShifts(db, viewerUser.id, 'field', event.event_date, event.id)
@@ -550,7 +526,7 @@ eventsCoreRouter.get('/:id', async (c) => {
       : [0, 0];
 
     const sanitizedDuties = duties.map(d => {
-      const dType = getDutyType(d.title);
+      const dType = getDutyType(d, { certifiedShiftsEnabled });
       let userHasBadge = false;
       let isEligible = true;
       let ineligibilityReason = null;
@@ -558,7 +534,7 @@ eventsCoreRouter.get('/:id', async (c) => {
       let tier1Cap = null;
       let userCurrentShifts = 0;
 
-      if (!tierInfo.isUnlocked) {
+      if (certifiedShiftsEnabled && !tierInfo.isUnlocked) {
         isEligible = false;
         ineligibilityReason = `Tasks locked until ${formatUnlockDateTime(tierInfo.unlockAt)}`;
       } else if (dType.isPaid) {
@@ -627,14 +603,16 @@ eventsCoreRouter.get('/:id', async (c) => {
     const totalConfirmedSpectators = attendees.reduce((sum, a) => sum + (a.spectators_count || 0), 0);
     const totalWaitlistPlayers = waitlist.reduce((sum, w) => sum + (w.players_count != null ? w.players_count : (1 + (w.additional_guests || 0))), 0);
 
-    const decoratedBpSignups = bpSignups.map(s => ({
-      ...s,
-      is_mine: Boolean(
-        (user && s.user_id && s.user_id === user.id) ||
-        (myRsvp && s.attendee_id && s.attendee_id === myRsvp.id) ||
-        (myRsvp && s.player_name && myRsvp.name && s.player_name.trim().toLowerCase() === myRsvp.name.trim().toLowerCase())
-      )
-    }));
+    const decoratedBpSignups = battingPracticeEnabled
+      ? bpSignups.map(s => ({
+          ...s,
+          is_mine: Boolean(
+            (user && s.user_id && s.user_id === user.id) ||
+            (myRsvp && s.attendee_id && s.attendee_id === myRsvp.id) ||
+            (myRsvp && s.player_name && myRsvp.name && s.player_name.trim().toLowerCase() === myRsvp.name.trim().toLowerCase())
+          )
+        }))
+      : [];
 
     /** @type {Record<string, any>} */
     const safeEventObj = {
@@ -651,7 +629,7 @@ eventsCoreRouter.get('/:id', async (c) => {
       delete safeEventObj.allowed_emails;
     }
 
-    const canViewBpOrder = Boolean(user && canUserAccessEvent(user, earlyAllowedList));
+    const canViewBpOrder = Boolean(battingPracticeEnabled && user && canUserAccessEvent(user, earlyAllowedList));
     const visibleBpSignups = canViewBpOrder ? decoratedBpSignups : [];
 
     const visibleAttendees = !canViewRoster
@@ -668,7 +646,7 @@ eventsCoreRouter.get('/:id', async (c) => {
       waitlist: visibleWaitlist,
       comments,
       bp_signups: visibleBpSignups,
-      bpCount: bpSignups.length,
+      bpCount: battingPracticeEnabled ? bpSignups.length : 0,
       canViewBpOrder,
       myRsvp,
       canViewRoster,
@@ -708,7 +686,7 @@ eventsCoreRouter.post('/', requireOrganizer, async (c) => {
 
     let dutiesToInsert = [];
     if (use_default_duties || !custom_duties || custom_duties.length === 0) {
-      dutiesToInsert = await getDefaultDuties(c.env.DB);
+      dutiesToInsert = await getDefaultDuties(c.env.DB, c.env);
     } else if (Array.isArray(custom_duties)) {
       if (custom_duties.length > 25) {
         return c.json({ error: 'Cannot create more than 25 volunteer tasks per event.' }, 400);
@@ -717,10 +695,13 @@ eventsCoreRouter.post('/', requireOrganizer, async (c) => {
         if (!d || !d.title || !String(d.title).trim()) {
           return c.json({ error: 'All custom duties must have a non-empty title.' }, 400);
         }
+        if (normalizeDutyFlags(d).invalidBadge) {
+          return c.json({ error: `Invalid required_badge on duty '${String(d.title).trim()}'. Must be 'machine', 'field', or null.` }, 400);
+        }
       }
       dutiesToInsert = custom_duties;
     } else {
-      dutiesToInsert = await getDefaultDuties(c.env.DB);
+      dutiesToInsert = await getDefaultDuties(c.env.DB, c.env);
     }
 
     const allowedList = parseAllowedEmails(allowed_emails);
@@ -743,15 +724,20 @@ eventsCoreRouter.post('/', requireOrganizer, async (c) => {
     const eventId = insertEventRes.meta.last_row_id;
 
     if (dutiesToInsert.length > 0) {
-      await c.env.DB.batch(dutiesToInsert.map((d, idx) =>
-        c.env.DB.prepare('INSERT INTO event_duties (event_id, title, description, slots_needed, sort_order) VALUES (?, ?, ?, ?, ?)').bind(
+      await c.env.DB.batch(dutiesToInsert.map((d, idx) => {
+        const flags = normalizeDutyFlags(d);
+        return c.env.DB.prepare(
+          'INSERT INTO event_duties (event_id, title, description, slots_needed, sort_order, grants_coordinator, required_badge) VALUES (?, ?, ?, ?, ?, ?, ?)'
+        ).bind(
           eventId,
           String(d.title).trim().slice(0, 120),
           String(d.description || '').trim().slice(0, 300),
           Math.min(50, Math.max(1, parseInt(d.slots_needed || 1, 10) || 1)),
-          d.sort_order !== undefined ? parseInt(d.sort_order, 10) : idx
-        )
-      ));
+          d.sort_order !== undefined ? parseInt(d.sort_order, 10) : idx,
+          flags.grantsCoordinator,
+          flags.requiredBadge
+        );
+      }));
     }
 
     const newEvent = await c.env.DB.prepare('SELECT * FROM events WHERE id = ?').bind(eventId).first();

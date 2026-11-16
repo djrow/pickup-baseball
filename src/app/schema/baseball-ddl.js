@@ -6,12 +6,18 @@
  */
 
 export const DEFAULT_BASEBALL_DUTIES = [
-  { title: 'Bases', description: 'Bring 3 throw-down bases.', slots_needed: 1 },
-  { title: 'Pitching machine and power', description: 'Bring a pitching machine and a way to run it on the field.', slots_needed: 1 },
-  { title: 'Game Baseballs', description: 'Bring game balls bucket.', slots_needed: 1 },
-  { title: 'Field Dragging', description: 'Arrive 20 mins early to drag the infield with the pull rake.', slots_needed: 2 },
-  { title: 'Game Facilitator', description: 'Help coordinate teams, batting order, and fair play throughout the game.', slots_needed: 1 },
-  { title: 'Water / Food', description: 'Bring drinking water, ice, and dugout snacks or fruit for players.', slots_needed: 1 }
+  { title: 'Bases', description: 'Bring 3 throw-down bases.', slots_needed: 1, grants_coordinator: 0, required_badge: null },
+  { title: 'Pitching machine and power', description: 'Bring a pitching machine and a way to run it on the field.', slots_needed: 1, grants_coordinator: 0, required_badge: 'machine' },
+  { title: 'Game Baseballs', description: 'Bring game balls bucket.', slots_needed: 1, grants_coordinator: 0, required_badge: null },
+  { title: 'Field Dragging', description: 'Arrive 20 mins early to drag the infield with the pull rake.', slots_needed: 2, grants_coordinator: 0, required_badge: 'field' },
+  { title: 'Game Facilitator', description: 'Help coordinate teams, batting order, and fair play throughout the game.', slots_needed: 1, grants_coordinator: 1, required_badge: null },
+  { title: 'Water / Food', description: 'Bring drinking water, ice, and dugout snacks or fruit for players.', slots_needed: 1, grants_coordinator: 0, required_badge: null }
+];
+
+export const DEFAULT_GENERIC_DUTIES = [
+  { title: 'Event Coordinator', description: 'Help welcome attendees, coordinate the schedule, and keep things running smoothly.', slots_needed: 1, grants_coordinator: 1, required_badge: null },
+  { title: 'Setup / Check-In', description: 'Arrive early to help set up the space and greet arriving attendees.', slots_needed: 2, grants_coordinator: 0, required_badge: null },
+  { title: 'Cleanup', description: 'Stay a few minutes after to help pack up gear and leave the space tidy.', slots_needed: 2, grants_coordinator: 0, required_badge: null }
 ];
 
 export const CREATE_TABLES_SQL = [

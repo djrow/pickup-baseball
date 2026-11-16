@@ -19,6 +19,18 @@ let openEditGameEventId = null;
 let openQuickTurnoutEventId = null;
 let loadedAdminEventsMap = new Map();
 let currentAdminUser = null;
+let adminPublicConfig = null;
+
+function isAdminCertifiedShiftsEnabled() {
+  return !(adminPublicConfig && adminPublicConfig.features && adminPublicConfig.features.certifiedShifts === false);
+}
+
+function applyAdminFeatureFlags() {
+  const showCertified = isAdminCertifiedShiftsEnabled();
+  document.querySelectorAll('.admin-certified-col').forEach(function(el) {
+    el.style.display = showCertified ? '' : 'none';
+  });
+}
 
 function cloneList(arr) {
   return JSON.parse(JSON.stringify(arr || []));
@@ -63,6 +75,13 @@ async function initAdmin() {
   setDefaultDateTime();
   setupQuickSundayButton();
 
+  if (typeof API.getPublicConfig === 'function') {
+    try {
+      adminPublicConfig = await API.getPublicConfig();
+    } catch (e) { /* use default config */ }
+  }
+  applyAdminFeatureFlags();
+
   setupTaskBuilder();
   setupDefaultTemplateEditor();
   setupCreateForm();
@@ -72,6 +91,7 @@ async function initAdmin() {
     setupMediaCarouselsAdmin(),
     loadAdminGames()
   ]);
+  renderTaskBuilder();
 
   if (user.isAdmin) {
     setupAdminBackupButton();
@@ -203,14 +223,22 @@ async function loadDefaultDuties() {
     const data = await API.getDefaultDuties();
     orgDefaultDuties = data.duties || [];
   } catch (err) {
-    orgDefaultDuties = [
-      { title: 'Bases', description: 'Bring 3 throw-down bases.', slots_needed: 1 },
-      { title: 'Pitching machine and power', description: 'Bring a pitching machine and a way to run it on the field.', slots_needed: 1 },
-      { title: 'Game Baseballs', description: 'Bring game balls bucket.', slots_needed: 1 },
-      { title: 'Field Dragging', description: 'Arrive 20 mins early to drag the infield with the pull rake.', slots_needed: 2 },
-      { title: 'Game Facilitator', description: 'Help coordinate teams, batting order, and fair play throughout the game.', slots_needed: 1 },
-      { title: 'Water / Food', description: 'Bring drinking water, ice, and dugout snacks or fruit for players.', slots_needed: 1 }
-    ];
+    if (adminPublicConfig && adminPublicConfig.preset === 'generic-community') {
+      orgDefaultDuties = [
+        { title: 'Event Coordinator', description: 'Help welcome attendees, coordinate the schedule, and keep things running smoothly.', slots_needed: 1, grants_coordinator: 1, required_badge: null },
+        { title: 'Setup / Check-In', description: 'Arrive early to help set up the space and greet arriving attendees.', slots_needed: 2, grants_coordinator: 0, required_badge: null },
+        { title: 'Cleanup', description: 'Stay a few minutes after to help pack up gear and leave the space tidy.', slots_needed: 2, grants_coordinator: 0, required_badge: null }
+      ];
+    } else {
+      orgDefaultDuties = [
+        { title: 'Bases', description: 'Bring 3 throw-down bases.', slots_needed: 1, grants_coordinator: 0, required_badge: null },
+        { title: 'Pitching machine and power', description: 'Bring a pitching machine and a way to run it on the field.', slots_needed: 1, grants_coordinator: 0, required_badge: 'machine' },
+        { title: 'Game Baseballs', description: 'Bring game balls bucket.', slots_needed: 1, grants_coordinator: 0, required_badge: null },
+        { title: 'Field Dragging', description: 'Arrive 20 mins early to drag the infield with the pull rake.', slots_needed: 2, grants_coordinator: 0, required_badge: 'field' },
+        { title: 'Game Facilitator', description: 'Help coordinate teams, batting order, and fair play throughout the game.', slots_needed: 1, grants_coordinator: 1, required_badge: null },
+        { title: 'Water / Food', description: 'Bring drinking water, ice, and dugout snacks or fruit for players.', slots_needed: 1, grants_coordinator: 0, required_badge: null }
+      ];
+    }
   }
   builderDuties = cloneList(orgDefaultDuties);
   templateDuties = cloneList(orgDefaultDuties);
@@ -232,10 +260,16 @@ function readEditableTaskRows(containerId) {
   const rows = container.querySelectorAll('.editable-task-row');
   const updated = [];
   rows.forEach(function(row) {
+    const coordChk = row.querySelector('.editable-task-coordinator');
+    const badgeSel = row.querySelector('.editable-task-badge');
+    const preservedBadge = row.getAttribute('data-required-badge') || '';
+    const rawBadge = badgeSel ? badgeSel.value : preservedBadge;
     updated.push({
       title: row.querySelector('.editable-task-title').value,
       description: row.querySelector('.editable-task-desc').value,
-      slots_needed: parseInt(row.querySelector('.editable-task-slots').value, 10) || 1
+      slots_needed: parseInt(row.querySelector('.editable-task-slots').value, 10) || 1,
+      grants_coordinator: coordChk && coordChk.checked ? 1 : 0,
+      required_badge: rawBadge ? rawBadge : null
     });
   });
   return updated;
@@ -249,9 +283,12 @@ function renderEditableTaskRows(containerId, list, removeFnName, emptyHtml) {
     return;
   }
 
+  const showCertified = isAdminCertifiedShiftsEnabled();
   container.innerHTML = list.map(function(duty, idx) {
+    const isCoord = Boolean(duty.grants_coordinator);
+    const reqBadge = duty.required_badge || '';
     return `
-      <div class="editable-task-row" style="display: grid; grid-template-columns: 2fr 3fr 100px 40px; gap: 10px; align-items: center; background: var(--bg-card); padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);">
+      <div class="editable-task-row" data-required-badge="${API.escapeHtml(reqBadge)}" style="display: grid; grid-template-columns: 2fr 3fr 100px 40px; gap: 10px; align-items: center; background: var(--bg-card); padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);">
         <div>
           <label style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 2px;">Task Name</label>
           <input type="text" class="editable-task-title" value="${API.escapeHtml(duty.title)}" placeholder="e.g. Umpire, Baseballs..." required style="padding: 6px 10px; font-size: 0.9rem;">
@@ -266,6 +303,22 @@ function renderEditableTaskRows(containerId, list, removeFnName, emptyHtml) {
         </div>
         <div style="text-align: right; padding-top: 18px;">
           <button type="button" data-action="remove-task-row" data-row-idx="${idx}" data-remove-fn="${removeFnName}" title="Remove task" style="background: none; border: none; cursor: pointer; color: var(--danger); font-size: 1.15rem; line-height: 1;">🗑️</button>
+        </div>
+        <div style="grid-column: 1 / -1; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding-top: 4px; border-top: 1px dashed var(--border); font-size: 0.78rem; color: var(--text-muted);">
+          <label style="display: inline-flex; align-items: center; gap: 5px; cursor: pointer; font-weight: 600; margin: 0;">
+            <input type="checkbox" class="editable-task-coordinator" ${isCoord ? 'checked' : ''} style="width: 14px; height: 14px; accent-color: var(--primary);">
+            <span>📋 Coordinator Access</span>
+          </label>
+          ${showCertified ? `
+            <label style="display: inline-flex; align-items: center; gap: 6px; font-weight: 600; margin: 0;">
+              <span>Required Badge:</span>
+              <select class="editable-task-badge" style="padding: 2px 6px; font-size: 0.76rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-input); color: var(--text-main);">
+                <option value="" ${reqBadge === '' ? 'selected' : ''}>None (Standard Task)</option>
+                <option value="machine" ${reqBadge === 'machine' ? 'selected' : ''}>⚡ Pitching Machine</option>
+                <option value="field" ${reqBadge === 'field' ? 'selected' : ''}>🚜 Field Dragging</option>
+              </select>
+            </label>
+          ` : ''}
         </div>
       </div>
     `;
@@ -809,7 +862,15 @@ function renderAdminGamesList(query) {
       if (action === 'delete-game') return deleteGame(eventId);
       if (action === 'save-edited-game') return window.saveEditedGame(eventId);
       if (action === 'edit-duty') {
-        return window.editDutyInline(eventId, parseInt(btn.dataset.dutyId, 10), btn.dataset.title, btn.dataset.desc, parseInt(btn.dataset.slots, 10));
+        return window.editDutyInline(
+          eventId,
+          parseInt(btn.dataset.dutyId, 10),
+          btn.dataset.title,
+          btn.dataset.desc,
+          parseInt(btn.dataset.slots, 10),
+          btn.dataset.grantsCoordinator === '1',
+          btn.dataset.requiredBadge || ''
+        );
       }
       if (action === 'delete-duty') return window.deleteDutyInline(eventId, parseInt(btn.dataset.dutyId, 10));
       if (action === 'add-duty') return window.addDutyToEvent(eventId);
@@ -1009,10 +1070,14 @@ async function renderTaskManagerContent(eventId) {
             const assignedNames = (d.assigned_players || []).map(function(p) { return p.name; }).filter(Boolean).join(', ');
             const safeTitle = encodeURIComponent(d.title).replace(/'/g, '%27');
             const safeDesc = encodeURIComponent(d.description || '').replace(/'/g, '%27');
+            const coordPill = d.grants_coordinator ? '<span class="badge badge-green" style="font-size: 0.7rem; margin-left: 6px;">📋 Coordinator</span>' : '';
+            const badgePill = (isAdminCertifiedShiftsEnabled() && d.required_badge)
+              ? `<span class="badge badge-gray" style="font-size: 0.7rem; margin-left: 6px;">${d.required_badge === 'machine' ? '⚡ Machine Badge' : '🚜 Dragging Badge'}</span>`
+              : '';
             return `
               <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-card); padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); flex-wrap: wrap; gap: 8px;">
                 <div style="flex: 1; min-width: 220px;">
-                  <div style="font-weight: 700; font-size: 0.95rem;">${API.escapeHtml(d.title)}</div>
+                  <div style="font-weight: 700; font-size: 0.95rem;">${API.escapeHtml(d.title)}${coordPill}${badgePill}</div>
                   <div style="font-size: 0.82rem; color: var(--text-muted);">${API.escapeHtml(d.description || 'No description')}</div>
                   <div style="font-size: 0.78rem; color: var(--primary); font-weight: 600; margin-top: 3px;">
                     Slots: ${(d.assigned_players || []).length} / ${d.slots_needed} filled
@@ -1020,7 +1085,7 @@ async function renderTaskManagerContent(eventId) {
                   </div>
                 </div>
                 <div style="display: flex; gap: 8px; align-items: center;">
-                  <button type="button" data-action="edit-duty" data-event-id="${eventId}" data-duty-id="${d.id}" data-title="${safeTitle}" data-desc="${safeDesc}" data-slots="${d.slots_needed}" class="btn btn-outline btn-sm" style="font-size: 0.78rem; padding: 4px 8px;">✏️ Edit</button>
+                  <button type="button" data-action="edit-duty" data-event-id="${eventId}" data-duty-id="${d.id}" data-title="${safeTitle}" data-desc="${safeDesc}" data-slots="${d.slots_needed}" data-grants-coordinator="${d.grants_coordinator ? '1' : '0'}" data-required-badge="${API.escapeHtml(d.required_badge || '')}" class="btn btn-outline btn-sm" style="font-size: 0.78rem; padding: 4px 8px;">✏️ Edit</button>
                   <button type="button" data-action="delete-duty" data-event-id="${eventId}" data-duty-id="${d.id}" class="btn btn-danger btn-sm" style="font-size: 0.78rem; padding: 4px 8px;">🗑️ Delete</button>
                 </div>
               </div>
@@ -1036,6 +1101,22 @@ async function renderTaskManagerContent(eventId) {
             <input type="number" id="new-duty-slots-${eventId}" min="1" max="15" value="1" placeholder="Slots" style="padding: 6px 8px; font-size: 0.85rem; text-align: center;">
             <button type="button" data-action="add-duty" data-event-id="${eventId}" class="btn btn-primary btn-sm">Add Task</button>
           </div>
+          <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-top: 8px; font-size: 0.78rem; color: var(--text-muted);">
+            <label style="display: inline-flex; align-items: center; gap: 5px; cursor: pointer; font-weight: 600; margin: 0;">
+              <input type="checkbox" id="new-duty-coord-${eventId}" style="width: 14px; height: 14px; accent-color: var(--primary);">
+              <span>📋 Coordinator Access</span>
+            </label>
+            ${isAdminCertifiedShiftsEnabled() ? `
+              <label style="display: inline-flex; align-items: center; gap: 6px; font-weight: 600; margin: 0;">
+                <span>Required Badge:</span>
+                <select id="new-duty-badge-${eventId}" style="padding: 2px 6px; font-size: 0.76rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-input); color: var(--text-main);">
+                  <option value="">None (Standard Task)</option>
+                  <option value="machine">⚡ Pitching Machine</option>
+                  <option value="field">🚜 Field Dragging</option>
+                </select>
+              </label>
+            ` : ''}
+          </div>
         </div>
       </div>
     `;
@@ -1048,13 +1129,21 @@ window.addDutyToEvent = async function(eventId) {
   const title = document.getElementById('new-duty-title-' + eventId).value.trim();
   const desc = document.getElementById('new-duty-desc-' + eventId).value.trim();
   const slots = parseInt(document.getElementById('new-duty-slots-' + eventId).value, 10) || 1;
+  const coordEl = document.getElementById('new-duty-coord-' + eventId);
+  const badgeEl = document.getElementById('new-duty-badge-' + eventId);
   if (!title) {
     if (window.PBFDialog) window.PBFDialog.toast('Please enter a task name.', { type: 'error' });
     return;
   }
 
   try {
-    const data = await API.addDuty(eventId, { title: title, description: desc, slots_needed: slots });
+    const data = await API.addDuty(eventId, {
+      title: title,
+      description: desc,
+      slots_needed: slots,
+      grants_coordinator: coordEl && coordEl.checked ? 1 : 0,
+      required_badge: (badgeEl && badgeEl.value) ? badgeEl.value : null
+    });
     if (data.error) {
       if (window.PBFDialog) window.PBFDialog.toast(data.error, { type: 'error' });
     } else {
@@ -1066,21 +1155,41 @@ window.addDutyToEvent = async function(eventId) {
   }
 };
 
-window.editDutyInline = async function(eventId, dutyId, encodedTitle, encodedDesc, slots) {
+window.editDutyInline = async function(eventId, dutyId, encodedTitle, encodedDesc, slots, grantsCoordinator, requiredBadge) {
   if (!window.PBFDialog) return;
-  const result = await window.PBFDialog.form('Edit Task', [
+  const fields = [
     { name: 'title', label: 'Task Name', type: 'text', value: decodeURIComponent(encodedTitle), required: true },
     { name: 'description', label: 'Details / Description', type: 'textarea', value: decodeURIComponent(encodedDesc), rows: 2 },
-    { name: 'slots_needed', label: 'Volunteers Needed', type: 'number', value: slots || 1, min: 1 }
-  ]);
+    { name: 'slots_needed', label: 'Volunteers Needed', type: 'number', value: slots || 1, min: 1 },
+    { name: 'grants_coordinator', label: '📋 Grants Coordinator Access', type: 'checkbox', checked: Boolean(grantsCoordinator) }
+  ];
+  if (isAdminCertifiedShiftsEnabled()) {
+    fields.push({
+      name: 'required_badge',
+      label: 'Required Certification Badge',
+      type: 'select',
+      value: requiredBadge || '',
+      options: [
+        { value: '', label: 'None (Standard Task)' },
+        { value: 'machine', label: '⚡ Pitching Machine Badge' },
+        { value: 'field', label: '🚜 Field Dragging Badge' }
+      ]
+    });
+  }
+  const result = await window.PBFDialog.form('Edit Task', fields);
   if (!result) return;
 
   try {
-    const data = await API.updateDuty(eventId, dutyId, {
+    const payload = {
       title: String(result.title || '').trim(),
       description: String(result.description || '').trim(),
-      slots_needed: parseInt(result.slots_needed, 10) || 1
-    });
+      slots_needed: parseInt(result.slots_needed, 10) || 1,
+      grants_coordinator: result.grants_coordinator ? 1 : 0
+    };
+    if (isAdminCertifiedShiftsEnabled()) {
+      payload.required_badge = result.required_badge ? String(result.required_badge) : null;
+    }
+    const data = await API.updateDuty(eventId, dutyId, payload);
     if (data.error) {
       window.PBFDialog.toast(data.error, { type: 'error' });
     } else {
@@ -1242,7 +1351,7 @@ function setupAdminUserManagement(currentUser) {
               ${certLinkHtml}
             </div>
           </td>
-          <td style="padding: 5px 10px; white-space: nowrap;">
+          <td class="admin-certified-col" style="padding: 5px 10px; white-space: nowrap;${isAdminCertifiedShiftsEnabled() ? '' : ' display: none;'}">
             <label style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.76rem; font-weight: 600; cursor: pointer; margin-right: 8px;">
               <input type="checkbox" class="admin-machine-badge" data-user-id="${u.id}" ${u.machine_badge ? 'checked' : ''}> ⚡ Machine
             </label>
@@ -1250,7 +1359,7 @@ function setupAdminUserManagement(currentUser) {
               <input type="checkbox" class="admin-field-badge" data-user-id="${u.id}" ${u.field_badge ? 'checked' : ''}> 🚜 Dragging
             </label>
           </td>
-          <td style="padding: 5px 10px; white-space: nowrap;">
+          <td class="admin-certified-col" style="padding: 5px 10px; white-space: nowrap;${isAdminCertifiedShiftsEnabled() ? '' : ' display: none;'}">
             <div style="display: inline-flex; align-items: center; gap: 4px;">
               <button type="button" class="btn btn-outline btn-sm btn-credit-minus" data-user-id="${u.id}" style="padding: 0 6px; height: 24px; font-size: 0.78rem; line-height: 1;">−</button>
               <span class="admin-hero-credits-val" data-user-id="${u.id}" style="font-weight: 700; font-size: 0.82rem; min-width: 20px; text-align: center;">${credits}</span>

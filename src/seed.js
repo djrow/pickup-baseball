@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const { initDatabase, db, DEFAULT_BASEBALL_DUTIES } = require('./db');
+const { initDatabase, db, getDefaultDuties } = require('./db');
 
 async function seed() {
   await initDatabase();
@@ -34,13 +34,22 @@ async function seed() {
 
   // Insert duties
   const insertDuty = db.prepare(`
-    INSERT INTO event_duties (event_id, title, description, slots_needed, sort_order)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO event_duties (event_id, title, description, slots_needed, sort_order, grants_coordinator, required_badge)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
 
   const dutyIds = [];
-  DEFAULT_BASEBALL_DUTIES.forEach((d, idx) => {
-    const res = insertDuty.run(eventId, d.title, d.description, d.slots_needed, idx);
+  const presetDuties = getDefaultDuties();
+  presetDuties.forEach((d, idx) => {
+    const res = insertDuty.run(
+      eventId,
+      d.title,
+      d.description || '',
+      d.slots_needed || 1,
+      idx,
+      d.grants_coordinator ? 1 : 0,
+      d.required_badge || null
+    );
     dutyIds.push(res.lastInsertRowid);
   });
 

@@ -4,6 +4,23 @@
  * certification badges, rolling 3-month shift caps, and Backup Hero Credits.
  */
 
+import { resolveConfig } from './config.js';
+import { ERROR_CODES, jsonError } from './errors.js';
+
+/**
+ * Returns a 403 JSON error response when FEATURE_BATTING_PRACTICE is disabled, or null when enabled.
+ * @param {AppContext} c
+ */
+export function rejectIfBattingPracticeDisabled(c) {
+  if (!resolveConfig(c.env).FEATURE_BATTING_PRACTICE) {
+    return jsonError(c, 403, ERROR_CODES.FORBIDDEN, 'Batting practice is disabled for this community.', {
+      feature: 'FEATURE_BATTING_PRACTICE',
+      disabled: true
+    });
+  }
+  return null;
+}
+
 export function parseAllowedEmails(raw) {
   if (!raw) return [];
   if (Array.isArray(raw)) {
@@ -76,15 +93,60 @@ export function getTaskTier(eventDateStr, now) {
   return { tier: 'tier3', isUnlocked: true, unlockAt: unlockIso };
 }
 
-export function getDutyType(title) {
-  const lower = (title || '').toLowerCase();
-  if (lower.includes('machine')) {
-    return { type: 'machine', isPaid: true, requiredBadge: 'machine_badge', badgeName: 'Pitching Machine Badge' };
+const VALID_DUTY_BADGES = new Set(['machine', 'field']);
+
+/**
+ * Normalizes explicit `grants_coordinator` and `required_badge` fields on a duty payload.
+ * @param {Record<string, any> | null | undefined} duty
+ * @returns {{ grantsCoordinator: number, requiredBadge: string | null, invalidBadge: boolean }}
+ */
+export function normalizeDutyFlags(duty) {
+  const src = duty && typeof duty === 'object' ? duty : {};
+  const rawCoord = src.grants_coordinator;
+  const grantsCoordinator = rawCoord === true || rawCoord === 1 || rawCoord === '1' || rawCoord === 'true' ? 1 : 0;
+
+  let requiredBadge = null;
+  let invalidBadge = false;
+  if (src.required_badge !== undefined && src.required_badge !== null) {
+    let normalized = String(src.required_badge).trim().toLowerCase();
+    if (normalized === 'machine_badge') normalized = 'machine';
+    if (normalized === 'field_badge') normalized = 'field';
+    if (normalized !== '') {
+      if (VALID_DUTY_BADGES.has(normalized)) {
+        requiredBadge = normalized;
+      } else {
+        invalidBadge = true;
+      }
+    }
   }
-  if (lower.includes('drag')) {
-    return { type: 'field', isPaid: true, requiredBadge: 'field_badge', badgeName: 'Field Dragging Badge' };
+  return { grantsCoordinator, requiredBadge, invalidBadge };
+}
+
+/**
+ * Resolves duty badge policy purely from the explicit `required_badge` column (or badge key)
+ * and the `FEATURE_CERTIFIED_SHIFTS` flag. Never inspects duty titles.
+ * @param {Record<string, any> | string | null | undefined} dutyOrBadge
+ * @param {{ certifiedShiftsEnabled?: boolean }} [options]
+ */
+export function getDutyType(dutyOrBadge, options = {}) {
+  if (options && options.certifiedShiftsEnabled === false) {
+    return { type: 'general', isPaid: false, requiredBadge: null, badgeKey: null, badgeName: null };
   }
-  return { type: 'general', isPaid: false, requiredBadge: null, badgeName: null };
+
+  let rawBadge = '';
+  if (dutyOrBadge && typeof dutyOrBadge === 'object') {
+    rawBadge = dutyOrBadge.required_badge ? String(dutyOrBadge.required_badge).trim().toLowerCase() : '';
+  } else if (typeof dutyOrBadge === 'string') {
+    rawBadge = dutyOrBadge.trim().toLowerCase();
+  }
+
+  if (rawBadge === 'machine' || rawBadge === 'machine_badge') {
+    return { type: 'machine', isPaid: true, requiredBadge: 'machine_badge', badgeKey: 'machine', badgeName: 'Pitching Machine Badge' };
+  }
+  if (rawBadge === 'field' || rawBadge === 'field_badge') {
+    return { type: 'field', isPaid: true, requiredBadge: 'field_badge', badgeKey: 'field', badgeName: 'Field Dragging Badge' };
+  }
+  return { type: 'general', isPaid: false, requiredBadge: null, badgeKey: null, badgeName: null };
 }
 
 export async function getDutyTier1Cap(db, dutyType) {
@@ -95,7 +157,7 @@ export async function getDutyTier1Cap(db, dutyType) {
 }
 
 export async function getUserRollingShifts(db, userId, dutyType, targetEventDate, targetEventId) {
-  const likePattern = dutyType === 'machine' ? '%machine%' : '%drag%';
+  const requiredBadge = dutyType === 'machine' ? 'machine' : 'field';
   const row = await db.prepare(`
     SELECT COUNT(DISTINCT e.id) as count
     FROM duty_assignments da
@@ -106,8 +168,8 @@ export async function getUserRollingShifts(db, userId, dutyType, targetEventDate
       AND a.status = 'attending'
       AND e.status != 'cancelled'
       AND e.id != ?
-      AND LOWER(ed.title) LIKE ?
+      AND ed.required_badge = ?
       AND ABS(julianday(e.event_date) - julianday(?)) <= 42
-  `).bind(userId, targetEventId || 0, likePattern, targetEventDate).first();
+  `).bind(userId, targetEventId || 0, requiredBadge, targetEventDate).first();
   return row ? row.count : 0;
 }

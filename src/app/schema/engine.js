@@ -7,8 +7,9 @@
  * @module app/schema/engine
  */
 
-import { DEFAULT_BASEBALL_DUTIES, CREATE_TABLES_SQL } from './baseball-ddl.js';
+import { DEFAULT_BASEBALL_DUTIES, DEFAULT_GENERIC_DUTIES, CREATE_TABLES_SQL } from './baseball-ddl.js';
 import { CREATE_CHAT_TABLES_SQL } from './chat-ddl.js';
+import { resolveConfig, PRESET_PICKUP_BASEBALL } from '../config.js';
 import {
   BASEBALL_MIGRATIONS,
   CHAT_MIGRATIONS,
@@ -269,7 +270,39 @@ async function runWithDbLock(db, force, doneSet, inFlightMap, workerFn) {
   return promise;
 }
 
-export async function ensureD1Schema(db, force = false) {
+/**
+ * Returns preset-appropriate default volunteer tasks (`pickup-baseball` vs `generic-community`).
+ * @param {Record<string, any> | ResolvedBootConfig | null | undefined} [envOrConfig]
+ */
+export function getPresetDefaultDuties(envOrConfig) {
+  const cfg = resolveConfig(envOrConfig);
+  return cfg.COMMUNITY_PRESET === PRESET_PICKUP_BASEBALL
+    ? DEFAULT_BASEBALL_DUTIES
+    : DEFAULT_GENERIC_DUTIES;
+}
+
+/**
+ * Builds prepared statements to seed preset default duties on fresh DB initialization.
+ * @param {D1Database} db
+ * @param {Record<string, any> | ResolvedBootConfig | null | undefined} [envOrConfig]
+ * @returns {D1PreparedStatement[]}
+ */
+export function buildDefaultDutyStatements(db, envOrConfig) {
+  const duties = getPresetDefaultDuties(envOrConfig);
+  const sql = 'INSERT INTO default_duties (title, description, slots_needed, sort_order, grants_coordinator, required_badge) VALUES (?, ?, ?, ?, ?, ?)';
+  return duties.map((d, idx) =>
+    db.prepare(sql).bind(
+      d.title,
+      d.description || '',
+      d.slots_needed || 1,
+      idx,
+      d.grants_coordinator ? 1 : 0,
+      d.required_badge || null
+    )
+  );
+}
+
+export async function ensureD1Schema(db, force = false, env = null) {
   return runWithDbLock(db, force, migratedDbs, inFlightBaseballMigrations, async () => {
     const result = await runVersionedMigrations(db, {
       metaTable: 'app_settings',
@@ -277,6 +310,7 @@ export async function ensureD1Schema(db, force = false) {
       force,
       buildFreshStatements: (targetVersion) => [
         ...CREATE_TABLES_SQL.map((sql) => db.prepare(sql)),
+        ...buildDefaultDutyStatements(db, env),
         db.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('schema_version', ?)").bind(String(targetVersion))
       ]
     });
@@ -359,45 +393,20 @@ export async function pruneEphemeralChatRows(chatDb) {
 
 export const ensureBaseballD1Schema = ensureD1Schema;
 
-export async function ensureDualD1Schema(dbs, force = false) {
+export async function ensureDualD1Schema(dbs, force = false, env = null) {
   const baseball = dbs?.BASEBALL_DB || dbs?.DB || dbs?.baseballDb || dbs?.db;
   const chat = dbs?.CHAT_DB || dbs?.chatDb;
-  if (baseball) await ensureBaseballD1Schema(baseball, force);
+  if (baseball) await ensureBaseballD1Schema(baseball, force, env);
   if (chat) await ensureChatD1Schema(chat, force);
   if (baseball && chat) await ensureClubhouseOptInBackfill(baseball, chat, force);
 }
 
-export async function getDefaultDuties(db) {
-  let { results } = await db.prepare(
-    'SELECT title, description, slots_needed, sort_order FROM default_duties ORDER BY sort_order ASC, id ASC'
+export async function getDefaultDuties(db, env = null) {
+  const { results } = await db.prepare(
+    'SELECT title, description, slots_needed, sort_order, COALESCE(grants_coordinator, 0) as grants_coordinator, required_badge FROM default_duties ORDER BY sort_order ASC, id ASC'
   ).all();
   if (!results || results.length === 0) {
-    return DEFAULT_BASEBALL_DUTIES;
-  }
-  const hasFacilitator = results.some(r => r.title && r.title.toLowerCase().includes('facilitator'));
-  const hasWaterFood = results.some(r => r.title && (r.title.toLowerCase().includes('water') || r.title.toLowerCase().includes('food')));
-  if (!hasFacilitator || !hasWaterFood) {
-    try {
-      const maxSort = results.reduce((m, r) => Math.max(m, r.sort_order || 0), 0);
-      if (!hasFacilitator) {
-        await db.prepare('INSERT INTO default_duties (title, description, slots_needed, sort_order) VALUES (?, ?, ?, ?)').bind(
-          'Game Facilitator', 'Help coordinate teams, batting order, and fair play throughout the game.', 1, maxSort + 1
-        ).run();
-      }
-      if (!hasWaterFood) {
-        await db.prepare('INSERT INTO default_duties (title, description, slots_needed, sort_order) VALUES (?, ?, ?, ?)').bind(
-          'Water / Food', 'Bring drinking water, ice, and dugout snacks or fruit for players.', 1, maxSort + 2
-        ).run();
-      }
-      const refetched = await db.prepare(
-        'SELECT title, description, slots_needed, sort_order FROM default_duties ORDER BY sort_order ASC, id ASC'
-      ).all();
-      if (refetched && refetched.results && refetched.results.length > 0) {
-        results = refetched.results;
-      }
-    } catch (e) {
-      console.warn('[getDefaultDuties] Auto-seed error:', e);
-    }
+    return getPresetDefaultDuties(env);
   }
   return results;
 }
