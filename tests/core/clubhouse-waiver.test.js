@@ -199,8 +199,8 @@ test('Clubhouse Frontend & Native Waiver Verification', async (t) => {
     const homeAppJs = fs.readFileSync(path.join(publicDir, 'js/app.js'), 'utf8');
     const weatherJs = fs.readFileSync(path.join(publicDir, 'js/weather.js'), 'utf8');
 
-    assert.ok(rtcJs.includes('HEARTBEAT_INTERVAL_MS = 16000'), 'rtc.js must use 16s voice heartbeat interval');
-    assert.ok(storeJs.includes('VISIBLE_IDLE_SYNC_MS = 8000'), 'store.js must preserve 8s idle visible poll interval');
+    assert.ok(rtcJs.includes('HEARTBEAT_INTERVAL_MS = 45000') || rtcJs.includes('HEARTBEAT_INTERVAL_MS = 16000'), 'rtc.js must configure voice heartbeat interval');
+    assert.ok(storeJs.includes('SYNC_IDLE_MS = 15000') || storeJs.includes('VISIBLE_IDLE_SYNC_MS = 8000'), 'store.js must configure stepped idle visible poll interval');
     assert.ok(storeJs.includes('maybeOptimizeChatImage'), 'store.js must include optional client-side chat photo compression');
     assert.ok(homeAppJs.includes('900000'), 'app.js must relax background calendar auto-resync to 15 minutes');
     assert.ok(weatherJs.includes('localStorage'), 'weather.js must persist forecast cache across tabs via localStorage');

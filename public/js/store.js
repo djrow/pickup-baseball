@@ -18,8 +18,13 @@
   var DB_VERSION = 1;
   var VISIBLE_ACTIVE_SYNC_MS = 4000;
   var VISIBLE_IDLE_SYNC_MS = 8000;
-  var ACTIVE_CHAT_WINDOW_MS = 60000;
-  var HIDDEN_SYNC_MS = 60000;
+  var SYNC_ACTIVE_MS = 5000;
+  var SYNC_IDLE_MS = 15000;
+  var SYNC_DEEP_IDLE_MS = 45000;
+  var SYNC_VOICE_HIDDEN_MS = 90000;
+  var ACTIVE_CHAT_WINDOW_MS = 45000; // 45s active window
+  var DEEP_IDLE_WINDOW_MS = 300000; // 5 minutes (300s)
+  var HIDDEN_SYNC_MS = SYNC_VOICE_HIDDEN_MS;
   var CHUNK_SIZE_BYTES = 8 * 1024 * 1024; // 8 MB Google Drive resumable chunk multiple
 
   var state = {
@@ -36,6 +41,8 @@
     lastEventId: 0,
     lastSignalId: 0,
     lastChatActivityAt: 0,
+    lastUserActivityAt: Date.now(),
+    lastSyncETag: null,
     syncTimer: null,
     syncInFlight: false,
     listeners: []
@@ -365,11 +372,11 @@
     });
   }
 
-  function apiRequest(method, url, body) {
+  function apiRequest(method, url, body, customHeaders) {
     var opts = {
       method: method,
       credentials: 'same-origin',
-      headers: {}
+      headers: Object.assign({}, customHeaders || {})
     };
     if (body !== undefined && body !== null) {
       if (body instanceof ArrayBuffer || body instanceof Uint8Array || (typeof Blob !== 'undefined' && body instanceof Blob)) {
@@ -391,7 +398,7 @@
     return fetch(url, opts).then(function (res) {
       if (timeoutHandle) clearTimeout(timeoutHandle);
       function recordStoreFailure(data) {
-        if (res.ok) return;
+        if (res.ok || res.status === 304) return;
         if (typeof window !== 'undefined' && window.API && typeof window.API.recordDiagnostic === 'function') {
           var hdrGet = (res.headers && typeof res.headers.get === 'function') ? function (name) { return res.headers.get(name); } : function () { return ''; };
           var reqId = hdrGet('X-Request-Id') || (data && data.requestId) || '';
@@ -1759,8 +1766,23 @@
       '&since_event_id=' + encodeURIComponent(state.lastEventId) +
       '&since_signal_id=' + encodeURIComponent(state.lastSignalId || 0);
 
-    return apiRequest('GET', url).then(function (res) {
+    var customHeaders = {};
+    if (state.lastSyncETag) {
+      customHeaders['If-None-Match'] = state.lastSyncETag;
+    }
+
+    return apiRequest('GET', url, null, customHeaders).then(function (res) {
       state.syncInFlight = false;
+      if (res.headers && typeof res.headers.get === 'function') {
+        var respEtag = res.headers.get('ETag');
+        if (respEtag) {
+          state.lastSyncETag = respEtag;
+        }
+      }
+      if (res.status === 304) {
+        // Unchanged watermarks: delta sync returned 304 Not Modified with empty body
+        return null;
+      }
       if (!res.ok) {
         if (res.status === 401) {
           clearLocalSessionData();
@@ -2214,10 +2236,33 @@
 
   function markChatActivity() {
     var wasActive = isChatRecentlyActive();
-    state.lastChatActivityAt = Date.now();
+    var now = Date.now();
+    state.lastChatActivityAt = now;
+    state.lastUserActivityAt = now;
     if (!wasActive && state.syncTimer && !state.syncInFlight) {
       scheduleNextSyncTick();
     }
+  }
+
+  function getSteppedSyncDelay() {
+    var isHidden = (typeof document !== 'undefined' && document.visibilityState === 'hidden');
+    var inVoice = Boolean(root.ClubhouseRTC && root.ClubhouseRTC.state && root.ClubhouseRTC.state.activeChannelId);
+    if (isHidden) {
+      return inVoice ? SYNC_VOICE_HIDDEN_MS : 0;
+    }
+    if (inVoice) {
+      return SYNC_ACTIVE_MS;
+    }
+    var now = Date.now();
+    var lastActive = Math.max(state.lastChatActivityAt || 0, state.lastUserActivityAt || 0);
+    var idleElapsed = lastActive > 0 ? (now - lastActive) : 0;
+    if (idleElapsed < ACTIVE_CHAT_WINDOW_MS) {
+      return SYNC_ACTIVE_MS; // 5s: active chat/voice within 45s
+    }
+    if (idleElapsed < DEEP_IDLE_WINDOW_MS) {
+      return SYNC_IDLE_MS; // 15s: visible idle 45s–5m
+    }
+    return SYNC_DEEP_IDLE_MS; // 45s: visible deep-idle > 5m
   }
 
   function scheduleNextSyncTick() {
@@ -2228,15 +2273,11 @@
     if (!state.user) {
       return;
     }
-    var isHidden = (typeof document !== 'undefined' && document.visibilityState === 'hidden');
-    var inVoice = Boolean(root.ClubhouseRTC && root.ClubhouseRTC.state && root.ClubhouseRTC.state.activeChannelId);
-    if (isHidden && !inVoice) {
-      // Zero idle background polling when tab is hidden and not in a voice huddle
+    var delay = getSteppedSyncDelay();
+    if (delay <= 0) {
+      // 0: hidden and not in voice, paused
       return;
     }
-    var delay = isHidden
-      ? HIDDEN_SYNC_MS
-      : ((inVoice || isChatRecentlyActive()) ? VISIBLE_ACTIVE_SYNC_MS : VISIBLE_IDLE_SYNC_MS);
     state.syncTimer = setTimeout(function () {
       pollDeltaSync().then(function () {
         if (state.user) {
@@ -2244,6 +2285,23 @@
         }
       });
     }, delay);
+  }
+
+  function onUserActivity() {
+    state.lastUserActivityAt = Date.now();
+    if (!state.user) return;
+    if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+      if (state.syncTimer && !state.syncInFlight) {
+        scheduleNextSyncTick();
+      }
+    }
+  }
+
+  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener('keydown', onUserActivity, { passive: true });
+    window.addEventListener('pointerdown', onUserActivity, { passive: true });
+    window.addEventListener('focus', onUserActivity, { passive: true });
+    window.addEventListener('input', onUserActivity, { passive: true });
   }
 
   function startAdaptiveSyncLoop() {
@@ -2664,8 +2722,16 @@
     pollDeltaSync: pollDeltaSync,
     markChatActivity: markChatActivity,
     isChatRecentlyActive: isChatRecentlyActive,
+    getSteppedSyncDelay: getSteppedSyncDelay,
     startAdaptiveSyncLoop: startAdaptiveSyncLoop,
     stopAdaptiveSyncLoop: stopAdaptiveSyncLoop,
+    VISIBLE_ACTIVE_SYNC_MS: VISIBLE_ACTIVE_SYNC_MS,
+    VISIBLE_IDLE_SYNC_MS: VISIBLE_IDLE_SYNC_MS,
+    HIDDEN_SYNC_MS: HIDDEN_SYNC_MS,
+    SYNC_ACTIVE_MS: SYNC_ACTIVE_MS,
+    SYNC_IDLE_MS: SYNC_IDLE_MS,
+    SYNC_DEEP_IDLE_MS: SYNC_DEEP_IDLE_MS,
+    SYNC_VOICE_HIDDEN_MS: SYNC_VOICE_HIDDEN_MS,
     apiRequest: apiRequest
   };
 

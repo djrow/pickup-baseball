@@ -4,11 +4,12 @@
  */
 
 import { Hono } from 'hono';
-import { requireAuth, rejectIfChatMuted, rejectIfClubhouseOptedOut, checkRateLimit, CANONICAL_MEMBER_ROLE } from '../security.js';
+import { requireAuth, rejectIfChatMuted, rejectIfClubhouseOptedOut, checkRateLimit, deriveRateLimitKey, CANONICAL_MEMBER_ROLE } from '../security.js';
 import { resolveConfig } from '../config.js';
 import { resolveChannel, canUserAccessChannel, isPeerBlocked, rejectIfDmPeerBlocked } from './chat.js';
 import { logEvent } from '../errors.js';
 
+export const VOICE_TTL_SEC = 90;
 export const voiceRouter = /** @type {AppHono} */ (new Hono());
 export const rtcRouter = /** @type {AppHono} */ (new Hono());
 let lastSignalPruneSec = 0;
@@ -65,7 +66,7 @@ voiceRouter.post('/:channelId/join', requireAuth, async (c) => {
 
   const vpCountRow = await chatDb.prepare(
     'SELECT COUNT(*) as total FROM voice_participants WHERE channel_id = ? AND user_id != ? AND heartbeat_at > ?'
-  ).bind(channel.id, user.id, nowSecJoin - 25).first();
+  ).bind(channel.id, user.id, nowSecJoin - VOICE_TTL_SEC).first();
   if (vpCountRow && Number(vpCountRow.total) >= 24) {
     return c.json({ error: 'This voice room has reached its maximum capacity (24 participants).' }, 429);
   }
@@ -76,11 +77,11 @@ voiceRouter.post('/:channelId/join', requireAuth, async (c) => {
   const screenSharing = body.screen_sharing ? 1 : 0;
   const nowSec = Math.floor(Date.now() / 1000);
 
-  // Prune stale participants (>25s) only if expired rows exist
+  // Prune stale participants (>90s) only if expired rows exist
   try {
-    const staleVp = await chatDb.prepare('SELECT 1 FROM voice_participants WHERE heartbeat_at <= ? LIMIT 1').bind(nowSec - 25).first();
+    const staleVp = await chatDb.prepare('SELECT 1 FROM voice_participants WHERE heartbeat_at <= ? LIMIT 1').bind(nowSec - VOICE_TTL_SEC).first();
     if (staleVp) {
-      await chatDb.prepare('DELETE FROM voice_participants WHERE heartbeat_at <= ?').bind(nowSec - 25).run();
+      await chatDb.prepare('DELETE FROM voice_participants WHERE heartbeat_at <= ?').bind(nowSec - VOICE_TTL_SEC).run();
     }
   } catch (e) {
     /* best-effort stale voice participant prune */
@@ -109,7 +110,7 @@ voiceRouter.post('/:channelId/join', requireAuth, async (c) => {
 
   const { results: participants } = await chatDb.prepare(
     'SELECT * FROM voice_participants WHERE channel_id = ? AND heartbeat_at > ? ORDER BY heartbeat_at DESC'
-  ).bind(channel.id, nowSec - 25).all();
+  ).bind(channel.id, nowSec - VOICE_TTL_SEC).all();
 
   const iceConfig = buildAuthorizedIceConfig(c.env);
 
@@ -148,25 +149,16 @@ voiceRouter.post('/:channelId/state', requireAuth, async (c) => {
   const blockResp = await rejectIfDmPeerBlocked(c, chatDb, channel, user.id, 'Voice calls are blocked between you and this member.');
   if (blockResp) return blockResp;
 
-  const stateRate = await checkRateLimit(chatDb, `chat_voice_state:${user.id}`, 60, 60, c.env, {
-    table: 'chat_rate_limits',
-    failClosed: false,
-    enforceInTest: true
-  });
-  if (!stateRate.allowed) {
-    return c.json({ error: 'Too many voice state requests. Please wait a moment.' }, 429);
-  }
-  const nowSecState = Math.floor(Date.now() / 1000);
-
+  const nowSec = Math.floor(Date.now() / 1000);
   const body = await c.req.json().catch(() => ({}));
   const existing = await chatDb.prepare(
     'SELECT * FROM voice_participants WHERE channel_id = ? AND user_id = ?'
   ).bind(channel.id, user.id).first();
 
-  if (!existing || Number(existing.heartbeat_at || 0) <= nowSecState - 25) {
+  if (!existing || Number(existing.heartbeat_at || 0) <= nowSec - VOICE_TTL_SEC) {
     const vpCountRow = await chatDb.prepare(
       'SELECT COUNT(*) as total FROM voice_participants WHERE channel_id = ? AND user_id != ? AND heartbeat_at > ?'
-    ).bind(channel.id, user.id, nowSecState - 25).first();
+    ).bind(channel.id, user.id, nowSec - VOICE_TTL_SEC).first();
     if (vpCountRow && Number(vpCountRow.total) >= 24) {
       return c.json({ error: 'This voice room has reached its maximum capacity (24 participants).' }, 429);
     }
@@ -175,9 +167,32 @@ voiceRouter.post('/:channelId/state', requireAuth, async (c) => {
   const muted = body.muted !== undefined ? (body.muted ? 1 : 0) : (existing ? existing.muted : 0);
   const deafened = body.deafened !== undefined ? (body.deafened ? 1 : 0) : (existing ? existing.deafened : 0);
   const screenSharing = body.screen_sharing !== undefined ? (body.screen_sharing ? 1 : 0) : (existing ? existing.screen_sharing : 0);
-  const nowSec = Math.floor(Date.now() / 1000);
 
-  await chatDb.prepare(`
+  // Batch chat_rate_limits and voice_participants upserts via db.batch()
+  const { key: hashedKey } = await deriveRateLimitKey(`chat_voice_state:${user.id}`, c.env, { nowSec, db: chatDb });
+  const safeWindowSeconds = 60;
+  const RATE_LIMIT_MIN_RETENTION_SECONDS = 3600;
+  const ttlSeconds = Math.max(safeWindowSeconds, RATE_LIMIT_MIN_RETENTION_SECONDS);
+  const expiresAt = nowSec + ttlSeconds;
+  const windowCutoff = nowSec - safeWindowSeconds;
+
+  const rateLimitUpsertStmt = chatDb.prepare(`
+    INSERT INTO chat_rate_limits (key, count, window_start, expires_at)
+    VALUES (?, 1, ?, ?)
+    ON CONFLICT(key) DO UPDATE SET
+      count = CASE WHEN chat_rate_limits.window_start <= ? THEN 1 ELSE chat_rate_limits.count + 1 END,
+      window_start = CASE WHEN chat_rate_limits.window_start <= ? THEN ? ELSE chat_rate_limits.window_start END,
+      expires_at = CASE WHEN chat_rate_limits.window_start <= ? THEN ? ELSE MAX(chat_rate_limits.expires_at, chat_rate_limits.window_start + ?) END
+  `).bind(
+    hashedKey, nowSec, expiresAt,
+    windowCutoff,
+    windowCutoff, nowSec,
+    windowCutoff, expiresAt, ttlSeconds
+  );
+
+  const rateLimitSelectStmt = chatDb.prepare('SELECT count FROM chat_rate_limits WHERE key = ?').bind(hashedKey);
+
+  const vpUpsertStmt = chatDb.prepare(`
     INSERT INTO voice_participants (channel_id, user_id, user_name, muted, deafened, screen_sharing, heartbeat_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(channel_id, user_id) DO UPDATE SET
@@ -186,7 +201,13 @@ voiceRouter.post('/:channelId/state', requireAuth, async (c) => {
       deafened = excluded.deafened,
       screen_sharing = excluded.screen_sharing,
       heartbeat_at = excluded.heartbeat_at
-  `).bind(channel.id, user.id, user.name, muted, deafened, screenSharing, nowSec).run();
+  `).bind(channel.id, user.id, user.name, muted, deafened, screenSharing, nowSec);
+
+  const batchRes = await chatDb.batch([rateLimitUpsertStmt, rateLimitSelectStmt, vpUpsertStmt]);
+  const rateCountRow = /** @type {{ count?: number|string }|undefined} */ (batchRes[1] && batchRes[1].results && batchRes[1].results[0]);
+  if (rateCountRow && Number(rateCountRow.count) > 60) {
+    return c.json({ error: 'Too many voice state requests. Please wait a moment.' }, 429);
+  }
 
   // Only emit a sync_events row when voice state actually changed (skip no-op heartbeat refreshes)
   const stateChanged = !existing ||
@@ -234,6 +255,16 @@ voiceRouter.post('/:channelId/leave', requireAuth, async (c) => {
   }
 
   const nowSec = Math.floor(Date.now() / 1000);
+
+  // Opportunistically prune stale voice participants on leave
+  try {
+    const staleVp = await chatDb.prepare('SELECT 1 FROM voice_participants WHERE heartbeat_at <= ? LIMIT 1').bind(nowSec - VOICE_TTL_SEC).first();
+    if (staleVp) {
+      await chatDb.prepare('DELETE FROM voice_participants WHERE heartbeat_at <= ?').bind(nowSec - VOICE_TTL_SEC).run();
+    }
+  } catch (e) {
+    /* best-effort stale voice participant prune */
+  }
 
   const delRes = await chatDb.prepare(
     'DELETE FROM voice_participants WHERE channel_id = ? AND user_id = ?'

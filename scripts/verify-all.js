@@ -323,4 +323,5 @@ require('../tests/core/privacy-consent.test.js')();
 require('../tests/core/visitor-erasure.test.js')();
 require('../tests/core/peer-block-ui.test.js')();
 require('../tests/core/cache-batching.test.js')(ctx);
+require('../tests/core/clubhouse-sync-voice.test.js')(ctx);
 require('../tests/clubhouse/index.js')();
