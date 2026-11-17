@@ -23,11 +23,12 @@ const { sendRainoutEmail } = require('../../src/app/mailer.js');
 const { createD1Adapter } = require('../../src/d1-sqlite.js');
 
 module.exports = function registerMailerCursorsTests(ctx) {
-  const { apiReq, db, seedOrgCookie } = ctx;
+  const { apiReq, db } = ctx;
   const d1 = ctx.d1 || (ctx.baseballD1) || createD1Adapter(db);
 
   test('Ticket #69: Wave 1c.6 Unified MAIL_PROVIDER & Per-RSVP Cursors', async (t) => {
     const origFetch = global.fetch;
+    const seedOrgCookie = ctx.seedOrgCookie;
 
     t.afterEach(() => {
       global.fetch = origFetch;

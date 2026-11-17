@@ -19,7 +19,11 @@ import {
   base64ToUint8Array
 } from '../../security.js';
 import { purgePublicEdgeCache } from '../../edge-cache.js';
-import { getDefaultDuties } from '../../schema.js';
+import {
+  getDefaultDuties,
+  pruneEphemeralBaseballRows,
+  pruneEphemeralChatRows
+} from '../../schema.js';
 import {
   parseAllowedEmails,
   canUserAccessEvent,
@@ -615,6 +619,14 @@ eventsCoreRouter.all('/reminders/check', async (c) => {
     const sent = typeof result === 'object' && result !== null ? result.sent : undefined;
     const remaining = typeof result === 'object' && result !== null ? result.remaining : undefined;
     const quotaPaused = typeof result === 'object' && result !== null ? result.quotaPaused : undefined;
+
+    // Prune expired rate_limits, sessions, and 24h abandoned pending uploads
+    if (c.env && c.env.DB) {
+      await pruneEphemeralBaseballRows(c.env.DB, Date.now(), { force: true });
+    }
+    if (c.env && c.env.CHAT_DB) {
+      await pruneEphemeralChatRows(c.env.CHAT_DB, Date.now(), { force: true });
+    }
 
     return c.json({
       success: true,

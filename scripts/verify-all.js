@@ -125,7 +125,8 @@ app.use('/api', createNodeHttpBridge(honoApp, () => ({
   NODE_ENV: 'test',
   BASEBALL_DB: baseballD1 || d1,
   CHAT_DB: chatD1,
-  DB: baseballD1 || d1
+  DB: baseballD1 || d1,
+  CRON_SECRET: process.env.CRON_SECRET || 'test-cron-secret'
 })));
 
 let server;
@@ -156,14 +157,20 @@ function getCookie(headers, cookieName) {
 async function apiReq(method, endpoint, cookie = null, body = null, extraHeaders = {}) {
   const headers = { ...extraHeaders };
   if (cookie) headers['Cookie'] = cookie;
-  if (body !== null && typeof body === 'object') {
-    headers['Content-Type'] = 'application/json';
+  let reqBody = undefined;
+  if (body !== null && body !== undefined) {
+    if (Buffer.isBuffer(body) || typeof body === 'string' || body instanceof Uint8Array || body instanceof ArrayBuffer) {
+      reqBody = body;
+    } else {
+      headers['Content-Type'] = 'application/json';
+      reqBody = JSON.stringify(body);
+    }
   }
 
   const res = await fetch(`${ctx.baseUrl}${endpoint}`, {
     method,
     headers,
-    body: body !== null ? (typeof body === 'string' ? body : JSON.stringify(body)) : undefined,
+    body: reqBody,
     redirect: 'manual'
   });
 
@@ -327,6 +334,7 @@ require('../tests/core/storage-provider.test.js')(ctx);
 require('../tests/core/gallery-direct-upload.test.js')(ctx);
 require('../tests/core/mailer-cursors.test.js')(ctx);
 require('../tests/core/webhook-resend-suppression.test.js')(ctx);
+require('../tests/core/cron-reminders.test.js')(ctx);
 require('../tests/core/migrate-d1-media-to-r2.test.js')();
 require('../tests/core/clubhouse-sync-voice.test.js')(ctx);
 require('../tests/clubhouse/index.js')();

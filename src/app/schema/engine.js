@@ -353,13 +353,17 @@ export async function pruneEphemeralBaseballRows(db, nowMsOverride = Date.now(),
   const nowIso = new Date(nowMs).toISOString();
   const nowSec = Math.floor(nowMs / 1000);
   const legacyRateCutoff = nowSec - 2 * 60 * 60;
+  const pendingUploadCutoff = new Date(nowMs - 24 * 60 * 60 * 1000).toISOString();
   try {
     const stmts = [
       db.prepare('DELETE FROM sessions WHERE expires_at <= ?').bind(nowIso),
       db.prepare('DELETE FROM auth_codes WHERE expires_at <= ?').bind(nowIso),
       db.prepare(
         'DELETE FROM rate_limits WHERE (expires_at > 0 AND expires_at <= ?) OR (expires_at <= 0 AND window_start <= ?)'
-      ).bind(nowSec, legacyRateCutoff)
+      ).bind(nowSec, legacyRateCutoff),
+      db.prepare(
+        "DELETE FROM media_items WHERE upload_status = 'pending' AND created_at <= ?"
+      ).bind(pendingUploadCutoff)
     ];
     if (typeof db.batch === 'function') {
       await db.batch(stmts);
@@ -389,13 +393,17 @@ export async function pruneEphemeralChatRows(chatDb, nowMsOverride = Date.now(),
 
   const nowSec = Math.floor(nowMs / 1000);
   const legacyRateCutoff = nowSec - 7200;
+  const pendingUploadCutoff = new Date(nowMs - 24 * 60 * 60 * 1000).toISOString();
   try {
     const stmts = [
       chatDb.prepare('DELETE FROM rtc_signals WHERE created_at <= ?').bind(nowSec - 300),
       chatDb.prepare(
         'DELETE FROM chat_rate_limits WHERE (expires_at > 0 AND expires_at <= ?) OR (expires_at <= 0 AND window_start <= ?)'
       ).bind(nowSec, legacyRateCutoff),
-      chatDb.prepare('DELETE FROM sync_events WHERE created_at <= ?').bind(nowSec - 7 * 86400)
+      chatDb.prepare('DELETE FROM sync_events WHERE created_at <= ?').bind(nowSec - 7 * 86400),
+      chatDb.prepare(
+        "DELETE FROM chat_attachments WHERE upload_status = 'pending' AND created_at <= ?"
+      ).bind(pendingUploadCutoff)
     ];
     if (typeof chatDb.batch === 'function') {
       await chatDb.batch(stmts);
