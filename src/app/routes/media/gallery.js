@@ -19,20 +19,29 @@ import {
   validateAppscriptRedirectUrl,
   arrayBufferToBase64,
   base64ToUint8Array,
-  stripJpegMetadata
+  stripJpegMetadata,
+  hashUploadToken,
+  verifyUploadToken
 } from '../../security.js';
 import { logEvent } from '../../errors.js';
 import {
   MAX_MEDIA_BYTES,
   MAX_LOCAL_D1_MEDIA_BYTES,
+  MAX_GDRIVE_ATTACHMENT_BYTES,
   validateExternalHttpUrl,
   extractYouTubeId,
   extractGoogleDriveFileId,
-  isValidContainerMediaBuffer
+  isValidContainerMediaBuffer,
+  hasInvalidOrSpoofedMagicBytes
 } from '../media-helpers.js';
 import { canUserAccessEvent } from '../../policy.js';
 import { getDisallowZeroLoginMediaSetting } from '../../schema.js';
 import { r2StorageAdapter } from '../../storage/r2.js';
+import {
+  resolveStorageProvider,
+  getStorageAdapter,
+  canonicalObjectKey
+} from '../../storage/index.js';
 
 export const mediaGalleryRouter = /** @type {AppHono} */ (new Hono());
 
@@ -52,7 +61,8 @@ mediaGalleryRouter.get('/', async (c) => {
     let whereClauses = [];
     let bindings = [];
 
-    // By default, public gallery only displays admin-approved media
+    // Filter out unfinalized direct uploads (upload_status = 'pending')
+    whereClauses.push("(m.upload_status = 'ready' OR m.upload_status IS NULL)");
     if (statusParam === 'pending' && isManager) {
       whereClauses.push("m.is_approved = 0");
     } else if (statusParam === 'all' && isManager) {
@@ -107,7 +117,7 @@ mediaGalleryRouter.get('/', async (c) => {
       SELECT m.album, m.date_taken, m.event_id, e.id as event_exists, e.allowed_emails as event_allowed_emails
       FROM media_items m
       LEFT JOIN events e ON m.event_id = e.id
-      WHERE m.is_approved = 1
+      WHERE m.is_approved = 1 AND (m.upload_status = 'ready' OR m.upload_status IS NULL)
       ORDER BY m.date_taken DESC, m.id DESC
     `).all();
 
@@ -301,6 +311,327 @@ mediaGalleryRouter.get('/:id/file', async (c) => {
 });
 
 // ---------------------------------------------------------------------------
+// POST /api/media/init - Initialize Direct Gallery Media Upload (R2 / Drive / Local)
+// ---------------------------------------------------------------------------
+mediaGalleryRouter.post('/init', async (c) => {
+  const user = c.get('user');
+  const db = c.env && c.env.DB;
+  if (!db) return c.json({ error: 'Database unavailable.' }, 500);
+
+  const clientIp = getClientIp(c);
+  const rateCheck = await checkRateLimit(db, `media_init:${clientIp}`, 30, 3600, c.env);
+  if (!rateCheck.allowed) {
+    return c.json({ error: 'Too many media uploads initialized. Please wait an hour before submitting more.' }, 429);
+  }
+
+  if (!user && (await getDisallowZeroLoginMediaSetting(db, c.env))) {
+    return c.json({ error: 'Zero-login media uploads are currently disabled. Please sign in to upload media.' }, 401);
+  }
+
+  const body = await c.req.json().catch(() => ({}));
+  const cfTurnstileResponse = body.cf_turnstile_response;
+  if (!user && !(await verifyTurnstileIfConfigured(c.env, cfTurnstileResponse, clientIp))) {
+    return c.json({ error: 'Bot verification failed. Please refresh and try again.' }, 403);
+  }
+
+  // eslint-disable-next-line no-control-regex
+  const fileName = String(body.file_name || '').replace(/[\x00-\x1F\x7F]/g, '').trim();
+  const mimeType = String(body.mime_type || '').trim().toLowerCase();
+  const fileSize = parseInt(body.file_size, 10);
+
+  if (!fileName || !mimeType || isNaN(fileSize) || fileSize <= 0) {
+    return c.json({ error: 'Valid file_name, mime_type, and positive file_size are required.' }, 400);
+  }
+
+  const ALLOWED_MEDIA_MIME = new Set([
+    'image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif', 'image/avif',
+    'video/mp4', 'video/webm', 'video/quicktime'
+  ]);
+  if (!ALLOWED_MEDIA_MIME.has(mimeType)) {
+    return c.json({ error: `Disallowed or unsupported media format (${mimeType}).` }, 400);
+  }
+
+  let cleanDate = body.date_taken ? String(body.date_taken).trim() : '';
+  if (!cleanDate || !/^\d{4}-\d{2}-\d{2}$/.test(cleanDate)) {
+    cleanDate = new Date().toISOString().slice(0, 10);
+  }
+  const cleanAlbum = (body.album && String(body.album).trim() ? String(body.album).trim() : 'Community Moments').slice(0, 120);
+  const cleanTitle = (body.title && String(body.title).trim() ? String(body.title).trim() : fileName).slice(0, 200);
+  const cleanCaption = (body.caption && String(body.caption).trim() ? String(body.caption).trim() : '').slice(0, 2000);
+  const cleanContributor = (body.contributor_name && String(body.contributor_name).trim()
+    ? String(body.contributor_name).trim()
+    : (user && user.name ? user.name : 'Community Player')).slice(0, 120);
+
+  const rawEventId = body.event_id ? parseInt(body.event_id, 10) : null;
+  const cleanEventId = (rawEventId && !isNaN(rawEventId) && rawEventId > 0) ? rawEventId : null;
+  if (cleanEventId) {
+    const targetEv = await db.prepare('SELECT id, allowed_emails FROM events WHERE id = ?').bind(cleanEventId).first();
+    if (!targetEv || !canUserAccessEvent(user, targetEv)) {
+      return c.json({ error: 'Access denied: cannot link media to this game.' }, 403);
+    }
+  }
+
+  const requestedProvider = body.storage_provider ? String(body.storage_provider).toLowerCase().trim() : null;
+  const effectiveEnv = {
+    ...process.env,
+    ...(c.env || {}),
+    ...(requestedProvider ? { STORAGE_PROVIDER: requestedProvider } : {})
+  };
+  const provider = resolveStorageProvider(effectiveEnv);
+
+  if (provider === 'local' && fileSize > 1024 * 1024) {
+    return c.json({ error: 'Files over 1 MB require R2 or Google Drive storage, which is currently unavailable.' }, 400);
+  }
+  if (provider === 'r2' && fileSize > 50 * 1024 * 1024) {
+    return c.json({ error: 'File size exceeds R2 50 MB limit.' }, 400);
+  }
+  if (fileSize > MAX_GDRIVE_ATTACHMENT_BYTES) {
+    return c.json({ error: 'File size exceeds maximum limit of 500 MB.' }, 400);
+  }
+
+  const isManager = Boolean(user && (user.role === 'admin' || user.role === 'organizer' || user.isAdmin || user.canManageEvents));
+  const hideExplicitly = isManager && (
+    body.publish_immediately === false ||
+    body.publish_immediately === 'false' ||
+    body.is_approved === 0 ||
+    body.is_approved === false
+  );
+  const isApproved = hideExplicitly ? 0 : 1;
+
+  const rawUploadToken = generateToken();
+  const uploadTokenHash = await hashUploadToken(rawUploadToken);
+  const deleteToken = generateToken();
+  const finalMediaType = mimeType.startsWith('video/') ? 'video' : 'photo';
+
+  const insertSql = `
+    INSERT INTO media_items (
+      title, caption, media_type, original_url, file_url,
+      mime_type, file_size, album, date_taken, contributor_name,
+      contributor_id, event_id, is_approved, delete_token,
+      storage_provider, upload_status, upload_token_hash
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+  `;
+
+  const tempFileUrl = '/api/media/temp/file';
+  const result = await db.prepare(insertSql).bind(
+    cleanTitle, cleanCaption, finalMediaType, null, tempFileUrl,
+    mimeType, fileSize, cleanAlbum, cleanDate, cleanContributor,
+    user ? user.id : null, cleanEventId, isApproved, deleteToken,
+    provider, uploadTokenHash
+  ).run();
+
+  const mediaId = result.meta.last_row_id;
+  const canonicalKey = canonicalObjectKey('media', { mediaId, token: generateToken().slice(0, 16) });
+  const adapter = getStorageAdapter(effectiveEnv);
+
+  const initResult = await adapter.uploadInit(effectiveEnv, {
+    kind: 'media',
+    objectKey: canonicalKey,
+    fileName,
+    mimeType,
+    fileSize,
+    origin: c.req.header('origin') || '',
+    metadata: {
+      mediaId,
+      media_id: mediaId
+    }
+  });
+
+  if (!initResult.ok && initResult.error) {
+    await db.prepare('DELETE FROM media_items WHERE id = ?').bind(mediaId).run().catch(() => {});
+    return c.json({ error: initResult.error }, 400);
+  }
+
+  await db.prepare(`
+    UPDATE media_items
+    SET storage_provider = ?, r2_key = ?, original_url = ?
+    WHERE id = ?
+  `).bind(
+    initResult.storageProvider,
+    initResult.objectKey || null,
+    initResult.driveFileId ? `https://drive.google.com/file/d/${initResult.driveFileId}/view` : null,
+    mediaId
+  ).run();
+
+  return c.json({
+    success: true,
+    mediaId,
+    media_id: mediaId,
+    uploadToken: rawUploadToken,
+    upload_token: rawUploadToken,
+    delete_token: deleteToken,
+    storageProvider: initResult.storageProvider,
+    storage_provider: initResult.storageProvider,
+    uploadMode: initResult.uploadMode,
+    upload_mode: initResult.uploadMode,
+    uploadUrl: initResult.uploadUrl,
+    upload_url: initResult.uploadUrl,
+    r2_presigned_put: (initResult.storageProvider === 'r2' ? initResult.uploadUrl : null),
+    objectKey: initResult.objectKey,
+    driveFileId: initResult.driveFileId,
+    uploadStatus: 'pending',
+    headers: initResult.headers || {}
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PUT /api/media/:id/upload - Local Binary Upload with Magic-Byte Check & EXIF Strip
+// ---------------------------------------------------------------------------
+mediaGalleryRouter.put('/:id/upload', async (c) => {
+  const db = c.env && c.env.DB;
+  if (!db) return c.json({ error: 'Database unavailable.' }, 500);
+
+  const id = parseInt(c.req.param('id'), 10);
+  if (!id || isNaN(id)) return c.json({ error: 'Invalid ID' }, 400);
+
+  const row = await db.prepare('SELECT * FROM media_items WHERE id = ?').bind(id).first();
+  if (!row) return c.json({ error: 'Media session not found.' }, 404);
+
+  const user = c.get('user');
+  const tokenHeader = c.req.header('X-Upload-Token') || c.req.header('x-upload-token');
+  const tokenQuery = c.req.query('token');
+  const providedToken = String(tokenHeader || tokenQuery || '').trim();
+
+  let isAuthorized = false;
+  if (row.upload_token_hash && providedToken) {
+    isAuthorized = await verifyUploadToken(providedToken, row.upload_token_hash);
+  }
+  if (!isAuthorized && user && (user.isAdmin || (row.contributor_id && user.id === row.contributor_id))) {
+    isAuthorized = true;
+  }
+
+  if (!isAuthorized) {
+    if (!providedToken && !user) {
+      return c.json({ error: 'Upload token required.' }, 401);
+    }
+    return c.json({ error: 'Invalid or expired upload token.' }, 403);
+  }
+
+  if (row.upload_status === 'ready' || row.storage_provider !== 'local') {
+    return c.json({ error: 'Media item is already finalized or stored externally.' }, 409);
+  }
+
+  const rawBuffer = await c.req.arrayBuffer();
+  if (rawBuffer.byteLength > 1024 * 1024) {
+    return c.json({ error: 'Uploaded file exceeds the 1 MB local database limit.' }, 413);
+  }
+  const bytes = new Uint8Array(rawBuffer);
+
+  if (hasInvalidOrSpoofedMagicBytes(bytes, row.mime_type, false)) {
+    return c.json({ error: 'Invalid or spoofed file header detected for declared MIME type.' }, 400);
+  }
+
+  let processedBuffer = rawBuffer;
+  if (row.mime_type === 'image/jpeg' || row.mime_type === 'image/jpg') {
+    try {
+      processedBuffer = stripJpegMetadata(rawBuffer);
+    } catch (e) {
+      /* best-effort strip */
+    }
+  }
+
+  const base64Data = arrayBufferToBase64(processedBuffer);
+  const finalSize = processedBuffer.byteLength;
+
+  await db.prepare(`
+    UPDATE media_items
+    SET file_data = ?, file_size = ?
+    WHERE id = ?
+  `).bind(base64Data, finalSize, id).run();
+
+  return c.json({
+    success: true,
+    mediaId: id,
+    size: finalSize,
+    status: 'uploaded'
+  });
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/media/:id/complete - Finalize Direct Gallery Media Upload
+// ---------------------------------------------------------------------------
+mediaGalleryRouter.post('/:id/complete', async (c) => {
+  const db = c.env && c.env.DB;
+  if (!db) return c.json({ error: 'Database unavailable.' }, 500);
+
+  const id = parseInt(c.req.param('id'), 10);
+  if (!id || isNaN(id)) return c.json({ error: 'Invalid ID' }, 400);
+
+  const row = await db.prepare('SELECT * FROM media_items WHERE id = ?').bind(id).first();
+  if (!row) return c.json({ error: 'Media item not found.' }, 404);
+
+  if (row.upload_status === 'ready') {
+    return c.json({ error: 'Media item is already finalized.' }, 409);
+  }
+
+  const user = c.get('user');
+  const body = await c.req.json().catch(() => ({}));
+  const tokenHeader = c.req.header('X-Upload-Token') || c.req.header('x-upload-token');
+  const tokenQuery = c.req.query('token');
+  const tokenBody = body.upload_token || body.token;
+  const providedToken = String(tokenBody || tokenHeader || tokenQuery || '').trim();
+
+  let isAuthorized = false;
+  if (row.upload_token_hash && providedToken) {
+    isAuthorized = await verifyUploadToken(providedToken, row.upload_token_hash);
+  }
+  if (!isAuthorized && user && (user.isAdmin || (row.contributor_id && user.id === row.contributor_id))) {
+    isAuthorized = true;
+  }
+
+  if (!isAuthorized) {
+    return c.json({ error: 'Invalid or expired upload authorization token.' }, 403);
+  }
+
+  const effectiveEnv = {
+    ...process.env,
+    ...(c.env || {}),
+    ...(row.storage_provider ? { STORAGE_PROVIDER: row.storage_provider } : {})
+  };
+  const adapter = getStorageAdapter(effectiveEnv);
+  const requestedDriveId = body.drive_file_id || body.gdrive_file_id || null;
+
+  const fin = await adapter.finalizeUpload(effectiveEnv, {
+    kind: 'media',
+    objectKey: String(row.r2_key || ''),
+    driveFileId: String(requestedDriveId || row.original_url || ''),
+    expectedSize: Number(row.file_size || 0),
+    mimeType: String(row.mime_type || '')
+  });
+
+  if (!fin.ok && fin.error) {
+    return c.json({ error: fin.error }, 400);
+  }
+
+  const finalFileUrl = `/api/media/${id}/file`;
+  let finalOriginalUrl = row.original_url;
+  if (requestedDriveId) {
+    finalOriginalUrl = `https://drive.google.com/file/d/${requestedDriveId}/view`;
+  }
+
+  await db.prepare(`
+    UPDATE media_items
+    SET upload_status = 'ready',
+        upload_token_hash = NULL,
+        file_url = ?,
+        original_url = COALESCE(?, original_url)
+    WHERE id = ?
+  `).bind(finalFileUrl, finalOriginalUrl, id).run();
+
+  await purgePublicEdgeCache(c, { media: true });
+
+  const updatedItem = await db.prepare('SELECT * FROM media_items WHERE id = ?').bind(id).first();
+
+  return c.json({
+    success: true,
+    mediaId: id,
+    status: 'ready',
+    file_url: finalFileUrl,
+    item: updatedItem
+  });
+});
+
+// ---------------------------------------------------------------------------
 // POST /api/media - Community Zero-Login Media Drop
 // ---------------------------------------------------------------------------
 mediaGalleryRouter.post('/', async (c) => {
@@ -467,6 +798,9 @@ mediaGalleryRouter.post('/', async (c) => {
         bytes = base64ToUint8Array(cleanB64);
       } catch (b64Err) {
         return c.json({ error: 'Invalid base64 media payload.' }, 400);
+      }
+      if (bytes.byteLength > 1024 * 1024) {
+        return c.json({ error: 'Inline media payloads cannot exceed 1 MB raw. Please use direct upload.' }, 413);
       }
       if (bytes.byteLength > maxB64UploadBytes) {
         return c.json({ error: user ? 'Uploaded file exceeds 50MB limit.' : 'Anonymous uploads are limited to 10MB.' }, 400);

@@ -324,6 +324,7 @@ require('../tests/core/visitor-erasure.test.js')();
 require('../tests/core/peer-block-ui.test.js')();
 require('../tests/core/cache-batching.test.js')(ctx);
 require('../tests/core/storage-provider.test.js')(ctx);
+require('../tests/core/gallery-direct-upload.test.js')(ctx);
 require('../tests/core/mailer-cursors.test.js')(ctx);
 require('../tests/core/migrate-d1-media-to-r2.test.js')();
 require('../tests/core/clubhouse-sync-voice.test.js')(ctx);

@@ -15,6 +15,7 @@ export const MAX_CODE_VERIFY_ATTEMPTS = 5;
 export const CANONICAL_MEMBER_ROLE = 'member';
 export const MEMBER_ROLE_ALIASES = Object.freeze(['member', 'player']);
 export const MANAGEMENT_TOKEN_PREFIX = 'sha256:';
+export const UPLOAD_TOKEN_PREFIX = 'sha256:';
 
 /**
  * Returns true if the given role represents the lowest-privilege community member role
@@ -142,6 +143,32 @@ export async function verifyManagementToken(rawToken, storedToken) {
   const stored = typeof storedToken === 'string' ? storedToken : '';
   if (!trimmed || !stored || !stored.startsWith(MANAGEMENT_TOKEN_PREFIX)) return false;
   const hashed = await hashManagementToken(trimmed);
+  return constantTimeEqual(hashed, stored);
+}
+
+/**
+ * Hash single-use upload authorization token for direct uploads (Ticket #70 / ADR-0008).
+ * @param {string} rawToken
+ * @returns {Promise<string>}
+ */
+export async function hashUploadToken(rawToken) {
+  if (!rawToken || typeof rawToken !== 'string') return '';
+  const trimmed = rawToken.trim();
+  if (!trimmed) return '';
+  return `${UPLOAD_TOKEN_PREFIX}${await sha256Hex(trimmed)}`;
+}
+
+/**
+ * Constant-time verification of a caller-supplied upload token against stored sha256:<hex> hash.
+ * @param {unknown} rawToken
+ * @param {unknown} storedToken
+ * @returns {Promise<boolean>}
+ */
+export async function verifyUploadToken(rawToken, storedToken) {
+  const trimmed = typeof rawToken === 'string' ? rawToken.trim() : '';
+  const stored = typeof storedToken === 'string' ? storedToken : '';
+  if (!trimmed || !stored || !stored.startsWith(UPLOAD_TOKEN_PREFIX)) return false;
+  const hashed = await hashUploadToken(trimmed);
   return constantTimeEqual(hashed, stored);
 }
 

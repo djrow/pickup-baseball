@@ -25,6 +25,7 @@ const EXPECTED_CRYPTO_EXPORTS = [
   'SESSION_DURATION_SECONDS',
   'SESSION_HASH_PREFIX',
   'TEMPORARY_SESSION_DURATION_SECONDS',
+  'UPLOAD_TOKEN_PREFIX',
   'arrayBufferToBase64',
   'base64ToUint8Array',
   'constantTimeEqual',
@@ -35,6 +36,7 @@ const EXPECTED_CRYPTO_EXPORTS = [
   'getSafeRelativeRedirect',
   'hashManagementToken',
   'hashSessionId',
+  'hashUploadToken',
   'hmacSha256Hex',
   'isMemberRole',
   'isValidEmailAddress',
@@ -43,7 +45,8 @@ const EXPECTED_CRYPTO_EXPORTS = [
   'sanitizeHttpUrl',
   'sha256Hex',
   'stripJpegMetadata',
-  'verifyManagementToken'
+  'verifyManagementToken',
+  'verifyUploadToken'
 ];
 
 const EXPECTED_SESSION_EXPORTS = [

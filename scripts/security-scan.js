@@ -398,6 +398,21 @@ const PUBLIC_OR_TOKEN_ROUTE_MANIFEST = [
     reason: 'Intentional zero-login community photo drop (Turnstile + disallow_zero_login_media + magic-byte checks)'
   },
   {
+    ast: 'gallery.js:POST:/init',
+    route: 'POST /api/media/init',
+    reason: 'Zero-login direct gallery upload session initialization (Turnstile + IP rate limit + sha256 upload_token)'
+  },
+  {
+    ast: 'gallery.js:PUT:/:id/upload',
+    route: 'PUT /api/media/:id/upload',
+    reason: 'Single-use upload token authorization with magic-byte verification and local 1 MB cap'
+  },
+  {
+    ast: 'gallery.js:POST:/:id/complete',
+    route: 'POST /api/media/:id/complete',
+    reason: 'Single-use upload token authorization with storage provider finalization'
+  },
+  {
     ast: 'gallery.js:DELETE:/:id',
     route: 'DELETE /api/media/:id',
     reason: 'Protected inside handleMediaDelete via organizer/admin, uploader session, or constant-time delete_token'
