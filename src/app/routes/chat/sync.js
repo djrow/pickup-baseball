@@ -22,6 +22,7 @@ import {
 
 export const chatSyncRouter = /** @type {AppHono} */ (new Hono());
 
+export const VOICE_TTL_SEC = 90;
 let lastSyncPruneSec = 0;
 
 chatSyncRouter.get('/bootstrap', requireAuth, async (c) => {
@@ -84,18 +85,18 @@ chatSyncRouter.get('/bootstrap', requireAuth, async (c) => {
   try {
     const staleVoice = await chatDb.prepare(
       'SELECT 1 FROM voice_participants WHERE heartbeat_at <= ? LIMIT 1'
-    ).bind(nowSec - 25).first();
+    ).bind(nowSec - VOICE_TTL_SEC).first();
     if (staleVoice) {
-      await chatDb.prepare('DELETE FROM voice_participants WHERE heartbeat_at <= ?').bind(nowSec - 25).run();
+      await chatDb.prepare('DELETE FROM voice_participants WHERE heartbeat_at <= ?').bind(nowSec - VOICE_TTL_SEC).run();
     }
   } catch (e) {
     /* best-effort stale voice participant prune */
   }
 
-  // Active voice participants (<25s heartbeat)
+  // Active voice participants (<90s heartbeat)
   const { results: rawVoice } = await chatDb.prepare(
     'SELECT * FROM voice_participants WHERE heartbeat_at > ? AND user_id NOT IN (SELECT user_id FROM clubhouse_opted_out) ORDER BY heartbeat_at DESC'
-  ).bind(nowSec - 25).all();
+  ).bind(nowSec - VOICE_TTL_SEC).all();
   const voice_participants = (rawVoice || []).filter((vp) => accessibleIds.has(vp.channel_id));
 
   // Unread counts per accessible channel (chunked for D1 100-param limit)
@@ -253,30 +254,56 @@ chatSyncRouter.get('/sync', requireAuth, async (c) => {
   const channelFilterParam = c.req.query('channel_id');
   const nowSec = Math.floor(Date.now() / 1000);
 
-  // Fast-path watermark check: 1 compact scalar query skips 6+ table queries on idle polls
+  // Fast-path watermark check & ETag generation: 1 compact scalar query skips 6+ table queries on idle polls
+  let etag = null;
   if (!channelFilterParam) {
     const watermark = await chatDb.prepare(`
       SELECT
         (SELECT COALESCE(MAX(id), 0) FROM messages) as max_msg_id,
         (SELECT COALESCE(MAX(id), 0) FROM sync_events) as max_event_id,
-        EXISTS(
-          SELECT 1 FROM rtc_signals
+        (SELECT COALESCE(MAX(id), 0) FROM rtc_signals
           WHERE recipient_user_id = ? AND created_at > ? AND id > ?
             AND sender_user_id NOT IN (
               SELECT blocked_id FROM user_blocks WHERE blocker_id = ?
               UNION
               SELECT blocker_id FROM user_blocks WHERE blocked_id = ?
             )
-        ) as has_signals,
-        EXISTS(SELECT 1 FROM voice_participants WHERE heartbeat_at > ?) as has_voice
-    `).bind(user.id, nowSec - 60, sinceSignalId, user.id, user.id, nowSec - 25).first();
+        ) as max_sig_id,
+        (SELECT COUNT(*) FROM voice_participants WHERE heartbeat_at > ?) as voice_count,
+        (SELECT COALESCE(MAX(heartbeat_at), 0) FROM voice_participants WHERE heartbeat_at > ?) as max_voice_hb
+    `).bind(user.id, nowSec - 60, sinceSignalId, user.id, user.id, nowSec - VOICE_TTL_SEC, nowSec - VOICE_TTL_SEC).first();
+
+    const maxMsgId = Number((watermark && watermark.max_msg_id) || 0);
+    const maxEvtId = Number((watermark && watermark.max_event_id) || 0);
+    const maxSigId = Number((watermark && watermark.max_sig_id) || 0);
+    const voiceCount = Number((watermark && watermark.voice_count) || 0);
+    const maxVoiceHb = Number((watermark && watermark.max_voice_hb) || 0);
+
+    etag = `W/"sync-${maxMsgId}-${maxEvtId}-${maxSigId}-${voiceCount}-${maxVoiceHb}"`;
+    c.header('ETag', etag);
+    c.header('Cache-Control', 'no-cache');
+
+    const ifNoneMatch = c.req.header('If-None-Match');
+    if (
+      ifNoneMatch === etag &&
+      maxMsgId <= sinceMsgId &&
+      maxEvtId <= sinceEventId &&
+      maxSigId <= 0
+    ) {
+      return new Response(null, {
+        status: 304,
+        headers: {
+          ETag: etag,
+          'Cache-Control': 'no-cache'
+        }
+      });
+    }
 
     if (
-      watermark &&
-      Number(watermark.max_msg_id || 0) <= sinceMsgId &&
-      Number(watermark.max_event_id || 0) <= sinceEventId &&
-      !watermark.has_signals &&
-      !watermark.has_voice
+      maxMsgId <= sinceMsgId &&
+      maxEvtId <= sinceEventId &&
+      maxSigId <= 0 &&
+      voiceCount === 0
     ) {
       return c.json({
         messages: [],
@@ -342,9 +369,9 @@ chatSyncRouter.get('/sync', requireAuth, async (c) => {
       if (staleSig) {
         await chatDb.prepare('DELETE FROM rtc_signals WHERE created_at <= ?').bind(nowSec - 60).run();
       }
-      const staleVp = await chatDb.prepare('SELECT 1 FROM voice_participants WHERE heartbeat_at <= ? LIMIT 1').bind(nowSec - 25).first();
+      const staleVp = await chatDb.prepare('SELECT 1 FROM voice_participants WHERE heartbeat_at <= ? LIMIT 1').bind(nowSec - VOICE_TTL_SEC).first();
       if (staleVp) {
-        await chatDb.prepare('DELETE FROM voice_participants WHERE heartbeat_at <= ?').bind(nowSec - 25).run();
+        await chatDb.prepare('DELETE FROM voice_participants WHERE heartbeat_at <= ?').bind(nowSec - VOICE_TTL_SEC).run();
       }
       await pruneEphemeralChatRows(chatDb);
     } catch (e) {
@@ -368,7 +395,7 @@ chatSyncRouter.get('/sync', requireAuth, async (c) => {
 
   const { results: rawVoice } = await chatDb.prepare(
     'SELECT * FROM voice_participants WHERE heartbeat_at > ? AND user_id NOT IN (SELECT user_id FROM clubhouse_opted_out) ORDER BY heartbeat_at DESC'
-  ).bind(nowSec - 25).all();
+  ).bind(nowSec - VOICE_TTL_SEC).all();
 
   const accessibleSet = new Set(accessibleChannels.map((ch) => ch.id));
   const voice_participants = (rawVoice || []).filter((vp) => accessibleSet.has(vp.channel_id));
@@ -376,6 +403,12 @@ chatSyncRouter.get('/sync', requireAuth, async (c) => {
 
   const latest_msg_id = messages.length > 0 ? messages[messages.length - 1].id : sinceMsgId;
   const latest_event_id = events.length > 0 ? events[events.length - 1].id : sinceEventId;
+
+  if (!etag) {
+    etag = `W/"sync-${channelFilterParam || 'all'}-${latest_msg_id}-${latest_event_id}-${rtc_signals.length}-${voice_participants.length}"`;
+    c.header('ETag', etag);
+  }
+  c.header('Cache-Control', 'no-cache');
 
   return c.json({
     messages,

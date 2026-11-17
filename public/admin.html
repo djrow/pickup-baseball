@@ -466,6 +466,37 @@
         </div>
       </div>
 
+      <!-- Email Suppressions Section (Resend Webhook Bounces & Complaints) -->
+      <div class="subpanel-card" style="padding: 18px; margin-top: 20px;">
+        <div class="flex-between" style="margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+          <div>
+            <h3 style="margin: 0; color: var(--secondary); font-size: 1.05rem;">📬 Email Suppressions</h3>
+            <p class="text-muted-sm" style="margin-top: 2px; font-size: 0.82rem;">Recipients suppressed due to Resend hard bounces or spam complaints to protect sender reputation. Clearing removes the suppression.</p>
+          </div>
+          <button type="button" id="refresh-suppressions-btn" class="btn btn-outline btn-sm">🔄 Refresh Suppressions</button>
+        </div>
+
+        <div id="suppressions-alert"></div>
+
+        <div class="table-responsive admin-users-scroll-container" style="max-height: 240px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-sm);">
+          <table class="data-table data-table-compact">
+            <thead>
+              <tr>
+                <th style="min-width: 180px;">Suppressed Email</th>
+                <th style="min-width: 100px;">Reason</th>
+                <th style="min-width: 110px;">Bounce Type</th>
+                <th style="min-width: 90px;">Provider</th>
+                <th style="min-width: 110px;">Date</th>
+                <th style="min-width: 80px;">Action</th>
+              </tr>
+            </thead>
+            <tbody id="suppressions-table-body">
+              <tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 12px;">Loading suppressions list...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <!-- Quarantined Liability Waivers (Admin Legal-Defense Hold) -->
       <div class="subpanel-card" style="padding: 18px; margin-top: 20px;">
         <div class="flex-between" style="margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">

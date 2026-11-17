@@ -500,12 +500,12 @@ async function runTier2(t, ctx) {
       }
       const nowSec = Math.floor(Date.now() / 1000);
 
-      // 1. Insert a stale participant (heartbeat 35s ago, exceeding 25s threshold)
+      // 1. Insert a stale participant (heartbeat 100s ago, exceeding 90s threshold)
       chatDb.prepare(`
         INSERT INTO voice_participants (channel_id, user_id, user_name, muted, deafened, screen_sharing, heartbeat_at)
         VALUES (6, 9999, 'Stale User', 0, 0, 0, ?)
         ON CONFLICT(channel_id, user_id) DO UPDATE SET heartbeat_at = ?
-      `).run(nowSec - 35, nowSec - 35);
+      `).run(nowSec - 100, nowSec - 100);
 
       // 2. Insert an active participant (heartbeat 5s ago, active)
       chatDb.prepare(`
@@ -521,7 +521,7 @@ async function runTier2(t, ctx) {
 
       // 4. Assert application endpoint omitted the stale participant
       const staleFound = bootstrapRes.data.voice_participants.find((p) => p.user_id === 9999);
-      assert.equal(staleFound, undefined, 'Stale participant (>25s) must be omitted by /api/bootstrap');
+      assert.equal(staleFound, undefined, 'Stale participant (>90s) must be omitted by /api/bootstrap');
 
       // 5. Assert application endpoint included the active participant
       const activeFound = bootstrapRes.data.voice_participants.find((p) => p.user_id === playerUser.id);

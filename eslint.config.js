@@ -47,9 +47,9 @@ module.exports = [
   // Base recommended rules
   js.configs.recommended,
 
-  // Backend ESM (Cloudflare Workers / Pages Functions + Hono app)
+  // Backend ESM (Cloudflare Workers / Pages Functions + Hono app + workers/ directory)
   {
-    files: ['src/app/**/*.js', 'functions/**/*.js'],
+    files: ['src/app/**/*.js', 'functions/**/*.js', 'workers/**/*.js'],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',

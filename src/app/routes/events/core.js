@@ -11,20 +11,25 @@ import {
   requireOrganizer,
   requireAdmin,
   resolveUserByCalendarToken,
+  ensureUserCalendarToken,
   constantTimeEqual,
   checkRateLimit,
   getSafePublicOrigin,
   arrayBufferToBase64,
   base64ToUint8Array
 } from '../../security.js';
-import { getDefaultDuties, getRequireLoginSetting } from '../../schema.js';
+import { purgePublicEdgeCache } from '../../edge-cache.js';
+import {
+  getDefaultDuties,
+  pruneEphemeralBaseballRows,
+  pruneEphemeralChatRows
+} from '../../schema.js';
 import {
   parseAllowedEmails,
   canUserAccessEvent,
   formatUnlockDateTime,
   getTaskTier,
   getDutyType,
-  getDutyTier1Cap,
   getUserRollingShifts,
   normalizeDutyFlags,
   isViewerOrganizer,
@@ -514,7 +519,19 @@ async function resolveIcsViewer(c) {
     }
     return { errorResponse: null, viewerUser: tokenUser };
   }
-  return { errorResponse: null, viewerUser: c.get('user') || null };
+  const viewerUser = c.get('user') || null;
+  if (viewerUser && !viewerUser.calendar_token && !viewerUser.calendarToken && viewerUser.id && c.env && c.env.DB) {
+    try {
+      const freshToken = await ensureUserCalendarToken(c.env.DB, viewerUser.id, null);
+      if (freshToken) {
+        viewerUser.calendar_token = freshToken;
+        viewerUser.calendarToken = freshToken;
+      }
+    } catch (e) {
+      /* ignore calendar token mint error */
+    }
+  }
+  return { errorResponse: null, viewerUser };
 }
 
 eventsCoreRouter.get('/calendar.ics', async (c) => {
@@ -597,8 +614,28 @@ eventsCoreRouter.all('/reminders/check', async (c) => {
 
   try {
     const origin = getSafePublicOrigin(c);
-    const processed = await processUpcomingEventRemindersD1(c.env.DB, c.env, origin);
-    return c.json({ success: true, processed, message: 'Reminder check executed.' });
+    const result = await processUpcomingEventRemindersD1(c.env.DB, c.env, origin);
+    const processed = typeof result === 'object' && result !== null ? result.processed : result;
+    const sent = typeof result === 'object' && result !== null ? result.sent : undefined;
+    const remaining = typeof result === 'object' && result !== null ? result.remaining : undefined;
+    const quotaPaused = typeof result === 'object' && result !== null ? result.quotaPaused : undefined;
+
+    // Prune expired rate_limits, sessions, and 24h abandoned pending uploads
+    if (c.env && c.env.DB) {
+      await pruneEphemeralBaseballRows(c.env.DB, Date.now(), { force: true });
+    }
+    if (c.env && c.env.CHAT_DB) {
+      await pruneEphemeralChatRows(c.env.CHAT_DB, Date.now(), { force: true });
+    }
+
+    return c.json({
+      success: true,
+      processed,
+      ...(sent !== undefined ? { sent } : {}),
+      ...(remaining !== undefined ? { remaining } : {}),
+      ...(quotaPaused !== undefined ? { quotaPaused } : {}),
+      message: 'Reminder check executed.'
+    });
   } catch (err) {
     console.error('[Reminders] Error checking reminders:', err);
     return c.json({ error: 'Failed to process reminders.' }, 500);
@@ -702,7 +739,9 @@ eventsCoreRouter.get('/:id', async (c) => {
       `).bind(eventId)
     ];
 
+    let myRsvpIndex = -1;
     if (user) {
+      myRsvpIndex = batchStmts.length;
       batchStmts.push(
         db.prepare(`
           SELECT a.id, a.event_id, a.user_id, a.name, a.email, a.status, a.gear_bringing,
@@ -711,8 +750,12 @@ eventsCoreRouter.get('/:id', async (c) => {
             a.additional_guests, a.guest_names,
             COALESCE(a.notify_emails, 0) as notify_emails,
             COALESCE(a.roster_consent, 0) as roster_consent,
+            COALESCE(u.machine_badge, 0) as machine_badge,
+            COALESCE(u.field_badge, 0) as field_badge,
+            COALESCE(u.hero_credits, 0) as hero_credits,
             (SELECT json_group_array(duty_id) FROM duty_assignments WHERE attendee_id = a.id) as duty_ids
           FROM attendees a
+          LEFT JOIN users u ON a.user_id = u.id
           WHERE a.event_id = ? AND (a.user_id = ? OR a.email = ?)
         `).bind(eventId, user.id, user.email)
       );
@@ -724,8 +767,31 @@ eventsCoreRouter.get('/:id', async (c) => {
         userIdIsNull: true
       });
       if (tokenStmt) {
+        myRsvpIndex = batchStmts.length;
         batchStmts.push(tokenStmt);
       }
+    }
+
+    const cfg = resolveConfig(c.env);
+    const certifiedShiftsEnabled = cfg.FEATURE_CERTIFIED_SHIFTS;
+    const battingPracticeEnabled = cfg.FEATURE_BATTING_PRACTICE;
+
+    const settingsIndex = batchStmts.length;
+    batchStmts.push(
+      db.prepare("SELECT key, value FROM app_settings WHERE key = 'require_login_to_rsvp'")
+    );
+
+    let capsIndex = -1;
+    if (certifiedShiftsEnabled) {
+      capsIndex = batchStmts.length;
+      batchStmts.push(
+        db.prepare(`
+          SELECT 
+            COUNT(CASE WHEN machine_badge = 1 THEN 1 END) as machine_count,
+            COUNT(CASE WHEN field_badge = 1 THEN 1 END) as field_count
+          FROM users
+        `)
+      );
     }
 
     const batchRes = await db.batch(batchStmts);
@@ -764,7 +830,7 @@ eventsCoreRouter.get('/:id', async (c) => {
     /** @type {Array<Record<string, any>>} */
     const bpSignups = batchRes[5].results || [];
     /** @type {Record<string, any>|null} */
-    let myRsvp = (batchRes.length > 6 && batchRes[6] && batchRes[6].results && batchRes[6].results[0]) || null;
+    let myRsvp = (myRsvpIndex >= 0 && batchRes[myRsvpIndex] && batchRes[myRsvpIndex].results && batchRes[myRsvpIndex].results[0]) || null;
     if (myRsvp) {
       if (myRsvp.email && !isDeliverableEmail(myRsvp.email)) {
         myRsvp.email = '';
@@ -777,24 +843,49 @@ eventsCoreRouter.get('/:id', async (c) => {
       }
     }
 
-    const cfg = resolveConfig(c.env);
-    const certifiedShiftsEnabled = cfg.FEATURE_CERTIFIED_SHIFTS;
-    const battingPracticeEnabled = cfg.FEATURE_BATTING_PRACTICE;
-
     const isOrganizer = isViewerOrganizer(user);
     const canViewRoster = Boolean(user || (myRsvp && myRsvp.id));
     const tierInfo = certifiedShiftsEnabled
       ? getTaskTier(event.event_date)
       : { tier: 'open', isUnlocked: true, unlockAt: null };
-    const viewerId = user ? user.id : (myRsvp && myRsvp.user_id ? myRsvp.user_id : null);
-    const [requireLogin, viewerUser, machineCap, fieldCap] = await Promise.all([
-      getRequireLoginSetting(db, c.env),
-      viewerId
-        ? /** @type {Promise<Record<string, any>|null>} */ (db.prepare('SELECT id, machine_badge, field_badge, hero_credits FROM users WHERE id = ?').bind(viewerId).first())
-        : Promise.resolve(null),
-      certifiedShiftsEnabled ? getDutyTier1Cap(db, 'machine') : Promise.resolve(null),
-      certifiedShiftsEnabled ? getDutyTier1Cap(db, 'field') : Promise.resolve(null)
-    ]);
+
+    /** @type {{ value?: string }|null} */
+    const settingsRow = (settingsIndex >= 0 && batchRes[settingsIndex] && batchRes[settingsIndex].results && /** @type {{ value?: string }} */ (batchRes[settingsIndex].results[0])) || null;
+    const requireLogin = settingsRow ? (settingsRow.value === 'true') : (c.env && c.env.NODE_ENV === 'test' ? false : true);
+
+    let machineCap = 2;
+    let fieldCap = 2;
+    if (capsIndex >= 0 && batchRes[capsIndex] && batchRes[capsIndex].results && batchRes[capsIndex].results[0]) {
+      /** @type {{ machine_count?: number, field_count?: number }} */
+      const counts = batchRes[capsIndex].results[0];
+      const mCount = Math.max(1, Number(counts.machine_count) || 0);
+      const fCount = Math.max(1, Number(counts.field_count) || 0);
+      machineCap = Math.max(1, Math.floor(12 / mCount));
+      fieldCap = Math.max(1, Math.floor(12 / fCount));
+    }
+
+    let viewerUser = null;
+    if (user) {
+      viewerUser = {
+        id: user.id,
+        machine_badge: user.machine_badge || 0,
+        field_badge: user.field_badge || 0,
+        hero_credits: user.hero_credits || 0
+      };
+    } else if (myRsvp && myRsvp.user_id) {
+      viewerUser = {
+        id: myRsvp.user_id,
+        machine_badge: myRsvp.machine_badge || 0,
+        field_badge: myRsvp.field_badge || 0,
+        hero_credits: myRsvp.hero_credits || 0
+      };
+    }
+
+    if (myRsvp && viewerUser) {
+      myRsvp.hero_credits = viewerUser.hero_credits || 0;
+      myRsvp.machine_badge = viewerUser.machine_badge || 0;
+      myRsvp.field_badge = viewerUser.field_badge || 0;
+    }
 
     const hoursUntilEvent = (new Date(event.event_date).getTime() - Date.now()) / (3600 * 1000);
     const isUrgentCoverWindow = certifiedShiftsEnabled && hoursUntilEvent > 0 && hoursUntilEvent < 48;
@@ -943,7 +1034,8 @@ eventsCoreRouter.get('/:id', async (c) => {
       totalHeadcount: totalConfirmedPlayers + totalConfirmedSpectators,
       totalWaitlist: totalWaitlistPlayers,
       user: user || null,
-      require_login_to_rsvp: requireLogin
+      require_login_to_rsvp: requireLogin,
+      requireLogin: requireLogin
     });
   } catch (err) {
     console.error('[Events] Error fetching event details:', err);
@@ -1029,6 +1121,7 @@ eventsCoreRouter.post('/', requireOrganizer, async (c) => {
     }
 
     const newEvent = await c.env.DB.prepare('SELECT * FROM events WHERE id = ?').bind(eventId).first();
+    await purgePublicEdgeCache(c, { events: true, eventId });
     return c.json({ success: true, eventId, event: newEvent, message: 'Event created successfully.' });
   } catch (err) {
     console.error('[Events] Error creating event:', err);
@@ -1088,6 +1181,12 @@ eventsCoreRouter.put('/:id', requireOrganizer, async (c) => {
       }
     }
 
+    const dateChanged = Boolean(
+      event_date !== undefined &&
+      event_date !== null &&
+      new Date(String(event_date)).getTime() !== new Date(String(existingEvent.event_date)).getTime()
+    );
+
     await c.env.DB.prepare(`
       UPDATE events
       SET title = COALESCE(?, title),
@@ -1098,7 +1197,8 @@ eventsCoreRouter.put('/:id', requireOrganizer, async (c) => {
           max_players = ?,
           actual_attendance = ?,
           allowed_emails = ?,
-          status = COALESCE(?, status)
+          status = COALESCE(?, status),
+          reminder_sent = CASE WHEN ? = 1 THEN 0 ELSE reminder_sent END
       WHERE id = ?
     `).bind(
       title !== undefined ? String(title).trim().slice(0, 150) : null,
@@ -1110,10 +1210,16 @@ eventsCoreRouter.put('/:id', requireOrganizer, async (c) => {
       newActualAttendance,
       newAllowedEmails,
       status || null,
+      dateChanged ? 1 : 0,
       eventId
     ).run();
 
+    if (dateChanged) {
+      await c.env.DB.prepare('UPDATE attendees SET reminder_sent_at = NULL WHERE event_id = ?').bind(eventId).run();
+    }
+
     const updated = await c.env.DB.prepare('SELECT * FROM events WHERE id = ?').bind(eventId).first();
+    await purgePublicEdgeCache(c, { events: true, eventId });
     return c.json({ success: true, event: updated, message: 'Event updated.' });
   } catch (err) {
     console.error('[Events] Error updating event:', err);
@@ -1154,6 +1260,7 @@ eventsCoreRouter.delete('/:id', requireAdmin, async (c) => {
       await c.env.DB.prepare('UPDATE posts SET event_id = NULL WHERE event_id = ?').bind(eventId).run();
       await c.env.DB.prepare('UPDATE media_items SET event_id = NULL WHERE event_id = ?').bind(eventId).run();
     }
+    await purgePublicEdgeCache(c, { events: true, eventId });
     return c.json({ success: true, message: 'Event deleted.' });
   } catch (err) {
     console.error('[Events] Error deleting event:', err);
@@ -1200,8 +1307,9 @@ eventsCoreRouter.post('/:id/rainout', requireOrganizer, async (c) => {
     `).bind(cleanNote, shouldEmail ? 1 : 0, eventId).run();
 
     if (shouldEmail) {
-      await notifyConfirmedAttendees(c, event, cleanNote, sendRainoutEmail);
+      await notifyConfirmedAttendees(c, event, cleanNote, sendRainoutEmail, { actionType: 'rainout' });
     }
+    await purgePublicEdgeCache(c, { events: true, eventId });
     return c.json({ success: true, message: 'Game has been marked as rained out.' });
   } catch (err) {
     console.error('[Events] Error marking rainout:', err);
@@ -1226,8 +1334,9 @@ eventsCoreRouter.post('/:id/reopen', requireOrganizer, async (c) => {
     ).bind(eventId).run();
 
     if (body.sendEmail) {
-      await notifyConfirmedAttendees(c, event, cleanNote, sendReopenEmail);
+      await notifyConfirmedAttendees(c, event, cleanNote, sendReopenEmail, { actionType: 'reopen' });
     }
+    await purgePublicEdgeCache(c, { events: true, eventId });
     return c.json({ success: true, message: 'Game has been reopened and is back on!' });
   } catch (err) {
     console.error('[Events] Error reopening event:', err);
@@ -1247,11 +1356,50 @@ eventsCoreRouter.post('/:id/send-rainout-email', requireOrganizer, async (c) => 
     const body = await c.req.json().catch(() => ({}));
     const cleanNote = body.note !== undefined ? (body.note ? String(body.note).trim() : null) : (event.rainout_note ? String(event.rainout_note) : null);
 
-    await notifyConfirmedAttendees(c, event, cleanNote, sendRainoutEmail);
+    const result = await notifyConfirmedAttendees(c, event, cleanNote, sendRainoutEmail, { actionType: 'rainout' });
     await c.env.DB.prepare('UPDATE events SET rainout_email_sent = 1 WHERE id = ?').bind(eventId).run();
 
-    return c.json({ success: true, message: 'Rainout email sent to confirmed attendees.' });
+    return c.json({
+      success: true,
+      sent: result.sent,
+      remaining: result.remaining,
+      quotaPaused: result.quotaPaused,
+      message: 'Rainout email sent to confirmed attendees.'
+    });
   } catch (err) {
     return jsonError(c, 500, ERROR_CODES.MAIL_ERROR, 'Failed to send rainout email.');
+  }
+});
+
+eventsCoreRouter.post('/:id/notifications/resume', requireOrganizer, async (c) => {
+  try {
+    const eventId = parseInt(c.req.param('id'), 10);
+    if (!eventId || isNaN(eventId) || eventId <= 0) {
+      return c.json({ error: 'Invalid event ID.' }, 400);
+    }
+    const event = await c.env.DB.prepare('SELECT * FROM events WHERE id = ?').bind(eventId).first();
+    if (!event) return c.json({ error: 'Event not found.' }, 404);
+
+    const body = await c.req.json().catch(() => ({}));
+    const actionType = body.actionType || (event.status === 'rainout' ? 'rainout' : 'reopen');
+    const note = body.note !== undefined ? (body.note ? String(body.note).trim() : null) : (event.rainout_note ? String(event.rainout_note) : null);
+    const limit = body.limit !== undefined ? Math.min(200, Math.max(1, parseInt(body.limit, 10) || 100)) : 100;
+
+    const emailFn = actionType === 'rainout' ? sendRainoutEmail : sendReopenEmail;
+    const result = await notifyConfirmedAttendees(c, event, note, emailFn, {
+      actionType,
+      limit
+    });
+
+    return c.json({
+      success: true,
+      sent: result.sent,
+      remaining: result.remaining,
+      quotaPaused: result.quotaPaused,
+      message: result.remaining === 0 ? 'All attendee notices delivered.' : 'Attendee notice batch dispatched.'
+    });
+  } catch (err) {
+    console.error('[Events] Error resuming notifications:', err);
+    return jsonError(c, 500, ERROR_CODES.MAIL_ERROR, 'Failed to resume notifications.');
   }
 });

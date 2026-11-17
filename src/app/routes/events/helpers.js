@@ -6,7 +6,10 @@
 
 import {
   sendWaitlistPromotionEmail,
-  sendEventReminder
+  sendBatch,
+  buildEventReminderEmail,
+  buildRainoutEmail,
+  buildReopenEmail
 } from '../../mailer.js';
 import { getSafePublicOrigin, getManagementTokenCandidates } from '../../security.js';
 import { ERROR_CODES, logEvent } from '../../errors.js';
@@ -127,52 +130,109 @@ export async function promoteNextWaitlistedPlayer(c, origin, eventId) {
 }
 
 /**
- * Sends pre-game reminder emails to all attending registrants for a single event and marks `reminder_sent = 1`.
+ * Sends pre-game reminder emails to attending registrants for a single event.
+ * Tracks `attendees.reminder_sent_at`, caps per-run batches (default 100),
+ * stamps `reminder_sent_at` per sent batch via `db.batch()`, and sets `events.reminder_sent = 1`
+ * only when `remaining === 0`.
+ *
  * @param {D1Database} db - D1 database binding (`BASEBALL_DB`).
  * @param {AppBindings} env - Cloudflare environment bindings.
  * @param {string} origin - Public site origin URL.
  * @param {Record<string, any>} event - Event row.
- * @returns {Promise<void>}
+ * @param {{ limit?: number }} [options]
+ * @returns {Promise<{ sent: number, remaining: number, quotaPaused: boolean }>}
  */
-export async function sendRemindersForEventD1(db, env, origin, event) {
-  const { results: attendees } = await db.prepare(`
+export async function sendRemindersForEventD1(db, env, origin, event, options = {}) {
+  const limit = options.limit !== undefined ? options.limit : 100;
+
+  // 1. Fetch attending registrants whose reminder has not yet been sent
+  const { results: unsentRows } = await db.prepare(`
     SELECT a.*, d.title as duty_name
     FROM attendees a
     LEFT JOIN duty_assignments da ON a.id = da.attendee_id
     LEFT JOIN event_duties d ON da.duty_id = d.id
-    WHERE a.event_id = ? AND a.status = 'attending'
-  `).bind(event.id).all();
+    WHERE a.event_id = ? AND a.status = 'attending' AND a.reminder_sent_at IS NULL
+    ORDER BY a.created_at ASC, a.id ASC
+    LIMIT ?
+  `).bind(event.id, limit).all();
 
   /** @type {Array<Record<string, any>>} */
-  const list = attendees || [];
-  await runBoundedConcurrency(list, 5, async (att) => {
-    if (!isDeliverableEmail(att.email)) return;
-    try {
-      await sendEventReminder(env, origin, {
-        email: att.email,
-        name: att.name,
-        event,
-        dutyName: att.duty_name,
-        gearBringing: att.gear_bringing,
-        totalAttendees: list.length
-      });
-    } catch (e) {
-      logEvent('error', 'event_reminder_email_failed', {
-        code: ERROR_CODES.MAIL_ERROR,
-        email: att.email,
-        msg: e && e.message ? e.message : 'Event reminder email failed'
-      });
+  const candidates = (unsentRows || []).filter((att) => isDeliverableEmail(String(att.email || '')));
+
+  if (candidates.length === 0) {
+    // Check if any deliverable attendees remain unsent
+    const countRow = await db.prepare(`
+      SELECT COUNT(*) as count
+      FROM attendees
+      WHERE event_id = ? AND status = 'attending' AND reminder_sent_at IS NULL
+        AND email NOT LIKE '%@noemail.invalid' AND email NOT LIKE '%.invalid'
+    `).bind(event.id).first();
+    const remaining = Number((countRow && countRow.count) || 0);
+
+    if (remaining === 0) {
+      await db.prepare('UPDATE events SET reminder_sent = 1 WHERE id = ?').bind(event.id).run();
     }
-  });
-  await db.prepare('UPDATE events SET reminder_sent = 1 WHERE id = ?').bind(event.id).run();
+    return { sent: 0, remaining, quotaPaused: false };
+  }
+
+  // Count total attending to display in email
+  const totalAttRow = await db.prepare(`
+    SELECT COUNT(*) as total FROM attendees WHERE event_id = ? AND status = 'attending'
+  `).bind(event.id).first();
+  const totalAttendees = Number((totalAttRow && totalAttRow.total) || candidates.length);
+
+  // Build batch messages
+  const messages = candidates.map((att) => buildEventReminderEmail(env, origin, {
+    email: att.email,
+    name: att.name,
+    event,
+    dutyName: att.duty_name,
+    gearBringing: att.gear_bringing,
+    totalAttendees
+  }));
+
+  const batchRes = await sendBatch(env, db, messages, { priority: 'reminder' });
+
+  // Atomically stamp reminder_sent_at for sent candidates
+  if (batchRes.sent && batchRes.sent.length > 0) {
+    const sentIndices = new Set(batchRes.sent.map((s) => s.index));
+    const sentAttendees = candidates.filter((_, idx) => sentIndices.has(idx));
+
+    if (sentAttendees.length > 0) {
+      const nowIso = new Date().toISOString();
+      const stmts = sentAttendees.map((att) =>
+        db.prepare('UPDATE attendees SET reminder_sent_at = ? WHERE id = ?').bind(nowIso, att.id)
+      );
+      await db.batch(stmts);
+    }
+  }
+
+  // Check remaining count
+  const remainingRow = await db.prepare(`
+    SELECT COUNT(*) as count
+    FROM attendees
+    WHERE event_id = ? AND status = 'attending' AND reminder_sent_at IS NULL
+      AND email NOT LIKE '%@noemail.invalid' AND email NOT LIKE '%.invalid'
+  `).bind(event.id).first();
+  const remaining = Number((remainingRow && remainingRow.count) || 0);
+
+  if (remaining === 0 && !batchRes.quotaPaused) {
+    await db.prepare('UPDATE events SET reminder_sent = 1 WHERE id = ?').bind(event.id).run();
+  }
+
+  return {
+    sent: (batchRes.sent && batchRes.sent.length) || 0,
+    remaining,
+    quotaPaused: Boolean(batchRes.quotaPaused)
+  };
 }
 
 /**
- * Processes all active games within the next 36 hours whose reminders have not yet been sent.
+ * Processes all active games within the next 36 hours whose reminders have not yet been completed.
  * @param {D1Database} db - D1 database binding.
  * @param {AppBindings} env - Cloudflare environment bindings.
  * @param {string} [origin] - Public site origin URL.
- * @returns {Promise<number>} Count of events processed.
+ * @returns {Promise<{ processed: number, sent: number, remaining: number, quotaPaused: boolean }>}
  */
 export async function processUpcomingEventRemindersD1(db, env, origin = '') {
   const safeOrigin = origin || resolveConfig(env).PUBLIC_ORIGIN || '';
@@ -186,42 +246,125 @@ export async function processUpcomingEventRemindersD1(db, env, origin = '') {
   `).bind(windowStart, windowEnd).all();
 
   const list = upcomingEvents || [];
+  let totalSent = 0;
+  let totalRemaining = 0;
+  let anyQuotaPaused = false;
+
   for (const ev of list) {
-    await sendRemindersForEventD1(db, env, safeOrigin, ev);
+    const res = await sendRemindersForEventD1(db, env, safeOrigin, ev);
+    totalSent += res.sent;
+    totalRemaining += res.remaining;
+    if (res.quotaPaused) {
+      anyQuotaPaused = true;
+      break;
+    }
   }
-  return list.length;
+
+  return {
+    processed: list.length,
+    sent: totalSent,
+    remaining: totalRemaining,
+    quotaPaused: anyQuotaPaused
+  };
 }
 
 /**
- * Broadcasts an event status email (rainout or reopen) to all confirmed attendees with deliverable emails.
+ * Broadcasts an event status email (rainout or reopen) to confirmed attendees with deliverable emails.
+ * Stamps deterministic `notice_key` (`rainout:<event_version>` / `reopen:<event_version>`)
+ * into `attendees.last_notice_key` and `last_notice_sent_at` via `db.batch()`.
+ * Returns `{ sent, remaining, quotaPaused }` and supports duplicate-free continuation.
+ *
  * @param {AppContext} c
  * @param {Record<string, any>} event
  * @param {string|null} note
- * @param {(env: AppBindings, origin: string, payload: Record<string, any>) => Promise<any>} emailFn
- * @returns {Promise<void>}
+ * @param {Function} [emailBuilderOrFn] - Email builder or sender function
+ * @param {{ noticeKey?: string, limit?: number, actionType?: 'rainout' | 'reopen' }} [options]
+ * @returns {Promise<{ sent: number, remaining: number, quotaPaused: boolean }>}
  */
-export async function notifyConfirmedAttendees(c, event, note, emailFn) {
-  const { results: attendees } = await c.env.DB.prepare(
-    "SELECT * FROM attendees WHERE event_id = ? AND status = 'attending'"
-  ).bind(event.id).all();
+export async function notifyConfirmedAttendees(c, event, note, emailBuilderOrFn, options = {}) {
+  const db = c.env.DB;
   const origin = getSafePublicOrigin(c);
-  await runBoundedConcurrency(attendees || [], 5, async (att) => {
-    if (!isDeliverableEmail(String(att.email || ''))) return;
-    try {
-      await emailFn(c.env, origin, {
+  const limit = options.limit !== undefined ? options.limit : 100;
+
+  // Determine notice_key: rainout:<version> or reopen:<version>
+  const version = event.invite_version !== undefined ? event.invite_version : 1;
+  const actionType = options.actionType || (event.status === 'rainout' ? 'rainout' : 'reopen');
+  const noticeKey = options.noticeKey || `${actionType}:${version}`;
+
+  // Query confirmed attendees who have not yet received this notice_key
+  const { results: unsentRows } = await db.prepare(`
+    SELECT * FROM attendees
+    WHERE event_id = ? AND status = 'attending'
+      AND (last_notice_key IS NULL OR last_notice_key != ?)
+    ORDER BY created_at ASC, id ASC
+    LIMIT ?
+  `).bind(event.id, noticeKey, limit).all();
+
+  const candidates = (unsentRows || []).filter((att) => isDeliverableEmail(String(att.email || '')));
+
+  if (candidates.length === 0) {
+    const countRow = await db.prepare(`
+      SELECT COUNT(*) as count
+      FROM attendees
+      WHERE event_id = ? AND status = 'attending'
+        AND (last_notice_key IS NULL OR last_notice_key != ?)
+        AND email NOT LIKE '%@noemail.invalid' AND email NOT LIKE '%.invalid'
+    `).bind(event.id, noticeKey).first();
+    const remaining = Number((countRow && countRow.count) || 0);
+    return { sent: 0, remaining, quotaPaused: false };
+  }
+
+  // Construct batch messages
+  const isRainout = actionType === 'rainout';
+  const messages = candidates.map((att) => {
+    if (isRainout) {
+      return buildRainoutEmail(c.env, origin, {
         email: att.email,
         name: att.name,
         event,
         note
       });
-    } catch (e) {
-      logEvent('error', 'event_notice_email_failed', {
-        code: ERROR_CODES.MAIL_ERROR,
-        email: att.email,
-        msg: e && e.message ? e.message : 'Event notice email failed'
-      });
     }
+    return buildReopenEmail(c.env, origin, {
+      email: att.email,
+      name: att.name,
+      event,
+      note
+    });
   });
+
+  const batchRes = await sendBatch(c.env, db, messages, { priority: 'rainout_reopen' });
+
+  // Atomically stamp last_notice_key and last_notice_sent_at for sent candidates
+  if (batchRes.sent && batchRes.sent.length > 0) {
+    const sentIndices = new Set(batchRes.sent.map((s) => s.index));
+    const sentAttendees = candidates.filter((_, idx) => sentIndices.has(idx));
+
+    if (sentAttendees.length > 0) {
+      const nowIso = new Date().toISOString();
+      const stmts = sentAttendees.map((att) =>
+        db.prepare('UPDATE attendees SET last_notice_key = ?, last_notice_sent_at = ? WHERE id = ?')
+          .bind(noticeKey, nowIso, att.id)
+      );
+      await db.batch(stmts);
+    }
+  }
+
+  // Remaining count for this notice_key
+  const remainingRow = await db.prepare(`
+    SELECT COUNT(*) as count
+    FROM attendees
+    WHERE event_id = ? AND status = 'attending'
+      AND (last_notice_key IS NULL OR last_notice_key != ?)
+      AND email NOT LIKE '%@noemail.invalid' AND email NOT LIKE '%.invalid'
+  `).bind(event.id, noticeKey).first();
+  const remaining = Number((remainingRow && remainingRow.count) || 0);
+
+  return {
+    sent: (batchRes.sent && batchRes.sent.length) || 0,
+    remaining,
+    quotaPaused: Boolean(batchRes.quotaPaused)
+  };
 }
 
 /** Detail projection for `GET /api/events/:id` attendee self-lookup. */

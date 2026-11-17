@@ -1,0 +1,10 @@
+name = "cron-reminders"
+main = "src/index.js"
+compatibility_date = "2024-10-22"
+compatibility_flags = ["nodejs_compat"]
+
+[triggers]
+crons = ["0 * * * *"]
+
+[vars]
+LOCK_PREVIEW_ORIGIN = "1"

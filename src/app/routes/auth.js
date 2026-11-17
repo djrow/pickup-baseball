@@ -30,6 +30,8 @@ import {
   requireAdmin,
   ensureUserCalendarToken,
   regenerateUserCalendarToken,
+  purgeSessionCache,
+  purgeUserSessionCache,
   enforceUserSessionCap,
   CANONICAL_MEMBER_ROLE,
   isMemberRole,
@@ -40,6 +42,7 @@ import { resolveConfig } from '../config.js';
 import { sendAuthCode, sendErasureVerificationCode } from '../mailer.js';
 import { ERROR_CODES, jsonError, logEvent } from '../errors.js';
 import { executeTwoTierErasure } from '../erasure.js';
+import { purgePublicEdgeCache } from '../edge-cache.js';
 import {
   CONSENT_TYPES,
   getConsentPolicyMetadata,
@@ -71,7 +74,7 @@ async function upsertUserAndCreateSession(c, cleanEmail, fallbackName, { sharedD
     ).bind(displayName, cleanEmail, role, isAdminFlag, calendarToken).run();
     user = await db.prepare('SELECT * FROM users WHERE id = ?').bind(insertRes.meta.last_row_id).first();
   } else if (!user.calendar_token) {
-    await ensureUserCalendarToken(db, user.id, user.calendar_token);
+    user.calendar_token = await ensureUserCalendarToken(db, user.id, user.calendar_token);
   }
 
   // Prune expired sessions and keep at most (MAX_SESSIONS_PER_USER - 1) prior active sessions
@@ -409,7 +412,20 @@ authRouter.get('/verify-magic', async (c) => {
   }
 });
 
-authRouter.get('/me', (c) => c.json({ user: c.get('user') }));
+authRouter.get('/me', async (c) => {
+  const user = c.get('user');
+  if (user && !user.calendarToken && !user.calendar_token && c.env && (c.env.BASEBALL_DB || c.env.DB)) {
+    const db = c.env.BASEBALL_DB || c.env.DB;
+    try {
+      const token = await ensureUserCalendarToken(db, user.id, null);
+      if (token) {
+        user.calendar_token = token;
+        user.calendarToken = token;
+      }
+    } catch (e) { /* ignore */ }
+  }
+  return c.json({ user });
+});
 
 async function fetchBaseballExportData(db, userId, userEmail) {
   const visitorEmailHash = await hashSubjectEmail(userEmail);
@@ -1008,6 +1024,8 @@ async function applyMemberProfileAndConsents(db, user, body, profileFields, env 
       granted: tr.granted
     }, env);
   }
+
+  await purgeUserSessionCache(db, user.id);
 }
 
 authRouter.put('/profile', requireAuth, async (c) => {
@@ -1140,6 +1158,7 @@ async function handleClubhouseOptInToggle(c) {
 
     user.clubhouseOptedIn = optedIn;
     user.clubhouse_opted_in = val;
+    await purgeUserSessionCache(c.env.DB, user.id);
 
     return c.json({
       success: true,
@@ -1183,6 +1202,7 @@ authRouter.post('/avatar', requireAuth, async (c) => {
     const dataUrl = `data:${mime};base64,${arrayBufferToBase64(cleanBuffer)}`;
 
     await c.env.DB.prepare('UPDATE users SET avatar_url = ? WHERE id = ?').bind(dataUrl, user.id).run();
+    await purgeUserSessionCache(c.env.DB, user.id);
     const avatarUrl = `/api/users/${user.id}/avatar?v=${dataUrl.length}`;
     user.avatarUrl = avatarUrl;
 
@@ -1197,6 +1217,7 @@ authRouter.delete('/avatar', requireAuth, async (c) => {
   const user = c.get('user');
   try {
     await c.env.DB.prepare('UPDATE users SET avatar_url = NULL WHERE id = ?').bind(user.id).run();
+    await purgeUserSessionCache(c.env.DB, user.id);
     user.avatarUrl = null;
     return c.json({ success: true, message: 'Profile picture removed.' });
   } catch (err) {
@@ -1272,6 +1293,7 @@ authRouter.put('/users/:id/role', requireAdmin, async (c) => {
 
   const isAdminFlag = role === 'admin' ? 1 : 0;
   await c.env.DB.prepare('UPDATE users SET role = ?, is_admin = ? WHERE id = ?').bind(role, isAdminFlag, targetId).run();
+  await purgeUserSessionCache(c.env.DB, targetId);
 
   return c.json({
     success: true,
@@ -1300,6 +1322,7 @@ authRouter.put('/users/:id/moderator', requireAdmin, async (c) => {
 
   const modVal = enableMod ? 1 : 0;
   await c.env.DB.prepare('UPDATE users SET is_moderator = ? WHERE id = ?').bind(modVal, targetId).run();
+  await purgeUserSessionCache(c.env.DB, targetId);
 
   return c.json({
     success: true,
@@ -1343,6 +1366,7 @@ authRouter.put('/users/:id/badges', requireAdmin, async (c) => {
     await c.env.DB.prepare(
       'UPDATE users SET machine_badge = ?, field_badge = ?, hero_credits = ?, waiver_status = ?, waiver_signed_at = ? WHERE id = ?'
     ).bind(newMachineBadge, newFieldBadge, newHeroCredits, newWaiverStatus, newWaiverSignedAt, targetId).run();
+    await purgeUserSessionCache(c.env.DB, targetId);
 
     return c.json({
       success: true,
@@ -1384,6 +1408,10 @@ authRouter.delete('/users/:id', requireAdmin, async (c) => {
   const keepApprovedGallery = c.req.query('keep_approved_gallery') === 'true'
     || body.keep_approved_gallery === true
     || body.keep_approved_gallery === 'true';
+
+  if (ban) {
+    await purgeUserSessionCache(c.env.DB, targetId);
+  }
 
   const result = await executeTwoTierErasure({
     db: c.env.DB,
@@ -1430,6 +1458,11 @@ authRouter.post('/banned-emails', requireAdmin, async (c) => {
     return c.json({ error: 'You cannot ban your own administrator email address.' }, 400);
   }
   const cleanReason = (reason || 'Banned by admin').toString().trim().slice(0, 200);
+
+  const targetUserRow = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(cleanEmail).first();
+  if (targetUserRow && targetUserRow.id) {
+    await purgeUserSessionCache(c.env.DB, Number(targetUserRow.id));
+  }
 
   await c.env.DB.batch([
     c.env.DB.prepare('INSERT OR REPLACE INTO banned_emails (email, reason) VALUES (?, ?)').bind(cleanEmail, cleanReason),
@@ -1490,6 +1523,8 @@ authRouter.post('/logout-other-devices', requireAuth, async (c) => {
 
   const currentSessionId = getCookie(c, SESSION_COOKIE_NAME) || '';
   const currentSessionHash = currentSessionId ? await hashSessionId(currentSessionId) : '';
+  await purgeUserSessionCache(db, user.id, currentSessionHash);
+
   const delRes = await db.prepare(
     'DELETE FROM sessions WHERE user_id = ? AND id != ?'
   ).bind(user.id, currentSessionHash).run();
@@ -1513,14 +1548,17 @@ authRouter.post('/logout-other-devices', requireAuth, async (c) => {
 
 authRouter.post('/logout', async (c) => {
   const sessionId = getCookie(c, SESSION_COOKIE_NAME);
-  if (sessionId && c.env.DB) {
-    try {
-      const hashedId = await hashSessionId(sessionId);
-      await c.env.DB.prepare(
-        'DELETE FROM sessions WHERE id = ?'
-      ).bind(hashedId).run();
-    } catch (e) {
-      logEvent('warn', 'auth_logout_session_delete_failed', { err: e });
+  if (sessionId) {
+    await purgeSessionCache(sessionId);
+    if (c.env.DB) {
+      try {
+        const hashedId = await hashSessionId(sessionId);
+        await c.env.DB.prepare(
+          'DELETE FROM sessions WHERE id = ?'
+        ).bind(hashedId).run();
+      } catch (e) {
+        logEvent('warn', 'auth_logout_session_delete_failed', { err: e });
+      }
     }
   }
   deleteCookie(c, SESSION_COOKIE_NAME, { path: '/' });
@@ -1628,6 +1666,7 @@ export async function putSettingsHandler(c) {
     }
     await c.env.DB.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('appscript_upload_url', ?)").bind(cleanUrl).run();
   }
+  await purgePublicEdgeCache(c, { config: true });
   return c.json({
     success: true,
     require_login_to_rsvp: requireLoginVal !== null ? (requireLoginVal === 'true') : undefined,

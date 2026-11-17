@@ -22,6 +22,7 @@ import { sendWaiverConfirmationEmail } from '../mailer.js';
 import { logEvent } from '../errors.js';
 import { resolveConfig, PRESET_PICKUP_BASEBALL } from '../config.js';
 import { purgeExpiredQuarantinedWaivers, scrubExpiredWaiverTelemetry } from '../erasure.js';
+import { resolveStorageProvider, canonicalObjectKey, r2StorageAdapter } from '../storage/index.js';
 
 export { scrubExpiredWaiverTelemetry };
 
@@ -688,7 +689,17 @@ waiverRouter.post('/sign', requireAuth, async (c) => {
   const backgroundWork = (async () => {
     await scrubExpiredWaiverTelemetry(c.env.DB);
     try {
-      if (isGDriveConfigured(c.env)) {
+      const provider = resolveStorageProvider(c.env);
+      if (provider === 'r2' || (c.env && (c.env.MEDIA_BUCKET || c.env.R2_BUCKET))) {
+        const htmlCert = renderSignedWaiverCertificateHtml(waiverRow, true, true, c.env);
+        const certKey = canonicalObjectKey('waivers', { certificateId });
+        await r2StorageAdapter.putObject(c.env, {
+          kind: 'waivers',
+          objectKey: certKey,
+          mimeType: 'text/html; charset=utf-8',
+          bytes: new TextEncoder().encode(htmlCert)
+        });
+      } else if (isGDriveConfigured(c.env)) {
         const htmlCert = renderSignedWaiverCertificateHtml(waiverRow, true, true, c.env);
         const safeFileNamePart = printedName.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40) || 'Player';
         const fileName = `Waiver_${safeFileNamePart}_${signedDate}_${certificateId}.html`;
@@ -703,7 +714,7 @@ waiverRouter.post('/sign', requireAuth, async (c) => {
         }
       }
     } catch (err) {
-      console.warn('[Waiver] Optional Google Drive archival skipped:', err.message);
+      console.warn('[Waiver] Optional Google Drive/R2 archival skipped:', err.message);
     }
 
     try {

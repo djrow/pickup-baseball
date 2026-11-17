@@ -8,7 +8,7 @@
 (function (root) {
   'use strict';
 
-  var HEARTBEAT_INTERVAL_MS = 16000;
+  var HEARTBEAT_INTERVAL_MS = 45000;
   var DEFAULT_ICE_SERVERS = [
     { urls: 'stun:stun.cloudflare.com:3478' },
     { urls: 'stun:stun.l.google.com:19302' }
@@ -722,6 +722,21 @@
         } catch (e) { /* ignore transient DataChannel send failure for typing indicator */ }
       }
     }
+  }
+
+  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener('pagehide', function () {
+      if (rtcState.activeChannelId) {
+        var leaveUrl = '/api/voice/' + encodeURIComponent(rtcState.activeChannelId) + '/leave';
+        if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
+          navigator.sendBeacon(leaveUrl);
+        } else {
+          try {
+            fetch(leaveUrl, { method: 'POST', credentials: 'same-origin', keepalive: true });
+          } catch (e) { /* best-effort pagehide leave */ }
+        }
+      }
+    });
   }
 
   var ClubhouseRTC = {

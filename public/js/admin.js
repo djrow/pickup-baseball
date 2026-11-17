@@ -1804,6 +1804,9 @@ function setupAdminSecurity() {
   const banForm = document.getElementById('ban-email-form');
   const banSubmitBtn = document.getElementById('ban-submit-btn');
   const refreshBannedBtn = document.getElementById('refresh-banned-btn');
+  const suppressionsTableBody = document.getElementById('suppressions-table-body');
+  const suppressionsAlert = document.getElementById('suppressions-alert');
+  const refreshSuppressionsBtn = document.getElementById('refresh-suppressions-btn');
   const quarantinedTableBody = document.getElementById('quarantined-waivers-table-body');
   const quarantinedAlert = document.getElementById('quarantined-waivers-alert');
   const refreshQuarantinedBtn = document.getElementById('refresh-quarantined-waivers-btn');
@@ -2019,6 +2022,60 @@ function setupAdminSecurity() {
 
   if (refreshBannedBtn) refreshBannedBtn.addEventListener('click', loadBannedEmails);
 
+  async function loadSuppressions() {
+    if (!suppressionsTableBody) return;
+    suppressionsTableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 10px;">Loading suppressions list...</td></tr>';
+    try {
+      const res = await API.getSuppressions();
+      const list = (res && res.suppressions) ? res.suppressions : [];
+      if (list.length === 0) {
+        suppressionsTableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 10px;">No email suppressions.</td></tr>';
+        return;
+      }
+      suppressionsTableBody.innerHTML = list.map(function(s) {
+        const bounceTypeLabel = s.bounce_type ? API.escapeHtml(s.bounce_type) : '-';
+        const reasonBadgeClass = s.reason === 'complaint' ? 'color: var(--danger);' : 'color: var(--warning, #d97706);';
+        return `
+          <tr>
+            <td style="font-weight: 700; font-size: 0.84rem; font-family: monospace;">${API.escapeHtml(s.email)}</td>
+            <td style="font-size: 0.82rem; font-weight: 600; ${reasonBadgeClass}">${API.escapeHtml(s.reason || 'bounce')}</td>
+            <td style="font-size: 0.82rem; color: var(--text-muted);">${bounceTypeLabel}</td>
+            <td style="font-size: 0.82rem; color: var(--text-muted);">${API.escapeHtml(s.provider || 'resend')}</td>
+            <td style="font-size: 0.82rem; color: var(--text-muted); white-space: nowrap;">${s.created_at ? API.escapeHtml(String(s.created_at).slice(0, 10)) : ''}</td>
+            <td style="white-space: nowrap;">
+              <button type="button" class="btn btn-outline btn-sm btn-clear-suppression" data-email="${API.escapeHtml(s.email)}" style="font-size: 0.75rem; padding: 2px 8px; height: 26px; line-height: 1.2;">Clear</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      suppressionsTableBody.querySelectorAll('.btn-clear-suppression').forEach(function(btn) {
+        btn.addEventListener('click', async function(e) {
+          const email = e.currentTarget.getAttribute('data-email');
+          const ok = window.PBFDialog
+            ? await window.PBFDialog.confirm('Clear suppression for ' + email + '? Future emails will be sent normally.')
+            : false;
+          if (!ok) return;
+          try {
+            const clearRes = await API.clearSuppression(email);
+            if (suppressionsAlert) {
+              suppressionsAlert.innerHTML = '<div class="alert alert-success" style="font-size: 0.85rem;">' + API.escapeHtml((clearRes && clearRes.message) || 'Suppression cleared.') + '</div>';
+            }
+            await loadSuppressions();
+          } catch (err) {
+            if (suppressionsAlert) {
+              suppressionsAlert.innerHTML = '<div class="alert alert-error" style="font-size: 0.85rem;">Failed to clear suppression.</div>';
+            }
+          }
+        });
+      });
+    } catch (e) {
+      suppressionsTableBody.innerHTML = '<tr><td colspan="6" style="color: var(--danger); text-align: center; padding: 10px;">Failed to load suppressions list.</td></tr>';
+    }
+  }
+
+  if (refreshSuppressionsBtn) refreshSuppressionsBtn.addEventListener('click', loadSuppressions);
+
   async function loadQuarantinedWaivers() {
     if (!quarantinedTableBody) return;
     quarantinedTableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 10px;">' + API.escapeHtml(API.t('admin.quarantined_loading', 'Loading quarantined waivers...')) + '</td></tr>';
@@ -2079,6 +2136,7 @@ function setupAdminSecurity() {
 
   loadSettings();
   loadBannedEmails();
+  loadSuppressions();
   loadQuarantinedWaivers();
 
   if (window.location.hash === '#admin-security-section' || window.location.hash === '#security-management-section') {

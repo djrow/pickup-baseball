@@ -41,6 +41,42 @@ const testDataDir = path.join(os.tmpdir(), `pickup_verify_data_${Date.now()}`);
 process.env.DATA_DIR = testDataDir;
 
 const { db, chatDb, d1, baseballD1, chatD1, initDatabase, getDefaultDuties } = require('../src/db');
+const { clearSessionMemoryCache } = require('../src/app/security.js');
+const { clearPublicEdgeMemoryCache } = require('../src/app/edge-cache.js');
+
+// Auto-invalidate in-memory caches when tests execute raw SQL mutations directly on test databases
+const origDbPrepare = db.prepare.bind(db);
+db.prepare = function(sql) {
+  const stmt = origDbPrepare(sql);
+  const origRun = stmt.run.bind(stmt);
+  stmt.run = function(...args) {
+    const res = origRun(...args);
+    const upper = String(sql).toUpperCase();
+    if (upper.includes('SESSIONS') || upper.includes('USERS') || upper.includes('DUTY_ASSIGNMENTS') || upper.includes('CLUBHOUSE_OPTED_OUT')) {
+      clearSessionMemoryCache();
+    }
+    if (upper.includes('EVENTS') || upper.includes('ATTENDEES') || upper.includes('MEDIA_ITEMS') || upper.includes('COMMENTS') || upper.includes('BATTING_PRACTICE_SIGNUPS')) {
+      clearPublicEdgeMemoryCache();
+    }
+    return res;
+  };
+  return stmt;
+};
+
+const origChatDbPrepare = chatDb.prepare.bind(chatDb);
+chatDb.prepare = function(sql) {
+  const stmt = origChatDbPrepare(sql);
+  const origRun = stmt.run.bind(stmt);
+  stmt.run = function(...args) {
+    const res = origRun(...args);
+    const upper = String(sql).toUpperCase();
+    if (upper.includes('CLUBHOUSE_OPTED_OUT') || upper.includes('VOICE_PARTICIPANTS')) {
+      clearSessionMemoryCache();
+    }
+    return res;
+  };
+  return stmt;
+};
 
 const { createSession } = require('../src/auth');
 const { createNodeHttpBridge, getFullRequestUrl, sendWebResponse } = require('../src/d1-sqlite');
@@ -89,7 +125,8 @@ app.use('/api', createNodeHttpBridge(honoApp, () => ({
   NODE_ENV: 'test',
   BASEBALL_DB: baseballD1 || d1,
   CHAT_DB: chatD1,
-  DB: baseballD1 || d1
+  DB: baseballD1 || d1,
+  CRON_SECRET: process.env.CRON_SECRET || 'test-cron-secret'
 })));
 
 let server;
@@ -120,14 +157,20 @@ function getCookie(headers, cookieName) {
 async function apiReq(method, endpoint, cookie = null, body = null, extraHeaders = {}) {
   const headers = { ...extraHeaders };
   if (cookie) headers['Cookie'] = cookie;
-  if (body !== null && typeof body === 'object') {
-    headers['Content-Type'] = 'application/json';
+  let reqBody = undefined;
+  if (body !== null && body !== undefined) {
+    if (Buffer.isBuffer(body) || typeof body === 'string' || body instanceof Uint8Array || body instanceof ArrayBuffer) {
+      reqBody = body;
+    } else {
+      headers['Content-Type'] = 'application/json';
+      reqBody = JSON.stringify(body);
+    }
   }
 
   const res = await fetch(`${ctx.baseUrl}${endpoint}`, {
     method,
     headers,
-    body: body !== null ? (typeof body === 'string' ? body : JSON.stringify(body)) : undefined,
+    body: reqBody,
     redirect: 'manual'
   });
 
@@ -155,6 +198,10 @@ const ctx = {
   rootDir: ROOT_DIR,
   publicDir: PUBLIC_DIR,
   db,
+  d1,
+  baseballD1,
+  chatDb,
+  chatD1,
   initDatabase,
   getDefaultDuties,
   createSession,
@@ -282,4 +329,12 @@ require('../tests/core/two-tier-erasure.test.js')();
 require('../tests/core/privacy-consent.test.js')();
 require('../tests/core/visitor-erasure.test.js')();
 require('../tests/core/peer-block-ui.test.js')();
+require('../tests/core/cache-batching.test.js')(ctx);
+require('../tests/core/storage-provider.test.js')(ctx);
+require('../tests/core/gallery-direct-upload.test.js')(ctx);
+require('../tests/core/mailer-cursors.test.js')(ctx);
+require('../tests/core/webhook-resend-suppression.test.js')(ctx);
+require('../tests/core/cron-reminders.test.js')(ctx);
+require('../tests/core/migrate-d1-media-to-r2.test.js')();
+require('../tests/core/clubhouse-sync-voice.test.js')(ctx);
 require('../tests/clubhouse/index.js')();

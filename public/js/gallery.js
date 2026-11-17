@@ -18,9 +18,90 @@
   var currentLightboxIndex = -1;
   var currentPhotoItems = [];
   var currentUser = null;
+  var selectedFile = null;
   var selectedFileBase64 = null;
   var selectedFileMime = null;
   var selectedFileName = null;
+
+  function stripJpegMetadataClient(buffer) {
+    if (window.ClubhouseCrypto && typeof window.ClubhouseCrypto.stripJpegMetadata === 'function') {
+      return window.ClubhouseCrypto.stripJpegMetadata(buffer);
+    }
+    var bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+    if (bytes.length < 4 || bytes[0] !== 0xFF || bytes[1] !== 0xD8) {
+      return buffer;
+    }
+    var chunks = [bytes.slice(0, 2)];
+    var pos = 2;
+    while (pos + 4 <= bytes.length) {
+      if (bytes[pos] !== 0xFF) {
+        chunks.push(bytes.slice(pos));
+        break;
+      }
+      var marker = bytes[pos + 1];
+      if (marker === 0xDA || marker === 0xD9) {
+        chunks.push(bytes.slice(pos));
+        break;
+      }
+      var segLen = (bytes[pos + 2] << 8) | bytes[pos + 3];
+      if (segLen < 2 || pos + 2 + segLen > bytes.length) {
+        chunks.push(bytes.slice(pos));
+        break;
+      }
+      var isExifOrComment = (marker >= 0xE1 && marker <= 0xEF) || marker === 0xFE;
+      if (!isExifOrComment) {
+        chunks.push(bytes.slice(pos, pos + 2 + segLen));
+      }
+      pos += 2 + segLen;
+    }
+    var totalLen = 0;
+    for (var i = 0; i < chunks.length; i++) {
+      totalLen += chunks[i].length;
+    }
+    var out = new Uint8Array(totalLen);
+    var offset = 0;
+    for (var j = 0; j < chunks.length; j++) {
+      out.set(chunks[j], offset);
+      offset += chunks[j].length;
+    }
+    return out.buffer;
+  }
+
+  function uploadChunksToGDrive(uploadUrl, arrayBuffer, mimeType, progressCb) {
+    var CHUNK_SIZE_BYTES = 8 * 1024 * 1024;
+    var total = arrayBuffer.byteLength;
+    var offset = 0;
+
+    function nextChunk() {
+      var end = Math.min(offset + CHUNK_SIZE_BYTES, total);
+      var chunk = arrayBuffer.slice(offset, end);
+      var contentRange = 'bytes ' + offset + '-' + (end - 1) + '/' + total;
+
+      return fetch(uploadUrl, {
+        method: 'PUT',
+        headers: {
+          'Content-Range': contentRange,
+          'Content-Type': mimeType || 'application/octet-stream'
+        },
+        body: chunk
+      }).then(function (res) {
+        if (!res.ok && res.status !== 308) {
+          throw new Error('Chunk upload failed with HTTP ' + res.status);
+        }
+        offset = end;
+        var pct = Math.min(92, Math.round(15 + (offset / total) * 77));
+        if (typeof progressCb === 'function') {
+          progressCb(pct, 'Uploading to PBF Shared Drive (' + Math.round((offset / total) * 100) + '%)...');
+        }
+        if (offset < total && (res.status === 308 || res.ok)) {
+          return nextChunk();
+        }
+        return res.json().catch(function () { return {}; });
+      });
+    }
+
+    return nextChunk();
+  }
 
   function slugify(text) {
     return String(text || '')
@@ -1105,6 +1186,7 @@
     }
 
     selectedFileName = file.name;
+    selectedFile = file;
 
     readFileWithoutCompression(file, function(b64, mime) {
       selectedFileBase64 = b64;
@@ -1267,7 +1349,88 @@
         submitBtn.textContent = isLinkMode ? 'Copying & Saving Media…' : 'Uploading Media…';
       }
 
-      var res = await API.submitMedia(payload);
+      var res;
+
+      if (!isLinkMode && selectedFile) {
+        // Direct upload path: init -> upload (with client JPEG EXIF strip) -> complete
+        var rawBuf = await selectedFile.arrayBuffer();
+        var uploadBuf = rawBuf;
+        var mimeToUpload = selectedFileMime || selectedFile.type || 'image/jpeg';
+
+        if (mimeToUpload === 'image/jpeg' || mimeToUpload === 'image/jpg') {
+          uploadBuf = stripJpegMetadataClient(rawBuf);
+        }
+
+        var initPayload = {
+          file_name: selectedFileName || selectedFile.name,
+          mime_type: mimeToUpload,
+          file_size: uploadBuf.byteLength,
+          date_taken: payload.date_taken,
+          album: payload.album,
+          title: payload.title,
+          caption: payload.caption,
+          contributor_name: payload.contributor_name
+        };
+        if (payload.publish_immediately === false) {
+          initPayload.publish_immediately = false;
+        }
+
+        var initRes = await API.request('POST', '/api/media/init', initPayload, {
+          throwOnError: true,
+          errorMsg: 'Failed to initialize media upload.'
+        });
+
+        var mediaId = initRes.mediaId || initRes.media_id;
+        var uploadToken = initRes.uploadToken || initRes.upload_token;
+        var uploadUrl = initRes.uploadUrl || initRes.upload_url;
+        var storageProvider = initRes.storageProvider || initRes.storage_provider || 'local';
+
+        if (storageProvider === 'gdrive' && uploadUrl && uploadUrl.indexOf('googleapis.com') !== -1) {
+          if (submitBtn) submitBtn.textContent = 'Uploading to Drive…';
+          var gdriveMeta = await uploadChunksToGDrive(uploadUrl, uploadBuf, mimeToUpload);
+          var resolvedDriveId = (gdriveMeta && gdriveMeta.id) ? gdriveMeta.id : initRes.driveFileId;
+          res = await API.request('POST', '/api/media/' + encodeURIComponent(mediaId) + '/complete', {
+            upload_token: uploadToken,
+            drive_file_id: resolvedDriveId
+          }, { throwOnError: true, errorMsg: 'Failed to complete Google Drive upload.' });
+        } else if (storageProvider === 'r2' && uploadUrl) {
+          if (submitBtn) submitBtn.textContent = 'Uploading to R2…';
+          var r2PutRes = await fetch(uploadUrl, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': mimeToUpload,
+              'Content-Length': String(uploadBuf.byteLength)
+            },
+            body: uploadBuf
+          });
+          if (!r2PutRes.ok) {
+            throw new Error('Direct R2 upload failed with HTTP ' + r2PutRes.status);
+          }
+          res = await API.request('POST', '/api/media/' + encodeURIComponent(mediaId) + '/complete', {
+            upload_token: uploadToken
+          }, { throwOnError: true, errorMsg: 'Failed to complete R2 upload.' });
+        } else {
+          // Local storage PUT binary upload
+          if (submitBtn) submitBtn.textContent = 'Uploading media…';
+          var localPutRes = await fetch(uploadUrl, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': mimeToUpload,
+              'X-Upload-Token': uploadToken
+            },
+            body: uploadBuf
+          });
+          if (!localPutRes.ok) {
+            var errData = await localPutRes.json().catch(function() { return {}; });
+            throw new Error(errData.error || ('Local direct upload failed with HTTP ' + localPutRes.status));
+          }
+          res = await API.request('POST', '/api/media/' + encodeURIComponent(mediaId) + '/complete', {
+            upload_token: uploadToken
+          }, { throwOnError: true, errorMsg: 'Failed to complete local upload.' });
+        }
+      } else {
+        res = await API.submitMedia(payload);
+      }
 
       if (res && res.item) {
         saveMySubmission({
@@ -1313,6 +1476,7 @@
       }
 
       // Reset form
+      selectedFile = null;
       selectedFileBase64 = null;
       selectedFileMime = null;
       selectedFileName = null;

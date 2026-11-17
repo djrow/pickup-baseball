@@ -381,34 +381,49 @@ const PUBLIC_OR_TOKEN_ROUTE_MANIFEST = [
     reason: 'Public single community highlight view (filters invite-restricted event posts)'
   },
 
-  // Community gallery & attachment streaming in src/app/routes/media.js
+  // Community gallery & attachment streaming in src/app/routes/media/
   {
-    ast: 'media.js:GET:/',
+    ast: 'gallery.js:GET:/',
     route: 'GET /api/media',
     reason: 'Public approved media gallery listing (pending queue restricted to organizer/admin)'
   },
   {
-    ast: 'media.js:GET:/:id/file',
+    ast: 'gallery.js:GET:/:id/file',
     route: 'GET /api/media/:id/file',
     reason: 'Public approved gallery media file proxy (unapproved & invite-only event media restricted)'
   },
   {
-    ast: 'media.js:POST:/',
+    ast: 'gallery.js:POST:/',
     route: 'POST /api/media',
     reason: 'Intentional zero-login community photo drop (Turnstile + disallow_zero_login_media + magic-byte checks)'
   },
   {
-    ast: 'media.js:DELETE:/:id',
+    ast: 'gallery.js:POST:/init',
+    route: 'POST /api/media/init',
+    reason: 'Zero-login direct gallery upload session initialization (Turnstile + IP rate limit + sha256 upload_token)'
+  },
+  {
+    ast: 'gallery.js:PUT:/:id/upload',
+    route: 'PUT /api/media/:id/upload',
+    reason: 'Single-use upload token authorization with magic-byte verification and local 1 MB cap'
+  },
+  {
+    ast: 'gallery.js:POST:/:id/complete',
+    route: 'POST /api/media/:id/complete',
+    reason: 'Single-use upload token authorization with storage provider finalization'
+  },
+  {
+    ast: 'gallery.js:DELETE:/:id',
     route: 'DELETE /api/media/:id',
     reason: 'Protected inside handleMediaDelete via organizer/admin, uploader session, or constant-time delete_token'
   },
   {
-    ast: 'media.js:POST:/:id/delete',
+    ast: 'gallery.js:POST:/:id/delete',
     route: 'POST /api/media/:id/delete',
     reason: 'Protected inside handleMediaDelete via organizer/admin, uploader session, or constant-time delete_token'
   },
   {
-    ast: 'media.js:GET:/:id/stream',
+    ast: 'attachments.js:GET:/:id/stream',
     route: 'GET /api/attachments/:id/stream',
     reason: 'Public only when promoted to approved public gallery; otherwise enforces 401 (!user) and channel read ACL'
   },
@@ -454,6 +469,13 @@ const PUBLIC_OR_TOKEN_ROUTE_MANIFEST = [
     ast: 'messages.js:GET:/channels/:id/messages',
     route: 'GET /api/channels/:id/messages',
     reason: 'Allows logged-out read only for isPublicGuestChannel (#announcements); enforces 401 on all other channels'
+  },
+
+  // Inbound webhooks in src/app/routes/webhooks.js
+  {
+    ast: 'webhooks.js:POST:/resend',
+    route: 'POST /api/webhooks/resend',
+    reason: 'Public inbound Resend webhook verified via Svix signature (svix-id, svix-timestamp ±300s, svix-signature HMAC SHA-256)'
   }
 ];
 
@@ -539,7 +561,7 @@ function inferRequiredRoleTier(method, fullPath, localPath = '', fileName = '') 
     (full === '/api/events' && m === 'POST') ||
     (full === '/api/events/:id' && (m === 'PUT' || m === 'PATCH')) ||
     full === '/api/events/attendee-candidates' ||
-    /^\/api\/events\/[^/]+\/(?:rainout|reopen|send-rainout-email|bp-order\/clear)$/.test(full) ||
+    /^\/api\/events\/[^/]+\/(?:rainout|reopen|send-rainout-email|notifications\/resume|bp-order\/clear)$/.test(full) ||
     /^\/api\/events\/[^/]+\/duties(?:\/|$)/.test(full) ||
     /^\/api\/events\/[^/]+\/attendees(?:\/|$)/.test(full) ||
     (/^\/api\/posts(?:\/|$)/.test(full) && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(m)) ||
@@ -657,7 +679,9 @@ const FALLBACK_ROUTER_PREFIXES = {
   eventsBpDutiesRouter: '/api/events',
   postsRouter: '/api/posts',
   mediaRouter: '/api/media',
+  mediaGalleryRouter: '/api/media',
   attachmentsRouter: '/api/attachments',
+  mediaAttachmentsRouter: '/api/attachments',
   keysRouter: '/api/keys',
   voiceRouter: '/api/voice',
   rtcRouter: '/api/rtc',
