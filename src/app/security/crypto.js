@@ -172,6 +172,71 @@ export async function verifyUploadToken(rawToken, storedToken) {
   return constantTimeEqual(hashed, stored);
 }
 
+/**
+ * Verify Svix webhook signature (ADR-0008 / Ticket #72).
+ * Verifies svix-signature header against svixId, svixTimestamp, and rawBody using secret.
+ * Supports tolerance window check (default ±300s = 5 min).
+ *
+ * @param {string} secret RESEND_WEBHOOK_SECRET (with or without 'whsec_' prefix)
+ * @param {string} svixId svix-id header
+ * @param {string} svixTimestamp svix-timestamp header
+ * @param {string|Uint8Array} rawBody raw unparsed request body
+ * @param {string} svixSignature svix-signature header (e.g. 'v1,base64... v1,base64...')
+ * @param {number} [toleranceSeconds=300] maximum drift window (default 300s = 5m)
+ * @returns {Promise<boolean>}
+ */
+export async function verifySvixSignature(secret, svixId, svixTimestamp, rawBody, svixSignature, toleranceSeconds = 300) {
+  if (!secret || typeof secret !== 'string') return false;
+  if (!svixId || typeof svixId !== 'string') return false;
+  if (!svixTimestamp || typeof svixTimestamp !== 'string') return false;
+  if (rawBody === null || rawBody === undefined) return false;
+  if (!svixSignature || typeof svixSignature !== 'string') return false;
+
+  const timestampNum = parseInt(svixTimestamp, 10);
+  if (isNaN(timestampNum) || timestampNum <= 0) return false;
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (Math.abs(nowSec - timestampNum) > toleranceSeconds) {
+    return false;
+  }
+
+  const bodyStr = typeof rawBody === 'string' ? rawBody : new TextDecoder().decode(rawBody);
+  const toSign = `${svixId}.${svixTimestamp}.${bodyStr}`;
+
+  let keyBytes = null;
+  if (secret.startsWith('whsec_')) {
+    try {
+      keyBytes = base64ToUint8Array(secret.slice(6));
+    } catch (e) {
+      keyBytes = null;
+    }
+  }
+  if (!keyBytes || keyBytes.length === 0) {
+    keyBytes = new TextEncoder().encode(secret);
+  }
+
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    keyBytes,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const sigBuffer = await crypto.subtle.sign('HMAC', cryptoKey, new TextEncoder().encode(toSign));
+  const expectedSig = arrayBufferToBase64(sigBuffer);
+
+  const passedSignatures = svixSignature.split(' ').map((s) => s.trim()).filter(Boolean);
+  for (const item of passedSignatures) {
+    const parts = item.split(',');
+    if (parts.length === 2 && parts[0] === 'v1') {
+      if (constantTimeEqual(expectedSig, parts[1])) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 export function escapeHtml(str) {
   if (!str) return '';
   return String(str)

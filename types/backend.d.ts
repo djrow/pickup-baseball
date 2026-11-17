@@ -31,6 +31,7 @@ interface AppBindings {
   SESSION_SECRET?: string;
   TURNSTILE_SECRET_KEY?: string;
   RESEND_API_KEY?: string;
+  RESEND_WEBHOOK_SECRET?: string;
   GDRIVE_CLIENT_ID?: string;
   GDRIVE_CLIENT_SECRET?: string;
   GDRIVE_REFRESH_TOKEN?: string;

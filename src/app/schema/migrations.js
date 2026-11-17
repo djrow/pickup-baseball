@@ -227,6 +227,7 @@ const BASEBALL_V2_COLUMNS = [
   { table: 'media_items', column: 'r2_key', sql: 'ALTER TABLE media_items ADD COLUMN r2_key TEXT DEFAULT NULL' },
   { table: 'media_items', column: 'upload_status', sql: "ALTER TABLE media_items ADD COLUMN upload_status TEXT NOT NULL DEFAULT 'ready'" },
   { table: 'media_items', column: 'upload_token_hash', sql: 'ALTER TABLE media_items ADD COLUMN upload_token_hash TEXT DEFAULT NULL' },
+  { table: 'email_suppressions', column: 'metadata', sql: 'ALTER TABLE email_suppressions ADD COLUMN metadata TEXT DEFAULT NULL' },
   { table: 'rate_limits', column: 'expires_at', sql: 'ALTER TABLE rate_limits ADD COLUMN expires_at INTEGER NOT NULL DEFAULT 0' }
 ];
 

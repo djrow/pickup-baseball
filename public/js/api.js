@@ -2093,6 +2093,14 @@ const API = {
     return this.request('DELETE', '/api/auth/banned-emails/' + encodeURIComponent(id));
   },
 
+  async getSuppressions() {
+    return this.request('GET', '/api/admin/suppressions');
+  },
+
+  async clearSuppression(email) {
+    return this.request('DELETE', '/api/admin/suppressions/' + encodeURIComponent(email));
+  },
+
   async getSettings() {
     return this.request('GET', '/api/settings');
   },

@@ -16,6 +16,8 @@ import { authRouter, serveUserAvatar, getSettingsHandler, putSettingsHandler, te
 import { eventsRouter } from './routes/events.js';
 import { postsRouter } from './routes/posts.js';
 import { mediaRouter, attachmentsRouter, getAdminStorageStatusHandler } from './routes/media.js';
+import { getAdminSuppressionsHandler, deleteAdminSuppressionHandler } from './routes/admin-suppressions.js';
+import { webhooksRouter } from './routes/webhooks.js';
 import { keysRouter } from './routes/keys.js';
 import { chatRouter } from './routes/chat.js';
 import { voiceRouter, rtcRouter } from './routes/rtc.js';
@@ -116,7 +118,8 @@ app.use('*', async (c, next) => {
   }
 
   // CSRF Origin / Fetch-Metadata verification on state-changing requests
-  if (!['GET', 'HEAD', 'OPTIONS'].includes(c.req.method)) {
+  // Inbound webhooks (e.g. /api/webhooks/resend) are signed via Svix and bypass CSRF origin checks
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(c.req.method) && !pathName.startsWith('/api/webhooks')) {
     const reqOrigin = reqUrl.origin;
     const originHeader = c.req.header('Origin');
     const refererHeader = c.req.header('Referer');
@@ -148,6 +151,7 @@ app.use('*', async (c, next) => {
 
   const skipSessionLookup =
     isStatelessEndpoint ||
+    pathName.startsWith('/api/webhooks') ||
     pathName === '/api/auth/logout';
 
   const sessionId = !skipSessionLookup ? getCookie(c, SESSION_COOKIE_NAME) : null;
@@ -217,6 +221,9 @@ app.route('/posts', postsRouter);
 app.route('/media', mediaRouter);
 app.route('/attachments', attachmentsRouter);
 app.get('/admin/storage-status', requireAdmin, getAdminStorageStatusHandler);
+app.get('/admin/suppressions', requireAdmin, getAdminSuppressionsHandler);
+app.delete('/admin/suppressions/:email', requireAdmin, deleteAdminSuppressionHandler);
+app.route('/webhooks', webhooksRouter);
 app.route('/keys', keysRouter);
 app.route('/voice', voiceRouter);
 app.route('/rtc', rtcRouter);

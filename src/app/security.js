@@ -31,6 +31,7 @@ export {
   verifyManagementToken,
   hashUploadToken,
   verifyUploadToken,
+  verifySvixSignature,
   escapeHtml,
   sanitizeHttpUrl,
   getSafeRelativeRedirect,

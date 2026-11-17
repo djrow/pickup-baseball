@@ -46,6 +46,7 @@ const EXPECTED_CRYPTO_EXPORTS = [
   'sha256Hex',
   'stripJpegMetadata',
   'verifyManagementToken',
+  'verifySvixSignature',
   'verifyUploadToken'
 ];
 

@@ -469,6 +469,13 @@ const PUBLIC_OR_TOKEN_ROUTE_MANIFEST = [
     ast: 'messages.js:GET:/channels/:id/messages',
     route: 'GET /api/channels/:id/messages',
     reason: 'Allows logged-out read only for isPublicGuestChannel (#announcements); enforces 401 on all other channels'
+  },
+
+  // Inbound webhooks in src/app/routes/webhooks.js
+  {
+    ast: 'webhooks.js:POST:/resend',
+    route: 'POST /api/webhooks/resend',
+    reason: 'Public inbound Resend webhook verified via Svix signature (svix-id, svix-timestamp ±300s, svix-signature HMAC SHA-256)'
   }
 ];
 

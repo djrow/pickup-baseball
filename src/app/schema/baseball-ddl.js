@@ -256,6 +256,7 @@ export const CREATE_TABLES_SQL = [
     reason TEXT NOT NULL,
     bounce_type TEXT DEFAULT NULL,
     provider TEXT NOT NULL DEFAULT 'resend',
+    metadata TEXT DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`,
   'CREATE INDEX IF NOT EXISTS idx_events_date ON events(event_date)',
