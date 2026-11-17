@@ -228,8 +228,11 @@ test('Clubhouse Frontend & Native Waiver Verification', async (t) => {
     assert.ok(hdrCloseIdx !== -1 && mainOpenIdx !== -1 && hdrCloseIdx < mainOpenIdx, 'archive.html must close </header> before <main>');
 
     // 2. All 14 i18n JSON files must have 100% key parity with EN_DICT
-    const apiJsSrc = fs.readFileSync(path.join(publicDir, 'js', 'api.js'), 'utf8');
-    const m = apiJsSrc.match(/const EN_DICT = \{([\s\S]*?)\n\};/);
+    const i18nPath = path.join(publicDir, 'js', 'api', 'i18n.js');
+    const apiJsSrc = fs.existsSync(i18nPath)
+      ? fs.readFileSync(i18nPath, 'utf8')
+      : fs.readFileSync(path.join(publicDir, 'js', 'api.js'), 'utf8');
+    const m = apiJsSrc.match(/(?:const|var)\s+EN_DICT\s*=\s*\{([\s\S]*?)\n\s*\};/);
     assert.ok(m, 'api.js must define EN_DICT');
     const enObj = vm.runInNewContext('({' + m[1] + '})');
     const enKeys = Object.keys(enObj);

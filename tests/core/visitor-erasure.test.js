@@ -536,7 +536,15 @@ function registerVisitorErasureTests() {
     await t.test('7. Self-service Visitor erasure UI, ES6 safety, and 14-locale i18n key parity', () => {
       const loginHtml = fs.readFileSync(path.join(ROOT_DIR, 'public', 'login.html'), 'utf8');
       const loginJs = fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'login.js'), 'utf8');
-      const apiJs = fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'api.js'), 'utf8');
+      const apiJs = fs.existsSync(path.join(ROOT_DIR, 'public', 'js', 'api', 'ui.js'))
+        ? fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'api', 'ui.js'), 'utf8')
+        : fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'api.js'), 'utf8');
+      const apiEndpointsJs = fs.existsSync(path.join(ROOT_DIR, 'public', 'js', 'api', 'endpoints.js'))
+        ? fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'api', 'endpoints.js'), 'utf8')
+        : apiJs;
+      const apiI18nJs = fs.existsSync(path.join(ROOT_DIR, 'public', 'js', 'api', 'i18n.js'))
+        ? fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'api', 'i18n.js'), 'utf8')
+        : apiJs;
       const indexHtml = fs.readFileSync(path.join(ROOT_DIR, 'public', 'index.html'), 'utf8');
 
       assert.ok(loginHtml.includes('id="visitor-erasure-card"'), 'login.html must include #visitor-erasure-card');
@@ -548,13 +556,13 @@ function registerVisitorErasureTests() {
       assert.ok(indexHtml.includes('/login.html#erase-data'), 'index.html privacy accordion should link to /login.html#erase-data');
       assert.ok(apiJs.includes('/login.html#erase-data'), 'api.js footer should link to /login.html#erase-data');
 
-      assert.ok(apiJs.includes('requestVisitorErasure'), 'api.js must define API.requestVisitorErasure');
-      assert.ok(apiJs.includes('confirmVisitorErasure'), 'api.js must define API.confirmVisitorErasure');
+      assert.ok(apiEndpointsJs.includes('requestVisitorErasure'), 'api.js must define API.requestVisitorErasure');
+      assert.ok(apiEndpointsJs.includes('confirmVisitorErasure'), 'api.js must define API.confirmVisitorErasure');
       assert.ok(loginJs.includes('requestVisitorErasure'), 'login.js must call API.requestVisitorErasure');
       assert.ok(loginJs.includes('confirmVisitorErasure'), 'login.js must call API.confirmVisitorErasure');
       assert.ok(!loginJs.includes('?.') && !loginJs.includes('??'), 'login.js must stay strict ES6 without ?. or ??');
 
-      const m = apiJs.match(/const EN_DICT = \{([\s\S]*?)\n\};/);
+      const m = apiI18nJs.match(/(?:const|var)\s+EN_DICT\s*=\s*\{([\s\S]*?)\n\s*\};/);
       assert.ok(m, 'api.js must define EN_DICT');
       const enObj = vm.runInNewContext('({' + m[1] + '})');
       const enKeys = Object.keys(enObj);

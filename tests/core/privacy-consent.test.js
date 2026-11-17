@@ -562,7 +562,14 @@ function registerPrivacyConsentTests() {
       const profileJs = fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'profile.js'), 'utf8');
       const eventHtml = fs.readFileSync(path.join(ROOT_DIR, 'public', 'event.html'), 'utf8');
       const eventJs = fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'event.js'), 'utf8');
-      const apiJs = fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'api.js'), 'utf8');
+      const apiEndpointsJs = fs.existsSync(path.join(ROOT_DIR, 'public', 'js', 'api', 'endpoints.js'))
+        ? fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'api', 'endpoints.js'), 'utf8')
+        : fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'api.js'), 'utf8');
+      const apiJs = ['api/i18n.js', 'api/ui.js', 'api/endpoints.js', 'api.js']
+        .map((rel) => path.join(ROOT_DIR, 'public', 'js', rel))
+        .filter((p) => fs.existsSync(p))
+        .map((p) => fs.readFileSync(p, 'utf8'))
+        .join('\n');
 
       // HTML checks: checkboxes exist and are unchecked by default on event.html
       assert.ok(profileHtml.includes('id="profile-roster-visibility"'));
@@ -689,7 +696,7 @@ function registerPrivacyConsentTests() {
       assert.equal(capturedProfileCall.extra.profile_sharing, true);
 
       // Verify event.js visitor consent checkbox binding (unchecked by default, visible for visitor, hidden for member)
-      assert.ok(apiJs.includes('updateProfile('));
+      assert.ok(apiEndpointsJs.includes('updateProfile('));
       assert.ok(eventJs.includes('rsvp-roster-consent'));
       assert.ok(eventJs.includes('rsvp-notify-emails'));
 

@@ -564,7 +564,11 @@ function registerVisitorPrivacyTests() {
     });
 
     await t.test('6. public/js/event.js Visitor UI renders discussion privacy notice, sign-in comment CTA, and never caches comments', async () => {
-      const apiCode = fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'api.js'), 'utf8');
+      const apiCode = ['api/i18n.js', 'api/ui.js', 'api/endpoints.js', 'api.js']
+        .map((rel) => path.join(ROOT_DIR, 'public', 'js', rel))
+        .filter((p) => fs.existsSync(p))
+        .map((p) => fs.readFileSync(p, 'utf8'))
+        .join('\n');
       const eventCode = fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'event.js'), 'utf8');
 
       // Ensure event.js does not cache res.comments into localStorage

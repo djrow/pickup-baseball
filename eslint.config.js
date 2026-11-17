@@ -130,6 +130,8 @@ module.exports = [
   // Existing IIFE client modules: enforce zero accidental top-level globals
   {
     files: [
+      'public/js/api.js',
+      'public/js/api/*.js',
       'public/js/art.js',
       'public/js/clubhouse.js',
       'public/js/crypto.js',

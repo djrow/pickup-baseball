@@ -508,7 +508,7 @@ module.exports = async function registerWeatherGalleryTests(ctx, t9) {
     const swSrc = fs.readFileSync(path.join(publicDir, 'sw.js'), 'utf8');
     assert.ok(swSrc.includes(`CACHE_NAME = 'pbf-cache-v${CURRENT_APP_VERSION}'`), 'sw.js CACHE_NAME must match CURRENT_APP_VERSION');
     const apiSrc = fs.readFileSync(path.join(publicDir, 'js', 'api.js'), 'utf8');
-    assert.ok(apiSrc.includes(`CLIENT_VERSION: '${CURRENT_APP_VERSION}'`), 'api.js CLIENT_VERSION must match CURRENT_APP_VERSION');
+    assert.ok(apiSrc.includes(`API.CLIENT_VERSION = '${CURRENT_APP_VERSION}'`) || apiSrc.includes(`CLIENT_VERSION: '${CURRENT_APP_VERSION}'`), 'api.js CLIENT_VERSION must match CURRENT_APP_VERSION');
     for (const entry of fs.readdirSync(publicDir)) {
       if (!entry.endsWith('.html')) continue;
       const html = fs.readFileSync(path.join(publicDir, entry), 'utf8');
@@ -557,7 +557,9 @@ module.exports = async function registerWeatherGalleryTests(ctx, t9) {
     assert.ok(archiveDoc.includes('Pixel Diamond'), 'archive doc must detail Pixel Diamond');
     assert.ok(archiveDoc.includes('Dugout Chalkboard'), 'archive doc must detail Chalkboard & Sticker Wall');
 
-    const apiJs = fs.readFileSync(path.join(publicDir, 'js', 'api.js'), 'utf8');
+    const apiJs = fs.existsSync(path.join(publicDir, 'js', 'api', 'ui.js'))
+      ? fs.readFileSync(path.join(publicDir, 'js', 'api', 'ui.js'), 'utf8')
+      : fs.readFileSync(path.join(publicDir, 'js', 'api.js'), 'utf8');
     assert.ok(apiJs.includes('nav-link-gallery'), 'api.js must render .nav-link-gallery in API.renderNav()');
     assert.ok(apiJs.includes('/gallery.html'), 'api.js must link to /gallery.html');
 
@@ -618,7 +620,9 @@ module.exports = async function registerWeatherGalleryTests(ctx, t9) {
     assert.ok(galleryJsCode.includes('updateCarouselEdgeHints'), 'gallery.js must implement updateCarouselEdgeHints');
 
     // 3. Verify top navigation links & Service Worker
-    const apiJs = fs.readFileSync(path.join(publicDir, 'js', 'api.js'), 'utf8');
+    const apiJs = fs.existsSync(path.join(publicDir, 'js', 'api', 'ui.js'))
+      ? fs.readFileSync(path.join(publicDir, 'js', 'api', 'ui.js'), 'utf8')
+      : fs.readFileSync(path.join(publicDir, 'js', 'api.js'), 'utf8');
     assert.ok(apiJs.includes('nav-link-gallery'), 'api.js must render .nav-link-gallery in API.renderNav()');
     assert.ok(apiJs.includes('/gallery.html'), 'api.js must link to /gallery.html');
 
@@ -1001,7 +1005,9 @@ module.exports = async function registerWeatherGalleryTests(ctx, t9) {
     assert.ok(securityTxt.includes('Contact: mailto:'), 'security.txt must specify a Contact address');
     assert.ok(securityTxt.includes('Expires:'), 'security.txt must specify an Expires timestamp');
     assert.ok(fs.existsSync(path.resolve(ctx.rootDir, 'SECURITY.md')), 'SECURITY.md must exist');
-    const apiSrc = fs.readFileSync(path.join(publicDir, 'js', 'api.js'), 'utf8');
+    const apiSrc = fs.existsSync(path.join(publicDir, 'js', 'api', 'ui.js'))
+      ? fs.readFileSync(path.join(publicDir, 'js', 'api', 'ui.js'), 'utf8')
+      : fs.readFileSync(path.join(publicDir, 'js', 'api.js'), 'utf8');
     assert.ok(apiSrc.includes('footer-security-badges'), 'api.js footer must render security verification badges');
     assert.ok(apiSrc.includes('ssllabs.com/ssltest/analyze.html'), 'api.js footer must link to SSL Labs report');
     assert.ok(apiSrc.includes('developer.mozilla.org/en-US/observatory/analyze'), 'api.js footer must link to Mozilla HTTP Observatory');
@@ -1010,7 +1016,7 @@ module.exports = async function registerWeatherGalleryTests(ctx, t9) {
     assert.ok(apiSrc.includes('<span>security.txt</span><span class="footer-security-grade">Valid</span>'), 'api.js footer security.txt badge must show Valid pill');
     assert.ok(headersFile.includes('upgrade-insecure-requests;'), '_headers CSP must contain upgrade-insecure-requests');
 
-    const apiJs = fs.readFileSync(path.join(publicDir, 'js', 'api.js'), 'utf8');
+    const apiJs = apiSrc;
     assert.ok(apiJs.includes('renderCookieNotice'), 'api.js must provide renderCookieNotice');
     assert.ok(apiJs.includes('cookie-notice-banner'), 'api.js must render cookie-notice-banner');
   });
@@ -1028,7 +1034,9 @@ module.exports = async function registerWeatherGalleryTests(ctx, t9) {
     assert.ok(eventJs.includes('function openBpModal'), 'event.js must define openBpModal');
     assert.ok(eventJs.includes('function setupBpOrderUi'), 'event.js must define setupBpOrderUi');
 
-    const apiJs = fs.readFileSync(path.join(publicDir, 'js', 'api.js'), 'utf8');
+    const apiJs = fs.existsSync(path.join(publicDir, 'js', 'api', 'endpoints.js'))
+      ? fs.readFileSync(path.join(publicDir, 'js', 'api', 'endpoints.js'), 'utf8')
+      : fs.readFileSync(path.join(publicDir, 'js', 'api.js'), 'utf8');
     assert.ok(apiJs.includes('getBpOrder'), 'api.js must provide getBpOrder');
     assert.ok(apiJs.includes('postBpSignup'), 'api.js must provide postBpSignup');
     assert.ok(apiJs.includes('updateBpSignup'), 'api.js must provide updateBpSignup');
@@ -1213,10 +1221,13 @@ module.exports = async function registerWeatherGalleryTests(ctx, t9) {
     assert.equal(privBpOrg.status, 200, 'Organizer/invited user must get 200 on invite-only /bp-order');
 
     // Verify Attendee Roster terminology & BP privacy gate in UI files
+    const apiI18nJs = fs.existsSync(path.join(publicDir, 'js', 'api', 'i18n.js'))
+      ? fs.readFileSync(path.join(publicDir, 'js', 'api', 'i18n.js'), 'utf8')
+      : apiJs;
     assert.ok(eventHtml.includes('Attendee Roster'), 'event.html must label roster as Attendee Roster');
     assert.ok(eventJs.includes('Attendee Roster is Private') && eventJs.includes('Non-Playing'), 'event.js must use Attendee Roster and Non-Playing guest labels');
     assert.ok(eventJs.includes('Batting Practice Order is Private'), 'event.js must hide BP grid behind login privacy gate when signed out');
-    assert.ok(apiJs.includes('"event.roster_private_title": "Attendee Roster is Private"'), 'api.js EN_DICT must label private roster as Attendee Roster');
+    assert.ok(apiI18nJs.includes('"event.roster_private_title": "Attendee Roster is Private"'), 'api.js EN_DICT must label private roster as Attendee Roster');
 
     // 12. Delete / withdraw from BP slot
     const deleteRes = await fetch(`${baseUrl}/api/events/${bpEvent.id}/bp-order/${p1SignupId}`, {

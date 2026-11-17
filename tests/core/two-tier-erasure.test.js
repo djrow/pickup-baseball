@@ -489,7 +489,9 @@ function registerTwoTierErasureTests() {
     await t.test('6. Profile UI self-erasure controls, ES6 safety, and 14-locale i18n key parity', () => {
       const profileHtml = fs.readFileSync(path.join(ROOT_DIR, 'public', 'profile.html'), 'utf8');
       const profileJs = fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'profile.js'), 'utf8');
-      const apiJs = fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'api.js'), 'utf8');
+      const apiJs = fs.existsSync(path.join(ROOT_DIR, 'public', 'js', 'api', 'i18n.js'))
+        ? fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'api', 'i18n.js'), 'utf8')
+        : fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'api.js'), 'utf8');
 
       assert.ok(profileHtml.includes('id="profile-erasure-card"'), 'profile.html must include #profile-erasure-card');
       assert.ok(profileHtml.includes('id="erasure-keep-gallery"'), 'profile.html must include #erasure-keep-gallery checkbox');
@@ -499,7 +501,7 @@ function registerTwoTierErasureTests() {
       assert.ok(profileJs.includes('deleteMyAccount'), 'profile.js must call API.deleteMyAccount');
       assert.ok(!profileJs.includes('?.') && !profileJs.includes('??'), 'profile.js must stay strict ES6 without ?. or ??');
 
-      const m = apiJs.match(/const EN_DICT = \{([\s\S]*?)\n\};/);
+      const m = apiJs.match(/(?:const|var)\s+EN_DICT\s*=\s*\{([\s\S]*?)\n\s*\};/);
       assert.ok(m, 'api.js must define EN_DICT');
       const enObj = vm.runInNewContext('({' + m[1] + '})');
       const enKeys = Object.keys(enObj);

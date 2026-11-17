@@ -46,10 +46,15 @@ const swUpdated = fs.readFileSync(swFile, 'utf8').replace(
 );
 fs.writeFileSync(swFile, toLf(swUpdated), 'utf8');
 
-const apiUpdated = fs.readFileSync(apiFile, 'utf8').replace(
-  /CLIENT_VERSION:\s*'\d+'/,
-  `CLIENT_VERSION: '${nextVersion}'`
-);
+const apiUpdated = fs.readFileSync(apiFile, 'utf8')
+  .replace(
+    /CLIENT_VERSION:\s*'\d+'/,
+    `CLIENT_VERSION: '${nextVersion}'`
+  )
+  .replace(
+    /API\.CLIENT_VERSION\s*=\s*'\d+';/,
+    `API.CLIENT_VERSION = '${nextVersion}';`
+  );
 fs.writeFileSync(apiFile, toLf(apiUpdated), 'utf8');
 
 let htmlCount = 0;

@@ -1390,13 +1390,16 @@ function checkPwaAssetSync(rootDir = ROOT, options = {}) {
 }
 
 /**
- * 9. Audit i18n dictionary completeness against canonical EN_DICT in public/js/api.js.
+ * 9. Audit i18n dictionary completeness against canonical EN_DICT in public/js/api/i18n.js.
  */
 function checkI18nKeyParity() {
-  const apiSrc = fs.readFileSync(path.join(ROOT, 'public', 'js', 'api.js'), 'utf8');
-  const enMatch = apiSrc.match(/const EN_DICT = \{([\s\S]*?)\n\};/);
+  const i18nFile = fs.existsSync(path.join(ROOT, 'public', 'js', 'api', 'i18n.js'))
+    ? path.join(ROOT, 'public', 'js', 'api', 'i18n.js')
+    : path.join(ROOT, 'public', 'js', 'api.js');
+  const apiSrc = fs.readFileSync(i18nFile, 'utf8');
+  const enMatch = apiSrc.match(/(?:const|var)\s+EN_DICT\s*=\s*\{([\s\S]*?)\n\s*\};/);
   if (!enMatch) {
-    record('FAIL', 'i18n Translation Key Parity', 'Could not locate EN_DICT in public/js/api.js');
+    record('FAIL', 'i18n Translation Key Parity', 'Could not locate EN_DICT in ' + rel(i18nFile));
     return;
   }
 

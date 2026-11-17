@@ -88,8 +88,11 @@ function createFakeElement(id = '', tag = 'div') {
 }
 
 function loadApiEnDict() {
-  const apiSrc = fs.readFileSync(path.join(PUBLIC_DIR, 'js', 'api.js'), 'utf8');
-  const m = apiSrc.match(/const EN_DICT = \{([\s\S]*?)\n\};/);
+  const i18nPath = path.join(PUBLIC_DIR, 'js', 'api', 'i18n.js');
+  const apiSrc = fs.existsSync(i18nPath)
+    ? fs.readFileSync(i18nPath, 'utf8')
+    : fs.readFileSync(path.join(PUBLIC_DIR, 'js', 'api.js'), 'utf8');
+  const m = apiSrc.match(/(?:const|var)\s+EN_DICT\s*=\s*\{([\s\S]*?)\n\s*\};/);
   assert.ok(m, 'public/js/api.js must define EN_DICT');
   return vm.runInNewContext('({' + m[1] + '})');
 }

@@ -722,7 +722,9 @@ function registerBackupDrTests() {
     await t.test('5. Admin UI & 14-locale i18n parity for two-mode backup controls', () => {
       const adminHtml = fs.readFileSync(path.join(ROOT_DIR, 'public', 'admin.html'), 'utf8');
       const adminJs = fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'admin.js'), 'utf8');
-      const apiJs = fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'api.js'), 'utf8');
+      const apiJs = fs.existsSync(path.join(ROOT_DIR, 'public', 'js', 'api', 'i18n.js'))
+        ? fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'api', 'i18n.js'), 'utf8')
+        : fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'api.js'), 'utf8');
 
       assert.ok(adminHtml.includes('id="btn-backup-db"'), 'admin.html must include #btn-backup-db');
       assert.ok(adminHtml.includes('id="btn-backup-dr"'), 'admin.html must include #btn-backup-dr');
