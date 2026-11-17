@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Player Consent, Waiver &amp; Indemnity - Sunday Pickup Baseball</title>
   <link rel="stylesheet" href="/css/style.css?v=152">
+  <link rel="stylesheet" href="/css/dialog.css?v=152">
   <link rel="stylesheet" href="/css/themes.css?v=152">
   <link rel="alternate" type="application/rss+xml" title="Sunday Pickup Baseball Highlights &amp; Updates" href="/feed.xml">
   <link rel="shortcut icon" href="/favicon.ico">
@@ -18,7 +19,7 @@
       background: var(--bg-card);
       border: 1.5px solid var(--border);
       border-radius: var(--radius-md);
-      padding: 36px 40px;
+      padding: 36px 40px; padding-inline: 40px;
       box-shadow: var(--shadow-md);
       font-family: Georgia, "Times New Roman", Times, serif;
       line-height: 1.65;
@@ -59,15 +60,14 @@
     }
     .waiver-sig-baseline {
       position: absolute;
-      left: 20px;
-      right: 20px;
+      inset-inline: 20px;
       bottom: 32px;
       border-bottom: 1.5px solid #94a3b8;
       pointer-events: none;
     }
     .waiver-sig-hint {
       position: absolute;
-      left: 24px;
+      inset-inline-start: 24px;
       bottom: 10px;
       font-size: 0.75rem;
       color: #64748b;
@@ -79,7 +79,7 @@
         padding: 22px 18px;
       }
       .waiver-paper p {
-        text-align: left;
+        text-align: start;
       }
     }
     .print-only-sig {

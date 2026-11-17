@@ -569,10 +569,10 @@ module.exports = async function registerWeatherGalleryTests(ctx, t9) {
     assert.ok(swJs.includes('/art.html') || swJs.includes('/gallery.html'), 'sw.js must cache art / gallery assets');
     assert.ok(swJs.includes('/js/art.js'), 'sw.js must cache /js/art.js');
 
-    const styleCss = fs.readFileSync(path.join(publicDir, 'css', 'style.css'), 'utf8');
-    assert.ok(styleCss.includes('.pixel-canvas-frame'), 'style.css must define .pixel-canvas-frame');
-    assert.ok(styleCss.includes('.trunk-outer-box'), 'style.css must define .trunk-outer-box');
-    assert.ok(styleCss.includes('.chalkboard-frame'), 'style.css must define .chalkboard-frame');
+    const artCss = fs.readFileSync(path.join(publicDir, 'css', 'art.css'), 'utf8');
+    assert.ok(artCss.includes('.pixel-canvas-frame'), 'art.css must define .pixel-canvas-frame');
+    assert.ok(artCss.includes('.trunk-outer-box'), 'art.css must define .trunk-outer-box');
+    assert.ok(artCss.includes('.chalkboard-frame'), 'art.css must define .chalkboard-frame');
   });
 
   await t9.test('T9.24: Community Photo & Video Gallery (Zero-Login Drop, Remote Image Copy, Chronological Order & Album Bookmarks)', async () => {
@@ -629,17 +629,18 @@ module.exports = async function registerWeatherGalleryTests(ctx, t9) {
     assert.ok(swJs.includes('/gallery.html'), 'sw.js must cache /gallery.html');
     assert.ok(swJs.includes('/js/gallery.js'), 'sw.js must cache /js/gallery.js');
 
+    const galleryCss = fs.readFileSync(path.join(publicDir, 'css', 'gallery.css'), 'utf8');
     const styleCss = fs.readFileSync(path.join(publicDir, 'css', 'style.css'), 'utf8');
     assert.ok(styleCss.includes('.nav-link-gallery'), 'style.css must define .nav-link-gallery');
-    assert.ok(styleCss.includes('.album-bookmarks-scroll'), 'style.css must define .album-bookmarks-scroll');
-    assert.ok(styleCss.includes('.album-bookmark-pill'), 'style.css must define .album-bookmark-pill');
-    assert.ok(styleCss.includes('.carousel-stage-wrap'), 'style.css must define .carousel-stage-wrap');
-    assert.ok(styleCss.includes('.carousel-track'), 'style.css must define .carousel-track');
-    assert.ok(styleCss.includes('.carousel-paddle'), 'style.css must define .carousel-paddle');
-    assert.ok(styleCss.includes('.carousel-edge-hint'), 'style.css must define .carousel-edge-hint');
-    assert.ok(styleCss.includes('.photo-jump-focus'), 'style.css must define .photo-jump-focus');
-    assert.ok(styleCss.includes('.photo-card'), 'style.css must define .photo-card');
-    assert.ok(styleCss.includes('.video-facade-container'), 'style.css must define .video-facade-container');
+    assert.ok(galleryCss.includes('.album-bookmarks-scroll'), 'gallery.css must define .album-bookmarks-scroll');
+    assert.ok(galleryCss.includes('.album-bookmark-pill'), 'gallery.css must define .album-bookmark-pill');
+    assert.ok(galleryCss.includes('.carousel-stage-wrap'), 'gallery.css must define .carousel-stage-wrap');
+    assert.ok(galleryCss.includes('.carousel-track'), 'gallery.css must define .carousel-track');
+    assert.ok(galleryCss.includes('.carousel-paddle'), 'gallery.css must define .carousel-paddle');
+    assert.ok(galleryCss.includes('.carousel-edge-hint'), 'gallery.css must define .carousel-edge-hint');
+    assert.ok(galleryCss.includes('.photo-jump-focus'), 'gallery.css must define .photo-jump-focus');
+    assert.ok(galleryCss.includes('.photo-card'), 'gallery.css must define .photo-card');
+    assert.ok(galleryCss.includes('.video-facade-container'), 'gallery.css must define .video-facade-container');
 
     // 4. API Acceptance: Query GET /api/media (fresh DB has zero demo media; seed 3 fixture items for ordering tests)
     const getRes = await fetch(`${baseUrl}/api/media`);

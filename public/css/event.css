@@ -1,0 +1,532 @@
+/* ==========================================================================
+   Event Detail & Admin Features (Batting Practice, Event Detail Layout, Duty Cards)
+   ========================================================================== */
+
+/* ========================================================
+   Batting Practice (BP) Order Signup Sheet Styles
+   ======================================================== */
+.bp-order-section {
+  border-top: 4px solid var(--secondary);
+}
+
+.bp-groups-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  background: var(--bg-subtle, #f8fafc);
+  border-radius: var(--radius-sm, 8px);
+  border: 1px solid var(--border);
+  font-size: 0.8rem;
+}
+
+.bp-group-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 500;
+}
+
+.bp-group-tag.group-1 {
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+.bp-group-tag.group-2 {
+  background: #eff6ff;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
+}
+
+.bp-group-tag.group-3 {
+  background: #fefce8;
+  color: #854d0e;
+  border: 1px solid #fef08a;
+}
+
+[data-theme="dark"] .bp-group-tag.group-1 {
+  background: rgba(16, 185, 129, 0.15);
+  color: #6ee7b7;
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+[data-theme="dark"] .bp-group-tag.group-2 {
+  background: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+[data-theme="dark"] .bp-group-tag.group-3 {
+  background: rgba(234, 179, 8, 0.15);
+  color: #fde047;
+  border-color: rgba(234, 179, 8, 0.3);
+}
+
+.bp-slots-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 12px;
+}
+
+.bp-slot-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm, 8px);
+  border: 1.5px solid var(--border);
+  background: var(--bg-card, #ffffff);
+  transition: all 0.15s ease-in-out;
+}
+
+.bp-slot-card:hover {
+  box-shadow: var(--shadow-sm);
+  border-color: var(--secondary);
+}
+
+.bp-slot-card.is-open {
+  border-style: dashed;
+  background: var(--surface-2, #fafafa);
+}
+
+.bp-slot-card.is-open:hover {
+  background: var(--bg-card, #ffffff);
+  border-color: var(--primary);
+}
+
+.bp-slot-card.is-mine {
+  border-color: var(--primary);
+  background: rgba(0, 104, 71, 0.04);
+  box-shadow: 0 0 0 1px var(--primary);
+}
+
+[data-theme="dark"] .bp-slot-card.is-mine {
+  background: rgba(52, 211, 153, 0.08);
+}
+
+.bp-slot-num-badge {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 800;
+  background: var(--bg-subtle, #f1f5f9);
+  color: var(--secondary);
+  border: 1px solid var(--border);
+}
+
+.bp-slot-card.is-mine .bp-slot-num-badge {
+  background: var(--primary);
+  color: #ffffff;
+  border-color: var(--primary);
+}
+
+.bp-slot-round-lbl {
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  font-weight: 700;
+  line-height: 1;
+  margin-top: 1px;
+  opacity: 0.8;
+}
+
+.bp-slot-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.bp-slot-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.bp-slot-name {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bp-slot-notes {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+  font-style: italic;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bp-slot-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.bp-claim-slot-btn {
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  color: var(--primary);
+  border: 1.5px solid var(--primary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.bp-claim-slot-btn:hover {
+  background: var(--primary);
+  color: #ffffff;
+}
+
+.bp-slot-icon-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 4px;
+  opacity: 0.75;
+  transition: opacity 0.15s ease;
+  line-height: 1;
+}
+
+.bp-slot-icon-btn:hover {
+  opacity: 1;
+}
+
+.bp-modal {
+  position: fixed;
+  top: 0;
+  inset-inline: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.bp-modal-content {
+  width: 100%;
+  max-width: 440px;
+  background: var(--bg-card, #ffffff);
+  border-radius: var(--radius-md, 12px);
+  box-shadow: var(--shadow-lg);
+  padding: 24px;
+}
+
+.bp-modal-close-btn {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  line-height: 1;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+}
+
+.bp-modal-close-btn:hover {
+  color: var(--text-main);
+}
+
+/* ==========================================================================
+   Event Detail Page Compact Layout & Combined Cards (.event-detail-main)
+   ========================================================================== */
+.event-detail-main .card {
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+
+.event-detail-main .card-header {
+  margin-bottom: 10px;
+  gap: 8px;
+}
+
+.event-detail-main .organizer-controls-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(290px, 1.55fr);
+  gap: 8px;
+  margin-bottom: 10px;
+  align-items: stretch;
+}
+
+.event-detail-main .organizer-controls-grid:empty {
+  display: none;
+}
+
+.event-detail-main .organizer-controls-grid > div:empty {
+  display: none;
+}
+
+.event-detail-main .organizer-turnout-card {
+  background: var(--bg-subtle);
+  border: 1.5px solid var(--border);
+  border-inline-start: 4px solid var(--primary);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.event-detail-main .organizer-turnout-card.is-recorded {
+  border-inline-start-color: var(--secondary);
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.event-detail-main .organizer-inline-panel {
+  padding: 8px 10px;
+  margin-bottom: 0;
+  border-radius: var(--radius-sm);
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.event-detail-main .event-meta-grid {
+  grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+  gap: 8px 12px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+
+.event-detail-main .meta-item {
+  gap: 8px;
+}
+
+.event-detail-main .meta-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+}
+
+.event-detail-main .meta-icon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.event-detail-main .meta-label {
+  font-size: 0.65rem;
+}
+
+.event-detail-main .meta-value {
+  font-size: 0.86rem;
+  line-height: 1.25;
+}
+
+.weather-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.weather-kpi-tile {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 9px;
+}
+
+.weather-kpi-label {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.weather-kpi-val {
+  font-size: 0.96rem;
+  font-weight: 800;
+  color: var(--secondary);
+  margin-top: 1px;
+}
+
+.weather-kpi-sub {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  margin-top: 1px;
+  line-height: 1.25;
+}
+
+.weather-kpi-rec {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--secondary);
+  margin-top: 2px;
+  line-height: 1.25;
+}
+
+/* RSVP & Tasks compact density */
+.event-detail-main .rsvp-counters-grid {
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.event-detail-main .rsvp-counter-card {
+  padding: 8px 10px;
+}
+
+.event-detail-main .rsvp-counter-title {
+  font-size: 0.9rem;
+}
+
+.event-detail-main .rsvp-counter-sub {
+  font-size: 0.72rem;
+}
+
+.event-detail-main .stepper-btn,
+.event-detail-main .stepper-input {
+  height: 30px;
+}
+
+.event-detail-main .stepper-btn {
+  width: 30px;
+  font-size: 1rem;
+}
+
+.event-detail-main .rsvp-group-summary {
+  padding: 5px 10px;
+  margin-bottom: 8px;
+  font-size: 0.8rem;
+}
+
+.event-detail-main .rsvp-tasks-checklist {
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 6px;
+}
+
+.event-detail-main .rsvp-task-row {
+  padding: 6px 9px;
+  gap: 7px;
+}
+
+.event-detail-main .rsvp-task-row input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+}
+
+.event-detail-main .rsvp-optional-details {
+  margin-bottom: 6px;
+}
+
+.event-detail-main .rsvp-optional-details summary {
+  padding: 6px 10px;
+  font-size: 0.8rem;
+}
+
+.event-detail-main .rsvp-optional-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 8px 10px;
+  padding: 8px 10px 10px;
+}
+
+.event-detail-main input[type="text"],
+.event-detail-main input[type="email"],
+.event-detail-main input[type="number"],
+.event-detail-main textarea,
+.event-detail-main select {
+  padding: 7px 10px;
+}
+
+/* Unified Roster + Batting Practice (BP) Order inside a single compact card */
+.event-detail-main .roster-list {
+  grid-template-columns: repeat(auto-fill, minmax(235px, 1fr));
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.event-detail-main .roster-item {
+  padding: 8px 10px;
+}
+
+.event-detail-main .roster-bp-divider {
+  border-top: 1px solid var(--border);
+  margin-top: 12px;
+  padding-top: 12px;
+}
+
+.event-detail-main .bp-groups-legend {
+  gap: 6px;
+  margin-bottom: 8px;
+  padding: 5px 8px;
+}
+
+.event-detail-main .bp-group-tag {
+  padding: 2px 8px;
+  font-size: 0.71rem;
+}
+
+.event-detail-main .bp-slots-grid {
+  grid-template-columns: repeat(auto-fill, minmax(225px, 1fr));
+  gap: 6px;
+}
+
+.event-detail-main .bp-slot-card {
+  padding: 6px 8px;
+  gap: 7px;
+}
+
+.event-detail-main .bp-slot-num-badge {
+  width: 32px;
+  height: 32px;
+  font-size: 0.8rem;
+  border-radius: 7px;
+}
+
+.event-detail-main .bp-slot-round-lbl {
+  font-size: 0.54rem;
+}
+
+.event-detail-main .bp-slot-name {
+  font-size: 0.84rem;
+}
+
+.event-detail-main .bp-claim-slot-btn {
+  font-size: 0.72rem;
+  padding: 3px 8px;
+}
+
+/* Compact Discussion Board */
+.event-detail-main .comments-list {
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.event-detail-main .comment-bubble {
+  padding: 10px 12px;
+}
+
+@media (max-width: 720px) {
+  .event-detail-main .organizer-controls-grid {
+    grid-template-columns: 1fr;
+  }
+}
+

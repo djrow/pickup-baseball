@@ -908,7 +908,7 @@
       var html = '';
       html += '<div style="padding:8px;border:1px solid var(--ch-border);border-radius:6px;margin-bottom:8px;">';
       html += '<div style="font-weight:700;margin-bottom:3px;">' + escapeHtml(tClubhouse('clubhouse.verify_your_fp', 'Your Key Fingerprint')) + '</div>';
-      html += '<div style="font-family:monospace;font-size:11.5px;color:var(--ch-text-secondary);word-break:break-word;">' +
+      html += '<div dir="ltr" style="font-family:monospace;font-size:11.5px;color:var(--ch-text-secondary);word-break:break-word;unicode-bidi:isolate;">' +
         escapeHtml(info.myFingerprint || tClubhouse('clubhouse.verify_not_enrolled', 'Not enrolled on this browser yet')) + '</div></div>';
 
       var peers = info.peers || [];
@@ -930,7 +930,7 @@
           html += '<span style="color:#fbbf24;">' + escapeHtml(tClubhouse('clubhouse.verify_no_vault', '⏳ No E2EE Vault')) + '</span>';
         }
         html += '</div>';
-        html += '<div style="font-family:monospace;font-size:11.5px;color:var(--ch-text-secondary);word-break:break-word;">' +
+        html += '<div dir="ltr" style="font-family:monospace;font-size:11.5px;color:var(--ch-text-secondary);word-break:break-word;unicode-bidi:isolate;">' +
           escapeHtml(p.fingerprint || tClubhouse('clubhouse.verify_waiting_member', 'Waiting for member to enroll key vault')) + '</div>';
         if (p.keyRotatedAt) {
           html += '<div style="font-size:11px;color:var(--ch-text-muted);margin-top:3px;">' + escapeHtml(tClubhouse('clubhouse.verify_last_rotated', 'Last rotated: {date}', { date: String(p.keyRotatedAt) })) + '</div>';

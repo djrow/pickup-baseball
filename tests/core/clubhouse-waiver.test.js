@@ -207,10 +207,11 @@ test('Clubhouse Frontend & Native Waiver Verification', async (t) => {
 
     // 4. Compact game detail card consolidation checks
     const eventHtmlComp = fs.readFileSync(path.join(publicDir, 'event.html'), 'utf8');
-    const styleCssComp = fs.readFileSync(path.join(publicDir, 'css/style.css'), 'utf8');
+    const weatherCssComp = fs.readFileSync(path.join(publicDir, 'css/weather.css'), 'utf8');
+    const eventCssComp = fs.readFileSync(path.join(publicDir, 'css/event.css'), 'utf8');
     assert.ok(eventHtmlComp.includes('event-detail-main') && eventHtmlComp.includes('organizer-controls-grid'), 'event.html must group organizer controls cleanly');
     assert.ok(eventHtmlComp.includes('id="roster-bp-card"') && eventHtmlComp.includes('roster-bp-divider'), 'event.html must combine Expected Attendees and BP Order in one card');
-    assert.ok(styleCssComp.includes('.weather-kpi-grid') && styleCssComp.includes('.event-detail-main .bp-slot-card'), 'style.css must style compact detail page cards');
+    assert.ok(weatherCssComp.includes('.weather-kpi-grid') && eventCssComp.includes('.event-detail-main .bp-slot-card'), 'weather.css and event.css must style compact detail page cards');
 
     for (const [fname, src] of [['rtc.js', rtcJs], ['store.js', storeJs], ['app.js', homeAppJs], ['weather.js', weatherJs]]) {
       assert.ok(!src.includes('?.') && !src.includes('??'), `${fname} must stay ES6 compatible without ?. or ??`);

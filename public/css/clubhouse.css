@@ -132,7 +132,7 @@ html, body.clubhouse-body {
    ============================================================================ */
 .ch-sidebar {
   background-color: var(--ch-bg-sidebar);
-  border-right: 1px solid var(--ch-border);
+  border-inline-end: 1px solid var(--ch-border);
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -228,7 +228,7 @@ html, body.clubhouse-body {
 
 /* Voice Room Participants Roster */
 .ch-voice-roster {
-  padding-left: 22px;
+  padding-inline-start: 22px;
   margin-top: 2px;
   margin-bottom: 6px;
   display: flex;
@@ -256,7 +256,7 @@ html, body.clubhouse-body {
   justify-content: center;
   font-size: 11px;
   font-weight: 700;
-  margin-right: 7px;
+  margin-inline-end: 7px;
   border: 2px solid transparent;
 }
 
@@ -785,7 +785,7 @@ html, body.clubhouse-body {
    ============================================================================ */
 .ch-context-panel {
   background-color: var(--ch-bg-sidebar);
-  border-left: 1px solid var(--ch-border);
+  border-inline-start: 1px solid var(--ch-border);
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -1101,13 +1101,16 @@ html, body.clubhouse-body {
   .ch-context-panel.mobile-open {
     display: flex;
     position: fixed;
-    right: 0;
+    inset-inline-end: 0;
     top: 0;
     bottom: 0;
     height: auto;
     width: min(320px, calc(100vw - 52px));
     z-index: 60;
     box-shadow: -8px 0 28px rgba(0, 0, 0, 0.55);
+  }
+  [dir="rtl"] .ch-context-panel.mobile-open {
+    box-shadow: 8px 0 28px rgba(0, 0, 0, 0.55);
   }
   .ch-mobile-backdrop.active {
     display: block;
@@ -1165,13 +1168,16 @@ html, body.clubhouse-body {
   .ch-sidebar.mobile-open {
     display: flex;
     position: fixed;
-    left: 0;
+    inset-inline-start: 0;
     top: 0;
     bottom: 0;
     height: auto;
     width: min(270px, calc(100vw - 40px));
     z-index: 60;
     box-shadow: 8px 0 28px rgba(0, 0, 0, 0.55);
+  }
+  [dir="rtl"] .ch-sidebar.mobile-open {
+    box-shadow: -8px 0 28px rgba(0, 0, 0, 0.55);
   }
 }
 
@@ -1218,7 +1224,7 @@ html, body.clubhouse-body {
 
 .ch-covenant-list {
   margin: 0;
-  padding-left: 18px;
+  padding-inline-start: 18px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1357,7 +1363,7 @@ html, body.clubhouse-body {
   padding: 4px;
   cursor: pointer;
   color: var(--ch-text-primary);
-  text-align: left;
+  text-align: start;
 }
 
 .ch-gif-card:hover {
@@ -1404,219 +1410,6 @@ html, body.clubhouse-body {
   padding: 0 2px;
 }
 
-/* ==========================================================================
-   Accessible In-App Dialogs & Toasts (window.PBFDialog)
-   ========================================================================== */
-.pbf-toast-container {
-  position: fixed;
-  bottom: 1.25rem;
-  right: 1.25rem;
-  z-index: 9500;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  max-width: min(380px, calc(100vw - 2rem));
-  pointer-events: none;
-}
-
-.pbf-toast {
-  pointer-events: auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.7rem 0.95rem;
-  border-radius: 10px;
-  background: var(--ch-bg-elevated);
-  color: var(--ch-text-primary);
-  border: 1px solid var(--ch-border);
-  box-shadow: var(--ch-shadow-float);
-  font-size: 0.9rem;
-  line-height: 1.4;
-}
-
-.pbf-toast-success {
-  border-color: rgba(46, 204, 113, 0.45);
-}
-
-.pbf-toast-error {
-  border-color: rgba(231, 76, 60, 0.55);
-  background: var(--ch-toast-err-bg);
-  color: var(--ch-toast-err-text);
-}
-
-.pbf-toast-content {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.4rem;
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.pbf-toast-msg {
-  flex: 1 1 auto;
-  word-break: break-word;
-}
-
-.pbf-toast-diag-btn {
-  appearance: none;
-  border: 1px solid var(--ch-border);
-  background: transparent;
-  color: inherit;
-  border-radius: 6px;
-  padding: 0.25rem 0.55rem;
-  font-size: 0.78rem;
-  font-weight: 600;
-  line-height: 1.2;
-  cursor: pointer;
-  opacity: 0.92;
-}
-
-.pbf-toast-diag-btn:hover {
-  opacity: 1;
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.pbf-toast-close {
-  flex: 0 0 auto;
-  background: transparent;
-  border: none;
-  color: inherit;
-  font-size: 1.15rem;
-  line-height: 1;
-  padding: 0.1rem 0.35rem;
-  cursor: pointer;
-}
-
-.pbf-dialog-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 9600;
-  background: rgba(4, 10, 8, 0.72);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-}
-
-.pbf-dialog-card {
-  width: 100%;
-  max-width: 440px;
-  max-height: calc(100dvh - 2rem);
-  overflow-y: auto;
-  background: var(--ch-bg-sidebar);
-  color: var(--ch-text-primary);
-  border: 1px solid var(--ch-border);
-  border-radius: 12px;
-  box-shadow: var(--ch-shadow-float);
-  padding: 1.15rem 1.25rem;
-}
-
-.pbf-dialog-header {
-  margin-bottom: 0.6rem;
-}
-
-.pbf-dialog-title {
-  margin: 0;
-  font-size: 1.08rem;
-  font-weight: 700;
-  color: var(--ch-text-primary);
-}
-
-.pbf-dialog-message {
-  margin: 0 0 0.85rem;
-  font-size: 0.92rem;
-  line-height: 1.5;
-  color: var(--ch-text-secondary);
-  white-space: pre-line;
-}
-
-.pbf-dialog-field {
-  margin-bottom: 0.75rem;
-}
-
-.pbf-dialog-label {
-  display: block;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--ch-text-secondary);
-  margin-bottom: 0.3rem;
-}
-
-.pbf-dialog-input {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 0.5rem 0.65rem;
-  border: 1px solid var(--ch-border);
-  border-radius: 8px;
-  background: var(--ch-bg-rail);
-  color: var(--ch-text-primary);
-  font: inherit;
-  font-size: 0.92rem;
-}
-
-.pbf-dialog-input:focus {
-  outline: none;
-  border-color: var(--ch-accent);
-}
-
-.pbf-dialog-checkbox-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.9rem;
-  cursor: pointer;
-  margin-bottom: 0.75rem;
-}
-
-.pbf-dialog-error {
-  color: var(--ch-danger);
-  font-size: 0.84rem;
-  font-weight: 600;
-  min-height: 1.1em;
-  margin-bottom: 0.35rem;
-}
-
-.pbf-dialog-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.55rem;
-  margin-top: 1rem;
-  flex-wrap: wrap;
-}
-
-.pbf-dialog-btn {
-  padding: 0.48rem 0.9rem;
-  border-radius: 8px;
-  border: 1px solid var(--ch-border);
-  font: inherit;
-  font-size: 0.88rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.pbf-dialog-btn-secondary {
-  background: var(--ch-bg-elevated);
-  color: var(--ch-text-primary);
-}
-
-.pbf-dialog-btn-primary {
-  background: var(--ch-accent);
-  border-color: var(--ch-accent);
-  color: var(--ch-on-accent);
-}
-
-.pbf-dialog-btn-primary:hover {
-  background: var(--ch-accent-hover);
-}
-
-.pbf-dialog-btn-danger {
-  background: var(--ch-danger);
-  border-color: var(--ch-danger);
-  color: #ffffff;
-}
-
 /* Dynamic quick-navigation dropdown inside Clubhouse user bar */
 .ch-quick-nav-wrap {
   position: relative;
@@ -1625,7 +1418,7 @@ html, body.clubhouse-body {
 .ch-quick-nav-menu {
   position: absolute;
   bottom: calc(100% + 6px);
-  left: 0;
+  inset-inline-start: 0;
   min-width: 170px;
   background: var(--ch-bg-rail);
   border: 1px solid var(--ch-border);
@@ -1681,7 +1474,7 @@ html, body.clubhouse-body {
 }
 
 .ch-theme-swatch + .ch-theme-swatch {
-  margin-left: -4px;
+  margin-inline-start: -4px;
 }
 
 .ch-theme-btn-label {
@@ -1718,7 +1511,7 @@ html, body.clubhouse-body {
 }
 
 .ch-theme-summary-swatches .swatch-preview + .swatch-preview {
-  margin-left: -6px;
+  margin-inline-start: -6px;
 }
 
 .ch-theme-summary-meta {
@@ -1742,7 +1535,7 @@ html, body.clubhouse-body {
 #ch-theme-picker-body {
   max-height: 62vh;
   overflow-y: auto;
-  padding-right: 2px;
+  padding-inline-end: 2px;
 }
 
 #ch-theme-picker-body .theme-mode-tabs {
@@ -1806,7 +1599,7 @@ html, body.clubhouse-body {
   border: 1.5px solid var(--ch-border);
   background: var(--ch-bg-rail);
   color: var(--ch-text-primary);
-  text-align: left;
+  text-align: start;
   cursor: pointer;
   font: inherit;
   transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.1s ease;
@@ -1837,7 +1630,7 @@ html, body.clubhouse-body {
 }
 
 .swatch-preview + .swatch-preview {
-  margin-left: -4px;
+  margin-inline-start: -4px;
 }
 
 .palette-info {
@@ -1870,4 +1663,19 @@ html, body.clubhouse-body {
   font-weight: 800;
   color: var(--ch-accent);
   flex-shrink: 0;
+}
+
+/* Technical & numeric token isolation for bidirectional / RTL text stability */
+.tech-token,
+[data-tech-token],
+.ch-channel-label span,
+#ch-active-channel-name,
+#ch-verify-safety-number,
+#ch-vault-own-fp {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+.ch-channel-label span,
+#ch-active-channel-name {
+  display: inline-block;
 }

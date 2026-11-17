@@ -562,14 +562,33 @@ async function runPublicShellAndDiagnosticsSmoke(browser, session, server, track
   assert(diagSmoke.clearedAfter === 0 && diagSmoke.sessionCleared === null, 'clearDiagnostics empties memory and sessionStorage');
   record('Error diagnostics ring buffer + "Copy Diagnostic Details" clipboard copy verified in browser');
 
-  // Dark mode + Arabic RTL check + mobile viewport overflow
-  await session.evaluate('localStorage.setItem("pickup_theme", "dark"); localStorage.setItem("pickup_lang", "ar");');
-  await session.setViewport(390, 844);
-  await session.navigateAndCheck(`${server.baseUrl}/index.html`, 'index.html (ar/dark/mobile)', tracker);
-  await session.waitFor('document.documentElement.getAttribute("data-theme") === "dark" && document.documentElement.getAttribute("dir") === "rtl"');
-  const overflowMobile = await session.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 2');
-  assert(overflowMobile, 'mobile index (ar/RTL) has no horizontal overflow');
-  record('Dark mode + RTL Arabic layout + mobile (390x844) render without overflow');
+  // Dark mode + RTL (Arabic 'ar' & Persian 'fa') desktop, mobile, and mobile drawer checks
+  for (const rtlLang of ['ar', 'fa']) {
+    // 1. Desktop RTL check (1280x900)
+    await session.evaluate(`localStorage.setItem("pickup_theme", "dark"); localStorage.setItem("pickup_lang", "${rtlLang}");`);
+    await session.setViewport(1280, 900);
+    await session.navigateAndCheck(`${server.baseUrl}/index.html`, `index.html (${rtlLang}/dark/desktop)`, tracker);
+    await session.waitFor(`document.documentElement.getAttribute("data-theme") === "dark" && document.documentElement.getAttribute("dir") === "rtl"`);
+    const overflowDesktop = await session.evaluate('document.documentElement.scrollWidth <= window.innerWidth');
+    assert(overflowDesktop, `desktop index (${rtlLang}/RTL) has zero horizontal overflow`);
+
+    // 2. Mobile RTL check (390x844)
+    await session.setViewport(390, 844);
+    await session.waitFor('document.documentElement.scrollWidth <= window.innerWidth + 2');
+    const overflowMobile = await session.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 2');
+    assert(overflowMobile, `mobile index (${rtlLang}/RTL) has zero horizontal overflow`);
+
+    // 3. Mobile menu dropdown RTL check
+    const menuToggle = await session.evaluate('Boolean(document.getElementById("nav-menu-toggle"))');
+    if (menuToggle) {
+      await clickEl(session, '#nav-menu-toggle');
+      await session.waitFor('document.getElementById("nav-menu-toggle").getAttribute("aria-expanded") === "true"');
+      const overflowDrawer = await session.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 2');
+      assert(overflowDrawer, `mobile index (${rtlLang}/RTL) with menu open has zero horizontal overflow`);
+      await clickEl(session, '#nav-menu-toggle');
+    }
+  }
+  record('Dark mode + RTL (ar/fa) layout desktop + mobile + mobile-drawer render without horizontal overflow');
 
   await session.evaluate('localStorage.setItem("pickup_theme", "light"); localStorage.setItem("pickup_lang", "en");');
   await session.setViewport(1280, 900);
@@ -627,6 +646,40 @@ async function runPublicShellAndDiagnosticsSmoke(browser, session, server, track
   await clickEl(session, '#btn-done-theme-modal');
   await session.evaluate('localStorage.removeItem("pickup_theme_mode"); localStorage.removeItem("pickup_theme"); localStorage.removeItem("pickup_color_theme");');
   record('clubhouse.html theme modal switches Light/Dark mode & MLB market palettes cleanly');
+
+  // Clubhouse Mobile Drawers RTL check (sidebar & context drawers in RTL)
+  for (const rtlLang of ['ar', 'fa']) {
+    await session.evaluate(`localStorage.setItem("pickup_lang", "${rtlLang}");`);
+    await session.setViewport(390, 844);
+    await session.navigateAndCheck(`${server.baseUrl}/clubhouse.html`, `clubhouse.html (${rtlLang}/mobile)`, tracker);
+    await session.waitFor(`document.documentElement.getAttribute("dir") === "rtl"`);
+
+    const chOverflowMobile = await session.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 2');
+    assert(chOverflowMobile, `clubhouse mobile (${rtlLang}/RTL) has zero horizontal overflow`);
+
+    // Open sidebar mobile drawer
+    const hasSidebarBtn = await session.evaluate('Boolean(document.getElementById("btn-mobile-sidebar"))');
+    if (hasSidebarBtn) {
+      await clickEl(session, '#btn-mobile-sidebar');
+      await session.waitFor('document.querySelector(".ch-sidebar.mobile-open")');
+      const overflowSidebar = await session.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 2');
+      assert(overflowSidebar, `clubhouse mobile (${rtlLang}/RTL) with sidebar open has zero horizontal overflow`);
+      await clickEl(session, '#btn-mobile-sidebar');
+    }
+
+    // Open context panel drawer if available
+    const hasContextBtn = await session.evaluate('Boolean(document.getElementById("btn-mobile-context"))');
+    if (hasContextBtn) {
+      await clickEl(session, '#btn-mobile-context');
+      await session.waitFor('document.querySelector(".ch-context-panel.mobile-open")');
+      const overflowContext = await session.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 2');
+      assert(overflowContext, `clubhouse mobile (${rtlLang}/RTL) with context panel open has zero horizontal overflow`);
+      await clickEl(session, '#btn-mobile-context');
+    }
+  }
+  await session.evaluate('localStorage.setItem("pickup_lang", "en");');
+  await session.setViewport(1280, 900);
+  record('clubhouse.html mobile sidebar & context drawers render in RTL (ar/fa) without horizontal overflow');
 }
 
 /**

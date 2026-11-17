@@ -1490,7 +1490,7 @@ function setupAdminUserManagement(currentUser) {
               ${API.escapeHtml(u.name)}
               ${isMe ? '<span style="color: var(--primary); font-size: 0.75rem; margin-left: 4px; font-weight: 600;">(You)</span>' : ''}
             </div>
-            <div style="font-size: 0.77rem; color: var(--text-muted); font-family: monospace; line-height: 1.2;">${API.escapeHtml(u.email)}</div>
+            <div dir="ltr" class="tech-token" style="font-size: 0.77rem; color: var(--text-muted); font-family: monospace; line-height: 1.2;">${API.escapeHtml(u.email)}</div>
           </td>
           <td style="padding: 5px 10px; font-weight: 600; font-size: 0.82rem; white-space: nowrap;">${gamesCount} game${gamesCount === 1 ? '' : 's'}</td>
           <td style="padding: 5px 10px; white-space: nowrap;">${roleBadge}</td>

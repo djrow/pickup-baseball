@@ -1059,7 +1059,7 @@ async function setupRsvpState(preserveAlertHtml) {
         loginPrompt.innerHTML = `
           <h4 style="margin: 0 0 6px 0; color: var(--secondary); font-size: 1.05rem;">🔒 Restricted Roster</h4>
           <p style="margin: 0; font-size: 0.88rem; color: var(--text-muted);">
-            RSVP for this game is restricted to an invited list. Your account (<strong>${API.escapeHtml(user.email)}</strong>) is not on the roster for this event. Please contact the organizer if you should be included.
+            RSVP for this game is restricted to an invited list. Your account (<strong dir="ltr" class="tech-token">${API.escapeHtml(user.email)}</strong>) is not on the roster for this event. Please contact the organizer if you should be included.
           </p>
         `;
       }
