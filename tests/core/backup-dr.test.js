@@ -722,7 +722,9 @@ function registerBackupDrTests() {
     await t.test('5. Admin UI & 14-locale i18n parity for two-mode backup controls', () => {
       const adminHtml = fs.readFileSync(path.join(ROOT_DIR, 'public', 'admin.html'), 'utf8');
       const adminJs = fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'admin.js'), 'utf8');
-      const apiJs = fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'api.js'), 'utf8');
+      const apiJs = fs.existsSync(path.join(ROOT_DIR, 'public', 'js', 'api', 'i18n.js'))
+        ? fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'api', 'i18n.js'), 'utf8')
+        : fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'api.js'), 'utf8');
 
       assert.ok(adminHtml.includes('id="btn-backup-db"'), 'admin.html must include #btn-backup-db');
       assert.ok(adminHtml.includes('id="btn-backup-dr"'), 'admin.html must include #btn-backup-dr');
@@ -753,11 +755,15 @@ function registerBackupDrTests() {
       }
 
       const i18nDir = path.join(ROOT_DIR, 'public', 'i18n');
-      const localeFiles = fs.readdirSync(i18nDir).filter((f) => f.endsWith('.json'));
+      const localeFiles = fs.readdirSync(i18nDir).filter((f) => f.endsWith('.json') && f !== 'en.json');
       assert.equal(localeFiles.length, 14, 'Must have 14 non-English locale JSON files');
 
       for (const file of localeFiles) {
-        const dict = JSON.parse(fs.readFileSync(path.join(i18nDir, file), 'utf8'));
+        const lang = file.replace('.json', '');
+        const coreDict = JSON.parse(fs.readFileSync(path.join(i18nDir, file), 'utf8'));
+        const adminDictPath = path.join(i18nDir, 'admin', `${lang}.json`);
+        const adminDict = fs.existsSync(adminDictPath) ? JSON.parse(fs.readFileSync(adminDictPath, 'utf8')) : {};
+        const dict = Object.assign({}, coreDict, adminDict);
         for (const key of requiredKeys) {
           assert.ok(typeof dict[key] === 'string' && dict[key].length > 0, `${file} must define non-empty "${key}"`);
         }

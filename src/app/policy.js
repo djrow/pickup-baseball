@@ -267,6 +267,8 @@ export function sanitizeAttendeesForViewer(rows, { user = null, isOrganizer = fa
       roster_consent: _rc,
       notes,
       waiver_status,
+      paper_waiver_at,
+      paper_waiver_by,
       ...rest
     } = row;
 
@@ -284,6 +286,8 @@ export function sanitizeAttendeesForViewer(rows, { user = null, isOrganizer = fa
     if (canSeePrivate) {
       sanitized.notes = notes || '';
       sanitized.waiver_status = waiver_status || 'none';
+      if (paper_waiver_at !== undefined) sanitized.paper_waiver_at = paper_waiver_at;
+      if (paper_waiver_by !== undefined) sanitized.paper_waiver_by = paper_waiver_by;
     }
 
     return sanitized;

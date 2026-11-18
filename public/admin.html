@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Dashboard - Sunday Pickup Baseball</title>
   <link rel="stylesheet" href="/css/style.css?v=152">
+  <link rel="stylesheet" href="/css/dialog.css?v=152">
+  <link rel="stylesheet" href="/css/weather.css?v=152">
+  <link rel="stylesheet" href="/css/event.css?v=152">
   <link rel="stylesheet" href="/css/themes.css?v=152">
   <link rel="alternate" type="application/rss+xml" title="Sunday Pickup Baseball Highlights &amp; Updates" href="/feed.xml">
   <link rel="shortcut icon" href="/favicon.ico">
@@ -20,10 +23,11 @@
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 </head>
 <body>
+  <a href="#main-content" class="pbf-skip-link">Skip to main content</a>
 
   <!-- Site Header -->
   <header class="site-header">
-    <div class="container" id="main-nav">
+    <nav class="container" id="main-nav" aria-label="Main Navigation">
       <div class="nav-wrap">
         <a href="/index.html" class="brand">
           <img src="/logo.svg" alt="Pickup Baseball Foundation Logo" class="brand-logo">
@@ -47,10 +51,10 @@
           </div>
         </div>
       </div>
-    </div>
+    </nav>
   </header>
 
-  <main class="container" id="admin-main-container" style="margin-top: 32px; margin-bottom: 60px; display: none;">
+  <main class="container" id="main-content" style="margin-top: 32px; margin-bottom: 60px; display: none;">
 
     <!-- Manager Controls -->
     <div class="flex-between" style="margin-bottom: 24px;">
@@ -68,6 +72,18 @@
     </div>
 
     <div id="admin-alert"></div>
+
+    <!-- Setup Health Checklist Card (Admin Only) -->
+    <section class="card" id="admin-setup-health-card" style="display: none; margin-bottom: 24px; border-left: 4px solid var(--primary);">
+      <div class="flex-between" style="gap: 12px; align-items: flex-start; flex-wrap: wrap;">
+        <div>
+          <h2 class="card-title" style="margin-bottom: 4px;" data-i18n="admin.setup_health_title">🩺 Self-Host Setup Health</h2>
+          <p id="admin-setup-health-desc" style="margin: 0; font-size: 0.9rem; color: var(--text-muted);" data-i18n="admin.setup_health_desc">Production secret &amp; adapter checklist for your community instance (run npm run setup or see SELF_HOST.md).</p>
+        </div>
+        <button type="button" id="btn-dismiss-setup-health" class="btn btn-outline" style="padding: 6px 12px; font-size: 0.84rem;" data-i18n="admin.setup_health_dismiss">Dismiss</button>
+      </div>
+      <div id="admin-setup-health-list" style="margin-top: 12px; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px;"></div>
+    </section>
 
     <!-- Create Event Card -->
     <section class="card">
@@ -154,6 +170,14 @@
               <textarea id="event-extra-allowed-emails" rows="2" placeholder="e.g. guestplayer@gmail.com, coach@example.com" style="margin-top: 4px; font-size: 0.85rem;"></textarea>
             </div>
           </div>
+        </div>
+
+        <!-- Automatic Pre-Event Reminder Emails -->
+        <div class="form-group subpanel-card" style="margin-bottom: 16px;">
+          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 600; margin: 0;">
+            <input type="checkbox" id="event-auto-reminders-toggle" checked style="width: 18px; height: 18px; accent-color: var(--primary);">
+            <span data-i18n="event.auto_reminders_label">📬 Send automatic 24-hour pre-event reminder emails to confirmed attendees</span>
+          </label>
         </div>
 
         <!-- Task Builder Setup -->
@@ -533,6 +557,9 @@
 
   <footer id="site-footer" class="site-footer"></footer>
 
+  <script src="/js/api/i18n.js?v=152"></script>
+  <script src="/js/api/ui.js?v=152"></script>
+  <script src="/js/api/endpoints.js?v=152"></script>
   <script src="/js/api.js?v=152"></script>
   <script src="/js/dialog.js?v=152"></script>
   <script src="/js/weather.js?v=152"></script>

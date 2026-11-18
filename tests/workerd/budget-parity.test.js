@@ -92,7 +92,7 @@ test('Workerd Subrequest & D1 Query Budget Parity (Cloudflare Free <= 50 ceiling
     for (let i = 1; i <= 25; i++) {
       attendeeStmts.push(
         db.prepare(
-          "INSERT INTO attendees (event_id, name, email, is_guest, status, players_count, management_token) VALUES (?, ?, ?, 1, 'attending', 1, ?)"
+          "INSERT INTO attendees (event_id, name, email, is_guest, status, players_count, management_token, notify_emails) VALUES (?, ?, ?, 1, 'attending', 1, ?, 1)"
         ).bind(eventId, `Player ${i}`, `player${i}@example.org`, `tok-rem-${eventId}-${i}`)
       );
     }
@@ -157,7 +157,7 @@ test('Workerd Subrequest & D1 Query Budget Parity (Cloudflare Free <= 50 ceiling
     for (let i = 1; i <= 20; i++) {
       stmts.push(
         db.prepare(
-          "INSERT INTO attendees (event_id, name, email, is_guest, status, players_count, management_token) VALUES (?, ?, ?, 1, 'attending', 1, ?)"
+          "INSERT INTO attendees (event_id, name, email, is_guest, status, players_count, management_token, notify_emails) VALUES (?, ?, ?, 1, 'attending', 1, ?, 1)"
         ).bind(eventId, `Rain Player ${i}`, `rain${i}@example.org`, `tok-rain-${eventId}-${i}`)
       );
     }

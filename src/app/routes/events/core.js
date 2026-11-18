@@ -16,7 +16,9 @@ import {
   checkRateLimit,
   getSafePublicOrigin,
   arrayBufferToBase64,
-  base64ToUint8Array
+  base64ToUint8Array,
+  generateInviteToken,
+  verifyInviteToken
 } from '../../security.js';
 import { purgePublicEdgeCache } from '../../edge-cache.js';
 import {
@@ -122,7 +124,7 @@ eventsCoreRouter.get('/', async (c) => {
 });
 
 const BACKUP_PAGE_SIZE = 500;
-const SECRET_APP_SETTING_KEYS = new Set(['waiver_provenance_secret', 'appscript_upload_url', 'rate_limit_hmac_secret']);
+const SECRET_APP_SETTING_KEYS = new Set(['waiver_provenance_secret', 'appscript_upload_url', 'rate_limit_hmac_secret', 'invite_token_secret']);
 const SCRUBBED_APP_SETTING_KEYS = new Set(['schema_version', 'require_login_to_rsvp', 'disallow_zero_login_media']);
 
 const SCRUBBED_TABLE_QUERIES = {
@@ -680,8 +682,17 @@ eventsCoreRouter.get('/:id', async (c) => {
           COALESCE(a.spectators_count, 0) as spectators_count,
           a.additional_guests, a.guest_names, a.is_guest, a.created_at,
           COALESCE(a.roster_consent, 0) as roster_consent,
+          a.paper_waiver_at, a.paper_waiver_by,
           u.bio,
-          COALESCE(u.waiver_status, 'none') as waiver_status,
+          COALESCE(
+            CASE
+              WHEN u.waiver_status = 'digital' THEN 'digital'
+              WHEN (SELECT 1 FROM waivers w WHERE w.email = a.email AND COALESCE(w.status, 'active') != 'quarantined' LIMIT 1) IS NOT NULL THEN 'digital'
+              WHEN a.paper_waiver_at IS NOT NULL OR u.waiver_status = 'paper' THEN 'paper'
+              ELSE 'none'
+            END,
+            'none'
+          ) as waiver_status,
           COALESCE(u.roster_visibility, 0) as roster_visibility,
           COALESCE(u.profile_sharing, 0) as profile_sharing,
           ${AVATAR_EXPR} as avatar_url,
@@ -702,8 +713,17 @@ eventsCoreRouter.get('/:id', async (c) => {
           COALESCE(a.spectators_count, 0) as spectators_count,
           a.additional_guests, a.guest_names, a.is_guest, a.created_at,
           COALESCE(a.roster_consent, 0) as roster_consent,
+          a.paper_waiver_at, a.paper_waiver_by,
           u.bio,
-          COALESCE(u.waiver_status, 'none') as waiver_status,
+          COALESCE(
+            CASE
+              WHEN u.waiver_status = 'digital' THEN 'digital'
+              WHEN (SELECT 1 FROM waivers w WHERE w.email = a.email AND COALESCE(w.status, 'active') != 'quarantined' LIMIT 1) IS NOT NULL THEN 'digital'
+              WHEN a.paper_waiver_at IS NOT NULL OR u.waiver_status = 'paper' THEN 'paper'
+              ELSE 'none'
+            END,
+            'none'
+          ) as waiver_status,
           COALESCE(u.roster_visibility, 0) as roster_visibility,
           COALESCE(u.profile_sharing, 0) as profile_sharing,
           ${AVATAR_EXPR} as avatar_url
@@ -750,6 +770,16 @@ eventsCoreRouter.get('/:id', async (c) => {
             a.additional_guests, a.guest_names,
             COALESCE(a.notify_emails, 0) as notify_emails,
             COALESCE(a.roster_consent, 0) as roster_consent,
+            a.paper_waiver_at, a.paper_waiver_by,
+            COALESCE(
+              CASE
+                WHEN u.waiver_status = 'digital' THEN 'digital'
+                WHEN (SELECT 1 FROM waivers w WHERE w.email = a.email AND COALESCE(w.status, 'active') != 'quarantined' LIMIT 1) IS NOT NULL THEN 'digital'
+                WHEN a.paper_waiver_at IS NOT NULL OR u.waiver_status = 'paper' THEN 'paper'
+                ELSE 'none'
+              END,
+              'none'
+            ) as waiver_status,
             COALESCE(u.machine_badge, 0) as machine_badge,
             COALESCE(u.field_badge, 0) as field_badge,
             COALESCE(u.hero_credits, 0) as hero_credits,
@@ -801,11 +831,33 @@ eventsCoreRouter.get('/:id', async (c) => {
       return c.json({ error: 'Event not found.' }, 404);
     }
 
+    /** @type {Record<string, any>|null} */
+    let myRsvp = (myRsvpIndex >= 0 && batchRes[myRsvpIndex] && batchRes[myRsvpIndex].results && /** @type {Record<string, any>} */ (batchRes[myRsvpIndex].results[0])) || null;
+    if (myRsvp) {
+      if (myRsvp.email && !isDeliverableEmail(myRsvp.email)) {
+        myRsvp.email = '';
+      }
+      try {
+        const parsedDutyIds = JSON.parse(myRsvp.duty_ids || '[]');
+        myRsvp.duty_ids = Array.isArray(parsedDutyIds) ? parsedDutyIds.filter((n) => n != null) : [];
+      } catch (e) {
+        myRsvp.duty_ids = [];
+      }
+    }
+
     const earlyAllowedList = parseAllowedEmails(event.allowed_emails);
-    if (earlyAllowedList.length > 0 && !canUserAccessEvent(user, earlyAllowedList)) {
+    const rawInviteQuery = c.req.query('invite');
+    const hasValidInvite = Boolean(
+      event.invite_enabled === 1 &&
+      rawInviteQuery &&
+      (await verifyInviteToken(c.env, event.id, event.invite_version != null ? event.invite_version : 1, rawInviteQuery, db))
+    );
+    const hasAttendeeAccess = Boolean(myRsvp && myRsvp.id);
+
+    if (earlyAllowedList.length > 0 && !canUserAccessEvent(user, earlyAllowedList) && !hasValidInvite && !hasAttendeeAccess) {
       if (!user) {
         return c.json({
-          error: 'This pickup game is restricted to an invite list. Please log in with an invited account to view game details.',
+          error: 'This pickup game is restricted to an invite list. Please log in with an invited account or use a valid invite link to view game details.',
           restricted: true
         }, 401);
       }
@@ -814,7 +866,6 @@ eventsCoreRouter.get('/:id', async (c) => {
         restricted: true
       }, 403);
     }
-
     /** @type {Array<Record<string, any>>} */
     const duties = (batchRes[1].results || []).map(/** @param {Record<string, any>} d */ d => ({
       ...d,
@@ -829,19 +880,6 @@ eventsCoreRouter.get('/:id', async (c) => {
     const comments = batchRes[4].results || [];
     /** @type {Array<Record<string, any>>} */
     const bpSignups = batchRes[5].results || [];
-    /** @type {Record<string, any>|null} */
-    let myRsvp = (myRsvpIndex >= 0 && batchRes[myRsvpIndex] && batchRes[myRsvpIndex].results && batchRes[myRsvpIndex].results[0]) || null;
-    if (myRsvp) {
-      if (myRsvp.email && !isDeliverableEmail(myRsvp.email)) {
-        myRsvp.email = '';
-      }
-      try {
-        const parsedDutyIds = JSON.parse(myRsvp.duty_ids || '[]');
-        myRsvp.duty_ids = Array.isArray(parsedDutyIds) ? parsedDutyIds.filter((n) => n != null) : [];
-      } catch (e) {
-        myRsvp.duty_ids = [];
-      }
-    }
 
     const isOrganizer = isViewerOrganizer(user);
     const canViewRoster = Boolean(user || (myRsvp && myRsvp.id));
@@ -967,9 +1005,18 @@ eventsCoreRouter.get('/:id', async (c) => {
     let isAllowedToRsvp = true;
     if (isRestricted) {
       if (user && user.canManageEvents) isAllowedToRsvp = true;
-      else if (user && user.email) isAllowedToRsvp = allowedList.includes(user.email.toLowerCase());
-      else if (myRsvp && myRsvp.email) isAllowedToRsvp = allowedList.includes(myRsvp.email.toLowerCase());
+      else if (user && user.email && allowedList.includes(user.email.toLowerCase())) isAllowedToRsvp = true;
+      else if (hasValidInvite) isAllowedToRsvp = true;
+      else if (myRsvp && myRsvp.id) isAllowedToRsvp = true;
       else isAllowedToRsvp = false;
+    }
+
+    let organizerInviteToken = null;
+    let organizerInviteUrl = null;
+    if (isOrganizer && isRestricted) {
+      organizerInviteToken = await generateInviteToken(c.env, event.id, event.invite_version != null ? event.invite_version : 1, db);
+      const publicOrigin = getSafePublicOrigin(c);
+      organizerInviteUrl = `${publicOrigin}/event.html?id=${event.id}&invite=${organizerInviteToken}`;
     }
 
     const totalConfirmedPlayers = attendees.reduce((sum, a) => sum + (a.players_count != null ? a.players_count : (1 + (a.additional_guests || 0))), 0);
@@ -993,6 +1040,10 @@ eventsCoreRouter.get('/:id', async (c) => {
       allowed_emails_list: isOrganizer ? allowedList : [],
       is_restricted: isRestricted,
       is_allowed_to_rsvp: isAllowedToRsvp,
+      invite_enabled: event.invite_enabled ? 1 : 0,
+      invite_version: event.invite_version != null ? event.invite_version : 1,
+      invite_token: organizerInviteToken,
+      invite_url: organizerInviteUrl,
       task_unlock_at: tierInfo.unlockAt,
       task_tier: tierInfo.tier,
       is_tasks_unlocked: tierInfo.isUnlocked,
@@ -1000,6 +1051,8 @@ eventsCoreRouter.get('/:id', async (c) => {
     };
     if (!isOrganizer) {
       delete safeEventObj.allowed_emails;
+      delete safeEventObj.invite_token;
+      delete safeEventObj.invite_url;
     }
 
     const canViewBpOrder = Boolean(battingPracticeEnabled && user && canUserAccessEvent(user, earlyAllowedList));
@@ -1049,7 +1102,7 @@ eventsCoreRouter.post('/', requireOrganizer, async (c) => {
     const {
       title, description, location, location_url,
       event_date, max_players, use_default_duties,
-      custom_duties, allowed_emails
+      custom_duties, allowed_emails, auto_reminders
     } = await c.req.json();
 
     if (!title || !String(title).trim() || !location || !String(location).trim() || !event_date) {
@@ -1086,10 +1139,11 @@ eventsCoreRouter.post('/', requireOrganizer, async (c) => {
 
     const allowedList = parseAllowedEmails(allowed_emails);
     const allowedEmailsJson = allowedList.length > 0 ? JSON.stringify(allowedList) : null;
+    const autoRemindersVal = (auto_reminders === false || auto_reminders === 0 || auto_reminders === '0' || auto_reminders === 'false') ? 0 : 1;
 
     const insertEventRes = await c.env.DB.prepare(`
-      INSERT INTO events (title, description, location, location_url, event_date, max_players, allowed_emails, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO events (title, description, location, location_url, event_date, max_players, allowed_emails, auto_reminders, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       String(title).trim().slice(0, 150),
       String(description || '').trim().slice(0, 2000),
@@ -1098,6 +1152,7 @@ eventsCoreRouter.post('/', requireOrganizer, async (c) => {
       event_date,
       max_players ? parseInt(max_players, 10) : null,
       allowedEmailsJson,
+      autoRemindersVal,
       user.id
     ).run();
 
@@ -1135,7 +1190,7 @@ eventsCoreRouter.put('/:id', requireOrganizer, async (c) => {
     if (!eventId || isNaN(eventId) || eventId <= 0) {
       return c.json({ error: 'Invalid event ID.' }, 400);
     }
-    const { title, description, location, location_url, event_date, max_players, actual_attendance, status, allowed_emails } = await c.req.json();
+    const { title, description, location, location_url, event_date, max_players, actual_attendance, status, allowed_emails, invite_enabled, auto_reminders } = await c.req.json();
 
     const existingEvent = await c.env.DB.prepare('SELECT * FROM events WHERE id = ?').bind(eventId).first();
     if (!existingEvent) {
@@ -1181,6 +1236,14 @@ eventsCoreRouter.put('/:id', requireOrganizer, async (c) => {
       }
     }
 
+    const newInviteEnabled = invite_enabled !== undefined
+      ? (invite_enabled ? 1 : 0)
+      : existingEvent.invite_enabled;
+
+    const newAutoReminders = auto_reminders !== undefined
+      ? ((auto_reminders === false || auto_reminders === 0 || auto_reminders === '0' || auto_reminders === 'false') ? 0 : 1)
+      : (existingEvent.auto_reminders !== undefined && existingEvent.auto_reminders !== null ? existingEvent.auto_reminders : 1);
+
     const dateChanged = Boolean(
       event_date !== undefined &&
       event_date !== null &&
@@ -1197,6 +1260,8 @@ eventsCoreRouter.put('/:id', requireOrganizer, async (c) => {
           max_players = ?,
           actual_attendance = ?,
           allowed_emails = ?,
+          invite_enabled = ?,
+          auto_reminders = ?,
           status = COALESCE(?, status),
           reminder_sent = CASE WHEN ? = 1 THEN 0 ELSE reminder_sent END
       WHERE id = ?
@@ -1209,6 +1274,8 @@ eventsCoreRouter.put('/:id', requireOrganizer, async (c) => {
       newMaxPlayers,
       newActualAttendance,
       newAllowedEmails,
+      newInviteEnabled,
+      newAutoReminders,
       status || null,
       dateChanged ? 1 : 0,
       eventId
@@ -1401,5 +1468,105 @@ eventsCoreRouter.post('/:id/notifications/resume', requireOrganizer, async (c) =
   } catch (err) {
     console.error('[Events] Error resuming notifications:', err);
     return jsonError(c, 500, ERROR_CODES.MAIL_ERROR, 'Failed to resume notifications.');
+  }
+});
+
+eventsCoreRouter.get('/:id/invite', requireOrganizer, async (c) => {
+  try {
+    const eventId = parseInt(c.req.param('id'), 10);
+    if (!eventId || isNaN(eventId) || eventId <= 0) {
+      return c.json({ error: 'Invalid event ID.' }, 400);
+    }
+    const event = await c.env.DB.prepare('SELECT id, allowed_emails, invite_enabled, invite_version FROM events WHERE id = ?').bind(eventId).first();
+    if (!event) {
+      return c.json({ error: 'Event not found.' }, 404);
+    }
+
+    const version = event.invite_version != null ? Number(event.invite_version) : 1;
+    const inviteToken = await generateInviteToken(c.env, Number(event.id), version, c.env.DB);
+    const origin = getSafePublicOrigin(c);
+    const inviteUrl = `${origin}/event.html?id=${event.id}&invite=${inviteToken}`;
+
+    return c.json({
+      success: true,
+      invite_enabled: event.invite_enabled ? 1 : 0,
+      invite_version: version,
+      invite_token: inviteToken,
+      invite_url: inviteUrl
+    });
+  } catch (err) {
+    console.error('[Events] Error fetching invite token:', err);
+    return c.json({ error: 'Failed to fetch invite link.' }, 500);
+  }
+});
+
+eventsCoreRouter.post('/:id/invite/toggle', requireOrganizer, async (c) => {
+  try {
+    const eventId = parseInt(c.req.param('id'), 10);
+    if (!eventId || isNaN(eventId) || eventId <= 0) {
+      return c.json({ error: 'Invalid event ID.' }, 400);
+    }
+    const event = await c.env.DB.prepare('SELECT id, invite_enabled, invite_version FROM events WHERE id = ?').bind(eventId).first();
+    if (!event) {
+      return c.json({ error: 'Event not found.' }, 404);
+    }
+
+    const body = await c.req.json().catch(() => ({}));
+    const newEnabled = body.enabled !== undefined
+      ? (body.enabled ? 1 : 0)
+      : (event.invite_enabled ? 0 : 1);
+
+    await c.env.DB.prepare('UPDATE events SET invite_enabled = ? WHERE id = ?').bind(newEnabled, eventId).run();
+
+    const version = event.invite_version != null ? Number(event.invite_version) : 1;
+    const inviteToken = await generateInviteToken(c.env, Number(event.id), version, c.env.DB);
+    const origin = getSafePublicOrigin(c);
+    const inviteUrl = `${origin}/event.html?id=${event.id}&invite=${inviteToken}`;
+
+    await purgePublicEdgeCache(c, { events: true, eventId });
+    return c.json({
+      success: true,
+      invite_enabled: newEnabled,
+      invite_version: version,
+      invite_token: inviteToken,
+      invite_url: inviteUrl,
+      message: newEnabled === 1 ? 'Invite link enabled.' : 'Invite link disabled.'
+    });
+  } catch (err) {
+    console.error('[Events] Error toggling invite link:', err);
+    return c.json({ error: 'Failed to toggle invite link.' }, 500);
+  }
+});
+
+eventsCoreRouter.post('/:id/invite/rotate', requireOrganizer, async (c) => {
+  try {
+    const eventId = parseInt(c.req.param('id'), 10);
+    if (!eventId || isNaN(eventId) || eventId <= 0) {
+      return c.json({ error: 'Invalid event ID.' }, 400);
+    }
+    const event = await c.env.DB.prepare('SELECT id, invite_enabled, invite_version FROM events WHERE id = ?').bind(eventId).first();
+    if (!event) {
+      return c.json({ error: 'Event not found.' }, 404);
+    }
+
+    const nextVersion = (event.invite_version != null ? Number(event.invite_version) : 1) + 1;
+    await c.env.DB.prepare('UPDATE events SET invite_version = ?, invite_enabled = 1 WHERE id = ?').bind(nextVersion, eventId).run();
+
+    const inviteToken = await generateInviteToken(c.env, Number(event.id), nextVersion, c.env.DB);
+    const origin = getSafePublicOrigin(c);
+    const inviteUrl = `${origin}/event.html?id=${event.id}&invite=${inviteToken}`;
+
+    await purgePublicEdgeCache(c, { events: true, eventId });
+    return c.json({
+      success: true,
+      invite_enabled: 1,
+      invite_version: nextVersion,
+      invite_token: inviteToken,
+      invite_url: inviteUrl,
+      message: 'Invite link rotated successfully. Previous link has been invalidated.'
+    });
+  } catch (err) {
+    console.error('[Events] Error rotating invite link:', err);
+    return c.json({ error: 'Failed to rotate invite link.' }, 500);
   }
 });

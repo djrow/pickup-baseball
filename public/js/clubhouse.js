@@ -241,7 +241,53 @@
     return Boolean(isModeratorUser(user) || (user && user.role === 'organizer'));
   }
 
-  function openReasonModal(opts) {
+  var modalTraps = {};
+  var drawerTrap = null;
+  var gifPickerTriggerEl = null;
+  var updateThemeUiGlobal = null;
+
+  function trapModal(modalId, triggerEl, initialFocus) {
+    var modalEl = el(modalId);
+    if (!modalEl) return;
+    if (modalTraps[modalId]) {
+      modalTraps[modalId].release();
+      delete modalTraps[modalId];
+    }
+    if (typeof window !== 'undefined' && window.PBFDialog && typeof window.PBFDialog.trapFocus === 'function') {
+      modalTraps[modalId] = window.PBFDialog.trapFocus(modalEl, {
+        triggerEl: triggerEl || document.activeElement,
+        escape: true,
+        onEscape: function () {
+          closeModalById(modalId);
+        },
+        siblingInert: true,
+        initialFocus: initialFocus !== undefined ? initialFocus : true
+      });
+    }
+  }
+
+  function releaseModalTrap(modalId) {
+    if (modalTraps[modalId]) {
+      modalTraps[modalId].release();
+      delete modalTraps[modalId];
+    }
+  }
+
+  function closeModalById(modalId) {
+    if (modalId === 'ch-reason-modal') closeReasonModal();
+    else if (modalId === 'ch-board-modal') closeBoardModal();
+    else if (modalId === 'ch-vault-modal') closeVaultModal();
+    else if (modalId === 'ch-verify-modal') closeVerifyModal();
+    else if (modalId === 'ch-covenant-modal') closeCovenantModal();
+    else if (modalId === 'ch-theme-modal') closeThemeModal();
+    else {
+      var m = el(modalId);
+      if (m) m.classList.add('hidden');
+      releaseModalTrap(modalId);
+    }
+  }
+
+  function openReasonModal(opts, triggerEl) {
     var modal = el('ch-reason-modal');
     var titleEl = el('ch-reason-modal-title');
     var descEl = el('ch-reason-modal-desc');
@@ -250,6 +296,7 @@
     var submitBtn = el('btn-submit-reason');
     if (!modal || !inputEl) return;
 
+    var trig = triggerEl || document.activeElement;
     uiState.reasonAction = opts || null;
     if (titleEl) titleEl.textContent = (opts && opts.title) || 'State Reason';
     if (descEl) descEl.textContent = (opts && opts.desc) || '';
@@ -257,12 +304,13 @@
     inputEl.value = '';
     if (errEl) errEl.textContent = '';
     modal.classList.remove('hidden');
-    inputEl.focus();
+    trapModal('ch-reason-modal', trig, inputEl);
   }
 
   function closeReasonModal() {
     var modal = el('ch-reason-modal');
     if (modal) modal.classList.add('hidden');
+    releaseModalTrap('ch-reason-modal');
     uiState.reasonAction = null;
   }
 
@@ -305,7 +353,7 @@
     listEl.innerHTML = html || '<div style="font-size:12px;color:var(--ch-text-muted);">Only you (creator) will be added for now.</div>';
   }
 
-  function openBoardModal(channelOrNull) {
+  function openBoardModal(channelOrNull, triggerEl) {
     var modal = el('ch-board-modal');
     var titleEl = el('ch-board-modal-title');
     var idInput = el('board-edit-id');
@@ -319,6 +367,7 @@
     var deleteBtn = el('btn-delete-board');
     if (!modal || !nameInput) return;
 
+    var trig = triggerEl || document.activeElement;
     var ch = channelOrNull || null;
     if (idInput) idInput.value = ch ? String(ch.id) : '';
     nameInput.value = ch ? (ch.name || '') : '';
@@ -342,12 +391,75 @@
       }
     }
     modal.classList.remove('hidden');
-    nameInput.focus();
+    trapModal('ch-board-modal', trig, nameInput);
   }
 
   function closeBoardModal() {
     var modal = el('ch-board-modal');
     if (modal) modal.classList.add('hidden');
+    releaseModalTrap('ch-board-modal');
+  }
+
+  function openVaultModal(triggerEl) {
+    var modal = el('ch-vault-modal');
+    if (!modal) return;
+    var trig = triggerEl || document.activeElement;
+    modal.classList.remove('hidden');
+    syncPrivacyRelayToggleUi();
+    loadStorageStatusWidget();
+    refreshOwnVaultFingerprint();
+    trapModal('ch-vault-modal', trig, el('ch-vault-passphrase') || el('btn-close-vault-modal'));
+  }
+
+  function closeVaultModal() {
+    var modal = el('ch-vault-modal');
+    if (modal) modal.classList.add('hidden');
+    releaseModalTrap('ch-vault-modal');
+  }
+
+  function closeVerifyModal() {
+    var modal = el('ch-verify-modal');
+    if (modal) modal.classList.add('hidden');
+    releaseModalTrap('ch-verify-modal');
+  }
+
+  function openCovenantModal(triggerEl) {
+    var modal = el('ch-covenant-modal');
+    if (!modal) return;
+    var trig = triggerEl || document.activeElement;
+    modal.classList.remove('hidden');
+    trapModal('ch-covenant-modal', trig, el('btn-done-covenant-modal'));
+  }
+
+  function closeCovenantModal() {
+    var modal = el('ch-covenant-modal');
+    if (modal) modal.classList.add('hidden');
+    releaseModalTrap('ch-covenant-modal');
+  }
+
+  function openThemeModal(triggerEl) {
+    var themeModal = el('ch-theme-modal');
+    if (!themeModal) return;
+    var trig = triggerEl || document.activeElement;
+    var pickerBody = el('ch-theme-picker-body');
+    if (pickerBody && !uiState.pickerInitialized) {
+      var api = (typeof window !== 'undefined' && window.API) ? window.API : null;
+      if (api && typeof api.populateThemePicker === 'function') {
+        api.populateThemePicker(pickerBody);
+        uiState.pickerInitialized = true;
+      }
+    }
+    if (typeof updateThemeUiGlobal === 'function') {
+      updateThemeUiGlobal();
+    }
+    themeModal.classList.remove('hidden');
+    trapModal('ch-theme-modal', trig, el('btn-done-theme-modal'));
+  }
+
+  function closeThemeModal() {
+    var themeModal = el('ch-theme-modal');
+    if (themeModal) themeModal.classList.add('hidden');
+    releaseModalTrap('ch-theme-modal');
   }
 
   function el(id) {
@@ -365,24 +477,54 @@
     if (sidebar) sidebar.classList.remove('mobile-open');
     if (context) context.classList.remove('mobile-open');
     if (backdrop) backdrop.classList.remove('active');
+    if (drawerTrap) {
+      drawerTrap.release();
+      drawerTrap = null;
+    }
   }
 
-  function openMobileSidebar() {
+  function openMobileSidebar(triggerEl) {
     var sidebar = el('ch-sidebar');
     var context = el('ch-context-panel');
     var backdrop = el('ch-mobile-backdrop');
     if (context) context.classList.remove('mobile-open');
+    if (drawerTrap) {
+      drawerTrap.release();
+      drawerTrap = null;
+    }
     if (sidebar) sidebar.classList.add('mobile-open');
     if (backdrop) backdrop.classList.add('active');
+    if (sidebar && typeof window !== 'undefined' && window.PBFDialog && typeof window.PBFDialog.trapFocus === 'function') {
+      drawerTrap = window.PBFDialog.trapFocus(sidebar, {
+        triggerEl: triggerEl || el('btn-mobile-sidebar') || document.activeElement,
+        escape: true,
+        onEscape: closeMobileDrawers,
+        siblingInert: true,
+        initialFocus: el('btn-close-sidebar') || true
+      });
+    }
   }
 
-  function openMobileContext() {
+  function openMobileContext(triggerEl) {
     var sidebar = el('ch-sidebar');
     var context = el('ch-context-panel');
     var backdrop = el('ch-mobile-backdrop');
     if (sidebar) sidebar.classList.remove('mobile-open');
+    if (drawerTrap) {
+      drawerTrap.release();
+      drawerTrap = null;
+    }
     if (context) context.classList.add('mobile-open');
     if (backdrop) backdrop.classList.add('active');
+    if (context && typeof window !== 'undefined' && window.PBFDialog && typeof window.PBFDialog.trapFocus === 'function') {
+      drawerTrap = window.PBFDialog.trapFocus(context, {
+        triggerEl: triggerEl || el('btn-mobile-context') || document.activeElement,
+        escape: true,
+        onEscape: closeMobileDrawers,
+        siblingInert: true,
+        initialFocus: el('btn-close-context') || true
+      });
+    }
   }
 
   function escapeHtml(str) {
@@ -620,14 +762,17 @@
           var lockBadge = (isDmCh || isPrivateCh) ? '<span class="ch-lock-icon" title="' + (isDmCh ? 'End-to-End Encrypted DM (ECDH)' : 'Private Invite-Only Board (ECDH E2EE)') + '">🔒</span>' : '';
           var roleIcon = (!isPrivateCh && item.min_role_read && !isMemberRole(item.min_role_read)) ? '<span class="ch-lock-icon" title="Role-Gated">🛡️</span>' : '';
           var editBtnHtml = (canEditBoard && !isDmCh)
-            ? '<button type="button" class="ch-channel-edit-btn" data-edit-board-id="' + item.id + '" title="Edit or Delete Board">✏️</button>'
+            ? '<button type="button" class="ch-channel-edit-btn" data-edit-board-id="' + item.id + '" title="Edit or Delete Board" aria-label="Edit board ' + escapeHtml(item.name) + '">✏️</button>'
             : '';
           var dmHideBtnHtml = (isDmCh && isSignedIn)
             ? '<button type="button" class="ch-channel-edit-btn ch-dm-hide-btn" data-hide-dm-id="' + item.id + '" title="Hide DM from channel list" aria-label="Hide ' + escapeHtml(item.name) + ' from channel list">✕</button>'
             : '';
 
-          html += '<div class="ch-channel-item' + (isActive ? ' active' : '') + '" data-channel-id="' + item.id + '" data-channel-type="' + escapeHtml(item.channel_type) + '">';
-          html += '<div class="ch-channel-label"><span>' + escapeHtml(item.name) + '</span>' + lockBadge + roleIcon + '</div>' + editBtnHtml + dmHideBtnHtml;
+          html += '<div class="ch-channel-row">';
+          html += '<button type="button" class="ch-channel-item' + (isActive ? ' active' : '') + '" data-channel-id="' + item.id + '" data-channel-type="' + escapeHtml(item.channel_type) + '" aria-label="' + escapeHtml(item.name) + '">';
+          html += '<span class="ch-channel-label"><span>' + escapeHtml(item.name) + '</span>' + lockBadge + roleIcon + '</span>';
+          html += '</button>';
+          html += editBtnHtml + dmHideBtnHtml;
           html += '</div>';
 
           if (isVoice) {
@@ -676,26 +821,50 @@
 
     var channelEls = container.querySelectorAll('.ch-channel-item');
     for (var k = 0; k < channelEls.length; k++) {
-      channelEls[k].addEventListener('click', function () {
-        var chId = Number(this.getAttribute('data-channel-id'));
-        var chType = this.getAttribute('data-channel-type');
-        if (chType === 'voice') {
-          handleJoinVoiceLounge(chId);
-        } else {
-          selectTextChannel(chId);
-        }
-      });
+      (function (idx) {
+        var chBtn = channelEls[idx];
+        chBtn.addEventListener('click', function () {
+          var chId = Number(this.getAttribute('data-channel-id'));
+          var chType = this.getAttribute('data-channel-type');
+          if (chType === 'voice') {
+            handleJoinVoiceLounge(chId);
+          } else {
+            selectTextChannel(chId);
+          }
+        });
+
+        chBtn.addEventListener('keydown', function (ev) {
+          if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+            ev.preventDefault();
+            var allBtns = container.querySelectorAll('.ch-channel-item');
+            if (!allBtns || allBtns.length === 0) return;
+            var currentPos = -1;
+            for (var p = 0; p < allBtns.length; p++) {
+              if (allBtns[p] === chBtn) {
+                currentPos = p;
+                break;
+              }
+            }
+            if (currentPos === -1) return;
+            var nextPos = ev.key === 'ArrowDown' ? currentPos + 1 : currentPos - 1;
+            if (nextPos >= 0 && nextPos < allBtns.length) {
+              allBtns[nextPos].focus();
+            }
+          }
+        });
+      })(k);
     }
 
     var editBoardBtns = container.querySelectorAll('[data-edit-board-id]');
     for (var eb = 0; eb < editBoardBtns.length; eb++) {
       editBoardBtns[eb].addEventListener('click', function (ev) {
         ev.stopPropagation();
+        var selfBtn = this;
         var bId = Number(this.getAttribute('data-edit-board-id'));
         var chs = Store.state.channels || [];
         for (var c = 0; c < chs.length; c++) {
           if (Number(chs[c].id) === bId) {
-            openBoardModal(chs[c]);
+            openBoardModal(chs[c], selfBtn);
             break;
           }
         }
@@ -865,7 +1034,7 @@
     }).catch(function () {});
   }
 
-  function openVerifyKeysModal() {
+  function openVerifyKeysModal(triggerEl) {
     var modal = el('ch-verify-modal');
     var warnEl = el('ch-verify-warning');
     var safetyWrap = el('ch-verify-safety-wrap');
@@ -874,6 +1043,7 @@
     var statusEl = el('ch-verify-status-msg');
     if (!modal || !uiState.activeChannel || typeof Store.getChannelVerificationInfo !== 'function') return;
 
+    var trig = triggerEl || document.activeElement;
     if (statusEl) statusEl.textContent = '';
     if (peersEl) {
       peersEl.innerHTML = '<div style="color:var(--ch-text-muted);">' +
@@ -881,6 +1051,7 @@
         '</div>';
     }
     modal.classList.remove('hidden');
+    trapModal('ch-verify-modal', trig, el('btn-done-verify-modal'));
 
     Store.getChannelVerificationInfo(uiState.activeChannel.id).then(function (info) {
       if (!info || !info.supported) {
@@ -908,7 +1079,7 @@
       var html = '';
       html += '<div style="padding:8px;border:1px solid var(--ch-border);border-radius:6px;margin-bottom:8px;">';
       html += '<div style="font-weight:700;margin-bottom:3px;">' + escapeHtml(tClubhouse('clubhouse.verify_your_fp', 'Your Key Fingerprint')) + '</div>';
-      html += '<div style="font-family:monospace;font-size:11.5px;color:var(--ch-text-secondary);word-break:break-word;">' +
+      html += '<div dir="ltr" style="font-family:monospace;font-size:11.5px;color:var(--ch-text-secondary);word-break:break-word;unicode-bidi:isolate;">' +
         escapeHtml(info.myFingerprint || tClubhouse('clubhouse.verify_not_enrolled', 'Not enrolled on this browser yet')) + '</div></div>';
 
       var peers = info.peers || [];
@@ -930,7 +1101,7 @@
           html += '<span style="color:#fbbf24;">' + escapeHtml(tClubhouse('clubhouse.verify_no_vault', '⏳ No E2EE Vault')) + '</span>';
         }
         html += '</div>';
-        html += '<div style="font-family:monospace;font-size:11.5px;color:var(--ch-text-secondary);word-break:break-word;">' +
+        html += '<div dir="ltr" style="font-family:monospace;font-size:11.5px;color:var(--ch-text-secondary);word-break:break-word;unicode-bidi:isolate;">' +
           escapeHtml(p.fingerprint || tClubhouse('clubhouse.verify_waiting_member', 'Waiting for member to enroll key vault')) + '</div>';
         if (p.keyRotatedAt) {
           html += '<div style="font-size:11px;color:var(--ch-text-muted);margin-top:3px;">' + escapeHtml(tClubhouse('clubhouse.verify_last_rotated', 'Last rotated: {date}', { date: String(p.keyRotatedAt) })) + '</div>';
@@ -1821,14 +1992,24 @@
     }
   }
 
-  function switchContextTab(tabName) {
+  function switchContextTab(tabName, shouldFocus) {
     var tabs = ['sunday', 'thread', 'members', 'mod'];
     for (var i = 0; i < tabs.length; i++) {
       var t = tabs[i];
       var btn = el('tab-btn-' + t);
       var panel = el('tab-panel-' + t);
-      if (btn) btn.className = 'ch-context-tab' + (t === tabName ? ' active' : '');
-      if (panel) panel.style.display = (t === tabName ? 'block' : 'none');
+      var isActive = (t === tabName);
+      if (btn) {
+        btn.className = 'ch-context-tab' + (isActive ? ' active' : '');
+        btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        btn.setAttribute('tabindex', isActive ? '0' : '-1');
+        if (isActive && shouldFocus && typeof btn.focus === 'function') {
+          btn.focus();
+        }
+      }
+      if (panel) {
+        panel.style.display = (isActive ? 'block' : 'none');
+      }
     }
     if (tabName === 'mod' && isModeratorUser()) {
       loadModerationPanel();
@@ -2331,7 +2512,10 @@
 
     if (progWrap) progWrap.classList.remove('hidden');
     Store.uploadAttachment(uiState.activeChannelId, file, function (pct, statusMsg) {
-      if (progBar) progBar.style.width = pct + '%';
+      if (progBar) {
+        progBar.style.width = pct + '%';
+        progBar.setAttribute('aria-valuenow', String(Math.round(pct)));
+      }
       if (progText) progText.textContent = statusMsg;
     }).then(function (att) {
       if (att && att.id) {
@@ -2444,9 +2628,10 @@
     gridEl.innerHTML = html;
   }
 
-  function openGifPicker() {
+  function openGifPicker(triggerEl) {
     var picker = el('ch-gif-picker');
     if (!picker) return;
+    gifPickerTriggerEl = triggerEl || el('btn-open-gif-picker') || document.activeElement;
     picker.classList.remove('hidden');
     loadGifPickerData();
     var searchEl = el('ch-gif-search-input');
@@ -2456,6 +2641,9 @@
   function closeGifPicker() {
     var picker = el('ch-gif-picker');
     if (picker) picker.classList.add('hidden');
+    if (gifPickerTriggerEl && typeof gifPickerTriggerEl.focus === 'function') {
+      try { gifPickerTriggerEl.focus(); } catch (e) { /* ignore */ }
+    }
   }
 
   function sendGifToActiveChannel(gifUrl, gifTitle, driveGifId) {
@@ -2572,7 +2760,7 @@
     if (gifOpenBtn && gifPicker) {
       gifOpenBtn.addEventListener('click', function () {
         if (gifPicker.classList.contains('hidden')) {
-          openGifPicker();
+          openGifPicker(gifOpenBtn);
         } else {
           closeGifPicker();
         }
@@ -2596,9 +2784,41 @@
         uiState.gifTab = btn.getAttribute('data-gif-tab') || 'all';
         var allTabs = gifTabsWrap.querySelectorAll('.ch-gif-tab');
         for (var t = 0; t < allTabs.length; t++) {
-          allTabs[t].classList.toggle('active', allTabs[t] === btn);
+          var isCur = (allTabs[t] === btn);
+          allTabs[t].classList.toggle('active', isCur);
+          allTabs[t].setAttribute('aria-selected', isCur ? 'true' : 'false');
+          allTabs[t].setAttribute('tabindex', isCur ? '0' : '-1');
         }
         renderGifGrid();
+      });
+
+      gifTabsWrap.addEventListener('keydown', function (ev) {
+        if (ev.key === 'ArrowRight' || ev.key === 'ArrowLeft') {
+          var allTabs = Array.from(gifTabsWrap.querySelectorAll('button[role="tab"]'));
+          if (allTabs.length === 0) return;
+          var curIdx = -1;
+          for (var t = 0; t < allTabs.length; t++) {
+            if (allTabs[t] === document.activeElement) {
+              curIdx = t;
+              break;
+            }
+          }
+          if (curIdx === -1) return;
+          ev.preventDefault();
+          var isRtl = (typeof document !== 'undefined' && document.documentElement && document.documentElement.dir === 'rtl');
+          var forward = (ev.key === 'ArrowRight' && !isRtl) || (ev.key === 'ArrowLeft' && isRtl);
+          var nextIdx = forward ? (curIdx + 1) % allTabs.length : (curIdx - 1 + allTabs.length) % allTabs.length;
+          var nextBtn = allTabs[nextIdx];
+          uiState.gifTab = nextBtn.getAttribute('data-gif-tab') || 'all';
+          for (var j = 0; j < allTabs.length; j++) {
+            var active = (allTabs[j] === nextBtn);
+            allTabs[j].classList.toggle('active', active);
+            allTabs[j].setAttribute('aria-selected', active ? 'true' : 'false');
+            allTabs[j].setAttribute('tabindex', active ? '0' : '-1');
+          }
+          nextBtn.focus();
+          renderGifGrid();
+        }
       });
     }
     if (gifImportForm) {
@@ -2697,7 +2917,7 @@
     if (newChanBtn) {
       newChanBtn.addEventListener('click', function () {
         if (!canCreateBoards()) return;
-        openBoardModal(null);
+        openBoardModal(null, newChanBtn);
       });
     }
 
@@ -2860,7 +3080,7 @@
         if (sidebar && sidebar.classList.contains('mobile-open')) {
           closeMobileDrawers();
         } else {
-          openMobileSidebar();
+          openMobileSidebar(mobileSidebarBtn);
         }
       });
     }
@@ -2873,7 +3093,7 @@
         if (context && context.classList.contains('mobile-open')) {
           closeMobileDrawers();
         } else {
-          openMobileContext();
+          openMobileContext(mobileContextBtn);
         }
       });
     }
@@ -2882,6 +3102,18 @@
     }
     if (mobileBackdrop) {
       mobileBackdrop.addEventListener('click', closeMobileDrawers);
+    }
+
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('resize', function () {
+        if (!isNarrowViewport(960)) {
+          var sidebar = el('ch-sidebar');
+          var context = el('ch-context-panel');
+          if ((sidebar && sidebar.classList.contains('mobile-open')) || (context && context.classList.contains('mobile-open')) || drawerTrap) {
+            closeMobileDrawers();
+          }
+        }
+      });
     }
 
     // Close thread button (#btn-close-thread)
@@ -2924,6 +3156,7 @@
     var tabThread = el('tab-btn-thread');
     var tabMembers = el('tab-btn-members');
     var tabMod = el('tab-btn-mod');
+    var contextTabsList = el('ch-context-tabs');
     var modRefreshReports = el('btn-mod-refresh-reports');
     var modRefreshUsers = el('btn-mod-refresh-users');
     if (tabSunday) tabSunday.addEventListener('click', function () { switchContextTab('sunday'); });
@@ -2937,6 +3170,34 @@
     if (tabMod) {
       tabMod.addEventListener('click', function () {
         switchContextTab('mod');
+      });
+    }
+    if (contextTabsList) {
+      contextTabsList.addEventListener('keydown', function (ev) {
+        if (ev.key === 'ArrowRight' || ev.key === 'ArrowLeft') {
+          var allTabs = Array.from(contextTabsList.querySelectorAll('button[role="tab"]')).filter(function (b) {
+            return b.style.display !== 'none';
+          });
+          if (allTabs.length === 0) return;
+          var curIdx = -1;
+          for (var t = 0; t < allTabs.length; t++) {
+            if (allTabs[t] === document.activeElement) {
+              curIdx = t;
+              break;
+            }
+          }
+          if (curIdx === -1) return;
+          ev.preventDefault();
+          var isRtl = (typeof document !== 'undefined' && document.documentElement && document.documentElement.dir === 'rtl');
+          var forward = (ev.key === 'ArrowRight' && !isRtl) || (ev.key === 'ArrowLeft' && isRtl);
+          var nextIdx = forward ? (curIdx + 1) % allTabs.length : (curIdx - 1 + allTabs.length) % allTabs.length;
+          var nextTabBtn = allTabs[nextIdx];
+          var tabName = nextTabBtn.getAttribute('data-tab');
+          if (tabName) {
+            switchContextTab(tabName, true);
+            if (tabName === 'members') renderMembersDirectory();
+          }
+        }
       });
     }
     if (modRefreshReports) {
@@ -3033,24 +3294,16 @@
 
     if (vaultBtn && vaultModal) {
       vaultBtn.addEventListener('click', function () {
-        vaultModal.classList.remove('hidden');
-        syncPrivacyRelayToggleUi();
-        loadStorageStatusWidget();
-        refreshOwnVaultFingerprint();
+        openVaultModal(vaultBtn);
       });
     }
     if (dmOpenVaultBtn && vaultModal) {
       dmOpenVaultBtn.addEventListener('click', function () {
-        vaultModal.classList.remove('hidden');
-        syncPrivacyRelayToggleUi();
-        loadStorageStatusWidget();
-        refreshOwnVaultFingerprint();
+        openVaultModal(dmOpenVaultBtn);
       });
     }
     if (closeVaultBtn && vaultModal) {
-      closeVaultBtn.addEventListener('click', function () {
-        vaultModal.classList.add('hidden');
-      });
+      closeVaultBtn.addEventListener('click', closeVaultModal);
     }
 
     // Clubhouse Behavior Covenant modal
@@ -3065,13 +3318,7 @@
     var covenantModal = el('ch-covenant-modal');
     var closeCovenantBtn = el('btn-close-covenant-modal');
     var doneCovenantBtn = el('btn-done-covenant-modal');
-    function openCovenantModal() {
-      if (covenantModal) covenantModal.classList.remove('hidden');
-    }
-    function closeCovenantModal() {
-      if (covenantModal) covenantModal.classList.add('hidden');
-    }
-    if (openCovenantBtn) openCovenantBtn.addEventListener('click', openCovenantModal);
+    if (openCovenantBtn) openCovenantBtn.addEventListener('click', function () { openCovenantModal(openCovenantBtn); });
     if (closeCovenantBtn) closeCovenantBtn.addEventListener('click', closeCovenantModal);
     if (doneCovenantBtn) doneCovenantBtn.addEventListener('click', closeCovenantModal);
     if (covenantModal) {
@@ -3087,13 +3334,13 @@
     var doneVerifyBtn = el('btn-done-verify-modal');
     var copySafetyBtn = el('btn-copy-safety-number');
     if (verifyKeyBtn) {
-      verifyKeyBtn.addEventListener('click', openVerifyKeysModal);
+      verifyKeyBtn.addEventListener('click', function () { openVerifyKeysModal(verifyKeyBtn); });
     }
     if (closeVerifyBtn && verifyModal) {
-      closeVerifyBtn.addEventListener('click', function () { verifyModal.classList.add('hidden'); });
+      closeVerifyBtn.addEventListener('click', closeVerifyModal);
     }
     if (doneVerifyBtn && verifyModal) {
-      doneVerifyBtn.addEventListener('click', function () { verifyModal.classList.add('hidden'); });
+      doneVerifyBtn.addEventListener('click', closeVerifyModal);
     }
     if (copySafetyBtn) {
       copySafetyBtn.addEventListener('click', function () {
@@ -3204,6 +3451,18 @@
 
   function initClubhouseApp() {
     if (typeof document === 'undefined' || !el('clubhouse-app')) return;
+
+    if (typeof window !== 'undefined' && window.API && typeof window.API.loadSurfaceDict === 'function') {
+      if (!window.API.activeSurfaces) window.API.activeSurfaces = [];
+      if (window.API.activeSurfaces.indexOf('clubhouse') === -1) {
+        window.API.activeSurfaces.push('clubhouse');
+      }
+      window.API.loadSurfaceDict('clubhouse').then(function () {
+        if (typeof window.API.applyTranslations === 'function') {
+          window.API.applyTranslations(el('clubhouse-app'));
+        }
+      }).catch(function () {});
+    }
 
     initDomEvents();
 
@@ -3536,22 +3795,10 @@
       }
     }
 
-    function openThemeModal() {
-      if (!themeModal) return;
-      if (pickerBody && !pickerInitialized) {
-        api.populateThemePicker(pickerBody);
-        pickerInitialized = true;
-      }
-      updateThemeUi();
-      themeModal.classList.remove('hidden');
-    }
+    updateThemeUiGlobal = updateThemeUi;
 
-    function closeThemeModal() {
-      if (themeModal) themeModal.classList.add('hidden');
-    }
-
-    if (userBtn) userBtn.addEventListener('click', openThemeModal);
-    if (headerBtn) headerBtn.addEventListener('click', openThemeModal);
+    if (userBtn) userBtn.addEventListener('click', function () { openThemeModal(userBtn); });
+    if (headerBtn) headerBtn.addEventListener('click', function () { openThemeModal(headerBtn); });
     if (closeBtn) closeBtn.addEventListener('click', closeThemeModal);
     if (doneBtn) doneBtn.addEventListener('click', closeThemeModal);
     if (themeModal) {
@@ -3559,12 +3806,6 @@
         if (ev.target === themeModal) closeThemeModal();
       });
     }
-
-    document.addEventListener('keydown', function (ev) {
-      if (ev.key === 'Escape' && themeModal && !themeModal.classList.contains('hidden')) {
-        closeThemeModal();
-      }
-    });
 
     if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
       window.addEventListener('pickup:themechange', updateThemeUi);

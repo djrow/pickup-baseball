@@ -7,10 +7,12 @@
   <link rel="shortcut icon" href="/favicon.ico" />
   <link rel="icon" type="image/svg+xml" href="/logo.svg" />
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png" />
-  <link rel="stylesheet" href="/css/clubhouse.css?v=152" />
-  <link rel="stylesheet" href="/css/themes.css?v=152" />
+  <link rel="stylesheet" href="/css/clubhouse.css?v=152">
+  <link rel="stylesheet" href="/css/dialog.css?v=152">
+  <link rel="stylesheet" href="/css/themes.css?v=152">
 </head>
 <body class="clubhouse-body">
+  <a href="#main-content" class="pbf-skip-link">Skip to main content</a>
   <div class="clubhouse-app" id="clubhouse-app">
 
     <!-- ==================================================================
@@ -25,9 +27,11 @@
         </div>
       </header>
 
-      <div class="ch-channel-scroller" id="ch-channel-list">
-        <!-- Populated dynamically by clubhouse.js -->
-      </div>
+      <nav class="ch-sidebar-nav" id="ch-sidebar-nav" aria-label="Channels">
+        <div class="ch-channel-scroller" id="ch-channel-list">
+          <!-- Populated dynamically by clubhouse.js -->
+        </div>
+      </nav>
 
       <div class="ch-covenant-strip" id="ch-covenant-strip">
         <span>By using the Clubhouse, you implicitly agree to our Behavior Covenant: <strong>no dehumanization</strong>, <strong>no harassment</strong>, goodwill &amp; privacy.</span>
@@ -44,10 +48,10 @@
           </div>
         </div>
         <div class="ch-voice-controls">
-          <button type="button" class="ch-icon-btn" id="btn-voice-mute" title="Mute / Unmute Microphone">🎙️</button>
-          <button type="button" class="ch-icon-btn" id="btn-voice-deafen" title="Deafen / Undeafen Audio">🎧</button>
-          <button type="button" class="ch-icon-btn" id="btn-voice-screen" title="Share Screen (720p)">🖥️</button>
-          <button type="button" class="ch-icon-btn" id="btn-voice-leave" title="Disconnect from Voice Lounge">📴</button>
+          <button type="button" class="ch-icon-btn" id="btn-voice-mute" aria-label="Mute or unmute microphone" title="Mute / Unmute Microphone">🎙️</button>
+          <button type="button" class="ch-icon-btn" id="btn-voice-deafen" aria-label="Deafen or undeafen audio" title="Deafen / Undeafen Audio">🎧</button>
+          <button type="button" class="ch-icon-btn" id="btn-voice-screen" aria-label="Share screen" title="Share Screen (720p)">🖥️</button>
+          <button type="button" class="ch-icon-btn" id="btn-voice-leave" aria-label="Disconnect from voice lounge" title="Disconnect from Voice Lounge">📴</button>
         </div>
         <div class="ch-user-quick-actions">
           <a href="/index.html" class="ch-user-quick-btn" id="btn-user-calendar" title="Sunday Game Schedule &amp; RSVPs">📅 Game Calendar</a>
@@ -60,11 +64,11 @@
     <!-- ==================================================================
          3. CENTER MESSAGE & MEDIA STAGE
          ================================================================== -->
-    <main class="ch-stage" aria-label="Active Channel Conversation">
+    <main class="ch-stage" id="main-content" aria-label="Active Channel Conversation">
       <header class="ch-stage-header">
         <div class="ch-stage-title-wrap">
           <button type="button" class="ch-icon-btn ch-mobile-toggle-btn" id="btn-mobile-sidebar" aria-label="Open channels and DMs" title="Channels &amp; DMs">☰</button>
-          <span class="ch-stage-title" id="ch-active-channel-name">#general</span>
+          <h1 class="ch-stage-title" id="ch-active-channel-name" style="display:inline-block;font-size:inherit;font-weight:inherit;margin:0;">#general</h1>
           <span class="ch-e2ee-badge" id="ch-active-e2ee-badge">🛡️ Moderated Board</span>
           <button type="button" class="ch-promote-btn hidden" id="btn-dm-verify-key" title="Verify E2EE Key Fingerprints & Safety Number" data-i18n="clubhouse.verify_key_btn">🛡️ Verify Key</button>
           <span class="ch-stage-topic" id="ch-active-channel-topic">Main community hangout for all players.</span>
@@ -72,7 +76,7 @@
         <div class="ch-stage-actions">
           <input type="search" class="ch-search-input" id="ch-message-search" placeholder="Search channel..." aria-label="Search channel messages" />
           <button type="button" class="ch-icon-btn" id="btn-header-theme" title="Theme &amp; Colors" aria-label="Theme &amp; Colors">🎨</button>
-          <button type="button" class="ch-icon-btn" id="btn-new-channel" title="Create Channel (Organizers/Admins)">➕</button>
+          <button type="button" class="ch-icon-btn" id="btn-new-channel" aria-label="Create channel" title="Create Channel (Organizers/Admins)">➕</button>
           <button type="button" class="ch-icon-btn ch-context-toggle-btn" id="btn-mobile-context" aria-label="Open Sunday Game, Thread, and Members panel" title="Sunday Game &amp; Threads">⚾</button>
         </div>
       </header>
@@ -110,19 +114,19 @@
       <!-- Composer Bar -->
       <div class="ch-composer-wrap" id="ch-drop-zone">
         <div class="ch-upload-progress hidden" id="ch-upload-progress">
-          <div id="ch-upload-status-text">Uploading to PBF Shared Drive...</div>
+          <div id="ch-upload-status-text" aria-live="polite">Uploading to PBF Shared Drive...</div>
           <div class="ch-progress-track">
-            <div class="ch-progress-fill" id="ch-upload-progress-bar"></div>
+            <div class="ch-progress-fill" id="ch-upload-progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
           </div>
         </div>
-        <div class="ch-typing-indicator" id="ch-typing-indicator"></div>
+        <div class="ch-typing-indicator" id="ch-typing-indicator" aria-live="polite" aria-atomic="true"></div>
         <div class="ch-gif-picker hidden" id="ch-gif-picker" role="dialog" aria-label="Clubhouse GIF Selector">
           <div class="ch-gif-picker-header">
             <span class="ch-gif-picker-title">🎞️ Clubhouse GIFs</span>
-            <div class="ch-gif-tabs" id="ch-gif-tabs">
-              <button type="button" class="ch-gif-tab active" data-gif-tab="all">All</button>
-              <button type="button" class="ch-gif-tab" data-gif-tab="starter">Starter Pack</button>
-              <button type="button" class="ch-gif-tab" data-gif-tab="drive">PBF Shared Drive</button>
+            <div class="ch-gif-tabs" id="ch-gif-tabs" role="tablist" aria-label="GIF Categories">
+              <button type="button" class="ch-gif-tab active" data-gif-tab="all" role="tab" aria-selected="true" tabindex="0">All</button>
+              <button type="button" class="ch-gif-tab" data-gif-tab="starter" role="tab" aria-selected="false" tabindex="-1">Starter Pack</button>
+              <button type="button" class="ch-gif-tab" data-gif-tab="drive" role="tab" aria-selected="false" tabindex="-1">PBF Shared Drive</button>
             </div>
             <button type="button" class="ch-icon-btn" id="btn-close-gif-picker" aria-label="Close GIF selector">✕</button>
           </div>
@@ -140,8 +144,8 @@
           </div>
         </div>
         <form class="ch-composer-box" id="ch-composer-form">
-          <button type="button" class="ch-icon-btn" id="btn-attach-file" title="Upload Photo or HD Video (EXIF GPS Auto-Stripped)">📎</button>
-          <button type="button" class="ch-icon-btn ch-gif-trigger-btn" id="btn-open-gif-picker" title="Open GIF Selector or Paste GIF Link">GIF</button>
+          <button type="button" class="ch-icon-btn" id="btn-attach-file" aria-label="Attach photo or video" title="Upload Photo or HD Video (EXIF GPS Auto-Stripped)">📎</button>
+          <button type="button" class="ch-icon-btn ch-gif-trigger-btn" id="btn-open-gif-picker" aria-label="Open GIF selector" title="Open GIF Selector or Paste GIF Link">GIF</button>
           <input type="file" id="ch-file-input" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime,audio/mpeg,audio/ogg,audio/wav,application/pdf" style="display:none" />
           <textarea class="ch-composer-input" id="ch-composer-input" placeholder="Message #general — Press Enter to send, Shift+Enter for newline" rows="1"></textarea>
           <button type="submit" class="ch-send-btn" id="ch-send-btn">Send</button>
@@ -153,16 +157,16 @@
          4. RIGHT CONTEXT PANEL (320px): SUNDAY GAME CARD, THREADS & MEMBERS
          ================================================================== -->
     <aside class="ch-context-panel" id="ch-context-panel" aria-label="Game Day Card, Threads, and Directory">
-      <div class="ch-context-tabs" id="ch-context-tabs" role="tablist">
-        <button type="button" class="ch-context-tab active" data-tab="sunday" id="tab-btn-sunday">⚾ Game</button>
-        <button type="button" class="ch-context-tab" data-tab="thread" id="tab-btn-thread">🧵 Thread</button>
-        <button type="button" class="ch-context-tab" data-tab="members" id="tab-btn-members">👥 Members</button>
-        <button type="button" class="ch-context-tab" data-tab="mod" id="tab-btn-mod" style="display:none;">🛡️ Mod</button>
+      <div class="ch-context-tabs" id="ch-context-tabs" role="tablist" aria-label="Context Tabs">
+        <button type="button" class="ch-context-tab active" data-tab="sunday" id="tab-btn-sunday" role="tab" aria-selected="true" aria-controls="tab-panel-sunday" tabindex="0">⚾ Game</button>
+        <button type="button" class="ch-context-tab" data-tab="thread" id="tab-btn-thread" role="tab" aria-selected="false" aria-controls="tab-panel-thread" tabindex="-1">🧵 Thread</button>
+        <button type="button" class="ch-context-tab" data-tab="members" id="tab-btn-members" role="tab" aria-selected="false" aria-controls="tab-panel-members" tabindex="-1">👥 Members</button>
+        <button type="button" class="ch-context-tab" data-tab="mod" id="tab-btn-mod" role="tab" aria-selected="false" aria-controls="tab-panel-mod" tabindex="-1" style="display:none;">🛡️ Mod</button>
         <button type="button" class="ch-icon-btn ch-context-close-btn" id="btn-close-context" aria-label="Close right panel">✕</button>
       </div>
 
       <!-- Tab 1: Live Sunday Game-Day Card & BP Slot Grid -->
-      <div class="ch-context-body" id="tab-panel-sunday">
+      <div class="ch-context-body" id="tab-panel-sunday" role="tabpanel" aria-labelledby="tab-btn-sunday" tabindex="0">
         <div class="ch-widget-card" id="ch-sunday-card">
           <div class="ch-widget-title">
             <span>Next Public Game</span>
@@ -209,11 +213,11 @@
       </div>
 
       <!-- Tab 2: Active Thread Drawer -->
-      <div class="ch-context-body" id="tab-panel-thread" style="display:none;">
+      <div class="ch-context-body" id="tab-panel-thread" role="tabpanel" aria-labelledby="tab-btn-thread" tabindex="0" style="display:none;">
         <div class="ch-widget-card" id="ch-thread-header">
           <div class="ch-widget-title">
             <span>Active Thread</span>
-            <button type="button" class="ch-icon-btn" id="btn-close-thread">✕</button>
+            <button type="button" class="ch-icon-btn" id="btn-close-thread" aria-label="Close active thread">✕</button>
           </div>
           <div id="ch-thread-root-preview" style="font-size:13px;color:var(--ch-text-secondary);">
             Select "💬 Reply in Thread" on any message to open its discussion thread.
@@ -227,7 +231,7 @@
       </div>
 
       <!-- Tab 3: Member Directory -->
-      <div class="ch-context-body" id="tab-panel-members" style="display:none;">
+      <div class="ch-context-body" id="tab-panel-members" role="tabpanel" aria-labelledby="tab-btn-members" tabindex="0" style="display:none;">
         <div class="ch-widget-card">
           <div class="ch-widget-title">
             <span>Clubhouse Roster &amp; Badges</span>
@@ -237,11 +241,11 @@
       </div>
 
       <!-- Tab 4: Moderation Queue, Blanket Mutes & Moderator Delegation -->
-      <div class="ch-context-body" id="tab-panel-mod" style="display:none;">
+      <div class="ch-context-body" id="tab-panel-mod" role="tabpanel" aria-labelledby="tab-btn-mod" tabindex="0" style="display:none;">
         <div class="ch-widget-card">
           <div class="ch-widget-title">
             <span>🚩 Open &amp; Recent Reports</span>
-            <button type="button" class="ch-promote-btn" id="btn-mod-refresh-reports">↻ Refresh</button>
+            <button type="button" class="ch-promote-btn" id="btn-mod-refresh-reports" aria-label="Refresh reported messages">↻ Refresh</button>
           </div>
           <div id="ch-mod-reports-list" class="ch-mod-list">Loading reports...</div>
         </div>
@@ -249,7 +253,7 @@
         <div class="ch-widget-card">
           <div class="ch-widget-title">
             <span>🔇 Blanket Mute &amp; Moderator Roles</span>
-            <button type="button" class="ch-promote-btn" id="btn-mod-refresh-users">↻ Refresh</button>
+            <button type="button" class="ch-promote-btn" id="btn-mod-refresh-users" aria-label="Refresh users list">↻ Refresh</button>
           </div>
           <div id="ch-mod-users-list" class="ch-mod-list">Loading users...</div>
         </div>
@@ -262,10 +266,10 @@
        E2EE SECURITY VAULT, PRIVACY RELAY & PBF SHARED DRIVE QUOTA MODAL
        ==================================================================== -->
   <div class="ch-modal-backdrop hidden" id="ch-vault-modal">
-    <div class="ch-modal" role="dialog" aria-labelledby="ch-vault-modal-title">
+    <div class="ch-modal" role="dialog" aria-modal="true" aria-labelledby="ch-vault-modal-title">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-        <h3 id="ch-vault-modal-title" style="margin:0;font-size:17px;">🔐 E2EE Key Vault &amp; Privacy Settings</h3>
-        <button type="button" class="ch-icon-btn" id="btn-close-vault-modal">✕</button>
+        <h2 id="ch-vault-modal-title" style="margin:0;font-size:17px;">🔐 E2EE Key Vault &amp; Privacy Settings</h2>
+        <button type="button" class="ch-icon-btn" id="btn-close-vault-modal" aria-label="Close security vault modal">✕</button>
       </div>
       <p style="font-size:12.5px;color:var(--ch-text-secondary);margin-top:0;">
         Your ECDH P-256 &amp; ECDSA P-256 private keys are generated in your browser with <code>extractable: false</code> and backed up with PBKDF2-SHA256 (600,000 iterations) + AES-GCM-256.
@@ -286,7 +290,7 @@
       </div>
 
       <div id="ch-vault-status-msg" style="font-size:12px;color:var(--ch-green);margin-bottom:8px;"></div>
-      <div id="ch-vault-own-fp" class="hidden" style="font-size:11.5px;color:var(--ch-text-secondary);background:rgba(255,255,255,0.04);border:1px solid var(--ch-border);border-radius:6px;padding:8px 10px;margin-bottom:12px;font-family:monospace;word-break:break-word;"></div>
+      <div id="ch-vault-own-fp" dir="ltr" class="hidden" style="font-size:11.5px;unicode-bidi:isolate;color:var(--ch-text-secondary);background:rgba(255,255,255,0.04);border:1px solid var(--ch-border);border-radius:6px;padding:8px 10px;margin-bottom:12px;font-family:monospace;word-break:break-word;"></div>
 
       <div class="ch-widget-card" id="ch-admin-storage-widget" style="margin-bottom:0;">
         <div class="ch-widget-title">
@@ -304,10 +308,10 @@
        CREATE / EDIT MESSAGE BOARD MODAL
        ==================================================================== -->
   <div class="ch-modal-backdrop hidden" id="ch-board-modal">
-    <div class="ch-modal" role="dialog" aria-labelledby="ch-board-modal-title">
+    <div class="ch-modal" role="dialog" aria-modal="true" aria-labelledby="ch-board-modal-title">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-        <h3 id="ch-board-modal-title" style="margin:0;font-size:17px;">📋 Create Message Board</h3>
-        <button type="button" class="ch-icon-btn" id="btn-close-board-modal">✕</button>
+        <h2 id="ch-board-modal-title" style="margin:0;font-size:17px;">📋 Create Message Board</h2>
+        <button type="button" class="ch-icon-btn" id="btn-close-board-modal" aria-label="Close message board modal">✕</button>
       </div>
       <form id="ch-board-form">
         <input type="hidden" id="board-edit-id" value="" />
@@ -366,10 +370,10 @@
        DM & PRIVATE BOARD KEY FINGERPRINT / SAFETY NUMBER VERIFICATION MODAL
        ==================================================================== -->
   <div class="ch-modal-backdrop hidden" id="ch-verify-modal">
-    <div class="ch-modal" role="dialog" aria-labelledby="ch-verify-modal-title">
+    <div class="ch-modal" role="dialog" aria-modal="true" aria-labelledby="ch-verify-modal-title">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <h3 id="ch-verify-modal-title" style="margin:0;font-size:17px;" data-i18n="clubhouse.verify_modal_title">🛡️ Verify E2EE Security Keys</h3>
-        <button type="button" class="ch-icon-btn" id="btn-close-verify-modal">✕</button>
+        <h2 id="ch-verify-modal-title" style="margin:0;font-size:17px;" data-i18n="clubhouse.verify_modal_title">🛡️ Verify E2EE Security Keys</h2>
+        <button type="button" class="ch-icon-btn" id="btn-close-verify-modal" aria-label="Close key verification modal">✕</button>
       </div>
       <p style="font-size:12.5px;color:var(--ch-text-secondary);margin-top:0;" data-i18n="clubhouse.verify_modal_desc">
         Compare these numbers in person or on a trusted call to verify there is no active man-in-the-middle key swap.
@@ -384,7 +388,7 @@
           <span style="font-size:12px;font-weight:700;" data-i18n="clubhouse.verify_safety_number_label">Shared 60-Digit Safety Number</span>
           <button type="button" class="ch-promote-btn" id="btn-copy-safety-number" data-i18n="clubhouse.verify_copy_btn">📋 Copy</button>
         </div>
-        <div id="ch-verify-safety-number" style="font-family:monospace;font-size:13.5px;letter-spacing:0.6px;line-height:1.65;background:rgba(0,0,0,0.28);border:1px solid var(--ch-border);border-radius:6px;padding:10px;text-align:center;user-select:all;"></div>
+        <div id="ch-verify-safety-number" dir="ltr" style="font-family:monospace;unicode-bidi:isolate;font-size:13.5px;letter-spacing:0.6px;line-height:1.65;background:rgba(0,0,0,0.28);border:1px solid var(--ch-border);border-radius:6px;padding:10px;text-align:center;user-select:all;"></div>
       </div>
 
       <div id="ch-verify-peers-list" style="max-height:190px;overflow-y:auto;margin-bottom:10px;font-size:12px;"></div>
@@ -399,10 +403,10 @@
        STATED-REASON MODERATION / REPORT MODAL
        ==================================================================== -->
   <div class="ch-modal-backdrop hidden" id="ch-reason-modal">
-    <div class="ch-modal" role="dialog" aria-labelledby="ch-reason-modal-title">
+    <div class="ch-modal" role="dialog" aria-modal="true" aria-labelledby="ch-reason-modal-title">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <h3 id="ch-reason-modal-title" style="margin:0;font-size:17px;">State Reason</h3>
-        <button type="button" class="ch-icon-btn" id="btn-close-reason-modal">✕</button>
+        <h2 id="ch-reason-modal-title" style="margin:0;font-size:17px;">State Reason</h2>
+        <button type="button" class="ch-icon-btn" id="btn-close-reason-modal" aria-label="Close stated reason modal">✕</button>
       </div>
       <p id="ch-reason-modal-desc" style="font-size:12.5px;color:var(--ch-text-secondary);margin-top:0;"></p>
       <form id="ch-reason-form">
@@ -421,9 +425,9 @@
        CLUBHOUSE BEHAVIOR COVENANT MODAL (IMPLICIT AGREEMENT)
        ==================================================================== -->
   <div class="ch-modal-backdrop hidden" id="ch-covenant-modal">
-    <div class="ch-modal ch-covenant-modal" role="dialog" aria-labelledby="ch-covenant-modal-title">
+    <div class="ch-modal ch-covenant-modal" role="dialog" aria-modal="true" aria-labelledby="ch-covenant-modal-title">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-        <h3 id="ch-covenant-modal-title" style="margin:0;font-size:17px;">📜 Clubhouse Behavior Covenant</h3>
+        <h2 id="ch-covenant-modal-title" style="margin:0;font-size:17px;">📜 Clubhouse Behavior Covenant</h2>
         <button type="button" class="ch-icon-btn" id="btn-close-covenant-modal" aria-label="Close Behavior Covenant">✕</button>
       </div>
       <p class="ch-covenant-intro">
@@ -450,7 +454,7 @@
   <div class="ch-modal-backdrop hidden" id="ch-theme-modal">
     <div class="ch-modal ch-theme-modal" role="dialog" aria-modal="true" aria-labelledby="ch-theme-modal-title">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <h3 id="ch-theme-modal-title" style="margin:0;font-size:17px;">⚾ Baseball Colors &amp; Mode</h3>
+        <h2 id="ch-theme-modal-title" style="margin:0;font-size:17px;">⚾ Baseball Colors &amp; Mode</h2>
         <button type="button" class="ch-icon-btn" id="btn-close-theme-modal" aria-label="Close theme options">✕</button>
       </div>
       <div class="ch-theme-summary" id="ch-theme-summary"></div>
@@ -461,6 +465,9 @@
     </div>
   </div>
 
+  <script src="/js/api/i18n.js?v=152"></script>
+  <script src="/js/api/ui.js?v=152"></script>
+  <script src="/js/api/endpoints.js?v=152"></script>
   <script src="/js/api.js?v=152"></script>
   <script src="/js/dialog.js?v=152"></script>
   <script src="/js/crypto.js?v=152"></script>

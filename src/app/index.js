@@ -23,6 +23,7 @@ import { chatRouter } from './routes/chat.js';
 import { voiceRouter, rtcRouter } from './routes/rtc.js';
 import { baseballRouter } from './routes/baseball.js';
 import { waiverRouter } from './routes/waiver.js';
+import { notificationsRouter } from './routes/notifications.js';
 import { gifsRouter } from './routes/gifs.js';
 
 export const app = /** @type {AppHono} */ (new Hono()).basePath('/api');
@@ -119,7 +120,7 @@ app.use('*', async (c, next) => {
 
   // CSRF Origin / Fetch-Metadata verification on state-changing requests
   // Inbound webhooks (e.g. /api/webhooks/resend) are signed via Svix and bypass CSRF origin checks
-  if (!['GET', 'HEAD', 'OPTIONS'].includes(c.req.method) && !pathName.startsWith('/api/webhooks')) {
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(c.req.method) && !pathName.startsWith('/api/webhooks') && !pathName.startsWith('/api/notifications/unsubscribe')) {
     const reqOrigin = reqUrl.origin;
     const originHeader = c.req.header('Origin');
     const refererHeader = c.req.header('Referer');
@@ -229,5 +230,6 @@ app.route('/voice', voiceRouter);
 app.route('/rtc', rtcRouter);
 app.route('/baseball', baseballRouter);
 app.route('/waiver', waiverRouter);
+app.route('/notifications', notificationsRouter);
 app.route('/gifs', gifsRouter);
 app.route('/', chatRouter);

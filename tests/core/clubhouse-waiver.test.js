@@ -207,10 +207,11 @@ test('Clubhouse Frontend & Native Waiver Verification', async (t) => {
 
     // 4. Compact game detail card consolidation checks
     const eventHtmlComp = fs.readFileSync(path.join(publicDir, 'event.html'), 'utf8');
-    const styleCssComp = fs.readFileSync(path.join(publicDir, 'css/style.css'), 'utf8');
+    const weatherCssComp = fs.readFileSync(path.join(publicDir, 'css/weather.css'), 'utf8');
+    const eventCssComp = fs.readFileSync(path.join(publicDir, 'css/event.css'), 'utf8');
     assert.ok(eventHtmlComp.includes('event-detail-main') && eventHtmlComp.includes('organizer-controls-grid'), 'event.html must group organizer controls cleanly');
     assert.ok(eventHtmlComp.includes('id="roster-bp-card"') && eventHtmlComp.includes('roster-bp-divider'), 'event.html must combine Expected Attendees and BP Order in one card');
-    assert.ok(styleCssComp.includes('.weather-kpi-grid') && styleCssComp.includes('.event-detail-main .bp-slot-card'), 'style.css must style compact detail page cards');
+    assert.ok(weatherCssComp.includes('.weather-kpi-grid') && eventCssComp.includes('.event-detail-main .bp-slot-card'), 'weather.css and event.css must style compact detail page cards');
 
     for (const [fname, src] of [['rtc.js', rtcJs], ['store.js', storeJs], ['app.js', homeAppJs], ['weather.js', weatherJs]]) {
       assert.ok(!src.includes('?.') && !src.includes('??'), `${fname} must stay ES6 compatible without ?. or ??`);
@@ -226,15 +227,25 @@ test('Clubhouse Frontend & Native Waiver Verification', async (t) => {
     const mainOpenIdx = archiveHtml.indexOf('<main');
     assert.ok(hdrCloseIdx !== -1 && mainOpenIdx !== -1 && hdrCloseIdx < mainOpenIdx, 'archive.html must close </header> before <main>');
 
-    // 2. All 14 i18n JSON files must have 100% key parity with EN_DICT
-    const apiJsSrc = fs.readFileSync(path.join(publicDir, 'js', 'api.js'), 'utf8');
-    const m = apiJsSrc.match(/const EN_DICT = \{([\s\S]*?)\n\};/);
+    // 2. All 14 i18n JSON files must have 100% key parity with EN_DICT (across Core, Clubhouse & Admin split bundles)
+    const i18nPath = path.join(publicDir, 'js', 'api', 'i18n.js');
+    const apiJsSrc = fs.existsSync(i18nPath)
+      ? fs.readFileSync(i18nPath, 'utf8')
+      : fs.readFileSync(path.join(publicDir, 'js', 'api.js'), 'utf8');
+    const m = apiJsSrc.match(/(?:const|var)\s+EN_DICT\s*=\s*\{([\s\S]*?)\n\s*\};/);
     assert.ok(m, 'api.js must define EN_DICT');
     const enObj = vm.runInNewContext('({' + m[1] + '})');
     const enKeys = Object.keys(enObj);
     const i18nDir = path.join(publicDir, 'i18n');
     for (const lang of ['ar', 'es', 'fa', 'fr', 'hi', 'hy', 'ja', 'ko', 'pa', 'pt', 'ru', 'tl', 'vi', 'zh']) {
-      const dict = JSON.parse(fs.readFileSync(path.join(i18nDir, `${lang}.json`), 'utf8'));
+      const coreDict = JSON.parse(fs.readFileSync(path.join(i18nDir, `${lang}.json`), 'utf8'));
+      const chDict = fs.existsSync(path.join(i18nDir, 'clubhouse', `${lang}.json`))
+        ? JSON.parse(fs.readFileSync(path.join(i18nDir, 'clubhouse', `${lang}.json`), 'utf8'))
+        : {};
+      const admDict = fs.existsSync(path.join(i18nDir, 'admin', `${lang}.json`))
+        ? JSON.parse(fs.readFileSync(path.join(i18nDir, 'admin', `${lang}.json`), 'utf8'))
+        : {};
+      const dict = Object.assign({}, coreDict, chDict, admDict);
       const missing = enKeys.filter((k) => !(k in dict));
       assert.deepEqual(missing, [], `${lang}.json must contain all EN_DICT keys`);
     }

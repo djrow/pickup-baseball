@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Game Details & RSVP - Sunday Pickup Baseball</title>
   <link rel="stylesheet" href="/css/style.css?v=152">
+  <link rel="stylesheet" href="/css/dialog.css?v=152">
+  <link rel="stylesheet" href="/css/weather.css?v=152">
+  <link rel="stylesheet" href="/css/event.css?v=152">
   <link rel="stylesheet" href="/css/themes.css?v=152">
   <link rel="alternate" type="application/rss+xml" title="Sunday Pickup Baseball Highlights &amp; Updates" href="/feed.xml">
   <link rel="shortcut icon" href="/favicon.ico">
@@ -20,10 +23,11 @@
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 </head>
 <body>
+  <a href="#main-content" class="pbf-skip-link">Skip to main content</a>
 
   <!-- Site Header -->
   <header class="site-header">
-    <div class="container" id="main-nav">
+    <nav class="container" id="main-nav" aria-label="Main Navigation">
       <div class="nav-wrap">
         <a href="/index.html" class="brand">
           <img src="/logo.svg" alt="Pickup Baseball Foundation Logo" class="brand-logo">
@@ -47,10 +51,10 @@
           </div>
         </div>
       </div>
-    </div>
+    </nav>
   </header>
 
-  <main class="container event-detail-main" style="margin-top: 14px; margin-bottom: 36px;">
+  <main class="container event-detail-main" id="main-content" style="margin-top: 14px; margin-bottom: 36px;">
     
     <!-- Breadcrumb -->
     <div style="margin-bottom: 10px;">
@@ -84,6 +88,7 @@
         </div>
 
         <div id="edit-event-panel" style="display: none; margin-bottom: 10px;"></div>
+        <div id="organizer-invite-panel" style="display: none; margin-bottom: 10px;"></div>
         <div class="organizer-controls-grid">
           <div id="organizer-attendance-panel" style="display: none;"></div>
           <div id="organizer-rainout-panel" style="display: none;"></div>
@@ -163,6 +168,9 @@
               <div class="meta-value" id="event-calendar-actions" style="margin-top: 3px;">
                 <button type="button" id="event-subscribe-ics-btn" class="btn btn-outline btn-sm" aria-expanded="false" aria-controls="event-subscribe-panel" data-i18n="calendar.subscribe_game_btn" title="Subscribe to live updates for this game or add to Google Calendar">
                   🔄 Subscribe Game (.ics)
+                </button>
+                <button type="button" id="event-share-btn" class="btn btn-outline btn-sm" style="margin-left: 4px;" data-i18n="event.share_btn" title="Share this game link">
+                  🔗 Share Event
                 </button>
               </div>
             </div>
@@ -466,6 +474,9 @@
 
   <footer id="site-footer" class="site-footer"></footer>
 
+  <script src="/js/api/i18n.js?v=152"></script>
+  <script src="/js/api/ui.js?v=152"></script>
+  <script src="/js/api/endpoints.js?v=152"></script>
   <script src="/js/api.js?v=152"></script>
   <script src="/js/dialog.js?v=152"></script>
   <script src="/js/weather.js?v=152"></script>

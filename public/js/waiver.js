@@ -40,28 +40,49 @@
   }
 
   function renderWaiverDocument(statusData) {
-    if (!statusData || !Array.isArray(statusData.paragraphs) || statusData.paragraphs.length === 0) {
-      return;
+    var lang = (API && typeof API.getLang === 'function') ? API.getLang() : 'en';
+    var isEnglish = lang === 'en';
+
+    var noticeBanner = document.getElementById('waiver-controlling-notice-banner');
+    if (noticeBanner) {
+      noticeBanner.style.display = isEnglish ? 'none' : 'block';
     }
+
+    var originalDetails = document.getElementById('waiver-english-original-details');
+    if (originalDetails) {
+      originalDetails.style.display = isEnglish ? 'none' : 'block';
+    }
+
     var container = document.getElementById('waiver-paragraphs');
     if (container) {
-      var html = '';
-      for (var i = 0; i < statusData.paragraphs.length; i++) {
-        var isLast = i === statusData.paragraphs.length - 1;
-        html += '<p' + (isLast ? ' class="waiver-bold"' : '') + '>' + API.escapeHtml(statusData.paragraphs[i]) + '</p>';
+      if (isEnglish && statusData && Array.isArray(statusData.paragraphs) && statusData.paragraphs.length > 0) {
+        var html = '';
+        for (var i = 0; i < statusData.paragraphs.length; i++) {
+          var isLast = i === statusData.paragraphs.length - 1;
+          html += '<p' + (isLast ? ' class="waiver-bold"' : '') + '>' + API.escapeHtml(statusData.paragraphs[i]) + '</p>';
+        }
+        container.innerHTML = html;
+      } else {
+        // Render localized waiver paragraphs via API.t
+        var p1 = API.t('waiver.paragraph_1');
+        var p2 = API.t('waiver.paragraph_2');
+        var p3 = API.t('waiver.paragraph_3');
+        var p4 = API.t('waiver.paragraph_4');
+        container.innerHTML =
+          '<p>' + API.escapeHtml(p1) + '</p>' +
+          '<p>' + API.escapeHtml(p2) + '</p>' +
+          '<p>' + API.escapeHtml(p3) + '</p>' +
+          '<p class="waiver-bold">' + API.escapeHtml(p4) + '</p>';
       }
-      container.innerHTML = html;
     }
-    var docVer = statusData.document_version || '';
-    if (docVer) {
-      var formLabel = document.getElementById('waiver-form-id-label');
-      if (formLabel) {
-        formLabel.textContent = 'Form ID: ' + docVer + ' • SHA-256 Provenance Sealed';
-      }
-      var printFormId = document.getElementById('waiver-print-form-id');
-      if (printFormId) {
-        printFormId.textContent = docVer;
-      }
+    var docVer = (statusData && statusData.document_version) || '41335\\14760738.1';
+    var formLabel = document.getElementById('waiver-form-id-label');
+    if (formLabel) {
+      formLabel.textContent = API.t('waiver.form_id_label', 'Form ID: {docVer} • SHA-256 Provenance Sealed', { docVer: docVer });
+    }
+    var printFormId = document.getElementById('waiver-print-form-id');
+    if (printFormId) {
+      printFormId.textContent = docVer;
     }
   }
 
@@ -79,16 +100,23 @@
 
     if (wStatus === 'digital' && latest) {
       var certUrl = '/api/waiver/certificate/' + encodeURIComponent(latest.certificate_id) + '?format=html';
+      var activeTitle = API.t('waiver.status_active_digital', '🔏 Digital Waiver Signed & Sealed on File');
+      var signedDesc = API.t('waiver.status_digital_desc', 'Signed by {name} on {date}', {
+        name: latest.printed_name,
+        date: latest.signed_date
+      });
+      var viewCertBtn = API.t('waiver.view_cert_btn', '📄 View / Print Signed Certificate ↗');
+
       banner.innerHTML =
         '<div class="card" style="border-left: 5px solid var(--secondary); background: var(--bg-subtle); padding: 18px 22px;">' +
           '<div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px;">' +
             '<div>' +
               '<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px;">' +
-                '<span class="badge badge-green" style="font-size: 0.85rem; padding: 4px 10px;">🔏 Digital Waiver Signed &amp; Sealed on File</span>' +
+                '<span class="badge badge-green" style="font-size: 0.85rem; padding: 4px 10px;">' + API.escapeHtml(activeTitle) + '</span>' +
                 '<span style="font-size: 0.8rem; font-family: monospace; color: var(--text-muted);">ID: ' + API.escapeHtml(latest.certificate_id) + '</span>' +
               '</div>' +
               '<div style="font-size: 0.9rem; color: var(--text-main);">' +
-                'Signed by <strong>' + API.escapeHtml(latest.printed_name) + '</strong> on <strong>' + API.escapeHtml(latest.signed_date) + '</strong>' +
+                API.escapeHtml(signedDesc) +
               '</div>' +
               '<div style="font-size: 0.74rem; color: var(--text-muted); font-family: monospace; margin-top: 4px; word-break: break-all;">' +
                 'SHA-256 Digest: ' + API.escapeHtml(latest.document_sha256) +
@@ -96,29 +124,34 @@
             '</div>' +
             '<div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">' +
               '<a href="' + API.escapeHtml(certUrl) + '" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm" style="font-weight: 700;">' +
-                '📄 View / Print Signed Certificate ↗' +
+                API.escapeHtml(viewCertBtn) +
               '</a>' +
             '</div>' +
           '</div>' +
         '</div>';
     } else if (wStatus === 'paper' || (wStatus === 'digital' && !latest)) {
-      var badgeLabel = wStatus === 'paper' ? '📄 Paper Waiver Recorded on File' : '✓ Waiver Recorded on File';
+      var badgeLabel = wStatus === 'paper'
+        ? API.t('waiver.status_active_paper', '📄 Paper Waiver Recorded on File')
+        : API.t('waiver.status_active_generic', '✓ Waiver Recorded on File');
+      var paperDesc = API.t('waiver.status_paper_desc', 'Your waiver status is active on file. You may also execute a digital signature below anytime if you would like a downloadable cryptographic certificate receipt.');
+
       banner.innerHTML =
         '<div class="card" style="border-left: 5px solid var(--secondary); background: var(--bg-subtle); padding: 16px 20px;">' +
           '<div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">' +
-            '<span class="badge badge-green" style="font-size: 0.85rem; padding: 4px 10px;">' + badgeLabel + '</span>' +
+            '<span class="badge badge-green" style="font-size: 0.85rem; padding: 4px 10px;">' + API.escapeHtml(badgeLabel) + '</span>' +
             '<span style="font-size: 0.88rem; color: var(--text-main);">' +
-              'Your waiver status is active on file. You may also execute a digital signature below anytime if you would like a downloadable cryptographic certificate receipt.' +
+              API.escapeHtml(paperDesc) +
             '</span>' +
           '</div>' +
         '</div>';
     } else {
+      var unsignedDesc = API.t('waiver.status_unsigned_desc', 'Please review the Consent, Waiver and Indemnity below and sign digitally (or let an organizer know if you already signed a paper copy at the field).');
       banner.innerHTML =
         '<div class="card" style="border-left: 5px solid var(--primary); background: var(--bg-subtle); padding: 14px 18px;">' +
           '<div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">' +
             '<span class="badge badge-orange" style="font-size: 0.82rem;">📝 Waiver Signature</span>' +
             '<span style="font-size: 0.88rem; color: var(--text-main);">' +
-              'Please review the Consent, Waiver and Indemnity below and sign digitally (or let an organizer know if you already signed a paper copy at the field).' +
+              API.escapeHtml(unsignedDesc) +
             '</span>' +
           '</div>' +
         '</div>';
@@ -275,6 +308,26 @@
     var printDateSpan = document.getElementById('print-dated-val');
     if (printDateSpan) printDateSpan.textContent = todayStr;
 
+    try {
+      var urlParams = new URLSearchParams(window.location.search);
+      var redirectParam = urlParams.get('redirect');
+      if (redirectParam && redirectParam.startsWith('/') && !redirectParam.startsWith('//')) {
+        var backLink = document.querySelector('a[data-i18n="waiver.back_to_games"]');
+        if (backLink) {
+          backLink.setAttribute('href', redirectParam);
+          if (redirectParam.indexOf('event.html') !== -1) {
+            backLink.textContent = '← Back to Game Details';
+          }
+        }
+        var loginCta = document.querySelector('a[data-i18n="waiver.sign_cta"]');
+        if (loginCta) {
+          loginCta.setAttribute('href', '/login.html?redirect=' + encodeURIComponent('/waiver.html?redirect=' + redirectParam));
+        }
+      }
+    } catch (e) {
+      // safe fallback
+    }
+
     const [statusData, meUser] = await Promise.all([
       API.getWaiverStatus().catch(() => null),
       API.getMe()
@@ -286,6 +339,15 @@
     if (statusData) {
       renderWaiverDocument(statusData);
       renderStatusBanner(statusData);
+    }
+
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('pickup:langchange', function() {
+        if (statusData) {
+          renderWaiverDocument(statusData);
+          renderStatusBanner(statusData);
+        }
+      });
     }
 
     var authPrompt = document.getElementById('waiver-auth-prompt');
@@ -321,11 +383,11 @@
       var submitBtn = document.getElementById('btn-submit-waiver');
 
       if (!printedName || printedName.length < 2) {
-        showWaiverAlert('Please enter your full Printed Name.', true);
+        showWaiverAlert(API.t('waiver.printed_name_required_error', 'Please enter your full Printed Name.'), true);
         return;
       }
       if (!hasDrawnStrokes || !pad || !pad.canvas) {
-        showWaiverAlert('Please draw or type your signature on the Signature line.', true);
+        showWaiverAlert(API.t('waiver.sig_required_error', 'Please draw or type your signature on the Signature line.'), true);
         return;
       }
       if (!ageBox || !ageBox.checked) {
@@ -333,14 +395,14 @@
         return;
       }
       if (!consentBox || !consentBox.checked) {
-        showWaiverAlert('Please check the Electronic Signature Consent box to continue.', true);
+        showWaiverAlert(API.t('waiver.consent_required_error', 'Please check the Electronic Signature Consent box to continue.'), true);
         return;
       }
 
       var sigDataUrl = pad.canvas.toDataURL('image/png');
       if (submitBtn) {
         submitBtn.disabled = true;
-        submitBtn.textContent = 'Sealing & Recording Waiver...';
+        submitBtn.textContent = API.t('waiver.submitting', 'Sealing & Recording Waiver...');
       }
 
       try {
@@ -351,13 +413,14 @@
           signature_data: sigDataUrl,
           age_attestation: true,
           attested_18_plus: true,
-          electronic_consent: true
+          electronic_consent: true,
+          waiver_locale: (API && typeof API.getLang === 'function') ? API.getLang() : 'en'
         });
 
         if (res && res.error) {
           showWaiverAlert(res.error, true);
         } else if (res && res.waiver) {
-          showWaiverAlert('✓ Consent, Waiver and Indemnity signed and sealed! Certificate ID: ' + res.waiver.certificate_id, false);
+          showWaiverAlert(API.t('waiver.success_msg', '✓ Consent, Waiver and Indemnity signed and sealed! Certificate ID: {certId}', { certId: res.waiver.certificate_id }), false);
           if (API.currentUser) {
             API.currentUser.waiverStatus = 'digital';
             API.currentUser.waiver_status = 'digital';
@@ -373,7 +436,7 @@
       } finally {
         if (submitBtn) {
           submitBtn.disabled = false;
-          submitBtn.textContent = '🔏 Sign & Seal Waiver';
+          submitBtn.textContent = API.t('waiver.btn_submit', '🔏 Sign & Seal Waiver');
         }
       }
     });

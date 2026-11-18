@@ -1,1222 +1,110 @@
+// @ts-check
 /**
- * @fileoverview Standard API Helpers, i18n Loader, Theming & Shared Navigation for Pickup Baseball Charity.
+ * @fileoverview Root Client API Entry, Session/User Cache, Diagnostic Ring Buffer & Lifecycle Boot.
  * Vanilla ES6 (no bundler, no optional chaining/nullish coalescing).
  *
  * TABLE OF CONTENTS:
- * 1. EN_DICT Canonical English i18n Dictionary
- * 2. Language, Theme & Color Palette Controls (`getLang`, `t`, `initI18n`, `initTheme`, `renderFooter`)
- * 3. Service Worker & Version Update Lifecycle (`initAppUpdater`, `triggerAppUpdate`)
- * 4. Auth/User Cache & Core Fetch Wrapper (`request`, `getMe`, `logout`, `clearDataCaches`)
- * 5. Domain API Wrappers (Events, RSVPs, BP Order, Auth, Users, Waivers, Admin Settings)
- * 6. Shared Modals, Date/Pacific Timezone Helpers, ICS Subscribe Panel & Media Embeds
+ * 1. Entry Root window.API definition & CLIENT_VERSION
+ * 2. Session, User Cache & Clubhouse IDB cleanup
+ * 3. Zero-PII Diagnostic Logging Buffer
+ * 4. Fetch Wrapper (request, getPublicConfig, getMe, logout)
+ * 5. Service Worker Lifecycle & Version Polling
+ * 6. Global DOM Image Fallbacks & Boot Handlers
  *
  * @global API
  */
 
-const EN_DICT = {
-  "nav.community": "Community",
-  "nav.calendar": "Calendar",
-  "nav.archive": "Archive",
-  "nav.gallery": "Gallery & Art",
-  "nav.gallery_title": "Photo, Video & Art Gallery",
-  "nav.clubhouse": "Clubhouse",
-  "nav.clubhouse_title": "Clubhouse Chat & Voice Dugout",
-  "nav.donate": "Donate",
-  "nav.about": "About Us",
-  "nav.about_title": "About Pickup Baseball Foundation",
-  "nav.menu": "Menu",
-  "nav.handbook": "Handbook",
-  "nav.login": "Log In",
-  "nav.logout": "Log Out",
-  "nav.admin": "⚙️ Admin",
-  "nav.org": "⚾ Org",
-  "about.hero_pill": "⚾ 501(c)(3) Nonprofit • Oakland, CA • Est. 2021",
-  "about.hero_title": "About Us",
-  "about.hero_desc": "Free access to pickup baseball for teens and adults in the greater San Francisco Bay Area.",
-  "about.mission_title": "Our Mission",
-  "about.mission_p1": "Pickup Baseball Foundation (PBF) provides free access to pickup baseball for teens and adults of all ages, genders, and skill levels. We foster a welcoming and inclusive environment for building community with fellow baseball fans of all backgrounds in the greater San Francisco Bay Area.",
-  "about.mission_p2": "PBF is a 501(c)(3) nonprofit organization founded in 2021 and based in Oakland, CA.",
-  "about.contact_desc": "Get in touch with us at <a href=\"mailto:pickupbaseballfoundation@gmail.com\">pickupbaseballfoundation@gmail.com</a>.",
-  "about.play_title": "⚾ Sunday Pickup Games",
-  "about.play_desc": "Check the game calendar, RSVP in seconds, and coordinate bats, balls, bases, and catcher's gear.",
-  "about.play_btn": "View Game Calendar →",
-  "about.support_title": "❤️ Keep Games Free",
-  "about.support_desc": "Every pickup game is free to join. Donations help buy equipment and keep baseball accessible to all.",
-  "about.support_btn": "Donate →",
-  "calendar.title": "Game Calendar",
-  "calendar.subtitle": "Sunday Pickup Games • 12:00 PM • Bushrod Park",
-  "calendar.today": "Today",
-  "calendar.add_to_calendar": "Subscribe All (.ics)",
-  "calendar.subscribe_game_btn": "🔄 Subscribe Game (.ics)",
-  "calendar.export_btn": "📥 Export Schedule (.ics)",
-  "calendar.sync_checking": "Syncing with cloud…",
-  "calendar.sync_just_now": "Cloud synced • Just now",
-  "calendar.sync_mins_ago": "Cloud synced • {mins}m ago",
-  "calendar.sync_at_time": "Cloud synced • {time}",
-  "calendar.sync_offline_cached": "Offline — cached schedule ({time})",
-  "calendar.sync_offline": "Offline — showing cached schedule",
-  "calendar.sync_offline_empty": "Offline — unable to reach cloud",
-  "calendar.subscribe_title": "🔄 All-Games Live Calendar Sync (.ics)",
-  "calendar.subscribe_desc": "Subscribe once so newly scheduled games, field changes, and rainout alerts update automatically on your phone or computer.",
-  "calendar.subscribe_apple_btn": "🍎 Apple / Outlook (Live Sync)",
-  "calendar.subscribe_google_btn": "📅 Google Calendar (Live Sync)",
-  "calendar.subscribe_copy_btn": "📋 Copy Feed URL",
-  "calendar.subscribe_copied": "✓ Copied!",
-  "calendar.subscribe_snapshot_btn": "📥 Download One-Time .ics File",
-  "event.calendar_label": "Game Calendar",
-  "calendar.noon_game": "12:00 PM Game",
-  "calendar.legend_game": "Confirmed Game (12:00 PM)",
-  "calendar.legend_prospective": "Prospective (TBA)",
-  "calendar.legend_rainout": "Rainout",
-  "calendar.legend_today": "Today",
-  "calendar.legend_attending": "You're Attending",
-  "calendar.no_game": "No game scheduled on this date.",
-  "calendar.prospective_pill": "Prospective",
-  "calendar.prospective_badge": "📅 Prospective",
-  "calendar.pickup_reminder": "Free community pickup baseball is every Sunday at Noon at Bushrod Park!",
-  "calendar.view_details": "RSVP & View Game Details →",
-  "footer.tagline": "Building community through America's pastime.",
-  "footer.subtext": "Built for simplicity and durability. Free & open-source.",
-  "footer.about_site": "Prototyped with Google Gemini in October 2026 for simplicity and durability. Free & open-source",
-  "footer.handbook": "Handbook & Field Rules",
-  "footer.copyright": "© 2026 Pickup Baseball Foundation. Licensed under Apache License 2.0.",
-  "footer.erase_data": "Erase My Data",
-  "hero.handbook_btn": "📖 Handbook & Field Rules ↗",
-  "rules.summary": "⚾ Typical Rules of Play on Sundays: Casual, all skill levels, pitching machine, continuous batting, and safety first.",
-  "rules.full_link": "📖 Read the Complete Sunday Rules of Play in the Webapp Handbook ↗",
-  "footer.update_app": "Update App",
-  "footer.update_available": "Update Available — Click to Refresh",
-  "footer.update_checking": "Checking for updates and clearing cache...",
-  "footer.update_reloading": "✓ App updated! Reloading with latest version...",
-  "footer.update_available_desc": "A new version of Sunday Pickup Baseball is ready.",
-  "hero.title": "Free Pickup Baseball Every Sunday at Noon",
-  "hero.desc": "We provide accessible, friendly Sunday baseball games for everyone in the community. Check the head count, coordinate gear, volunteer for game-day tasks, and play ball!",
-  "hero.login_btn": "⚾ Player Log In / Sign In",
-  "hero.profile_btn": "👤 Player Profile ({name})",
-  "hero.mailing_btn": "Join Mailing List ↗",
-  "hero.view_games_btn": "View Games ↓",
-  "privacy.summary": "🔒 Our Privacy Promise: We collect only your name & email and never share it.",
-  "privacy.read_details": "Read details ▾",
-  "privacy.hide": "Hide ▴",
-  "privacy.b1": "We collect only your <strong>name</strong> and <strong>email address</strong>.",
-  "privacy.b2": "We <strong>never share</strong> your email address with anyone.",
-  "privacy.b3": "Only <strong>One Person</strong> sends messages to the mailing list. Right now, that's David.",
-  "privacy.b4": "Your handwritten signature is only on a paper waiver we keep on file. We <strong>never share it</strong>.",
-  "privacy.b5": "If you make a player account, the site will also email you sign-in codes and game confirmations or reminders. Anything extra you add to your profile (like a bio or photo) is optional.",
-  "privacy.contact_prefix": "Questions or want your info removed? Email",
-  "privacy.erase_link": "Erase your Visitor / RSVP data →",
-  "home.welcome_signed_in": "Welcome, {name}! You are signed in.",
-  "home.scheduled_games": "Scheduled Games",
-  "home.future_games": "Future Scheduled Games",
-  "home.view_past_archive": "Past Games Archive →",
-  "home.archive_prompt": "Looking for past game recaps, turnout records, and discussion boards?",
-  "home.filter_upcoming": "Upcoming",
-  "home.filter_past": "Past Archive",
-  "home.loading_games": "Loading scheduled games...",
-  "home.no_upcoming_title": "No Upcoming Games Scheduled Yet",
-  "home.no_upcoming_desc": "Check back soon! Our Sunday pickup games are posted throughout the season.",
-  "home.no_past": "No past games in the archive yet.",
-  "home.no_additional": "No additional games scheduled right now.",
-  "archive.title": "Past Games Archive",
-  "archive.subtitle": "Browse past Sunday games, volunteer records, attendance turnouts, and field discussions.",
-  "archive.back_to_upcoming": "← Back to Upcoming Games",
-  "archive.no_games": "No past games found in the archive yet.",
-  "home.next_sunday_badge": "Next Sunday Pickup",
-  "home.sunday_game_badge": "Sunday Game",
-  "home.you_are_attending": "✓ You are Attending",
-  "home.rsvp_view_details": "RSVP & View Details →",
-  "home.view_rsvp": "View & RSVP →",
-  "home.date_time": "Date & Time",
-  "home.field_location": "Field Location",
-  "home.map_link": "Map Link ↗",
-  "home.confirmed_players": "Confirmed Players",
-  "home.players_count": "{count} Players",
-  "home.on_roster_count": "{count} on Roster",
-  "home.players_played": "{count} Played",
-  "home.online_rsvps_sub": "({count} online)",
-  "home.view_game": "View Game →",
-  "home.duty_coordination": "Task Coordination",
-  "home.duties_configured": "{count} Tasks Configured",
-  "home.skill_levels_note": "⚾ Open to all skill levels. Need gear or can bring some? Click below to let the team know.",
-  "home.join_roster_btn": "Join Roster / Volunteer for Tasks",
-  "feed.heading": "Highlights & Community Updates",
-  "feed.subtitle": "Game recaps, video highlights, photo albums, and field announcements.",
-  "feed.rss_btn": "📡 RSS Feed",
-  "feed.new_post_btn": "+ New Highlight",
-  "feed.no_posts_title": "No Highlights Posted Yet",
-  "feed.no_posts_desc": "Check back soon for game recaps, photo albums, video clips, and announcements!",
-  "feed.confirm_delete": "Delete this highlight from the community feed and RSS?",
-  "feed.delete_btn": "Delete",
-  "feed.game_badge": "⚾ Game Link",
-  "how.title": "How Our Pickup Baseball Webapp Works",
-  "how.s1_title": "1. RSVP Anytime",
-  "how.s1_desc": "Sign up in seconds as a guest or with just your name & email. Knowing player numbers helps us balance teams and pick the right field.",
-  "how.s2_title": "2. Coordinate Gear & Tasks",
-  "how.s2_desc": "Sign up to bring bases, balls, catcher's gear, or first aid. Tell everyone in advance what equipment you can share.",
-  "how.s3_title": "3. Email Reminders",
-  "how.s3_desc": "You'll receive an instant confirmation upon RSVP, plus an automated reminder email the day before game day with field details and rosters.",
-  "how.s4_title": "4. Game Discussion",
-  "how.s4_desc": "Discuss pre-game weather, field conditions, carpools, or share post-game photos and recaps directly on the event board.",
-  "event.back_to_games": "← Back to All Games",
-  "event.loading": "Loading game details...",
-  "event.upcoming_badge": "Upcoming Game",
-  "event.roster_count": "Roster Count",
-  "event.duties_status": "Tasks Status",
-  "event.slots_filled": "{filled} of {total} Slots Filled",
-  "event.open_map": "[Open Map ↗]",
-  "event.rsvp_heading": "RSVP & Volunteer Tasks",
-  "event.rsvp_subheading": "Sign up players, spectators, and group tasks in one step.",
-  "event.already_account": "Already have an account?",
-  "event.login_autofill": "Log in to save your group RSVP and manage tasks anytime.",
-  "event.signin_required_title": "⚾ Sign-In Required to RSVP",
-  "event.signin_required_desc": "To protect community games from spam, please sign in with a verified email to RSVP for players, spectators, or tasks.",
-  "event.signin_required_btn": "⚾ Sign In / Register to RSVP →",
-  "event.signin_submit_btn": "Sign In to Submit RSVP",
-  "event.name_label": "Name *",
-  "event.name_placeholder": "Your name or group name",
-  "event.email_label": "Email Address (Optional)",
-  "event.email_placeholder": "Optional — only for email confirmations & reminders",
-  "event.players_counter_title": "⚾ Players",
-  "event.players_counter_sub": "Playing on the field",
-  "event.spectators_counter_title": "👏 Spectators",
-  "event.spectators_counter_sub": "Watching or helping off-field",
-  "event.optional_details_summary": "Add group names or shared gear (optional)",
-  "event.group_names_label": "Group / Guest Names",
-  "event.cancel_rsvp_btn": "Can't Make It",
-  "event.will_attend": "Will you attend?",
-  "event.attending_yes": "⚾ Yes, I'm playing!",
-  "event.attending_no": "✕ Can't make it",
-  "event.cant_make_it_badge": "You marked Can't Make It",
-  "event.additional_guests_label": "Bringing Additional Guests?",
-  "event.additional_guests_help": "Bringing friends or family who want to play? Let us know how many extra players are coming with you.",
-  "event.guest_names_placeholder": "e.g. Alex, Jordan, Sam",
-  "event.just_me": "0 (Just me)",
-  "event.guests_badge": "guest",
-  "event.guests_badge_plural": "guests",
-  "event.guests_prefix": "Group:",
-  "event.gear_label": "Shared Gear Your Group Can Bring",
-  "event.gear_placeholder": "e.g. 2 wood bats, catcher's helmet, spare glove",
-  "event.gear_help": "Coordination helps us make sure we have enough bats, balls, and gear for players without their own.",
-  "event.duties_label": "🛡️ Group Volunteer Tasks",
-  "event.duties_help": "Your group covers checked tasks together",
-  "event.submit_rsvp_btn": "Confirm RSVP",
-  "event.update_rsvp_btn": "Update RSVP",
-  "event.saving_rsvp": "Saving RSVP...",
-  "event.rsvp_email_note": "📬 Email confirmation & reminders sent if an email is provided",
-  "event.edit_link_prompt": "Already RSVPed as a visitor?",
-  "event.edit_link_btn": "🔗 Email me a fresh edit link",
-  "event.edit_link_email_placeholder": "Enter the email used for your RSVP",
-  "event.edit_link_send_btn": "Send Edit Link",
-  "event.edit_link_sending": "Sending...",
-  "event.duty_board_title": "🛡️ Game Day Task Board",
-  "event.duty_board_desc": "Essential roles to keep our pickup games safe, fun, and organized.",
-  "event.duty_filled": "Filled",
-  "event.duty_needed": "Needed",
-  "event.duty_volunteers": "✓ Volunteer(s):",
-  "event.duty_needs_count": "⚠️ Needs {count} volunteer(s)",
-  "event.duty_covered": "Covered",
-  "event.duty_covered_by": "✓ Covered by {names}",
-  "event.duty_current_open": "Current: {names} ({count} open)",
-  "event.roster_title": "👥 Attendee Roster",
-  "event.roster_desc": "Players, non-playing guests, shared gear, and group tasks.",
-  "event.actual_turnout": "Actual Turnout",
-  "event.turnout_badge": "{count} Played",
-  "event.turnout_count_sub": "({count} online RSVPs)",
-  "event.record_turnout": "Record Actual Attendance",
-  "event.record_turnout_desc": "{count} players RSVP'd online. How many players actually played?",
-  "event.save_turnout": "Save Turnout",
-  "event.roster_private_title": "Attendee Roster is Private",
-  "event.roster_private_desc": "To protect attendee privacy, individual names, non-playing guests, and task assignments are only visible to attendees. Please RSVP (attending or can't make it) below to view who's coming!",
-  "event.roster_private_cta": "RSVP to View Attendee Roster",
-  "event.confirmed_badge": "{count} Confirmed",
-  "event.waitlist_heading": "Waitlist",
-  "event.waitlist_badge": "Waitlist #{pos}",
-  "event.on_waitlist_badge": "On Waitlist",
-  "event.waitlist_pos_badge": "Waitlist #{pos}",
-  "event.join_waitlist_btn": "Join Waitlist (Auto-Promote)",
-  "event.update_waitlist_btn": "Update Waitlist Info",
-  "event.no_players_yet": "No attendees on the roster yet. Be the first to mark yourself attending!",
-  "event.playing_badge": "Playing",
-  "event.rained_out_badge": "Rained Out",
-  "event.guest_tag": "(Guest)",
-  "event.discussion_title": "💬 Game Discussion Board",
-  "event.discussion_desc": "Coordinate carpools, ask about gear, discuss weather, or post post-game highlights!",
-  "event.no_comments_yet": "No discussion yet. Have a question about field location or gear? Start the conversation below!",
-  "event.comments_members_only": "Event discussion is visible to signed-in members only.",
-  "event.signin_to_comment": "Please sign in to join the game discussion and coordinate gear with teammates.",
-  "event.signin_email_btn": "Sign In with Email →",
-  "event.leave_message": "Leave a Message",
-  "event.email_optional": "Email (Optional)",
-  "event.message_label": "Message",
-  "event.message_placeholder": "Field update, gear questions, or post-game shoutouts...",
-  "event.post_comment_btn": "Post to Discussion",
-  "event.bp_title": "Batting Practice (BP) Order",
-  "event.bp_subtitle": "12:30 PM – 1:30 PM machine-pitch warmup • Shag outfield fly balls while other rounds hit!",
-  "event.bp_quick_claim": "Claim Next Slot",
-  "event.bp_your_slot": "Your Spot",
-  "event.bp_open_slot": "Open Slot",
-  "event.bp_claim_btn": "Claim Slot",
-  "event.bp_leave_btn": "Withdraw",
-  "event.bp_change_btn": "Change",
-  "event.bp_rsvp_checkbox": "⚾ Sign me up for Batting Practice (BP) order (12:30 PM warmup)",
-  "login.title": "Player Sign-In",
-  "login.subtitle": "No password needed. We'll send a 6-digit code or magic link to your email.",
-  "login.name_label": "Name",
-  "login.name_placeholder": "Your name",
-  "login.name_help": "Only needed if this is your first time playing with us.",
-  "login.email_label": "Email Address *",
-  "login.remember_email": "Remember my email address on this device",
-  "login.shared_device": "This is a shared or friend's device (temporary 4-hour sign-in)",
-  "login.shared_device_help": "Signs out when the browser closes or after 4 hours, and won't save your email here.",
-  "login.send_code_btn": "Send Sign-In Code",
-  "login.enter_code_label": "Enter 6-Digit Code",
-  "login.code_help": "Or click the link sent to your email to log in instantly. (Code expires in 10 minutes.)",
-  "login.verify_btn": "Verify & Sign In",
-  "login.change_email_btn": "← Change Email",
-  "login.footer_hint": "💡 New here? Just enter your name and email above — we'll email you a code, and your account is created automatically.",
-  "login.signed_in_title": "You are Signed In!",
-  "login.view_games_btn": "⚾ View Scheduled Games",
-  "login.profile_btn": "👤 Player Profile",
-  "profile.back_to_games": "← Back to Games",
-  "profile.title": "Player Profile",
-  "profile.subtitle": "Customize how other players see you on the Sunday game rosters and discussion board.",
-  "profile.picture_title": "Profile Picture",
-  "profile.picture_desc": "JPEG, PNG, WebP or GIF (up to 5MB).",
-  "profile.choose_photo": "📷 Choose Photo",
-  "profile.remove_photo": "Remove",
-  "profile.name_label": "Name *",
-  "profile.name_placeholder": "Your name",
-  "profile.email_label": "Email Address",
-  "profile.email_help": "Used for sign-in and game day reminder notifications.",
-  "profile.bio_label": "Short Bio / Baseball Background",
-  "profile.bio_placeholder": "e.g. Played 3rd base in college, always happy to pitch in. Love Sunday pickup ball!",
-  "profile.bio_help": "Shown on the game roster alongside gear you bring.",
-  "profile.save_btn": "Save Changes",
-  "profile.cancel_btn": "Cancel",
-  "profile.sessions_title": "🔐 Signed-In Devices",
-  "profile.sessions_desc": "Accounts stay signed in on up to 5 devices at once. If you forgot to log out on a friend's phone, sign out everywhere else below.",
-  "profile.logout_other_devices_btn": "Sign Out of All Other Devices",
-  "profile.erasure_title": "🗑️ Delete Account & Erase Data",
-  "profile.erasure_notice": "Deleting your account immediately removes your profile, sessions, login codes, consent records, future RSVPs, task assignments, and batting practice slots. Past attendance counts, discussions, and posts are anonymized. Legal Waiver Retention Notice: Signed liability waivers remain sealed in restricted Admin-only quarantine for 3 years from signing or your last attended event before permanent deletion.",
-  "profile.erasure_keep_gallery": "Keep my approved Gallery photos/videos anonymously attributed to \"Community Member\" (unapproved items are always deleted)",
-  "profile.erasure_send_code_btn": "📧 Email Verification Code to Delete Account",
-  "profile.erasure_code_label": "Enter 6-Digit Verification Code",
-  "profile.erasure_code_placeholder": "123456",
-  "profile.erasure_confirm_btn": "Permanently Delete My Account",
-  "profile.erasure_cancel_btn": "Cancel",
-  "profile.erasure_confirm_dialog": "Permanently delete your account and personal data? This cannot be undone. Any signed liability waiver will stay in restricted 3-year legal-defense quarantine before automatic purge.",
-  "profile.erasure_code_sent": "Verification code sent to your email. Enter the 6-digit code below to confirm deletion.",
-  "donate.hero_pill": "❤️ Support Free Community Baseball",
-  "donate.hero_title": "Help Keep the Games Free",
-  "donate.hero_desc": "Pickup Baseball Foundation provides free, welcoming Sunday baseball for everyone in the community. Your donation helps us buy equipment, maintain gear, and keep the games open to all.",
-  "donate.paypal_title": "Donate with PayPal",
-  "donate.paypal_desc": "Give securely through our official PayPal Giving Fund charity fundraiser page.",
-  "donate.paypal_btn": "Donate via PayPal →",
-  "donate.every_title": "Donate with Every.org",
-  "donate.every_desc": "Give through our Every.org nonprofit page, which supports card, bank, DAF, and stock gifts.",
-  "donate.every_btn": "Donate via Every.org →",
-  "donate.tax_title": "🧾 Tax Receipts",
-  "donate.tax_desc": "Need a receipt for your taxes? After you donate, email David at <a href=\"mailto:pickupbaseballfoundation@gmail.com\">pickupbaseballfoundation@gmail.com</a> with your name and the amount and date of your gift. David will send you a donation receipt on our letterhead that you can submit to the IRS.",
-  "donate.footer_note": "Thank you for supporting the game! ⚾ Questions? Reply to any of our emails or write to <a href=\"mailto:pickupbaseballfoundation@gmail.com\">pickupbaseballfoundation@gmail.com</a>.",
-  "phrase.sunday_pickup": "Sunday Pickup Baseball",
-  "phrase.sunday_pickup_noon": "Sunday Pickup Baseball - Noon Game",
-  "phrase.default_desc_1": "Weekly community pickup baseball game. All skill levels welcome! Bring your glove and enthusiasm. Please check off any gear you can share or tasks you can take.",
-  "phrase.default_desc_2": "Accessible, friendly community pickup baseball. Free for everyone!",
-  "phrase.default_desc_3": "No special announcements for this pickup game. Bring your glove and enthusiasm!",
-  "phrase.duty_bases": "Bases",
-  "phrase.duty_bases_desc": "Bring 3 throw-down bases.",
-  "phrase.duty_machine": "Pitching machine and power",
-  "phrase.duty_machine_desc": "Bring a pitching machine and a way to run it on the field.",
-  "phrase.duty_balls": "Game Baseballs",
-  "phrase.duty_balls_desc": "Bring game balls bucket.",
-  "phrase.duty_drag": "Field Dragging",
-  "phrase.duty_drag_desc": "Arrive 20 mins early to drag the infield with the pull rake.",
-  "phrase.duty_facilitator": "Game Facilitator",
-  "phrase.duty_facilitator_desc": "Help coordinate teams, batting order, and fair play throughout the game.",
-  "phrase.duty_water_food": "Water / Food",
-  "phrase.duty_water_food_desc": "Bring drinking water, ice, and dugout snacks or fruit for players.",
-  "dialog.close": "Close notification",
-  "dialog.notice": "Notice",
-  "dialog.ok": "OK",
-  "dialog.confirm_title": "Please Confirm",
-  "dialog.cancel": "Cancel",
-  "dialog.confirm": "Confirm",
-  "dialog.input_title": "Enter Details",
-  "dialog.save": "Save",
-  "calendar.no_upcoming_export": "No upcoming games scheduled to export.",
-  "feed.delete_failed": "Failed to delete post.",
-  "archive.turnout_title": "Game Attendance",
-  "archive.invalid_attendance": "Please enter a valid attendance number.",
-  "archive.turnout_saved": "Attendance saved.",
-  "archive.save_failed": "Failed to save turnout.",
-  "archive.record_prompt": "Enter the number of players who attended and played in this game:",
-  "archive.edit_prompt": "Update actual headcount for this game:",
-  "profile.signin_required": "Please sign in to view and edit your profile.",
-  "profile.confirm_remove_avatar": "Remove your profile picture?",
-  "profile.waiver_card_title": "📝 Player Consent & Liability Waiver",
-  "waiver.back_to_games": "← Back to Game Schedule",
-  "waiver.print_blank": "🖨️ Print Paper Copy",
-  "waiver.title": "CONSENT, WAIVER AND INDEMNITY",
-  "waiver.sign_online_title": "🔏 Sign Online with Verified Email Provenance",
-  "waiver.sign_cta": "⚾ Sign In with Email to Sign Waiver →",
-  "waiver.execute_sig": "✍️ Execute Digital Signature",
-  "waiver.age_attestation_label": "I confirm that I am 18 years of age or older, or that I am the parent or legal guardian signing on behalf of a minor participant.",
-  "waiver.age_attestation_error": "You must confirm that you are 18 years of age or older (or a parent/legal guardian signing on behalf of a minor).",
-  "gallery.photos_reel": "Community Photos Reel",
-  "gallery.videos_reel": "Video Releases & Highlights Reel",
-  "gallery.drop_links_btn": "📥 Drop Photos / Links",
-  "gallery.mod_queue_title": "Admin Moderation Queue",
-  "gallery.all_albums": "🌟 All Albums",
-  "backup_scrubbed_btn": "📥 Operational SQL (.zip)",
-  "backup_dr_btn": "🔐 Encrypted DR Backup (.pbfenc)",
-  "backup_scrubbed_working": "⏳ Exporting scrubbed SQL...",
-  "backup_dr_working": "⏳ Encrypting DR backup...",
-  "backup_dr_prompt_title": "🔐 Encrypted Full DR Backup",
-  "backup_dr_prompt_msg": "Enter a passphrase (at least 8 characters) to encrypt this full disaster-recovery backup. Keep it safe — you will need it with scripts/restore-backup.js:",
-  "backup_dr_prompt_placeholder": "Enter backup encryption passphrase...",
-  "backup_dr_confirm_btn": "Encrypt & Download",
-  "backup_dr_passphrase_short": "Backup passphrase must be at least 8 characters.",
-  "backup_scrubbed_success": "Scrubbed operational SQL backup downloaded.",
-  "backup_dr_success": "Encrypted disaster-recovery backup (.pbfenc) downloaded.",
-  "backup_failed": "Database backup failed: {error}",
-  "rtc_turn_unavailable_note": "Unavailable: No TURN privacy relay server is configured on this deployment.",
-  "rtc_turn_available_note": "TURN privacy relay server is configured and ready.",
-  "rtc_turn_blocked_warning": "Privacy Relay Mode blocked direct P2P voice because no TURN relay server is configured.",
-  "profile.export_title": "📦 Download Your Data",
-  "profile.export_desc": "Download a JSON archive of your profile, consent history, RSVPs, volunteer tasks, signed waivers, and Clubhouse messages.",
-  "profile.export_btn": "📥 Download JSON Export",
-  "profile.export_decrypt_label": "Decrypt my encrypted Clubhouse messages in-browser before saving",
-  "profile.export_working": "⏳ Preparing export...",
-  "profile.export_success": "Your personal data export has been downloaded.",
-  "profile.export_success_decrypted": "Your personal data export (with {count} decrypted E2EE message(s)) has been downloaded.",
-  "profile.export_failed": "Failed to export your data: {error}",
-  "profile.export_passphrase_title": "🔐 Unlock E2EE Key Vault",
-  "profile.export_passphrase_msg": "Enter your E2EE Key Vault passphrase to decrypt your encrypted Clubhouse messages in-browser before saving:",
-  "profile.export_passphrase_placeholder": "Enter vault passphrase...",
-  "profile.export_passphrase_confirm": "Unlock & Decrypt",
-  "profile.export_wrong_passphrase": "Incorrect E2EE vault passphrase. Encrypted messages could not be decrypted.",
-  "profile.privacy_consent_title": "🔒 Privacy Consent",
-  "profile.privacy_consent_desc": "By default, signed-in members see only your First L. initial and RSVP status. Toggle below to share full details with peers.",
-  "profile.roster_visibility_label": "Show my full name, shared gear, and companion names to signed-in members",
-  "profile.roster_visibility_help": "When off, peer members see \"First L.\" only (organizers always see full details).",
-  "profile.profile_sharing_label": "Share my bio and profile picture with signed-in members",
-  "profile.profile_sharing_help": "Controls whether your short bio and avatar appear to peers on rosters, comments, and Clubhouse.",
-  "profile.notify_title": "📬 Notification Preferences",
-  "profile.notify_rsvp_label": "RSVP confirmation emails",
-  "profile.notify_rainouts_label": "Rainout and field change alerts",
-  "profile.notify_reminders_label": "Pre-event reminder emails",
-  "profile.notify_community_label": "Community updates and announcements",
-  "event.visitor_privacy_title": "🔒 Privacy & Notification Choices (Optional)",
-  "event.visitor_roster_consent_label": "Show my full name, shared gear, and companion names to signed-in members on the roster (otherwise shown as \"First L.\")",
-  "event.visitor_notify_emails_label": "Send me event reminder and rainout notification emails for this event (if email provided)",
-  "visitor_erasure.title": "🗑️ Erase Visitor / RSVP Data",
-  "visitor_erasure.summary_hint": "Remove RSVPs or data without signing in",
-  "visitor_erasure.notice": "Verify your email with a 6-digit code to permanently delete future RSVPs, task assignments, batting practice slots, and consent records, and anonymize past attendance and comments. Legal Waiver Retention Notice: Signed liability waivers remain sealed in restricted Admin-only quarantine for 3 years from signing or your last attended event before permanent deletion.",
-  "visitor_erasure.email_label": "Email Address *",
-  "visitor_erasure.email_placeholder": "you@example.com",
-  "visitor_erasure.keep_gallery": "If an account exists, keep my approved Gallery photos/videos anonymously attributed to \"Community Member\" (unapproved items are always deleted)",
-  "visitor_erasure.send_code_btn": "📧 Email Erasure Verification Code",
-  "visitor_erasure.code_label": "Enter 6-Digit Erasure Code",
-  "visitor_erasure.code_placeholder": "123456",
-  "visitor_erasure.confirm_btn": "Permanently Erase My Data",
-  "visitor_erasure.cancel_btn": "Cancel",
-  "visitor_erasure.confirm_dialog": "Permanently erase all personal data and RSVPs matching this email? This cannot be undone. Any signed liability waiver will stay in restricted 3-year legal-defense quarantine before automatic purge.",
-  "visitor_erasure.invalid_email": "Please enter a valid email address.",
-  "visitor_erasure.invalid_code": "Please enter the 6-digit verification code sent to your email.",
-  "clubhouse.peer_block_btn": "🚫 Block",
-  "clubhouse.peer_unblock_btn": "🔓 Unblock",
-  "clubhouse.peer_block_badge": "🚫 Blocked",
-  "clubhouse.peer_block_title": "Block this member (hides their shared-channel messages and prevents 1:1 DMs and voice)",
-  "clubhouse.peer_unblock_title": "Unblock this member",
-  "clubhouse.peer_block_confirm_title": "🚫 Block Member",
-  "clubhouse.peer_block_confirm_msg": "Block {name}? This prevents 1:1 Direct Messages and voice calls between you two, and hides their messages in shared channels and group DMs for you. Announcement boards and Moderator actions are not affected.",
-  "clubhouse.peer_block_btn_confirm": "Block Member",
-  "clubhouse.peer_unblock_confirm_title": "🔓 Unblock Member",
-  "clubhouse.peer_unblock_confirm_msg": "Unblock {name}? You will be able to exchange 1:1 Direct Messages and voice calls again, and their shared-channel messages will be visible.",
-  "clubhouse.peer_unblock_btn_confirm": "Unblock Member",
-  "clubhouse.peer_block_success": "{name} has been blocked.",
-  "clubhouse.peer_unblock_success": "{name} has been unblocked.",
-  "clubhouse.peer_block_error": "Unable to update block status.",
-  "clubhouse.peer_blocked_msg_stub": "🚫 Message from blocked member {name} hidden from your view.",
-  "clubhouse.peer_blocked_reply_stub": "🚫 Reply from blocked member {name} hidden.",
-  "clubhouse.peer_blocked_show_once": "Show once",
-  "clubhouse.peer_blocked_unblock_short": "Unblock",
-  "clubhouse.peer_blocked_dm_notice": "🚫 Direct messages are blocked between you and this member.",
-  "clubhouse.peer_blocked_dm_self": "Unblock this member to start or send a 1:1 Direct Message.",
-  "clubhouse.peer_blocked_voice_notice": "🚫 Voice calls are blocked between you and this member.",
-  "admin.quarantined_title": "🔒 Quarantined Waivers (Legal-Defense Hold)",
-  "admin.quarantined_desc": "Sealed waivers retained for 3 years after account erasure (all lookups are audit-logged and auto-purged after retention expires).",
-  "admin.quarantined_refresh": "🔄 Refresh",
-  "admin.quarantined_purge": "🧹 Purge Expired",
-  "admin.quarantined_col_cert": "Certificate ID",
-  "admin.quarantined_col_signer": "Signer",
-  "admin.quarantined_col_signed": "Signed",
-  "admin.quarantined_col_retention": "Retention Until",
-  "admin.quarantined_col_action": "Action",
-  "admin.quarantined_loading": "Loading quarantined waivers...",
-  "admin.quarantined_empty": "No quarantined waivers on legal hold.",
-  "admin.quarantined_inspect": "📄 Inspect",
-  "admin.quarantined_load_failed": "Failed to load quarantined waivers.",
-  "admin.quarantined_purged": "✓ Purged {count} expired quarantined waiver(s).",
-  "admin.quarantined_purge_failed": "Failed to purge expired quarantined waivers.",
-  "admin.remove_user_title": "Remove Member Account",
-  "admin.remove_user_confirm": "Permanently remove member account {email}? Profile, future RSVPs, and media will be erased, past records anonymized, and any signed liability waiver will be held in 3-year legal-defense quarantine.",
-  "admin.remove_user_ban_checkbox": "Also permanently BAN {email} from re-registering or signing in again",
-  "admin.remove_user_confirm_btn": "Remove Member",
-  "admin.removing_user": "Removing {email}...",
-  "admin.remove_user_failed": "Failed to remove member account.",
-  "profile.saving_btn": "Saving...",
-  "profile.updated_success": "Profile and privacy settings updated successfully!",
-  "profile.update_failed": "Error updating profile.",
-  "profile.erasure_sending_code": "Sending code...",
-  "profile.erasure_send_failed": "Failed to send verification code.",
-  "profile.erasure_enter_code": "Please enter the 6-digit verification code sent to your email.",
-  "profile.erasure_deleting_btn": "Deleting...",
-  "profile.erasure_deleted_fallback": "Your account has been deleted.",
-  "profile.erasure_delete_failed": "Failed to delete account. Please try again.",
-  "visitor_erasure.sending": "Sending...",
-  "visitor_erasure.sent_fallback": "If records matching that email address exist, a 6-digit erasure verification code has been sent. It expires in 10 minutes.",
-  "visitor_erasure.network_error": "Error contacting server. Please try again.",
-  "visitor_erasure.erasing": "Erasing...",
-  "visitor_erasure.erased_fallback": "Your personal data and RSVPs have been erased.",
-  "visitor_erasure.erasure_failed": "Failed to complete erasure. Please try again.",
-  "clubhouse.verify_key_btn": "🛡️ Verify Key",
-  "clubhouse.verify_key_changed_btn": "⚠️ Key Changed!",
-  "clubhouse.verify_key_verified_btn": "✓ Key Verified",
-  "clubhouse.verify_modal_title": "🛡️ Verify E2EE Security Keys",
-  "clubhouse.verify_modal_desc": "Compare these numbers in person or on a trusted call to verify there is no active man-in-the-middle key swap.",
-  "clubhouse.verify_warning_title": "⚠️ Security Key Changed!",
-  "clubhouse.verify_warning_desc": "One or more participants' ECDH public keys differ from what you previously saw. Re-verify before sending sensitive messages.",
-  "clubhouse.verify_safety_number_label": "Shared 60-Digit Safety Number",
-  "clubhouse.verify_copy_btn": "📋 Copy",
-  "clubhouse.verify_done_btn": "Done",
-  "clubhouse.verify_computing": "Computing cryptographic fingerprints...",
-  "clubhouse.verify_unsupported": "Key verification is available on E2EE DMs and Private Boards.",
-  "clubhouse.verify_your_fp": "Your Key Fingerprint",
-  "clubhouse.verify_not_enrolled": "Not enrolled on this browser yet",
-  "clubhouse.verify_reverify_btn": "⚠️ Re-Verify New Key",
-  "clubhouse.verify_verified_badge": "✓ Verified",
-  "clubhouse.verify_mark_btn": "✓ Mark Verified",
-  "clubhouse.verify_no_vault": "⏳ No E2EE Vault",
-  "clubhouse.verify_waiting_member": "Waiting for member to enroll key vault",
-  "clubhouse.verify_last_rotated": "Last rotated: {date}",
-  "clubhouse.verify_pinned_success": "✓ Key fingerprint pinned & marked verified on this device.",
-  "clubhouse.verify_error": "Error: {message}",
-  "clubhouse.verify_load_failed": "Failed to load key info: {message}",
-  "clubhouse.verify_own_fp": "Your ECDH Identity Key Fingerprint: {fp}",
-  "clubhouse.audit_notice_title": "Server Security Audit Notice",
-  "clubhouse.audit_sender_name": "Clubhouse Security Audit",
-  "clubhouse.audit_verified_badge": "🔐 Server Verified"
-};
+(function () {
+  'use strict';
 
-const KNOWN_PHRASE_KEYS = {
-  "Sunday Pickup Baseball": "phrase.sunday_pickup",
-  "Sunday Pickup Baseball - Noon Game": "phrase.sunday_pickup_noon",
-  "Weekly community pickup baseball game. All skill levels welcome! Bring your glove and enthusiasm. Please check off any gear you can share or duties you can take.": "phrase.default_desc_1",
-  "Weekly community pickup baseball game. All skill levels welcome! Bring your glove and enthusiasm. Please check off any gear you can share or tasks you can take.": "phrase.default_desc_1",
-  "Accessible, friendly community pickup baseball. Free for everyone!": "phrase.default_desc_2",
-  "No special announcements for this pickup game. Bring your glove and enthusiasm!": "phrase.default_desc_3",
-  "Bases": "phrase.duty_bases",
-  "Bring 3 throw-down bases.": "phrase.duty_bases_desc",
-  "Pitching machine and power": "phrase.duty_machine",
-  "Bring a pitching machine and a way to run it on the field.": "phrase.duty_machine_desc",
-  "Game Baseballs": "phrase.duty_balls",
-  "Bring game balls bucket.": "phrase.duty_balls_desc",
-  "Field Dragging": "phrase.duty_drag",
-  "Arrive 20 mins early to drag the infield with the pull rake.": "phrase.duty_drag_desc",
-  "Game Facilitator": "phrase.duty_facilitator",
-  "Help coordinate teams, batting order, and fair play throughout the game.": "phrase.duty_facilitator_desc",
-  "Water / Food": "phrase.duty_water_food",
-  "Bring drinking water, ice, and dugout snacks or fruit for players.": "phrase.duty_water_food_desc"
-};
+  var root = typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this);
+  if (!root) return;
 
-const API = {
-  // Installed Client Application Version
-  CLIENT_VERSION: '152',
+  var API = root.API = root.API || {};
+  if (typeof globalThis !== 'undefined') {
+    /** @type {any} */ (globalThis).API = API;
+  }
+
+  // Installed Client Application Version: '152' (stamped by scripts/bump-version.js)
+  API.CLIENT_VERSION = '152';
 
   // Current user cache
-  currentUser: null,
+  API.currentUser = null;
 
   // Zero-PII client diagnostic ring buffer (bounded to 25 entries, cleared on logout)
-  MAX_DIAGNOSTIC_ENTRIES: 25,
-  DIAGNOSTIC_STORAGE_KEY: 'pbf_diagnostic_log',
-  _diagnosticBuffer: null,
+  API.MAX_DIAGNOSTIC_ENTRIES = 25;
+  API.DIAGNOSTIC_STORAGE_KEY = 'pbf_diagnostic_log';
+  API._diagnosticBuffer = null;
 
-  // Top 15 languages spoken in California
-  SUPPORTED_LANGUAGES: [
-    { code: 'en', label: 'English', short: 'EN', locale: 'en-US', rtl: false },
-    { code: 'es', label: 'Español', short: 'ES', locale: 'es-US', rtl: false },
-    { code: 'zh', label: '中文', short: '中', locale: 'zh-CN', rtl: false },
-    { code: 'tl', label: 'Tagalog', short: 'TL', locale: 'fil-PH', rtl: false },
-    { code: 'vi', label: 'Tiếng Việt', short: 'VI', locale: 'vi-VN', rtl: false },
-    { code: 'ko', label: '한국어', short: '한', locale: 'ko-KR', rtl: false },
-    { code: 'fa', label: 'فارسی', short: 'فا', locale: 'fa-IR', rtl: true },
-    { code: 'hy', label: 'Հայերեն', short: 'Հայ', locale: 'hy-AM', rtl: false },
-    { code: 'ar', label: 'العربية', short: 'عرب', locale: 'ar', rtl: true },
-    { code: 'ru', label: 'Русский', short: 'РУ', locale: 'ru-RU', rtl: false },
-    { code: 'hi', label: 'हिन्दी', short: 'हि', locale: 'hi-IN', rtl: false },
-    { code: 'pa', label: 'ਪੰਜਾਬੀ', short: 'ਪੰ', locale: 'pa-IN', rtl: false },
-    { code: 'ja', label: '日本語', short: '日', locale: 'ja-JP', rtl: false },
-    { code: 'fr', label: 'Français', short: 'FR', locale: 'fr-FR', rtl: false },
-    { code: 'pt', label: 'Português', short: 'PT', locale: 'pt-BR', rtl: false }
-  ],
-
-  i18nCache: { en: EN_DICT },
-
-  getLang() {
-    try {
-      const saved = localStorage.getItem('pickup_lang');
-      if (saved && this.SUPPORTED_LANGUAGES.some(l => l.code === saved)) {
-        return saved;
-      }
-    } catch (e) { /* localStorage unavailable */ }
-    if (typeof navigator !== 'undefined' && navigator.language) {
-      const base = navigator.language.split('-')[0].toLowerCase();
-      const normalized = base === 'fil' ? 'tl' : base;
-      if (this.SUPPORTED_LANGUAGES.some(l => l.code === normalized)) {
-        return normalized;
-      }
-    }
-    return 'en';
-  },
-
-  getLangMeta(code) {
-    const langCode = code || this.getLang();
-    return this.SUPPORTED_LANGUAGES.find(l => l.code === langCode) || this.SUPPORTED_LANGUAGES[0];
-  },
-
-  t(key, fallbackOrVars = {}, maybeVars = {}) {
-    let fallback = null;
-    let vars = {};
-
-    if (typeof fallbackOrVars === 'string') {
-      fallback = fallbackOrVars;
-      vars = (maybeVars && typeof maybeVars === 'object') ? maybeVars : {};
-    } else if (fallbackOrVars && typeof fallbackOrVars === 'object') {
-      vars = fallbackOrVars;
-    }
-
-    const lang = this.getLang();
-    const dict = this.i18nCache[lang] || EN_DICT;
-    let str = (dict && dict[key] !== undefined)
-      ? dict[key]
-      : (EN_DICT[key] !== undefined
-          ? EN_DICT[key]
-          : (fallback !== null ? fallback : key));
-
-    if (vars && typeof vars === 'object') {
-      for (const [k, v] of Object.entries(vars)) {
-        str = str.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v));
-      }
-    }
-    return str;
-  },
-
-  translatePhrase(text) {
-    if (!text) return '';
-    const trimmed = String(text).trim();
-    const key = KNOWN_PHRASE_KEYS[trimmed];
-    if (key) return this.t(key);
-    return String(text);
-  },
-
-  translateEventTitle(ev) {
-    if (!ev || !ev.title) return '';
-    const raw = String(ev.title).trim();
-    if (KNOWN_PHRASE_KEYS[raw]) {
-      return this.t(KNOWN_PHRASE_KEYS[raw]);
-    }
-    if (/^Sunday Pickup Baseball\s*\(.+\)$/i.test(raw)) {
-      if (this.getLang() === 'en') return raw;
-      return `${this.t('phrase.sunday_pickup')} (${this.formatDate(ev.event_date)})`;
-    }
-    return raw;
-  },
-
-  async loadLangDict(lang) {
-    if (lang === 'en') return EN_DICT;
-    if (this.i18nCache[lang]) return this.i18nCache[lang];
-    const cacheKey = 'pickup_i18n_v' + this.CLIENT_VERSION + '_' + lang;
-    try {
-      const cachedRaw = localStorage.getItem(cacheKey);
-      if (cachedRaw) {
-        this.i18nCache[lang] = JSON.parse(cachedRaw);
-        return this.i18nCache[lang];
-      }
-    } catch (e) { /* ignore invalid/unavailable i18n cache */ }
-    try {
-      const res = await fetch('/i18n/' + encodeURIComponent(lang) + '.json?v=' + this.CLIENT_VERSION);
-      if (res.ok) {
-        const data = await res.json();
-        this.i18nCache[lang] = data;
-        try {
-          localStorage.setItem(cacheKey, JSON.stringify(data));
-        } catch (e) { /* storage quota / private mode */ }
-        return data;
-      }
-    } catch (err) {
-      console.warn('Could not load language dictionary:', lang, err);
-    }
-    return EN_DICT;
-  },
-
-  async setLang(lang) {
-    if (!this.SUPPORTED_LANGUAGES.some(l => l.code === lang)) return;
-    try {
-      localStorage.setItem('pickup_lang', lang);
-    } catch (e) { /* localStorage unavailable */ }
-    await this.loadLangDict(lang);
-    this.applyTranslations();
-    this.renderNav(this.currentUser);
-    window.dispatchEvent(new CustomEvent('pickup:langchange', { detail: { lang } }));
-  },
-
-  applyTranslations(root = document) {
-    const lang = this.getLang();
-    const meta = this.getLangMeta(lang);
-    document.documentElement.lang = lang;
-    document.documentElement.dir = meta.rtl ? 'rtl' : 'ltr';
-    document.documentElement.style.setProperty('--privacy-more', JSON.stringify(String(this.t('privacy.read_details') || '')));
-    document.documentElement.style.setProperty('--privacy-hide', JSON.stringify(String(this.t('privacy.hide') || '')));
-
-    root.querySelectorAll('[data-i18n]').forEach(el => {
-      const key = el.getAttribute('data-i18n');
-      if (key) el.textContent = this.t(key);
-    });
-
-    root.querySelectorAll('[data-i18n-html]').forEach(el => {
-      const key = el.getAttribute('data-i18n-html');
-      if (key) el.innerHTML = this.t(key);
-    });
-
-    root.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
-      const key = el.getAttribute('data-i18n-placeholder');
-      if (key) el.setAttribute('placeholder', this.t(key));
-    });
-
-    const langSelect = document.getElementById('lang-select');
-    if (langSelect && langSelect.value !== lang) {
-      langSelect.value = lang;
-    }
-  },
-
-  async initI18n() {
-    const lang = this.getLang();
-    if (lang !== 'en') {
-      await this.loadLangDict(lang);
-    }
-    this.applyTranslations();
-    if (lang !== 'en') {
-      window.dispatchEvent(new CustomEvent('pickup:langchange', { detail: { lang } }));
-    }
-  },
-
-  COLOR_THEMES: [
-    { id: 'bay-area', name: 'Bay Area Heritage', market: "SF Giants & Oakland A's", primaryColor: '#FD5A1E', secondaryColor: '#003831' },
-    { id: 'seattle-mariners', name: 'Seattle Mariners', market: 'Northwest Green & Navy', primaryColor: '#005C5C', secondaryColor: '#0C2340' },
-    { id: 'white-sox', name: 'Chicago White Sox', market: 'South Side Black & Silver', primaryColor: '#27251F', secondaryColor: '#94a3b8' },
-    { id: 'milwaukee-brewers', name: 'Milwaukee Brewers', market: 'Glove Navy & Harvest Gold', primaryColor: '#B6891A', secondaryColor: '#12284C' },
-    { id: 'dodger-blue', name: 'Dodger Blue & Silver', market: 'Los Angeles Dodgers', primaryColor: '#005A9C', secondaryColor: '#0B2341' },
-    { id: 'pinstripe-navy', name: 'Pinstripe Navy & Silver', market: 'New York Yankees', primaryColor: '#1E3A5F', secondaryColor: '#0C2340' },
-    { id: 'fenway-red', name: 'Fenway Crimson & Navy', market: 'Boston Red Sox', primaryColor: '#C8102E', secondaryColor: '#0C2340' },
-    { id: 'wrigley-royal', name: 'Wrigley Royal & Red', market: 'Chicago Cubs', primaryColor: '#0E3386', secondaryColor: '#CC3433' },
-    { id: 'camden-orange', name: 'Camden Orange & Black', market: 'Baltimore Orioles', primaryColor: '#DF4601', secondaryColor: '#212322' },
-    { id: 'friar-gold', name: 'Friar Brown & Sungold', market: 'San Diego Padres', primaryColor: '#C48200', secondaryColor: '#2F241D' },
-    { id: 'sedona-red', name: 'Sedona Red & Desert Teal', market: 'Arizona Diamondbacks', primaryColor: '#A71930', secondaryColor: '#26696D' },
-    { id: 'powder-blue', name: 'Powder Blue & Royal', market: 'Classic 1980s Retro', primaryColor: '#0284c7', secondaryColor: '#004687' }
-  ],
-
-  getThemeMode() {
-    try {
-      const saved = localStorage.getItem('pickup_theme_mode');
-      if (saved === 'light' || saved === 'dark' || saved === 'system') return saved;
-      const legacy = localStorage.getItem('pickup_theme');
-      if (legacy === 'light' || legacy === 'dark') return legacy;
-    } catch (e) { /* localStorage unavailable */ }
-    return 'system';
-  },
-
-  getEffectiveTheme() {
-    const mode = this.getThemeMode();
-    if (mode === 'dark') return 'dark';
-    if (mode === 'light') return 'light';
-    if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      return 'dark';
-    }
-    return 'light';
-  },
-
-  getTheme() {
-    return this.getEffectiveTheme();
-  },
-
-  getColorTheme() {
-    try {
-      const saved = localStorage.getItem('pickup_color_theme');
-      if (saved && this.COLOR_THEMES.some(t => t.id === saved)) {
-        return saved;
-      }
-    } catch (e) { /* localStorage unavailable */ }
-    return 'bay-area';
-  },
-
-  updateThemeColorMeta() {
-    if (typeof document === 'undefined') return;
-    const isDark = this.getEffectiveTheme() === 'dark';
-    let bg = '#ffffff';
-    if (isDark) {
-      try {
-        const computed = getComputedStyle(document.documentElement).getPropertyValue('--bg-card').trim();
-        bg = computed || '#11221e';
-      } catch (e) {
-        bg = '#11221e';
-      }
-    } else {
-      try {
-        const computed = getComputedStyle(document.documentElement).getPropertyValue('--bg-card').trim();
-        bg = computed || '#ffffff';
-      } catch (e) {
-        bg = '#ffffff';
-      }
-    }
-    const metaTags = document.querySelectorAll('meta[name="theme-color"]');
-    if (metaTags.length > 0) {
-      metaTags.forEach(m => m.setAttribute('content', bg));
-    } else {
-      const meta = document.createElement('meta');
-      meta.name = 'theme-color';
-      meta.content = bg;
-      document.head.appendChild(meta);
-    }
-  },
-
-  applyColorTheme(colorThemeId) {
-    const valid = this.COLOR_THEMES.some(t => t.id === colorThemeId) ? colorThemeId : 'bay-area';
-    if (valid === 'bay-area') {
-      document.documentElement.removeAttribute('data-color-theme');
-    } else {
-      document.documentElement.setAttribute('data-color-theme', valid);
-    }
-    this.updateThemeColorMeta();
-  },
-
-  setColorTheme(themeId) {
-    if (!this.COLOR_THEMES.some(t => t.id === themeId)) return;
-    try {
-      localStorage.setItem('pickup_color_theme', themeId);
-    } catch (e) { /* localStorage unavailable */ }
-    this.applyColorTheme(themeId);
-    this.updateFooterThemeUi();
-    this.updateThemePickersUi();
-    this._dispatchThemeChange();
-  },
-
-  applyTheme(theme) {
-    if (theme === 'dark') {
-      document.documentElement.setAttribute('data-theme', 'dark');
-    } else {
-      document.documentElement.removeAttribute('data-theme');
-    }
-    this.updateThemeColorMeta();
-  },
-
-  setThemeMode(mode) {
-    if (mode !== 'light' && mode !== 'dark' && mode !== 'system') return;
-    try {
-      localStorage.setItem('pickup_theme_mode', mode);
-      localStorage.setItem('pickup_theme', this.getEffectiveTheme());
-    } catch (e) { /* localStorage unavailable */ }
-    this.applyTheme(this.getEffectiveTheme());
-    this.updateFooterThemeUi();
-    this.updateThemePickersUi();
-    this._dispatchThemeChange();
-  },
-
-  _dispatchThemeChange() {
-    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof CustomEvent === 'function') {
-      window.dispatchEvent(new CustomEvent('pickup:themechange', {
-        detail: {
-          mode: this.getThemeMode(),
-          effectiveTheme: this.getEffectiveTheme(),
-          colorTheme: this.getColorTheme()
-        }
-      }));
-    }
-  },
-
-  toggleTheme() {
-    const current = this.getEffectiveTheme();
-    const next = current === 'dark' ? 'light' : 'dark';
-    this.setThemeMode(next);
-  },
-
-  initTheme() {
-    // 1. Immediately apply color theme and light/dark theme attributes
-    this.applyColorTheme(this.getColorTheme());
-    this.applyTheme(this.getEffectiveTheme());
-    this.updateThemeColorMeta();
-
-    // 2. Listen to system preference & cross-tab storage changes
-    if (typeof window !== 'undefined' && window.matchMedia) {
-      try {
-        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-          if (this.getThemeMode() === 'system') {
-            this.applyTheme(this.getEffectiveTheme());
-            this.updateFooterThemeUi();
-            this.updateThemePickersUi();
-            this._dispatchThemeChange();
-          }
-        });
-      } catch (e) { /* Safari <14 without matchMedia.addEventListener */ }
-    }
-    if (typeof window !== 'undefined' && !this._themeStorageBound) {
-      this._themeStorageBound = true;
-      window.addEventListener('storage', (ev) => {
-        if (!ev) return;
-        if (ev.key === 'pickup_theme_mode' || ev.key === 'pickup_theme' || ev.key === 'pickup_color_theme') {
-          this.applyColorTheme(this.getColorTheme());
-          this.applyTheme(this.getEffectiveTheme());
-          this.updateFooterThemeUi();
-          this.updateThemePickersUi();
-          this._dispatchThemeChange();
-        }
-      });
-    }
-
-    // 3. Mount footer theme picker when DOM is interactive
-    const mount = () => {
-      this.renderFooter();
-    };
-    if (typeof document !== 'undefined') {
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', mount);
-      } else {
-        mount();
-      }
-    }
-  },
-
-  updateThemePickersUi(rootEl) {
-    if (typeof document === 'undefined') return;
-    const currentMode = this.getThemeMode();
-    const currentColor = this.getColorTheme();
-    const scope = rootEl || document;
-
-    scope.querySelectorAll('.theme-mode-tab').forEach(tab => {
-      tab.classList.toggle('active', tab.dataset.mode === currentMode);
-    });
-
-    scope.querySelectorAll('.theme-palette-card').forEach(card => {
-      const isSelected = card.dataset.colorTheme === currentColor;
-      card.classList.toggle('selected', isSelected);
-      const check = card.querySelector('.palette-check');
-      if (check) check.textContent = isSelected ? '✓' : '';
-    });
-  },
-
-  populateThemePicker(containerEl) {
-    if (!containerEl) return;
-    const currentMode = this.getThemeMode();
-    const currentColor = this.getColorTheme();
-
-    containerEl.innerHTML = `
-      <div class="theme-mode-tabs" role="tablist">
-        <button type="button" class="theme-mode-tab ${currentMode === 'light' ? 'active' : ''}" data-mode="light">☀️ Light</button>
-        <button type="button" class="theme-mode-tab ${currentMode === 'dark' ? 'active' : ''}" data-mode="dark">🌙 Dark</button>
-        <button type="button" class="theme-mode-tab ${currentMode === 'system' ? 'active' : ''}" data-mode="system">💻 System</button>
-      </div>
-
-      <div class="theme-palette-heading" style="text-align: start; margin-top: 10px;">Select Market Palette</div>
-      <div class="footer-theme-palette-grid">
-        ${this.COLOR_THEMES.map(th => `
-          <button type="button" class="theme-palette-card ${th.id === currentColor ? 'selected' : ''}" data-color-theme="${th.id}">
-            <span class="palette-swatches">
-              <span class="swatch-preview" style="background: ${th.primaryColor};"></span>
-              <span class="swatch-preview" style="background: ${th.secondaryColor};"></span>
-            </span>
-            <span class="palette-info">
-              <span class="palette-name">${this.escapeHtml(th.name)}</span>
-              <span class="palette-sub">${this.escapeHtml(th.market)}</span>
-            </span>
-            <span class="palette-check">${th.id === currentColor ? '✓' : ''}</span>
-          </button>
-        `).join('')}
-      </div>
-    `;
-
-    containerEl.querySelectorAll('.theme-mode-tab').forEach(tab => {
-      tab.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this.setThemeMode(tab.dataset.mode);
-      });
-    });
-
-    containerEl.querySelectorAll('.theme-palette-card').forEach(card => {
-      card.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this.setColorTheme(card.dataset.colorTheme);
-      });
-    });
-
-    this.updateThemePickersUi(containerEl);
-  },
-
-  updateFooterThemeUi() {
-    const currentMode = this.getThemeMode();
-    const currentColor = this.getColorTheme();
-    const effectiveTheme = this.getEffectiveTheme();
-    const activeThemeObj = this.COLOR_THEMES.find(t => t.id === currentColor) || this.COLOR_THEMES[0];
-
-    const trigger = document.getElementById('footer-theme-trigger');
-    if (trigger) {
-      trigger.innerHTML = `
-        <span style="display: inline-flex; align-items: center; gap: 4px; vertical-align: middle;">
-          <span style="width: 11px; height: 11px; border-radius: 50%; background: ${activeThemeObj.primaryColor}; display: inline-block; border: 1.5px solid rgba(255,255,255,0.6);"></span>
-          <span style="width: 11px; height: 11px; border-radius: 50%; background: ${activeThemeObj.secondaryColor}; display: inline-block; border: 1.5px solid rgba(255,255,255,0.6); margin-left: -5px; margin-inline-start: -5px;"></span>
-        </span>
-        <span>🎨 Theme &amp; Colors: <strong>${this.escapeHtml(activeThemeObj.name)}</strong> (${effectiveTheme === 'dark' ? 'Dark' : 'Light'})</span>
-      `;
-    }
-
-    // Update mode tabs in panel
-    document.querySelectorAll('#footer-theme-panel .theme-mode-tab').forEach(tab => {
-      tab.classList.toggle('active', tab.dataset.mode === currentMode);
-    });
-
-    // Update palette cards in panel
-    document.querySelectorAll('#footer-theme-panel .theme-palette-card').forEach(card => {
-      const isSelected = card.dataset.colorTheme === currentColor;
-      card.classList.toggle('selected', isSelected);
-      const check = card.querySelector('.palette-check');
-      if (check) check.textContent = isSelected ? '✓' : '';
-    });
-  },
-
-
-  renderFooter() {
-    if (typeof document === 'undefined') return;
-    const footer = document.getElementById('site-footer') || document.querySelector('footer.site-footer');
-    if (!footer) return;
-
-    const currentLang = this.getLang();
-    const langOptionsHtml = this.SUPPORTED_LANGUAGES.map(l =>
-      `<option value="${l.code}" ${l.code === currentLang ? 'selected' : ''} title="${this.escapeHtml(l.label)}">🌐 ${l.short} — ${this.escapeHtml(l.label)}</option>`
-    ).join('');
-    const langSelectHtml = `<select id="lang-select" class="lang-select footer-lang-select" aria-label="Language" title="Language / Idioma / 语言">${langOptionsHtml}</select>`;
-
-    if (!footer.querySelector('.footer-controls')) {
-      footer.innerHTML = `
-        <div class="container">
-          <p><img src="/logo.svg" alt="" class="footer-logo"> <strong>Pickup Baseball Foundation</strong> — <span data-i18n="footer.tagline">${this.escapeHtml(this.t('footer.tagline', "Building community through America's pastime."))}</span></p>
-          <div class="footer-controls">
-            <div class="footer-theme-wrapper" style="display: flex; justify-content: center; align-items: center; gap: 10px; flex-wrap: wrap;">
-              <button type="button" id="footer-theme-trigger" class="footer-theme-btn" aria-label="Change Appearance Theme">🎨 Theme &amp; Colors</button>
-              ${langSelectHtml}
-            </div>
-            <div id="footer-theme-panel-slot"></div>
-            <div id="footer-update-wrapper" class="footer-update-wrapper">
-              <button type="button" id="footer-update-btn" class="footer-update-btn" aria-label="Update app to latest version">
-                <span class="update-icon">🔄</span> <span class="update-label" data-i18n="footer.update_app">${this.escapeHtml(this.t('footer.update_app', 'Update App'))}</span>
-              </button>
-            </div>
-            <div id="footer-update-status" class="footer-update-status" style="display: none;" role="status" aria-live="polite"></div>
-          </div>
-          <div class="footer-security-badges" aria-label="Independent Security Verifications">
-            <a href="https://www.ssllabs.com/ssltest/analyze.html?d=pickupbaseballfoundation.org" target="_blank" rel="noopener noreferrer" class="footer-security-badge" title="Qualys SSL Labs TLS report for pickupbaseballfoundation.org: Grade A+">
-              <span>🔒 SSL Labs</span><span class="footer-security-grade">A+</span>
-            </a>
-            <a href="https://developer.mozilla.org/en-US/observatory/analyze?host=pickupbaseballfoundation.org" target="_blank" rel="noopener noreferrer" class="footer-security-badge" title="Mozilla HTTP Observatory scorecard for pickupbaseballfoundation.org: Grade A+ (Score 105)">
-              <span>🛡️ HTTP Observatory</span><span class="footer-security-grade">A+</span>
-            </a>
-            <a href="https://securityheaders.com/?q=https%3A%2F%2Fpickupbaseballfoundation.org&followRedirects=on" target="_blank" rel="noopener noreferrer" class="footer-security-badge" title="SecurityHeaders.com scan for pickupbaseballfoundation.org: Grade A+ (6/6 headers green)">
-              <span>📋 Security Headers</span><span class="footer-security-grade">A+</span>
-            </a>
-            <a href="https://github.com/djrow/pickup-baseball/security" target="_blank" rel="noopener noreferrer" class="footer-security-badge" title="GitHub Security Overview: SECURITY.md policy enabled, private reporting enabled, 0 published advisories">
-              <span>✅ CodeQL &amp; Policy</span><span class="footer-security-grade">0 Advisories</span>
-            </a>
-            <a href="/.well-known/security.txt" target="_blank" rel="noopener noreferrer" class="footer-security-badge" title="RFC 9116 vulnerability disclosure policy (valid through 2027-11-01)">
-              <span>security.txt</span><span class="footer-security-grade">Valid</span>
-            </a>
-          </div>
-          <p style="margin-top: 12px; font-size: 0.8rem; color: #94a3b8; line-height: 1.5;">
-            <span data-i18n="footer.about_site">${this.escapeHtml(this.t('footer.about_site', 'Prototyped with Google Gemini in October 2026 for simplicity and durability. Free & open-source'))}</span> on <a href="https://github.com/djrow/pickup-baseball" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">GitHub</a> • <a href="/about.html" data-i18n="nav.about" style="color: inherit; text-decoration: underline;">About Us</a> • <a href="/waiver.html" style="color: inherit; text-decoration: underline;">Player Waiver</a> • <a href="/login.html#erase-data" data-i18n="footer.erase_data" style="color: inherit; text-decoration: underline;">${this.escapeHtml(this.t('footer.erase_data', 'Erase My Data'))}</a>.
-          </p>
-          <p style="margin-top: 6px; font-size: 0.75rem; color: #64748b; line-height: 1.4;">
-            <a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;" data-i18n="footer.copyright">${this.escapeHtml(this.t('footer.copyright', '© 2026 Pickup Baseball Foundation. Licensed under Apache License 2.0.'))}</a> • <span id="footer-app-version" class="footer-app-version" title="Loaded web app version">v${this.escapeHtml(this.CLIENT_VERSION)}</span>
-          </p>
-        </div>
-      `;
-    } else if (!footer.querySelector('#lang-select')) {
-      const themeWrapper = footer.querySelector('.footer-theme-wrapper');
-      if (themeWrapper) {
-        themeWrapper.style.display = 'flex';
-        themeWrapper.style.justifyContent = 'center';
-        themeWrapper.style.alignItems = 'center';
-        themeWrapper.style.gap = '10px';
-        themeWrapper.style.flexWrap = 'wrap';
-        themeWrapper.insertAdjacentHTML('beforeend', langSelectHtml);
-      }
-    }
-
-    const langSelect = document.getElementById('lang-select');
-    if (langSelect && !langSelect.dataset.bound) {
-      langSelect.dataset.bound = '1';
-      langSelect.addEventListener('change', (e) => API.setLang(e.target.value));
-    }
-
-    this.initFooterThemePicker();
-    this.initAppUpdater();
-  },
-
-  initFooterThemePicker() {
-    if (typeof document === 'undefined') return;
-    const trigger = document.getElementById('footer-theme-trigger');
-    if (!trigger) return;
-
-    let panel = document.getElementById('footer-theme-panel');
-    if (!panel) {
-      panel = document.createElement('div');
-      panel.id = 'footer-theme-panel';
-      panel.className = 'footer-theme-panel';
-      panel.setAttribute('aria-hidden', 'true');
-
-      panel.innerHTML = `
-        <div class="footer-theme-header">
-          <div class="footer-theme-title">
-            <span>⚾</span> <strong>Baseball Colors &amp; Mode</strong>
-          </div>
-          <button type="button" id="footer-theme-close-btn" class="footer-theme-close" aria-label="Close theme options">✕</button>
-        </div>
-        <div id="footer-theme-picker-body"></div>
-      `;
-
-      const slot = document.getElementById('footer-theme-panel-slot');
-      if (slot) {
-        slot.appendChild(panel);
-      } else if (trigger.parentElement) {
-        trigger.parentElement.insertAdjacentElement('afterend', panel);
-      }
-      const bodyMount = panel.querySelector('#footer-theme-picker-body');
-      this.populateThemePicker(bodyMount);
-    }
-
-    if (!trigger.dataset.bound) {
-      trigger.dataset.bound = '1';
-      trigger.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const isOpen = panel.classList.contains('open');
-        panel.classList.toggle('open', !isOpen);
-        panel.setAttribute('aria-hidden', String(isOpen));
-        trigger.setAttribute('aria-expanded', String(!isOpen));
-        if (!isOpen) {
-          panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }
-      });
-    }
-
-    const closeBtn = document.getElementById('footer-theme-close-btn');
-    if (closeBtn && !closeBtn.dataset.bound) {
-      closeBtn.dataset.bound = '1';
-      closeBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        panel.classList.remove('open');
-        panel.setAttribute('aria-hidden', 'true');
-        trigger.setAttribute('aria-expanded', 'false');
-      });
-    }
-
-    if (!this._footerThemeGlobalBound) {
-      this._footerThemeGlobalBound = true;
-      document.addEventListener('click', (e) => {
-        const activePanel = document.getElementById('footer-theme-panel');
-        const activeTrigger = document.getElementById('footer-theme-trigger');
-        if (activePanel && activePanel.classList.contains('open')) {
-          if (!activePanel.contains(e.target) && e.target !== activeTrigger && (!activeTrigger || !activeTrigger.contains(e.target))) {
-            activePanel.classList.remove('open');
-            activePanel.setAttribute('aria-hidden', 'true');
-            if (activeTrigger) activeTrigger.setAttribute('aria-expanded', 'false');
-          }
-        }
-      });
-
-      document.addEventListener('keydown', (e) => {
-        const activePanel = document.getElementById('footer-theme-panel');
-        const activeTrigger = document.getElementById('footer-theme-trigger');
-        if (e.key === 'Escape' && activePanel && activePanel.classList.contains('open')) {
-          activePanel.classList.remove('open');
-          activePanel.setAttribute('aria-hidden', 'true');
-          if (activeTrigger) activeTrigger.setAttribute('aria-expanded', 'false');
-        }
-      });
-    }
-
-    this.updateFooterThemeUi();
-  },
-
-
-  checkResponseVersion(res) {
+  API.checkResponseVersion = function (res) {
     if (!res || !res.headers) return;
     try {
-      const serverVersion = res.headers.get('x-app-version');
+      var serverVersion = res.headers.get('x-app-version');
       if (serverVersion && serverVersion !== this.CLIENT_VERSION) {
         this.setUpdateAvailableUi(null, null, serverVersion);
       }
     } catch (e) { /* ignore opaque/missing response headers */ }
-  },
+  };
 
-  async checkForUpdates() {
-    try {
-      const res = await fetch('/api/version?t=' + Date.now());
-      if (res.ok) {
-        this.checkResponseVersion(res);
-        const data = await res.json();
-        if (data && data.version && data.version !== this.CLIENT_VERSION) {
-          this.setUpdateAvailableUi(null, null, data.version);
-          return true;
+  API.checkForUpdates = function () {
+    var self = this;
+    return fetch('/api/version?t=' + Date.now())
+      .then(function (res) {
+        if (res.ok) {
+          self.checkResponseVersion(res);
+          return res.json().then(function (data) {
+            if (data && data.version && data.version !== self.CLIENT_VERSION) {
+              self.setUpdateAvailableUi(null, null, data.version);
+              return true;
+            }
+            return false;
+          });
         }
-      }
-    } catch (e) {
-      this.recordDiagnostic({ route: '/api/version', method: 'GET', status: 0, code: 'VERSION_CHECK_FAILED' });
-    }
-    return false;
-  },
+        return false;
+      })
+      .catch(function () {
+        self.recordDiagnostic({ route: '/api/version', method: 'GET', status: 0, code: 'VERSION_CHECK_FAILED' });
+        return false;
+      });
+  };
 
-  initAppUpdater() {
+  API.initAppUpdater = function () {
     if (typeof document === 'undefined') return;
-    const updateBtn = document.getElementById('footer-update-btn');
-    const statusEl = document.getElementById('footer-update-status');
+    var updateBtn = /** @type {HTMLButtonElement|null} */ (document.getElementById('footer-update-btn'));
+    var statusEl = document.getElementById('footer-update-status');
     if (!updateBtn || updateBtn.dataset.bound) return;
     updateBtn.dataset.bound = '1';
 
-    let waitingWorker = null;
+    var waitingWorker = null;
+    var self = this;
 
     // 1. Service Worker updatefound & waiting lifecycle detection
     if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
-      navigator.serviceWorker.getRegistration().then((reg) => {
+      navigator.serviceWorker.getRegistration().then(function (reg) {
         if (!reg) return;
 
         if (reg.waiting) {
           waitingWorker = reg.waiting;
-          this.setUpdateAvailableUi(updateBtn, statusEl);
+          self.setUpdateAvailableUi(updateBtn, statusEl);
         }
 
-        reg.addEventListener('updatefound', () => {
-          const installingWorker = reg.installing;
+        reg.addEventListener('updatefound', function () {
+          var installingWorker = reg.installing;
           if (installingWorker) {
-            installingWorker.addEventListener('statechange', () => {
+            installingWorker.addEventListener('statechange', function () {
               if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
                 waitingWorker = installingWorker;
-                this.setUpdateAvailableUi(updateBtn, statusEl);
+                self.setUpdateAvailableUi(updateBtn, statusEl);
               }
             });
           }
         });
-      }).catch((err) => {
+      }).catch(function (err) {
         console.warn('[PWA] Service worker lookup error:', err);
       });
 
-      let refreshing = false;
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
+      var refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', function () {
         if (!refreshing) {
           refreshing = true;
           window.location.reload();
@@ -1225,105 +113,124 @@ const API = {
     }
 
     // 2. Non-blocking heartbeat version check (throttled to max once per hour per client via localStorage)
-    setTimeout(() => {
+    setTimeout(function () {
       try {
-        const lastCheck = parseInt(localStorage.getItem('pb_version_last_check') || '0', 10);
+        var lastCheck = parseInt(localStorage.getItem('pb_version_last_check') || '0', 10);
         if (lastCheck && (Date.now() - lastCheck) < 3600000) {
           return;
         }
         localStorage.setItem('pb_version_last_check', String(Date.now()));
       } catch (e) { /* localStorage unavailable */ }
-      this.checkForUpdates();
+      self.checkForUpdates();
     }, 1500);
 
     // 3. User update action
-    updateBtn.addEventListener('click', async (e) => {
+    updateBtn.addEventListener('click', function (e) {
       e.preventDefault();
-      await this.triggerAppUpdate(updateBtn, statusEl, waitingWorker);
+      self.triggerAppUpdate(updateBtn, statusEl, waitingWorker);
     });
-  },
+  };
 
-  setUpdateAvailableUi(btn, statusEl, _newVersion) {
-    if (!btn) btn = document.getElementById('footer-update-btn');
-    if (!statusEl) statusEl = document.getElementById('footer-update-status');
-    const wrapper = document.getElementById('footer-update-wrapper') || (btn ? btn.closest('.footer-update-wrapper') : null);
+  API.setUpdateAvailableUi = function (btn, statusEl, _newVersion) {
+    var updateBtn = btn || /** @type {HTMLButtonElement|null} */ (document.getElementById('footer-update-btn'));
+    var updateStatus = statusEl || document.getElementById('footer-update-status');
+    var wrapper = document.getElementById('footer-update-wrapper') || (updateBtn ? updateBtn.closest('.footer-update-wrapper') : null);
     if (wrapper) {
       wrapper.classList.add('visible');
-      wrapper.style.display = 'flex';
+      /** @type {HTMLElement} */ (wrapper).style.display = 'flex';
     }
-    if (btn) {
-      btn.classList.add('update-available');
-      const label = btn.querySelector('.update-label');
+    if (updateBtn) {
+      updateBtn.classList.add('update-available');
+      var label = updateBtn.querySelector('.update-label');
       if (label) {
-        label.textContent = this.t('footer.update_available', 'Update Available — Click to Refresh');
+        label.textContent = (typeof this.t === 'function')
+          ? this.t('footer.update_available', 'Update Available — Click to Refresh')
+          : 'Update Available — Click to Refresh';
       }
     }
-    if (statusEl) {
-      statusEl.style.display = 'block';
-      statusEl.className = 'footer-update-status status-available';
-      statusEl.textContent = this.t('footer.update_available_desc', 'A new version of Sunday Pickup Baseball is ready.');
+    if (updateStatus) {
+      updateStatus.style.display = 'block';
+      updateStatus.className = 'footer-update-status status-available';
+      updateStatus.textContent = (typeof this.t === 'function')
+        ? this.t('footer.update_available_desc', 'A new version of Sunday Pickup Baseball is ready.')
+        : 'A new version of Sunday Pickup Baseball is ready.';
     }
-  },
+  };
 
-  async triggerAppUpdate(btn, statusEl, waitingWorker) {
+  API.triggerAppUpdate = function (btn, statusEl, waitingWorker) {
     if (btn) {
       btn.classList.add('updating');
       btn.disabled = true;
-      const label = btn.querySelector('.update-label');
+      var label = btn.querySelector('.update-label');
       if (label) {
-        label.textContent = this.t('footer.update_checking', 'Checking for updates...');
+        label.textContent = (typeof this.t === 'function')
+          ? this.t('footer.update_checking', 'Checking for updates...')
+          : 'Checking for updates...';
       }
     }
     if (statusEl) {
       statusEl.style.display = 'block';
       statusEl.className = 'footer-update-status status-checking';
-      statusEl.textContent = this.t('footer.update_checking', 'Checking for updates and clearing cache...');
+      statusEl.textContent = (typeof this.t === 'function')
+        ? this.t('footer.update_checking', 'Checking for updates and clearing cache...')
+        : 'Checking for updates and clearing cache...';
     }
 
+    var self = this;
     try {
       if (waitingWorker) {
         waitingWorker.postMessage({ type: 'SKIP_WAITING' });
       }
 
-      if ('serviceWorker' in navigator) {
-        const reg = await navigator.serviceWorker.getRegistration();
-        if (reg) {
-          if (reg.waiting) {
-            reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-          }
-          await reg.update().catch(() => {});
+      var swPromise = ('serviceWorker' in navigator)
+        ? navigator.serviceWorker.getRegistration().then(function (reg) {
+            if (reg) {
+              if (reg.waiting) {
+                reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+              }
+              return reg.update().catch(function () {});
+            }
+          })
+        : Promise.resolve();
+
+      var cachePromise = ('caches' in window)
+        ? caches.keys().then(function (cacheNames) {
+            return Promise.all(cacheNames.map(function (k) { return caches.delete(k); }));
+          })
+        : Promise.resolve();
+
+      return Promise.all([swPromise, cachePromise]).then(function () {
+        self.clearDataCaches(true);
+
+        if (statusEl) {
+          statusEl.className = 'footer-update-status status-ready';
+          statusEl.textContent = (typeof self.t === 'function')
+            ? self.t('footer.update_reloading', '✓ App updated! Reloading with latest version...')
+            : '✓ App updated! Reloading with latest version...';
         }
-      }
 
-      if ('caches' in window) {
-        const cacheNames = await caches.keys();
-        await Promise.all(cacheNames.map(k => caches.delete(k)));
-      }
-
-      this.clearDataCaches(true);
-
-      if (statusEl) {
-        statusEl.className = 'footer-update-status status-ready';
-        statusEl.textContent = this.t('footer.update_reloading', '✓ App updated! Reloading with latest version...');
-      }
-
-      setTimeout(() => {
-        const currentUrl = new URL(window.location.href);
-        currentUrl.searchParams.set('updated', String(Date.now()));
-        window.location.href = currentUrl.toString();
-      }, 450);
+        setTimeout(function () {
+          var currentUrl = new URL(window.location.href);
+          currentUrl.searchParams.set('updated', String(Date.now()));
+          window.location.href = currentUrl.toString();
+        }, 450);
+      }).catch(function (err) {
+        console.error('[Update Error]', err);
+        window.location.reload();
+      });
 
     } catch (err) {
       console.error('[Update Error]', err);
       window.location.reload();
+      return Promise.resolve();
     }
-  },
+  };
 
-  getCachedUser() {
+  API.getCachedUser = function () {
     try {
-      const raw = localStorage.getItem('pickup_cached_user');
+      var raw = localStorage.getItem('pickup_cached_user');
       if (!raw) return null;
-      const parsed = JSON.parse(raw);
+      var parsed = JSON.parse(raw);
       if (!parsed || typeof parsed !== 'object' || !parsed.id || typeof parsed.email !== 'string') {
         return null;
       }
@@ -1331,9 +238,9 @@ const API = {
     } catch (e) {
       return null;
     }
-  },
+  };
 
-  setCachedUser(user) {
+  API.setCachedUser = function (user) {
     try {
       if (user) {
         var sanitized = Object.assign({}, user);
@@ -1344,49 +251,53 @@ const API = {
         localStorage.removeItem('pickup_cached_user');
       }
     } catch (e) { /* localStorage unavailable */ }
-  },
+  };
 
-  clearClubhouseIndexedDb() {
+  API.clearClubhouseIndexedDb = function () {
     if (typeof BroadcastChannel !== 'undefined') {
       try {
-        const ch = new BroadcastChannel('pickup_clubhouse_clear');
+        var ch = new BroadcastChannel('pickup_clubhouse_clear');
         ch.postMessage({ type: 'clear' });
         ch.close();
       } catch (e) { /* BroadcastChannel unavailable */ }
     }
     if (typeof indexedDB === 'undefined') return Promise.resolve();
-    const deleteDb = (dbName) => new Promise((resolve) => {
-      let settled = false;
-      const done = () => {
-        if (settled) return;
-        settled = true;
-        resolve();
-      };
-      const timer = setTimeout(done, 400);
-      try {
-        const req = indexedDB.deleteDatabase(dbName);
-        req.onsuccess = () => { clearTimeout(timer); done(); };
-        req.onerror = () => { clearTimeout(timer); done(); };
-        req.onblocked = () => { clearTimeout(timer); done(); };
-      } catch (e) {
-        clearTimeout(timer);
-        done();
-      }
-    });
+    var deleteDb = function (dbName) {
+      return new Promise(function (resolve) {
+        var settled = false;
+        var done = function () {
+          if (settled) return;
+          settled = true;
+          resolve(undefined);
+        };
+        var timer = setTimeout(done, 400);
+        try {
+          var req = indexedDB.deleteDatabase(dbName);
+          req.onsuccess = function () { clearTimeout(timer); done(); };
+          req.onerror = function () { clearTimeout(timer); done(); };
+          req.onblocked = function () { clearTimeout(timer); done(); };
+        } catch (e) {
+          clearTimeout(timer);
+          done();
+        }
+      });
+    };
     return Promise.all([
       deleteDb('pickup_clubhouse_db'),
       deleteDb('pickup_clubhouse_crypto')
     ]);
-  },
+  };
 
-  clearDataCaches(skipIndexedDb) {
+  API.clearDataCaches = function (skipIndexedDb) {
     try {
       localStorage.removeItem('pickup_cached_user');
       localStorage.removeItem('pickup_ch_collapsed_cats');
       localStorage.removeItem('pbf_my_media_submissions');
-      const keysToRemove = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
+      localStorage.removeItem('pickup_remembered_email');
+      localStorage.removeItem('pickup_remembered_name');
+      var keysToRemove = [];
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
         if (
           k &&
           (k.startsWith('pickup_cached_event') ||
@@ -1397,34 +308,34 @@ const API = {
           keysToRemove.push(k);
         }
       }
-      keysToRemove.forEach(k => localStorage.removeItem(k));
+      keysToRemove.forEach(function (key) { localStorage.removeItem(key); });
     } catch (e) { /* localStorage unavailable */ }
     if (!skipIndexedDb) {
       this.clearClubhouseIndexedDb();
     }
     this.clearDiagnostics();
-  },
+  };
 
-  _sanitizeDiagnosticRoute(rawUrl) {
-    const fallback = (typeof window !== 'undefined' && window.location && window.location.pathname) ? window.location.pathname : '/';
+  API._sanitizeDiagnosticRoute = function (rawUrl) {
+    var fallback = (typeof window !== 'undefined' && window.location && window.location.pathname) ? window.location.pathname : '/';
     if (!rawUrl || typeof rawUrl !== 'string') return fallback;
-    let pathname = rawUrl.trim();
+    var pathname = rawUrl.trim();
     try {
-      const origin = (typeof window !== 'undefined' && window.location && window.location.origin) ? window.location.origin : 'https://www.pickupbaseballfoundation.org';
-      const parsed = new URL(pathname, origin);
+      var origin = (typeof window !== 'undefined' && window.location && window.location.origin) ? window.location.origin : 'https://www.pickupbaseballfoundation.org';
+      var parsed = new URL(pathname, origin);
       pathname = parsed.pathname || '/';
     } catch (e) {
-      const qIdx = pathname.indexOf('?');
+      var qIdx = pathname.indexOf('?');
       if (qIdx !== -1) pathname = pathname.slice(0, qIdx);
-      const hIdx = pathname.indexOf('#');
+      var hIdx = pathname.indexOf('#');
       if (hIdx !== -1) pathname = pathname.slice(0, hIdx);
     }
     pathname = pathname.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '[REDACTED]');
     return pathname.slice(0, 160) || '/';
-  },
+  };
 
-  _statusToErrorCode(status) {
-    const s = Number(status) || 0;
+  API._statusToErrorCode = function (status) {
+    var s = Number(status) || 0;
     if (s === 401) return 'AUTH_REQUIRED';
     if (s === 403) return 'FORBIDDEN';
     if (s === 404) return 'NOT_FOUND';
@@ -1433,14 +344,14 @@ const API = {
     if (s >= 500) return 'INTERNAL_ERROR';
     if (s >= 400) return 'VALIDATION_ERROR';
     return 'CLIENT_ERROR';
-  },
+  };
 
-  _sanitizeDiagnosticEntry(entry) {
-    const src = (entry && typeof entry === 'object') ? entry : {};
-    const statusNum = Number(src.status);
-    const safeStatus = isNaN(statusNum) ? 0 : statusNum;
-    const rawCode = src.code ? String(src.code).trim().slice(0, 48) : this._statusToErrorCode(safeStatus);
-    const appVer = src['X-App-Version'] ? String(src['X-App-Version']).trim().slice(0, 32) : (src.appVersion ? String(src.appVersion).trim().slice(0, 32) : this.CLIENT_VERSION);
+  API._sanitizeDiagnosticEntry = function (entry) {
+    var src = (entry && typeof entry === 'object') ? entry : {};
+    var statusNum = Number(src.status);
+    var safeStatus = isNaN(statusNum) ? 0 : statusNum;
+    var rawCode = src.code ? String(src.code).trim().slice(0, 48) : this._statusToErrorCode(safeStatus);
+    var appVer = src['X-App-Version'] ? String(src['X-App-Version']).trim().slice(0, 32) : (src.appVersion ? String(src.appVersion).trim().slice(0, 32) : this.CLIENT_VERSION);
     return {
       ts: src.ts ? String(src.ts).slice(0, 40) : new Date().toISOString(),
       requestId: src.requestId ? String(src.requestId).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 32) : '',
@@ -1450,20 +361,20 @@ const API = {
       code: rawCode || 'CLIENT_ERROR',
       'X-App-Version': appVer
     };
-  },
+  };
 
-  _loadDiagnosticBuffer() {
+  API._loadDiagnosticBuffer = function () {
     if (Array.isArray(this._diagnosticBuffer)) {
       return this._diagnosticBuffer;
     }
-    let loaded = [];
+    var loaded = [];
     try {
       if (typeof sessionStorage !== 'undefined') {
-        const raw = sessionStorage.getItem(this.DIAGNOSTIC_STORAGE_KEY);
+        var raw = sessionStorage.getItem(this.DIAGNOSTIC_STORAGE_KEY);
         if (raw) {
-          const parsed = JSON.parse(raw);
+          var parsed = JSON.parse(raw);
           if (Array.isArray(parsed)) {
-            loaded = parsed.slice(-this.MAX_DIAGNOSTIC_ENTRIES).map((item) => this._sanitizeDiagnosticEntry(item));
+            loaded = parsed.slice(-this.MAX_DIAGNOSTIC_ENTRIES).map(function (item) { return API._sanitizeDiagnosticEntry(item); });
           }
         }
       }
@@ -1472,9 +383,9 @@ const API = {
     }
     this._diagnosticBuffer = loaded;
     return this._diagnosticBuffer;
-  },
+  };
 
-  _persistDiagnosticBuffer(buf) {
+  API._persistDiagnosticBuffer = function (buf) {
     try {
       if (typeof sessionStorage !== 'undefined') {
         sessionStorage.setItem(this.DIAGNOSTIC_STORAGE_KEY, JSON.stringify(buf));
@@ -1482,24 +393,24 @@ const API = {
     } catch (e) {
       // Ignore sessionStorage quota/private-mode restrictions
     }
-  },
+  };
 
-  recordDiagnostic(entry) {
-    const buf = this._loadDiagnosticBuffer();
-    const sanitized = this._sanitizeDiagnosticEntry(entry);
+  API.recordDiagnostic = function (entry) {
+    var buf = this._loadDiagnosticBuffer();
+    var sanitized = this._sanitizeDiagnosticEntry(entry);
     buf.push(sanitized);
     if (buf.length > this.MAX_DIAGNOSTIC_ENTRIES) {
       this._diagnosticBuffer = buf.slice(-this.MAX_DIAGNOSTIC_ENTRIES);
     }
     this._persistDiagnosticBuffer(this._diagnosticBuffer);
     return sanitized;
-  },
+  };
 
-  getDiagnostics() {
+  API.getDiagnostics = function () {
     return this._loadDiagnosticBuffer().slice();
-  },
+  };
 
-  clearDiagnostics() {
+  API.clearDiagnostics = function () {
     this._diagnosticBuffer = [];
     try {
       if (typeof sessionStorage !== 'undefined') {
@@ -1508,15 +419,15 @@ const API = {
     } catch (e) {
       // Ignore sessionStorage removal errors
     }
-  },
+  };
 
-  formatDiagnosticsText(extraEntry) {
-    const list = this.getDiagnostics();
+  API.formatDiagnosticsText = function (extraEntry) {
+    var list = this.getDiagnostics();
     if (extraEntry && typeof extraEntry === 'object') {
       list.push(this._sanitizeDiagnosticEntry(extraEntry));
     }
-    const recent = list.slice(-this.MAX_DIAGNOSTIC_ENTRIES);
-    const pagePath = this._sanitizeDiagnosticRoute(
+    var recent = list.slice(-this.MAX_DIAGNOSTIC_ENTRIES);
+    var pagePath = this._sanitizeDiagnosticRoute(
       (typeof window !== 'undefined' && window.location && window.location.pathname) ? window.location.pathname : '/'
     );
     return JSON.stringify({
@@ -1525,7 +436,7 @@ const API = {
       generatedAt: new Date().toISOString(),
       entries: recent
     }, null, 2);
-  },
+  };
 
   /**
    * Executes an HTTP request against `/api/...` with automatic credentials, JSON handling,
@@ -1533,13 +444,13 @@ const API = {
    * @param {string} method - HTTP method (`GET`, `POST`, `PUT`, `PATCH`, `DELETE`).
    * @param {string} url - Request path.
    * @param {object|FormData|string|null} [body] - JSON payload or FormData.
-   * @param {{ headers?: object, noStore?: boolean }} [opts]
+   * @param {{ headers?: object, noStore?: boolean, timeoutMs?: number, throwOnError?: boolean, errorMsg?: string, invalidateKeys?: string[], invalidateOnSuccess?: boolean }} [opts]
    * @returns {Promise<any>}
    */
-  async request(method, url, body, opts) {
-    const options = opts || {};
-    const init = { method: method };
-    const headers = Object.assign({}, options.headers || {});
+  API.request = function (method, url, body, opts) {
+    var options = opts || {};
+    var init = /** @type {RequestInit & { headers?: Record<string, string> }} */ ({ method: method });
+    var headers = /** @type {Record<string, string>} */ (Object.assign({}, options.headers || {}));
     if (options.noStore) init.cache = 'no-store';
     if (body !== undefined && body !== null) {
       if (typeof FormData !== 'undefined' && body instanceof FormData) {
@@ -1554,89 +465,103 @@ const API = {
     if (Object.keys(headers).length > 0) {
       init.headers = headers;
     }
-    const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
-    const timeoutMs = typeof options.timeoutMs === 'number' ? options.timeoutMs : (isFormData ? 60000 : 15000);
-    let timeoutHandle = null;
+    var isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+    var timeoutMs = typeof options.timeoutMs === 'number' ? options.timeoutMs : (isFormData ? 60000 : 15000);
+    var timeoutHandle = null;
     if (timeoutMs > 0 && typeof AbortController !== 'undefined' && !init.signal) {
-      const controller = new AbortController();
+      var controller = new AbortController();
       init.signal = controller.signal;
-      timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
+      timeoutHandle = setTimeout(function () { controller.abort(); }, timeoutMs);
     }
-    let res;
-    try {
-      res = await fetch(url, init);
-    } catch (err) {
+    var self = this;
+    return fetch(url, init).then(function (res) {
       if (timeoutHandle) clearTimeout(timeoutHandle);
-      const isTimeout = Boolean(err && err.name === 'AbortError');
-      this.recordDiagnostic({
+      self.checkResponseVersion(res);
+      if (typeof self.setNetworkOnline === 'function') {
+        self.setNetworkOnline();
+      }
+
+      var contentType = (res.headers && res.headers.get && res.headers.get('content-type')) || '';
+      var parsePromise;
+      if (contentType.includes('application/json')) {
+        parsePromise = res.json().catch(function () { return {}; });
+      } else {
+        parsePromise = res.text().catch(function () { return ''; }).then(function (txt) {
+          try {
+            return txt ? JSON.parse(txt) : {};
+          } catch (e) {
+            return { error: txt || (res.ok ? '' : 'Request failed.') };
+          }
+        });
+      }
+
+      return parsePromise.then(function (data) {
+        if (!res.ok) {
+          var headerReqId = (res.headers && res.headers.get && res.headers.get('x-request-id')) || '';
+          var headerAppVer = (res.headers && res.headers.get && res.headers.get('x-app-version')) || self.CLIENT_VERSION;
+          var reqId = headerReqId || (data && data.requestId) || '';
+          var errCode = (data && data.code) || self._statusToErrorCode(res.status);
+          self.recordDiagnostic({
+            requestId: reqId,
+            route: url,
+            method: method,
+            status: res.status,
+            code: errCode,
+            'X-App-Version': headerAppVer
+          });
+          if (options.throwOnError) {
+            var err = /** @type {any} */ (new Error((data && data.error) ? data.error : (options.errorMsg || 'Request failed.')));
+            err.status = res.status;
+            err.code = errCode;
+            err.requestId = reqId;
+            err.appVersion = headerAppVer;
+            throw err;
+          }
+        }
+        if (options.invalidateKeys && (!options.invalidateOnSuccess || (data && data.success))) {
+          try {
+            options.invalidateKeys.forEach(function (k) { localStorage.removeItem(k); });
+          } catch (e) { /* localStorage unavailable */ }
+        }
+        return data;
+      });
+    }).catch(function (err) {
+      if (timeoutHandle) clearTimeout(timeoutHandle);
+      if (typeof self.setNetworkOffline === 'function') {
+        self.setNetworkOffline();
+      }
+      if (err && err.requestId) {
+        // Already recorded above before options.throwOnError threw err
+        throw err;
+      }
+      var isTimeout = Boolean(err && err.name === 'AbortError');
+      self.recordDiagnostic({
         requestId: '',
         route: url,
         method: method,
         status: 0,
         code: isTimeout ? 'TIMEOUT_ERROR' : 'NETWORK_ERROR',
-        'X-App-Version': this.CLIENT_VERSION
+        'X-App-Version': self.CLIENT_VERSION
       });
       if (isTimeout) {
-        throw new Error('Request timed out. Please check your connection and try again.', { cause: err });
+        throw new Error('Request timed out. Please check your connection and try again.');
       }
       throw err;
-    }
-    if (timeoutHandle) clearTimeout(timeoutHandle);
-    this.checkResponseVersion(res);
-    let data;
-    const contentType = (res.headers && res.headers.get && res.headers.get('content-type')) || '';
-    if (contentType.includes('application/json')) {
-      data = await res.json().catch(() => ({}));
-    } else {
-      const txt = await res.text().catch(() => '');
-      try {
-        data = txt ? JSON.parse(txt) : {};
-      } catch (e) {
-        data = { error: txt || (res.ok ? '' : 'Request failed.') };
-      }
-    }
-    if (!res.ok) {
-      const headerReqId = (res.headers && res.headers.get && res.headers.get('x-request-id')) || '';
-      const headerAppVer = (res.headers && res.headers.get && res.headers.get('x-app-version')) || this.CLIENT_VERSION;
-      const reqId = headerReqId || (data && data.requestId) || '';
-      const errCode = (data && data.code) || this._statusToErrorCode(res.status);
-      this.recordDiagnostic({
-        requestId: reqId,
-        route: url,
-        method: method,
-        status: res.status,
-        code: errCode,
-        'X-App-Version': headerAppVer
-      });
-      if (options.throwOnError) {
-        const err = new Error((data && data.error) ? data.error : (options.errorMsg || 'Request failed.'));
-        err.status = res.status;
-        err.code = errCode;
-        err.requestId = reqId;
-        err.appVersion = headerAppVer;
-        throw err;
-      }
-    }
-    if (options.invalidateKeys && (!options.invalidateOnSuccess || (data && data.success))) {
-      try {
-        options.invalidateKeys.forEach(function(k) { localStorage.removeItem(k); });
-      } catch (e) { /* localStorage unavailable */ }
-    }
-    return data;
-  },
+    });
+  };
 
-  publicConfig: null,
-  _publicConfigPromise: null,
+  API.publicConfig = null;
+  API._publicConfigPromise = null;
 
-  async getPublicConfig(forceRefresh) {
+  API.getPublicConfig = function getPublicConfig(forceRefresh) {
     if (!forceRefresh && this.publicConfig) {
-      return this.publicConfig;
+      return Promise.resolve(this.publicConfig);
     }
     if (!forceRefresh && this._publicConfigPromise) {
       return this._publicConfigPromise;
     }
-    const self = this;
-    const fallback = {
+    var self = this;
+    var fallback = {
       preset: 'generic-community',
       communityName: 'Community Hub',
       publicOrigin: null,
@@ -1648,73 +573,79 @@ const API = {
         sundayPriority: false
       }
     };
-    this._publicConfigPromise = (async function() {
-      try {
-        const res = await fetch('/api/config/public');
-        if (res && res.ok) {
-          const data = await res.json();
-          if (data && typeof data === 'object' && data.features) {
-            self.publicConfig = data;
-            try {
-              localStorage.setItem('pbf_public_config', JSON.stringify(data));
-            } catch (e) { /* localStorage unavailable */ }
-            return data;
-          }
-        }
-      } catch (e) {
-        /* network unavailable; fall back to cached config */
-      } finally {
-        self._publicConfigPromise = null;
-      }
-      try {
-        const cached = localStorage.getItem('pbf_public_config');
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (parsed && parsed.features) {
-            self.publicConfig = parsed;
-            return parsed;
-          }
-        }
-      } catch (e) { /* localStorage unavailable */ }
-      return fallback;
-    })();
-    return this._publicConfigPromise;
-  },
 
-  isFeatureEnabled(flagKey, configOverride) {
-    const cfg = configOverride || this.publicConfig;
+    this._publicConfigPromise = fetch('/api/config/public')
+      .then(function (res) {
+        if (res && res.ok) {
+          return res.json().then(function (data) {
+            if (data && typeof data === 'object' && data.features) {
+              self.publicConfig = data;
+              try {
+                localStorage.setItem('pbf_public_config', JSON.stringify(data));
+              } catch (e) { /* localStorage unavailable */ }
+              return data;
+            }
+            return fallback;
+          });
+        }
+        return fallback;
+      })
+      .catch(function () {
+        try {
+          var cached = localStorage.getItem('pbf_public_config');
+          if (cached) {
+            var parsed = JSON.parse(cached);
+            if (parsed && parsed.features) {
+              self.publicConfig = parsed;
+              return parsed;
+            }
+          }
+        } catch (e) { /* localStorage unavailable */ }
+        return fallback;
+      })
+      .finally(function () {
+        self._publicConfigPromise = null;
+      });
+
+    return this._publicConfigPromise;
+  };
+
+  API.isFeatureEnabled = function isFeatureEnabled(flagKey, configOverride) {
+    var cfg = configOverride || this.publicConfig;
     if (!cfg || !cfg.features || typeof cfg.features[flagKey] !== 'boolean') {
       return true;
     }
     return cfg.features[flagKey] === true;
-  },
+  };
 
-  async getMe() {
-    try {
-      const data = await this.request('GET', '/api/auth/me');
-      API.currentUser = data.user || null;
-      API.setCachedUser(API.currentUser);
-      return API.currentUser;
-    } catch (e) {
-      console.warn('Could not fetch session', e);
-      return API.getCachedUser();
-    }
-  },
+  API.getMe = function () {
+    return this.request('GET', '/api/auth/me')
+      .then(function (data) {
+        API.currentUser = data.user || null;
+        API.setCachedUser(API.currentUser);
+        return API.currentUser;
+      })
+      .catch(function (e) {
+        console.warn('Could not fetch session', e);
+        return API.getCachedUser();
+      });
+  };
 
-  async regenerateCalendarToken() {
-    const data = await this.request('POST', '/api/auth/calendar-token/regenerate', {}, {
+  API.regenerateCalendarToken = function () {
+    return this.request('POST', '/api/auth/calendar-token/regenerate', {}, {
       throwOnError: true,
       errorMsg: 'Failed to reset personal calendar link.'
+    }).then(function (data) {
+      if (data && data.calendarToken && API.currentUser) {
+        API.currentUser.calendarToken = data.calendarToken;
+        API.currentUser.calendar_token = data.calendarToken;
+        API.setCachedUser(API.currentUser);
+      }
+      return data;
     });
-    if (data && data.calendarToken && API.currentUser) {
-      API.currentUser.calendarToken = data.calendarToken;
-      API.currentUser.calendar_token = data.calendarToken;
-      API.setCachedUser(API.currentUser);
-    }
-    return data;
-  },
+  };
 
-  async logout() {
+  API.logout = function () {
     try {
       API.clearDataCaches(true);
       API.clearDiagnostics();
@@ -1729,1203 +660,106 @@ const API = {
       var clearCachePromise = (typeof caches !== 'undefined' && typeof caches.keys === 'function')
         ? caches.keys().then(function (keys) { return Promise.all(keys.map(function (k) { return caches.delete(k); })); }).catch(function () {})
         : Promise.resolve();
-      await Promise.all([
+      return Promise.all([
         API.clearClubhouseIndexedDb(),
         clearCachePromise,
         fetch('/api/auth/logout', { method: 'POST' })
-      ]);
-    } finally {
+      ]).finally(function () {
+        window.location.href = '/index.html';
+      });
+    } catch (err) {
       window.location.href = '/index.html';
+      return Promise.resolve();
     }
-  },
+  };
 
-  async getPosts() {
-    return this.request('GET', '/api/posts', null, {
-      noStore: true, throwOnError: true, errorMsg: 'Failed to load community highlights.'
-    });
-  },
+  // Expose facade on window
+  window.API = API;
 
-  async createPost(payload) {
-    return this.request('POST', '/api/posts', payload || {}, {
-      throwOnError: true, errorMsg: 'Failed to publish post.'
-    });
-  },
+  // Initialize theme mode & color palette immediately
+  if (typeof API.initTheme === 'function') {
+    API.initTheme();
+  }
 
-  async deletePost(id) {
-    return this.request('DELETE', '/api/posts/' + encodeURIComponent(id), null, {
-      throwOnError: true, errorMsg: 'Failed to delete post.'
-    });
-  },
-
-  async getMedia(params) {
-    const p = params || {};
-    const q = new URLSearchParams();
-    if (p.type) q.set('type', p.type);
-    if (p.album) q.set('album', p.album);
-    if (p.order) q.set('order', p.order);
-    if (p.status) q.set('status', p.status);
-    const qs = q.toString() ? '?' + q.toString() : '';
-    return this.request('GET', '/api/media' + qs, null, {
-      noStore: true, throwOnError: true, errorMsg: 'Failed to load community gallery.'
-    });
-  },
-
-  async submitMedia(payload) {
-    return this.request('POST', '/api/media', payload || {}, {
-      throwOnError: true, errorMsg: 'Failed to submit media.'
-    });
-  },
-
-  async approveMedia(id) {
-    return this.request('PUT', '/api/media/' + encodeURIComponent(id) + '/approve', null, {
-      throwOnError: true, errorMsg: 'Failed to approve media item.'
-    });
-  },
-
-  async updateMedia(id, payload) {
-    return this.request('PUT', '/api/media/' + encodeURIComponent(id), payload || {}, {
-      throwOnError: true, errorMsg: 'Failed to update media item.'
-    });
-  },
-
-  async deleteMedia(id, token) {
-    const headers = {};
-    if (token) headers['X-Delete-Token'] = token;
-    const qs = token ? '?token=' + encodeURIComponent(token) : '';
-    return this.request('DELETE', '/api/media/' + encodeURIComponent(id) + qs, null, {
-      headers,
-      throwOnError: true,
-      errorMsg: 'Failed to delete media item.'
-    });
-  },
-
-  async getEvents(filter = 'upcoming') {
-    const data = await this.request('GET', '/api/events?filter=' + encodeURIComponent(filter), null, {
-      noStore: true, throwOnError: true, errorMsg: 'Failed to sync schedule with cloud.'
-    });
-    if (data && data.user !== undefined) {
-      API.currentUser = data.user || null;
-      API.setCachedUser(API.currentUser);
+  // Global CSP-safe image fallback handler (replaces inline onerror attributes)
+  document.addEventListener('error', function (e) {
+    var t = /** @type {HTMLImageElement|null} */ (e.target);
+    if (t && t.tagName === 'IMG' && t.dataset && t.dataset.fallback && !t.dataset.fallbackApplied) {
+      t.dataset.fallbackApplied = '1';
+      var safeFallback = (typeof API.safeUrl === 'function') ? API.safeUrl(t.dataset.fallback) : t.dataset.fallback;
+      if (safeFallback) t.src = safeFallback;
     }
-    return data;
-  },
+  }, true);
 
-  async getEvent(id, token = '') {
-    const safeId = encodeURIComponent(id);
-    const url = '/api/events/' + safeId + (token ? '?token=' + encodeURIComponent(token) : '');
-    const data = await this.request('GET', url);
-    if (data && data.user !== undefined) {
-      API.currentUser = data.user || null;
-      API.setCachedUser(API.currentUser);
+  // Initialize i18n & cookie notice on DOM ready
+  var bootApp = function () {
+    if (typeof API.initI18n === 'function') {
+      API.initI18n();
     }
-    return data;
-  },
-
-  async postRsvp(id, payload) {
-    return this.request('POST', '/api/events/' + encodeURIComponent(id) + '/rsvp', payload, {
-      invalidateKeys: ['pickup_cached_event_' + id, 'pickup_cached_events_upcoming', 'pickup_cached_events_all']
-    });
-  },
-
-  async requestRsvpEditLink(id, email) {
-    return this.request('POST', '/api/events/' + encodeURIComponent(id) + '/rsvp/edit-link', {
-      email: email
-    });
-  },
-
-  async postComment(id, payload) {
-    return this.request('POST', '/api/events/' + encodeURIComponent(id) + '/comments', payload, {
-      invalidateKeys: ['pickup_cached_event_' + id]
-    });
-  },
-
-  async deleteComment(eventId, commentId) {
-    return this.request('DELETE', '/api/events/' + encodeURIComponent(eventId) + '/comments/' + encodeURIComponent(commentId), null, {
-      invalidateKeys: ['pickup_cached_event_' + eventId]
-    });
-  },
-
-  async removeAttendee(eventId, attendeeId) {
-    return this.request('DELETE', '/api/events/' + encodeURIComponent(eventId) + '/attendees/' + encodeURIComponent(attendeeId), null, {
-      invalidateKeys: ['pickup_cached_event_' + eventId, 'pickup_cached_events_upcoming', 'pickup_cached_events_all']
-    });
-  },
-
-  async callRainout(id, payload) {
-    return this.request('POST', '/api/events/' + encodeURIComponent(id) + '/rainout', payload || {}, {
-      invalidateKeys: ['pickup_cached_event_' + id, 'pickup_cached_events_upcoming', 'pickup_cached_events_all']
-    });
-  },
-
-  async reopenEvent(id, payload) {
-    return this.request('POST', '/api/events/' + encodeURIComponent(id) + '/reopen', payload || {}, {
-      invalidateKeys: ['pickup_cached_event_' + id, 'pickup_cached_events_upcoming', 'pickup_cached_events_all']
-    });
-  },
-
-  async sendRainoutEmail(id, payload) {
-    return this.request('POST', '/api/events/' + encodeURIComponent(id) + '/send-rainout-email', payload || {});
-  },
-
-  async sendReminders(id) {
-    return this.request('POST', '/api/events/' + encodeURIComponent(id) + '/send-reminders');
-  },
-
-  async getBpOrder(eventId, token = '') {
-    const url = '/api/events/' + encodeURIComponent(eventId) + '/bp-order' + (token ? '?token=' + encodeURIComponent(token) : '');
-    return this.request('GET', url);
-  },
-
-  async postBpSignup(eventId, payload) {
-    return this.request('POST', '/api/events/' + encodeURIComponent(eventId) + '/bp-order', payload, {
-      invalidateKeys: ['pickup_cached_event_' + eventId]
-    });
-  },
-
-  async updateBpSignup(eventId, signupId, payload) {
-    return this.request('PUT', '/api/events/' + encodeURIComponent(eventId) + '/bp-order/' + encodeURIComponent(signupId), payload, {
-      invalidateKeys: ['pickup_cached_event_' + eventId]
-    });
-  },
-
-  async deleteBpSignup(eventId, signupId, payload) {
-    return this.request('DELETE', '/api/events/' + encodeURIComponent(eventId) + '/bp-order/' + encodeURIComponent(signupId), payload || {}, {
-      invalidateKeys: ['pickup_cached_event_' + eventId]
-    });
-  },
-
-  async clearBpOrder(eventId) {
-    return this.request('POST', '/api/events/' + encodeURIComponent(eventId) + '/bp-order/clear', {}, {
-      invalidateKeys: ['pickup_cached_event_' + eventId]
-    });
-  },
-
-  async sendLoginCode(email, name = '', sharedDevice = false) {
-    return this.request('POST', '/api/auth/send-code', {
-      email: email,
-      name: name,
-      shared_device: Boolean(sharedDevice)
-    });
-  },
-
-  async verifyLoginCode(email, code, sharedDevice) {
-    const payload = { email: email, code: code };
-    if (sharedDevice !== undefined) {
-      payload.shared_device = Boolean(sharedDevice);
+    if (typeof API.renderCookieNotice === 'function') {
+      API.renderCookieNotice();
     }
-    return this.request('POST', '/api/auth/verify-code', payload);
-  },
+    if (typeof API.initOfflineUx === 'function') {
+      API.initOfflineUx();
+    }
+  };
 
-  async getActiveSessions() {
-    return this.request('GET', '/api/auth/sessions', null, { noStore: true });
-  },
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bootApp);
+  } else {
+    bootApp();
+  }
 
-  async logoutOtherDevices() {
-    return this.request('POST', '/api/auth/logout-other-devices', {});
-  },
-
-  async exportMyData() {
-    return this.request('GET', '/api/auth/export', null, { noStore: true });
-  },
-
-  async updateProfile(name, bio, extra) {
-    const payload = { name: name, bio: bio };
-    if (extra && typeof extra === 'object') {
-      Object.keys(extra).forEach(function(k) {
-        if (extra[k] !== undefined) {
-          payload[k] = extra[k];
-        }
+  // Global unexpected client error & unhandled rejection listeners (zero-PII diagnostic ring buffer)
+  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener('error', function (e) {
+      var targetElement = /** @type {HTMLElement|null} */ (e && e.target);
+      if (targetElement && targetElement.tagName && !e.error && !e.message) return;
+      var errObj = (e && e.error) ? e.error : null;
+      API.recordDiagnostic({
+        requestId: (errObj && errObj.requestId) || '',
+        route: (window.location && window.location.pathname) || '/',
+        method: 'CLIENT',
+        status: (errObj && errObj.status) || 0,
+        code: (errObj && errObj.code) || 'CLIENT_ERROR',
+        'X-App-Version': API.CLIENT_VERSION
       });
-    }
-    return this.request('PUT', '/api/auth/profile', payload);
-  },
-
-  async getConsent() {
-    return this.request('GET', '/api/auth/consent', null, { noStore: true });
-  },
-
-  async updateConsent(payload) {
-    return this.request('PUT', '/api/auth/consent', payload || {});
-  },
-
-  async setClubhouseOptIn(optedIn) {
-    return this.request('PUT', '/api/auth/clubhouse-opt-in', { opted_in: Boolean(optedIn) });
-  },
-
-  async uploadAvatar(file) {
-    const formData = new FormData();
-    formData.append('avatar', file);
-    return this.request('POST', '/api/auth/avatar', formData);
-  },
-
-  async deleteAvatar() {
-    return this.request('DELETE', '/api/auth/avatar');
-  },
-
-  async getDefaultDuties() {
-    return this.request('GET', '/api/events/default-duties');
-  },
-
-  async saveDefaultDuties(duties) {
-    return this.request('PUT', '/api/events/default-duties', { duties: duties });
-  },
-
-  async createEvent(payload) {
-    return this.request('POST', '/api/events', payload, {
-      invalidateKeys: ['pickup_cached_events_upcoming', 'pickup_cached_events_all']
     });
-  },
 
-  async updateEvent(id, payload) {
-    return this.request('PUT', '/api/events/' + encodeURIComponent(id), payload, {
-      invalidateOnSuccess: true,
-      invalidateKeys: [
-        'pickup_cached_event_' + id,
-        'pickup_cached_events_upcoming',
-        'pickup_cached_events_past',
-        'pickup_cached_events_all'
-      ]
+    window.addEventListener('unhandledrejection', function (e) {
+      var reason = (e && e.reason) ? e.reason : null;
+      API.recordDiagnostic({
+        requestId: (reason && reason.requestId) || '',
+        route: (window.location && window.location.pathname) || '/',
+        method: 'CLIENT',
+        status: (reason && reason.status) || 0,
+        code: (reason && reason.code) || 'CLIENT_ERROR',
+        'X-App-Version': API.CLIENT_VERSION
+      });
     });
-  },
+  }
 
-  async deleteEvent(id) {
-    return this.request('DELETE', '/api/events/' + encodeURIComponent(id), null, {
-      invalidateOnSuccess: true,
-      invalidateKeys: [
-        'pickup_cached_event_' + id,
-        'pickup_cached_events_upcoming',
-        'pickup_cached_events_past',
-        'pickup_cached_events_all'
-      ]
-    });
-  },
-
-  async addDuty(eventId, payload) {
-    return this.request('POST', '/api/events/' + encodeURIComponent(eventId) + '/duties', payload, {
-      invalidateKeys: ['pickup_cached_event_' + eventId]
-    });
-  },
-
-  async updateDuty(eventId, dutyId, payload) {
-    return this.request('PUT', '/api/events/' + encodeURIComponent(eventId) + '/duties/' + encodeURIComponent(dutyId), payload, {
-      invalidateKeys: ['pickup_cached_event_' + eventId]
-    });
-  },
-
-  async deleteDuty(eventId, dutyId) {
-    return this.request('DELETE', '/api/events/' + encodeURIComponent(eventId) + '/duties/' + encodeURIComponent(dutyId), null, {
-      invalidateKeys: ['pickup_cached_event_' + eventId]
-    });
-  },
-
-  async getAttendeeCandidates() {
-    return this.request('GET', '/api/events/attendee-candidates');
-  },
-
-  async getUsers() {
-    return this.request('GET', '/api/auth/users');
-  },
-
-  async updateUserRole(userId, role) {
-    return this.request('PUT', '/api/auth/users/' + encodeURIComponent(userId) + '/role', { role: role });
-  },
-
-  async updateUserBadges(userId, badges) {
-    return this.request('PUT', '/api/auth/users/' + encodeURIComponent(userId) + '/badges', badges);
-  },
-
-  async updateUserModerator(userId, isModerator) {
-    return this.request('PUT', '/api/auth/users/' + encodeURIComponent(userId) + '/moderator', { is_moderator: Boolean(isModerator) });
-  },
-
-  async muteUserModeration(userId, muted, reason) {
-    return this.request('PUT', '/api/moderation/users/' + encodeURIComponent(userId) + '/mute', {
-      muted: Boolean(muted),
-      reason: reason || ''
-    });
-  },
-
-  async getWaiverStatus() {
-    return this.request('GET', '/api/waiver/status', null, { noStore: true });
-  },
-
-  async signWaiver(payload) {
-    return this.request('POST', '/api/waiver/sign', payload || {});
-  },
-
-  async updateUserWaiverStatus(userId, waiverStatus) {
-    return this.request('PUT', '/api/waiver/admin/users/' + encodeURIComponent(userId), { waiver_status: waiverStatus });
-  },
-
-  async deleteUser(userId, ban = false, reason = '') {
-    return this.request('DELETE', '/api/auth/users/' + encodeURIComponent(userId) + '?ban=' + (ban ? 'true' : 'false') + '&reason=' + encodeURIComponent(reason));
-  },
-
-  async deleteMyAccount(payload) {
-    return this.request('DELETE', '/api/auth/me', payload || {});
-  },
-
-  async requestVisitorErasure(email) {
-    return this.request('POST', '/api/auth/erasure/request', { email: email });
-  },
-
-  async confirmVisitorErasure(payload) {
-    return this.request('POST', '/api/auth/erasure/confirm', payload || {});
-  },
-
-  async getQuarantinedWaivers() {
-    return this.request('GET', '/api/waiver/admin/quarantined', null, { noStore: true });
-  },
-
-  async purgeQuarantinedWaivers() {
-    return this.request('POST', '/api/waiver/admin/quarantined/purge', {});
-  },
-
-  async getBannedEmails() {
-    return this.request('GET', '/api/auth/banned-emails');
-  },
-
-  async banEmail(email, reason = '') {
-    return this.request('POST', '/api/auth/banned-emails', { email: email, reason: reason });
-  },
-
-  async unbanEmail(id) {
-    return this.request('DELETE', '/api/auth/banned-emails/' + encodeURIComponent(id));
-  },
-
-  async getSuppressions() {
-    return this.request('GET', '/api/admin/suppressions');
-  },
-
-  async clearSuppression(email) {
-    return this.request('DELETE', '/api/admin/suppressions/' + encodeURIComponent(email));
-  },
-
-  async getSettings() {
-    return this.request('GET', '/api/settings');
-  },
-
-  async updateSettings(settings) {
-    return this.request('PUT', '/api/settings', settings);
-  },
-
-  async testAppscript(url) {
-    return this.request('POST', '/api/settings/test-appscript', { url });
-  },
-
-  renderEditGameFieldsHtml(prefix, ev) {
-    const pacificLocal = this.isoToPacificLocalInput(ev.event_date);
-    const hasCap = Boolean(ev.max_players && ev.max_players > 0);
-    const capVal = hasCap ? ev.max_players : 28;
-    let allowedArr = [];
-    if (Array.isArray(ev.allowed_emails_list)) {
-      allowedArr = ev.allowed_emails_list;
-    } else if (ev.allowed_emails) {
-      try {
-        allowedArr = typeof ev.allowed_emails === 'string' ? JSON.parse(ev.allowed_emails) : ev.allowed_emails;
-      } catch (e) { /* ignore malformed allowed_emails JSON */ }
-    }
-
-    return `
-      <div class="grid-2">
-        <div class="form-group" style="margin-bottom: 10px;">
-          <label for="${prefix}-title" style="font-size: 0.82rem;">Game Title *</label>
-          <input type="text" id="${prefix}-title" value="${this.escapeHtml(ev.title || '')}" required>
-        </div>
-        <div class="form-group" style="margin-bottom: 10px;">
-          <label for="${prefix}-date" style="font-size: 0.82rem;">Date &amp; Time (Pacific) *</label>
-          <input type="datetime-local" id="${prefix}-date" value="${this.escapeHtml(pacificLocal)}" required>
-        </div>
-      </div>
-      <div class="grid-2">
-        <div class="form-group" style="margin-bottom: 10px;">
-          <label for="${prefix}-location" style="font-size: 0.82rem;">Field Location *</label>
-          <input type="text" id="${prefix}-location" value="${this.escapeHtml(ev.location || '')}" list="common-locations-list" required>
-        </div>
-        <div class="form-group" style="margin-bottom: 10px;">
-          <label for="${prefix}-map" style="font-size: 0.82rem;">Map / Directions Link (Optional)</label>
-          <input type="text" id="${prefix}-map" value="${this.escapeHtml(ev.location_url || '')}" placeholder="https://maps.google.com/?q=...">
-        </div>
-      </div>
-      <div class="form-group" style="margin-bottom: 10px;">
-        <label for="${prefix}-desc" style="font-size: 0.82rem;">Game Details &amp; Announcements</label>
-        <textarea id="${prefix}-desc" rows="2">${this.escapeHtml(ev.description || '')}</textarea>
-      </div>
-      <div class="form-group" style="background: var(--bg-card); padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 10px;">
-        <label for="${prefix}-actual-attendance" style="font-weight: 600; font-size: 0.84rem; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
-          <span>⚾</span> <span>Actual Attendance (Players who played)</span>
-        </label>
-        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-          <input type="number" id="${prefix}-actual-attendance" value="${ev.actual_attendance != null ? ev.actual_attendance : ''}" min="0" max="200" placeholder="e.g. 18" style="width: 90px; padding: 5px 8px; font-weight: 700;">
-          <span style="font-size: 0.8rem; color: var(--text-muted);">Record actual turnout from the field. Shown in Past Games archive!</span>
-        </div>
-      </div>
-      <div class="form-group" style="background: var(--bg-card); padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 10px;">
-        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; font-size: 0.84rem; margin: 0;">
-          <input type="checkbox" id="${prefix}-cap-toggle" ${hasCap ? 'checked' : ''} style="width: 16px; height: 16px; accent-color: var(--primary);">
-          <span>Limit Playing Roster Size (Auto-Waitlist when full)</span>
-        </label>
-        <div id="${prefix}-max-players-wrap" style="display: ${hasCap ? 'block' : 'none'}; margin-top: 8px; padding-left: 24px;">
-          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-            <label for="${prefix}-max-players" style="font-size: 0.84rem; color: var(--text-muted); margin: 0;">Max Confirmed Players:</label>
-            <input type="number" id="${prefix}-max-players" value="${capVal}" min="2" max="100" style="width: 80px; padding: 4px 8px;">
-          </div>
-        </div>
-      </div>
-      <div class="form-group" style="background: var(--bg-card); padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 12px;">
-        <label for="${prefix}-allowed-emails" style="font-weight: 600; font-size: 0.84rem; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
-          <span>🔒</span> <span>Allowed Player Emails (Whitelist — Optional)</span>
-        </label>
-        <textarea id="${prefix}-allowed-emails" rows="2" placeholder="Leave blank to allow all players; or enter emails separated by commas or lines" style="font-size: 0.82rem;">${this.escapeHtml((allowedArr || []).join(', '))}</textarea>
-      </div>
-    `;
-  },
-
-  bindEditGameCapToggle(prefix) {
-    const capToggle = document.getElementById(prefix + '-cap-toggle');
-    const capWrap = document.getElementById(prefix + '-max-players-wrap');
-    if (capToggle && capWrap) {
-      capToggle.onchange = function() {
-        capWrap.style.display = capToggle.checked ? 'block' : 'none';
-      };
-    }
-  },
-
-  readEditGameFields(prefix) {
-    const titleEl = document.getElementById(prefix + '-title');
-    const dateEl = document.getElementById(prefix + '-date');
-    const locEl = document.getElementById(prefix + '-location');
-    const mapEl = document.getElementById(prefix + '-map');
-    const descEl = document.getElementById(prefix + '-desc');
-    const attEl = document.getElementById(prefix + '-actual-attendance');
-    const capToggle = document.getElementById(prefix + '-cap-toggle');
-    const maxEl = document.getElementById(prefix + '-max-players');
-    const allowedEl = document.getElementById(prefix + '-allowed-emails');
-
-    const title = titleEl ? titleEl.value.trim() : '';
-    const rawDate = dateEl ? dateEl.value : '';
-    const location = locEl ? locEl.value.trim() : '';
-    if (!title || !rawDate || !location) {
-      return { error: 'Title, Date/Time, and Field Location are required.' };
-    }
-
-    const attRaw = attEl ? attEl.value.trim() : '';
-    const parsedAtt = attRaw === '' ? null : parseInt(attRaw, 10);
-    const maxPlayers = (capToggle && capToggle.checked)
-      ? (parseInt(maxEl ? maxEl.value : '28', 10) || 28)
-      : null;
-
-    const allowedRaw = allowedEl ? allowedEl.value : '';
-    const allowedList = allowedRaw.split(/[,\n;]/).map(function(s) { return s.trim().toLowerCase(); }).filter(function(s) { return s.indexOf('@') !== -1; });
-
-    return {
-      payload: {
-        title: title,
-        event_date: this.localToPacificIso(rawDate),
-        location: location,
-        location_url: mapEl ? mapEl.value.trim() : '',
-        description: descEl ? descEl.value.trim() : '',
-        max_players: maxPlayers,
-        actual_attendance: (parsedAtt === null || isNaN(parsedAtt)) ? null : parsedAtt,
-        allowed_emails: allowedList.length > 0 ? allowedList : null
-      }
-    };
-  },
-
-  formatDate(isoString) {
-    if (!isoString) return '';
-    const d = new Date(isoString);
-    const locale = this.getLangMeta().locale || 'en-US';
-    return d.toLocaleDateString(locale, {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      timeZone: 'America/Los_Angeles'
-    });
-  },
-
-  formatDateTime(isoString) {
-    if (!isoString) return '';
-    const d = new Date(isoString);
-    const locale = this.getLangMeta().locale || 'en-US';
-    return d.toLocaleString(locale, {
-      weekday: 'long',
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      timeZone: 'America/Los_Angeles',
-      timeZoneName: 'short'
-    });
-  },
-
-  isoToPacificLocalInput(isoString) {
-    if (!isoString) return '';
-    const d = new Date(isoString);
-    if (isNaN(d.getTime())) return '';
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/Los_Angeles',
-      hourCycle: 'h23',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
-    }).formatToParts(d);
-    const get = (t) => (parts.find(p => p.type === t) || {}).value || '00';
-    return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}`;
-  },
-
-  localToPacificIso(dateString, timeString = '12:00') {
-    if (!dateString) return '';
-    const [datePart, timePart] = dateString.includes('T') ? dateString.split('T') : [dateString, timeString];
-    const [year, month, day] = datePart.split('-').map(Number);
-    const [hour, min] = (timePart || '12:00').split(':').map(Number);
-    let d = new Date(Date.UTC(year, month - 1, day, hour + 7, min || 0));
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/Los_Angeles',
-      hourCycle: 'h23',
-      year: 'numeric', month: 'numeric', day: 'numeric',
-      hour: 'numeric', minute: 'numeric'
-    }).formatToParts(d);
-    const pHour = Number(parts.find(p => p.type === 'hour').value);
-    const diffHours = hour - pHour;
-    d = new Date(d.getTime() + diffHours * 3600000);
-    return d.toISOString();
-  },
-
-  getNextSundayNoonPacificIso() {
-    const now = new Date();
-    const laFormatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/Los_Angeles',
-      year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short'
-    });
-    const dayName = laFormatter.formatToParts(now).find(p => p.type === 'weekday').value;
-    const daysMap = { 'Sun': 0, 'Mon': 1, 'Tue': 2, 'Wed': 3, 'Thu': 4, 'Fri': 5, 'Sat': 6 };
-    const currentDay = daysMap[dayName] !== undefined ? daysMap[dayName] : now.getDay();
-    let daysUntilSunday = 7 - currentDay;
-    if (daysUntilSunday === 7) {
-      const currentHour = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', hourCycle: 'h23', hour: 'numeric' }).format(now));
-      if (currentHour < 12) daysUntilSunday = 0;
-    }
-    const targetDate = new Date(now.getTime() + daysUntilSunday * 86400000);
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/Los_Angeles',
-      year: 'numeric', month: '2-digit', day: '2-digit'
-    }).formatToParts(targetDate);
-    const yyyy = parts.find(p => p.type === 'year').value;
-    const mm = parts.find(p => p.type === 'month').value;
-    const dd = parts.find(p => p.type === 'day').value;
-    return this.localToPacificIso(`${yyyy}-${mm}-${dd}`, '12:00');
-  },
-
-  getGoogleCalendarUrl(ev) {
-    if (!ev || !ev.event_date) return '#';
-    let startDate = new Date(ev.event_date);
-    if (isNaN(startDate.getTime())) {
-      startDate = new Date();
-    }
-    const endDate = new Date(startDate.getTime() + 3 * 60 * 60 * 1000);
-    const pad = function(n) { return String(n).padStart(2, '0'); };
-    const formatGCal = function(d) {
-      return d.getUTCFullYear() +
-        pad(d.getUTCMonth() + 1) +
-        pad(d.getUTCDate()) + 'T' +
-        pad(d.getUTCHours()) +
-        pad(d.getUTCMinutes()) +
-        pad(d.getUTCSeconds()) + 'Z';
-    };
-    const title = encodeURIComponent(this.translateEventTitle(ev) || ev.title || 'Sunday Pickup Baseball - Noon Game');
-    const details = encodeURIComponent('Free community pickup baseball. Check headcount, coordinate gear & volunteer for tasks at https://www.pickupbaseballfoundation.org/event.html?id=' + ev.id);
-    const location = encodeURIComponent(ev.location || 'Bushrod Park Field 1, Oakland, CA');
-    return 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + title + '&dates=' + formatGCal(startDate) + '/' + formatGCal(endDate) + '&details=' + details + '&location=' + location;
-  },
-
-  downloadEventsIcs(events, filename) {
-    const upcoming = (events || []).filter(function(e) { return e && e.status !== 'cancelled'; });
-    if (upcoming.length === 0) {
-      if (typeof window !== 'undefined' && window.PBFDialog) {
-        window.PBFDialog.toast(this.t('calendar.no_upcoming_export', 'No upcoming games scheduled to export.'), { type: 'info' });
-      }
-      return;
-    }
-
-    const pad = function(n) { return String(n).padStart(2, '0'); };
-    const formatIcsDate = function(d) {
-      return d.getUTCFullYear() +
-        pad(d.getUTCMonth() + 1) +
-        pad(d.getUTCDate()) + 'T' +
-        pad(d.getUTCHours()) +
-        pad(d.getUTCMinutes()) +
-        pad(d.getUTCSeconds()) + 'Z';
-    };
-
-    const icsLines = [
-      'BEGIN:VCALENDAR',
-      'VERSION:2.0',
-      'PRODID:-//Pickup Baseball Foundation//NONSGML Pickup Baseball Calendar//EN',
-      'CALSCALE:GREGORIAN',
-      'METHOD:PUBLISH',
-      'X-WR-CALNAME:Sunday Pickup Baseball',
-      'X-WR-TIMEZONE:America/Los_Angeles'
-    ];
-
-    for (let i = 0; i < upcoming.length; i++) {
-      const ev = upcoming[i];
-      const startDate = new Date(ev.event_date);
-      if (isNaN(startDate.getTime())) continue;
-      const endDate = new Date(startDate.getTime() + 3 * 60 * 60 * 1000);
-      const isRainout = ev.status === 'rainout';
-      const baseTitle = ev.title || 'Sunday Pickup Baseball - Noon Game';
-      const summary = isRainout ? ('🌧️ RAINED OUT: ' + baseTitle) : baseTitle;
-
-      icsLines.push('BEGIN:VEVENT');
-      icsLines.push('UID:pickup-baseball-event-' + ev.id + '@pickupbaseballfoundation.org');
-      icsLines.push('DTSTAMP:' + formatIcsDate(new Date()));
-      icsLines.push('DTSTART:' + formatIcsDate(startDate));
-      icsLines.push('DTEND:' + formatIcsDate(endDate));
-      icsLines.push('SUMMARY:' + summary.replace(/,/g, '\\,'));
-      icsLines.push('LOCATION:' + (ev.location || 'Bushrod Park Field 1, Oakland, CA').replace(/,/g, '\\,'));
-      icsLines.push('DESCRIPTION:Free community pickup baseball. Check headcount and volunteer at https://www.pickupbaseballfoundation.org/event.html?id=' + ev.id);
-      icsLines.push('STATUS:CONFIRMED');
-      icsLines.push('END:VEVENT');
-    }
-
-    icsLines.push('END:VCALENDAR');
-
-    const blob = new Blob([icsLines.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename || 'pickup-baseball-schedule.ics';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  },
-
-  renderSubscribePanel(panelEl, options) {
-    if (!panelEl) return;
-    const opts = options || {};
-    const singleEvent = opts.event || null;
-    const isSingleGame = Boolean(singleEvent && singleEvent.id);
-    const host = window.location.host || 'www.pickupbaseballfoundation.org';
-    const origin = window.location.origin || ('https://' + host);
-    const calToken = opts.calendarToken || (this.currentUser && (this.currentUser.calendarToken || this.currentUser.calendar_token)) || '';
-    const baseFeedPath = isSingleGame ? ('/api/events/' + singleEvent.id + '/calendar.ics') : '/api/events/calendar.ics';
-    const feedPath = calToken ? (baseFeedPath + '?cal_token=' + encodeURIComponent(calToken)) : baseFeedPath;
-    const rawFeedHttpUrl = opts.feedHttpUrl ? String(opts.feedHttpUrl).trim() : '';
-    const rawWebcalUrl = opts.webcalUrl ? String(opts.webcalUrl).trim() : '';
-    const feedHttpUrl = /^https?:\/\//i.test(rawFeedHttpUrl) ? rawFeedHttpUrl : (origin + feedPath);
-    const webcalUrl = /^webcal:\/\//i.test(rawWebcalUrl) ? rawWebcalUrl : ('webcal://' + host + feedPath);
-    const googleSubscribeUrl = 'https://calendar.google.com/calendar/r?cid=' + encodeURIComponent(webcalUrl);
-    const googleAddOnceUrl = isSingleGame ? this.getGoogleCalendarUrl(singleEvent) : '';
-
-    const titleText = isSingleGame
-      ? '🔄 Single-Game Live Calendar Sync (.ics)'
-      : this.t('calendar.subscribe_title', '🔄 All-Games Live Calendar Sync (.ics)');
-    const descText = isSingleGame
-      ? 'Subscribe to this game for live rainout alerts and time/field updates — or add it directly to Google Calendar.'
-      : this.t('calendar.subscribe_desc', 'Subscribe once so newly scheduled games, field changes, and rainout alerts update automatically on your phone or computer.');
-    const appleBtnLabel = this.t('calendar.subscribe_apple_btn', '🍎 Apple / Outlook (Live Sync)');
-    const googleLiveLabel = this.t('calendar.subscribe_google_btn', '📅 Google Calendar (Live Sync)');
-    const snapshotBtnLabel = isSingleGame
-      ? '📥 Download Game .ics'
-      : this.t('calendar.subscribe_snapshot_btn', '📥 Download One-Time .ics File');
-    const copyBtnLabel = this.t('calendar.subscribe_copy_btn', '📋 Copy Feed URL');
-    const copiedBtnLabel = this.t('calendar.subscribe_copied', '✓ Copied!');
-    const idPrefix = opts.idPrefix || 'calendar';
-    const tokenFooterHtml = calToken
-      ? '<div style="margin-top:0.5rem;display:flex;align-items:center;justify-content:space-between;gap:0.75rem;flex-wrap:wrap;font-size:0.78rem;color:var(--text-muted);">' +
-          '<span>🔒 Personal feed link includes public games + invite-only games you are invited to. Keep this link private.</span>' +
-          '<button type="button" id="' + idPrefix + '-rotate-token-btn" class="btn btn-outline btn-xs" style="font-size:0.74rem;padding:0.2rem 0.55rem;">' +
-            (opts._justReset ? '✓ Secret Link Reset!' : '🔄 Reset Secret Link') +
-          '</button>' +
-        '</div>'
-      : '<div style="margin-top:0.5rem;font-size:0.78rem;color:var(--text-muted);">' +
-          '🌐 Public games only. <a href="/login.html" style="font-weight:600;">Sign in</a> for a personal link that includes invite-only games you\'re invited to.' +
-        '</div>';
-
-    panelEl.innerHTML =
-      '<div class="subscribe-panel-header">' +
-        '<div>' +
-          '<h3 class="subscribe-panel-title">' + this.escapeHtml(titleText) + '</h3>' +
-          '<p class="subscribe-panel-desc">' + this.escapeHtml(descText) + '</p>' +
-        '</div>' +
-        '<button type="button" id="' + idPrefix + '-subscribe-close-btn" class="calendar-drawer-close-btn" aria-label="Close calendar sync options" title="Close">✕</button>' +
-      '</div>' +
-      '<div class="subscribe-actions-row">' +
-        '<a href="' + this.escapeHtml(webcalUrl) + '" class="btn btn-primary btn-sm" style="font-weight: 700; text-decoration: none;">' +
-          this.escapeHtml(appleBtnLabel) +
-        '</a>' +
-        '<a href="' + this.escapeHtml(googleSubscribeUrl) + '" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm" style="font-weight: 700; text-decoration: none;">' +
-          this.escapeHtml(googleLiveLabel) +
-        '</a>' +
-        (isSingleGame
-          ? '<a href="' + this.escapeHtml(googleAddOnceUrl) + '" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm" style="font-weight: 600; text-decoration: none;" title="Add this game once to your primary Google Calendar">➕ Add Once to Google Cal ↗</a>'
-          : '') +
-        '<button type="button" id="' + idPrefix + '-download-snapshot-btn" class="btn btn-outline btn-sm" title="Download a static .ics file">' +
-          this.escapeHtml(snapshotBtnLabel) +
-        '</button>' +
-      '</div>' +
-      '<div class="subscribe-url-row">' +
-        '<input type="text" id="' + idPrefix + '-feed-url-input" class="subscribe-url-input" value="' + this.escapeHtml(feedHttpUrl) + '" readonly aria-label="Live calendar subscription URL">' +
-        '<button type="button" id="' + idPrefix + '-copy-feed-btn" class="btn btn-outline btn-sm" style="white-space: nowrap; font-weight: 600;">' +
-          this.escapeHtml(copyBtnLabel) +
-        '</button>' +
-      '</div>' +
-      tokenFooterHtml;
-
-    const closeBtn = panelEl.querySelector('#' + idPrefix + '-subscribe-close-btn');
-    if (closeBtn && typeof opts.onClose === 'function') {
-      closeBtn.addEventListener('click', opts.onClose);
-    }
-
-    const self = this;
-    const rotateBtn = panelEl.querySelector('#' + idPrefix + '-rotate-token-btn');
-    if (rotateBtn) {
-      rotateBtn.addEventListener('click', function() {
-        rotateBtn.disabled = true;
-        rotateBtn.textContent = 'Resetting...';
-        self.regenerateCalendarToken().then(function(res) {
-          const nextOpts = Object.assign({}, opts, {
-            calendarToken: (res && res.calendarToken) ? res.calendarToken : (self.currentUser && self.currentUser.calendarToken),
-            feedHttpUrl: undefined,
-            webcalUrl: undefined,
-            _justReset: true
-          });
-          self.renderSubscribePanel(panelEl, nextOpts);
-        }).catch(function(err) {
-          rotateBtn.disabled = false;
-          rotateBtn.textContent = '🔄 Reset Secret Link';
-          console.error('[Calendar] Token reset failed:', err);
+  // Register PWA Service Worker
+  if (typeof window !== 'undefined' && typeof navigator !== 'undefined' && 'serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('/sw.js').then(function (reg) {
+        reg.addEventListener('updatefound', function () {
+          var newWorker = reg.installing;
+          if (newWorker) {
+            newWorker.addEventListener('statechange', function () {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                console.log('[PWA] New version cached and ready.');
+              }
+            });
+          }
         });
+      }).catch(function (err) {
+        console.warn('[PWA] Service worker registration error:', err);
       });
-    }
-    const snapshotBtn = panelEl.querySelector('#' + idPrefix + '-download-snapshot-btn');
-    if (snapshotBtn) {
-      snapshotBtn.addEventListener('click', function() {
-        if (isSingleGame) {
-          self.downloadEventsIcs([singleEvent], 'pickup-baseball-game-' + singleEvent.id + '.ics');
-        } else {
-          self.downloadEventsIcs(opts.events || [], 'pickup-baseball-schedule.ics');
-        }
-      });
-    }
-
-    const copyBtn = panelEl.querySelector('#' + idPrefix + '-copy-feed-btn');
-    const urlInput = panelEl.querySelector('#' + idPrefix + '-feed-url-input');
-    if (copyBtn && urlInput) {
-      copyBtn.addEventListener('click', function() {
-        const markCopied = function() {
-          copyBtn.textContent = copiedBtnLabel;
-          setTimeout(function() {
-            copyBtn.textContent = copyBtnLabel;
-          }, 2200);
-        };
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(feedHttpUrl).then(markCopied).catch(function() {
-            urlInput.select();
-            try { document.execCommand('copy'); } catch (e) { /* clipboard fallback unavailable */ }
-            markCopied();
-          });
-        } else {
-          urlInput.select();
-          try { document.execCommand('copy'); } catch (e) { /* clipboard fallback unavailable */ }
-          markCopied();
-        }
-      });
-    }
-  },
-
-  renderNav(user) {
-    const navContainer = document.getElementById('main-nav');
-    if (!navContainer) return;
-
-    const currentLang = this.getLang();
-    const pathname = (typeof window !== 'undefined' && window.location && window.location.pathname) ? window.location.pathname : '';
-    const isProfilePage = pathname.endsWith('profile.html') || pathname === '/profile';
-    const isAdminPage = pathname.endsWith('admin.html') || pathname === '/admin';
-    const isDonatePage = pathname.endsWith('donate.html') || pathname === '/donate';
-    const isAboutPage = pathname.endsWith('about.html') || pathname === '/about';
-    const isArtPage = pathname.endsWith('art.html') || pathname === '/art';
-    const isGalleryPage = pathname.endsWith('gallery.html') || pathname === '/gallery';
-    const isClubhousePage = pathname.endsWith('clubhouse.html') || pathname === '/clubhouse';
-
-    let authHtml;
-    if (user) {
-      const displayName = this.formatDisplayName(user.name, 'Player');
-      const safeAvatar = this.safeAvatarUrl(user.avatarUrl);
-      const avatarImg = safeAvatar
-        ? `<img src="${this.escapeHtml(safeAvatar)}" alt="${this.escapeHtml(displayName)}" class="nav-avatar" decoding="async">`
-        : `<span class="nav-avatar-placeholder">${this.escapeHtml((displayName || 'P').charAt(0).toUpperCase())}</span>`;
-
-      authHtml = `
-        <a href="/profile.html" class="nav-user-badge${isProfilePage ? ' active' : ''}" title="${this.escapeHtml(displayName)}">
-          ${avatarImg}
-          <span class="nav-user-name">
-            ${this.escapeHtml(displayName)}
-          </span>
-        </a>
-      `;
-    } else {
-      authHtml = `
-        <a href="/login.html" class="btn-login"><span class="btn-login-icon">⚾ </span><span>${this.escapeHtml(this.t('nav.login'))}</span></a>
-      `;
-    }
-
-    // nav.art community art merged into nav.gallery (/art.html redirects to /gallery.html#community-art-section; nav-link-art alias)
-    const clubhouseLinkHtml = `<a href="/clubhouse.html" role="menuitem" class="nav-dropdown-item nav-link-clubhouse${isClubhousePage ? ' active' : ''}" title="${this.escapeHtml(this.t('nav.clubhouse_title', 'Clubhouse Chat & Voice Dugout'))}"><span>💬</span> <span>${this.escapeHtml(this.t('nav.clubhouse', 'Clubhouse'))}</span></a>`;
-    const galleryLinkHtml = `<a href="/gallery.html" role="menuitem" class="nav-dropdown-item nav-link-gallery${isGalleryPage || isArtPage ? ' active' : ''}" title="${this.escapeHtml(this.t('nav.gallery_title', 'Photo, Video & Art Gallery'))}"><span class="nav-gallery-icon">📸</span> <span>${this.escapeHtml(this.t('nav.gallery', 'Gallery & Art'))}</span></a>`;
-    const aboutLinkHtml = `<a href="/about.html" role="menuitem" class="nav-dropdown-item nav-link-about${isAboutPage ? ' active' : ''}" title="${this.escapeHtml(this.t('nav.about_title', 'About Pickup Baseball Foundation'))}"><span>ℹ️</span> <span>${this.escapeHtml(this.t('nav.about', 'About Us'))}</span></a>`;
-    const donateLinkHtml = `<a href="/donate.html" role="menuitem" class="nav-dropdown-item nav-link-donate${isDonatePage ? ' active' : ''}"><span>❤️</span> <span>${this.escapeHtml(this.t('nav.donate'))}</span></a>`;
-    const adminLinkHtml = (user && user.canManageEvents)
-      ? `<div class="nav-dropdown-divider" role="separator"></div><a href="/admin.html" role="menuitem" class="nav-dropdown-item nav-link-admin${isAdminPage ? ' active' : ''}"><span>${this.escapeHtml(user.isAdmin ? this.t('nav.admin') : this.t('nav.org'))}</span></a>`
-      : '';
-
-    const menuActive = isClubhousePage || isGalleryPage || isArtPage || isAboutPage || isDonatePage || isAdminPage;
-
-    navContainer.innerHTML = `
-      <div class="nav-wrap">
-        <a href="/index.html" class="brand">
-          <img src="/logo.svg" alt="Pickup Baseball Foundation Logo" class="brand-logo">
-          <span class="brand-text"><span class="brand-line">Pickup Baseball</span> <span class="brand-line">Foundation</span></span>
-          <span class="brand-short">PBF</span>
-        </a>
-        <div class="nav-links">
-          ${authHtml}
-          <div class="nav-dropdown" id="nav-menu-dropdown">
-            <button type="button" id="nav-menu-toggle" class="nav-menu-btn${menuActive ? ' has-active' : ''}" aria-haspopup="true" aria-expanded="false" aria-controls="nav-menu-panel">
-              <span class="nav-menu-icon" aria-hidden="true">☰</span>
-              <span class="nav-menu-label">${this.escapeHtml(this.t('nav.menu', 'Menu'))}</span>
-              <span class="nav-menu-caret" aria-hidden="true">▾</span>
-            </button>
-            <div id="nav-menu-panel" class="nav-dropdown-menu" role="menu" aria-hidden="true">
-              ${clubhouseLinkHtml}
-              ${galleryLinkHtml}
-              ${aboutLinkHtml}
-              ${donateLinkHtml}
-              ${adminLinkHtml}
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
-
-    this.initNavDropdown();
-    this.renderFooter();
-    const langSelect = document.getElementById('lang-select');
-    if (langSelect && langSelect.value !== currentLang) {
-      langSelect.value = currentLang;
-    }
-  },
-
-  initNavDropdown() {
-    if (typeof document === 'undefined' || typeof document.getElementById !== 'function') return;
-    const dropdown = document.getElementById('nav-menu-dropdown');
-    const toggleBtn = document.getElementById('nav-menu-toggle');
-    const panel = document.getElementById('nav-menu-panel');
-    if (!dropdown || !toggleBtn || !panel) return;
-
-    const setOpen = (open) => {
-      dropdown.classList.toggle('is-open', open);
-      toggleBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
-      panel.setAttribute('aria-hidden', open ? 'false' : 'true');
-    };
-
-    toggleBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      setOpen(!dropdown.classList.contains('is-open'));
     });
 
-    panel.addEventListener('click', (e) => {
-      if (e.target && e.target.closest && e.target.closest('a')) {
-        setOpen(false);
-      }
+    window.addEventListener('beforeinstallprompt', function (e) {
+      /** @type {any} */ (window).deferredPwaPrompt = e;
     });
-
-    if (!this._navDropdownGlobalBound && typeof document.addEventListener === 'function') {
-      this._navDropdownGlobalBound = true;
-      document.addEventListener('click', (e) => {
-        const dd = document.getElementById('nav-menu-dropdown');
-        const btn = document.getElementById('nav-menu-toggle');
-        const p = document.getElementById('nav-menu-panel');
-        if (!dd || !btn || !p || !dd.classList.contains('is-open')) return;
-        if (!dd.contains(e.target)) {
-          dd.classList.remove('is-open');
-          btn.setAttribute('aria-expanded', 'false');
-          p.setAttribute('aria-hidden', 'true');
-        }
-      });
-      document.addEventListener('keydown', (e) => {
-        if (e.key !== 'Escape') return;
-        const dd = document.getElementById('nav-menu-dropdown');
-        const btn = document.getElementById('nav-menu-toggle');
-        const p = document.getElementById('nav-menu-panel');
-        if (dd && dd.classList.contains('is-open')) {
-          dd.classList.remove('is-open');
-          if (btn) btn.setAttribute('aria-expanded', 'false');
-          if (p) p.setAttribute('aria-hidden', 'true');
-          if (btn && typeof btn.focus === 'function') btn.focus();
-        }
-      });
-    }
-  },
-
-  formatDisplayName(rawName, fallback) {
-    const fb = fallback !== undefined ? fallback : 'Player';
-    const raw = rawName ? String(rawName).trim() : '';
-    if (!raw) return fb;
-    const parts = raw.split(/\s+/);
-    if (parts.length < 2) return raw;
-    const first = parts.slice(0, -1).join(' ');
-    const last = parts[parts.length - 1].replace(/\.+$/, '');
-    if (!last) return first || fb;
-    return first + ' ' + last.charAt(0) + '.';
-  },
-
-  formatDisplayNameList(rawList) {
-    const raw = rawList ? String(rawList).trim() : '';
-    if (!raw) return '';
-    return raw.split(',').map((entry) => {
-      const trimmed = entry.trim();
-      return trimmed ? this.formatDisplayName(trimmed, trimmed) : '';
-    }).filter(Boolean).join(', ');
-  },
-
-  abbreviateDisplayNames(records, nameProp, idProp, fallback) {
-    const list = Array.isArray(records) ? records : [];
-    const prop = nameProp || 'name';
-    const fb = fallback !== undefined ? fallback : 'Player';
-    const seenIds = {};
-    const keyCounts = {};
-
-    const parsed = list.map((rec, idx) => {
-      const raw = (rec && rec[prop]) ? String(rec[prop]).trim() : '';
-      const parts = raw ? raw.split(/\s+/) : [];
-      const first = parts.length > 1 ? parts.slice(0, -1).join(' ') : (parts[0] || '');
-      const last = parts.length > 1 ? parts[parts.length - 1].replace(/\.+$/, '') : '';
-      const key = (first && last) ? (first.toLowerCase() + '|' + last.charAt(0).toLowerCase()) : '';
-      const uid = rec && (idProp ? rec[idProp] : (rec.user_id || rec.id));
-      const personId = uid ? ('u:' + String(uid)) : (raw ? ('n:' + raw.toLowerCase()) : ('i:' + idx));
-      if (key && !Object.prototype.hasOwnProperty.call(seenIds, personId)) {
-        seenIds[personId] = true;
-        keyCounts[key] = (keyCounts[key] || 0) + 1;
-      }
-      return { raw: raw, first: first, last: last, key: key };
-    });
-
-    return parsed.map((p) => {
-      if (!p.raw) return fb;
-      if (!p.last) return p.raw;
-      const len = keyCounts[p.key] > 1 ? 2 : 1;
-      return p.first + ' ' + p.last.slice(0, len) + '.';
-    });
-  },
-
-  isMemberRole(role) {
-    return role === 'member' || role === 'player';
-  },
-
-  escapeHtml(str) {
-    if (str === null || str === undefined) return '';
-    return String(str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  },
-
-  parseMediaType(url, explicitType) {
-    if (explicitType && explicitType !== 'auto') return explicitType;
-    if (!url) return 'none';
-    const u = String(url).trim();
-    if (/youtube\.com\/watch\?|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\//i.test(u)) {
-      return 'youtube';
-    }
-    if (/\.(jpeg|jpg|png|webp|gif|svg)(\?.*)?$/i.test(u) || /imgur\.com\//i.test(u)) {
-      return 'image';
-    }
-    if (/\.(mp4|webm|mov)(\?.*)?$/i.test(u)) {
-      return 'video';
-    }
-    if (/\.(mp3|wav|ogg|m4a)(\?.*)?$/i.test(u)) {
-      return 'audio';
-    }
-    return 'link';
-  },
-
-  getYouTubeId(url) {
-    if (!url) return null;
-    const match = String(url).match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([\w-]{11})/i);
-    return match ? match[1] : null;
-  },
-
-  getYouTubeEmbedUrl(url) {
-    const id = this.getYouTubeId(url);
-    if (!id) return '';
-    return 'https://www.youtube-nocookie.com/embed/' + id;
-  },
-
-  getGoogleDriveId(url) {
-    if (!url) return null;
-    const match = String(url).match(/(?:drive\.google\.com\/(?:file\/d\/|open\?id=)|docs\.google\.com\/file\/d\/)([\w-]{25,})/i);
-    return match ? match[1] : null;
-  },
-
-  getGoogleDriveEmbedUrl(url) {
-    const id = this.getGoogleDriveId(url);
-    if (!id) return '';
-    return 'https://drive.google.com/file/d/' + id + '/preview';
-  },
-
-  safeUrl(rawUrl) {
-    if (!rawUrl || typeof rawUrl !== 'string') return '';
-    const trimmed = rawUrl.trim();
-    // eslint-disable-next-line no-control-regex
-    if (/[\u0000-\u001f\u007f]/.test(trimmed)) return '';
-    if (trimmed.startsWith('/') && !trimmed.startsWith('//') && !trimmed.startsWith('/\\')) {
-      return trimmed;
-    }
-    try {
-      const parsed = new URL(trimmed);
-      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
-        return parsed.href;
-      }
-    } catch (e) { /* invalid URL rejected */ }
-    return '';
-  },
-
-  safeAvatarUrl(rawUrl) {
-    if (!rawUrl || typeof rawUrl !== 'string') return '';
-    const trimmed = rawUrl.trim();
-    if (/^\/api\/users\/\d+\/avatar(\?v=\d+)?$/i.test(trimmed)) {
-      return trimmed;
-    }
-    if (/^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/=]+$/i.test(trimmed)) {
-      return trimmed;
-    }
-    return this.safeUrl(trimmed);
-  },
-
-  icon(name, size = 20) {
-    const attrs = `width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -0.18em; flex-shrink: 0;"`;
-    const icons = {
-      calendar: `<svg ${attrs}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`,
-      pin: `<svg ${attrs}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>`,
-      users: `<svg ${attrs}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
-      shield: `<svg ${attrs}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`,
-      bag: `<svg ${attrs}><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>`,
-      mail: `<svg ${attrs}><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>`,
-      chat: `<svg ${attrs}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`
-    };
-    return icons[name] || '';
-  },
-
-  renderCookieNotice() {
-    if (typeof document === 'undefined' || typeof window === 'undefined') return;
-    try {
-      if (localStorage.getItem('pbf_cookie_consent') === '1') return;
-    } catch (e) { /* localStorage unavailable */ }
-    if (document.getElementById('cookie-notice-banner')) return;
-
-    const banner = document.createElement('aside');
-    banner.id = 'cookie-notice-banner';
-    banner.className = 'cookie-notice-banner';
-    banner.setAttribute('role', 'region');
-    banner.setAttribute('aria-label', 'Cookie and privacy notice');
-    banner.style.cssText = 'position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); width: calc(100% - 32px); max-width: 660px; background: #003831; color: #ffffff; padding: 14px 18px; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.35); z-index: 99999; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 14px; font-size: 0.88rem; line-height: 1.4; border: 1px solid rgba(255,255,255,0.18);';
-
-    banner.innerHTML = '<div style="display: flex; align-items: center; gap: 10px; flex: 1 1 220px; min-width: 0;">' +
-      '<span style="font-size: 1.3rem;">🍪</span>' +
-      '<span><strong>Cookie &amp; Privacy Notice:</strong> We only use essential session cookies and Cloudflare security cookies to prevent spam and keep your account safe. We do not use third-party tracking or advertising cookies.</span>' +
-      '</div>' +
-      '<button type="button" id="cookie-notice-dismiss" class="btn btn-primary btn-sm" style="background: #FD5A1E; color: #ffffff; border: none; font-weight: 700; white-space: nowrap; padding: 6px 14px; border-radius: 6px; cursor: pointer;">Got It</button>';
-
-    document.body.appendChild(banner);
-    const dismissBtn = document.getElementById('cookie-notice-dismiss');
-    if (dismissBtn) {
-      dismissBtn.addEventListener('click', function() {
-        try {
-          localStorage.setItem('pbf_cookie_consent', '1');
-        } catch (e) { /* localStorage unavailable */ }
-        banner.remove();
-      });
-    }
   }
-};
-
-window.API = API;
-API.initTheme();
-// Global CSP-safe image fallback handler (replaces inline onerror attributes)
-document.addEventListener('error', (e) => {
-  const t = e.target;
-  if (t && t.tagName === 'IMG' && t.dataset && t.dataset.fallback && !t.dataset.fallbackApplied) {
-    t.dataset.fallbackApplied = '1';
-    const safeFallback = API.safeUrl(t.dataset.fallback);
-    if (safeFallback) t.src = safeFallback;
-  }
-}, true);
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
-    API.initI18n();
-    API.renderCookieNotice();
-  });
-} else {
-  API.initI18n();
-  API.renderCookieNotice();
-}
-
-// Global unexpected client error & unhandled rejection listeners (zero-PII diagnostic ring buffer)
-if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
-  window.addEventListener('error', (e) => {
-    if (e && e.target && e.target.tagName && !e.error && !e.message) return;
-    const errObj = (e && e.error) ? e.error : null;
-    API.recordDiagnostic({
-      requestId: (errObj && errObj.requestId) || '',
-      route: (window.location && window.location.pathname) || '/',
-      method: 'CLIENT',
-      status: (errObj && errObj.status) || 0,
-      code: (errObj && errObj.code) || 'CLIENT_ERROR',
-      'X-App-Version': API.CLIENT_VERSION
-    });
-  });
-  window.addEventListener('unhandledrejection', (e) => {
-    const reason = (e && e.reason) ? e.reason : null;
-    API.recordDiagnostic({
-      requestId: (reason && reason.requestId) || '',
-      route: (window.location && window.location.pathname) || '/',
-      method: 'CLIENT',
-      status: (reason && reason.status) || 0,
-      code: (reason && reason.code) || 'CLIENT_ERROR',
-      'X-App-Version': API.CLIENT_VERSION
-    });
-  });
-}
-
-// Register PWA Service Worker
-if (typeof window !== 'undefined' && 'serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').then((reg) => {
-      reg.addEventListener('updatefound', () => {
-        const newWorker = reg.installing;
-        if (newWorker) {
-          newWorker.addEventListener('statechange', () => {
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              console.log('[PWA] New version cached and ready.');
-            }
-          });
-        }
-      });
-    }).catch((err) => {
-      console.warn('[PWA] Service worker registration error:', err);
-    });
-  });
-
-  // Track install prompt event for custom install triggers if needed
-  window.addEventListener('beforeinstallprompt', (e) => {
-    window.deferredPwaPrompt = e;
-  });
-}
+})();

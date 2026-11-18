@@ -562,14 +562,33 @@ async function runPublicShellAndDiagnosticsSmoke(browser, session, server, track
   assert(diagSmoke.clearedAfter === 0 && diagSmoke.sessionCleared === null, 'clearDiagnostics empties memory and sessionStorage');
   record('Error diagnostics ring buffer + "Copy Diagnostic Details" clipboard copy verified in browser');
 
-  // Dark mode + Arabic RTL check + mobile viewport overflow
-  await session.evaluate('localStorage.setItem("pickup_theme", "dark"); localStorage.setItem("pickup_lang", "ar");');
-  await session.setViewport(390, 844);
-  await session.navigateAndCheck(`${server.baseUrl}/index.html`, 'index.html (ar/dark/mobile)', tracker);
-  await session.waitFor('document.documentElement.getAttribute("data-theme") === "dark" && document.documentElement.getAttribute("dir") === "rtl"');
-  const overflowMobile = await session.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 2');
-  assert(overflowMobile, 'mobile index (ar/RTL) has no horizontal overflow');
-  record('Dark mode + RTL Arabic layout + mobile (390x844) render without overflow');
+  // Dark mode + RTL (Arabic 'ar' & Persian 'fa') desktop, mobile, and mobile drawer checks
+  for (const rtlLang of ['ar', 'fa']) {
+    // 1. Desktop RTL check (1280x900)
+    await session.evaluate(`localStorage.setItem("pickup_theme", "dark"); localStorage.setItem("pickup_lang", "${rtlLang}");`);
+    await session.setViewport(1280, 900);
+    await session.navigateAndCheck(`${server.baseUrl}/index.html`, `index.html (${rtlLang}/dark/desktop)`, tracker);
+    await session.waitFor(`document.documentElement.getAttribute("data-theme") === "dark" && document.documentElement.getAttribute("dir") === "rtl"`);
+    const overflowDesktop = await session.evaluate('document.documentElement.scrollWidth <= window.innerWidth');
+    assert(overflowDesktop, `desktop index (${rtlLang}/RTL) has zero horizontal overflow`);
+
+    // 2. Mobile RTL check (390x844)
+    await session.setViewport(390, 844);
+    await session.waitFor('document.documentElement.scrollWidth <= window.innerWidth + 2');
+    const overflowMobile = await session.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 2');
+    assert(overflowMobile, `mobile index (${rtlLang}/RTL) has zero horizontal overflow`);
+
+    // 3. Mobile menu dropdown RTL check
+    const menuToggle = await session.evaluate('Boolean(document.getElementById("nav-menu-toggle"))');
+    if (menuToggle) {
+      await clickEl(session, '#nav-menu-toggle');
+      await session.waitFor('document.getElementById("nav-menu-toggle").getAttribute("aria-expanded") === "true"');
+      const overflowDrawer = await session.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 2');
+      assert(overflowDrawer, `mobile index (${rtlLang}/RTL) with menu open has zero horizontal overflow`);
+      await clickEl(session, '#nav-menu-toggle');
+    }
+  }
+  record('Dark mode + RTL (ar/fa) layout desktop + mobile + mobile-drawer render without horizontal overflow');
 
   await session.evaluate('localStorage.setItem("pickup_theme", "light"); localStorage.setItem("pickup_lang", "en");');
   await session.setViewport(1280, 900);
@@ -627,6 +646,58 @@ async function runPublicShellAndDiagnosticsSmoke(browser, session, server, track
   await clickEl(session, '#btn-done-theme-modal');
   await session.evaluate('localStorage.removeItem("pickup_theme_mode"); localStorage.removeItem("pickup_theme"); localStorage.removeItem("pickup_color_theme");');
   record('clubhouse.html theme modal switches Light/Dark mode & MLB market palettes cleanly');
+
+  // Verify unified overlay focus controller on clubhouse modals (inert siblings, focus trap, Escape)
+  await clickEl(session, '#btn-user-vault');
+  await session.waitFor('!document.getElementById("ch-vault-modal").classList.contains("hidden")');
+  const vaultInertState = await session.evaluate(`({
+    appInert: document.getElementById("clubhouse-app").inert === true,
+    activeRole: document.activeElement ? document.activeElement.tagName : ''
+  })`);
+  assert(vaultInertState.appInert, 'Opening ch-vault-modal sets sibling #clubhouse-app to inert');
+  await session.evaluate('document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))');
+  await session.waitFor('document.getElementById("ch-vault-modal").classList.contains("hidden")');
+  const vaultRestoredState = await session.evaluate(`({
+    appInert: document.getElementById("clubhouse-app").inert === true,
+    focusRestored: document.activeElement === document.getElementById("btn-user-vault")
+  })`);
+  assert(!vaultRestoredState.appInert, 'Closing ch-vault-modal clears inert from #clubhouse-app');
+  assert(vaultRestoredState.focusRestored, 'Closing ch-vault-modal restores focus to trigger button');
+  record('clubhouse.html vault modal verifies unified focus trap, sibling inert, and trigger focus restoration');
+
+  // Clubhouse Mobile Drawers RTL check (sidebar & context drawers in RTL)
+  for (const rtlLang of ['ar', 'fa']) {
+    await session.evaluate(`localStorage.setItem("pickup_lang", "${rtlLang}");`);
+    await session.setViewport(390, 844);
+    await session.navigateAndCheck(`${server.baseUrl}/clubhouse.html`, `clubhouse.html (${rtlLang}/mobile)`, tracker);
+    await session.waitFor(`document.documentElement.getAttribute("dir") === "rtl"`);
+
+    const chOverflowMobile = await session.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 2');
+    assert(chOverflowMobile, `clubhouse mobile (${rtlLang}/RTL) has zero horizontal overflow`);
+
+    // Open sidebar mobile drawer
+    const hasSidebarBtn = await session.evaluate('Boolean(document.getElementById("btn-mobile-sidebar"))');
+    if (hasSidebarBtn) {
+      await clickEl(session, '#btn-mobile-sidebar');
+      await session.waitFor('document.querySelector(".ch-sidebar.mobile-open")');
+      const overflowSidebar = await session.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 2');
+      assert(overflowSidebar, `clubhouse mobile (${rtlLang}/RTL) with sidebar open has zero horizontal overflow`);
+      await clickEl(session, '#btn-mobile-sidebar');
+    }
+
+    // Open context panel drawer if available
+    const hasContextBtn = await session.evaluate('Boolean(document.getElementById("btn-mobile-context"))');
+    if (hasContextBtn) {
+      await clickEl(session, '#btn-mobile-context');
+      await session.waitFor('document.querySelector(".ch-context-panel.mobile-open")');
+      const overflowContext = await session.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 2');
+      assert(overflowContext, `clubhouse mobile (${rtlLang}/RTL) with context panel open has zero horizontal overflow`);
+      await clickEl(session, '#btn-mobile-context');
+    }
+  }
+  await session.evaluate('localStorage.setItem("pickup_lang", "en");');
+  await session.setViewport(1280, 900);
+  record('clubhouse.html mobile sidebar & context drawers render in RTL (ar/fa) without horizontal overflow');
 }
 
 /**
@@ -729,6 +800,14 @@ async function runMemberLoginAndWaiverJourney(browser, server, tracker, record) 
     await session.navigateAndCheck(`${server.baseUrl}/waiver.html`, 'waiver.html (member signing)', tracker);
     await session.waitFor('document.getElementById("waiver-sign-form") && document.getElementById("waiver-sign-form").style.display !== "none"');
 
+    // Switch language to Spanish (es) to verify localized waiver rendering & collapsible English original
+    await session.evaluate(`(async () => {
+      await window.API.setLang('es');
+    })()`);
+    await session.waitFor('document.getElementById("waiver-english-original-details") && document.getElementById("waiver-english-original-details").style.display !== "none"');
+    const noticeVisible = await session.evaluate('document.getElementById("waiver-controlling-notice-banner").style.display !== "none"');
+    assert(noticeVisible, 'Non-English locale displays controlling-English notice banner');
+
     await fillInput(session, '#waiver-printed-name', 'Charlie Player');
     const canvasBox = await session.evaluate(`(() => {
       const c = document.getElementById('waiver-sig-canvas');
@@ -763,16 +842,29 @@ async function runMemberLoginAndWaiverJourney(browser, server, tracker, record) 
     })()`);
 
     await clickEl(session, '#btn-submit-waiver');
-    await session.waitFor('document.querySelector("#waiver-alert .alert-success") && document.getElementById("waiver-status-banner").textContent.includes("Digital Waiver Signed")', 10000);
+    await session.waitFor('document.querySelector("#waiver-alert .alert-success") && document.getElementById("waiver-status-banner").textContent.includes("Exención digital firmada")', 10000);
 
     const waiverRow = server.baseballDb.prepare(
-      'SELECT printed_name, signature_type, document_sha256, certificate_id FROM waivers WHERE user_id = ? ORDER BY id DESC LIMIT 1'
+      'SELECT printed_name, signature_type, document_sha256, certificate_id, waiver_locale FROM waivers WHERE user_id = ? ORDER BY id DESC LIMIT 1'
     ).get(server.playerUser.id);
     assert(
       waiverRow && waiverRow.printed_name === 'Charlie Player' && waiverRow.signature_type === 'drawn' && Boolean(waiverRow.document_sha256) && Boolean(waiverRow.certificate_id),
       'Signed digital waiver with SHA-256 provenance persisted to database'
     );
-    record('waiver.html canvas signature drawing + ESIGN consent + SHA-256 sealing succeeds');
+    assert(waiverRow.waiver_locale === 'es', 'Signed waiver seals waiver_locale onto waivers table');
+
+    // Restore language to English
+    await session.evaluate(`(async () => {
+      await window.API.setLang('en');
+    })()`);
+
+    record('waiver.html localized rendering + canvas signature drawing + ESIGN consent + SHA-256 sealing succeeds');
+
+    await session.navigateAndCheck(`${server.baseUrl}/profile.html`, 'profile.html (history panel)', tracker);
+    await session.waitFor('document.getElementById("profile-history-panel")', 10000);
+    await session.evaluate('document.getElementById("profile-history-panel").open = true');
+    await session.waitFor('document.getElementById("history-counts") && document.getElementById("history-counts").textContent.includes("Events attended")', 10000);
+    record('profile.html lazy-loads private My Attendance & Milestones panel');
   } finally {
     await browser.disposeSessionContext(session, 'Member Login & Waiver Journey', tracker);
   }
@@ -786,7 +878,20 @@ async function runAdminEventAndTaskJourney(browser, server, tracker, record) {
   try {
     await session.setCookie(server.adminCookie, server.baseUrl);
     await session.navigateAndCheck(`${server.baseUrl}/admin.html`, 'admin.html', tracker);
-    await session.waitFor('document.getElementById("admin-main-container").style.display === "block" && Boolean(document.getElementById("btn-add-task-row"))');
+    await session.waitFor('(document.getElementById("main-content") || document.getElementById("admin-main-container")).style.display === "block" && Boolean(document.getElementById("btn-add-task-row"))');
+
+    // 4.0 Admin Setup Health checklist card rendering & dismissal persistence (#63)
+    await session.waitFor('document.getElementById("admin-setup-health-card") && document.getElementById("admin-setup-health-card").style.display === "block" && document.querySelectorAll("#admin-setup-health-list .setup-health-item").length >= 4', 10000);
+    await clickEl(session, '#btn-dismiss-setup-health');
+    const setupHealthDismissed = await session.evaluate(
+      'document.getElementById("admin-setup-health-card").style.display === "none" && localStorage.getItem("pbf_setup_health_dismissed") === "1"'
+    );
+    assert(setupHealthDismissed, 'Dismissing Admin Setup Health card hides card and persists dismissal in localStorage');
+    await session.navigateAndCheck(`${server.baseUrl}/admin.html`, 'admin.html (after setup-health dismiss)', tracker);
+    await session.waitFor('(document.getElementById("main-content") || document.getElementById("admin-main-container")).style.display === "block" && Boolean(document.getElementById("btn-add-task-row"))');
+    const setupHealthStillHidden = await session.evaluate('document.getElementById("admin-setup-health-card").style.display === "none"');
+    assert(setupHealthStillHidden, 'Admin Setup Health card stays hidden across page reload after dismissal');
+    record('admin.html Setup Health checklist card renders and persists dismissal');
 
     await fillInput(session, '#event-title-input', 'Browser Smoke Sandlot Event');
     await fillInput(session, '#event-location-input', 'Bushrod Park Field 2');
@@ -817,6 +922,17 @@ async function runAdminEventAndTaskJourney(browser, server, tracker, record) {
     const dutiesText = await session.evaluate('document.getElementById("rsvp-duties-list").textContent');
     assert(dutiesText.includes('Scorekeeper'), 'Custom Volunteer Task "Scorekeeper" rendered on newly created Event page');
     record('admin.html Event + custom Volunteer Task creation redirects and renders on event.html');
+
+    // 4.1 Native Share Event and Organizer Invite Link controls smoke check (#59)
+    const shareBtnFound = await session.evaluate('Boolean(document.getElementById("event-share-btn"))');
+    assert(shareBtnFound, 'event.html renders native Share Event button in header');
+
+    await session.evaluate('try { Object.defineProperty(navigator, "share", { value: undefined, configurable: true, writable: true }); } catch (_) {}');
+    await clickEl(session, '#event-share-btn');
+    await session.waitFor('Boolean(document.querySelector(".pbf-toast"))', 5000);
+    const toastShown = await session.evaluate('Boolean(document.querySelector(".pbf-toast"))');
+    assert(toastShown, 'Clicking Share Event button triggers toast confirmation or clipboard copy');
+    record('event.html native Share Event button interacts cleanly');
   } finally {
     await browser.disposeSessionContext(session, 'Admin Event & Task Journey', tracker);
   }
@@ -1005,6 +1121,83 @@ async function runServiceWorkerAndOfflineSmoke(browser, defaultSession, server, 
     await defaultSession.navigateAndCheck(`${server.baseUrl}/index.html`, 'index.html (offline SW cache)', tracker);
     await defaultSession.waitFor('document.querySelector("header.site-header") !== null && document.getElementById("footer-app-version") !== null');
     record('CDP offline emulation serves cached public shell pages cleanly via Service Worker');
+
+    // Issue #58: Verify offline banner, disabled submit buttons with offline label, and Retry recovery
+    await defaultSession.navigateAndCheck(`${server.baseUrl}/event.html?id=${server.testEventId}`, 'event.html (offline banner & disabled submit)', tracker);
+    await defaultSession.waitFor('document.getElementById("global-offline-banner") && document.getElementById("global-offline-banner").getAttribute("role") === "status" && document.getElementById("global-offline-banner").style.display !== "none"');
+    const offlineState = await defaultSession.evaluate(`(() => {
+      const banner = document.getElementById('global-offline-banner');
+      const submitBtn = document.getElementById('rsvp-submit-btn');
+      return {
+        bannerVisible: banner && banner.style.display !== 'none' && banner.getAttribute('role') === 'status',
+        bannerText: banner ? banner.textContent : '',
+        submitDisabled: submitBtn ? submitBtn.disabled : false,
+        submitText: submitBtn ? submitBtn.textContent.trim() : ''
+      };
+    })()`);
+    assert(offlineState.bannerVisible, 'Global offline banner with role="status" is displayed while offline');
+    assert(offlineState.submitDisabled, 'Online-only submit button is disabled while offline');
+    assert(offlineState.submitText === 'Unavailable Offline', `Expected submit text "Unavailable Offline", got "${offlineState.submitText}"`);
+    record('Global role="status" offline banner displays and disables/labels online-only submit controls');
+
+    // Verify localStorage zero-PII cache contents: attendees, waitlist, comments, bp_signups are empty, no my_rsvp PII
+    const cachePiiCheck = await defaultSession.evaluate(`(() => {
+      const eventKey = 'pickup_cached_event_${server.testEventId}';
+      const raw = localStorage.getItem(eventKey);
+      if (!raw) return { found: false, zeroPii: false };
+      const parsed = JSON.parse(raw);
+      const hasAttendeePii = Array.isArray(parsed.attendees) && parsed.attendees.length > 0;
+      const hasWaitlistPii = Array.isArray(parsed.waitlist) && parsed.waitlist.length > 0;
+      const hasCommentsPii = Array.isArray(parsed.comments) && parsed.comments.length > 0;
+      const hasBpPii = Array.isArray(parsed.bp_signups) && parsed.bp_signups.length > 0;
+      const hasMyRsvp = Boolean(parsed.myRsvp || parsed.my_rsvp);
+      return {
+        found: true,
+        zeroPii: !hasAttendeePii && !hasWaitlistPii && !hasCommentsPii && !hasBpPii && !hasMyRsvp
+      };
+    })()`);
+    if (cachePiiCheck.found) {
+      assert(cachePiiCheck.zeroPii, 'Cached pickup_cached_event_* contains zero attendee names, comments, BP signups, or my_rsvp PII');
+    }
+
+    // Restore network conditions and test Retry UX recovery
+    await defaultSession.send('Network.emulateNetworkConditions', {
+      offline: false,
+      latency: 0,
+      downloadThroughput: -1,
+      uploadThroughput: -1
+    });
+
+    await clickEl(defaultSession, '#global-offline-retry-btn');
+    await defaultSession.waitFor('!document.getElementById("global-offline-banner") || document.getElementById("global-offline-banner").style.display === "none"', 10000);
+    const restoredSubmitState = await defaultSession.evaluate(`(() => {
+      const submitBtn = document.getElementById('rsvp-submit-btn');
+      return {
+        disabled: submitBtn ? submitBtn.disabled : false,
+        text: submitBtn ? submitBtn.textContent.trim() : ''
+      };
+    })()`);
+    assert(!restoredSubmitState.disabled, 'Submit button is re-enabled after successful network Retry');
+    record('Offline banner recovers cleanly and re-enables submit controls on network Retry');
+
+    // Verify logout wipes all cached event and user entries
+    await defaultSession.evaluate(`(() => {
+      localStorage.setItem('pickup_cached_event_test_mock', JSON.stringify({ event: { id: 999 } }));
+      localStorage.setItem('pickup_cached_user', JSON.stringify({ id: 999, email: 'test@example.com' }));
+    })()`);
+    await defaultSession.evaluate('window.API.clearDataCaches()');
+    const storageKeysAfterClear = await defaultSession.evaluate(`(() => {
+      const remaining = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && (k.startsWith('pickup_cached_event') || k === 'pickup_cached_user')) {
+          remaining.push(k);
+        }
+      }
+      return remaining;
+    })()`);
+    assert(storageKeysAfterClear.length === 0, `Logout/clearDataCaches must wipe all cached Event/user entries, remaining: ${storageKeysAfterClear.join(', ')}`);
+    record('Logout wipes all cached Event and user entries from localStorage');
   } finally {
     await defaultSession.send('Network.emulateNetworkConditions', {
       offline: false,

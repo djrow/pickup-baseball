@@ -103,11 +103,12 @@ export function buildRsvpConfirmationEmail(env, origin, { email, name, event, du
   if (sCount > 0) groupParts.push(`${sCount} ${pCount === 0 && dutyName ? (sCount === 1 ? 'volunteer' : 'volunteers/spectators') : (sCount === 1 ? 'spectator' : 'spectators')}`);
   const groupSummary = groupParts.join(', ') || '1 attendee';
   const safeLocationUrl = sanitizeHttpUrl(event.location_url);
+  const waiverLink = `${origin}/waiver.html?redirect=${encodeURIComponent(`/event.html?id=${event.id}`)}`;
 
   const subject = pCount > 0
     ? `Confirmed: You're in for ${event.title} (${dateFormatted})`
     : `Confirmed: RSVP for ${event.title} (${dateFormatted})`;
-  const text = `Hi ${name},\n\nYour group RSVP is confirmed for pickup baseball!\n\nEvent: ${event.title}\nDate & Time: ${dateFormatted}\nLocation: ${event.location}\nYour Group: ${groupSummary}${guestNames ? ` (${guestNames})` : ''}\n${dutyName ? `Group Task(s): ${dutyName}\n` : ''}${gearBringing ? `Shared Gear: ${gearBringing}\n` : ''}\nVisit the event page here:\n${manageLink}\n\nSee you at the field!\n- ${appName}`;
+  const text = `Hi ${name},\n\nYour group RSVP is confirmed for pickup baseball!\n\nEvent: ${event.title}\nDate & Time: ${dateFormatted}\nLocation: ${event.location}\nYour Group: ${groupSummary}${guestNames ? ` (${guestNames})` : ''}\n${dutyName ? `Group Task(s): ${dutyName}\n` : ''}${gearBringing ? `Shared Gear: ${gearBringing}\n` : ''}\nSign Waiver Before Arrival:\n${waiverLink}\n\nVisit the event page here:\n${manageLink}\n\nSee you at the field!\n- ${appName}`;
 
   const html = renderEmailLayout({
     origin,
@@ -123,6 +124,7 @@ export function buildRsvpConfirmationEmail(env, origin, { email, name, event, du
         ${safeLocationUrl ? `<p style="margin: 4px 0;"><a href="${escapeHtml(safeLocationUrl)}" target="_blank" rel="noopener noreferrer" style="color: #FD5A1E; font-weight: 700;">View Map / Directions ↗</a></p>` : ''}
         ${dutyName ? `<p style="margin: 6px 0 4px 0; color: #003831;"><strong>🛡️ Group Task(s):</strong> <span style="background: #e6f0ed; padding: 2px 8px; border-radius: 4px; font-weight: 700;">${escapeHtml(dutyName)}</span></p>` : ''}
         ${gearBringing ? `<p style="margin: 4px 0; color: #0c1f1a;"><strong>🎒 Shared Gear:</strong> <em>${escapeHtml(gearBringing)}</em></p>` : ''}
+        <p style="margin: 8px 0 4px 0; padding-top: 8px; border-top: 1px dashed #dbe4e0; color: #003831;"><strong>📝 Safety Waiver:</strong> <a href="${escapeHtml(waiverLink)}" style="color: #FD5A1E; font-weight: 700;">Sign Waiver Before Arrival →</a></p>
       </div>`,
     ctaUrl: manageLink,
     ctaLabel: 'View Live Roster & Update RSVP →',

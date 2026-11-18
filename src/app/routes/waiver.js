@@ -15,6 +15,7 @@ import {
   constantTimeEqual,
   checkRateLimit,
   requireAuth,
+  requireOrganizer,
   requireAdmin
 } from '../security.js';
 import { isGDriveConfigured, uploadGDriveTextFile } from '../gdrive.js';
@@ -218,9 +219,10 @@ export function buildCanonicalWaiverPayload({
   signed_date,
   signature_type,
   signature_sha256,
-  electronic_consent
+  electronic_consent,
+  waiver_locale
 }) {
-  return JSON.stringify({
+  const payloadObj = {
     document_version: String(document_version || WAIVER_DOC_VERSION),
     waiver_text_sha256: String(waiver_text_sha256 || ''),
     email: String(email || '').trim().toLowerCase(),
@@ -229,7 +231,11 @@ export function buildCanonicalWaiverPayload({
     signature_type: String(signature_type || 'drawn'),
     signature_sha256: String(signature_sha256 || ''),
     electronic_consent: Boolean(electronic_consent)
-  });
+  };
+  if (waiver_locale && typeof waiver_locale === 'string') {
+    payloadObj.waiver_locale = String(waiver_locale).trim().toLowerCase();
+  }
+  return JSON.stringify(payloadObj);
 }
 
 export function renderSignedWaiverCertificateHtml(waiverRow, integrityVerified = true, includePii = false, env = null) {
@@ -250,6 +256,7 @@ export function renderSignedWaiverCertificateHtml(waiverRow, integrityVerified =
   const safeTextHash = escapeHtml(waiverRow.waiver_text_sha256 || '');
   const safeDocHash = escapeHtml(waiverRow.document_sha256 || '');
   const safeSeal = escapeHtml(waiverRow.provenance_seal || '');
+  const safeLocale = escapeHtml(waiverRow.waiver_locale || 'en');
   const sigData = includePii ? String(waiverRow.signature_data || '') : '';
   const isImgSig = includePii && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(sigData);
 
@@ -467,6 +474,8 @@ export function renderSignedWaiverCertificateHtml(waiverRow, integrityVerified =
         <div class="prov-val">Explicitly affirmed by signer prior to execution</div>
         <div class="prov-label">Waiver Text SHA-256:</div>
         <div class="prov-val">${safeTextHash}</div>
+        <div class="prov-label">Waiver Signed Locale:</div>
+        <div class="prov-val">${safeLocale}</div>
         <div class="prov-label">Signed Record SHA-256:</div>
         <div class="prov-val">${safeDocHash}</div>
         <div class="prov-label">HMAC-SHA256 Provenance Seal:</div>
@@ -617,6 +626,10 @@ waiverRouter.post('/sign', requireAuth, async (c) => {
 
   const cfg = resolveConfig(c.env);
   const spec = getWaiverSpec(c.env);
+  const rawLocale = String(body.waiver_locale || body.locale || '').trim().toLowerCase();
+  const validLocales = ['en', 'ar', 'es', 'fa', 'fr', 'hi', 'hy', 'ja', 'ko', 'pa', 'pt', 'ru', 'tl', 'vi', 'zh'];
+  const waiverLocale = validLocales.indexOf(rawLocale) !== -1 ? rawLocale : 'en';
+
   const waiverTextSha256 = await sha256Hex(spec.officialText);
   const signatureSha256 = await sha256Hex(signatureData);
   const canonicalPayload = buildCanonicalWaiverPayload({
@@ -627,7 +640,8 @@ waiverRouter.post('/sign', requireAuth, async (c) => {
     signed_date: signedDate,
     signature_type: signatureType,
     signature_sha256: signatureSha256,
-    electronic_consent: true
+    electronic_consent: true,
+    waiver_locale: waiverLocale
   });
   const documentSha256 = await sha256Hex(canonicalPayload);
   const certificateId = generateCertificateId(signedDate, spec.certificatePrefix);
@@ -645,8 +659,9 @@ waiverRouter.post('/sign', requireAuth, async (c) => {
         certificate_id, user_id, email, printed_name, signed_date,
         signature_type, signature_data, document_version,
         waiver_text_sha256, document_sha256, provenance_seal,
-        signer_ip, user_agent, electronic_consent, signed_at, retention_until
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+        signer_ip, user_agent, electronic_consent, signed_at, retention_until,
+        waiver_locale
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
     `).bind(
       certificateId,
       user.id,
@@ -662,7 +677,8 @@ waiverRouter.post('/sign', requireAuth, async (c) => {
       clientIp,
       userAgent,
       signedAtIso,
-      retentionUntilIso
+      retentionUntilIso,
+      waiverLocale
     ),
     c.env.DB.prepare(
       "UPDATE users SET waiver_status = 'digital', waiver_signed_at = ? WHERE id = ?"
@@ -681,6 +697,7 @@ waiverRouter.post('/sign', requireAuth, async (c) => {
     waiver_text_sha256: waiverTextSha256,
     document_sha256: documentSha256,
     provenance_seal: provenanceSeal,
+    waiver_locale: waiverLocale,
     signed_at: signedAtIso
   };
 
@@ -756,14 +773,15 @@ waiverRouter.post('/sign', requireAuth, async (c) => {
       document_version: spec.documentVersion,
       waiver_text_sha256: waiverTextSha256,
       document_sha256: documentSha256,
-      provenance_seal: provenanceSeal
+      provenance_seal: provenanceSeal,
+      waiver_locale: waiverLocale
     }
   }, 201);
 });
 
 async function verifyWaiverIntegrity(env, row, db) {
   const sigSha256 = await sha256Hex(row.signature_data);
-  const expectedCanonical = buildCanonicalWaiverPayload({
+  const computePayloadWithLocale = (includeLocale) => buildCanonicalWaiverPayload({
     document_version: row.document_version,
     waiver_text_sha256: row.waiver_text_sha256,
     email: row.email,
@@ -771,15 +789,35 @@ async function verifyWaiverIntegrity(env, row, db) {
     signed_date: row.signed_date,
     signature_type: row.signature_type,
     signature_sha256: sigSha256,
-    electronic_consent: Boolean(row.electronic_consent)
+    electronic_consent: Boolean(row.electronic_consent),
+    waiver_locale: includeLocale ? (row.waiver_locale || null) : null
   });
-  const recomputedDocSha256 = await sha256Hex(expectedCanonical);
-  const sealVerified = await verifyWaiverProvenanceSeal(
+
+  // Try sealed payload with waiver_locale first
+  let expectedCanonical = computePayloadWithLocale(true);
+  let recomputedDocSha256 = await sha256Hex(expectedCanonical);
+  let sealVerified = await verifyWaiverProvenanceSeal(
     env,
     `${row.certificate_id}:${recomputedDocSha256}`,
     row.provenance_seal,
     db
   );
+
+  // If seal mismatch and row.document_sha256 doesn't match, fallback to legacy payload without waiver_locale
+  if (!constantTimeEqual(recomputedDocSha256, row.document_sha256) || !sealVerified) {
+    const legacyCanonical = computePayloadWithLocale(false);
+    const legacyDocSha256 = await sha256Hex(legacyCanonical);
+    const legacySealVerified = await verifyWaiverProvenanceSeal(
+      env,
+      `${row.certificate_id}:${legacyDocSha256}`,
+      row.provenance_seal,
+      db
+    );
+    if (constantTimeEqual(legacyDocSha256, row.document_sha256) && legacySealVerified) {
+      return true;
+    }
+  }
+
   return Boolean(
     constantTimeEqual(recomputedDocSha256, row.document_sha256) &&
     sealVerified
@@ -966,8 +1004,8 @@ waiverRouter.get('/admin/quarantined/:id', requireAdmin, async (c) => {
   });
 });
 
-// PUT /api/waiver/admin/users/:id — Admin endpoint to set waiver_status ('none' | 'paper' | 'digital')
-waiverRouter.put('/admin/users/:id', requireAdmin, async (c) => {
+// PUT /api/waiver/checkin/users/:id or PUT /api/waiver/admin/users/:id — Organizer/Admin endpoint to set waiver_status ('none' | 'paper' | 'digital')
+const handleUserWaiverCheckin = async (c) => {
   const targetId = parseInt(c.req.param('id'), 10);
   if (!targetId || isNaN(targetId) || targetId <= 0) {
     return c.json({ error: 'Invalid user ID.' }, 400);
@@ -989,6 +1027,11 @@ waiverRouter.put('/admin/users/:id', requireAdmin, async (c) => {
     return c.json({ error: "Invalid waiver_status. Must be 'none', 'paper', or 'digital'." }, 400);
   }
 
+  const currentStatus = targetUser.waiver_status || 'none';
+  if (currentStatus === 'digital' && newStatus !== 'digital') {
+    return c.json({ error: 'Cannot overwrite an existing digital ESIGN waiver.' }, 409);
+  }
+
   const newSignedAt = newStatus === 'none'
     ? null
     : (targetUser.waiver_signed_at || new Date().toISOString());
@@ -1005,6 +1048,74 @@ waiverRouter.put('/admin/users/:id', requireAdmin, async (c) => {
       waiver_status: newStatus,
       waiver_signed: newStatus === 'paper' || newStatus === 'digital',
       waiver_signed_at: newSignedAt
+    }
+  });
+};
+
+waiverRouter.put('/checkin/users/:id', requireOrganizer, handleUserWaiverCheckin);
+waiverRouter.put('/admin/users/:id', requireAdmin, handleUserWaiverCheckin);
+
+// PUT /api/waiver/checkin/attendees/:id — Organizer/Admin endpoint to toggle paper waiver on Visitor RSVP row
+waiverRouter.put('/checkin/attendees/:id', requireOrganizer, async (c) => {
+  const attendeeId = parseInt(c.req.param('id'), 10);
+  if (!attendeeId || isNaN(attendeeId) || attendeeId <= 0) {
+    return c.json({ error: 'Invalid attendee ID.' }, 400);
+  }
+  const user = c.get('user');
+  const attendee = await c.env.DB.prepare(`
+    SELECT a.id, a.user_id, a.name, a.email, a.paper_waiver_at, a.paper_waiver_by, u.waiver_status as user_waiver_status
+    FROM attendees a
+    LEFT JOIN users u ON a.user_id = u.id
+    WHERE a.id = ?
+  `).bind(attendeeId).first();
+  if (!attendee) {
+    return c.json({ error: 'Attendee not found.' }, 404);
+  }
+
+  // Check if this attendee is already covered by an active digital waiver (via user account or waivers table)
+  if (attendee.user_waiver_status === 'digital') {
+    return c.json({ error: 'Cannot overwrite an existing digital ESIGN waiver.' }, 409);
+  }
+  if (attendee.email) {
+    const activeDigital = await c.env.DB.prepare(`
+      SELECT id FROM waivers
+      WHERE email = ? AND COALESCE(status, 'active') != 'quarantined'
+      LIMIT 1
+    `).bind(String(attendee.email).toLowerCase()).first();
+    if (activeDigital) {
+      return c.json({ error: 'Cannot overwrite an existing digital ESIGN waiver.' }, 409);
+    }
+  }
+
+  let body;
+  try {
+    body = await c.req.json();
+  } catch (e) {
+    return c.json({ error: 'Invalid JSON request body.' }, 400);
+  }
+
+  const requestedStatus = String(body.waiver_status || '').trim().toLowerCase();
+  if (!['none', 'paper'].includes(requestedStatus)) {
+    return c.json({ error: "Invalid waiver_status. Must be 'none' or 'paper'." }, 400);
+  }
+
+  const newPaperAt = requestedStatus === 'paper' ? new Date().toISOString() : null;
+  const newPaperBy = requestedStatus === 'paper' ? (user ? user.id : null) : null;
+
+  await c.env.DB.prepare(`
+    UPDATE attendees
+    SET paper_waiver_at = ?, paper_waiver_by = ?
+    WHERE id = ?
+  `).bind(newPaperAt, newPaperBy, attendeeId).run();
+
+  return c.json({
+    success: true,
+    message: `Paper waiver for ${attendee.name} updated to ${requestedStatus}.`,
+    attendee: {
+      id: attendeeId,
+      waiver_status: requestedStatus,
+      paper_waiver_at: newPaperAt,
+      paper_waiver_by: newPaperBy
     }
   });
 });

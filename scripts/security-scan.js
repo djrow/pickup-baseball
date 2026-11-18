@@ -112,6 +112,53 @@ function checkHtmlAndCspHeaders() {
     record('PASS', 'HTML CSP Compliance (No inline scripts/handlers)', `${htmlFiles.length} HTML files clean`);
   }
 
+  // Check WCAG landmarks, skip links, and single-h1 non-skipping heading hierarchy
+  const a11yFindings = [];
+  for (const file of htmlFiles) {
+    const content = fs.readFileSync(file, 'utf8');
+    const relFile = rel(file);
+
+    // Skip link and main-content landmark
+    if (!content.includes('href="#main-content"')) {
+      a11yFindings.push(`${relFile}: missing #main-content skip link`);
+    }
+    if (!/<main\b[^>]*\bid=["']main-content["']/i.test(content)) {
+      a11yFindings.push(`${relFile}: missing <main id="main-content"> landmark`);
+    }
+
+    // Navigation landmark with aria-label
+    const navMatch = content.match(/<nav\b[^>]*>/i);
+    if (!navMatch) {
+      a11yFindings.push(`${relFile}: missing <nav> landmark`);
+    } else if (!/\baria-label=["'][^"']+["']/i.test(navMatch[0])) {
+      a11yFindings.push(`${relFile}: <nav> landmark missing aria-label attribute`);
+    }
+
+    // Heading hierarchy: single h1 and no skipping
+    const headings = [];
+    for (const m of content.matchAll(/<(h[1-6])\b[^>]*>([\s\S]*?)<\/\1>/gi)) {
+      headings.push({ tag: m[1].toLowerCase(), text: m[2].replace(/<[^>]*>/g, '').trim().slice(0, 30) });
+    }
+    const h1Count = headings.filter((h) => h.tag === 'h1').length;
+    if (h1Count !== 1) {
+      a11yFindings.push(`${relFile}: expected exactly one <h1>, found ${h1Count}`);
+    }
+    let prevLevel = 0;
+    for (const h of headings) {
+      const level = parseInt(h.tag[1], 10);
+      if (prevLevel > 0 && level > prevLevel + 1) {
+        a11yFindings.push(`${relFile}: heading hierarchy skipped from h${prevLevel} to h${level} ("${h.text}")`);
+      }
+      prevLevel = level;
+    }
+  }
+
+  if (a11yFindings.length > 0) {
+    record('FAIL', 'HTML Accessibility Landmarks & Heading Hierarchy', a11yFindings.join('; '));
+  } else {
+    record('PASS', 'HTML Accessibility Landmarks & Heading Hierarchy', `${htmlFiles.length} HTML files have valid skip links, nav landmarks, and single-h1 non-skipping headings`);
+  }
+
   const headersPath = path.join(ROOT, 'public', '_headers');
   if (!fs.existsSync(headersPath)) {
     record('FAIL', 'Cloudflare _headers file', 'public/_headers missing');
@@ -476,6 +523,18 @@ const PUBLIC_OR_TOKEN_ROUTE_MANIFEST = [
     ast: 'webhooks.js:POST:/resend',
     route: 'POST /api/webhooks/resend',
     reason: 'Public inbound Resend webhook verified via Svix signature (svix-id, svix-timestamp ±300s, svix-signature HMAC SHA-256)'
+  },
+
+  // RFC 8058 one-click unsubscribe in src/app/routes/notifications.js
+  {
+    ast: 'notifications.js:GET:/unsubscribe',
+    route: 'GET /api/notifications/unsubscribe',
+    reason: 'Public unsubscribe link authorized solely by stateless HMAC-signed token'
+  },
+  {
+    ast: 'notifications.js:POST:/unsubscribe',
+    route: 'POST /api/notifications/unsubscribe',
+    reason: 'RFC 8058 one-click unsubscribe authorized solely by stateless HMAC-signed token'
   }
 ];
 
@@ -1390,38 +1449,93 @@ function checkPwaAssetSync(rootDir = ROOT, options = {}) {
 }
 
 /**
- * 9. Audit i18n dictionary completeness against canonical EN_DICT in public/js/api.js.
+ * 9. Audit i18n dictionary completeness against canonical bundles across
+ * Core, Clubhouse, and Admin surfaces (Issue #62).
  */
 function checkI18nKeyParity() {
-  const apiSrc = fs.readFileSync(path.join(ROOT, 'public', 'js', 'api.js'), 'utf8');
-  const enMatch = apiSrc.match(/const EN_DICT = \{([\s\S]*?)\n\};/);
+  const i18nFile = fs.existsSync(path.join(ROOT, 'public', 'js', 'api', 'i18n.js'))
+    ? path.join(ROOT, 'public', 'js', 'api', 'i18n.js')
+    : path.join(ROOT, 'public', 'js', 'api.js');
+  const apiSrc = fs.readFileSync(i18nFile, 'utf8');
+  const enMatch = apiSrc.match(/(?:const|var)\s+EN_DICT\s*=\s*\{([\s\S]*?)\n\s*\};/);
   if (!enMatch) {
-    record('FAIL', 'i18n Translation Key Parity', 'Could not locate EN_DICT in public/js/api.js');
+    record('FAIL', 'i18n Translation Key Parity', 'Could not locate EN_DICT in ' + rel(i18nFile));
     return;
   }
 
   const enObj = vm.runInNewContext(`({${enMatch[1]}})`);
   const enKeys = Object.keys(enObj);
-  const i18nDir = path.join(ROOT, 'public', 'i18n');
-  const jsonFiles = fs.readdirSync(i18nDir).filter((f) => f.endsWith('.json')).sort();
-  const issues = [];
 
-  for (const file of jsonFiles) {
-    try {
-      const dict = JSON.parse(fs.readFileSync(path.join(i18nDir, file), 'utf8'));
-      const missing = enKeys.filter((k) => !(k in dict));
-      if (missing.length) {
-        issues.push(`${file} missing ${missing.length} key(s): ${missing.slice(0, 3).join(', ')}`);
-      }
-    } catch (err) {
-      issues.push(`${file} invalid JSON (${err.message})`);
+  const i18nDir = path.join(ROOT, 'public', 'i18n');
+  const surfaces = [
+    { name: 'Core', dir: i18nDir, canonical: path.join(i18nDir, 'en.json') },
+    { name: 'Clubhouse', dir: path.join(i18nDir, 'clubhouse'), canonical: path.join(i18nDir, 'clubhouse', 'en.json') },
+    { name: 'Admin', dir: path.join(i18nDir, 'admin'), canonical: path.join(i18nDir, 'admin', 'en.json') }
+  ];
+
+  const expectedLangs = ['en', 'ar', 'es', 'fa', 'fr', 'hi', 'hy', 'ja', 'ko', 'pa', 'pt', 'ru', 'tl', 'vi', 'zh'];
+  const issues = [];
+  let totalBundlesChecked = 0;
+  let splitKeysCount = 0;
+
+  for (const surface of surfaces) {
+    if (!fs.existsSync(surface.canonical)) {
+      issues.push(`Missing canonical ${surface.name} bundle: ${rel(surface.canonical)}`);
+      continue;
     }
+    let refDict;
+    try {
+      refDict = JSON.parse(fs.readFileSync(surface.canonical, 'utf8'));
+    } catch (err) {
+      issues.push(`Invalid JSON in ${surface.name} canonical bundle: ${err.message}`);
+      continue;
+    }
+    const refKeys = Object.keys(refDict);
+    splitKeysCount += refKeys.length;
+
+    for (const lang of expectedLangs) {
+      const file = path.join(surface.dir, `${lang}.json`);
+      if (!fs.existsSync(file)) {
+        issues.push(`${surface.name} bundle missing for locale ${lang} (${rel(file)})`);
+        continue;
+      }
+      totalBundlesChecked++;
+      try {
+        const dict = JSON.parse(fs.readFileSync(file, 'utf8'));
+        const missing = refKeys.filter((k) => !(k in dict));
+        if (missing.length) {
+          issues.push(`${surface.name}/${lang}.json missing ${missing.length} key(s): ${missing.slice(0, 3).join(', ')}`);
+        }
+      } catch (err) {
+        issues.push(`${surface.name}/${lang}.json invalid JSON (${err.message})`);
+      }
+    }
+  }
+
+  // Also verify that EN_DICT contains every key across all split bundles
+  const missingInEnDict = [];
+  for (const surface of surfaces) {
+    if (fs.existsSync(surface.canonical)) {
+      const refDict = JSON.parse(fs.readFileSync(surface.canonical, 'utf8'));
+      for (const k of Object.keys(refDict)) {
+        if (!(k in enObj)) {
+          missingInEnDict.push(`${surface.name}:${k}`);
+        }
+      }
+    }
+  }
+  if (missingInEnDict.length) {
+    issues.push(`EN_DICT missing ${missingInEnDict.length} key(s) from split bundles: ${missingInEnDict.slice(0, 3).join(', ')}`);
   }
 
   if (issues.length) {
     record('FAIL', 'i18n Translation Key Parity', issues.join('; '));
   } else {
-    record('PASS', 'i18n Translation Key Parity', `${jsonFiles.length} language bundles match all ${enKeys.length} EN_DICT keys`);
+    record(
+      'PASS',
+      'i18n Translation Key Parity',
+      `${totalBundlesChecked} split bundles (Core, Clubhouse, Admin across 15 locales) match all ${splitKeysCount} keys in parity with EN_DICT (${enKeys.length} keys)`
+    );
   }
 }
 

@@ -662,7 +662,8 @@ test('Ticket #33: Hashed RSVP Management Tokens & On-Demand Fresh Edit Link', as
         managementToken: 'should-be-ignored'
       });
 
-      // Helper dispatch checks
+      // Helper dispatch checks (visitors must have opted in to topic notifications)
+      await testD1.prepare('UPDATE attendees SET notify_emails = 1 WHERE event_id = ?').bind(eventId).run();
       await sendRemindersForEventD1(testD1, mockEnv, origin, eventRow);
       await notifyConfirmedAttendees({ env: { ...mockEnv, DB: testD1 }, req: { url: `${origin}/api/events/${eventId}/rainout` } }, eventRow, 'Rain note', sendRainoutEmail);
 

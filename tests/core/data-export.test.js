@@ -662,13 +662,23 @@ function registerDataExportTests() {
       assert.ok(profileHtml.includes('id="export-decrypt-e2ee-checkbox"'), 'profile.html must include E2EE decryption checkbox');
       assert.equal(/\son[a-z]+\s*=/i.test(profileHtml), false, 'profile.html must not contain inline event handlers');
 
-      for (const rel of ['public/js/profile.js', 'public/js/crypto.js', 'public/js/api.js']) {
+      for (const rel of [
+        'public/js/profile.js',
+        'public/js/crypto.js',
+        'public/js/api.js',
+        'public/js/api/i18n.js',
+        'public/js/api/ui.js',
+        'public/js/api/endpoints.js'
+      ]) {
+        if (!fs.existsSync(path.join(ROOT_DIR, rel))) continue;
         const src = fs.readFileSync(path.join(ROOT_DIR, rel), 'utf8');
         assert.equal(/[\w$\])]\?\./.test(src), false, `${rel} must not use optional chaining (?.)`);
         assert.equal(src.includes('??'), false, `${rel} must not use nullish coalescing (??)`);
       }
 
-      const apiSrc = fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'api.js'), 'utf8');
+      const apiSrc = fs.existsSync(path.join(ROOT_DIR, 'public', 'js', 'api', 'i18n.js'))
+        ? fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'api', 'i18n.js'), 'utf8')
+        : fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'api.js'), 'utf8');
       assert.ok(apiSrc.includes('profile.export_btn'), 'EN_DICT must include profile.export_btn');
       const requiredKeys = [
         'profile.export_title',
@@ -686,7 +696,7 @@ function registerDataExportTests() {
         'profile.export_wrong_passphrase'
       ];
       const i18nDir = path.join(ROOT_DIR, 'public', 'i18n');
-      const localeFiles = fs.readdirSync(i18nDir).filter((f) => f.endsWith('.json'));
+      const localeFiles = fs.readdirSync(i18nDir).filter((f) => f.endsWith('.json') && f !== 'en.json');
       assert.equal(localeFiles.length, 14, 'Expected 14 non-English locale files');
       for (const file of localeFiles) {
         const dict = JSON.parse(fs.readFileSync(path.join(i18nDir, file), 'utf8'));

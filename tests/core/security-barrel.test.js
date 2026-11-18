@@ -56,6 +56,7 @@ const EXPECTED_SESSION_EXPORTS = [
   'deriveRateLimitKey',
   'enforceUserSessionCap',
   'ensureUserCalendarToken',
+  'generateInviteToken',
   'getClientIp',
   'getSafePublicOrigin',
   'getSessionFromCache',
@@ -64,8 +65,10 @@ const EXPECTED_SESSION_EXPORTS = [
   'purgeSessionCache',
   'purgeUserSessionCache',
   'regenerateUserCalendarToken',
+  'resolveInviteSecret',
   'resolveUserByCalendarToken',
   'setSessionInCache',
+  'verifyInviteToken',
   'verifyTurnstileIfConfigured'
 ];
 

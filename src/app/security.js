@@ -58,7 +58,10 @@ export {
   enforceUserSessionCap,
   ensureUserCalendarToken,
   regenerateUserCalendarToken,
-  resolveUserByCalendarToken
+  resolveUserByCalendarToken,
+  resolveInviteSecret,
+  generateInviteToken,
+  verifyInviteToken
 } from './security/session.js';
 
 export {

@@ -1,0 +1,582 @@
+/* ==========================================================================
+   Weather & Smart Rainout Assistant Styles
+   ========================================================================== */
+
+.weather-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.weather-kpi-tile {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 9px;
+}
+
+.weather-kpi-label {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.weather-kpi-val {
+  font-size: 0.96rem;
+  font-weight: 800;
+  color: var(--secondary);
+  margin-top: 1px;
+}
+
+.weather-kpi-sub {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  margin-top: 1px;
+  line-height: 1.25;
+}
+
+.weather-kpi-rec {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--secondary);
+  margin-top: 2px;
+  line-height: 1.25;
+}
+
+.sunday-weather-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.weather-card-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  font-size: 0.69rem;
+  font-weight: 700;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--secondary);
+  line-height: 1.2;
+}
+
+.weather-card-pill.weather-rain-pill {
+  background: var(--bg-subtle);
+  color: var(--secondary);
+  border-color: var(--border);
+  font-weight: 600;
+  font-size: 0.68rem;
+}
+
+.drawer-weather-meta {
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.drawer-5day-weather-section {
+  width: 100%;
+  margin-top: 2px;
+  padding-top: 7px;
+  border-top: 1px solid var(--border);
+}
+
+.five-day-rain-track {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+  margin-top: 8px;
+  box-sizing: border-box;
+}
+
+@media (max-width: 720px) {
+  .five-day-rain-track {
+    display: flex;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .five-day-rain-col {
+    flex: 1 0 116px;
+    min-width: 116px;
+  }
+}
+
+.five-day-rain-col {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 8px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px;
+  font-size: 0.88rem;
+  box-sizing: border-box;
+}
+
+.five-day-rain-col .day-head {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.five-day-rain-col .day-precip-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+  margin: 2px 0;
+}
+
+.five-day-rain-col .day-tags-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.five-day-rain-col.is-game-day {
+  border-color: var(--primary);
+  background: rgba(253, 90, 30, 0.08);
+  box-shadow: 0 0 0 1px var(--primary);
+}
+
+.five-day-rain-col.is-today {
+  border-color: var(--secondary);
+  background: rgba(0, 56, 49, 0.08);
+  box-shadow: 0 0 0 1.5px var(--secondary);
+  position: relative;
+}
+
+.five-day-rain-col.is-today.is-game-day {
+  border-color: var(--primary);
+  background: rgba(253, 90, 30, 0.12);
+  box-shadow: 0 0 0 1.5px var(--primary);
+}
+
+.five-day-rain-col.is-today .day-title {
+  color: var(--secondary);
+  font-weight: 800;
+}
+
+.five-day-rain-col .today-pill {
+  font-size: 0.68rem;
+  font-weight: 800;
+  background: var(--secondary);
+  color: #fff;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  line-height: 1.15;
+  letter-spacing: 0.4px;
+}
+
+.five-day-rain-col .day-title {
+  font-weight: 800;
+  color: var(--secondary);
+  font-size: 0.94rem;
+  line-height: 1.15;
+}
+
+.five-day-rain-col .day-date {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  line-height: 1.15;
+}
+
+.five-day-rain-col .day-emoji {
+  font-size: 1.65rem;
+  line-height: 1;
+}
+
+.five-day-rain-col .day-rain {
+  font-weight: 800;
+  font-size: 1.08rem;
+  color: var(--text-main);
+  line-height: 1.1;
+}
+
+.five-day-rain-col .day-rain.has-rain {
+  color: #0284c7;
+  font-weight: 800;
+}
+
+.five-day-rain-col.is-game-day .day-rain.has-rain {
+  color: #dc2626;
+}
+
+.five-day-rain-col .day-temp {
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--text-main);
+  line-height: 1.2;
+}
+
+.five-day-rain-col .day-condition {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  line-height: 1.2;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.five-day-rain-col .day-prob {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #0284c7;
+  background: rgba(2, 132, 199, 0.10);
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1.15;
+}
+
+[data-theme="dark"] .five-day-rain-col .day-prob {
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.14);
+}
+
+.five-day-rain-col .game-day-pill {
+  font-size: 0.68rem;
+  font-weight: 800;
+  background: var(--primary);
+  color: #fff;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  line-height: 1.15;
+  letter-spacing: 0.3px;
+}
+
+.card-5day-rain-row {
+  display: flex;
+  gap: 2px;
+  align-items: flex-end;
+  width: 100%;
+  padding-top: 3px;
+  border-top: 1px dashed var(--border);
+  margin-top: 3px;
+}
+
+.smart-rainout-card {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.drainage-col:hover {
+  background: var(--bg-subtle);
+  border-radius: 4px;
+}
+
+.hourly-drainage-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.hourly-drainage-summary-chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.hourly-metric-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border);
+  background: var(--bg-subtle);
+  color: var(--text-main);
+}
+
+.hourly-metric-chip.rain {
+  border-color: rgba(14, 165, 233, 0.38);
+  color: #0369a1;
+  background: rgba(14, 165, 233, 0.10);
+}
+
+.hourly-metric-chip.surface {
+  border-color: rgba(245, 158, 11, 0.42);
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.11);
+}
+
+.hourly-drainage-legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  padding: 4px 8px;
+  margin-bottom: 6px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  font-size: 0.7rem;
+  color: var(--text-main);
+}
+
+.hourly-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.hourly-legend-sub {
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.hourly-legend-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 12px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.hourly-legend-swatch.rain {
+  background: #0ea5e9;
+}
+
+.hourly-legend-swatch.surface {
+  background: #f59e0b;
+}
+
+.hourly-legend-swatch.game-window {
+  width: 12px;
+  height: 12px;
+  background: rgba(0, 56, 49, 0.14);
+  border: 1px solid var(--secondary);
+}
+
+.hourly-legend-swatch.threshold-line {
+  width: 14px;
+  height: 0;
+  border-top: 2px dashed #dc2626;
+  border-radius: 0;
+}
+
+.hourly-drainage-scroll {
+  overflow-x: auto;
+  padding-bottom: 6px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.hourly-drainage-grid {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  min-width: 100%;
+  width: max-content;
+}
+
+.hourly-axis-col {
+  position: sticky;
+  inset-inline-start: 0;
+  z-index: 3;
+  flex: 0 0 58px;
+  width: 58px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 5px 2px 2px;
+  background: var(--bg-card);
+  border-inline-end: 1px solid var(--border);
+}
+
+.hourly-axis-hour {
+  height: 15px;
+  line-height: 15px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.hourly-axis-bars {
+  height: 48px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  line-height: 1;
+}
+
+.hourly-axis-val {
+  height: 14px;
+  line-height: 14px;
+  font-size: 0.62rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.hourly-axis-val.rain {
+  color: #0369a1;
+}
+
+.hourly-axis-val.surface {
+  color: #b45309;
+}
+
+.hourly-cols-track {
+  position: relative;
+  display: flex;
+  flex: 1;
+  align-items: stretch;
+  gap: 2px;
+}
+
+.hourly-threshold-guide {
+  position: absolute;
+  inset-inline: 0;
+  top: 19px; /* 2px col top padding + 15px hour + 2px gap = plot top; adjusted inline for plot offset */
+  border-top: 1.5px dashed rgba(220, 38, 38, 0.55);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.drainage-col {
+  flex: 1 0 26px;
+  min-width: 26px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 1px;
+  border-radius: 4px;
+  position: relative;
+  z-index: 2;
+}
+
+.drainage-col.is-game-hour {
+  background: rgba(0, 56, 49, 0.06);
+}
+
+.drainage-col.is-warmup-hour {
+  border-inline-start: 2px solid var(--secondary);
+}
+
+.drainage-hour-label {
+  height: 15px;
+  line-height: 15px;
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.drainage-col.is-game-hour .drainage-hour-label {
+  color: var(--secondary);
+  font-weight: 800;
+}
+
+.drainage-bars-slot {
+  height: 48px;
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  padding: 0 2px;
+  border-bottom: 1px solid var(--border);
+  box-sizing: border-box;
+}
+
+.drainage-bar {
+  flex: 1;
+  max-width: 8px;
+  min-width: 4px;
+  border-radius: 2px 2px 0 0;
+  transition: opacity 0.15s ease;
+}
+
+.drainage-bar-rain {
+  background: #0ea5e9;
+}
+
+.drainage-bar-surface {
+  background: #f59e0b;
+}
+
+.drainage-bar.is-empty {
+  background: var(--border);
+  opacity: 0.55;
+}
+
+.drainage-val-row {
+  height: 14px;
+  line-height: 14px;
+  font-size: 0.58rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  opacity: 0.72;
+}
+
+.drainage-val-row.rain.has-value {
+  color: #0369a1;
+  opacity: 1;
+  font-weight: 800;
+}
+
+.drainage-val-row.surface.has-value {
+  color: #b45309;
+  opacity: 1;
+  font-weight: 800;
+}
+
+[data-theme="dark"] .hourly-metric-chip.rain,
+[data-theme="dark"] .hourly-axis-val.rain,
+[data-theme="dark"] .drainage-val-row.rain.has-value {
+  color: #38bdf8;
+}
+
+[data-theme="dark"] .hourly-metric-chip.surface,
+[data-theme="dark"] .hourly-axis-val.surface,
+[data-theme="dark"] .drainage-val-row.surface.has-value {
+  color: #fbbf24;
+}
+
+[data-theme="dark"] .drainage-col.is-game-hour {
+  background: rgba(52, 211, 153, 0.08);
+}
+
+[data-theme="dark"] .hourly-legend-swatch.game-window {
+  background: rgba(52, 211, 153, 0.18);
+}
+
+.admin-game-weather-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+

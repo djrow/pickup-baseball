@@ -10,6 +10,7 @@
 
 let eventId = null;
 let guestToken = '';
+let inviteToken = '';
 let eventData = null;
 let eventPublicConfig = null;
 
@@ -42,6 +43,7 @@ async function initEvent() {
     storedGuestToken = eventId ? (localStorage.getItem('guest_token_' + eventId) || '') : '';
   } catch (e) { /* localStorage unavailable */ }
   guestToken = params.get('token') || storedGuestToken || '';
+  inviteToken = params.get('invite') || '';
 
   if (params.has('token') && typeof window.history !== 'undefined' && typeof window.history.replaceState === 'function') {
     try {
@@ -107,6 +109,7 @@ function applyLoadedEventToDom(res, preserveAlertHtml) {
   renderBpOrder();
   renderComments();
   setupRsvpState(preserveAlertHtml);
+  renderOrganizerInvitePanel();
   renderOrganizerRainoutPanel();
   renderOrganizerAttendancePanel();
 
@@ -149,20 +152,21 @@ async function loadEventData(preserveAlertHtml) {
       if (cachedRaw) {
         const cachedRes = JSON.parse(cachedRaw);
         if (cachedRes && cachedRes.event && !cachedRes.event.is_restricted) {
-          if (!API.currentUser) {
-            cachedRes.attendees = [];
-            cachedRes.waitlist = [];
-            cachedRes.comments = [];
-            cachedRes.bp_signups = [];
-            if (Array.isArray(cachedRes.duties)) {
-              cachedRes.duties = cachedRes.duties.map(function(d) {
-                return Object.assign({}, d, {
-                  assigned_players: (d.assigned_players || []).map(function(p) {
-                    return { attendee_id: p.attendee_id, name: '' };
-                  })
-                });
+          // Zero-PII contract: ensure no attendee, companion, comment, or my_rsvp PII in memory from cache
+          cachedRes.attendees = [];
+          cachedRes.waitlist = [];
+          cachedRes.comments = [];
+          cachedRes.bp_signups = [];
+          delete cachedRes.myRsvp;
+          delete cachedRes.my_rsvp;
+          if (Array.isArray(cachedRes.duties)) {
+            cachedRes.duties = cachedRes.duties.map(function(d) {
+              return Object.assign({}, d, {
+                assigned_players: (d.assigned_players || []).map(function(p) {
+                  return { attendee_id: p.attendee_id, name: '' };
+                })
               });
-            }
+            });
           }
           applyLoadedEventToDom(cachedRes, false);
         }
@@ -171,7 +175,7 @@ async function loadEventData(preserveAlertHtml) {
   }
 
   try {
-    const res = await API.getEvent(eventId, guestToken);
+    const res = await API.getEvent(eventId, guestToken, inviteToken);
     if (res.error) {
       try { localStorage.removeItem(cacheKey); } catch (e) { /* localStorage unavailable */ }
       showError(res.error);
@@ -258,6 +262,44 @@ function renderEventDetails() {
         });
         eventSubPanel.style.display = 'block';
         eventSubBtn.setAttribute('aria-expanded', 'true');
+      }
+    };
+  }
+
+  const eventShareBtn = document.getElementById('event-share-btn');
+  if (eventShareBtn) {
+    eventShareBtn.onclick = function() {
+      const shareUrl = window.location.href;
+      const shareTitle = (ev && ev.title) ? ev.title : 'Sunday Pickup Baseball';
+      const shareText = 'Check out this pickup baseball game: ' + shareTitle;
+      const fallbackCopy = function() {
+        if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+          try {
+            navigator.clipboard.writeText(shareUrl).catch(function() {});
+          } catch (e) { /* ignore clipboard error */ }
+        }
+        if (window.PBFDialog && typeof window.PBFDialog.toast === 'function') {
+          window.PBFDialog.toast(API.t('event.share_copied', 'Event link copied to clipboard!'), { type: 'success' });
+        }
+      };
+      if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+        try {
+          Promise.resolve(navigator.share({
+            title: shareTitle,
+            text: shareText,
+            url: shareUrl
+          })).catch(function(err) {
+            if (!err || err.name !== 'AbortError') {
+              fallbackCopy();
+            }
+          });
+        } catch (err) {
+          if (!err || err.name !== 'AbortError') {
+            fallbackCopy();
+          }
+        }
+      } else {
+        fallbackCopy();
       }
     };
   }
@@ -518,6 +560,43 @@ function renderAttendeesRoster() {
             roleBadges.push(`<span class="badge badge-volunteer" style="font-size: 0.7rem;">🙌 Volunteer (Non-Playing)</span>`);
           }
 
+          const isOrganizer = Boolean(API.currentUser && (API.currentUser.canManageEvents || API.currentUser.isAdmin));
+          const wStatus = a.waiver_status || 'none';
+          let waiverCheckinHtml = '';
+          if (isOrganizer) {
+            let badgeClass = 'badge-gray';
+            let badgeLabel = API.t('event.waiver_badge_unsigned', '⏳ Unsigned');
+            let nextAction = 'paper';
+            let nextTitle = 'Click to record paper waiver on file';
+            let isClickable = true;
+
+            if (wStatus === 'digital') {
+              badgeClass = 'badge-green';
+              badgeLabel = API.t('event.waiver_badge_digital', '🔏 Digital');
+              nextTitle = 'Signed digital waiver (ESIGN sealed)';
+              isClickable = false;
+            } else if (wStatus === 'paper') {
+              badgeClass = 'badge-blue';
+              badgeLabel = API.t('event.waiver_badge_paper', '📄 Paper');
+              nextAction = 'none';
+              nextTitle = 'Click to remove paper waiver';
+            }
+
+            const cursorStyle = isClickable ? 'cursor: pointer;' : 'cursor: default;';
+            const actionAttr = isClickable
+              ? `data-action="toggle-paper-waiver" data-attendee-id="${a.id}" data-user-id="${a.user_id || ''}" data-target-status="${nextAction}"`
+              : '';
+
+            waiverCheckinHtml = `<button type="button" class="badge ${badgeClass}" ${actionAttr} title="${nextTitle}" style="font-size: 0.68rem; font-weight: 700; border: none; padding: 2px 7px; ${cursorStyle}">${API.escapeHtml(badgeLabel)}</button>`;
+          }
+
+          let companionsVerifyHtml = '';
+          const companionCount = (a.players_count != null ? a.players_count : (1 + (a.additional_guests || 0))) + (a.spectators_count || 0) - 1;
+          if (isOrganizer && companionCount > 0) {
+            const compWarn = API.t('event.companions_verify_warning', '⚠️ +{count} companion(s) — verify at field', { count: companionCount });
+            companionsVerifyHtml = `<div style="font-size: 0.74rem; color: var(--text-muted); margin-top: 2px;">${API.escapeHtml(compWarn)}</div>`;
+          }
+
           return `
             <li class="roster-item" style="display: flex; gap: 12px; align-items: flex-start;">
               ${avatarImg}
@@ -529,9 +608,11 @@ function renderAttendeesRoster() {
                   </div>
                   <div style="display: flex; gap: 5px; align-items: center; flex-wrap: wrap;">
                     ${roleBadges.join('')}
+                    ${waiverCheckinHtml}
                     ${canMod ? `<button type="button" data-action="remove-attendee" data-attendee-id="${a.id}" title="Remove from roster" style="background:none;border:none;cursor:pointer;font-size:0.85rem;color:var(--danger);padding:0 2px;">🗑️</button>` : ''}
                   </div>
                 </div>
+                ${companionsVerifyHtml}
                 ${a.guest_names ? `<div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 3px;">👥 <em>${API.escapeHtml(API.t('event.guests_prefix', 'Group:'))} ${API.escapeHtml(API.formatDisplayNameList(a.guest_names))}</em></div>` : ''}
                 ${translatedDuties ? `<div style="font-size: 0.79rem; color: var(--primary); font-weight: 700; margin-top: 3px;">🛡️ Group Tasks: ${API.escapeHtml(translatedDuties)}</div>` : ''}
                 ${a.gear_bringing ? `<div class="roster-gear">🎒 <em>${API.escapeHtml(a.gear_bringing)}</em></div>` : ''}
@@ -592,11 +673,45 @@ function renderAttendeesRoster() {
   container.innerHTML = rosterHtml + waitlistHtml;
   if (!container.dataset.cspBound) {
     container.dataset.cspBound = '1';
-    container.addEventListener('click', function(e) {
-      const btn = e.target.closest('[data-action="remove-attendee"]');
-      if (!btn || !container.contains(btn)) return;
-      if (typeof window.removeRosterAttendee === 'function') {
-        window.removeRosterAttendee(parseInt(btn.dataset.attendeeId, 10));
+    container.addEventListener('click', async function(e) {
+      const removeBtn = e.target.closest('[data-action="remove-attendee"]');
+      if (removeBtn && container.contains(removeBtn)) {
+        if (typeof window.removeRosterAttendee === 'function') {
+          window.removeRosterAttendee(parseInt(removeBtn.dataset.attendeeId, 10));
+        }
+        return;
+      }
+
+      const waiverBtn = e.target.closest('[data-action="toggle-paper-waiver"]');
+      if (waiverBtn && container.contains(waiverBtn)) {
+        const attendeeId = waiverBtn.dataset.attendeeId ? parseInt(waiverBtn.dataset.attendeeId, 10) : null;
+        const userId = waiverBtn.dataset.userId ? parseInt(waiverBtn.dataset.userId, 10) : null;
+        const targetStatus = waiverBtn.dataset.targetStatus || 'paper';
+
+        waiverBtn.disabled = true;
+        try {
+          let res;
+          if (userId) {
+            res = await API.updateUserWaiverStatus(userId, targetStatus);
+          } else if (attendeeId) {
+            res = await API.updateAttendeeWaiverStatus(attendeeId, targetStatus);
+          }
+          if (res && res.error) {
+            if (window.PBFDialog && typeof window.PBFDialog.toast === 'function') {
+              window.PBFDialog.toast(res.error, { type: 'error' });
+            } else {
+              alert(res.error);
+            }
+            waiverBtn.disabled = false;
+          } else {
+            await loadEventData(true);
+          }
+        } catch (err) {
+          if (window.PBFDialog && typeof window.PBFDialog.toast === 'function') {
+            window.PBFDialog.toast(err.message || 'Failed to update waiver status', { type: 'error' });
+          }
+          waiverBtn.disabled = false;
+        }
       }
     });
   }
@@ -933,6 +1048,9 @@ function updateGroupSummaryUi() {
     } else {
       submitBtn.textContent = API.t('event.submit_rsvp_btn', 'Confirm RSVP');
     }
+    if (typeof API.updateOfflineUi === 'function') {
+      API.updateOfflineUi();
+    }
   }
 }
 
@@ -1059,7 +1177,7 @@ async function setupRsvpState(preserveAlertHtml) {
         loginPrompt.innerHTML = `
           <h4 style="margin: 0 0 6px 0; color: var(--secondary); font-size: 1.05rem;">🔒 Restricted Roster</h4>
           <p style="margin: 0; font-size: 0.88rem; color: var(--text-muted);">
-            RSVP for this game is restricted to an invited list. Your account (<strong>${API.escapeHtml(user.email)}</strong>) is not on the roster for this event. Please contact the organizer if you should be included.
+            RSVP for this game is restricted to an invited list. Your account (<strong dir="ltr" class="tech-token">${API.escapeHtml(user.email)}</strong>) is not on the roster for this event. Please contact the organizer if you should be included.
           </p>
         `;
       }
@@ -1386,6 +1504,115 @@ function renderOrganizerRainoutPanel() {
   }
 }
 
+function renderOrganizerInvitePanel() {
+  const panel = document.getElementById('organizer-invite-panel');
+  if (!panel) return;
+
+  const user = API.currentUser;
+  if (!user || (!user.canManageEvents && !user.isAdmin) || !eventData || !eventData.event || !eventData.event.is_restricted) {
+    panel.style.display = 'none';
+    panel.innerHTML = '';
+    return;
+  }
+
+  const ev = eventData.event;
+  const isEnabled = Boolean(ev.invite_enabled);
+  const version = ev.invite_version != null ? ev.invite_version : 1;
+  const inviteUrl = ev.invite_url || (window.location.origin + '/event.html?id=' + encodeURIComponent(ev.id) + (ev.invite_token ? '&invite=' + encodeURIComponent(ev.invite_token) : ''));
+
+  panel.style.display = 'block';
+  panel.innerHTML = `
+    <div class="card" style="padding: 12px 14px; background: var(--bg-card); border-left: 4px solid var(--secondary); border-inline-start: 4px solid var(--secondary); border-radius: 6px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+          <span style="font-weight: 700; font-size: 0.9rem; color: var(--secondary);" data-i18n="event.invite_panel_title">${API.escapeHtml(API.t('event.invite_panel_title', '🔒 Invite Link'))}</span>
+          <span class="badge ${isEnabled ? 'badge-green' : 'badge-gray'}" style="font-size: 0.75rem;">
+            ${isEnabled ? 'Active (v' + version + ')' : 'Disabled'}
+          </span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+          ${isEnabled ? `
+            <button type="button" id="btn-copy-invite-link" class="btn btn-outline btn-sm" style="font-weight: 600;" data-i18n="event.invite_copy_btn">
+              ${API.escapeHtml(API.t('event.invite_copy_btn', '📋 Copy Invite Link'))}
+            </button>
+            <button type="button" id="btn-rotate-invite-link" class="btn btn-outline btn-sm" style="font-weight: 600; color: var(--danger); border-color: var(--danger);" data-i18n="event.invite_rotate_btn">
+              ${API.escapeHtml(API.t('event.invite_rotate_btn', '🔄 Rotate Link'))}
+            </button>
+            <button type="button" id="btn-toggle-invite-link" class="btn btn-outline btn-sm" data-i18n="event.invite_disable_btn">
+              ${API.escapeHtml(API.t('event.invite_disable_btn', 'Disable'))}
+            </button>
+          ` : `
+            <button type="button" id="btn-toggle-invite-link" class="btn btn-primary btn-sm" data-i18n="event.invite_enable_btn">
+              ${API.escapeHtml(API.t('event.invite_enable_btn', 'Enable Invite Link'))}
+            </button>
+          `}
+        </div>
+      </div>
+      <p style="margin: 6px 0 0 0; font-size: 0.78rem; color: var(--text-muted); line-height: 1.4;">
+        Anyone with this link can view details and RSVP for this restricted pickup game. Rotating invalidates the previous link without affecting players already confirmed on the roster.
+      </p>
+    </div>
+  `;
+
+  const copyBtn = document.getElementById('btn-copy-invite-link');
+  if (copyBtn) {
+    copyBtn.onclick = function() {
+      if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        navigator.clipboard.writeText(inviteUrl).then(function() {
+          if (window.PBFDialog && typeof window.PBFDialog.toast === 'function') {
+            window.PBFDialog.toast(API.t('event.invite_copied', 'Invite link copied to clipboard!'), { type: 'success' });
+          }
+        }).catch(function() {});
+      }
+    };
+  }
+
+  const toggleBtn = document.getElementById('btn-toggle-invite-link');
+  if (toggleBtn) {
+    toggleBtn.onclick = async function() {
+      toggleBtn.disabled = true;
+      try {
+        const res = await API.toggleEventInvite(ev.id, !isEnabled);
+        if (res.error) {
+          if (window.PBFDialog) window.PBFDialog.toast(res.error, { type: 'error' });
+        } else {
+          if (window.PBFDialog) window.PBFDialog.toast(res.message || 'Invite link updated.', { type: 'success' });
+          await loadEventData(true);
+        }
+      } catch (err) {
+        if (window.PBFDialog) window.PBFDialog.toast('Failed to update invite link.', { type: 'error' });
+      } finally {
+        toggleBtn.disabled = false;
+      }
+    };
+  }
+
+  const rotateBtn = document.getElementById('btn-rotate-invite-link');
+  if (rotateBtn) {
+    rotateBtn.onclick = async function() {
+      const ok = window.PBFDialog
+        ? await window.PBFDialog.confirm('Rotate this invite link? The previous link will stop working immediately, but confirmed attendees will keep their roster spots.')
+        : false;
+      if (!ok) return;
+
+      rotateBtn.disabled = true;
+      try {
+        const res = await API.rotateEventInvite(ev.id);
+        if (res.error) {
+          if (window.PBFDialog) window.PBFDialog.toast(res.error, { type: 'error' });
+        } else {
+          if (window.PBFDialog) window.PBFDialog.toast('Invite link rotated. Previous link invalidated.', { type: 'success' });
+          await loadEventData(true);
+        }
+      } catch (err) {
+        if (window.PBFDialog) window.PBFDialog.toast('Failed to rotate invite link.', { type: 'error' });
+      } finally {
+        rotateBtn.disabled = false;
+      }
+    };
+  }
+}
+
 function renderOrganizerAttendancePanel() {
   const panel = document.getElementById('organizer-attendance-panel');
   if (!panel) return;
@@ -1596,7 +1823,8 @@ function setupRsvpForm() {
           gear_bringing: '',
           guest_names: '',
           duty_ids: [],
-          management_token: guestToken
+          management_token: guestToken,
+          invite_token: inviteToken
         });
 
         if (res.error) {
@@ -1668,7 +1896,8 @@ function setupRsvpForm() {
       duty_ids: checkedDuties,
       redeem_hero_credit: redeemHeroCredit,
       bp_signup: bpSignup,
-      management_token: guestToken
+      management_token: guestToken,
+      invite_token: inviteToken
     };
 
     if (!API.currentUser) {
@@ -1692,7 +1921,17 @@ function setupRsvpForm() {
           try { localStorage.setItem('guest_token_' + eventId, guestToken); } catch (e) { /* localStorage unavailable */ }
         }
         const alertClass = res.status === 'waitlist' ? 'alert-info' : 'alert-success';
-        alertBox.innerHTML = `<div class="alert ${alertClass}">${API.escapeHtml(res.message)}</div>`;
+        let promptHtml = '';
+        const currentWaiver = (API.currentUser && API.currentUser.waiver_status) || (eventData && eventData.myRsvp && eventData.myRsvp.waiver_status) || 'none';
+        if (currentWaiver === 'none') {
+          promptHtml = `
+            <div style="margin-top: 10px; padding: 10px 12px; background: var(--bg-surface); border: 1px dashed var(--primary); border-radius: 6px; font-size: 0.85rem; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+              <span data-i18n="event.waiver_prompt_text">${API.escapeHtml(API.t('event.waiver_prompt_text', '📝 Player Waiver: Please sign the waiver online before arriving at the field.'))}</span>
+              <a href="/waiver.html?redirect=/event.html?id=${encodeURIComponent(eventId)}" class="btn btn-sm btn-primary" style="font-size: 0.8rem; font-weight: 700; text-decoration: none; padding: 4px 10px;" data-i18n="event.waiver_prompt_btn">${API.escapeHtml(API.t('event.waiver_prompt_btn', 'Sign Waiver Before Arrival →'))}</a>
+            </div>
+          `;
+        }
+        alertBox.innerHTML = `<div class="alert ${alertClass}">${API.escapeHtml(res.message)}${promptHtml}</div>`;
         await loadEventData(true);
       }
     } catch (err) {

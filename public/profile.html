@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Player Profile &amp; Settings - Sunday Pickup Baseball</title>
   <link rel="stylesheet" href="/css/style.css?v=152">
+  <link rel="stylesheet" href="/css/dialog.css?v=152">
   <link rel="stylesheet" href="/css/themes.css?v=152">
   <link rel="alternate" type="application/rss+xml" title="Sunday Pickup Baseball Highlights &amp; Updates" href="/feed.xml">
   <link rel="shortcut icon" href="/favicon.ico">
@@ -20,10 +21,11 @@
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 </head>
 <body>
+  <a href="#main-content" class="pbf-skip-link">Skip to main content</a>
 
   <!-- Site Header -->
   <header class="site-header">
-    <div class="container" id="main-nav">
+    <nav class="container" id="main-nav" aria-label="Main Navigation">
       <div class="nav-wrap">
         <a href="/index.html" class="brand">
           <img src="/logo.svg" alt="Pickup Baseball Foundation Logo" class="brand-logo">
@@ -47,10 +49,10 @@
           </div>
         </div>
       </div>
-    </div>
+    </nav>
   </header>
 
-  <main class="container" style="max-width: 600px; margin-top: 36px; margin-bottom: 60px;">
+  <main class="container" id="main-content" style="max-width: 600px; margin-top: 36px; margin-bottom: 60px;">
     <div style="margin-bottom: 16px;">
       <a href="/index.html" style="color: var(--secondary); text-decoration: none; font-weight: 600; font-size: 0.9rem;" data-i18n="profile.back_to_games">
         ← Back to Games
@@ -79,7 +81,7 @@
       <div id="profile-waiver-card" style="padding: 16px 20px; background: var(--bg-subtle); border: 1.5px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
         <div>
           <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px;">
-            <h3 style="font-size: 0.95rem; color: var(--secondary); margin: 0;" data-i18n="profile.waiver_card_title">📝 Player Consent &amp; Liability Waiver</h3>
+            <h2 style="font-size: 0.95rem; color: var(--secondary); margin: 0;" data-i18n="profile.waiver_card_title">📝 Player Consent &amp; Liability Waiver</h2>
             <span id="badge-waiver-pill" class="badge badge-gray">⏳ Unsigned</span>
           </div>
           <p id="profile-waiver-desc" style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">
@@ -93,7 +95,7 @@
 
       <!-- Badges & Hero Credits Section -->
       <div id="profile-certified-shifts-card" style="padding: 16px 20px; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 18px;">
-        <h3 style="font-size: 0.95rem; color: var(--secondary); margin-bottom: 8px;">🏅 Operations Badges &amp; Hero Credits</h3>
+        <h2 style="font-size: 0.95rem; color: var(--secondary); margin-bottom: 8px;">🏅 Operations Badges &amp; Hero Credits</h2>
         <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center; font-size: 0.85rem;">
           <span id="badge-machine-pill" class="badge badge-gray">⚡ Pitching Machine: Uncertified</span>
           <span id="badge-field-pill" class="badge badge-gray">🚜 Field Dragging: Uncertified</span>
@@ -108,7 +110,7 @@
       <div id="profile-clubhouse-card" style="padding: 16px 20px; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
         <div style="flex: 1; min-width: 220px;">
           <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px;">
-            <h3 style="font-size: 0.95rem; color: var(--secondary); margin: 0;">💬 Clubhouse Community</h3>
+            <h2 style="font-size: 0.95rem; color: var(--secondary); margin: 0;">💬 Clubhouse Community</h2>
             <span id="badge-clubhouse-pill" class="badge badge-gray">Not Opted In</span>
           </div>
           <p id="profile-clubhouse-desc" style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">
@@ -125,7 +127,7 @@
       <div id="profile-security-card" style="padding: 16px 20px; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
         <div style="flex: 1; min-width: 220px;">
           <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px;">
-            <h3 style="font-size: 0.95rem; color: var(--secondary); margin: 0;" data-i18n="profile.sessions_title">🔐 Signed-In Devices</h3>
+            <h2 style="font-size: 0.95rem; color: var(--secondary); margin: 0;" data-i18n="profile.sessions_title">🔐 Signed-In Devices</h2>
             <span id="badge-sessions-pill" class="badge badge-gray">Checking...</span>
           </div>
           <p id="profile-sessions-desc" style="font-size: 0.8rem; color: var(--text-muted); margin: 0;" data-i18n="profile.sessions_desc">
@@ -141,7 +143,7 @@
       <div id="profile-export-card" style="padding: 16px 20px; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 24px;">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px;">
           <div style="flex: 1; min-width: 220px;">
-            <h3 style="font-size: 0.95rem; color: var(--secondary); margin: 0 0 4px 0;" data-i18n="profile.export_title">📦 Download Your Data</h3>
+            <h2 style="font-size: 0.95rem; color: var(--secondary); margin: 0 0 4px 0;" data-i18n="profile.export_title">📦 Download Your Data</h2>
             <p id="profile-export-desc" style="font-size: 0.8rem; color: var(--text-muted); margin: 0;" data-i18n="profile.export_desc">
               Download a JSON archive of your profile, consent history, RSVPs, volunteer tasks, signed waivers, and Clubhouse messages.
             </p>
@@ -162,7 +164,7 @@
       <div style="display: flex; align-items: center; gap: 20px; padding: 20px; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 24px; flex-wrap: wrap;">
         <div id="avatar-preview-container"></div>
         <div style="flex: 1; min-width: 200px;">
-          <h3 style="font-size: 0.95rem; color: var(--secondary); margin-bottom: 4px;" data-i18n="profile.picture_title">Profile Picture</h3>
+          <h2 style="font-size: 0.95rem; color: var(--secondary); margin-bottom: 4px;" data-i18n="profile.picture_title">Profile Picture</h2>
           <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 12px;" data-i18n="profile.picture_desc">
             JPEG, PNG, WebP or GIF (up to 5MB).
           </p>
@@ -202,7 +204,7 @@
 
         <!-- Privacy Consent Toggles -->
         <div id="profile-privacy-consent-section" style="padding: 16px 18px; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); margin-top: 18px; margin-bottom: 16px;">
-          <h3 style="font-size: 0.95rem; color: var(--secondary); margin: 0 0 6px 0;" data-i18n="profile.privacy_consent_title">🔒 Privacy Consent</h3>
+          <h2 style="font-size: 0.95rem; color: var(--secondary); margin: 0 0 6px 0;" data-i18n="profile.privacy_consent_title">🔒 Privacy Consent</h2>
           <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0 0 12px 0;" data-i18n="profile.privacy_consent_desc">
             By default, signed-in members see only your First L. initial and RSVP status. Toggle below to share full details with peers.
           </p>
@@ -226,7 +228,7 @@
 
         <!-- Notification Preferences -->
         <div id="profile-notifications-section" style="padding: 16px 18px; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 18px;">
-          <h3 style="font-size: 0.95rem; color: var(--secondary); margin: 0 0 10px 0;" data-i18n="profile.notify_title">📬 Notification Preferences</h3>
+          <h2 style="font-size: 0.95rem; color: var(--secondary); margin: 0 0 10px 0;" data-i18n="profile.notify_title">📬 Notification Preferences</h2>
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px 14px;">
             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.84rem; color: var(--text-main);">
               <input type="checkbox" id="profile-notify-rsvp" style="width: 16px; height: 16px; accent-color: var(--primary);">
@@ -262,7 +264,7 @@
 
       <!-- Account Deletion & Two-Tier Erasure Card -->
       <div id="profile-erasure-card" style="margin-top: 28px; padding: 18px 20px; background: var(--bg-subtle); border: 1.5px solid var(--danger); border-radius: var(--radius-sm);">
-        <h3 style="font-size: 0.98rem; color: var(--danger); margin: 0 0 8px 0;" data-i18n="profile.erasure_title">🗑️ Delete Account &amp; Erase Data</h3>
+        <h2 style="font-size: 0.98rem; color: var(--danger); margin: 0 0 8px 0;" data-i18n="profile.erasure_title">🗑️ Delete Account &amp; Erase Data</h2>
         <p id="profile-erasure-notice" style="font-size: 0.82rem; color: var(--text-muted); margin: 0 0 12px 0; line-height: 1.45;" data-i18n="profile.erasure_notice">
           Deleting your account immediately removes your profile, sessions, login codes, consent records, future RSVPs, task assignments, and batting practice slots. Past attendance counts, discussions, and posts are anonymized. Legal Waiver Retention Notice: Signed liability waivers remain sealed in restricted Admin-only quarantine for 3 years from signing or your last attended event before permanent deletion.
         </p>
@@ -296,10 +298,18 @@
         </div>
       </div>
     </div>
+    <details class="card" id="profile-history-panel" style="margin-top: 24px; padding: 16px;">
+      <summary style="cursor: pointer; font-weight: 600;" data-i18n="profile.history_title">My Attendance &amp; Milestones</summary>
+      <p style="font-size: 0.8rem;" data-i18n="profile.history_privacy_note">Private to you. Never shown to other players.</p>
+      <div id="profile-history-body" aria-live="polite"></div>
+    </details>
   </main>
 
   <footer id="site-footer" class="site-footer"></footer>
 
+  <script src="/js/api/i18n.js?v=152"></script>
+  <script src="/js/api/ui.js?v=152"></script>
+  <script src="/js/api/endpoints.js?v=152"></script>
   <script src="/js/api.js?v=152"></script>
   <script src="/js/dialog.js?v=152"></script>
   <script src="/js/crypto.js?v=152"></script>

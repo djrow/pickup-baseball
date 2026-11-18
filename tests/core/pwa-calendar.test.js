@@ -354,7 +354,9 @@ module.exports = async function registerPwaCalendarTests(ctx, t9) {
     // 11. Anonymous guest RSVPs without email address (name + optional details only)
     const noEmailHtml = fs.readFileSync(path.join(publicDir, 'event.html'), 'utf8');
     const noEmailEventJs = fs.readFileSync(path.join(publicDir, 'js/event.js'), 'utf8');
-    const noEmailApiJs = fs.readFileSync(path.join(publicDir, 'js/api.js'), 'utf8');
+    const noEmailApiJs = fs.existsSync(path.join(publicDir, 'js/api/i18n.js'))
+      ? fs.readFileSync(path.join(publicDir, 'js/api/i18n.js'), 'utf8')
+      : fs.readFileSync(path.join(publicDir, 'js/api.js'), 'utf8');
     assert.ok(!noEmailHtml.includes('id="rsvp-email" required') && noEmailHtml.includes('Email Address (Optional)'), 'event.html must clearly mark email as optional');
     assert.ok(!noEmailEventJs.includes("getElementById('rsvp-email').required = true"), 'event.js must not require rsvp-email for guests');
     assert.ok(noEmailApiJs.includes('"event.email_label": "Email Address (Optional)"'), 'api.js EN_DICT must label guest email as optional');
@@ -415,8 +417,13 @@ module.exports = async function registerPwaCalendarTests(ctx, t9) {
     assert.ok(!indexHtml.includes('Sunday Pickup Games • 12:00 PM • Bushrod Park'), 'index.html must not include hardcoded calendar subtitle');
     assert.ok(!indexHtml.includes('brand-tag'), 'index.html must not include community pill in top bar');
 
-    const apiJsNav = fs.readFileSync(path.join(publicDir, 'js/api.js'), 'utf8');
-    assert.ok(!apiJsNav.includes('class="brand-tag"'), 'api.js renderNav must not include community brand-tag pill');
+    const apiJsNav = fs.existsSync(path.join(publicDir, 'js/api/endpoints.js'))
+      ? fs.readFileSync(path.join(publicDir, 'js/api/endpoints.js'), 'utf8')
+      : fs.readFileSync(path.join(publicDir, 'js/api.js'), 'utf8');
+    const apiJsNavUi = fs.existsSync(path.join(publicDir, 'js/api/ui.js'))
+      ? fs.readFileSync(path.join(publicDir, 'js/api/ui.js'), 'utf8')
+      : apiJsNav;
+    assert.ok(!apiJsNavUi.includes('class="brand-tag"'), 'api.js renderNav must not include community brand-tag pill');
 
     const appJs = fs.readFileSync(path.join(publicDir, 'js/app.js'), 'utf8');
     assert.ok(appJs.includes('setupCloudSyncLifecycle'), 'app.js must bind cloud sync lifecycle listeners');
@@ -579,12 +586,18 @@ module.exports = async function registerPwaCalendarTests(ctx, t9) {
     assert.doesNotThrow(() => new vm.Script(apiJsNav, { filename: 'public/js/api.js' }), 'api.js must parse as valid JS without syntax errors');
     assert.doesNotThrow(() => new vm.Script(appJs, { filename: 'public/js/app.js' }), 'app.js must parse as valid JS without syntax errors');
 
+    const apiJsEndpoints = fs.existsSync(path.join(publicDir, 'js/api/endpoints.js'))
+      ? fs.readFileSync(path.join(publicDir, 'js/api/endpoints.js'), 'utf8')
+      : fs.readFileSync(path.join(publicDir, 'js/api.js'), 'utf8');
+    const apiJsUi = fs.existsSync(path.join(publicDir, 'js/api/ui.js'))
+      ? fs.readFileSync(path.join(publicDir, 'js/api/ui.js'), 'utf8')
+      : apiJsEndpoints;
     const apiJs = fs.readFileSync(path.join(publicDir, 'js/api.js'), 'utf8');
-    assert.ok(apiJs.includes('?cal_token=') && apiJs.includes('/api/auth/calendar-token/regenerate'), 'api.js subscribe panel must support personalized cal_token and token rotation');
+    assert.ok(apiJsEndpoints.includes('?cal_token=') && (apiJs.includes('/api/auth/calendar-token/regenerate') || apiJsEndpoints.includes('/api/auth/calendar-token/regenerate')), 'api.js subscribe panel must support personalized cal_token and token rotation');
     const readmeMd = fs.readFileSync(path.join(ctx.rootDir, 'README.md'), 'utf8');
     assert.ok(!indexHtml.includes('data-i18n="hero.notice"'), 'October 2026 notice must be moved out of the hero section');
-    assert.ok(!apiJs.includes('This site is new and few people know about it.'), 'Removed sentence must not appear in api.js');
-    assert.ok(apiJs.includes('Prototyped with Google Gemini in October 2026 for simplicity and durability. Free & open-source'), 'Site footer must include clean Prototyped with Google Gemini in October 2026 attribution');
+    assert.ok(!apiJsUi.includes('This site is new and few people know about it.'), 'Removed sentence must not appear in api.js');
+    assert.ok(apiJsUi.includes('Prototyped with Google Gemini in October 2026 for simplicity and durability. Free & open-source'), 'Site footer must include clean Prototyped with Google Gemini in October 2026 attribution');
     assert.ok(readmeMd.includes('Prototyped with Google Gemini in October 2026 for simplicity and durability'), 'README.md must include Prototyped with Google Gemini in October 2026 for simplicity and durability');
     assert.ok(readmeMd.includes('(HANDBOOK.md)'), 'README.md must link to HANDBOOK.md');
     assert.ok(fs.existsSync(path.join(ctx.rootDir, 'HANDBOOK.md')), 'HANDBOOK.md must exist in repository root');
@@ -594,14 +607,14 @@ module.exports = async function registerPwaCalendarTests(ctx, t9) {
     assert.ok(handbookMd.includes('Internet Explorer 11') && handbookMd.includes('Samsung Internet'), 'HANDBOOK.md must cover legacy browsers and mobile browsers');
     assert.ok(handbookMd.includes('Typical Rules of Play on the Field on Sundays'), 'HANDBOOK.md must contain typical rules of play section');
     assert.ok(handbookMd.includes('id="rules-of-play"'), 'HANDBOOK.md must have anchor for rules of play');
-    assert.ok(!apiJs.includes('nav-link-handbook'), 'api.js top bar must not render nav-link-handbook');
-    assert.ok(!apiJs.includes('data-i18n="footer.handbook"'), 'api.js footer must not render handbook & field rules link');
+    assert.ok(!apiJsUi.includes('nav-link-handbook'), 'api.js top bar must not render nav-link-handbook');
+    assert.ok(!apiJsUi.includes('data-i18n="footer.handbook"'), 'api.js footer must not render handbook & field rules link');
     assert.ok(indexHtml.includes('hero-handbook-btn'), 'index.html must include hero-handbook-btn');
     const licenseText = fs.readFileSync(path.join(ctx.rootDir, 'LICENSE'), 'utf8');
     assert.ok(licenseText.includes('Apache License') && licenseText.includes('Version 2.0, January 2004'), 'LICENSE must be Apache License 2.0');
     assert.ok(readmeMd.includes('Apache License, Version 2.0 (Apache-2.0)'), 'README.md must cite Apache License 2.0');
-    assert.ok(apiJs.includes('footer.copyright'), 'api.js must include footer.copyright');
-    assert.ok(apiJs.includes('href="https://www.apache.org/licenses/LICENSE-2.0"') && apiJs.includes('data-i18n="footer.copyright"') && !apiJs.includes('>Apache License 2.0</a>'), 'api.js must link footer.copyright directly to Apache License 2.0 without extra link text');
+    assert.ok(apiJsUi.includes('footer.copyright'), 'api.js must include footer.copyright');
+    assert.ok(apiJsUi.includes('href="https://www.apache.org/licenses/LICENSE-2.0"') && apiJsUi.includes('data-i18n="footer.copyright"') && !apiJsUi.includes('>Apache License 2.0</a>'), 'api.js must link footer.copyright directly to Apache License 2.0 without extra link text');
   });
 
   await test('T9.17: RSS 2.0 Feed with Media RSS, Multimedia Interpretation, and Highlights Lifecycle', async () => {
@@ -796,7 +809,11 @@ module.exports = async function registerPwaCalendarTests(ctx, t9) {
     assert.equal(aboutRes.status, 200, 'GET /about.html must respond 200 OK');
 
     // 4. Verify API.renderNav places Profile/Login next to #nav-menu-dropdown with Clubhouse, Gallery, About Us, Donate, and role-gated Admin
-    const apiCode = fs.readFileSync(path.join(publicDir, 'js', 'api.js'), 'utf8');
+    const apiCode = ['api/i18n.js', 'api/ui.js', 'api/endpoints.js', 'api.js']
+      .map((rel) => path.join(publicDir, 'js', rel))
+      .filter((p) => fs.existsSync(p))
+      .map((p) => fs.readFileSync(p, 'utf8'))
+      .join('\n');
     const navEl = { innerHTML: '' };
     const doc = {
       readyState: 'loading',

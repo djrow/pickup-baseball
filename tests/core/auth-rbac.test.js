@@ -688,7 +688,11 @@ test('T3: User Role Management & Session Persistence', async (t) => {
 
   await t.test('T3.11: Display name formatting renders First L. with collision disambiguation across community UI', async () => {
     const vm = require('node:vm');
-    const apiCode = fs.readFileSync(path.join(ctx.rootDir, 'public', 'js', 'api.js'), 'utf8');
+    const apiCode = ['api/i18n.js', 'api/ui.js', 'api/endpoints.js', 'api.js']
+      .map((rel) => path.join(ctx.rootDir, 'public', 'js', rel))
+      .filter((p) => fs.existsSync(p))
+      .map((p) => fs.readFileSync(p, 'utf8'))
+      .join('\n');
     const navEl = { innerHTML: '' };
     const doc = {
       readyState: 'loading',
@@ -962,7 +966,11 @@ test('T3: User Role Management & Session Persistence', async (t) => {
     assert.ok(adminUsers.data.users.some((u) => u.id === legacyId));
 
     // Verify shared API.isMemberRole helper and admin UI dropdown compatibility
-    const apiCode = fs.readFileSync(path.join(ctx.rootDir, 'public', 'js', 'api.js'), 'utf8');
+    const apiCode = ['api/i18n.js', 'api/ui.js', 'api/endpoints.js', 'api.js']
+      .map((rel) => path.join(ctx.rootDir, 'public', 'js', rel))
+      .filter((p) => fs.existsSync(p))
+      .map((p) => fs.readFileSync(p, 'utf8'))
+      .join('\n');
     const vm = require('node:vm');
     const sandbox = {
       window: {

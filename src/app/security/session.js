@@ -11,7 +11,8 @@ import {
   MAX_SESSIONS_PER_USER,
   generateToken,
   hashSessionId,
-  hmacSha256Hex
+  hmacSha256Hex,
+  constantTimeEqual
 } from './crypto.js';
 
 /** @type {Map<string, { user: Record<string, any>, expiresAt: number, userId: number, lightweight?: boolean }>} */
@@ -273,6 +274,116 @@ async function resolveRateLimitSecret(env, db = null) {
     ephemeralRateLimitSecret = generateToken();
   }
   return ephemeralRateLimitSecret;
+}
+
+/** @type {Map<string, Promise<string>>} */
+const derivedInviteSecretCache = new Map();
+/** @type {WeakMap<object, Promise<string|null>>} */
+const dbInviteSecretCache = new WeakMap();
+let ephemeralInviteSecret = null;
+
+/**
+ * Resolves the secret key used for HMAC-SHA256 invite link token generation.
+ * Follows hierarchy:
+ * 1. env.INVITE_SECRET
+ * 2. env.SESSION_SECRET (HMAC-SHA256 derived with 'pickup-invite-token-key-v1')
+ * 3. app_settings key 'invite_token_secret' in BASEBALL_DB
+ * 4. Ephemeral fallback token
+ *
+ * @param {AppBindings} env
+ * @param {D1Database|null} [db=null]
+ * @returns {Promise<string>}
+ */
+export async function resolveInviteSecret(env, db = null) {
+  if (env && env.INVITE_SECRET) {
+    return String(env.INVITE_SECRET);
+  }
+  if (env && env.SESSION_SECRET) {
+    const baseSecret = String(env.SESSION_SECRET);
+    let pending = derivedInviteSecretCache.get(baseSecret);
+    if (!pending) {
+      pending = hmacSha256Hex(baseSecret, 'pickup-invite-token-key-v1');
+      if (derivedInviteSecretCache.size > 16) {
+        derivedInviteSecretCache.clear();
+      }
+      derivedInviteSecretCache.set(baseSecret, pending);
+    }
+    return pending;
+  }
+
+  const secretDb = (env && (env.BASEBALL_DB || env.DB)) || db;
+  if (secretDb && typeof secretDb.prepare === 'function') {
+    let dbSecretPromise = dbInviteSecretCache.get(secretDb);
+    if (!dbSecretPromise) {
+      dbSecretPromise = (async () => {
+        try {
+          const existingStmt = secretDb.prepare("SELECT value FROM app_settings WHERE key = 'invite_token_secret'");
+          const existing = typeof existingStmt.first === 'function' ? await existingStmt.first() : null;
+          if (existing && existing.value) {
+            return String(existing.value);
+          }
+          const generated = generateToken();
+          const insertStmt = secretDb.prepare("INSERT OR IGNORE INTO app_settings (key, value) VALUES ('invite_token_secret', ?)");
+          if (typeof insertStmt.bind === 'function') {
+            await insertStmt.bind(generated).run();
+          }
+          const rowStmt = secretDb.prepare("SELECT value FROM app_settings WHERE key = 'invite_token_secret'");
+          const row = typeof rowStmt.first === 'function' ? await rowStmt.first() : null;
+          if (row && row.value) {
+            return String(row.value);
+          }
+        } catch (err) {
+          /* app_settings unavailable; fall through */
+        }
+        return null;
+      })();
+      dbInviteSecretCache.set(secretDb, dbSecretPromise);
+    }
+    const dbSecret = await dbSecretPromise;
+    if (dbSecret) {
+      return dbSecret;
+    }
+    dbInviteSecretCache.delete(secretDb);
+  }
+
+  if (!ephemeralInviteSecret) {
+    ephemeralInviteSecret = generateToken();
+  }
+  return ephemeralInviteSecret;
+}
+
+/**
+ * Generates an HMAC-SHA256 invite link token for a specific event and version.
+ * Format: HMAC-SHA256(secret, `${eventId}:${inviteVersion}`)
+ *
+ * @param {AppBindings} env
+ * @param {number|string} eventId
+ * @param {number|string} inviteVersion
+ * @param {D1Database|null} [db=null]
+ * @returns {Promise<string>}
+ */
+export async function generateInviteToken(env, eventId, inviteVersion, db = null) {
+  const secret = await resolveInviteSecret(env, db);
+  const version = inviteVersion != null ? String(inviteVersion) : '1';
+  return hmacSha256Hex(secret, `${eventId}:${version}`);
+}
+
+/**
+ * Constant-time verification of an invite token against expected HMAC.
+ *
+ * @param {AppBindings} env
+ * @param {number|string} eventId
+ * @param {number|string} inviteVersion
+ * @param {string|null|undefined} token
+ * @param {D1Database|null} [db=null]
+ * @returns {Promise<boolean>}
+ */
+export async function verifyInviteToken(env, eventId, inviteVersion, token, db = null) {
+  if (!token || typeof token !== 'string') return false;
+  const trimmed = token.trim();
+  if (trimmed.length !== 64) return false;
+  const expected = await generateInviteToken(env, eventId, inviteVersion, db);
+  return constantTimeEqual(trimmed, expected);
 }
 
 function parseRateLimitSpec(key, options = {}) {

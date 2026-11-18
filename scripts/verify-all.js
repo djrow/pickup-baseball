@@ -301,6 +301,7 @@ test.after(async () => {
 // ---------------------------------------------------------------------------
 require('../tests/core/auth-rbac.test.js')(ctx);
 require('../tests/core/events-rsvp.test.js')(ctx);
+require('../tests/core/invite-links.test.js')(ctx);
 
 test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
   await require('../tests/core/pwa-calendar.test.js')(ctx, t9);
@@ -333,8 +334,13 @@ require('../tests/core/cache-batching.test.js')(ctx);
 require('../tests/core/storage-provider.test.js')(ctx);
 require('../tests/core/gallery-direct-upload.test.js')(ctx);
 require('../tests/core/mailer-cursors.test.js')(ctx);
+require('../tests/core/mailer-preferences.test.js')(ctx);
 require('../tests/core/webhook-resend-suppression.test.js')(ctx);
 require('../tests/core/cron-reminders.test.js')(ctx);
 require('../tests/core/migrate-d1-media-to-r2.test.js')();
+require('../tests/core/setup-cli.test.js')(ctx);
+require('../tests/core/waiver-checkin.test.js')(ctx);
+require('../tests/core/dialog-focus-trap.test.js')();
+require('../tests/core/attendance-history.test.js')(ctx);
 require('../tests/core/clubhouse-sync-voice.test.js')(ctx);
 require('../tests/clubhouse/index.js')();

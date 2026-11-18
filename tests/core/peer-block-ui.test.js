@@ -88,8 +88,11 @@ function createFakeElement(id = '', tag = 'div') {
 }
 
 function loadApiEnDict() {
-  const apiSrc = fs.readFileSync(path.join(PUBLIC_DIR, 'js', 'api.js'), 'utf8');
-  const m = apiSrc.match(/const EN_DICT = \{([\s\S]*?)\n\};/);
+  const i18nPath = path.join(PUBLIC_DIR, 'js', 'api', 'i18n.js');
+  const apiSrc = fs.existsSync(i18nPath)
+    ? fs.readFileSync(i18nPath, 'utf8')
+    : fs.readFileSync(path.join(PUBLIC_DIR, 'js', 'api.js'), 'utf8');
+  const m = apiSrc.match(/(?:const|var)\s+EN_DICT\s*=\s*\{([\s\S]*?)\n\s*\};/);
   assert.ok(m, 'public/js/api.js must define EN_DICT');
   return vm.runInNewContext('({' + m[1] + '})');
 }
@@ -662,7 +665,14 @@ function registerPeerBlockUiTests() {
       const i18nDir = path.join(PUBLIC_DIR, 'i18n');
       const locales = ['ar', 'es', 'fa', 'fr', 'hi', 'hy', 'ja', 'ko', 'pa', 'pt', 'ru', 'tl', 'vi', 'zh'];
       for (const lang of locales) {
-        const dict = JSON.parse(fs.readFileSync(path.join(i18nDir, `${lang}.json`), 'utf8'));
+        const coreDict = JSON.parse(fs.readFileSync(path.join(i18nDir, `${lang}.json`), 'utf8'));
+        const chDict = fs.existsSync(path.join(i18nDir, 'clubhouse', `${lang}.json`))
+          ? JSON.parse(fs.readFileSync(path.join(i18nDir, 'clubhouse', `${lang}.json`), 'utf8'))
+          : {};
+        const admDict = fs.existsSync(path.join(i18nDir, 'admin', `${lang}.json`))
+          ? JSON.parse(fs.readFileSync(path.join(i18nDir, 'admin', `${lang}.json`), 'utf8'))
+          : {};
+        const dict = Object.assign({}, coreDict, chDict, admDict);
         const missing = enKeys.filter((k) => !(k in dict));
         assert.deepEqual(missing, [], `${lang}.json must contain all EN_DICT keys`);
       }
