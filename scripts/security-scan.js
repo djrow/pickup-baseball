@@ -178,6 +178,23 @@ function checkHtmlAndCspHeaders() {
     'upgrade-insecure-requests'
   ];
   const missing = requiredDirectives.filter((d) => !headersRaw.includes(d));
+
+  // Verify public/_headers and src/server.js stay in sync on HTML CSP & Cross-Origin isolation headers
+  const serverPath = path.join(ROOT, 'src', 'server.js');
+  if (fs.existsSync(serverPath)) {
+    const serverRaw = fs.readFileSync(serverPath, 'utf8');
+    const edgeCspMatch = headersRaw.match(/Content-Security-Policy:\s*([^\r\n]+)/);
+    const serverCspMatch = serverRaw.match(/setHeader\('Content-Security-Policy',\s*"([^"]+)"\)/);
+    if (edgeCspMatch && serverCspMatch && edgeCspMatch[1].trim() !== serverCspMatch[1].trim()) {
+      missing.push('CSP drift between public/_headers and src/server.js');
+    }
+    for (const hName of ['Cross-Origin-Opener-Policy', 'Cross-Origin-Resource-Policy', 'Cross-Origin-Embedder-Policy']) {
+      if (headersRaw.includes(`${hName}:`) && !serverRaw.includes(`'${hName}'`)) {
+        missing.push(`${hName} missing in src/server.js`);
+      }
+    }
+  }
+
   if (missing.length) {
     record('FAIL', 'Cloudflare _headers directives', `Missing: ${missing.join(', ')}`);
   } else {
