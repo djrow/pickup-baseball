@@ -134,8 +134,10 @@ function createStoreSandbox(fetchImpl) {
   };
   sandbox.window = sandbox;
   sandbox.globalThis = sandbox;
-  const storeSrc = fs.readFileSync(path.join(PUBLIC_DIR, 'js', 'store.js'), 'utf8');
-  vm.runInNewContext(storeSrc, sandbox, { filename: 'public/js/store.js' });
+  for (const rel of ['store.js', 'store/idb.js', 'store/e2ee.js', 'store/sync.js', 'store/actions.js']) {
+    const storeSrc = fs.readFileSync(path.join(PUBLIC_DIR, 'js', rel), 'utf8');
+    vm.runInNewContext(storeSrc, sandbox, { filename: 'public/js/' + rel });
+  }
   return sandbox;
 }
 
@@ -260,8 +262,10 @@ function createUiSandbox({ fetchImpl, enDict }) {
   sandbox.globalThis = sandbox;
   sandbox.addEventListener = function () {};
 
-  const storeSrc = fs.readFileSync(path.join(PUBLIC_DIR, 'js', 'store.js'), 'utf8');
-  vm.runInNewContext(storeSrc, sandbox, { filename: 'public/js/store.js' });
+  for (const rel of ['store.js', 'store/idb.js', 'store/e2ee.js', 'store/sync.js', 'store/actions.js']) {
+    const storeSrc = fs.readFileSync(path.join(PUBLIC_DIR, 'js', rel), 'utf8');
+    vm.runInNewContext(storeSrc, sandbox, { filename: 'public/js/' + rel });
+  }
 
   sandbox.module = { exports: {} };
   const rtcSrc = fs.readFileSync(path.join(PUBLIC_DIR, 'js', 'rtc.js'), 'utf8');

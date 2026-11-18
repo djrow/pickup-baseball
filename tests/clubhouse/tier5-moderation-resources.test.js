@@ -425,7 +425,9 @@ module.exports = async function runTier5(t, ctx) {
     }
 
     // 4. Verify client-side resource frugality mechanisms exist
-    const storeSrc = fs.readFileSync(path.resolve(__dirname, '../../public/js/store.js'), 'utf8');
+    const storeSrc = ['store.js', 'store/idb.js', 'store/e2ee.js', 'store/sync.js', 'store/actions.js']
+      .map((f) => fs.readFileSync(path.resolve(__dirname, '../../public/js', f), 'utf8'))
+      .join('\n');
     assert.ok(storeSrc.includes("visibilityState === 'hidden'"), 'store.js must pause idle polling when background tab is hidden');
     assert.ok(
       storeSrc.includes('VISIBLE_ACTIVE_SYNC_MS = 4000') && storeSrc.includes('VISIBLE_IDLE_SYNC_MS = 8000'),
@@ -824,7 +826,9 @@ module.exports = async function runTier5(t, ctx) {
 
     // 9. Verify honest UI labeling & strict ES6 compliance
     const clubhouseJs = fs.readFileSync(path.join(__dirname, '..', '..', 'public', 'js', 'clubhouse.js'), 'utf8');
-    const storeJs = fs.readFileSync(path.join(__dirname, '..', '..', 'public', 'js', 'store.js'), 'utf8');
+    const storeJs = ['store.js', 'store/idb.js', 'store/e2ee.js', 'store/sync.js', 'store/actions.js']
+      .map((f) => fs.readFileSync(path.join(__dirname, '..', '..', 'public', 'js', f), 'utf8'))
+      .join('\n');
     const cryptoJs = fs.readFileSync(path.join(__dirname, '..', '..', 'public', 'js', 'crypto.js'), 'utf8');
     assert.ok(clubhouseJs.includes('End-to-End Encrypted (ECDH)'), 'clubhouse.js must mark DMs as ECDH E2EE');
     assert.ok(clubhouseJs.includes('Moderated Board'), 'clubhouse.js must label public boards honestly as Moderated Board');
@@ -1400,7 +1404,9 @@ module.exports = async function runTier5(t, ctx) {
 
     // 6. Client Store logged-out / 401 cache isolation (simulating cached DM in IndexedDB after logout or expired session)
     const rootDir = path.join(__dirname, '..', '..');
-    const storeJs = fs.readFileSync(path.join(rootDir, 'public', 'js', 'store.js'), 'utf8');
+    const storeJs = ['store.js', 'store/idb.js', 'store/e2ee.js', 'store/sync.js', 'store/actions.js']
+      .map((f) => fs.readFileSync(path.join(rootDir, 'public', 'js', f), 'utf8'))
+      .join('\n');
     const clubhouseJs = fs.readFileSync(path.join(rootDir, 'public', 'js', 'clubhouse.js'), 'utf8');
     const apiJs = fs.readFileSync(path.join(rootDir, 'public', 'js', 'api.js'), 'utf8');
 

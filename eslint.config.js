@@ -108,7 +108,8 @@ module.exports = [
         ClubhouseCrypto: 'readonly',
         ClubhouseRTC: 'readonly',
         ArtStudio: 'readonly',
-        module: 'readonly'
+        module: 'readonly',
+        require: 'readonly'
       }
     },
     rules: {
@@ -139,6 +140,7 @@ module.exports = [
       'public/js/gallery.js',
       'public/js/rtc.js',
       'public/js/store.js',
+      'public/js/store/*.js',
       'public/js/waiver.js',
       'public/js/weather.js'
     ],

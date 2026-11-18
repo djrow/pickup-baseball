@@ -20,6 +20,10 @@ test('Clubhouse Frontend & Native Waiver Verification', async (t) => {
       'css/clubhouse.css',
       'js/crypto.js',
       'js/store.js',
+      'js/store/idb.js',
+      'js/store/e2ee.js',
+      'js/store/sync.js',
+      'js/store/actions.js',
       'js/rtc.js',
       'js/clubhouse.js'
     ];
@@ -41,7 +45,7 @@ test('Clubhouse Frontend & Native Waiver Verification', async (t) => {
     assert.ok(clubhouseHtml.includes('id="ch-bp-grid"'), 'clubhouse.html must include 28-slot BP grid');
     assert.ok(clubhouseHtml.includes('id="ch-privacy-relay-toggle"'), 'clubhouse.html must include Privacy Relay toggle');
 
-    for (const jsRel of ['js/crypto.js', 'js/store.js', 'js/rtc.js', 'js/clubhouse.js', 'js/waiver.js']) {
+    for (const jsRel of ['js/crypto.js', 'js/store.js', 'js/store/idb.js', 'js/store/e2ee.js', 'js/store/sync.js', 'js/store/actions.js', 'js/rtc.js', 'js/clubhouse.js', 'js/waiver.js']) {
       const code = fs.readFileSync(path.join(publicDir, jsRel), 'utf8');
       assert.ok(!code.includes('?.'), `${jsRel} must not use optional chaining (?.)`);
       assert.ok(!code.includes('??'), `${jsRel} must not use nullish coalescing (??)`);
@@ -195,7 +199,9 @@ test('Clubhouse Frontend & Native Waiver Verification', async (t) => {
     // 3. Frontend polling intervals, localStorage weather cache & ES6 safety checks
     const publicDir = ctx.publicDir;
     const rtcJs = fs.readFileSync(path.join(publicDir, 'js/rtc.js'), 'utf8');
-    const storeJs = fs.readFileSync(path.join(publicDir, 'js/store.js'), 'utf8');
+    const storeJs = ['js/store.js', 'js/store/idb.js', 'js/store/e2ee.js', 'js/store/sync.js', 'js/store/actions.js']
+      .map((rel) => fs.readFileSync(path.join(publicDir, rel), 'utf8'))
+      .join('\n');
     const homeAppJs = fs.readFileSync(path.join(publicDir, 'js/app.js'), 'utf8');
     const weatherJs = fs.readFileSync(path.join(publicDir, 'js/weather.js'), 'utf8');
 
