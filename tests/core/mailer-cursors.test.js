@@ -184,8 +184,8 @@ module.exports = function registerMailerCursorsTests(ctx) {
       const eventRow = await d1.prepare('SELECT * FROM events WHERE id = ?').bind(eventId).first();
 
       await d1.batch([
-        d1.prepare("INSERT INTO attendees (event_id, name, email, status) VALUES (?, 'Att 1', 'notice1@example.org', 'attending')").bind(eventId),
-        d1.prepare("INSERT INTO attendees (event_id, name, email, status) VALUES (?, 'Att 2', 'notice2@example.org', 'attending')").bind(eventId)
+        d1.prepare("INSERT INTO attendees (event_id, name, email, status, notify_emails) VALUES (?, 'Att 1', 'notice1@example.org', 'attending', 1)").bind(eventId),
+        d1.prepare("INSERT INTO attendees (event_id, name, email, status, notify_emails) VALUES (?, 'Att 2', 'notice2@example.org', 'attending', 1)").bind(eventId)
       ]);
 
       const mockContext = {
@@ -225,8 +225,8 @@ module.exports = function registerMailerCursorsTests(ctx) {
       let eventRow = await d1.prepare('SELECT * FROM events WHERE id = ?').bind(eventId).first();
 
       await d1.batch([
-        d1.prepare("INSERT INTO attendees (event_id, name, email, status) VALUES (?, 'Att 1', 'prog1@example.org', 'attending')").bind(eventId),
-        d1.prepare("INSERT INTO attendees (event_id, name, email, status) VALUES (?, 'Att 2', 'prog2@example.org', 'attending')").bind(eventId)
+        d1.prepare("INSERT INTO attendees (event_id, name, email, status, notify_emails) VALUES (?, 'Att 1', 'prog1@example.org', 'attending', 1)").bind(eventId),
+        d1.prepare("INSERT INTO attendees (event_id, name, email, status, notify_emails) VALUES (?, 'Att 2', 'prog2@example.org', 'attending', 1)").bind(eventId)
       ]);
 
       const env = { DB: d1, MAIL_PROVIDER: 'mock' };

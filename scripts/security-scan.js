@@ -523,6 +523,18 @@ const PUBLIC_OR_TOKEN_ROUTE_MANIFEST = [
     ast: 'webhooks.js:POST:/resend',
     route: 'POST /api/webhooks/resend',
     reason: 'Public inbound Resend webhook verified via Svix signature (svix-id, svix-timestamp ±300s, svix-signature HMAC SHA-256)'
+  },
+
+  // RFC 8058 one-click unsubscribe in src/app/routes/notifications.js
+  {
+    ast: 'notifications.js:GET:/unsubscribe',
+    route: 'GET /api/notifications/unsubscribe',
+    reason: 'Public unsubscribe link authorized solely by stateless HMAC-signed token'
+  },
+  {
+    ast: 'notifications.js:POST:/unsubscribe',
+    route: 'POST /api/notifications/unsubscribe',
+    reason: 'RFC 8058 one-click unsubscribe authorized solely by stateless HMAC-signed token'
   }
 ];
 

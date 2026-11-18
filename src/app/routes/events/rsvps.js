@@ -31,6 +31,7 @@ import {
   canUserAccessEvent
 } from '../../policy.js';
 import { resolveConfig } from '../../config.js';
+import { filterByPreference } from '../../mailer/preferences.js';
 import { sendRsvpConfirmation, sendWaitlistConfirmation, sendRsvpEditLinkEmail } from '../../mailer.js';
 import { ERROR_CODES, logEvent } from '../../errors.js';
 import { CONSENT_TYPES, parseOptionalBoolean, recordConsentChange } from '../../consent.js';
@@ -615,7 +616,12 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
 
     if (finalStatus === 'attending') {
       // Skip duplicate confirmation emails when editing an existing attending RSVP unless resend is requested
-      const shouldSendEmail = hasEmail && isDeliverableEmail(storedEmail) && (send_confirmation_email !== false) && (!wasAttending || Boolean(resend_confirmation));
+      let shouldSendEmail = hasEmail && isDeliverableEmail(storedEmail) && (send_confirmation_email !== false) && (!wasAttending || Boolean(resend_confirmation));
+      const confirmUser = c.get('user');
+      if (shouldSendEmail && confirmUser && confirmUser.id) {
+        const allowed = await filterByPreference(db, [{ user_id: confirmUser.id, email: storedEmail }], 'notify_rsvp_confirm');
+        if (allowed.length === 0) shouldSendEmail = false;
+      }
       if (shouldSendEmail) {
         runBackground(c, sendRsvpConfirmation(c.env, origin, {
           email: storedEmail, name, event,

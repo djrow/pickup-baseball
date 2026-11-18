@@ -16,6 +16,8 @@ import { ERROR_CODES, logEvent } from '../../errors.js';
 import { resolveConfig } from '../../config.js';
 
 /** SQL projection normalizing inline data-URI avatars to cached endpoint URLs. */
+import { filterByPreference, withUnsubscribeHeaders, REMINDER_LEAD_HOURS } from '../../mailer/preferences.js';
+
 export const AVATAR_EXPR = `CASE WHEN u.avatar_url LIKE 'data:%' THEN '/api/users/' || u.id || '/avatar?v=' || length(u.avatar_url) ELSE COALESCE(u.avatar_url, '') END`;
 
 /** Synthetic domain used when storing guest RSVPs submitted without an email address. */
@@ -157,7 +159,13 @@ export async function sendRemindersForEventD1(db, env, origin, event, options = 
   `).bind(event.id, limit).all();
 
   /** @type {Array<Record<string, any>>} */
-  const candidates = (unsentRows || []).filter((att) => isDeliverableEmail(String(att.email || '')));
+  const deliverable = (unsentRows || []).filter((att) => isDeliverableEmail(String(att.email || '')));
+  const candidates = await filterByPreference(db, deliverable, 'notify_event_reminders');
+  // Opted-out / banned recipients are stamped so they never block completion
+  const optedOut = deliverable.filter((att) => !candidates.includes(att));
+  for (const att of optedOut) {
+    await db.prepare('UPDATE attendees SET reminder_sent_at = CURRENT_TIMESTAMP WHERE id = ?').bind(att.id).run();
+  }
 
   if (candidates.length === 0) {
     // Check if any deliverable attendees remain unsent
@@ -182,14 +190,14 @@ export async function sendRemindersForEventD1(db, env, origin, event, options = 
   const totalAttendees = Number((totalAttRow && totalAttRow.total) || candidates.length);
 
   // Build batch messages
-  const messages = candidates.map((att) => buildEventReminderEmail(env, origin, {
+  const messages = await Promise.all(candidates.map((att) => withUnsubscribeHeaders(env, origin, buildEventReminderEmail(env, origin, {
     email: att.email,
     name: att.name,
     event,
     dutyName: att.duty_name,
     gearBringing: att.gear_bringing,
     totalAttendees
-  }));
+  }), { pref: 'notify_event_reminders', userId: att.user_id, email: att.email })));
 
   const batchRes = await sendBatch(env, db, messages, { priority: 'reminder' });
 
@@ -238,11 +246,11 @@ export async function processUpcomingEventRemindersD1(db, env, origin = '') {
   const safeOrigin = origin || resolveConfig(env).PUBLIC_ORIGIN || '';
   const now = new Date();
   const windowStart = now.toISOString();
-  const windowEnd = new Date(now.getTime() + 36 * 60 * 60 * 1000).toISOString();
+  const windowEnd = new Date(now.getTime() + REMINDER_LEAD_HOURS * 60 * 60 * 1000).toISOString();
 
   const { results: upcomingEvents } = await db.prepare(`
     SELECT * FROM events
-    WHERE status = 'active' AND reminder_sent = 0 AND event_date >= ? AND event_date <= ?
+    WHERE status = 'active' AND reminder_sent = 0 AND COALESCE(auto_reminders, 1) = 1 AND event_date >= ? AND event_date <= ?
   `).bind(windowStart, windowEnd).all();
 
   const list = upcomingEvents || [];
@@ -300,7 +308,7 @@ export async function notifyConfirmedAttendees(c, event, note, emailBuilderOrFn,
     LIMIT ?
   `).bind(event.id, noticeKey, limit).all();
 
-  const candidates = (unsentRows || []).filter((att) => isDeliverableEmail(String(att.email || '')));
+  const candidates = await filterByPreference(db, (unsentRows || []).filter((att) => isDeliverableEmail(String(att.email || ''))), 'notify_rainouts');
 
   if (candidates.length === 0) {
     const countRow = await db.prepare(`
