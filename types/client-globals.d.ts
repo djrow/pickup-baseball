@@ -87,7 +87,7 @@ interface PBFDialogFormField {
   label?: string;
   type?: string;
   placeholder?: string;
-  value?: string;
+  value?: string | number;
   checked?: boolean;
   required?: boolean;
   options?: Array<{ value: string; label: string }>;
@@ -109,6 +109,7 @@ interface PBFDialogFacade {
   confirm(message: string, options?: PBFDialogFormOptions): Promise<boolean>;
   confirmWithCheckbox(
     message: string,
+    checkboxLabelOrOptions?: string | PBFDialogFormOptions,
     options?: PBFDialogFormOptions
   ): Promise<{ confirmed: boolean; checked: boolean }>;
   prompt(message: string, defaultValueOrOptions?: string | PBFDialogFormOptions, options?: PBFDialogFormOptions): Promise<string | null>;
@@ -233,9 +234,13 @@ interface PBFApiFacade {
   updateUserWaiverStatus(userId: number | string, waiverStatus: string): Promise<any>;
   updateAttendeeWaiverStatus(attendeeId: number | string, waiverStatus: string): Promise<any>;
   deleteUser(userId: number | string, ban?: boolean, reason?: string): Promise<any>;
+  getQuarantinedWaivers(): Promise<any>;
+  purgeQuarantinedWaivers(): Promise<any>;
   getBannedEmails(): Promise<any>;
   banEmail(email: string, reason?: string): Promise<any>;
   unbanEmail(id: number | string): Promise<any>;
+  getSuppressions(): Promise<any>;
+  clearSuppression(email: string): Promise<any>;
   getSettings(): Promise<any>;
   updateSettings(settings: Record<string, any>): Promise<any>;
   testAppscript(url: string): Promise<any>;
@@ -244,7 +249,7 @@ interface PBFApiFacade {
   readEditGameFields(prefix: string): Record<string, any>;
   formatDate(isoString: string): string;
   formatDateTime(isoString: string): string;
-  isoToPacificLocalInput(isoString: string): { date: string; time: string } | string;
+  isoToPacificLocalInput(isoString: string): string;
   localToPacificIso(dateString: string, timeString?: string): string;
   getNextSundayNoonPacificIso(): string;
   getGoogleCalendarUrl(ev: PBFEvent | Record<string, any>): string;
@@ -268,6 +273,7 @@ interface PBFApiFacade {
   renderCookieNotice(): void;
   updateOfflineUi?(): void;
   _eventUi?: Record<string, any>;
+  _adminUi?: Record<string, any>;
 }
 
 interface WeatherServiceFacade {

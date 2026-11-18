@@ -562,7 +562,9 @@ function registerDutyFeatureFlagTests() {
       const eventJs = ['event/rsvp.js', 'event/organizer.js', 'event/bp.js', 'event.js']
         .map((f) => fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', f), 'utf8'))
         .join('\n');
-      const adminJs = fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'admin.js'), 'utf8');
+      const adminJs = ['admin/backup.js', 'admin/events-tasks.js', 'admin/users-moderation.js', 'admin/content-media.js', 'admin.js']
+        .map((f) => fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', f), 'utf8'))
+        .join('\n');
       const clubhouseJs = ['clubhouse/layout.js', 'clubhouse/messages.js', 'clubhouse/e2ee-ui.js', 'clubhouse/panels.js', 'clubhouse.js']
         .map((f) => fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', f), 'utf8'))
         .join('\n');

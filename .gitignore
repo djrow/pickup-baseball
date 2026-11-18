@@ -11,6 +11,7 @@ _worker.bundle
 *.db-shm
 data/
 backup*
+!public/js/admin/backup.js
 !tests/core/backup-dr.test.js
 .DS_Store
 Thumbs.db

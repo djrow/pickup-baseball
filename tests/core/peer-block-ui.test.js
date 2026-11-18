@@ -737,7 +737,9 @@ function registerPeerBlockUiTests() {
 
       // Verify Wave 1b UI files wire new strings through data-i18n / API.t / tClubhouse
       const adminHtml = fs.readFileSync(path.join(PUBLIC_DIR, 'admin.html'), 'utf8');
-      const adminJs = fs.readFileSync(path.join(PUBLIC_DIR, 'js', 'admin.js'), 'utf8');
+      const adminJs = ['admin/backup.js', 'admin/events-tasks.js', 'admin/users-moderation.js', 'admin/content-media.js', 'admin.js']
+        .map((f) => fs.readFileSync(path.join(PUBLIC_DIR, 'js', f), 'utf8'))
+        .join('\n');
       const profileJs = fs.readFileSync(path.join(PUBLIC_DIR, 'js', 'profile.js'), 'utf8');
       const loginJs = fs.readFileSync(path.join(PUBLIC_DIR, 'js', 'login.js'), 'utf8');
       const clubhouseHtml = fs.readFileSync(path.join(PUBLIC_DIR, 'clubhouse.html'), 'utf8');

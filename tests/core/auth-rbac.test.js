@@ -576,7 +576,9 @@ test('T3: User Role Management & Session Persistence', async (t) => {
     assert.ok(styleCss.includes('.data-table-compact'), 'style.css must define compact table styling');
     assert.ok(styleCss.includes('padding: 5px 10px'), 'style.css must compactify vertical padding on table cells');
 
-    const adminJs = fs.readFileSync(path.join(ctx.rootDir, 'public', 'js', 'admin.js'), 'utf8');
+    const adminJs = ['admin/backup.js', 'admin/events-tasks.js', 'admin/users-moderation.js', 'admin/content-media.js', 'admin.js']
+      .map((f) => fs.readFileSync(path.join(ctx.rootDir, 'public', 'js', f), 'utf8'))
+      .join('\n');
     assert.ok(adminJs.includes('admin-user-search-input'), 'admin.js must query search input');
     assert.ok(adminJs.includes('renderUsersList'), 'admin.js must include renderUsersList function');
     assert.ok(adminJs.includes('indexOf(query)'), 'admin.js must perform case-insensitive substring search for name and email');
@@ -594,7 +596,9 @@ test('T3: User Role Management & Session Persistence', async (t) => {
     assert.ok(adminHtml.includes('href="#admin-security-section"'), 'admin.html top nav must link directly to #admin-security-section');
     assert.ok(!adminHtml.includes('href="/login.html#security-management-section"'), 'admin.html must not bounce to login.html for security settings');
 
-    const adminJs = fs.readFileSync(path.join(ctx.rootDir, 'public', 'js', 'admin.js'), 'utf8');
+    const adminJs = ['admin/backup.js', 'admin/events-tasks.js', 'admin/users-moderation.js', 'admin/content-media.js', 'admin.js']
+      .map((f) => fs.readFileSync(path.join(ctx.rootDir, 'public', 'js', f), 'utf8'))
+      .join('\n');
     assert.ok(adminJs.includes('setupAdminSecurity'), 'admin.js must define setupAdminSecurity');
     assert.ok(adminJs.includes('admin-security-section'), 'admin.js must query #admin-security-section');
     assert.ok(adminJs.includes('API.updateSettings'), 'admin.js must update guest RSVP policy via API');
@@ -618,7 +622,9 @@ test('T3: User Role Management & Session Persistence', async (t) => {
     assert.ok(res.data.error.includes('Invalid role'), 'Error message must specify invalid role');
 
     // 2. Verify admin.js, login.js, and profile.js do not have facilitator role references
-    const adminJs = fs.readFileSync(path.join(ctx.rootDir, 'public', 'js', 'admin.js'), 'utf8');
+    const adminJs = ['admin/backup.js', 'admin/events-tasks.js', 'admin/users-moderation.js', 'admin/content-media.js', 'admin.js']
+      .map((f) => fs.readFileSync(path.join(ctx.rootDir, 'public', 'js', f), 'utf8'))
+      .join('\n');
     assert.ok(!adminJs.includes('value="facilitator"'), 'admin.js must not contain facilitator role option');
     assert.ok(!adminJs.includes("role === 'facilitator'"), 'admin.js must not contain role === facilitator branch');
 
