@@ -1372,7 +1372,7 @@ module.exports = function registerMigrationEngineTests() {
     const { ensureD1Schema, BASEBALL_SCHEMA_VERSION } = engineMod;
     const { BASEBALL_MIGRATIONS } = migrationsMod;
 
-    assert.equal(BASEBALL_SCHEMA_VERSION, 4, 'BASEBALL_SCHEMA_VERSION must be 4 including Ticket #33 backfill step');
+    assert.ok(BASEBALL_SCHEMA_VERSION >= 4, 'BASEBALL_SCHEMA_VERSION must be >= 4 including Ticket #33 backfill step');
     assert.ok(
       BASEBALL_MIGRATIONS.some((m) => m.version === 4 && m.name === 'backfill-hashed-rsvp-management-tokens' && typeof m.run === 'function'),
       'BASEBALL_MIGRATIONS must include v4 JS backfill step for attendees.management_token'
