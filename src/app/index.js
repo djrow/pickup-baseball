@@ -241,7 +241,7 @@ app.get('/mailing-list/count', async (c) => {
   const sheetId = (c.env && c.env.MAILING_LIST_SHEET_ID) || DEFAULT_MAILING_LIST_SHEET_ID;
   if (isGDriveConfigured(c.env)) {
     try {
-      const csv = await exportGDriveSheetCsv(c.env, sheetId);
+      const csv = await exportGDriveSheetCsv(c.env, sheetId, 'Sheet1');
       if (csv !== null) {
         // Sheet1 cell E2 = row 2, column 5
         const cellE2 = parseCsvCell(csv, 2, 5);
