@@ -674,6 +674,45 @@ async function fetchChatExportData(chatDb, userId) {
   };
 }
 
+const EVENT_MILESTONES = [1, 5, 10, 25, 50];
+const TASK_MILESTONES = [1, 5, 15];
+
+authRouter.get('/me/history', requireAuth, async (c) => {
+  const user = c.get('user');
+  const db = c.env && (c.env.BASEBALL_DB || c.env.DB);
+  if (!db) return c.json({ error: 'Database unavailable.' }, 500);
+  const nowIso = new Date().toISOString();
+  const evRes = await db.prepare(
+    `SELECT e.id, e.title, e.event_date FROM attendees a JOIN events e ON e.id = a.event_id
+     WHERE a.user_id = ? AND a.status = 'attending' AND e.status = 'active' AND e.event_date < ?
+     ORDER BY e.event_date DESC LIMIT 200`
+  ).bind(user.id, nowIso).all();
+  const taskRes = await db.prepare(
+    `SELECT d.id, d.title, e.id AS event_id, e.title AS event_title, e.event_date
+     FROM duty_assignments da JOIN attendees a ON a.id = da.attendee_id
+     JOIN event_duties d ON d.id = da.duty_id JOIN events e ON e.id = d.event_id
+     WHERE a.user_id = ? AND a.status = 'attending' AND e.status = 'active' AND e.event_date < ?
+     ORDER BY e.event_date DESC LIMIT 200`
+  ).bind(user.id, nowIso).all();
+  const events = (evRes && evRes.results) || [];
+  const tasks = (taskRes && taskRes.results) || [];
+  const milestones = [];
+  EVENT_MILESTONES.forEach((n) => {
+    if (events.length >= n) milestones.push({ type: 'events', threshold: n, label: n === 1 ? 'First Event attended' : n + ' Events attended' });
+  });
+  TASK_MILESTONES.forEach((n) => {
+    if (tasks.length >= n) milestones.push({ type: 'tasks', threshold: n, label: n === 1 ? 'First Volunteer Task completed' : n + ' Volunteer Tasks completed' });
+  });
+  c.header('Cache-Control', 'private, no-store');
+  return c.json({
+    events_attended: events.length,
+    tasks_completed: tasks.length,
+    events,
+    tasks,
+    milestones
+  });
+});
+
 authRouter.get('/export', requireAuth, async (c) => {
   const user = c.get('user');
   const db = c.env && (c.env.BASEBALL_DB || c.env.DB);

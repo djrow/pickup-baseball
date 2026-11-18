@@ -24,6 +24,7 @@ document.addEventListener('DOMContentLoaded', async function() {
       }
     }).catch(function() {});
   }
+  setupHistoryPanel();
   setupClubhouseOptIn();
   setupSessionManagement();
   setupDataExport();
@@ -659,4 +660,22 @@ function showAlert(msg, isError) {
   const box = document.getElementById('profile-alert');
   box.innerHTML = '<div class="alert ' + (isError ? 'alert-error' : 'alert-success') + '">' + API.escapeHtml(msg) + '</div>';
   window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function setupHistoryPanel() {
+  const panel = document.getElementById('profile-history-panel');
+  const body = document.getElementById('profile-history-body');
+  if (!panel || !body) return;
+  let loaded = false;
+  panel.addEventListener('toggle', function() {
+    if (!panel.open || loaded) return;
+    loaded = true;
+    body.textContent = 'Loading...';
+    fetch('/api/auth/me/history', { credentials: 'same-origin' }).then(function(r) { return r.json(); }).then(function(d) {
+      const esc = API.escapeHtml;
+      const badges = (d.milestones || []).map(function(m) { return '<li>' + esc(m.label) + '</li>'; }).join('');
+      body.innerHTML = '<p id="history-counts">' + esc(String(d.events_attended || 0)) + ' Events attended, ' + esc(String(d.tasks_completed || 0)) + ' Volunteer Tasks completed</p>' +
+        '<ul id="history-milestones">' + (badges || '<li>No milestones yet</li>') + '</ul>';
+    }).catch(function() { loaded = false; body.textContent = 'Could not load history.'; });
+  });
 }

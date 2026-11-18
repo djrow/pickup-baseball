@@ -859,6 +859,12 @@ async function runMemberLoginAndWaiverJourney(browser, server, tracker, record) 
     })()`);
 
     record('waiver.html localized rendering + canvas signature drawing + ESIGN consent + SHA-256 sealing succeeds');
+
+    await session.navigateAndCheck(`${server.baseUrl}/profile.html`, 'profile.html (history panel)', tracker);
+    await session.waitFor('document.getElementById("profile-history-panel")', 10000);
+    await session.evaluate('document.getElementById("profile-history-panel").open = true');
+    await session.waitFor('document.getElementById("history-counts") && document.getElementById("history-counts").textContent.includes("Events attended")', 10000);
+    record('profile.html lazy-loads private My Attendance & Milestones panel');
   } finally {
     await browser.disposeSessionContext(session, 'Member Login & Waiver Journey', tracker);
   }
