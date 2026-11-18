@@ -111,12 +111,13 @@ interface PBFDialogFacade {
     message: string,
     options?: PBFDialogFormOptions
   ): Promise<{ confirmed: boolean; checked: boolean }>;
-  prompt(message: string, options?: PBFDialogFormOptions): Promise<string | null>;
+  prompt(message: string, defaultValueOrOptions?: string | PBFDialogFormOptions, options?: PBFDialogFormOptions): Promise<string | null>;
   form(
     titleOrMessage: string,
     fieldsOrOptions: PBFDialogFormField[] | PBFDialogFormOptions,
     options?: PBFDialogFormOptions
   ): Promise<Record<string, any> | null>;
+  trapFocus?(containerEl: Element, opts?: Record<string, any>): { release(): void; update(): void };
 }
 
 interface PBFAPIError extends Error {
@@ -141,6 +142,8 @@ interface PBFApiFacade {
   setLang(lang: string): Promise<void>;
   applyTranslations(root?: Document | Element): void;
   initI18n(): Promise<void>;
+  loadSurfaceDict?(surface: string): Promise<any>;
+  activeSurfaces?: string[];
   getThemeMode(): string;
   getEffectiveTheme(): string;
   getTheme(): string;
@@ -296,8 +299,8 @@ interface ClubhouseCryptoFacade {
   decryptPayload(key: CryptoKey, ciphertext: string, iv?: string): Promise<string>;
   encryptBinaryBuffer(key: CryptoKey, buffer: ArrayBuffer): Promise<any>;
   decryptBinaryBuffer(key: CryptoKey, buffer: ArrayBuffer, iv?: string): Promise<ArrayBuffer>;
-  enrollIdentityWithPassphrase(passphrase: string): Promise<Record<string, any>>;
-  restoreIdentityFromServerVault(vaultRecord: Record<string, any>, passphrase: string): Promise<Record<string, any>>;
+  enrollIdentityWithPassphrase(passphrase: string, usePrivacyRelay?: boolean): Promise<Record<string, any>>;
+  restoreIdentityFromServerVault(vaultRecordOrPassphrase: Record<string, any> | string, passphrase?: string): Promise<Record<string, any>>;
   hasLocalIdentityKeys(): Promise<boolean>;
   getStoredIdentityKeys(): Promise<Record<string, any> | null>;
   toNonExtractableAesKey(rawOrJwk: any): Promise<CryptoKey>;
@@ -421,7 +424,7 @@ interface ClubhouseStoreFacade {
 
 interface ClubhouseRTCFacade {
   state: Record<string, any>;
-  onRtcEvent(listener: (eventName: string, payload?: any) => void): () => void;
+  onRtcEvent(listener: (eventName: string, payload?: any, rtcState?: any) => void): () => void;
   setTurnConfigured(configured: boolean): boolean;
   isTurnConfigured(): boolean;
   setIceServers(servers: any[]): any[];

@@ -58,6 +58,12 @@ async function withD1QueryCounter(ctx, fn) {
   }
 }
 
+function readClubhouseUiBundle(baseDir) {
+  return ['clubhouse/layout.js', 'clubhouse/messages.js', 'clubhouse/e2ee-ui.js', 'clubhouse/panels.js', 'clubhouse.js']
+    .map((f) => fs.readFileSync(path.resolve(baseDir, f), 'utf8'))
+    .join('\n');
+}
+
 module.exports = async function runTier5(t, ctx) {
   let generalChannelId = null;
   let customBoardId = null;
@@ -490,7 +496,7 @@ module.exports = async function runTier5(t, ctx) {
     assert.ok(!clubhouseHtml.includes('btn-mod-new-board'), 'Mod tab must not include Message Boards creation button');
     assert.ok(!clubhouseHtml.includes('<span>📋 Message Boards</span>'), 'Mod tab must not include Message Boards creation card');
 
-    const clubhouseJs = fs.readFileSync(path.resolve(__dirname, '../../public/js/clubhouse.js'), 'utf8');
+    const clubhouseJs = readClubhouseUiBundle(path.resolve(__dirname, '../../public/js'));
     assert.ok(clubhouseJs.includes("el('ch-bp-card')") && clubhouseJs.includes("el('ch-duties-card')"), 'clubhouse.js must gate game detail cards by login');
 
     // 2. Seed volunteer crew + BP slot on public event, plus an earlier invite-only restricted event
@@ -633,7 +639,7 @@ module.exports = async function runTier5(t, ctx) {
       assert.ok(!charlie.name.includes('Player'), `Expected abbreviated last name for seeded player, got "${charlie.name}"`);
       assert.match(charlie.name, /\s+[A-Za-z]{1,2}\.$/, 'Abbreviated member name must end with 1-2 letter last initial + period');
 
-      const clubhouseJs = fs.readFileSync(path.join(__dirname, '..', '..', 'public', 'js', 'clubhouse.js'), 'utf8');
+      const clubhouseJs = readClubhouseUiBundle(path.join(__dirname, '..', '..', 'public', 'js'));
       assert.ok(clubhouseJs.includes('function abbreviateMemberNames('), 'clubhouse.js must define abbreviateMemberNames');
       assert.ok(!clubhouseJs.includes('?.'), 'clubhouse.js must remain strict ES6 (no ?.)');
       assert.ok(!clubhouseJs.includes('??'), 'clubhouse.js must remain strict ES6 (no ??)');
@@ -825,7 +831,7 @@ module.exports = async function runTier5(t, ctx) {
     assert.equal(promoBlocked.status, 400, 'Encrypted/DM attachment must not be promotable to public gallery');
 
     // 9. Verify honest UI labeling & strict ES6 compliance
-    const clubhouseJs = fs.readFileSync(path.join(__dirname, '..', '..', 'public', 'js', 'clubhouse.js'), 'utf8');
+    const clubhouseJs = readClubhouseUiBundle(path.join(__dirname, '..', '..', 'public', 'js'));
     const storeJs = ['store.js', 'store/idb.js', 'store/e2ee.js', 'store/sync.js', 'store/actions.js']
       .map((f) => fs.readFileSync(path.join(__dirname, '..', '..', 'public', 'js', f), 'utf8'))
       .join('\n');
@@ -1007,7 +1013,7 @@ module.exports = async function runTier5(t, ctx) {
     const rootDir = path.join(__dirname, '..', '..');
 
     const clubhouseHtml = fs.readFileSync(path.join(rootDir, 'public', 'clubhouse.html'), 'utf8');
-    const clubhouseJs = fs.readFileSync(path.join(rootDir, 'public', 'js', 'clubhouse.js'), 'utf8');
+    const clubhouseJs = readClubhouseUiBundle(path.join(rootDir, 'public', 'js'));
 
     assert.ok(clubhouseHtml.includes('id="ch-covenant-strip"'), 'clubhouse.html must show implicit covenant strip');
     assert.ok(
@@ -1288,7 +1294,7 @@ module.exports = async function runTier5(t, ctx) {
 
     // 4. Verify UI & strict ES6/CSP invariants
     const clubhouseHtml = fs.readFileSync(path.join(rootDir, 'public', 'clubhouse.html'), 'utf8');
-    const clubhouseJs = fs.readFileSync(path.join(rootDir, 'public', 'js', 'clubhouse.js'), 'utf8');
+    const clubhouseJs = readClubhouseUiBundle(path.join(rootDir, 'public', 'js'));
     assert.ok(clubhouseHtml.includes('id="btn-open-gif-picker"'));
     assert.ok(clubhouseHtml.includes('id="ch-gif-picker"'));
     assert.ok(clubhouseHtml.includes('id="ch-gif-import-form"'));
@@ -1407,7 +1413,7 @@ module.exports = async function runTier5(t, ctx) {
     const storeJs = ['store.js', 'store/idb.js', 'store/e2ee.js', 'store/sync.js', 'store/actions.js']
       .map((f) => fs.readFileSync(path.join(rootDir, 'public', 'js', f), 'utf8'))
       .join('\n');
-    const clubhouseJs = fs.readFileSync(path.join(rootDir, 'public', 'js', 'clubhouse.js'), 'utf8');
+    const clubhouseJs = readClubhouseUiBundle(path.join(rootDir, 'public', 'js'));
     const apiJs = fs.readFileSync(path.join(rootDir, 'public', 'js', 'api.js'), 'utf8');
 
     assert.ok(!storeJs.includes('?.') && !storeJs.includes('??'), 'store.js must remain strict ES6');
@@ -1748,7 +1754,7 @@ module.exports = async function runTier5(t, ctx) {
 
     // 5. Verify UI controls & strict ES6 preserved
     const clubhouseHtml = fs.readFileSync(path.join(rootDir, 'public', 'clubhouse.html'), 'utf8');
-    const clubhouseJs = fs.readFileSync(path.join(rootDir, 'public', 'js', 'clubhouse.js'), 'utf8');
+    const clubhouseJs = readClubhouseUiBundle(path.join(rootDir, 'public', 'js'));
     const profileHtml = fs.readFileSync(path.join(rootDir, 'public', 'profile.html'), 'utf8');
     assert.ok(clubhouseHtml.includes('id="ch-optin-banner"'));
     assert.ok(clubhouseHtml.includes('id="btn-join-clubhouse"'));

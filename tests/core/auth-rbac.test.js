@@ -753,7 +753,9 @@ test('T3: User Role Management & Session Persistence', async (t) => {
     const appJs = fs.readFileSync(path.join(ctx.rootDir, 'public', 'js', 'app.js'), 'utf8');
     const eventJs = fs.readFileSync(path.join(ctx.rootDir, 'public', 'js', 'event.js'), 'utf8');
     const galleryJs = fs.readFileSync(path.join(ctx.rootDir, 'public', 'js', 'gallery.js'), 'utf8');
-    const clubhouseJs = fs.readFileSync(path.join(ctx.rootDir, 'public', 'js', 'clubhouse.js'), 'utf8');
+    const clubhouseJs = ['clubhouse/layout.js', 'clubhouse/messages.js', 'clubhouse/e2ee-ui.js', 'clubhouse/panels.js', 'clubhouse.js']
+      .map((f) => fs.readFileSync(path.join(ctx.rootDir, 'public', 'js', f), 'utf8'))
+      .join('\n');
     assert.ok(appJs.includes('API.formatDisplayName(data.user.name') && appJs.includes('API.formatDisplayName(post.author_name'), 'app.js must abbreviate welcome & post author names');
     assert.ok(eventJs.includes("API.abbreviateDisplayNames(attendees, 'name'") && eventJs.includes("API.abbreviateDisplayNames(comments, 'author_name'") && eventJs.includes("API.abbreviateDisplayNames(signups, 'player_name'"), 'event.js must abbreviate roster, comments, and BP slots');
     assert.ok(eventJs.includes('API.formatDisplayNameList(a.guest_names)'), 'event.js must abbreviate group guest names');

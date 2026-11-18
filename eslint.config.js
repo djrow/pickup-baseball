@@ -135,6 +135,7 @@ module.exports = [
       'public/js/api/*.js',
       'public/js/art.js',
       'public/js/clubhouse.js',
+      'public/js/clubhouse/*.js',
       'public/js/crypto.js',
       'public/js/dialog.js',
       'public/js/gallery.js',

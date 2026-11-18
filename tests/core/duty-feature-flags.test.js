@@ -561,7 +561,9 @@ function registerDutyFeatureFlagTests() {
       const appJs = fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'app.js'), 'utf8');
       const eventJs = fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'event.js'), 'utf8');
       const adminJs = fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'admin.js'), 'utf8');
-      const clubhouseJs = fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'clubhouse.js'), 'utf8');
+      const clubhouseJs = ['clubhouse/layout.js', 'clubhouse/messages.js', 'clubhouse/e2ee-ui.js', 'clubhouse/panels.js', 'clubhouse.js']
+        .map((f) => fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', f), 'utf8'))
+        .join('\n');
 
       assert.ok(apiJs.includes('getPublicConfig('), 'api.js must define getPublicConfig()');
       assert.ok(apiJs.includes('isFeatureEnabled('), 'api.js must define isFeatureEnabled()');

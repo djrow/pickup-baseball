@@ -25,6 +25,10 @@ test('Clubhouse Frontend & Native Waiver Verification', async (t) => {
       'js/store/sync.js',
       'js/store/actions.js',
       'js/rtc.js',
+      'js/clubhouse/layout.js',
+      'js/clubhouse/messages.js',
+      'js/clubhouse/e2ee-ui.js',
+      'js/clubhouse/panels.js',
       'js/clubhouse.js'
     ];
     for (const rel of requiredFiles) {
@@ -45,10 +49,14 @@ test('Clubhouse Frontend & Native Waiver Verification', async (t) => {
     assert.ok(clubhouseHtml.includes('id="ch-bp-grid"'), 'clubhouse.html must include 28-slot BP grid');
     assert.ok(clubhouseHtml.includes('id="ch-privacy-relay-toggle"'), 'clubhouse.html must include Privacy Relay toggle');
 
-    for (const jsRel of ['js/crypto.js', 'js/store.js', 'js/store/idb.js', 'js/store/e2ee.js', 'js/store/sync.js', 'js/store/actions.js', 'js/rtc.js', 'js/clubhouse.js', 'js/waiver.js']) {
+    for (const jsRel of ['js/crypto.js', 'js/store.js', 'js/store/idb.js', 'js/store/e2ee.js', 'js/store/sync.js', 'js/store/actions.js', 'js/rtc.js', 'js/clubhouse/layout.js', 'js/clubhouse/messages.js', 'js/clubhouse/e2ee-ui.js', 'js/clubhouse/panels.js', 'js/clubhouse.js', 'js/waiver.js']) {
       const code = fs.readFileSync(path.join(publicDir, jsRel), 'utf8');
       assert.ok(!code.includes('?.'), `${jsRel} must not use optional chaining (?.)`);
       assert.ok(!code.includes('??'), `${jsRel} must not use nullish coalescing (??)`);
+    }
+    for (const chRel of ['js/clubhouse/layout.js', 'js/clubhouse/messages.js', 'js/clubhouse/e2ee-ui.js', 'js/clubhouse/panels.js', 'js/clubhouse.js']) {
+      const code = fs.readFileSync(path.join(publicDir, chRel), 'utf8');
+      assert.ok(code.startsWith('// @ts-check'), `${chRel} must start with // @ts-check`);
     }
   });
 
