@@ -16,7 +16,8 @@ import {
   isValidEmailAddress,
   requireAuth,
   requireOrganizer,
-  purgeUserSessionCache
+  purgeUserSessionCache,
+  verifyInviteToken
 } from '../../security.js';
 import { purgePublicEdgeCache } from '../../edge-cache.js';
 import { getRequireLoginSetting } from '../../schema.js';
@@ -97,7 +98,7 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
 
     let {
       name, email, gear_bringing, duty_ids, redeem_hero_credit,
-      management_token, status, players_count, spectators_count,
+      management_token, invite_token, status, players_count, spectators_count,
       additional_guests, guest_names, cf_turnstile_response,
       bp_signup, bp_slot, resend_confirmation, send_confirmation_email,
       roster_consent, notify_emails
@@ -105,6 +106,7 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
     if (!management_token) {
       management_token = c.req.query('token');
     }
+    const inviteTokenCandidate = invite_token || c.req.query('invite');
     status = status === 'declined' ? 'declined' : 'attending';
 
     let playersCount = 1;
@@ -183,18 +185,6 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
       ? await db.prepare('SELECT id FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1').bind(email).first()
       : null;
 
-    const allowedList = parseAllowedEmails(event.allowed_emails);
-    if (allowedList.length > 0) {
-      if (!user) {
-        return c.json({ error: 'RSVP for this game is restricted to invited player accounts. Please sign in to RSVP if your account is invited.' }, 403);
-      }
-      if (!user.canManageEvents && (!hasEmail || !allowedList.includes(email.toLowerCase()))) {
-        return c.json({ error: 'RSVP for this game is restricted to invited player accounts. Please sign in to RSVP if your account is invited.' }, 403);
-      }
-    } else if (registeredUser) {
-      return c.json({ error: 'This email belongs to a registered account. Please sign in to RSVP.' }, 401);
-    }
-
     const cleanGear = String(gear_bringing || '').trim().slice(0, 300);
     const freshToken = generateToken();
     const freshTokenHash = await hashManagementToken(freshToken);
@@ -205,8 +195,33 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
         rawToken: String(management_token)
       });
     }
+    if (!existingAttendee && user) {
+      existingAttendee = await db.prepare('SELECT * FROM attendees WHERE event_id = ? AND (user_id = ? OR email = ?)').bind(eventId, user.id, user.email).first();
+    }
     if (!existingAttendee && hasEmail) {
       existingAttendee = await db.prepare('SELECT * FROM attendees WHERE event_id = ? AND email = ?').bind(eventId, email).first();
+    }
+
+    const hasValidInviteToken = Boolean(
+      event.invite_enabled === 1 &&
+      inviteTokenCandidate &&
+      (await verifyInviteToken(c.env, Number(event.id), event.invite_version != null ? Number(event.invite_version) : 1, inviteTokenCandidate, db))
+    );
+
+    const allowedList = parseAllowedEmails(event.allowed_emails);
+    if (allowedList.length > 0) {
+      const isOrganizerUser = Boolean(user && user.canManageEvents);
+      const isEmailAllowed = Boolean(hasEmail && allowedList.includes(email.toLowerCase()));
+      const isExistingAttendee = Boolean(existingAttendee && existingAttendee.id);
+
+      if (!isOrganizerUser && !isEmailAllowed && !hasValidInviteToken && !isExistingAttendee) {
+        if (!user) {
+          return c.json({ error: 'RSVP for this game is restricted to invited players or a valid invite link. Please sign in or use a valid invite link.' }, 403);
+        }
+        return c.json({ error: 'RSVP for this game is restricted to invited player accounts. Please sign in with an invited account or use a valid invite link.' }, 403);
+      }
+    } else if (registeredUser) {
+      return c.json({ error: 'This email belongs to a registered account. Please sign in to RSVP.' }, 401);
     }
     const wasAttending = existingAttendee && existingAttendee.status === 'attending';
     const prevPlayersCount = existingAttendee

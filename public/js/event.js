@@ -10,6 +10,7 @@
 
 let eventId = null;
 let guestToken = '';
+let inviteToken = '';
 let eventData = null;
 let eventPublicConfig = null;
 
@@ -42,6 +43,7 @@ async function initEvent() {
     storedGuestToken = eventId ? (localStorage.getItem('guest_token_' + eventId) || '') : '';
   } catch (e) { /* localStorage unavailable */ }
   guestToken = params.get('token') || storedGuestToken || '';
+  inviteToken = params.get('invite') || '';
 
   if (params.has('token') && typeof window.history !== 'undefined' && typeof window.history.replaceState === 'function') {
     try {
@@ -107,6 +109,7 @@ function applyLoadedEventToDom(res, preserveAlertHtml) {
   renderBpOrder();
   renderComments();
   setupRsvpState(preserveAlertHtml);
+  renderOrganizerInvitePanel();
   renderOrganizerRainoutPanel();
   renderOrganizerAttendancePanel();
 
@@ -172,7 +175,7 @@ async function loadEventData(preserveAlertHtml) {
   }
 
   try {
-    const res = await API.getEvent(eventId, guestToken);
+    const res = await API.getEvent(eventId, guestToken, inviteToken);
     if (res.error) {
       try { localStorage.removeItem(cacheKey); } catch (e) { /* localStorage unavailable */ }
       showError(res.error);
@@ -259,6 +262,28 @@ function renderEventDetails() {
         });
         eventSubPanel.style.display = 'block';
         eventSubBtn.setAttribute('aria-expanded', 'true');
+      }
+    };
+  }
+
+  const eventShareBtn = document.getElementById('event-share-btn');
+  if (eventShareBtn) {
+    eventShareBtn.onclick = function() {
+      const shareUrl = window.location.href;
+      const shareTitle = (ev && ev.title) ? ev.title : 'Sunday Pickup Baseball';
+      const shareText = 'Check out this pickup baseball game: ' + shareTitle;
+      if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+        navigator.share({
+          title: shareTitle,
+          text: shareText,
+          url: shareUrl
+        }).catch(function() {});
+      } else if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        navigator.clipboard.writeText(shareUrl).then(function() {
+          if (window.PBFDialog && typeof window.PBFDialog.toast === 'function') {
+            window.PBFDialog.toast('Event link copied to clipboard!', { type: 'success' });
+          }
+        }).catch(function() {});
       }
     };
   }
@@ -1390,6 +1415,115 @@ function renderOrganizerRainoutPanel() {
   }
 }
 
+function renderOrganizerInvitePanel() {
+  const panel = document.getElementById('organizer-invite-panel');
+  if (!panel) return;
+
+  const user = API.currentUser;
+  if (!user || (!user.canManageEvents && !user.isAdmin) || !eventData || !eventData.event || !eventData.event.is_restricted) {
+    panel.style.display = 'none';
+    panel.innerHTML = '';
+    return;
+  }
+
+  const ev = eventData.event;
+  const isEnabled = Boolean(ev.invite_enabled);
+  const version = ev.invite_version != null ? ev.invite_version : 1;
+  const inviteUrl = ev.invite_url || (window.location.origin + '/event.html?id=' + encodeURIComponent(ev.id) + (ev.invite_token ? '&invite=' + encodeURIComponent(ev.invite_token) : ''));
+
+  panel.style.display = 'block';
+  panel.innerHTML = `
+    <div class="card" style="padding: 12px 14px; background: var(--bg-card); border-left: 4px solid var(--secondary); border-inline-start: 4px solid var(--secondary); border-radius: 6px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+          <span style="font-weight: 700; font-size: 0.9rem; color: var(--secondary);">🔒 Invite Link</span>
+          <span class="badge ${isEnabled ? 'badge-green' : 'badge-gray'}" style="font-size: 0.75rem;">
+            ${isEnabled ? 'Active (v' + version + ')' : 'Disabled'}
+          </span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+          ${isEnabled ? `
+            <button type="button" id="btn-copy-invite-link" class="btn btn-outline btn-sm" style="font-weight: 600;">
+              📋 Copy Invite Link
+            </button>
+            <button type="button" id="btn-rotate-invite-link" class="btn btn-outline btn-sm" style="font-weight: 600; color: var(--danger); border-color: var(--danger);">
+              🔄 Rotate Link
+            </button>
+            <button type="button" id="btn-toggle-invite-link" class="btn btn-outline btn-sm">
+              Disable
+            </button>
+          ` : `
+            <button type="button" id="btn-toggle-invite-link" class="btn btn-primary btn-sm">
+              Enable Invite Link
+            </button>
+          `}
+        </div>
+      </div>
+      <p style="margin: 6px 0 0 0; font-size: 0.78rem; color: var(--text-muted); line-height: 1.4;">
+        Anyone with this link can view details and RSVP for this restricted pickup game. Rotating invalidates the previous link without affecting players already confirmed on the roster.
+      </p>
+    </div>
+  `;
+
+  const copyBtn = document.getElementById('btn-copy-invite-link');
+  if (copyBtn) {
+    copyBtn.onclick = function() {
+      if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        navigator.clipboard.writeText(inviteUrl).then(function() {
+          if (window.PBFDialog && typeof window.PBFDialog.toast === 'function') {
+            window.PBFDialog.toast('Invite link copied to clipboard!', { type: 'success' });
+          }
+        }).catch(function() {});
+      }
+    };
+  }
+
+  const toggleBtn = document.getElementById('btn-toggle-invite-link');
+  if (toggleBtn) {
+    toggleBtn.onclick = async function() {
+      toggleBtn.disabled = true;
+      try {
+        const res = await API.toggleEventInvite(ev.id, !isEnabled);
+        if (res.error) {
+          if (window.PBFDialog) window.PBFDialog.toast(res.error, { type: 'error' });
+        } else {
+          if (window.PBFDialog) window.PBFDialog.toast(res.message || 'Invite link updated.', { type: 'success' });
+          await loadEventData(true);
+        }
+      } catch (err) {
+        if (window.PBFDialog) window.PBFDialog.toast('Failed to update invite link.', { type: 'error' });
+      } finally {
+        toggleBtn.disabled = false;
+      }
+    };
+  }
+
+  const rotateBtn = document.getElementById('btn-rotate-invite-link');
+  if (rotateBtn) {
+    rotateBtn.onclick = async function() {
+      const ok = window.PBFDialog
+        ? await window.PBFDialog.confirm('Rotate this invite link? The previous link will stop working immediately, but confirmed attendees will keep their roster spots.')
+        : false;
+      if (!ok) return;
+
+      rotateBtn.disabled = true;
+      try {
+        const res = await API.rotateEventInvite(ev.id);
+        if (res.error) {
+          if (window.PBFDialog) window.PBFDialog.toast(res.error, { type: 'error' });
+        } else {
+          if (window.PBFDialog) window.PBFDialog.toast('Invite link rotated. Previous link invalidated.', { type: 'success' });
+          await loadEventData(true);
+        }
+      } catch (err) {
+        if (window.PBFDialog) window.PBFDialog.toast('Failed to rotate invite link.', { type: 'error' });
+      } finally {
+        rotateBtn.disabled = false;
+      }
+    };
+  }
+}
+
 function renderOrganizerAttendancePanel() {
   const panel = document.getElementById('organizer-attendance-panel');
   if (!panel) return;
@@ -1600,7 +1734,8 @@ function setupRsvpForm() {
           gear_bringing: '',
           guest_names: '',
           duty_ids: [],
-          management_token: guestToken
+          management_token: guestToken,
+          invite_token: inviteToken
         });
 
         if (res.error) {
@@ -1672,7 +1807,8 @@ function setupRsvpForm() {
       duty_ids: checkedDuties,
       redeem_hero_credit: redeemHeroCredit,
       bp_signup: bpSignup,
-      management_token: guestToken
+      management_token: guestToken,
+      invite_token: inviteToken
     };
 
     if (!API.currentUser) {

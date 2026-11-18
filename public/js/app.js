@@ -397,6 +397,9 @@ function renderCalendarDrawer(dateKey, game, isPast) {
           <h3>${API.escapeHtml(translatedTitle)}</h3>
         </div>
         <div class="drawer-actions">
+          <button type="button" class="btn btn-outline btn-sm drawer-share-event-btn" data-event-id="${game.id}" data-event-title="${API.escapeHtml(translatedTitle)}" title="Share Event link">
+            🔗 Share Event
+          </button>
           <a href="/event.html?id=${game.id}" class="btn btn-primary btn-sm" style="font-weight: 700;">
             📜 View Recap &amp; Comments →
           </a>
@@ -434,6 +437,9 @@ function renderCalendarDrawer(dateKey, game, isPast) {
               ⚾ BP Signup Sheet
             </a>
           ` : ''}
+          <button type="button" class="btn btn-outline btn-sm drawer-share-event-btn" data-event-id="${game.id}" data-event-title="${API.escapeHtml(translatedTitle)}" title="Share Event link">
+            🔗 Share Event
+          </button>
           <a href="/event.html?id=${game.id}" class="btn btn-primary btn-sm" style="font-weight: 700;">
             ${API.escapeHtml(API.t('calendar.view_details', 'RSVP & View Game Details →'))}
           </a>
@@ -490,6 +496,28 @@ function renderCalendarDrawer(dateKey, game, isPast) {
       </p>
       <div class="drawer-5day-weather-section" id="drawer-5day-weather-${dateKey}" style="display: none;"></div>
     `;
+  }
+
+  const shareBtn = drawer.querySelector('.drawer-share-event-btn');
+  if (shareBtn && game) {
+    shareBtn.addEventListener('click', function() {
+      const shareUrl = window.location.origin + '/event.html?id=' + encodeURIComponent(game.id);
+      const shareTitle = game.title || 'Sunday Pickup Baseball';
+      const shareText = 'Join us for ' + shareTitle + '!';
+      if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+        navigator.share({
+          title: shareTitle,
+          text: shareText,
+          url: shareUrl
+        }).catch(function() {});
+      } else if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        navigator.clipboard.writeText(shareUrl).then(function() {
+          if (window.PBFDialog && typeof window.PBFDialog.toast === 'function') {
+            window.PBFDialog.toast('Event link copied to clipboard!', { type: 'success' });
+          }
+        }).catch(function() {});
+      }
+    });
   }
 
   const closeBtn = drawer.querySelector('.calendar-drawer-close-btn');

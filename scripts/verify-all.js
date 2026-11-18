@@ -301,6 +301,7 @@ test.after(async () => {
 // ---------------------------------------------------------------------------
 require('../tests/core/auth-rbac.test.js')(ctx);
 require('../tests/core/events-rsvp.test.js')(ctx);
+require('../tests/core/invite-links.test.js')(ctx);
 
 test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
   await require('../tests/core/pwa-calendar.test.js')(ctx, t9);

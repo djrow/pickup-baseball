@@ -903,6 +903,15 @@ async function runAdminEventAndTaskJourney(browser, server, tracker, record) {
     const dutiesText = await session.evaluate('document.getElementById("rsvp-duties-list").textContent');
     assert(dutiesText.includes('Scorekeeper'), 'Custom Volunteer Task "Scorekeeper" rendered on newly created Event page');
     record('admin.html Event + custom Volunteer Task creation redirects and renders on event.html');
+
+    // 4.1 Native Share Event and Organizer Invite Link controls smoke check (#59)
+    const shareBtnFound = await session.evaluate('Boolean(document.getElementById("event-share-btn"))');
+    assert(shareBtnFound, 'event.html renders native Share Event button in header');
+
+    await clickEl(session, '#event-share-btn');
+    const toastShown = await session.evaluate('Boolean(document.querySelector(".pbf-toast"))');
+    assert(toastShown, 'Clicking Share Event button triggers toast confirmation or clipboard copy');
+    record('event.html native Share Event button interacts cleanly');
   } finally {
     await browser.disposeSessionContext(session, 'Admin Event & Task Journey', tracker);
   }

@@ -93,10 +93,14 @@
     });
   };
 
-  API.getEvent = function (id, token) {
+  API.getEvent = function (id, token, invite) {
     var safeId = encodeURIComponent(id);
     var tokenVal = token || '';
-    var url = '/api/events/' + safeId + (tokenVal ? '?token=' + encodeURIComponent(tokenVal) : '');
+    var inviteVal = invite || '';
+    var queryParts = [];
+    if (tokenVal) queryParts.push('token=' + encodeURIComponent(tokenVal));
+    if (inviteVal) queryParts.push('invite=' + encodeURIComponent(inviteVal));
+    var url = '/api/events/' + safeId + (queryParts.length > 0 ? '?' + queryParts.join('&') : '');
     return this.request('GET', url).then(function (data) {
       if (data && data.user !== undefined) {
         API.currentUser = data.user || null;
@@ -105,6 +109,26 @@
         }
       }
       return data;
+    });
+  };
+
+  API.getEventInvite = function (id) {
+    return this.request('GET', '/api/events/' + encodeURIComponent(id) + '/invite', null, {
+      noStore: true, throwOnError: true, errorMsg: 'Failed to fetch invite link.'
+    });
+  };
+
+  API.toggleEventInvite = function (id, enabled) {
+    return this.request('POST', '/api/events/' + encodeURIComponent(id) + '/invite/toggle', {
+      enabled: Boolean(enabled)
+    }, {
+      throwOnError: true, errorMsg: 'Failed to update invite link status.'
+    });
+  };
+
+  API.rotateEventInvite = function (id) {
+    return this.request('POST', '/api/events/' + encodeURIComponent(id) + '/invite/rotate', {}, {
+      throwOnError: true, errorMsg: 'Failed to rotate invite link.'
     });
   };
 
