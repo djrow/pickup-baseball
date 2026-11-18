@@ -293,6 +293,8 @@
       localStorage.removeItem('pickup_cached_user');
       localStorage.removeItem('pickup_ch_collapsed_cats');
       localStorage.removeItem('pbf_my_media_submissions');
+      localStorage.removeItem('pickup_remembered_email');
+      localStorage.removeItem('pickup_remembered_name');
       var keysToRemove = [];
       for (var i = 0; i < localStorage.length; i++) {
         var k = localStorage.key(i);
@@ -475,6 +477,9 @@
     return fetch(url, init).then(function (res) {
       if (timeoutHandle) clearTimeout(timeoutHandle);
       self.checkResponseVersion(res);
+      if (typeof self.setNetworkOnline === 'function') {
+        self.setNetworkOnline();
+      }
 
       var contentType = (res.headers && res.headers.get && res.headers.get('content-type')) || '';
       var parsePromise;
@@ -522,6 +527,9 @@
       });
     }).catch(function (err) {
       if (timeoutHandle) clearTimeout(timeoutHandle);
+      if (typeof self.setNetworkOffline === 'function') {
+        self.setNetworkOffline();
+      }
       if (err && err.requestId) {
         // Already recorded above before options.throwOnError threw err
         throw err;
@@ -690,6 +698,9 @@
     }
     if (typeof API.renderCookieNotice === 'function') {
       API.renderCookieNotice();
+    }
+    if (typeof API.initOfflineUx === 'function') {
+      API.initOfflineUx();
     }
   };
 

@@ -438,5 +438,8 @@
   "waiver.view_cert_btn": "📄 Voir / Imprimer le certificat signé ↗",
   "waiver.sig_required_error": "Veuillez dessiner ou taper votre signature.",
   "waiver.printed_name_required_error": "Veuillez entrer votre nom légal complet en lettres moulées.",
-  "waiver.consent_required_error": "Veuillez cocher la case de consentement électronique pour continuer."
+  "waiver.consent_required_error": "Veuillez cocher la case de consentement électronique pour continuer.",
+  "offline.banner": "Vous êtes actuellement hors ligne. Certaines fonctionnalités peuvent ne pas être disponibles.",
+  "offline.retry": "Réessayer",
+  "offline.submit_offline": "Indisponible hors ligne"
 }

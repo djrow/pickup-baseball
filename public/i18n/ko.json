@@ -438,5 +438,8 @@
   "waiver.view_cert_btn": "📄 서명 인증서 보기 / 인쇄 ↗",
   "waiver.sig_required_error": "서명란에 서명을 그리거나 입력해 주세요.",
   "waiver.printed_name_required_error": "정자 법적 성명을 입력해 주세요.",
-  "waiver.consent_required_error": "진행하려면 전자서명 동의 확인란에 체크해 주세요."
+  "waiver.consent_required_error": "진행하려면 전자서명 동의 확인란에 체크해 주세요.",
+  "offline.banner": "현재 오프라인 상태입니다. 일부 기능을 사용할 수 없을 수 있습니다.",
+  "offline.retry": "다시 시도",
+  "offline.submit_offline": "오프라인 시 사용 불가"
 }

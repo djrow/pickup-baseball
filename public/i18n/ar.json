@@ -438,5 +438,8 @@
   "waiver.view_cert_btn": "📄 عرض / طباعة الشهادة الموقعة ↗",
   "waiver.sig_required_error": "يرجى رسم أو كتابة توقيعك على خط التوقيع.",
   "waiver.printed_name_required_error": "يرجى إدخال اسمك القانوني الكامل.",
-  "waiver.consent_required_error": "يرجى تحديد مربع الموافقة على التوقيع الإلكتروني للمتابعة."
+  "waiver.consent_required_error": "يرجى تحديد مربع الموافقة على التوقيع الإلكتروني للمتابعة.",
+  "offline.banner": "أنت غير متصل بالإنترنت حاليًا. قد لا تتوفر بعض الميزات.",
+  "offline.retry": "إعادة المحاولة",
+  "offline.submit_offline": "غير متاح وأنت غير متصل"
 }

@@ -149,20 +149,21 @@ async function loadEventData(preserveAlertHtml) {
       if (cachedRaw) {
         const cachedRes = JSON.parse(cachedRaw);
         if (cachedRes && cachedRes.event && !cachedRes.event.is_restricted) {
-          if (!API.currentUser) {
-            cachedRes.attendees = [];
-            cachedRes.waitlist = [];
-            cachedRes.comments = [];
-            cachedRes.bp_signups = [];
-            if (Array.isArray(cachedRes.duties)) {
-              cachedRes.duties = cachedRes.duties.map(function(d) {
-                return Object.assign({}, d, {
-                  assigned_players: (d.assigned_players || []).map(function(p) {
-                    return { attendee_id: p.attendee_id, name: '' };
-                  })
-                });
+          // Zero-PII contract: ensure no attendee, companion, comment, or my_rsvp PII in memory from cache
+          cachedRes.attendees = [];
+          cachedRes.waitlist = [];
+          cachedRes.comments = [];
+          cachedRes.bp_signups = [];
+          delete cachedRes.myRsvp;
+          delete cachedRes.my_rsvp;
+          if (Array.isArray(cachedRes.duties)) {
+            cachedRes.duties = cachedRes.duties.map(function(d) {
+              return Object.assign({}, d, {
+                assigned_players: (d.assigned_players || []).map(function(p) {
+                  return { attendee_id: p.attendee_id, name: '' };
+                })
               });
-            }
+            });
           }
           applyLoadedEventToDom(cachedRes, false);
         }
@@ -932,6 +933,9 @@ function updateGroupSummaryUi() {
       submitBtn.textContent = API.t('event.update_rsvp_btn', 'Update RSVP');
     } else {
       submitBtn.textContent = API.t('event.submit_rsvp_btn', 'Confirm RSVP');
+    }
+    if (typeof API.updateOfflineUi === 'function') {
+      API.updateOfflineUi();
     }
   }
 }

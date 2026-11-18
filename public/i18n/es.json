@@ -438,5 +438,8 @@
   "waiver.view_cert_btn": "📄 Ver / Imprimir certificado firmado ↗",
   "waiver.sig_required_error": "Por favor dibuja o escribe tu firma en la línea de firma.",
   "waiver.printed_name_required_error": "Por favor ingresa tu nombre completo en letra de molde.",
-  "waiver.consent_required_error": "Por favor marca la casilla de consentimiento de firma electrónica para continuar."
+  "waiver.consent_required_error": "Por favor marca la casilla de consentimiento de firma electrónica para continuar.",
+  "offline.banner": "Actualmente no tienes conexión. Algunas funciones pueden no estar disponibles.",
+  "offline.retry": "Reintentar",
+  "offline.submit_offline": "No disponible sin conexión"
 }

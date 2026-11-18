@@ -438,5 +438,8 @@
   "waiver.view_cert_btn": "📄 署名証明書を表示 / 印刷 ↗",
   "waiver.sig_required_error": "署名欄に署名を描くか入力してください。",
   "waiver.printed_name_required_error": "正式な活字体氏名を入力してください。",
-  "waiver.consent_required_error": "続行するには電子署名同意チェックボックスをオンにしてください。"
+  "waiver.consent_required_error": "続行するには電子署名同意チェックボックスをオンにしてください。",
+  "offline.banner": "現在オフラインです。一部の機能が利用できない場合があります。",
+  "offline.retry": "再試行",
+  "offline.submit_offline": "オフライン時は利用不可"
 }

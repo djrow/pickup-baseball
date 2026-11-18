@@ -762,4 +762,153 @@
       });
     }
   };
+
+  API._isOffline = false;
+
+  API.isOffline = function () {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      return true;
+    }
+    return Boolean(this._isOffline);
+  };
+
+  API.setNetworkOffline = function () {
+    this._isOffline = true;
+    this.updateOfflineUi();
+  };
+
+  API.setNetworkOnline = function () {
+    this._isOffline = false;
+    this.updateOfflineUi();
+  };
+
+  API.retryNetwork = function () {
+    var self = this;
+    var retryBtn = /** @type {HTMLButtonElement|null} */ (document.getElementById('global-offline-retry-btn'));
+    if (retryBtn) {
+      retryBtn.disabled = true;
+      retryBtn.textContent = '…';
+    }
+    return fetch('/api/version?t=' + Date.now(), { cache: 'no-store' })
+      .then(function (res) {
+        if (res.ok) {
+          self.setNetworkOnline();
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('pickup:networkonline'));
+          }
+        } else {
+          self.setNetworkOffline();
+        }
+      })
+      .catch(function () {
+        self.setNetworkOffline();
+      })
+      .finally(function () {
+        if (retryBtn) {
+          retryBtn.disabled = false;
+          retryBtn.textContent = self.t('offline.retry', 'Retry');
+        }
+      });
+  };
+
+  API.updateOfflineUi = function () {
+    if (typeof document === 'undefined') return;
+    var offline = this.isOffline();
+    var banner = document.getElementById('global-offline-banner');
+
+    if (offline) {
+      if (!banner) {
+        banner = document.createElement('div');
+        banner.id = 'global-offline-banner';
+        banner.className = 'global-offline-banner';
+        banner.setAttribute('role', 'status');
+        banner.setAttribute('aria-live', 'polite');
+        banner.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; width: 100%; z-index: 100000; background: #991b1b; color: #ffffff; padding: 8px 16px; display: flex; align-items: center; justify-content: center; gap: 12px; font-weight: 600; font-size: 0.88rem; box-shadow: 0 2px 8px rgba(0,0,0,0.3);';
+
+        var textSpan = document.createElement('span');
+        textSpan.id = 'global-offline-banner-text';
+        textSpan.textContent = '📡 ' + this.t('offline.banner', 'You are currently offline. Some features may be unavailable.');
+
+        var retryBtn = document.createElement('button');
+        retryBtn.type = 'button';
+        retryBtn.id = 'global-offline-retry-btn';
+        retryBtn.className = 'btn btn-sm';
+        retryBtn.style.cssText = 'background: #ffffff; color: #991b1b; border: none; font-weight: 700; padding: 4px 12px; border-radius: 4px; cursor: pointer; white-space: nowrap;';
+        retryBtn.textContent = this.t('offline.retry', 'Retry');
+
+        var self = this;
+        retryBtn.addEventListener('click', function () {
+          self.retryNetwork();
+        });
+
+        banner.appendChild(textSpan);
+        banner.appendChild(retryBtn);
+
+        if (document.body && typeof document.body.insertBefore === 'function') {
+          document.body.insertBefore(banner, document.body.firstChild);
+        }
+      } else {
+        banner.style.display = 'flex';
+      }
+    } else {
+      if (banner) {
+        banner.style.display = 'none';
+      }
+    }
+
+    // Disable/enable and label online-only submit controls across forms
+    var forms = document.querySelectorAll('form');
+    var offlineLabel = this.t('offline.submit_offline', 'Unavailable Offline');
+    for (var i = 0; i < forms.length; i++) {
+      var form = forms[i];
+      var submitButtons = form.querySelectorAll('button[type="submit"], input[type="submit"]');
+      for (var j = 0; j < submitButtons.length; j++) {
+        var btn = /** @type {HTMLButtonElement|HTMLInputElement} */ (submitButtons[j]);
+        var el = /** @type {HTMLElement & { value?: string, disabled?: boolean }} */ (btn);
+        if (offline) {
+          if (!el.dataset.originalLabel) {
+            el.dataset.originalLabel = el.textContent || el.value || '';
+          }
+          if (!el.dataset.wasDisabledBeforeOffline) {
+            el.dataset.wasDisabledBeforeOffline = el.disabled ? '1' : '0';
+          }
+          el.disabled = true;
+          if (el.tagName === 'INPUT') {
+            el.value = offlineLabel;
+          } else {
+            el.textContent = offlineLabel;
+          }
+        } else {
+          if (el.dataset.originalLabel) {
+            if (el.tagName === 'INPUT') {
+              el.value = el.dataset.originalLabel;
+            } else {
+              el.textContent = el.dataset.originalLabel;
+            }
+            delete el.dataset.originalLabel;
+          }
+          if (el.dataset.wasDisabledBeforeOffline === '0') {
+            el.disabled = false;
+          }
+          delete el.dataset.wasDisabledBeforeOffline;
+        }
+      }
+    }
+  };
+
+  API.initOfflineUx = function () {
+    if (typeof window === 'undefined') return;
+    var self = this;
+    if (!this._offlineUxInitialized) {
+      this._offlineUxInitialized = true;
+      window.addEventListener('online', function () {
+        self.setNetworkOnline();
+        self.retryNetwork();
+      });
+      window.addEventListener('offline', function () {
+        self.setNetworkOffline();
+      });
+    }
+    this.updateOfflineUi();
+  };
 })();

@@ -1091,6 +1091,83 @@ async function runServiceWorkerAndOfflineSmoke(browser, defaultSession, server, 
     await defaultSession.navigateAndCheck(`${server.baseUrl}/index.html`, 'index.html (offline SW cache)', tracker);
     await defaultSession.waitFor('document.querySelector("header.site-header") !== null && document.getElementById("footer-app-version") !== null');
     record('CDP offline emulation serves cached public shell pages cleanly via Service Worker');
+
+    // Issue #58: Verify offline banner, disabled submit buttons with offline label, and Retry recovery
+    await defaultSession.navigateAndCheck(`${server.baseUrl}/event.html?id=${server.testEventId}`, 'event.html (offline banner & disabled submit)', tracker);
+    await defaultSession.waitFor('document.getElementById("global-offline-banner") && document.getElementById("global-offline-banner").getAttribute("role") === "status" && document.getElementById("global-offline-banner").style.display !== "none"');
+    const offlineState = await defaultSession.evaluate(`(() => {
+      const banner = document.getElementById('global-offline-banner');
+      const submitBtn = document.getElementById('rsvp-submit-btn');
+      return {
+        bannerVisible: banner && banner.style.display !== 'none' && banner.getAttribute('role') === 'status',
+        bannerText: banner ? banner.textContent : '',
+        submitDisabled: submitBtn ? submitBtn.disabled : false,
+        submitText: submitBtn ? submitBtn.textContent.trim() : ''
+      };
+    })()`);
+    assert(offlineState.bannerVisible, 'Global offline banner with role="status" is displayed while offline');
+    assert(offlineState.submitDisabled, 'Online-only submit button is disabled while offline');
+    assert(offlineState.submitText === 'Unavailable Offline', `Expected submit text "Unavailable Offline", got "${offlineState.submitText}"`);
+    record('Global role="status" offline banner displays and disables/labels online-only submit controls');
+
+    // Verify localStorage zero-PII cache contents: attendees, waitlist, comments, bp_signups are empty, no my_rsvp PII
+    const cachePiiCheck = await defaultSession.evaluate(`(() => {
+      const eventKey = 'pickup_cached_event_${server.testEventId}';
+      const raw = localStorage.getItem(eventKey);
+      if (!raw) return { found: false, zeroPii: false };
+      const parsed = JSON.parse(raw);
+      const hasAttendeePii = Array.isArray(parsed.attendees) && parsed.attendees.length > 0;
+      const hasWaitlistPii = Array.isArray(parsed.waitlist) && parsed.waitlist.length > 0;
+      const hasCommentsPii = Array.isArray(parsed.comments) && parsed.comments.length > 0;
+      const hasBpPii = Array.isArray(parsed.bp_signups) && parsed.bp_signups.length > 0;
+      const hasMyRsvp = Boolean(parsed.myRsvp || parsed.my_rsvp);
+      return {
+        found: true,
+        zeroPii: !hasAttendeePii && !hasWaitlistPii && !hasCommentsPii && !hasBpPii && !hasMyRsvp
+      };
+    })()`);
+    if (cachePiiCheck.found) {
+      assert(cachePiiCheck.zeroPii, 'Cached pickup_cached_event_* contains zero attendee names, comments, BP signups, or my_rsvp PII');
+    }
+
+    // Restore network conditions and test Retry UX recovery
+    await defaultSession.send('Network.emulateNetworkConditions', {
+      offline: false,
+      latency: 0,
+      downloadThroughput: -1,
+      uploadThroughput: -1
+    });
+
+    await clickEl(defaultSession, '#global-offline-retry-btn');
+    await defaultSession.waitFor('!document.getElementById("global-offline-banner") || document.getElementById("global-offline-banner").style.display === "none"', 10000);
+    const restoredSubmitState = await defaultSession.evaluate(`(() => {
+      const submitBtn = document.getElementById('rsvp-submit-btn');
+      return {
+        disabled: submitBtn ? submitBtn.disabled : false,
+        text: submitBtn ? submitBtn.textContent.trim() : ''
+      };
+    })()`);
+    assert(!restoredSubmitState.disabled, 'Submit button is re-enabled after successful network Retry');
+    record('Offline banner recovers cleanly and re-enables submit controls on network Retry');
+
+    // Verify logout wipes all cached event and user entries
+    await defaultSession.evaluate(`(() => {
+      localStorage.setItem('pickup_cached_event_test_mock', JSON.stringify({ event: { id: 999 } }));
+      localStorage.setItem('pickup_cached_user', JSON.stringify({ id: 999, email: 'test@example.com' }));
+    })()`);
+    await defaultSession.evaluate('window.API.clearDataCaches()');
+    const storageKeysAfterClear = await defaultSession.evaluate(`(() => {
+      const remaining = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && (k.startsWith('pickup_cached_event') || k === 'pickup_cached_user')) {
+          remaining.push(k);
+        }
+      }
+      return remaining;
+    })()`);
+    assert(storageKeysAfterClear.length === 0, `Logout/clearDataCaches must wipe all cached Event/user entries, remaining: ${storageKeysAfterClear.join(', ')}`);
+    record('Logout wipes all cached Event and user entries from localStorage');
   } finally {
     await defaultSession.send('Network.emulateNetworkConditions', {
       offline: false,

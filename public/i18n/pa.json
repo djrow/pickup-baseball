@@ -438,5 +438,8 @@
   "waiver.view_cert_btn": "📄 ਦਸਤਖਤ ਕੀਤਾ ਸਰਟੀਫਿਕੇਟ ਦੇਖੋ / ਪ੍ਰਿੰਟ ਕਰੋ ↗",
   "waiver.sig_required_error": "ਕਿਰਪਾ ਕਰਕੇ ਦਸਤਖਤ ਲਾਈਨ 'ਤੇ ਆਪਣੇ ਦਸਤਖਤ ਬਣਾਓ ਜਾਂ ਟਾਈਪ ਕਰੋ।",
   "waiver.printed_name_required_error": "ਕਿਰਪਾ ਕਰਕੇ ਆਪਣਾ ਪੂਰਾ ਕਾਨੂੰਨੀ ਨਾਮ ਦਰਜ ਕਰੋ।",
-  "waiver.consent_required_error": "ਜਾਰੀ ਰੱਖਣ ਲਈ ਕਿਰਪਾ ਕਰਕੇ ਇਲੈਕਟ੍ਰਾਨਿਕ ਸਹਿਮਤੀ ਬਾਕਸ ਚੈੱਕ ਕਰੋ।"
+  "waiver.consent_required_error": "ਜਾਰੀ ਰੱਖਣ ਲਈ ਕਿਰਪਾ ਕਰਕੇ ਇਲੈਕਟ੍ਰਾਨਿਕ ਸਹਿਮਤੀ ਬਾਕਸ ਚੈੱਕ ਕਰੋ।",
+  "offline.banner": "ਤੁਸੀਂ ਇਸ ਵੇਲੇ ਆਫਲਾਈਨ ਹੋ। ਕੁਝ ਵਿਸ਼ੇਸ਼ਤਾਵਾਂ ਉਪਲਬਧ ਨਹੀਂ ਹੋ ਸਕਦੀਆਂ।",
+  "offline.retry": "ਮੁੜ ਕੋਸ਼ਿਸ਼ ਕਰੋ",
+  "offline.submit_offline": "ਆਫਲਾਈਨ ਉਪਲਬਧ ਨਹੀਂ"
 }

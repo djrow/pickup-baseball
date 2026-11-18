@@ -438,5 +438,8 @@
   "waiver.view_cert_btn": "📄 Visualizar / Imprimir certificado assinado ↗",
   "waiver.sig_required_error": "Por favor, desenhe ou digite sua assinatura.",
   "waiver.printed_name_required_error": "Por favor, digite seu nome legal completo em letra de forma.",
-  "waiver.consent_required_error": "Por favor, marque a caixa de consentimento eletrônico para continuar."
+  "waiver.consent_required_error": "Por favor, marque a caixa de consentimento eletrônico para continuar.",
+  "offline.banner": "Você está offline no momento. Alguns recursos podem ficar indisponíveis.",
+  "offline.retry": "Tentar novamente",
+  "offline.submit_offline": "Indisponível offline"
 }

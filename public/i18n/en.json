@@ -438,5 +438,8 @@
   "waiver.view_cert_btn": "📄 View / Print Signed Certificate ↗",
   "waiver.sig_required_error": "Please draw or type your signature on the Signature line.",
   "waiver.printed_name_required_error": "Please enter your full Printed Name.",
-  "waiver.consent_required_error": "Please check the Electronic Signature Consent box to continue."
+  "waiver.consent_required_error": "Please check the Electronic Signature Consent box to continue.",
+  "offline.banner": "You are currently offline. Some features may be unavailable.",
+  "offline.retry": "Retry",
+  "offline.submit_offline": "Unavailable Offline"
 }

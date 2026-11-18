@@ -438,5 +438,8 @@
   "waiver.view_cert_btn": "📄 查看 / 打印已签署凭证 ↗",
   "waiver.sig_required_error": "请在签名线上手写或键入您的签名。",
   "waiver.printed_name_required_error": "请输入您的正楷法定全名。",
-  "waiver.consent_required_error": "请勾选电子签名同意框以继续。"
+  "waiver.consent_required_error": "请勾选电子签名同意框以继续。",
+  "offline.banner": "您当前处于离线状态。某些功能可能无法使用。",
+  "offline.retry": "重试",
+  "offline.submit_offline": "离线时不可用"
 }

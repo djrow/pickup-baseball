@@ -438,5 +438,8 @@
   "waiver.view_cert_btn": "📄 Tingnan / I-print ang Nilagdaang Sertipiko ↗",
   "waiver.sig_required_error": "Mangyaring iguhit o i-type ang iyong lagda sa linya ng lagda.",
   "waiver.printed_name_required_error": "Mangyaring ilagay ang iyong buong nakasulat na pangalan.",
-  "waiver.consent_required_error": "Pakimarkahan ang kahon ng elektronikong pahintulot upang magpatuloy."
+  "waiver.consent_required_error": "Pakimarkahan ang kahon ng elektronikong pahintulot upang magpatuloy.",
+  "offline.banner": "Kasalukuyan kang offline. Maaaring hindi available ang ilang mga feature.",
+  "offline.retry": "Subukang muli",
+  "offline.submit_offline": "Hindi available kapag offline"
 }

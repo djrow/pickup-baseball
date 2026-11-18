@@ -438,5 +438,8 @@
   "waiver.view_cert_btn": "📄 Xem / In Chứng Nhận Đã Ký ↗",
   "waiver.sig_required_error": "Vui lòng vẽ hoặc nhập chữ ký của bạn trên dòng chữ ký.",
   "waiver.printed_name_required_error": "Vui lòng nhập họ và tên in hoa đầy đủ.",
-  "waiver.consent_required_error": "Vui lòng đánh dấu vào ô đồng ý ký điện tử để tiếp tục."
+  "waiver.consent_required_error": "Vui lòng đánh dấu vào ô đồng ý ký điện tử để tiếp tục.",
+  "offline.banner": "Bạn hiện đang ngoại tuyến. Một số tính năng có thể không khả dụng.",
+  "offline.retry": "Thử lại",
+  "offline.submit_offline": "Không khả dụng khi ngoại tuyến"
 }
