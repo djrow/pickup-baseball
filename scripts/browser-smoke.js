@@ -880,6 +880,19 @@ async function runAdminEventAndTaskJourney(browser, server, tracker, record) {
     await session.navigateAndCheck(`${server.baseUrl}/admin.html`, 'admin.html', tracker);
     await session.waitFor('(document.getElementById("main-content") || document.getElementById("admin-main-container")).style.display === "block" && Boolean(document.getElementById("btn-add-task-row"))');
 
+    // 4.0 Admin Setup Health checklist card rendering & dismissal persistence (#63)
+    await session.waitFor('document.getElementById("admin-setup-health-card") && document.getElementById("admin-setup-health-card").style.display === "block" && document.querySelectorAll("#admin-setup-health-list .setup-health-item").length >= 4', 10000);
+    await clickEl(session, '#btn-dismiss-setup-health');
+    const setupHealthDismissed = await session.evaluate(
+      'document.getElementById("admin-setup-health-card").style.display === "none" && localStorage.getItem("pbf_setup_health_dismissed") === "1"'
+    );
+    assert(setupHealthDismissed, 'Dismissing Admin Setup Health card hides card and persists dismissal in localStorage');
+    await session.navigateAndCheck(`${server.baseUrl}/admin.html`, 'admin.html (after setup-health dismiss)', tracker);
+    await session.waitFor('(document.getElementById("main-content") || document.getElementById("admin-main-container")).style.display === "block" && Boolean(document.getElementById("btn-add-task-row"))');
+    const setupHealthStillHidden = await session.evaluate('document.getElementById("admin-setup-health-card").style.display === "none"');
+    assert(setupHealthStillHidden, 'Admin Setup Health card stays hidden across page reload after dismissal');
+    record('admin.html Setup Health checklist card renders and persists dismissal');
+
     await fillInput(session, '#event-title-input', 'Browser Smoke Sandlot Event');
     await fillInput(session, '#event-location-input', 'Bushrod Park Field 2');
     await fillInput(session, '#event-desc-input', 'Automated CDP browser smoke verification event');
@@ -915,6 +928,7 @@ async function runAdminEventAndTaskJourney(browser, server, tracker, record) {
     assert(shareBtnFound, 'event.html renders native Share Event button in header');
 
     await clickEl(session, '#event-share-btn');
+    await session.waitFor('Boolean(document.querySelector(".pbf-toast"))', 5000);
     const toastShown = await session.evaluate('Boolean(document.querySelector(".pbf-toast"))');
     assert(toastShown, 'Clicking Share Event button triggers toast confirmation or clipboard copy');
     record('event.html native Share Event button interacts cleanly');

@@ -31,5 +31,11 @@
   "admin.remove_user_ban_checkbox": "同时永久封禁 {email}，禁止其再次注册或登录",
   "admin.remove_user_confirm_btn": "移除会员",
   "admin.removing_user": "正在移除 {email}...",
-  "admin.remove_user_failed": "移除会员账户失败。"
+  "admin.remove_user_failed": "移除会员账户失败。",
+  "admin.setup_health_title": "🩺 自托管配置健康检查",
+  "admin.setup_health_desc": "社区实例的生产环境密钥与适配器检查清单（请运行 npm run setup 或参阅 SELF_HOST.md）。",
+  "admin.setup_health_dismiss": "关闭",
+  "admin.setup_health_status_ok": "✓ 已配置",
+  "admin.setup_health_status_missing": "⚠️ 未配置",
+  "admin.setup_health_all_ok": "所有生产环境密钥与绑定均已配置就绪。"
 }

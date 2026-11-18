@@ -31,5 +31,11 @@
   "admin.remove_user_ban_checkbox": "Permanenteng I-BAN din ang {email} mula sa muling pagrehistro o pag-sign in",
   "admin.remove_user_confirm_btn": "Alisin ang Miyembro",
   "admin.removing_user": "Inaalis ang {email}...",
-  "admin.remove_user_failed": "Nabigong alisin ang account ng miyembro."
+  "admin.remove_user_failed": "Nabigong alisin ang account ng miyembro.",
+  "admin.setup_health_title": "🩺 Kalusugan ng Self-Host Setup",
+  "admin.setup_health_desc": "Checklist ng production secret at adapter para sa iyong komunidad (patakbuhin ang npm run setup o tingnan ang SELF_HOST.md).",
+  "admin.setup_health_dismiss": "Itago",
+  "admin.setup_health_status_ok": "✓ Naka-configure",
+  "admin.setup_health_status_missing": "⚠️ Nawawala",
+  "admin.setup_health_all_ok": "Lahat ng production secret at binding ay naka-configure na."
 }

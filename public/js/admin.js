@@ -108,9 +108,75 @@ async function initAdmin() {
   renderTaskBuilder();
 
   if (user.isAdmin) {
+    setupAdminSetupHealthCard();
     setupAdminBackupButton();
     setupAdminUserManagement(user);
     setupAdminSecurity(user);
+  }
+}
+
+const SETUP_HEALTH_DISMISS_KEY = 'pbf_setup_health_dismissed';
+
+async function setupAdminSetupHealthCard() {
+  const card = document.getElementById('admin-setup-health-card');
+  const listEl = document.getElementById('admin-setup-health-list');
+  const descEl = document.getElementById('admin-setup-health-desc');
+  const dismissBtn = document.getElementById('btn-dismiss-setup-health');
+  if (!card || !listEl) return;
+
+  try {
+    if (localStorage.getItem(SETUP_HEALTH_DISMISS_KEY) === '1') {
+      card.style.display = 'none';
+      return;
+    }
+  } catch (e) { /* ignore storage errors */ }
+
+  if (dismissBtn && !dismissBtn.dataset.boundSetupHealthDismiss) {
+    dismissBtn.dataset.boundSetupHealthDismiss = '1';
+    dismissBtn.addEventListener('click', function() {
+      try {
+        localStorage.setItem(SETUP_HEALTH_DISMISS_KEY, '1');
+      } catch (e) { /* ignore storage errors */ }
+      card.style.display = 'none';
+    });
+  }
+
+  try {
+    const res = await fetch('/api/auth/admin/setup-health', { credentials: 'include', cache: 'no-store' });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data || !Array.isArray(data.items)) return;
+
+    const okBadgeText = API.t('admin.setup_health_status_ok', '✓ Configured');
+    const warnBadgeText = API.t('admin.setup_health_status_missing', '⚠️ Missing');
+
+    if (descEl) {
+      if (data.healthy) {
+        descEl.textContent = API.t('admin.setup_health_all_ok', 'All production secrets and bindings are configured.');
+      } else {
+        descEl.textContent = API.t(
+          'admin.setup_health_desc',
+          'Production secret & adapter checklist for your community instance (run npm run setup or see SELF_HOST.md).'
+        );
+      }
+    }
+
+    listEl.innerHTML = data.items.map(function(item) {
+      const configured = Boolean(item.configured);
+      const badgeClass = configured ? 'badge badge-green' : 'badge badge-orange';
+      const statusText = configured ? okBadgeText : warnBadgeText;
+      const extraInfo = item.provider
+        ? ' (' + API.escapeHtml(String(item.provider)) + ')'
+        : (item.mailProvider ? ' (' + API.escapeHtml(String(item.mailProvider)) + ')' : '');
+      return '<div class="setup-health-item" data-setup-key="' + API.escapeHtml(String(item.key)) + '" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2, #f8faf9);">' +
+        '<code style="font-size: 0.82rem; font-weight: 700;">' + API.escapeHtml(String(item.key)) + extraInfo + '</code>' +
+        '<span class="' + badgeClass + '" style="font-size: 0.75rem;">' + API.escapeHtml(statusText) + '</span>' +
+      '</div>';
+    }).join('');
+
+    card.style.display = 'block';
+  } catch (e) {
+    /* non-blocking setup health check */
   }
 }
 

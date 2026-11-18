@@ -338,5 +338,6 @@ require('../tests/core/mailer-preferences.test.js')(ctx);
 require('../tests/core/webhook-resend-suppression.test.js')(ctx);
 require('../tests/core/cron-reminders.test.js')(ctx);
 require('../tests/core/migrate-d1-media-to-r2.test.js')();
+require('../tests/core/setup-cli.test.js')(ctx);
 require('../tests/core/clubhouse-sync-voice.test.js')(ctx);
 require('../tests/clubhouse/index.js')();

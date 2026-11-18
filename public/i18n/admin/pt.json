@@ -31,5 +31,11 @@
   "admin.remove_user_ban_checkbox": "Também BANIR permanentemente {email} de se cadastrar ou entrar novamente",
   "admin.remove_user_confirm_btn": "Remover membro",
   "admin.removing_user": "Removendo {email}...",
-  "admin.remove_user_failed": "Falha ao remover a conta do membro."
+  "admin.remove_user_failed": "Falha ao remover a conta do membro.",
+  "admin.setup_health_title": "🩺 Saúde da configuração auto-hospedada",
+  "admin.setup_health_desc": "Lista de verificação de segredos e adaptadores de produção (execute npm run setup ou veja SELF_HOST.md).",
+  "admin.setup_health_dismiss": "Ocultar",
+  "admin.setup_health_status_ok": "✓ Configurado",
+  "admin.setup_health_status_missing": "⚠️ Ausente",
+  "admin.setup_health_all_ok": "Todos os segredos e vínculos de produção estão configurados."
 }

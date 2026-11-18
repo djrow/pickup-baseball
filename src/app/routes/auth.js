@@ -1588,6 +1588,64 @@ authRouter.post('/logout-other-devices', requireAuth, async (c) => {
   });
 });
 
+authRouter.get('/admin/setup-health', requireAdmin, async (c) => {
+  const env = /** @type {Record<string, any>} */ (c.env || {});
+  const cfg = resolveConfig(env);
+  const hasSecret = (val) => typeof val === 'string' && val.trim().length > 0;
+
+  const sessionSecretConfigured = hasSecret(env.SESSION_SECRET);
+  const waiverSecretConfigured = hasSecret(env.WAIVER_SIGNING_SECRET);
+  const cronSecretConfigured = hasSecret(env.CRON_SECRET) || hasSecret(env.REMINDERS_SECRET);
+  const inviteSecretConfigured = hasSecret(env.INVITE_SECRET);
+  const resendConfigured = hasSecret(env.RESEND_API_KEY) || hasSecret(env.BREVO_API_KEY) || cfg.MAIL_PROVIDER === 'resend' || cfg.MAIL_PROVIDER === 'brevo';
+  const resendStrict = hasSecret(env.RESEND_API_KEY);
+  const storageProvider = cfg.STORAGE_PROVIDER || 'local';
+  const storageConfigured = storageProvider === 'r2' || storageProvider === 'gdrive';
+
+  const items = [
+    {
+      key: 'SESSION_SECRET',
+      configured: sessionSecretConfigured
+    },
+    {
+      key: 'WAIVER_SIGNING_SECRET',
+      configured: waiverSecretConfigured
+    },
+    {
+      key: 'CRON_SECRET',
+      configured: cronSecretConfigured
+    },
+    {
+      key: 'INVITE_SECRET',
+      configured: inviteSecretConfigured
+    },
+    {
+      key: 'RESEND_API_KEY',
+      configured: resendStrict,
+      mailProvider: cfg.MAIL_PROVIDER
+    },
+    {
+      key: 'STORAGE_PROVIDER',
+      configured: storageConfigured,
+      provider: storageProvider
+    }
+  ];
+
+  const missingKeys = items.filter((item) => !item.configured).map((item) => item.key);
+
+  return c.json({
+    healthy: missingKeys.length === 0,
+    missingCount: missingKeys.length,
+    missingKeys,
+    preset: cfg.COMMUNITY_PRESET,
+    communityName: cfg.COMMUNITY_NAME,
+    mailProvider: cfg.MAIL_PROVIDER,
+    mailConfigured: resendConfigured,
+    storageProvider,
+    items
+  });
+});
+
 authRouter.post('/logout', async (c) => {
   const sessionId = getCookie(c, SESSION_COOKIE_NAME);
   if (sessionId) {

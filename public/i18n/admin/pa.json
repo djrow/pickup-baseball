@@ -31,5 +31,11 @@
   "admin.remove_user_ban_checkbox": "{email} ਨੂੰ ਦੁਬਾਰਾ ਰਜਿਸਟਰ ਕਰਨ ਜਾਂ ਸਾਈਨ ਇਨ ਕਰਨ ਤੋਂ ਵੀ ਪੱਕੇ ਤੌਰ 'ਤੇ ਪਾਬੰਦੀ ਲਗਾਓ",
   "admin.remove_user_confirm_btn": "ਮੈਂਬਰ ਹਟਾਓ",
   "admin.removing_user": "{email} ਨੂੰ ਹਟਾਇਆ ਜਾ ਰਿਹਾ ਹੈ...",
-  "admin.remove_user_failed": "ਮੈਂਬਰ ਖਾਤਾ ਹਟਾਉਣ ਵਿੱਚ ਅਸਫ਼ਲ।"
+  "admin.remove_user_failed": "ਮੈਂਬਰ ਖਾਤਾ ਹਟਾਉਣ ਵਿੱਚ ਅਸਫ਼ਲ।",
+  "admin.setup_health_title": "🩺 ਸੈਲਫ਼-ਹੋਸਟ ਸੈੱਟਅੱਪ ਸਿਹਤ",
+  "admin.setup_health_desc": "ਤੁਹਾਡੀ ਕਮਿਊਨਿਟੀ ਲਈ ਪ੍ਰੋਡਕਸ਼ਨ ਸੀਕ੍ਰੇਟ ਅਤੇ ਅਡੈਪਟਰ ਚੈੱਕਲਿਸਟ (npm run setup ਚਲਾਓ ਜਾਂ SELF_HOST.md ਦੇਖੋ)।",
+  "admin.setup_health_dismiss": "ਬੰਦ ਕਰੋ",
+  "admin.setup_health_status_ok": "✓ ਸੰਰਚਿਤ",
+  "admin.setup_health_status_missing": "⚠️ ਗੈਰ-ਮੌਜੂਦ",
+  "admin.setup_health_all_ok": "ਸਾਰੇ ਪ੍ਰੋਡਕਸ਼ਨ ਸੀਕ੍ਰੇਟ ਅਤੇ ਬਾਈਂਡਿੰਗ ਸੰਰਚਿਤ ਹਨ।"
 }

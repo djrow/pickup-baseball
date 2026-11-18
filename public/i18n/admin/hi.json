@@ -31,5 +31,11 @@
   "admin.remove_user_ban_checkbox": "{email} को दोबारा पंजीकरण या साइन इन करने से भी स्थायी रूप से प्रतिबंधित करें",
   "admin.remove_user_confirm_btn": "सदस्य हटाएँ",
   "admin.removing_user": "{email} को हटाया जा रहा है...",
-  "admin.remove_user_failed": "सदस्य खाता हटाने में विफल।"
+  "admin.remove_user_failed": "सदस्य खाता हटाने में विफल।",
+  "admin.setup_health_title": "🩺 सेल्फ़-होस्ट सेटअप स्वास्थ्य",
+  "admin.setup_health_desc": "आपके समुदाय इंस्टेंस के लिए प्रोडक्शन सीक्रेट और अडैप्टर चेकलिस्ट (npm run setup चलाएँ या SELF_HOST.md देखें)।",
+  "admin.setup_health_dismiss": "छुपाएँ",
+  "admin.setup_health_status_ok": "✓ कॉन्फ़िगर किया गया",
+  "admin.setup_health_status_missing": "⚠️ अनुपस्थित",
+  "admin.setup_health_all_ok": "सभी प्रोडक्शन सीक्रेट और बाइंडिंग कॉन्फ़िगर किए गए हैं।"
 }

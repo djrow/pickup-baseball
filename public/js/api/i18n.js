@@ -544,7 +544,13 @@
       "admin.remove_user_ban_checkbox": "Also permanently BAN {email} from re-registering or signing in again",
       "admin.remove_user_confirm_btn": "Remove Member",
       "admin.removing_user": "Removing {email}...",
-      "admin.remove_user_failed": "Failed to remove member account."
+      "admin.remove_user_failed": "Failed to remove member account.",
+      "admin.setup_health_title": "🩺 Self-Host Setup Health",
+      "admin.setup_health_desc": "Production secret & adapter checklist for your community instance (run npm run setup or see SELF_HOST.md).",
+      "admin.setup_health_dismiss": "Dismiss",
+      "admin.setup_health_status_ok": "✓ Configured",
+      "admin.setup_health_status_missing": "⚠️ Missing",
+      "admin.setup_health_all_ok": "All production secrets and bindings are configured."
   };
 
   /**

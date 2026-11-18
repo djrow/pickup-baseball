@@ -31,5 +31,11 @@
   "admin.remove_user_ban_checkbox": "Également BANNIR définitivement {email} pour empêcher toute nouvelle inscription ou connexion",
   "admin.remove_user_confirm_btn": "Supprimer le membre",
   "admin.removing_user": "Suppression de {email}...",
-  "admin.remove_user_failed": "Impossible de supprimer le compte du membre."
+  "admin.remove_user_failed": "Impossible de supprimer le compte du membre.",
+  "admin.setup_health_title": "🩺 Santé de la configuration auto-hébergée",
+  "admin.setup_health_desc": "Liste de contrôle des secrets et adaptateurs de production (exécutez npm run setup ou consultez SELF_HOST.md).",
+  "admin.setup_health_dismiss": "Masquer",
+  "admin.setup_health_status_ok": "✓ Configuré",
+  "admin.setup_health_status_missing": "⚠️ Manquant",
+  "admin.setup_health_all_ok": "Tous les secrets et liaisons de production sont configurés."
 }

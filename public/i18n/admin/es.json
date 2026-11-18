@@ -31,5 +31,11 @@
   "admin.remove_user_ban_checkbox": "También PROHIBIR permanentemente a {email} volver a registrarse o iniciar sesión",
   "admin.remove_user_confirm_btn": "Eliminar miembro",
   "admin.removing_user": "Eliminando a {email}...",
-  "admin.remove_user_failed": "No se pudo eliminar la cuenta del miembro."
+  "admin.remove_user_failed": "No se pudo eliminar la cuenta del miembro.",
+  "admin.setup_health_title": "🩺 Estado de configuración autoalojada",
+  "admin.setup_health_desc": "Lista de secretos y adaptadores de producción para tu comunidad (ejecuta npm run setup o consulta SELF_HOST.md).",
+  "admin.setup_health_dismiss": "Ocultar",
+  "admin.setup_health_status_ok": "✓ Configurado",
+  "admin.setup_health_status_missing": "⚠️ Falta",
+  "admin.setup_health_all_ok": "Todos los secretos y enlaces de producción están configurados."
 }

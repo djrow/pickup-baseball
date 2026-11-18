@@ -73,6 +73,18 @@
 
     <div id="admin-alert"></div>
 
+    <!-- Setup Health Checklist Card (Admin Only) -->
+    <section class="card" id="admin-setup-health-card" style="display: none; margin-bottom: 24px; border-left: 4px solid var(--primary);">
+      <div class="flex-between" style="gap: 12px; align-items: flex-start; flex-wrap: wrap;">
+        <div>
+          <h2 class="card-title" style="margin-bottom: 4px;" data-i18n="admin.setup_health_title">🩺 Self-Host Setup Health</h2>
+          <p id="admin-setup-health-desc" style="margin: 0; font-size: 0.9rem; color: var(--text-muted);" data-i18n="admin.setup_health_desc">Production secret &amp; adapter checklist for your community instance (run npm run setup or see SELF_HOST.md).</p>
+        </div>
+        <button type="button" id="btn-dismiss-setup-health" class="btn btn-outline" style="padding: 6px 12px; font-size: 0.84rem;" data-i18n="admin.setup_health_dismiss">Dismiss</button>
+      </div>
+      <div id="admin-setup-health-list" style="margin-top: 12px; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px;"></div>
+    </section>
+
     <!-- Create Event Card -->
     <section class="card">
       <h2 class="card-title" style="margin-bottom: 16px;">Schedule a New Game</h2>

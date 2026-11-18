@@ -31,5 +31,11 @@
   "admin.remove_user_ban_checkbox": "{email} の再登録および再サインインも永久に禁止する",
   "admin.remove_user_confirm_btn": "メンバーを削除",
   "admin.removing_user": "{email} を削除しています...",
-  "admin.remove_user_failed": "メンバーアカウントの削除に失敗しました。"
+  "admin.remove_user_failed": "メンバーアカウントの削除に失敗しました。",
+  "admin.setup_health_title": "🩺 セルフホスト設定ヘルスチェック",
+  "admin.setup_health_desc": "本番環境シークレットとアダプターのチェックリスト（npm run setup を実行するか SELF_HOST.md を参照してください）。",
+  "admin.setup_health_dismiss": "閉じる",
+  "admin.setup_health_status_ok": "✓ 設定済み",
+  "admin.setup_health_status_missing": "⚠️ 未設定",
+  "admin.setup_health_all_ok": "すべての本番シークレットとバインディングが設定されています。"
 }

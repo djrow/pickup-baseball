@@ -31,5 +31,11 @@
   "admin.remove_user_ban_checkbox": "Также навсегда ЗАБЛОКИРОВАТЬ {email} от повторной регистрации или входа",
   "admin.remove_user_confirm_btn": "Удалить участника",
   "admin.removing_user": "Удаление {email}...",
-  "admin.remove_user_failed": "Не удалось удалить аккаунт участника."
+  "admin.remove_user_failed": "Не удалось удалить аккаунт участника.",
+  "admin.setup_health_title": "🩺 Проверка настройки self-host",
+  "admin.setup_health_desc": "Контрольный список рабочих секретов и адаптеров вашего сообщества (выполните npm run setup или см. SELF_HOST.md).",
+  "admin.setup_health_dismiss": "Скрыть",
+  "admin.setup_health_status_ok": "✓ Настроено",
+  "admin.setup_health_status_missing": "⚠️ Отсутствует",
+  "admin.setup_health_all_ok": "Все рабочие секреты и привязки настроены."
 }

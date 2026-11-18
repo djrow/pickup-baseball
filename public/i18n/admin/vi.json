@@ -31,5 +31,11 @@
   "admin.remove_user_ban_checkbox": "Đồng thời CẤM vĩnh viễn {email} đăng ký lại hoặc đăng nhập lại",
   "admin.remove_user_confirm_btn": "Xóa thành viên",
   "admin.removing_user": "Đang xóa {email}...",
-  "admin.remove_user_failed": "Không thể xóa tài khoản thành viên."
+  "admin.remove_user_failed": "Không thể xóa tài khoản thành viên.",
+  "admin.setup_health_title": "🩺 Tình trạng thiết lập tự lưu trữ",
+  "admin.setup_health_desc": "Danh sách kiểm tra khóa bí mật và bộ kết nối sản xuất cho cộng đồng của bạn (chạy npm run setup hoặc xem SELF_HOST.md).",
+  "admin.setup_health_dismiss": "Ẩn",
+  "admin.setup_health_status_ok": "✓ Đã cấu hình",
+  "admin.setup_health_status_missing": "⚠️ Thiếu",
+  "admin.setup_health_all_ok": "Tất cả khóa bí mật và liên kết sản xuất đã được cấu hình."
 }

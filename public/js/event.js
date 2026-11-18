@@ -272,18 +272,22 @@ function renderEventDetails() {
       const shareUrl = window.location.href;
       const shareTitle = (ev && ev.title) ? ev.title : 'Sunday Pickup Baseball';
       const shareText = 'Check out this pickup baseball game: ' + shareTitle;
+      if (window.PBFDialog && typeof window.PBFDialog.toast === 'function') {
+        window.PBFDialog.toast('Event link copied to clipboard!', { type: 'success' });
+      }
+      if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        try {
+          navigator.clipboard.writeText(shareUrl).catch(function() {});
+        } catch (e) { /* ignore clipboard error */ }
+      }
       if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
-        navigator.share({
-          title: shareTitle,
-          text: shareText,
-          url: shareUrl
-        }).catch(function() {});
-      } else if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-        navigator.clipboard.writeText(shareUrl).then(function() {
-          if (window.PBFDialog && typeof window.PBFDialog.toast === 'function') {
-            window.PBFDialog.toast('Event link copied to clipboard!', { type: 'success' });
-          }
-        }).catch(function() {});
+        try {
+          Promise.resolve(navigator.share({
+            title: shareTitle,
+            text: shareText,
+            url: shareUrl
+          })).catch(function() {});
+        } catch (e) { /* ignore Web Share error */ }
       }
     };
   }

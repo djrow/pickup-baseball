@@ -31,5 +31,11 @@
   "admin.remove_user_ban_checkbox": "Նաև ընդմիշտ ԱՐԳԵԼԵԼ {email}-ին կրկին գրանցվել կամ մուտք գործել",
   "admin.remove_user_confirm_btn": "Հեռացնել անդամին",
   "admin.removing_user": "Հեռացվում է {email}-ը...",
-  "admin.remove_user_failed": "Չհաջողվեց հեռացնել անդամի հաշիվը։"
+  "admin.remove_user_failed": "Չհաջողվեց հեռացնել անդամի հաշիվը։",
+  "admin.setup_health_title": "🩺 Ինքնահոսթինգի կարգավորման վիճակ",
+  "admin.setup_health_desc": "Արտադրական գաղտնիքների և ադապտերների ստուգացանկ ձեր համայնքի համար (գործարկեք npm run setup կամ տես SELF_HOST.md)։",
+  "admin.setup_health_dismiss": "Փակել",
+  "admin.setup_health_status_ok": "✓ Կարգավորված է",
+  "admin.setup_health_status_missing": "⚠️ Բացակայում է",
+  "admin.setup_health_all_ok": "Բոլոր արտադրական գաղտնիքները և կապերը կարգավորված են։"
 }

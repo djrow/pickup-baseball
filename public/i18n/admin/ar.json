@@ -31,5 +31,11 @@
   "admin.remove_user_ban_checkbox": "حظر {email} نهائياً أيضاً من إعادة التسجيل أو تسجيل الدخول مرة أخرى",
   "admin.remove_user_confirm_btn": "إزالة العضو",
   "admin.removing_user": "جارٍ إزالة {email}...",
-  "admin.remove_user_failed": "فشل في إزالة حساب العضو."
+  "admin.remove_user_failed": "فشل في إزالة حساب العضو.",
+  "admin.setup_health_title": "🩺 حالة إعداد الاستضافة الذاتية",
+  "admin.setup_health_desc": "قائمة التحقق من أسرار ومحولات الإنتاج لمنصتك المجتمعية (شغّل npm run setup أو راجع SELF_HOST.md).",
+  "admin.setup_health_dismiss": "إخفاء",
+  "admin.setup_health_status_ok": "✓ مُهيأ",
+  "admin.setup_health_status_missing": "⚠️ مفقود",
+  "admin.setup_health_all_ok": "تمت تهيئة جميع أسرار وارتباطات الإنتاج."
 }
