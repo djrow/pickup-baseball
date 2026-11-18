@@ -272,7 +272,6 @@ function registerTurnRelayTests() {
 
     await t.test('4. Clubhouse UI disables and annotates #ch-privacy-relay-toggle when TURN is unconfigured and enables when configured', () => {
       const rtcSrc = fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'rtc.js'), 'utf8');
-      const clubhouseSrc = fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'clubhouse.js'), 'utf8');
 
       const listeners = {};
       const toggleEl = {
@@ -341,7 +340,10 @@ function registerTurnRelayTests() {
 
       vm.runInNewContext(rtcSrc, sandbox, { filename: 'public/js/rtc.js' });
       sandbox.module = { exports: {} };
-      vm.runInNewContext(clubhouseSrc, sandbox, { filename: 'public/js/clubhouse.js' });
+      for (const rel of ['clubhouse/layout.js', 'clubhouse/messages.js', 'clubhouse/e2ee-ui.js', 'clubhouse/panels.js', 'clubhouse.js']) {
+        const clubhouseSrc = fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', rel), 'utf8');
+        vm.runInNewContext(clubhouseSrc, sandbox, { filename: 'public/js/' + rel });
+      }
 
       const ClubhouseUI = sandbox.module.exports;
       const ClubhouseRTC = sandbox.ClubhouseRTC;

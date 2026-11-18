@@ -5,7 +5,7 @@
  * - Honors "Hide My IP (Privacy Relay Mode)" via iceTransportPolicy: 'relay'
  * - Zero-DB Ephemeral Typing Indicators & Live Presence via RTCDataChannel ('clubhouse-ephemeral')
  */
-(function (root) {
+(function (/** @type {any} */ root) {
   'use strict';
 
   var HEARTBEAT_INTERVAL_MS = 45000;
@@ -185,6 +185,10 @@
     });
   }
 
+  /**
+   * @param {boolean} [privacyRelayMode]
+   * @returns {RTCConfiguration}
+   */
   function getIceConfiguration(privacyRelayMode) {
     var useRelay = privacyRelayMode !== undefined ? Boolean(privacyRelayMode) : Boolean(rtcState.privacyRelayMode);
     if (useRelay) {
@@ -511,7 +515,7 @@
     }).then(function (res) {
       return res.json().then(function (data) {
         if (!res.ok) {
-          var err = new Error((data && data.error) || 'Unable to join voice lounge');
+          var err = /** @type {any} */ (new Error((data && data.error) || 'Unable to join voice lounge'));
           err.status = res.status;
           err.code = (data && data.code) ? data.code : '';
           throw err;

@@ -449,7 +449,7 @@ module.exports = function registerErrorTelemetryTests(ctx) {
     }
 
     await t.test('T11.1: Diagnostic scripts follow strict ES6 without optional chaining or nullish coalescing', () => {
-      for (const relPath of ['js/api.js', 'js/dialog.js', 'js/store.js']) {
+      for (const relPath of ['js/api.js', 'js/dialog.js', 'js/store.js', 'js/store/idb.js', 'js/store/e2ee.js', 'js/store/sync.js', 'js/store/actions.js']) {
         const src = fs.readFileSync(path.join(publicDir, relPath), 'utf8');
         const lines = src.split('\n');
         for (let i = 0; i < lines.length; i++) {

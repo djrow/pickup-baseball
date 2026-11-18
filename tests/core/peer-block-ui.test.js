@@ -134,8 +134,10 @@ function createStoreSandbox(fetchImpl) {
   };
   sandbox.window = sandbox;
   sandbox.globalThis = sandbox;
-  const storeSrc = fs.readFileSync(path.join(PUBLIC_DIR, 'js', 'store.js'), 'utf8');
-  vm.runInNewContext(storeSrc, sandbox, { filename: 'public/js/store.js' });
+  for (const rel of ['store.js', 'store/idb.js', 'store/e2ee.js', 'store/sync.js', 'store/actions.js']) {
+    const storeSrc = fs.readFileSync(path.join(PUBLIC_DIR, 'js', rel), 'utf8');
+    vm.runInNewContext(storeSrc, sandbox, { filename: 'public/js/' + rel });
+  }
   return sandbox;
 }
 
@@ -260,16 +262,20 @@ function createUiSandbox({ fetchImpl, enDict }) {
   sandbox.globalThis = sandbox;
   sandbox.addEventListener = function () {};
 
-  const storeSrc = fs.readFileSync(path.join(PUBLIC_DIR, 'js', 'store.js'), 'utf8');
-  vm.runInNewContext(storeSrc, sandbox, { filename: 'public/js/store.js' });
+  for (const rel of ['store.js', 'store/idb.js', 'store/e2ee.js', 'store/sync.js', 'store/actions.js']) {
+    const storeSrc = fs.readFileSync(path.join(PUBLIC_DIR, 'js', rel), 'utf8');
+    vm.runInNewContext(storeSrc, sandbox, { filename: 'public/js/' + rel });
+  }
 
   sandbox.module = { exports: {} };
   const rtcSrc = fs.readFileSync(path.join(PUBLIC_DIR, 'js', 'rtc.js'), 'utf8');
   vm.runInNewContext(rtcSrc, sandbox, { filename: 'public/js/rtc.js' });
 
   sandbox.module = { exports: {} };
-  const clubhouseSrc = fs.readFileSync(path.join(PUBLIC_DIR, 'js', 'clubhouse.js'), 'utf8');
-  vm.runInNewContext(clubhouseSrc, sandbox, { filename: 'public/js/clubhouse.js' });
+  for (const rel of ['clubhouse/layout.js', 'clubhouse/messages.js', 'clubhouse/e2ee-ui.js', 'clubhouse/panels.js', 'clubhouse.js']) {
+    const clubhouseSrc = fs.readFileSync(path.join(PUBLIC_DIR, 'js', rel), 'utf8');
+    vm.runInNewContext(clubhouseSrc, sandbox, { filename: 'public/js/' + rel });
+  }
 
   return { sandbox, elementsById, dialogs };
 }
@@ -720,13 +726,20 @@ function registerPeerBlockUiTests() {
       browserSandbox.addEventListener = function () {};
       browserSandbox.ClubhouseStore = { state: { channels: [], voiceParticipants: [], members: [] }, subscribe() { return function () {}; } };
       browserSandbox.ClubhouseRTC = {};
-      const clubhouseSrc = fs.readFileSync(path.join(PUBLIC_DIR, 'js', 'clubhouse.js'), 'utf8');
-      vm.runInNewContext(clubhouseSrc, browserSandbox, { filename: 'public/js/clubhouse.js' });
+      const clubhouseSrc = ['clubhouse/layout.js', 'clubhouse/messages.js', 'clubhouse/e2ee-ui.js', 'clubhouse/panels.js', 'clubhouse.js']
+        .map((rel) => {
+          const src = fs.readFileSync(path.join(PUBLIC_DIR, 'js', rel), 'utf8');
+          vm.runInNewContext(src, browserSandbox, { filename: 'public/js/' + rel });
+          return src;
+        })
+        .join('\n');
       assert.equal(browserSandbox.ClubhouseUI, undefined, 'clubhouse.js must not attach window.ClubhouseUI in browser mode');
 
       // Verify Wave 1b UI files wire new strings through data-i18n / API.t / tClubhouse
       const adminHtml = fs.readFileSync(path.join(PUBLIC_DIR, 'admin.html'), 'utf8');
-      const adminJs = fs.readFileSync(path.join(PUBLIC_DIR, 'js', 'admin.js'), 'utf8');
+      const adminJs = ['admin/backup.js', 'admin/events-tasks.js', 'admin/users-moderation.js', 'admin/content-media.js', 'admin.js']
+        .map((f) => fs.readFileSync(path.join(PUBLIC_DIR, 'js', f), 'utf8'))
+        .join('\n');
       const profileJs = fs.readFileSync(path.join(PUBLIC_DIR, 'js', 'profile.js'), 'utf8');
       const loginJs = fs.readFileSync(path.join(PUBLIC_DIR, 'js', 'login.js'), 'utf8');
       const clubhouseHtml = fs.readFileSync(path.join(PUBLIC_DIR, 'clubhouse.html'), 'utf8');

@@ -1,5 +1,5 @@
 // Service Worker for Pickup Baseball Foundation PWA
-const CACHE_NAME = 'pbf-cache-v152';
+const CACHE_NAME = 'pbf-cache-v153';
 /** @type {ServiceWorkerGlobalScope} */
 const sw = /** @type {any} */ (self);
 
@@ -34,16 +34,31 @@ const STATIC_ASSETS = [
   '/js/dialog.js',
   '/js/crypto.js',
   '/js/store.js',
+  '/js/store/idb.js',
+  '/js/store/e2ee.js',
+  '/js/store/sync.js',
+  '/js/store/actions.js',
   '/js/rtc.js',
+  '/js/clubhouse/layout.js',
+  '/js/clubhouse/messages.js',
+  '/js/clubhouse/e2ee-ui.js',
+  '/js/clubhouse/panels.js',
   '/js/clubhouse.js',
   '/js/weather.js',
   '/js/art.js',
   '/js/gallery.js',
   '/js/app.js',
   '/js/archive.js',
+  '/js/admin/backup.js',
+  '/js/admin/events-tasks.js',
+  '/js/admin/users-moderation.js',
+  '/js/admin/content-media.js',
   '/js/admin.js',
   '/js/login.js',
   '/js/profile.js',
+  '/js/event/rsvp.js',
+  '/js/event/organizer.js',
+  '/js/event/bp.js',
   '/js/event.js',
   '/js/waiver.js',
   '/js/nav-init.js',

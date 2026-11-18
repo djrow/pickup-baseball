@@ -1,2494 +1,645 @@
+// @ts-check
 /**
- * @fileoverview Event Details, Simplified Group RSVP (Players, Spectators & Group Tasks), Rainout/Attendance & BP Order UI.
+ * @fileoverview Event Page — Orchestrator Entry Script (`event.js`).
+ * URL/Invite Token Parsing, Zero-PII Offline Cache Read/Write, Event Data Loader,
+ * Header Details & Native Share Event Control, and Authenticated Discussion Comments.
+ * Connects `event/rsvp.js`, `event/organizer.js`, and `event/bp.js` to the DOM with zero `window.*` page exports.
+ * Vanilla ES6 (no bundler, no optional chaining/nullish coalescing).
  *
  * TABLE OF CONTENTS:
- * 1. Event Initialization, Fetching & Main Details Banner (`initEvent`, `loadEventData`, `renderEventDetails`)
- * 2. Attendee Roster, Discussion Comments & Volunteer Task Checklist (`renderAttendeesRoster`, `renderComments`, `renderTasksChecklist`)
- * 3. Group RSVP Form, Hero Credit Flow & Organizer Rainout/Turnout Panels (`setupRsvpState`, `renderOrganizerRainoutPanel`, `setupRsvpForm`)
- * 4. Batting Practice (BP) Order Signup Grid & Modal (`renderBpOrder`, `openBpModal`, `setupBpOrderUi`)
+ * 1. Node CommonJS Submodule Auto-Composition Bridge & Feature Flag Helpers
+ * 2. URL/Invite Token Parsing, Zero-PII Cache & Event Loader (`initEvent`, `loadEventData`, `applyLoadedEventToDom`)
+ * 3. Header Details, Weather Forecast & Native Share Event Control (`renderEventDetails`)
+ * 4. Authenticated Discussion Comments & Moderation (`renderComments`, `deleteDiscussionComment`, `setupCommentForm`)
+ * 5. CommonJS Test Export Bridge & DOM Boot
  */
+(function () {
+  'use strict';
 
-let eventId = null;
-let guestToken = '';
-let inviteToken = '';
-let eventData = null;
-let eventPublicConfig = null;
+  var root = typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this);
+  if (!root) return;
 
-function isBattingPracticeEnabled() {
-  return API.isFeatureEnabled('battingPractice', eventPublicConfig);
-}
+  var API = root.API = root.API || /** @type {any} */ ({});
+  /** @type {any} */
+  var EventUI = API._eventUi = API._eventUi || {};
+  var state = EventUI.state = EventUI.state || {
+    eventId: /** @type {string|null} */ (null),
+    visitorToken: '',
+    inviteToken: '',
+    eventData: /** @type {any} */ (null),
+    eventPublicConfig: /** @type {any} */ (null)
+  };
 
-function isCertifiedShiftsEnabled() {
-  return API.isFeatureEnabled('certifiedShifts', eventPublicConfig);
-}
+  // Auto-compose Event submodules when loaded directly via require() in Node CommonJS test environments
+  if ((typeof window === 'undefined' || (typeof module !== 'undefined' && module.exports)) && typeof require === 'function' && typeof EventUI.renderAttendeesRoster !== 'function') {
+    var eventSubmodules = ['./event/rsvp.js', './event/organizer.js', './event/bp.js'];
+    for (var smIdx = 0; smIdx < eventSubmodules.length; smIdx++) {
+      var smRel = eventSubmodules[smIdx];
+      try {
+        var resolvedPath = require.resolve(smRel);
+        if (require.cache && require.cache[resolvedPath]) {
+          delete require.cache[resolvedPath];
+        }
+      } catch (e) { /* ignore resolve errors */ }
+      try {
+        require(smRel);
+      } catch (e) { /* ignore in non-Node contexts */ }
+    }
+  }
 
-function applyEventFeatureFlags() {
-  const bpEnabled = isBattingPracticeEnabled();
-  const bpMeta = document.getElementById('event-bp-meta-item');
-  if (bpMeta) bpMeta.style.display = bpEnabled ? '' : 'none';
-  const bpSignupWrap = document.getElementById('rsvp-bp-signup-wrap');
-  if (bpSignupWrap) bpSignupWrap.style.display = bpEnabled ? '' : 'none';
-  const bpSignupEl = document.getElementById('rsvp-bp-signup');
-  if (!bpEnabled && bpSignupEl) bpSignupEl.checked = false;
-  const bpSection = document.getElementById('bp-order-section');
-  if (bpSection) bpSection.style.display = bpEnabled ? '' : 'none';
-}
+  function el(id) {
+    return typeof document !== 'undefined' ? /** @type {any} */ (document.getElementById(id)) : null;
+  }
 
-async function initEvent() {
-  const params = new URLSearchParams(window.location.search);
-  const rawEventId = params.get('id');
-  eventId = (rawEventId && /^\d+$/.test(rawEventId.trim())) ? rawEventId.trim() : null;
-  let storedGuestToken = '';
-  try {
-    storedGuestToken = eventId ? (localStorage.getItem('guest_token_' + eventId) || '') : '';
-  } catch (e) { /* localStorage unavailable */ }
-  guestToken = params.get('token') || storedGuestToken || '';
-  inviteToken = params.get('invite') || '';
+  function isBattingPracticeEnabled() {
+    return API.isFeatureEnabled('battingPractice', state.eventPublicConfig);
+  }
 
-  if (params.has('token') && typeof window.history !== 'undefined' && typeof window.history.replaceState === 'function') {
+  function isCertifiedShiftsEnabled() {
+    return API.isFeatureEnabled('certifiedShifts', state.eventPublicConfig);
+  }
+
+  function applyEventFeatureFlags() {
+    var bpEnabled = isBattingPracticeEnabled();
+    var bpMeta = el('event-bp-meta-item');
+    if (bpMeta) bpMeta.style.display = bpEnabled ? '' : 'none';
+    var bpSignupWrap = el('rsvp-bp-signup-wrap');
+    if (bpSignupWrap) bpSignupWrap.style.display = bpEnabled ? '' : 'none';
+    var bpSignupEl = /** @type {HTMLInputElement|null} */ (el('rsvp-bp-signup'));
+    if (!bpEnabled && bpSignupEl) bpSignupEl.checked = false;
+    var bpSection = el('bp-order-section');
+    if (bpSection) bpSection.style.display = bpEnabled ? '' : 'none';
+  }
+
+  function showError(msg) {
+    var loadingEl = el('event-loading');
+    if (loadingEl) loadingEl.style.display = 'none';
+    var errBox = el('event-error');
+    if (errBox) {
+      errBox.style.display = 'block';
+      errBox.textContent = msg;
+    }
+  }
+
+  function applyLoadedEventToDom(res, preserveAlertHtml) {
+    state.eventData = res;
+    if (res.user !== undefined) {
+      API.renderNav(res.user);
+    }
+    applyEventFeatureFlags();
+    renderEventDetails();
+    if (typeof EventUI.renderAttendeesRoster === 'function') EventUI.renderAttendeesRoster();
+    if (typeof EventUI.renderBpOrder === 'function') EventUI.renderBpOrder();
+    renderComments();
+    var rsvpStatePromise = typeof EventUI.setupRsvpState === 'function'
+      ? EventUI.setupRsvpState(preserveAlertHtml)
+      : Promise.resolve();
+    if (typeof EventUI.renderOrganizerInvitePanel === 'function') EventUI.renderOrganizerInvitePanel();
+    if (typeof EventUI.renderOrganizerRainoutPanel === 'function') EventUI.renderOrganizerRainoutPanel();
+    if (typeof EventUI.renderOrganizerAttendancePanel === 'function') EventUI.renderOrganizerAttendancePanel();
+    if (typeof EventUI.renderOrganizerAdminActions === 'function') EventUI.renderOrganizerAdminActions();
+
+    var loadingEl = el('event-loading');
+    if (loadingEl) loadingEl.style.display = 'none';
+    var containerEl = el('event-container');
+    if (containerEl) containerEl.style.display = 'block';
+
+    return rsvpStatePromise;
+  }
+
+  async function loadEventData(preserveAlertHtml) {
+    var cacheKey = 'pickup_cached_event_' + state.eventId;
+    if (!preserveAlertHtml) {
+      try {
+        var cachedRaw = localStorage.getItem(cacheKey);
+        if (cachedRaw) {
+          var cachedRes = JSON.parse(cachedRaw);
+          if (cachedRes && cachedRes.event && !cachedRes.event.is_restricted) {
+            // Zero-PII contract: ensure no attendee, companion, comment, or my_rsvp PII in memory from cache
+            cachedRes.attendees = [];
+            cachedRes.waitlist = [];
+            cachedRes.comments = [];
+            cachedRes.bp_signups = [];
+            delete cachedRes.myRsvp;
+            delete cachedRes.my_rsvp;
+            if (Array.isArray(cachedRes.duties)) {
+              cachedRes.duties = cachedRes.duties.map(function (d) {
+                return Object.assign({}, d, {
+                  assigned_players: (d.assigned_players || []).map(function (p) {
+                    return { attendee_id: p.attendee_id, name: '' };
+                  })
+                });
+              });
+            }
+            applyLoadedEventToDom(cachedRes, false);
+          }
+        }
+      } catch (e) { /* localStorage cache unavailable or invalid JSON */ }
+    }
+
     try {
-      const cleanUrl = new URL(window.location.href);
-      cleanUrl.searchParams.delete('token');
-      window.history.replaceState({}, document.title, cleanUrl.pathname + cleanUrl.search + cleanUrl.hash);
-    } catch (e) { /* best-effort URL token strip */ }
-  }
+      var res = await API.getEvent(state.eventId, state.visitorToken, state.inviteToken);
+      if (res.error) {
+        try { localStorage.removeItem(cacheKey); } catch (e) { /* localStorage unavailable */ }
+        showError(res.error);
+        return;
+      }
 
-  if (!eventId) {
-    showError('Invalid or missing event ID in URL.');
-    return;
-  }
+      if (!API.currentUser && state.visitorToken) {
+        if (res.myRsvp) {
+          try { localStorage.setItem('guest_token_' + state.eventId, state.visitorToken); } catch (e) { /* localStorage unavailable */ }
+        } else {
+          state.visitorToken = '';
+          try { localStorage.removeItem('guest_token_' + state.eventId); } catch (e) { /* localStorage unavailable */ }
+        }
+      }
 
-  // Instant 0ms nav + cached event render on low-signal mobile connections
-  const cachedUser = API.getCachedUser();
-  if (cachedUser) {
-    API.currentUser = cachedUser;
-    API.renderNav(cachedUser);
-  } else {
-    API.renderNav(null);
-  }
-
-  window.addEventListener('pickup:langchange', function() {
-    if (eventData && eventData.event) {
-      renderEventDetails();
-      renderAttendeesRoster();
-      renderBpOrder();
-      renderComments();
-      setupRsvpState();
-    }
-  });
-
-  setupRsvpForm();
-  setupEditLinkForm();
-  setupCommentForm();
-  setupBpOrderUi();
-  const configPromise = typeof API.getPublicConfig === 'function'
-    ? API.getPublicConfig().then(function(cfg) {
-        eventPublicConfig = cfg;
-        applyEventFeatureFlags();
-      }).catch(function() {})
-    : Promise.resolve();
-  await Promise.all([configPromise, loadEventData()]);
-  applyEventFeatureFlags();
-}
-
-function showError(msg) {
-  document.getElementById('event-loading').style.display = 'none';
-  const errBox = document.getElementById('event-error');
-  errBox.style.display = 'block';
-  errBox.textContent = msg;
-}
-
-function applyLoadedEventToDom(res, preserveAlertHtml) {
-  eventData = res;
-  if (res.user !== undefined) {
-    API.renderNav(res.user);
-  }
-  applyEventFeatureFlags();
-  renderEventDetails();
-  renderAttendeesRoster();
-  renderBpOrder();
-  renderComments();
-  setupRsvpState(preserveAlertHtml);
-  renderOrganizerInvitePanel();
-  renderOrganizerRainoutPanel();
-  renderOrganizerAttendancePanel();
-
-  document.getElementById('event-loading').style.display = 'none';
-  document.getElementById('event-container').style.display = 'block';
-
-  const adminContainer = document.getElementById('admin-actions-container');
-  const editPanel = document.getElementById('edit-event-panel');
-  if (API.currentUser && (API.currentUser.canManageEvents || API.currentUser.isAdmin)) {
-    adminContainer.style.display = 'flex';
-    adminContainer.innerHTML = `
-      <button type="button" id="edit-event-btn" class="btn btn-outline btn-sm">✏️ Edit Game</button>
-      ${API.currentUser.isAdmin ? '<button type="button" id="send-reminders-btn" class="btn btn-outline btn-sm">📧 Send Reminders Now</button>' : ''}
-    `;
-    const editEventBtn = document.getElementById('edit-event-btn');
-    if (editEventBtn) {
-      editEventBtn.onclick = toggleEditEventPanel;
-    }
-    const sendRemindersBtn = document.getElementById('send-reminders-btn');
-    if (sendRemindersBtn) {
-      sendRemindersBtn.onclick = handleSendReminders;
-    }
-  } else {
-    if (adminContainer) {
-      adminContainer.style.display = 'none';
-      adminContainer.innerHTML = '';
-    }
-    if (editPanel) {
-      editPanel.style.display = 'none';
-      editPanel.innerHTML = '';
-    }
-  }
-}
-
-async function loadEventData(preserveAlertHtml) {
-  const cacheKey = `pickup_cached_event_${eventId}`;
-  if (!preserveAlertHtml) {
-    try {
-      const cachedRaw = localStorage.getItem(cacheKey);
-      if (cachedRaw) {
-        const cachedRes = JSON.parse(cachedRaw);
-        if (cachedRes && cachedRes.event && !cachedRes.event.is_restricted) {
-          // Zero-PII contract: ensure no attendee, companion, comment, or my_rsvp PII in memory from cache
-          cachedRes.attendees = [];
-          cachedRes.waitlist = [];
-          cachedRes.comments = [];
-          cachedRes.bp_signups = [];
-          delete cachedRes.myRsvp;
-          delete cachedRes.my_rsvp;
-          if (Array.isArray(cachedRes.duties)) {
-            cachedRes.duties = cachedRes.duties.map(function(d) {
+      try {
+        if (res.event && res.event.is_restricted) {
+          localStorage.removeItem(cacheKey);
+        } else {
+          // Cache only public non-restricted event fields without volunteer PII
+          var publicCacheCopy = {
+            event: res.event,
+            duties: (res.duties || []).map(function (d) {
               return Object.assign({}, d, {
-                assigned_players: (d.assigned_players || []).map(function(p) {
+                assigned_players: (d.assigned_players || []).map(function (p) {
                   return { attendee_id: p.attendee_id, name: '' };
                 })
               });
-            });
-          }
-          applyLoadedEventToDom(cachedRes, false);
+            }),
+            attendees: [],
+            waitlist: [],
+            comments: [],
+            bp_signups: [],
+            totalAttendees: res.totalAttendees,
+            totalSpectators: res.totalSpectators,
+            totalHeadcount: res.totalHeadcount,
+            require_login_to_rsvp: res.require_login_to_rsvp
+          };
+          localStorage.setItem(cacheKey, JSON.stringify(publicCacheCopy));
         }
-      }
-    } catch (e) { /* localStorage cache unavailable or invalid JSON */ }
-  }
+      } catch (e) { /* storage quota / private mode */ }
 
-  try {
-    const res = await API.getEvent(eventId, guestToken, inviteToken);
-    if (res.error) {
-      try { localStorage.removeItem(cacheKey); } catch (e) { /* localStorage unavailable */ }
-      showError(res.error);
-      return;
-    }
-
-    if (!API.currentUser && guestToken) {
-      if (res.myRsvp) {
-        try { localStorage.setItem('guest_token_' + eventId, guestToken); } catch (e) { /* localStorage unavailable */ }
-      } else {
-        guestToken = '';
-        try { localStorage.removeItem('guest_token_' + eventId); } catch (e) { /* localStorage unavailable */ }
+      await applyLoadedEventToDom(res, preserveAlertHtml);
+    } catch (err) {
+      console.error('Error loading event:', err);
+      if (!state.eventData) {
+        showError('Unable to load event details. Please try again.');
       }
     }
-
-    try {
-      if (res.event && res.event.is_restricted) {
-        localStorage.removeItem(cacheKey);
-      } else {
-        // Cache only public non-restricted event fields without volunteer PII
-        const publicCacheCopy = {
-          event: res.event,
-          duties: (res.duties || []).map(function(d) {
-            return Object.assign({}, d, {
-              assigned_players: (d.assigned_players || []).map(function(p) {
-                return { attendee_id: p.attendee_id, name: '' };
-              })
-            });
-          }),
-          attendees: [],
-          waitlist: [],
-          comments: [],
-          bp_signups: [],
-          totalAttendees: res.totalAttendees,
-          totalSpectators: res.totalSpectators,
-          totalHeadcount: res.totalHeadcount,
-          require_login_to_rsvp: res.require_login_to_rsvp
-        };
-        localStorage.setItem(cacheKey, JSON.stringify(publicCacheCopy));
-      }
-    } catch (e) { /* storage quota / private mode */ }
-
-    applyLoadedEventToDom(res, preserveAlertHtml);
-  } catch (err) {
-    console.error('Error loading event:', err);
-    if (!eventData) {
-      showError('Unable to load event details. Please try again.');
-    }
   }
-}
 
-function renderEventDetails() {
-  const ev = eventData.event;
-  document.getElementById('event-title').textContent = API.translateEventTitle(ev);
-  const dtEl = document.getElementById('event-datetime');
-  if (dtEl) {
-    dtEl.textContent = API.formatDateTime(ev.event_date);
-  }
-  const eventSubBtn = document.getElementById('event-subscribe-ics-btn');
-  const eventSubPanel = document.getElementById('event-subscribe-panel');
-  if (eventSubBtn && eventSubPanel) {
-    const closeEventSub = function() {
-      eventSubPanel.style.display = 'none';
-      eventSubBtn.setAttribute('aria-expanded', 'false');
-    };
-    if (eventSubPanel.style.display !== 'none') {
-      API.renderSubscribePanel(eventSubPanel, {
-        mode: 'game',
-        event: ev,
-        idPrefix: 'event',
-        onClose: closeEventSub
-      });
+  function renderEventDetails() {
+    var eventData = state.eventData;
+    if (!eventData || !eventData.event) return;
+    var ev = eventData.event;
+    var titleEl = el('event-title');
+    if (titleEl) titleEl.textContent = API.translateEventTitle(ev);
+    var dtEl = el('event-datetime');
+    if (dtEl) {
+      dtEl.textContent = API.formatDateTime(ev.event_date);
     }
-    eventSubBtn.onclick = function() {
-      const isOpen = eventSubPanel.style.display !== 'none';
-      if (isOpen) {
-        closeEventSub();
-      } else {
+    var eventSubBtn = el('event-subscribe-ics-btn');
+    var eventSubPanel = el('event-subscribe-panel');
+    if (eventSubBtn && eventSubPanel) {
+      var closeEventSub = function () {
+        var panel = el('event-subscribe-panel');
+        var btn = el('event-subscribe-ics-btn');
+        if (panel) panel.style.display = 'none';
+        if (btn) btn.setAttribute('aria-expanded', 'false');
+      };
+      if (eventSubPanel.style.display !== 'none') {
         API.renderSubscribePanel(eventSubPanel, {
           mode: 'game',
           event: ev,
           idPrefix: 'event',
           onClose: closeEventSub
         });
-        eventSubPanel.style.display = 'block';
-        eventSubBtn.setAttribute('aria-expanded', 'true');
       }
-    };
-  }
+      if (!eventSubBtn.dataset.cspBound) {
+        eventSubBtn.dataset.cspBound = '1';
+        eventSubBtn.addEventListener('click', function () {
+          var curEv = state.eventData && state.eventData.event ? state.eventData.event : ev;
+          var isOpen = eventSubPanel.style.display !== 'none';
+          if (isOpen) {
+            closeEventSub();
+          } else {
+            API.renderSubscribePanel(eventSubPanel, {
+              mode: 'game',
+              event: curEv,
+              idPrefix: 'event',
+              onClose: closeEventSub
+            });
+            eventSubPanel.style.display = 'block';
+            eventSubBtn.setAttribute('aria-expanded', 'true');
+          }
+        });
+      }
+    }
 
-  const eventShareBtn = document.getElementById('event-share-btn');
-  if (eventShareBtn) {
-    eventShareBtn.onclick = function() {
-      const shareUrl = window.location.href;
-      const shareTitle = (ev && ev.title) ? ev.title : 'Sunday Pickup Baseball';
-      const shareText = 'Check out this pickup baseball game: ' + shareTitle;
-      const fallbackCopy = function() {
-        if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+    var eventShareBtn = el('event-share-btn');
+    if (eventShareBtn && !eventShareBtn.dataset.cspBound) {
+      eventShareBtn.dataset.cspBound = '1';
+      eventShareBtn.addEventListener('click', function () {
+        var curEv = state.eventData && state.eventData.event ? state.eventData.event : ev;
+        var shareUrl = window.location.href;
+        var shareTitle = (curEv && curEv.title) ? curEv.title : 'Sunday Pickup Baseball';
+        var shareText = 'Check out this pickup baseball game: ' + shareTitle;
+        var fallbackCopy = function () {
+          if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+            try {
+              navigator.clipboard.writeText(shareUrl).catch(function () {});
+            } catch (e) { /* ignore clipboard error */ }
+          }
+          if (root.PBFDialog && typeof root.PBFDialog.toast === 'function') {
+            root.PBFDialog.toast(API.t('event.share_copied', 'Event link copied to clipboard!'), { type: 'success' });
+          }
+        };
+        if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
           try {
-            navigator.clipboard.writeText(shareUrl).catch(function() {});
-          } catch (e) { /* ignore clipboard error */ }
-        }
-        if (window.PBFDialog && typeof window.PBFDialog.toast === 'function') {
-          window.PBFDialog.toast(API.t('event.share_copied', 'Event link copied to clipboard!'), { type: 'success' });
-        }
-      };
-      if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
-        try {
-          Promise.resolve(navigator.share({
-            title: shareTitle,
-            text: shareText,
-            url: shareUrl
-          })).catch(function(err) {
+            Promise.resolve(navigator.share({
+              title: shareTitle,
+              text: shareText,
+              url: shareUrl
+            })).catch(function (err) {
+              if (!err || err.name !== 'AbortError') {
+                fallbackCopy();
+              }
+            });
+          } catch (err) {
             if (!err || err.name !== 'AbortError') {
               fallbackCopy();
             }
-          });
-        } catch (err) {
-          if (!err || err.name !== 'AbortError') {
-            fallbackCopy();
           }
-        }
-      } else {
-        fallbackCopy();
-      }
-    };
-  }
-  document.getElementById('event-location').textContent = ev.location;
-
-  const statusBadge = document.getElementById('event-status-badge');
-  const rainoutBanner = document.getElementById('rainout-banner');
-
-  const existingRestrictedBadge = document.getElementById('restricted-roster-badge');
-  if (existingRestrictedBadge) {
-    existingRestrictedBadge.remove();
-  }
-
-  if (ev.status === 'rainout') {
-    if (statusBadge) {
-      statusBadge.className = 'badge badge-rainout';
-      statusBadge.textContent = '🌧️ ' + API.t('event.rained_out_badge', 'Rained Out');
-    }
-
-    if (rainoutBanner) {
-      rainoutBanner.style.display = 'block';
-      rainoutBanner.innerHTML = `
-        <div class="rainout-banner-inner">
-          <div class="rainout-icon">🌧️</div>
-          <div class="rainout-content">
-            <h2 class="rainout-title">Game Called Due to Rain &amp; Wet Field Conditions</h2>
-            <p class="rainout-subtitle">This game has been called for weather. Volunteer tasks and gear commitments are excused for today.</p>
-            ${ev.rainout_note ? `
-              <div class="rainout-note-box">
-                <span class="rainout-note-label">Organizer Update:</span>
-                <p class="rainout-note-text">"${API.escapeHtml(ev.rainout_note)}"</p>
-              </div>
-            ` : ''}
-            ${ev.rainout_at ? `<div class="rainout-timestamp">Called by organizer on ${API.formatDateTime(ev.rainout_at)}</div>` : ''}
-          </div>
-        </div>
-      `;
-    }
-  } else {
-    if (statusBadge) {
-      statusBadge.className = 'badge badge-green';
-      statusBadge.textContent = ev.actual_attendance != null
-        ? `⚾ ${API.t('home.players_played', { count: ev.actual_attendance })}`
-        : API.t('event.upcoming_badge', 'Upcoming Game');
-    }
-    if (rainoutBanner) {
-      rainoutBanner.style.display = 'none';
-      rainoutBanner.innerHTML = '';
-    }
-  }
-
-  if (ev.is_restricted && statusBadge) {
-    statusBadge.insertAdjacentHTML('afterend', ' <span id="restricted-roster-badge" class="badge badge-orange" style="display: inline-flex; align-items: center; gap: 4px;">🔒 Invited Roster</span>');
-  }
-
-  const mapLink = document.getElementById('event-map-link');
-  const safeMapUrl = API.safeUrl(ev.location_url);
-  if (safeMapUrl) {
-    mapLink.innerHTML = ` <a href="${API.escapeHtml(safeMapUrl)}" target="_blank" rel="noopener noreferrer" style="color: var(--primary); font-size: 0.85rem;">${API.escapeHtml(API.t('event.open_map'))}</a>`;
-  } else {
-    mapLink.innerHTML = '';
-  }
-
-  const rawDesc = ev.description || 'No special announcements for this pickup game. Bring your glove and enthusiasm!';
-  document.getElementById('event-description').textContent = API.translatePhrase(rawDesc);
-
-  const totalPlayers = eventData.totalAttendees != null ? eventData.totalAttendees : 0;
-  const totalSpectators = eventData.totalSpectators != null ? eventData.totalSpectators : 0;
-
-  const rosterLabel = document.querySelector('[data-i18n="event.roster_count"]');
-  if (ev.actual_attendance != null) {
-    if (rosterLabel) rosterLabel.textContent = API.t('event.actual_turnout', 'Actual Turnout');
-    const subParts = [`${totalPlayers} online ${totalPlayers === 1 ? 'player' : 'players'}`];
-    if (totalSpectators > 0) {
-      subParts.push(`${totalSpectators} ${totalSpectators === 1 ? 'spectator' : 'spectators'}`);
-    }
-    document.getElementById('event-attendee-count').innerHTML = `
-      <div style="display: flex; flex-direction: column;">
-        <span style="color: var(--secondary); font-size: 1.25rem; font-weight: 800; display: inline-flex; align-items: center; gap: 6px;">
-          <span>⚾</span> <span>${API.escapeHtml(API.t('home.players_played', { count: ev.actual_attendance }))}</span>
-        </span>
-        <span style="font-size: 0.78rem; font-weight: 500; color: var(--text-muted); margin-top: 2px;">
-          (${API.escapeHtml(subParts.join(', '))})
-        </span>
-      </div>
-    `;
-  } else {
-    if (rosterLabel) rosterLabel.textContent = API.t('event.roster_count', 'Roster Count');
-    if (totalSpectators > 0) {
-      const totalAttendeesAll = totalPlayers + totalSpectators;
-      document.getElementById('event-attendee-count').innerHTML = `
-        <div style="display: flex; flex-direction: column; line-height: 1.2;">
-          <span>${totalAttendeesAll} ${totalAttendeesAll === 1 ? 'Attendee' : 'Attendees'}</span>
-          <span style="font-size: 0.78rem; font-weight: 600; color: var(--secondary); margin-top: 2px;">
-            ${totalPlayers} ${totalPlayers === 1 ? 'Player' : 'Players'} + ${totalSpectators} Non-Playing
-          </span>
-        </div>
-      `;
-    } else {
-      document.getElementById('event-attendee-count').textContent = API.t('home.players_count', { count: totalPlayers });
-    }
-  }
-
-  // Total tasks filled calculation
-  let totalSlots = 0;
-  let filledSlots = 0;
-  (eventData.duties || []).forEach(function(d) {
-    totalSlots += d.slots_needed;
-    filledSlots += Math.min((d.assigned_players || []).length, d.slots_needed);
-  });
-  const pct = totalSlots > 0 ? Math.min(100, Math.round((filledSlots / totalSlots) * 100)) : 100;
-  document.getElementById('event-duties-status').innerHTML = `
-    <div>${API.escapeHtml(API.t('event.slots_filled', { filled: filledSlots, total: totalSlots }))}</div>
-    <div class="duty-progress-track" title="${pct}%">
-      <div class="duty-progress-fill" style="width: ${pct}%;"></div>
-    </div>
-  `;
-
-  // Asynchronously load weather and Smart Rainout Assistant
-  const weatherIcon = document.getElementById('event-weather-icon');
-  const weatherDisplay = document.getElementById('event-weather-display');
-  if (weatherDisplay && window.WeatherService && typeof window.WeatherService.getForecastForGame === 'function') {
-    window.WeatherService.getForecastForGame(ev.event_date, ev.location).then(function(fc) {
-      if (!fc || !fc.available) {
-        if (weatherDisplay) {
-          if (fc && fc.error) {
-            weatherDisplay.innerHTML = '<span style="font-size: 0.84rem; color: var(--text-muted);">Weather forecast temporarily unavailable</span>';
-          } else {
-            weatherDisplay.innerHTML = '<span style="font-size: 0.84rem; color: var(--text-muted);">10-day forecast activates closer to game</span>';
-          }
-        }
-        if (weatherIcon) weatherIcon.textContent = '📅';
-        if (typeof window.WeatherService.renderAssistantWidget === 'function') {
-          window.WeatherService.renderAssistantWidget('smart-rainout-widget', fc, { locationName: ev.location });
-        }
-        return;
-      }
-
-      if (weatherIcon) weatherIcon.textContent = fc.emoji;
-      if (weatherDisplay) {
-        weatherDisplay.innerHTML = `
-          <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-            <span style="font-weight: 800; color: var(--secondary); font-size: 1.05rem;">${API.escapeHtml(fc.temperature)}°F</span>
-            <span style="font-size: 0.82rem; color: var(--text-muted); font-weight: 600;">${API.escapeHtml(fc.condition)}</span>
-            <span class="badge ${API.escapeHtml(fc.badgeClass)}" style="font-size: 0.72rem; padding: 1px 6px;">${API.escapeHtml(fc.statusLabel)}</span>
-          </div>
-        `;
-      }
-
-      if (typeof window.WeatherService.renderAssistantWidget === 'function') {
-        window.WeatherService.renderAssistantWidget('smart-rainout-widget', fc, { locationName: ev.location });
-      }
-    }).catch(function(err) {
-      console.warn('Weather forecast fetch failed:', err);
-      if (weatherDisplay) {
-        weatherDisplay.innerHTML = '<span style="font-size: 0.84rem; color: var(--text-muted);">Weather forecast temporarily unavailable</span>';
-      }
-    });
-  }
-}
-
-function renderAttendeesRoster() {
-  const container = document.getElementById('attendees-container');
-  const attendees = eventData.attendees || [];
-  const waitlist = eventData.waitlist || [];
-  const rosterBadge = document.getElementById('roster-badge');
-  const spectatorsBadge = document.getElementById('spectators-badge');
-  const maxPlayers = eventData.event.max_players;
-
-  const confirmedPlayers = eventData.totalAttendees != null ? eventData.totalAttendees : attendees.length;
-  const confirmedSpectators = eventData.totalSpectators != null ? eventData.totalSpectators : 0;
-  const totalHeadcount = confirmedPlayers + confirmedSpectators;
-
-  if (confirmedSpectators > 0) {
-    rosterBadge.textContent = `👥 ${totalHeadcount} ${totalHeadcount === 1 ? 'Attendee' : 'Attendees'} (${confirmedPlayers}${maxPlayers ? '/' + maxPlayers : ''} ${confirmedPlayers === 1 ? 'Player' : 'Players'})`;
-  } else if (maxPlayers && maxPlayers > 0) {
-    rosterBadge.textContent = `⚾ ${confirmedPlayers}/${maxPlayers} Players`;
-  } else {
-    rosterBadge.textContent = `⚾ ${confirmedPlayers} ${confirmedPlayers === 1 ? 'Player' : 'Players'}`;
-  }
-
-  if (spectatorsBadge) {
-    if (confirmedSpectators > 0) {
-      spectatorsBadge.style.display = 'inline-flex';
-      spectatorsBadge.textContent = `👏 ${confirmedSpectators} Non-Playing ${confirmedSpectators === 1 ? 'Guest' : 'Guests'}`;
-    } else {
-      spectatorsBadge.style.display = 'none';
-      spectatorsBadge.textContent = '';
-    }
-  }
-
-  const canMod = API.currentUser && API.currentUser.canManageEvents;
-  const canViewRoster = Boolean(eventData.canViewRoster || eventData.myRsvp || canMod);
-
-  if (!canViewRoster) {
-    container.innerHTML = `
-      <div class="roster-private-card" style="text-align: center; padding: 28px 20px; background: var(--surface-2, #f5f8f7); border: 1.5px dashed var(--border); border-radius: 12px; margin-top: 8px;">
-        <div style="font-size: 2.2rem; margin-bottom: 10px;">🔒</div>
-        <h3 style="margin: 0 0 8px 0; color: var(--text); font-size: 1.15rem; font-weight: 700;">
-          ${API.escapeHtml(API.t('event.roster_private_title', 'Attendee Roster is Private'))}
-        </h3>
-        <p style="margin: 0 auto 16px auto; max-width: 440px; color: var(--text-muted); font-size: 0.92rem; line-height: 1.5;">
-          ${API.escapeHtml(API.t('event.roster_private_desc', "To protect attendee privacy, individual names, non-playing guests, and task assignments are only visible to attendees. RSVP above to see the attendee roster!"))}
-        </p>
-        <a href="#rsvp-section" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 8px; text-decoration: none; padding: 9px 18px; font-size: 0.9rem; font-weight: 600; border-radius: 8px;">
-          <span>⚾</span> <span>${API.escapeHtml(API.t('event.roster_private_cta', 'RSVP to View Attendee Roster'))}</span>
-        </a>
-      </div>
-    `;
-    return;
-  }
-
-  let rosterHtml;
-  if (attendees.length === 0) {
-    rosterHtml = `
-      <p style="color: var(--text-muted); font-style: italic; padding: 12px 0;">
-        ${API.escapeHtml(API.t('event.no_players_yet'))}
-      </p>
-    `;
-  } else {
-    const attendeeAbbr = API.abbreviateDisplayNames(attendees, 'name', 'user_id', 'Player');
-    rosterHtml = `
-      <ul class="roster-list">
-        ${attendees.map(function(a, idx) {
-          const displayName = a.show_full_name ? (a.name || 'Player') : (attendeeAbbr[idx] || API.formatDisplayName(a.name, 'Player'));
-          const safeAvatar = API.safeAvatarUrl(a.avatar_url);
-          const avatarImg = safeAvatar
-            ? `<img src="${API.escapeHtml(safeAvatar)}" alt="${API.escapeHtml(displayName)}" class="roster-avatar" loading="lazy" decoding="async">`
-            : `<span class="roster-avatar-placeholder">${API.escapeHtml((displayName || 'P').charAt(0).toUpperCase())}</span>`;
-          const translatedDuties = a.duties_assigned
-            ? a.duties_assigned.split(',').map(function(part) { return API.translatePhrase(part.trim()); }).join(', ')
-            : '';
-
-          const pCount = a.players_count != null ? a.players_count : (1 + (a.additional_guests || 0));
-          const sCount = a.spectators_count || 0;
-
-          const roleBadges = [];
-          if (pCount > 0) {
-            roleBadges.push(`<span class="badge badge-green" style="font-size: 0.7rem;">⚾ ${pCount} ${pCount === 1 ? 'Player' : 'Players'}</span>`);
-          }
-
-          const bpList = (eventData && eventData.bp_signups) || [];
-          const aBp = bpList.find(function(s) {
-            return (a.user_id && s.user_id === a.user_id) ||
-              (s.attendee_id && s.attendee_id === a.id) ||
-              (s.player_name && a.name && s.player_name.trim().toLowerCase() === a.name.trim().toLowerCase());
-          });
-          if (aBp) {
-            roleBadges.push(`<span class="badge badge-orange" style="font-size: 0.7rem; font-weight: 700;">⚾ BP #${aBp.slot_number}</span>`);
-          }
-          if (sCount > 0) {
-            if (pCount === 0 && translatedDuties) {
-              roleBadges.push(`<span class="badge badge-volunteer" style="font-size: 0.7rem;">🙌 ${sCount === 1 ? 'Volunteer (Non-Playing)' : (sCount + ' Volunteers (Non-Playing)')}</span>`);
-            } else {
-              roleBadges.push(`<span class="badge badge-spectator" style="font-size: 0.7rem;">👏 ${sCount} Non-Playing ${sCount === 1 ? 'Guest' : 'Guests'}</span>`);
-            }
-          } else if (pCount === 0 && translatedDuties) {
-            roleBadges.push(`<span class="badge badge-volunteer" style="font-size: 0.7rem;">🙌 Volunteer (Non-Playing)</span>`);
-          }
-
-          const isOrganizer = Boolean(API.currentUser && (API.currentUser.canManageEvents || API.currentUser.isAdmin));
-          const wStatus = a.waiver_status || 'none';
-          let waiverCheckinHtml = '';
-          if (isOrganizer) {
-            let badgeClass = 'badge-gray';
-            let badgeLabel = API.t('event.waiver_badge_unsigned', '⏳ Unsigned');
-            let nextAction = 'paper';
-            let nextTitle = 'Click to record paper waiver on file';
-            let isClickable = true;
-
-            if (wStatus === 'digital') {
-              badgeClass = 'badge-green';
-              badgeLabel = API.t('event.waiver_badge_digital', '🔏 Digital');
-              nextTitle = 'Signed digital waiver (ESIGN sealed)';
-              isClickable = false;
-            } else if (wStatus === 'paper') {
-              badgeClass = 'badge-blue';
-              badgeLabel = API.t('event.waiver_badge_paper', '📄 Paper');
-              nextAction = 'none';
-              nextTitle = 'Click to remove paper waiver';
-            }
-
-            const cursorStyle = isClickable ? 'cursor: pointer;' : 'cursor: default;';
-            const actionAttr = isClickable
-              ? `data-action="toggle-paper-waiver" data-attendee-id="${a.id}" data-user-id="${a.user_id || ''}" data-target-status="${nextAction}"`
-              : '';
-
-            waiverCheckinHtml = `<button type="button" class="badge ${badgeClass}" ${actionAttr} title="${nextTitle}" style="font-size: 0.68rem; font-weight: 700; border: none; padding: 2px 7px; ${cursorStyle}">${API.escapeHtml(badgeLabel)}</button>`;
-          }
-
-          let companionsVerifyHtml = '';
-          const companionCount = (a.players_count != null ? a.players_count : (1 + (a.additional_guests || 0))) + (a.spectators_count || 0) - 1;
-          if (isOrganizer && companionCount > 0) {
-            const compWarn = API.t('event.companions_verify_warning', '⚠️ +{count} companion(s) — verify at field', { count: companionCount });
-            companionsVerifyHtml = `<div style="font-size: 0.74rem; color: var(--text-muted); margin-top: 2px;">${API.escapeHtml(compWarn)}</div>`;
-          }
-
-          return `
-            <li class="roster-item" style="display: flex; gap: 12px; align-items: flex-start;">
-              ${avatarImg}
-              <div style="flex: 1; min-width: 0;">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; flex-wrap: wrap;">
-                  <div class="roster-name">
-                    ${API.escapeHtml(displayName)}
-                    ${a.is_guest ? `<span style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal;"> ${API.escapeHtml(API.t('event.guest_tag'))}</span>` : ''}
-                  </div>
-                  <div style="display: flex; gap: 5px; align-items: center; flex-wrap: wrap;">
-                    ${roleBadges.join('')}
-                    ${waiverCheckinHtml}
-                    ${canMod ? `<button type="button" data-action="remove-attendee" data-attendee-id="${a.id}" title="Remove from roster" style="background:none;border:none;cursor:pointer;font-size:0.85rem;color:var(--danger);padding:0 2px;">🗑️</button>` : ''}
-                  </div>
-                </div>
-                ${companionsVerifyHtml}
-                ${a.guest_names ? `<div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 3px;">👥 <em>${API.escapeHtml(API.t('event.guests_prefix', 'Group:'))} ${API.escapeHtml(API.formatDisplayNameList(a.guest_names))}</em></div>` : ''}
-                ${translatedDuties ? `<div style="font-size: 0.79rem; color: var(--primary); font-weight: 700; margin-top: 3px;">🛡️ Group Tasks: ${API.escapeHtml(translatedDuties)}</div>` : ''}
-                ${a.gear_bringing ? `<div class="roster-gear">🎒 <em>${API.escapeHtml(a.gear_bringing)}</em></div>` : ''}
-                ${a.bio ? `<div class="player-bio-text">"${API.escapeHtml(a.bio)}"</div>` : ''}
-              </div>
-            </li>
-          `;
-        }).join('')}
-      </ul>
-    `;
-  }
-
-  let waitlistHtml = '';
-  if (waitlist.length > 0) {
-    const waitlistAbbr = API.abbreviateDisplayNames(waitlist, 'name', 'user_id', 'Player');
-    waitlistHtml = `
-      <div style="margin-top: 26px; padding-top: 18px; border-top: 1.5px dashed var(--border);">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-          <h4 style="margin: 0; font-size: 0.95rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
-            <span>⏳</span> <span>${API.escapeHtml(API.t('event.waitlist_heading', 'Player Waitlist'))}</span>
-          </h4>
-          <span class="badge badge-gray" style="font-size: 0.72rem;">${waitlist.length} waiting</span>
-        </div>
-        <ul class="roster-list" style="opacity: 0.95;">
-          ${waitlist.map(function(w, idx) {
-            const wDisplayName = w.show_full_name ? (w.name || 'Player') : (waitlistAbbr[idx] || API.formatDisplayName(w.name, 'Player'));
-            const safeAvatar = API.safeAvatarUrl(w.avatar_url);
-            const avatarImg = safeAvatar
-              ? `<img src="${API.escapeHtml(safeAvatar)}" alt="${API.escapeHtml(wDisplayName)}" class="roster-avatar" loading="lazy" decoding="async">`
-              : `<span class="roster-avatar-placeholder" style="background: var(--bg-subtle); color: var(--text-muted);">${API.escapeHtml((wDisplayName || 'W').charAt(0).toUpperCase())}</span>`;
-            const wPlayers = w.players_count != null ? w.players_count : (1 + (w.additional_guests || 0));
-            const wSpectators = w.spectators_count || 0;
-            return `
-              <li class="roster-item" style="display: flex; gap: 12px; align-items: center; padding: 8px 12px;">
-                ${avatarImg}
-                <div style="flex: 1; min-width: 0;">
-                  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
-                    <div class="roster-name" style="font-size: 0.9rem;">
-                      ${API.escapeHtml(wDisplayName)}
-                      <span class="badge badge-subtle" style="font-weight: 700; margin-left: 6px; font-size: 0.7rem; background: var(--bg-subtle); color: var(--secondary); border: 1px solid var(--border);">⚾ ${wPlayers} ${wPlayers === 1 ? 'player' : 'players'}${wSpectators > 0 ? `, +${wSpectators} spec.` : ''}</span>
-                      ${w.is_guest ? `<span style="font-size: 0.72rem; color: var(--text-muted); font-weight: normal;"> ${API.escapeHtml(API.t('event.guest_tag'))}</span>` : ''}
-                    </div>
-                    <div style="display: flex; gap: 6px; align-items: center;">
-                      <span class="badge badge-orange" style="font-size: 0.68rem; font-weight: 700;">Waitlist #${idx + 1}</span>
-                      ${canMod ? `<button type="button" data-action="remove-attendee" data-attendee-id="${w.id}" title="Remove from waitlist" style="background:none;border:none;cursor:pointer;font-size:0.85rem;color:var(--danger);padding:0 2px;">🗑️</button>` : ''}
-                    </div>
-                  </div>
-                  ${w.guest_names ? `<div style="font-size: 0.76rem; color: var(--text-muted); margin-top: 2px;">👥 <em>${API.escapeHtml(API.t('event.guests_prefix', 'Group:'))} ${API.escapeHtml(API.formatDisplayNameList(w.guest_names))}</em></div>` : ''}
-                </div>
-              </li>
-            `;
-          }).join('')}
-        </ul>
-      </div>
-    `;
-  }
-
-  container.innerHTML = rosterHtml + waitlistHtml;
-  if (!container.dataset.cspBound) {
-    container.dataset.cspBound = '1';
-    container.addEventListener('click', async function(e) {
-      const removeBtn = e.target.closest('[data-action="remove-attendee"]');
-      if (removeBtn && container.contains(removeBtn)) {
-        if (typeof window.removeRosterAttendee === 'function') {
-          window.removeRosterAttendee(parseInt(removeBtn.dataset.attendeeId, 10));
-        }
-        return;
-      }
-
-      const waiverBtn = e.target.closest('[data-action="toggle-paper-waiver"]');
-      if (waiverBtn && container.contains(waiverBtn)) {
-        const attendeeId = waiverBtn.dataset.attendeeId ? parseInt(waiverBtn.dataset.attendeeId, 10) : null;
-        const userId = waiverBtn.dataset.userId ? parseInt(waiverBtn.dataset.userId, 10) : null;
-        const targetStatus = waiverBtn.dataset.targetStatus || 'paper';
-
-        waiverBtn.disabled = true;
-        try {
-          let res;
-          if (userId) {
-            res = await API.updateUserWaiverStatus(userId, targetStatus);
-          } else if (attendeeId) {
-            res = await API.updateAttendeeWaiverStatus(attendeeId, targetStatus);
-          }
-          if (res && res.error) {
-            if (window.PBFDialog && typeof window.PBFDialog.toast === 'function') {
-              window.PBFDialog.toast(res.error, { type: 'error' });
-            } else {
-              alert(res.error);
-            }
-            waiverBtn.disabled = false;
-          } else {
-            await loadEventData(true);
-          }
-        } catch (err) {
-          if (window.PBFDialog && typeof window.PBFDialog.toast === 'function') {
-            window.PBFDialog.toast(err.message || 'Failed to update waiver status', { type: 'error' });
-          }
-          waiverBtn.disabled = false;
-        }
-      }
-    });
-  }
-}
-
-function renderComments() {
-  const container = document.getElementById('comments-container');
-  const comments = eventData.comments || [];
-
-  if (!API.currentUser) {
-    container.innerHTML = `
-      <p style="color: var(--text-muted); font-style: italic;">
-        🔒 ${API.escapeHtml(API.t('event.comments_members_only', 'Event discussion is visible to signed-in members only.'))}
-      </p>
-    `;
-    return;
-  }
-
-  if (comments.length === 0) {
-    container.innerHTML = `
-      <p style="color: var(--text-muted); font-style: italic;">
-        ${API.escapeHtml(API.t('event.no_comments_yet'))}
-      </p>
-    `;
-    return;
-  }
-
-  const commentAbbr = API.abbreviateDisplayNames(comments, 'author_name', 'user_id', 'Player');
-  container.innerHTML = comments.map(function(c, idx) {
-    const authorDisplay = c.show_full_name ? (c.author_name || 'Player') : (commentAbbr[idx] || API.formatDisplayName(c.author_name, 'Player'));
-    const safeAvatar = API.safeAvatarUrl(c.avatar_url);
-    const avatarImg = safeAvatar
-      ? `<img src="${API.escapeHtml(safeAvatar)}" alt="${API.escapeHtml(authorDisplay)}" class="comment-avatar" loading="lazy" decoding="async">`
-      : `<span class="comment-avatar-placeholder">${API.escapeHtml((authorDisplay || 'P').charAt(0).toUpperCase())}</span>`;
-    const canMod = API.currentUser && API.currentUser.canManageEvents;
-
-    return `
-      <div class="comment-bubble" style="display: flex; gap: 12px; align-items: flex-start;">
-        ${avatarImg}
-        <div style="flex: 1; min-width: 0;">
-          <div class="comment-header">
-            <div>
-              <span class="comment-author">${API.escapeHtml(authorDisplay)}</span>
-              ${c.bio ? `<span style="font-size: 0.75rem; color: var(--text-muted); font-style: italic; margin-left: 6px;">• ${API.escapeHtml(c.bio)}</span>` : ''}
-            </div>
-            <div style="display: flex; gap: 8px; align-items: center;">
-              <span class="comment-time">${API.formatDateTime(c.created_at)}</span>
-              ${canMod ? `<button type="button" data-action="delete-comment" data-comment-id="${c.id}" title="Delete comment" style="background:none;border:none;cursor:pointer;font-size:0.85rem;color:var(--danger);padding:0 2px;">🗑️</button>` : ''}
-            </div>
-          </div>
-          <div class="comment-body">${API.escapeHtml(c.content)}</div>
-        </div>
-      </div>
-    `;
-  }).join('');
-
-  if (!container.dataset.cspBound) {
-    container.dataset.cspBound = '1';
-    container.addEventListener('click', function(e) {
-      const btn = e.target.closest('[data-action="delete-comment"]');
-      if (!btn || !container.contains(btn)) return;
-      if (typeof window.deleteDiscussionComment === 'function') {
-        window.deleteDiscussionComment(parseInt(btn.dataset.commentId, 10));
-      }
-    });
-  }
-}
-
-window.deleteDiscussionComment = async function(commentId) {
-  const ok = window.PBFDialog
-    ? await window.PBFDialog.confirm('Delete this comment from the discussion board?', { danger: true })
-    : false;
-  if (!ok) return;
-  try {
-    const data = await API.deleteComment(eventId, commentId);
-    if (data.error) {
-      if (window.PBFDialog) window.PBFDialog.toast(data.error, { type: 'error' });
-    } else {
-      await loadEventData();
-    }
-  } catch (e) {
-    if (window.PBFDialog) window.PBFDialog.toast('Failed to delete comment.', { type: 'error' });
-  }
-};
-
-window.removeRosterAttendee = async function(attendeeId) {
-  const ok = window.PBFDialog
-    ? await window.PBFDialog.confirm('Remove this group from the game roster?', { danger: true })
-    : false;
-  if (!ok) return;
-  try {
-    const data = await API.removeAttendee(eventId, attendeeId);
-    if (data.error) {
-      if (window.PBFDialog) window.PBFDialog.toast(data.error, { type: 'error' });
-    } else {
-      await loadEventData();
-    }
-  } catch (e) {
-    if (window.PBFDialog) window.PBFDialog.toast('Failed to remove attendee.', { type: 'error' });
-  }
-};
-
-function renderTasksChecklist(isInteractive) {
-  const dutiesList = document.getElementById('rsvp-duties-list');
-  if (!dutiesList || !eventData) return;
-
-  const duties = eventData.duties || [];
-  if (duties.length === 0) {
-    dutiesList.innerHTML = '<div style="font-size: 0.85rem; color: var(--text-muted); font-style: italic;">No volunteer tasks listed for this game.</div>';
-    return;
-  }
-
-  const myRsvp = eventData.myRsvp;
-  const myAssignedDutyIds = (myRsvp && myRsvp.status === 'attending' && Array.isArray(myRsvp.duty_ids)) ? myRsvp.duty_ids : [];
-  const isRainout = eventData.event && eventData.event.status === 'rainout';
-  const isTasksLocked = Boolean(eventData.event && eventData.event.is_tasks_unlocked === false);
-  const taskUnlockAt = eventData.event && eventData.event.task_unlock_at;
-
-  let lockedBannerHtml = '';
-  if (isTasksLocked) {
-    const formattedUnlock = taskUnlockAt ? new Date(taskUnlockAt).toLocaleString('en-US', {
-      timeZone: 'America/Los_Angeles',
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      timeZoneName: 'short'
-    }) : 'closer to game day';
-    lockedBannerHtml = `
-      <div style="padding: 10px 14px; background: var(--bg-subtle); border: 1.5px dashed var(--border); border-radius: var(--radius-sm); margin-bottom: 12px; font-size: 0.82rem; color: var(--text-muted); display: flex; align-items: flex-start; gap: 8px;">
-        <span style="font-size: 1.1rem; line-height: 1;">🔒</span>
-        <div>
-          <strong style="color: var(--text-main); display: block; margin-bottom: 2px;">Tasks unlock on ${API.escapeHtml(formattedUnlock)}</strong>
-          <span>Under the 12-week Fair-Share Policy, volunteer and paid operations tasks unlock at 5:00 AM on Monday, 12 weeks before game day. You can RSVP as a player or spectator now; tasks can be claimed once unlocked.</span>
-        </div>
-      </div>
-    `;
-  }
-
-  let showHeroCreditOption = false;
-  let userHeroCredits = (myRsvp && typeof myRsvp.hero_credits === 'number') ? myRsvp.hero_credits : 0;
-
-  const dutyRowsHtml = duties.map(function(d) {
-    const assigned = d.assigned_players || [];
-    const isMine = myAssignedDutyIds.indexOf(d.id) !== -1;
-    const otherFilledCount = assigned.filter(function(p) { return !myRsvp || p.attendee_id !== myRsvp.id; }).length;
-    const totalFilledCount = assigned.length;
-    const isFullForMe = otherFilledCount >= d.slots_needed;
-    const isCompletelyFull = totalFilledCount >= d.slots_needed;
-    const assignedAbbr = API.abbreviateDisplayNames(assigned, 'name', 'user_id', 'Player');
-    const volunteerNames = assigned.map(function(p, idx) {
-      if (!p || !p.name) return '';
-      const display = p.show_full_name ? p.name : (assignedAbbr[idx] || API.formatDisplayName(p.name, 'Player'));
-      return API.escapeHtml(display);
-    }).filter(Boolean).join(', ');
-    const translatedTitle = API.translatePhrase(d.title);
-    const translatedDesc = API.translatePhrase(d.description || '');
-
-    let statusPillHtml;
-    if (isRainout) {
-      statusPillHtml = '<span class="badge badge-gray" style="font-size: 0.68rem;">🌧️ Excused</span>';
-    } else if (isCompletelyFull) {
-      statusPillHtml = `<span class="badge badge-green" style="font-size: 0.68rem;">✓ ${volunteerNames ? volunteerNames : API.escapeHtml(API.t('event.duty_covered', 'Covered'))}</span>`;
-    } else {
-      const remaining = Math.max(0, d.slots_needed - totalFilledCount);
-      statusPillHtml = `<span class="badge badge-orange" style="font-size: 0.68rem;">${remaining} open</span>`;
-    }
-
-    let badgePillHtml = '';
-    if (isCertifiedShiftsEnabled() && d.is_paid) {
-      if (d.duty_type === 'machine') {
-        badgePillHtml = '<span class="badge badge-gray" style="font-size: 0.68rem; margin-right: 4px;">⚡ Machine Badge</span>';
-      } else if (d.duty_type === 'field') {
-        badgePillHtml = '<span class="badge badge-gray" style="font-size: 0.68rem; margin-right: 4px;">🚜 Dragging Badge</span>';
-      }
-    }
-
-    if (isCertifiedShiftsEnabled() && d.is_urgent_cover && !isCompletelyFull) {
-      badgePillHtml += '<span class="badge badge-green" style="font-size: 0.68rem; margin-right: 4px;">🛡️ Urgent Cover (+1 Hero Credit)</span>';
-    }
-
-    if (!isInteractive || isTasksLocked) {
-      return `
-        <div class="rsvp-task-row is-readonly">
-          <div style="font-size: 0.86rem; flex: 1; min-width: 0;">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; flex-wrap: wrap;">
-              <strong style="color: var(--text-main);">${API.escapeHtml(translatedTitle)}</strong>
-              <div style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap;">
-                ${badgePillHtml}
-                ${statusPillHtml}
-              </div>
-            </div>
-            ${translatedDesc ? `<div style="font-size: 0.77rem; color: var(--text-muted); margin-top: 2px;">${API.escapeHtml(translatedDesc)}</div>` : ''}
-          </div>
-        </div>
-      `;
-    }
-
-    const ineligibilityReason = d.ineligibility_reason;
-    const canUseCredit = Boolean(d.can_use_hero_credit);
-    if (canUseCredit) {
-      showHeroCreditOption = true;
-    }
-
-    let isDisallowedByPolicy = false;
-    if (d.is_paid && !d.is_eligible && !isMine) {
-      isDisallowedByPolicy = true;
-    }
-
-    const disabled = (isFullForMe || isDisallowedByPolicy) && !isMine;
-    const rowClasses = ['rsvp-task-row'];
-    if (isMine) rowClasses.push('is-checked');
-    if (disabled) rowClasses.push('is-disabled');
-
-    return `
-      <label class="${rowClasses.join(' ')}">
-        <input
-          type="checkbox"
-          name="duty_id"
-          value="${d.id}"
-          ${isMine ? 'checked' : ''}
-          ${disabled ? 'disabled' : ''}
-        >
-        <div style="font-size: 0.86rem; flex: 1; min-width: 0;">
-          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; flex-wrap: wrap;">
-            <strong style="color: ${disabled ? 'var(--text-muted)' : 'var(--text-main)'};">${API.escapeHtml(translatedTitle)}</strong>
-            <div style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap;">
-              ${badgePillHtml}
-              ${statusPillHtml}
-            </div>
-          </div>
-          ${translatedDesc ? `<div style="font-size: 0.77rem; color: var(--text-muted); margin-top: 2px;">${API.escapeHtml(translatedDesc)}</div>` : ''}
-          ${(!isCompletelyFull && volunteerNames) ? `<div style="font-size: 0.74rem; color: var(--secondary); font-weight: 600; margin-top: 2px;">✓ ${volunteerNames}</div>` : ''}
-          ${(isDisallowedByPolicy && ineligibilityReason) ? `<div style="font-size: 0.74rem; color: var(--danger); font-weight: 600; margin-top: 3px;">⚠️ ${API.escapeHtml(ineligibilityReason)}</div>` : ''}
-        </div>
-      </label>
-    `;
-  }).join('');
-
-  let heroCreditBoxHtml = '';
-  if (showHeroCreditOption && !isTasksLocked) {
-    heroCreditBoxHtml = `
-      <div style="padding: 10px 14px; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); margin-top: 12px; font-size: 0.82rem;">
-        <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--secondary); cursor: pointer; margin-bottom: 0;">
-          <input type="checkbox" id="redeem-hero-credit-checkbox" name="redeem_hero_credit" value="1">
-          <span>🛡️ Redeem 1 Backup Hero Credit (You have ${userHeroCredits} available)</span>
-        </label>
-        <p style="font-size: 0.75rem; color: var(--text-muted); margin: 4px 0 0 24px;">
-          Redeeming a Backup Hero Credit grants early Tier 1 access to this shift even if you have reached your rolling 3-month fair-share cap.
-        </p>
-      </div>
-    `;
-  }
-
-  dutiesList.innerHTML = lockedBannerHtml + dutyRowsHtml + heroCreditBoxHtml;
-}
-
-function getGroupFormCounts() {
-  const playersInput = document.getElementById('rsvp-players-count');
-  const spectatorsInput = document.getElementById('rsvp-spectators-count');
-  let p = playersInput ? parseInt(playersInput.value, 10) : 1;
-  let s = spectatorsInput ? parseInt(spectatorsInput.value, 10) : 0;
-  if (isNaN(p) || p < 0) p = 0;
-  if (p > 25) p = 25;
-  if (isNaN(s) || s < 0) s = 0;
-  if (s > 25) s = 25;
-  if (playersInput && String(p) !== playersInput.value) playersInput.value = String(p);
-  if (spectatorsInput && String(s) !== spectatorsInput.value) spectatorsInput.value = String(s);
-  const checkedTasks = document.querySelectorAll('input[name="duty_id"]:checked').length;
-  return { playersCount: p, spectatorsCount: s, checkedTasksCount: checkedTasks };
-}
-
-function updateGroupSummaryUi() {
-  const counts = getGroupFormCounts();
-  const p = counts.playersCount;
-  const s = counts.spectatorsCount;
-  const tCount = counts.checkedTasksCount;
-
-  const playersCard = document.getElementById('players-counter-card');
-  const spectatorsCard = document.getElementById('spectators-counter-card');
-  const pDecBtn = document.getElementById('players-dec-btn');
-  const sDecBtn = document.getElementById('spectators-dec-btn');
-  const summaryEl = document.getElementById('rsvp-group-summary');
-  const submitBtn = document.getElementById('rsvp-submit-btn');
-
-  if (playersCard) playersCard.classList.toggle('is-active', p > 0);
-  if (spectatorsCard) spectatorsCard.classList.toggle('is-active', s > 0 || (p === 0 && tCount > 0));
-  if (pDecBtn) pDecBtn.disabled = (p <= 0);
-  if (sDecBtn) sDecBtn.disabled = (s <= 0);
-
-  if (summaryEl) {
-    if (p === 0 && s === 0 && tCount === 0) {
-      summaryEl.className = 'rsvp-group-summary is-empty';
-      summaryEl.textContent = 'Add at least 1 player, spectator, or volunteer task to RSVP.';
-    } else {
-      summaryEl.className = 'rsvp-group-summary';
-      const parts = [];
-      if (p > 0) {
-        parts.push(`${p} ${p === 1 ? 'player' : 'players'}`);
-      }
-      if (s > 0) {
-        if (p === 0 && tCount > 0) {
-          parts.push(`${s} ${s === 1 ? 'volunteer' : 'volunteers/spectators'}`);
         } else {
-          parts.push(`${s} ${s === 1 ? 'spectator' : 'spectators'}`);
+          fallbackCopy();
         }
-      } else if (p === 0 && tCount > 0) {
-        parts.push('1 off-field volunteer');
+      });
+    }
+    var locEl = el('event-location');
+    if (locEl) locEl.textContent = ev.location;
+
+    var statusBadge = el('event-status-badge');
+    var rainoutBanner = el('rainout-banner');
+
+    var existingRestrictedBadge = el('restricted-roster-badge');
+    if (existingRestrictedBadge && typeof existingRestrictedBadge.remove === 'function') {
+      existingRestrictedBadge.remove();
+    }
+
+    if (ev.status === 'rainout') {
+      if (statusBadge) {
+        statusBadge.className = 'badge badge-rainout';
+        statusBadge.textContent = '🌧️ ' + API.t('event.rained_out_badge', 'Rained Out');
       }
-      const totalPeople = p + (s > 0 ? s : (p === 0 && tCount > 0 ? 1 : 0));
-      const totalText = (p > 0 && s > 0) ? ` (${totalPeople} people total)` : '';
-      const taskText = tCount > 0 ? ` • Covering ${tCount} group ${tCount === 1 ? 'task' : 'tasks'}` : '';
-      summaryEl.textContent = `Your group: ${parts.join(' + ')}${totalText}${taskText}`;
-    }
-  }
 
-  if (submitBtn && eventData && eventData.event && !submitBtn.dataset.submitting) {
-    const myRsvp = eventData.myRsvp;
-    const maxPlayers = eventData.event.max_players;
-    const myCurrentPlayers = (myRsvp && myRsvp.status === 'attending')
-      ? (myRsvp.players_count != null ? myRsvp.players_count : (1 + (myRsvp.additional_guests || 0)))
-      : 0;
-    const otherConfirmedPlayers = Math.max(0, (eventData.totalAttendees || 0) - myCurrentPlayers);
-    const wouldWaitlist = Boolean(maxPlayers && maxPlayers > 0 && p > 0 && (otherConfirmedPlayers + p > maxPlayers));
-
-    submitBtn.removeAttribute('data-i18n');
-    if (wouldWaitlist) {
-      submitBtn.textContent = (myRsvp && myRsvp.status === 'waitlist')
-        ? API.t('event.update_waitlist_btn', 'Update Waitlist RSVP')
-        : API.t('event.join_waitlist_btn', 'Join Player Waitlist');
-    } else if (myRsvp && myRsvp.status === 'attending') {
-      submitBtn.textContent = API.t('event.update_rsvp_btn', 'Update RSVP');
+      if (rainoutBanner) {
+        rainoutBanner.style.display = 'block';
+        rainoutBanner.innerHTML =
+          '<div class="rainout-banner-inner">' +
+            '<div class="rainout-icon">🌧️</div>' +
+            '<div class="rainout-content">' +
+              '<h2 class="rainout-title">Game Called Due to Rain &amp; Wet Field Conditions</h2>' +
+              '<p class="rainout-subtitle">This game has been called for weather. Volunteer tasks and gear commitments are excused for today.</p>' +
+              (ev.rainout_note ? (
+                '<div class="rainout-note-box">' +
+                  '<span class="rainout-note-label">Organizer Update:</span>' +
+                  '<p class="rainout-note-text">"' + API.escapeHtml(ev.rainout_note) + '"</p>' +
+                '</div>'
+              ) : '') +
+              (ev.rainout_at ? '<div class="rainout-timestamp">Called by organizer on ' + API.formatDateTime(ev.rainout_at) + '</div>' : '') +
+            '</div>' +
+          '</div>';
+      }
     } else {
-      submitBtn.textContent = API.t('event.submit_rsvp_btn', 'Confirm RSVP');
+      if (statusBadge) {
+        statusBadge.className = 'badge badge-green';
+        statusBadge.textContent = ev.actual_attendance != null
+          ? ('⚾ ' + API.t('home.players_played', { count: ev.actual_attendance }))
+          : API.t('event.upcoming_badge', 'Upcoming Game');
+      }
+      if (rainoutBanner) {
+        rainoutBanner.style.display = 'none';
+        rainoutBanner.innerHTML = '';
+      }
     }
-    if (typeof API.updateOfflineUi === 'function') {
-      API.updateOfflineUi();
+
+    if (ev.is_restricted && statusBadge && typeof statusBadge.insertAdjacentHTML === 'function') {
+      statusBadge.insertAdjacentHTML('afterend', ' <span id="restricted-roster-badge" class="badge badge-orange" style="display: inline-flex; align-items: center; gap: 4px;">🔒 Invited Roster</span>');
+    }
+
+    var mapLink = el('event-map-link');
+    var safeMapUrl = API.safeUrl(ev.location_url);
+    if (mapLink) {
+      if (safeMapUrl) {
+        mapLink.innerHTML = ' <a href="' + API.escapeHtml(safeMapUrl) + '" target="_blank" rel="noopener noreferrer" style="color: var(--primary); font-size: 0.85rem;">' + API.escapeHtml(API.t('event.open_map')) + '</a>';
+      } else {
+        mapLink.innerHTML = '';
+      }
+    }
+
+    var rawDesc = ev.description || 'No special announcements for this pickup game. Bring your glove and enthusiasm!';
+    var descEl = el('event-description');
+    if (descEl) descEl.textContent = API.translatePhrase(rawDesc);
+
+    var totalParticipants = eventData.totalAttendees != null ? eventData.totalAttendees : 0;
+    var totalSpectators = eventData.totalSpectators != null ? eventData.totalSpectators : 0;
+
+    var rosterLabel = typeof document !== 'undefined' && typeof document.querySelector === 'function'
+      ? document.querySelector('[data-i18n="event.roster_count"]')
+      : null;
+    var attendeeCountEl = el('event-attendee-count');
+    if (ev.actual_attendance != null) {
+      if (rosterLabel) rosterLabel.textContent = API.t('event.actual_turnout', 'Actual Turnout');
+      var subParts = [totalParticipants + ' online ' + (totalParticipants === 1 ? 'player' : 'players')];
+      if (totalSpectators > 0) {
+        subParts.push(totalSpectators + ' ' + (totalSpectators === 1 ? 'spectator' : 'spectators'));
+      }
+      if (attendeeCountEl) {
+        attendeeCountEl.innerHTML =
+          '<div style="display: flex; flex-direction: column;">' +
+            '<span style="color: var(--secondary); font-size: 1.25rem; font-weight: 800; display: inline-flex; align-items: center; gap: 6px;">' +
+              '<span>⚾</span> <span>' + API.escapeHtml(API.t('home.players_played', { count: ev.actual_attendance })) + '</span>' +
+            '</span>' +
+            '<span style="font-size: 0.78rem; font-weight: 500; color: var(--text-muted); margin-top: 2px;">' +
+              '(' + API.escapeHtml(subParts.join(', ')) + ')' +
+            '</span>' +
+          '</div>';
+      }
+    } else {
+      if (rosterLabel) rosterLabel.textContent = API.t('event.roster_count', 'Roster Count');
+      if (attendeeCountEl) {
+        if (totalSpectators > 0) {
+          var totalAttendeesAll = totalParticipants + totalSpectators;
+          attendeeCountEl.innerHTML =
+            '<div style="display: flex; flex-direction: column; line-height: 1.2;">' +
+              '<span>' + totalAttendeesAll + ' ' + (totalAttendeesAll === 1 ? 'Attendee' : 'Attendees') + '</span>' +
+              '<span style="font-size: 0.78rem; font-weight: 600; color: var(--secondary); margin-top: 2px;">' +
+                totalParticipants + ' ' + (totalParticipants === 1 ? 'Player' : 'Players') + ' + ' + totalSpectators + ' Non-Playing' +
+              '</span>' +
+            '</div>';
+        } else {
+          attendeeCountEl.textContent = API.t('home.players_count', { count: totalParticipants });
+        }
+      }
+    }
+
+    // Total tasks filled calculation
+    var totalSlots = 0;
+    var filledSlots = 0;
+    (eventData.duties || []).forEach(function (d) {
+      totalSlots += d.slots_needed;
+      filledSlots += Math.min((d.assigned_players || []).length, d.slots_needed);
+    });
+    var pct = totalSlots > 0 ? Math.min(100, Math.round((filledSlots / totalSlots) * 100)) : 100;
+    var dutiesStatusEl = el('event-duties-status');
+    if (dutiesStatusEl) {
+      dutiesStatusEl.innerHTML =
+        '<div>' + API.escapeHtml(API.t('event.slots_filled', { filled: filledSlots, total: totalSlots })) + '</div>' +
+        '<div class="duty-progress-track" title="' + pct + '%">' +
+          '<div class="duty-progress-fill" style="width: ' + pct + '%;"></div>' +
+        '</div>';
+    }
+
+    // Asynchronously load weather and Smart Rainout Assistant
+    var weatherIcon = el('event-weather-icon');
+    var weatherDisplay = el('event-weather-display');
+    if (weatherDisplay && root.WeatherService && typeof root.WeatherService.getForecastForGame === 'function') {
+      root.WeatherService.getForecastForGame(ev.event_date, ev.location).then(function (fc) {
+        if (!fc || !fc.available) {
+          if (weatherDisplay) {
+            if (fc && fc.error) {
+              weatherDisplay.innerHTML = '<span style="font-size: 0.84rem; color: var(--text-muted);">Weather forecast temporarily unavailable</span>';
+            } else {
+              weatherDisplay.innerHTML = '<span style="font-size: 0.84rem; color: var(--text-muted);">10-day forecast activates closer to game</span>';
+            }
+          }
+          if (weatherIcon) weatherIcon.textContent = '📅';
+          if (typeof root.WeatherService.renderAssistantWidget === 'function') {
+            /** @type {any} */ (root.WeatherService).renderAssistantWidget('smart-rainout-widget', fc, { locationName: ev.location });
+          }
+          return;
+        }
+
+        if (weatherIcon) weatherIcon.textContent = fc.emoji;
+        if (weatherDisplay) {
+          weatherDisplay.innerHTML =
+            '<div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">' +
+              '<span style="font-weight: 800; color: var(--secondary); font-size: 1.05rem;">' + API.escapeHtml(fc.temperature) + '°F</span>' +
+              '<span style="font-size: 0.82rem; color: var(--text-muted); font-weight: 600;">' + API.escapeHtml(fc.condition) + '</span>' +
+              '<span class="badge ' + API.escapeHtml(fc.badgeClass) + '" style="font-size: 0.72rem; padding: 1px 6px;">' + API.escapeHtml(fc.statusLabel) + '</span>' +
+            '</div>';
+        }
+
+        if (typeof root.WeatherService.renderAssistantWidget === 'function') {
+          /** @type {any} */ (root.WeatherService).renderAssistantWidget('smart-rainout-widget', fc, { locationName: ev.location });
+        }
+      }).catch(function (err) {
+        console.warn('Weather forecast fetch failed:', err);
+        if (weatherDisplay) {
+          weatherDisplay.innerHTML = '<span style="font-size: 0.84rem; color: var(--text-muted);">Weather forecast temporarily unavailable</span>';
+        }
+      });
     }
   }
-}
 
-async function setupRsvpState(preserveAlertHtml) {
-  const user = API.currentUser;
-  const myRsvp = eventData.myRsvp;
-  const guestFields = document.getElementById('guest-fields');
-  const rsvpBadge = document.getElementById('rsvp-badge-container');
-  const rsvpForm = document.getElementById('rsvp-form');
-  const interactiveTop = document.getElementById('rsvp-interactive-top');
-  const interactiveBottom = document.getElementById('rsvp-interactive-bottom');
-  const loginPrompt = document.getElementById('rsvp-login-prompt');
-  const commentGuestFields = document.getElementById('comment-guest-fields');
-  const commentForm = document.getElementById('comment-form');
-  const rainoutNotice = document.getElementById('rsvp-rainout-notice');
-  const editLinkBox = document.getElementById('rsvp-edit-link-box');
-  const alertDiv = document.getElementById('rsvp-alert');
-  const cancelBtn = document.getElementById('rsvp-cancel-btn');
-
-  if (!preserveAlertHtml && alertDiv) {
-    alertDiv.innerHTML = '';
-  }
-
-  let requireLogin = true;
-  if (eventData && eventData.require_login_to_rsvp !== undefined) {
-    requireLogin = Boolean(eventData.require_login_to_rsvp);
-  } else {
+  async function deleteDiscussionComment(commentId) {
+    var ok = root.PBFDialog
+      ? await root.PBFDialog.confirm('Delete this comment from the discussion board?', { danger: true })
+      : false;
+    if (!ok) return;
     try {
-      const s = await API.getSettings();
-      if (s && s.require_login_to_rsvp !== undefined) {
-        requireLogin = Boolean(s.require_login_to_rsvp);
+      var data = await API.deleteComment(state.eventId, commentId);
+      if (data.error) {
+        if (root.PBFDialog) root.PBFDialog.toast(data.error, { type: 'error' });
+      } else {
+        await loadEventData();
       }
     } catch (e) {
-      console.warn('Could not load RSVP settings:', e);
-      if (typeof API !== 'undefined' && API.recordDiagnostic) {
-        API.recordDiagnostic({ route: '/api/auth/settings', method: 'GET', status: 0, code: 'EVENT_SETTINGS_FAILED' });
-      }
+      if (root.PBFDialog) root.PBFDialog.toast('Failed to delete comment.', { type: 'error' });
     }
   }
 
-  const isRainout = Boolean(eventData && eventData.event && eventData.event.status === 'rainout');
-  const isRestricted = Boolean(eventData && eventData.event && eventData.event.is_restricted);
-  const isAllowed = Boolean(eventData && eventData.event && eventData.event.is_allowed_to_rsvp);
+  function renderComments() {
+    var container = el('comments-container');
+    var eventData = state.eventData;
+    if (!container || !eventData) return;
+    var comments = eventData.comments || [];
 
-  // Comment form auth state (signing in is always required to view or post comments)
-  if (user) {
-    if (commentForm && commentForm.dataset.lockedRendered === 'true' && commentForm.dataset.originalHtml) {
-      commentForm.innerHTML = commentForm.dataset.originalHtml;
-      delete commentForm.dataset.lockedRendered;
-    }
-    const activeGuestFields = document.getElementById('comment-guest-fields') || commentGuestFields;
-    if (activeGuestFields) activeGuestFields.style.display = 'none';
-    const cName = document.getElementById('comment-author-name');
-    if (cName) cName.required = false;
-  } else if (commentForm && !commentForm.dataset.lockedRendered) {
-    if (!commentForm.dataset.originalHtml) {
-      commentForm.dataset.originalHtml = commentForm.innerHTML;
-    }
-    commentForm.dataset.lockedRendered = 'true';
-    commentForm.innerHTML = `
-      <div style="background: var(--bg-subtle); border: 1.5px dashed var(--border); border-radius: var(--radius-sm); padding: 18px; text-align: center;">
-        <p style="margin: 0 0 10px 0; color: var(--text-muted); font-size: 0.9rem;">
-          ${API.escapeHtml(API.t('event.signin_to_comment'))}
-        </p>
-        <a href="/login.html?redirect=${encodeURIComponent(window.location.href)}" class="btn btn-outline btn-sm" style="font-weight: 700;">
-          ${API.escapeHtml(API.t('event.signin_email_btn'))}
-        </a>
-      </div>
-    `;
-  }
-
-  // 1. Rainout state: close RSVP inputs, keep tasks visible in read-only mode
-  if (isRainout) {
-    if (loginPrompt) loginPrompt.style.display = 'none';
-    if (editLinkBox) editLinkBox.style.display = 'none';
-    if (interactiveTop) interactiveTop.style.display = 'none';
-    if (interactiveBottom) interactiveBottom.style.display = 'none';
-    if (rsvpForm) rsvpForm.style.display = 'block';
-    if (rainoutNotice) {
-      rainoutNotice.style.display = 'block';
-      rainoutNotice.className = 'alert alert-rainout';
-      if (myRsvp && myRsvp.status === 'attending') {
-        rainoutNotice.innerHTML = `
-          <strong>🌧️ Game Called for Rain</strong>
-          <p style="margin: 6px 0 0 0;">Your group was confirmed for this game. Volunteer task and gear commitments are excused for today. Stay tuned to the discussion board below for updates!</p>
-        `;
-      } else {
-        rainoutNotice.innerHTML = `
-          <strong>🌧️ RSVPs Closed</strong>
-          <p style="margin: 6px 0 0 0;">RSVPs and task signups are closed because this game has been called for rain.</p>
-        `;
-      }
-    }
-    renderTasksChecklist(false);
-    return;
-  }
-
-  if (rainoutNotice) {
-    rainoutNotice.style.display = 'none';
-    rainoutNotice.innerHTML = '';
-  }
-
-  // 2. Restricted whitelist locked state
-  if (isRestricted && !isAllowed) {
-    if (editLinkBox) editLinkBox.style.display = 'none';
-    if (interactiveTop) interactiveTop.style.display = 'none';
-    if (interactiveBottom) interactiveBottom.style.display = 'none';
-    if (rsvpForm) rsvpForm.style.display = 'block';
-    if (loginPrompt) {
-      loginPrompt.className = 'alert alert-warning';
-      loginPrompt.style.display = 'block';
-      loginPrompt.style.textAlign = 'center';
-      if (!user) {
-        loginPrompt.innerHTML = `
-          <h4 style="margin: 0 0 6px 0; color: var(--secondary); font-size: 1.05rem;">🔒 Private / Invited Roster Only</h4>
-          <p style="margin: 0 0 12px 0; font-size: 0.88rem; color: var(--text-muted);">
-            RSVP for this pickup game is restricted to an invited roster. Please sign in with your invited email address to RSVP.
-          </p>
-          <a href="/login.html?redirect=${encodeURIComponent(window.location.href)}" class="btn btn-primary" style="font-weight: 700;">
-            Sign In with Invited Email
-          </a>
-        `;
-      } else {
-        loginPrompt.innerHTML = `
-          <h4 style="margin: 0 0 6px 0; color: var(--secondary); font-size: 1.05rem;">🔒 Restricted Roster</h4>
-          <p style="margin: 0; font-size: 0.88rem; color: var(--text-muted);">
-            RSVP for this game is restricted to an invited list. Your account (<strong dir="ltr" class="tech-token">${API.escapeHtml(user.email)}</strong>) is not on the roster for this event. Please contact the organizer if you should be included.
-          </p>
-        `;
-      }
-    }
-    renderTasksChecklist(false);
-    return;
-  }
-
-  // 3. Sign-in required and user is logged out: show clean sign-in CTA + read-only tasks list
-  if (!user && requireLogin) {
-    if (editLinkBox) editLinkBox.style.display = 'none';
-    if (interactiveTop) interactiveTop.style.display = 'none';
-    if (interactiveBottom) interactiveBottom.style.display = 'none';
-    if (rsvpForm) rsvpForm.style.display = 'block';
-    if (loginPrompt) {
-      loginPrompt.className = 'alert alert-info';
-      loginPrompt.style.display = 'block';
-      loginPrompt.style.textAlign = 'center';
-      loginPrompt.innerHTML = `
-        <h4 style="margin: 0 0 6px 0; color: var(--secondary); font-size: 1.05rem;">${API.escapeHtml(API.t('event.signin_required_title'))}</h4>
-        <p style="margin: 0 0 12px 0; font-size: 0.88rem; color: var(--text-muted);">
-          ${API.escapeHtml(API.t('event.signin_required_desc'))}
-        </p>
-        <a href="/login.html?redirect=${encodeURIComponent(window.location.href)}" class="btn btn-primary" style="font-weight: 700;">
-          ${API.escapeHtml(API.t('event.signin_required_btn'))}
-        </a>
-      `;
-    }
-    renderTasksChecklist(false);
-    return;
-  }
-
-  // 4. Interactive RSVP form enabled!
-  if (rsvpForm) rsvpForm.style.display = 'block';
-  if (interactiveTop) interactiveTop.style.display = 'block';
-  if (interactiveBottom) interactiveBottom.style.display = 'block';
-
-  const visitorConsentWrap = document.getElementById('visitor-consent-wrap');
-  const rsvpRosterConsentEl = document.getElementById('rsvp-roster-consent');
-  const rsvpNotifyEmailsEl = document.getElementById('rsvp-notify-emails');
-
-  if (user) {
-    if (loginPrompt) loginPrompt.style.display = 'none';
-    if (editLinkBox) editLinkBox.style.display = 'none';
-    if (guestFields) guestFields.style.display = 'none';
-    if (visitorConsentWrap) visitorConsentWrap.style.display = 'none';
-    document.getElementById('rsvp-name').required = false;
-    document.getElementById('rsvp-email').required = false;
-  } else {
-    if (loginPrompt) loginPrompt.style.display = 'flex';
-    if (editLinkBox) editLinkBox.style.display = 'block';
-    if (guestFields) guestFields.style.display = 'grid';
-    if (visitorConsentWrap) visitorConsentWrap.style.display = 'block';
-    document.getElementById('rsvp-name').required = true;
-    document.getElementById('rsvp-email').required = false;
-  }
-
-  if (!preserveAlertHtml && isRestricted && isAllowed && user && alertDiv && (!myRsvp || myRsvp.status !== 'attending')) {
-    alertDiv.innerHTML = '<div class="alert alert-success" style="font-size: 0.85rem; padding: 8px 12px; margin-bottom: 12px;">✓ Your account is on the invited list for this game.</div>';
-  }
-
-  const maxPlayers = eventData.event.max_players;
-  const totalPlayers = eventData.totalAttendees != null ? eventData.totalAttendees : (eventData.attendees || []).length;
-  const isFull = Boolean(maxPlayers && maxPlayers > 0 && totalPlayers >= maxPlayers);
-
-  const playersInput = document.getElementById('rsvp-players-count');
-  const spectatorsInput = document.getElementById('rsvp-spectators-count');
-  const guestNamesInput = document.getElementById('rsvp-guest-names');
-  const gearInput = document.getElementById('rsvp-gear');
-  const optionalDetails = document.getElementById('rsvp-optional-details');
-
-  if (myRsvp) {
-    if (myRsvp.status === 'attending') {
-      rsvpBadge.innerHTML = `<span class="badge badge-green">${API.escapeHtml(API.t('home.you_are_attending'))}</span>`;
-      if (cancelBtn) cancelBtn.style.display = 'inline-flex';
-    } else if (myRsvp.status === 'waitlist') {
-      const waitlist = eventData.waitlist || [];
-      const idx = waitlist.findIndex(function(w) { return w.id === myRsvp.id; });
-      const myPos = (idx !== -1 ? idx + 1 : 1);
-      rsvpBadge.innerHTML = `<span class="badge badge-orange">⏳ ${API.escapeHtml(API.t('event.waitlist_pos_badge', { pos: myPos }))}</span>`;
-      if (cancelBtn) cancelBtn.style.display = 'inline-flex';
-      if (!preserveAlertHtml && alertDiv) {
-        alertDiv.innerHTML = `
-          <div class="alert alert-info" style="border-left: 4px solid var(--primary); border-inline-start: 4px solid var(--primary); background: var(--bg-subtle); margin-bottom: 14px;">
-            <strong>⏳ Your Group is #${myPos} on the Player Waitlist</strong>
-            <p style="margin: 4px 0 0 0; font-size: 0.86rem; color: var(--text-muted);">
-              The playing roster is at capacity. If a player cancels, you will be promoted automatically and emailed! (Spectators with 0 players can confirm immediately.)
-            </p>
-          </div>
-        `;
-      }
-    } else {
-      rsvpBadge.innerHTML = `<span class="badge badge-gray">${API.escapeHtml(API.t('event.cant_make_it_badge'))}</span>`;
-      if (cancelBtn) cancelBtn.style.display = 'none';
-    }
-
-    if (myRsvp.name) document.getElementById('rsvp-name').value = myRsvp.name;
-    if (myRsvp.email) document.getElementById('rsvp-email').value = myRsvp.email;
-    if (gearInput) gearInput.value = myRsvp.gear_bringing || '';
-    if (guestNamesInput) guestNamesInput.value = myRsvp.guest_names || '';
-    if (rsvpRosterConsentEl) rsvpRosterConsentEl.checked = Boolean(myRsvp.roster_consent);
-    if (rsvpNotifyEmailsEl) rsvpNotifyEmailsEl.checked = Boolean(myRsvp.notify_emails);
-
-    if (myRsvp.status !== 'declined') {
-      const pCount = myRsvp.players_count != null ? myRsvp.players_count : (1 + (myRsvp.additional_guests || 0));
-      const sCount = myRsvp.spectators_count != null ? myRsvp.spectators_count : 0;
-      if (playersInput) playersInput.value = String(pCount);
-      if (spectatorsInput) spectatorsInput.value = String(sCount);
-    } else {
-      if (playersInput) playersInput.value = '1';
-      if (spectatorsInput) spectatorsInput.value = '0';
-    }
-
-    if (optionalDetails) {
-      optionalDetails.open = Boolean((myRsvp.gear_bringing && myRsvp.gear_bringing.trim()) || (myRsvp.guest_names && myRsvp.guest_names.trim()));
-    }
-  } else {
-    rsvpBadge.innerHTML = '';
-    if (cancelBtn) cancelBtn.style.display = 'none';
-    if (playersInput) playersInput.value = '1';
-    if (spectatorsInput) spectatorsInput.value = '0';
-    if (rsvpRosterConsentEl) rsvpRosterConsentEl.checked = false;
-    if (rsvpNotifyEmailsEl) rsvpNotifyEmailsEl.checked = false;
-    if (!preserveAlertHtml && isFull && alertDiv) {
-      alertDiv.innerHTML = `
-        <div class="alert alert-warning" style="border-left: 4px solid var(--primary); border-inline-start: 4px solid var(--primary); background: var(--bg-subtle); margin-bottom: 14px;">
-          <strong>⚠️ Playing Roster Full (${totalPlayers}/${maxPlayers} Players)</strong>
-          <p style="margin: 4px 0 0 0; font-size: 0.86rem; color: var(--text-muted);">
-            On-field player signups join the auto-promoting waitlist. Coming as a spectator or off-field volunteer? Set <strong>Players to 0</strong> below to confirm immediately!
-          </p>
-        </div>
-      `;
-    }
-  }
-
-  const rsvpBpCb = document.getElementById('rsvp-bp-signup');
-  if (rsvpBpCb) {
-    const hasMyBp = Boolean(eventData.bp_signups && eventData.bp_signups.some(function(s) { return s.is_mine; }));
-    rsvpBpCb.checked = hasMyBp;
-  }
-
-  renderTasksChecklist(true);
-  updateGroupSummaryUi();
-}
-
-function renderOrganizerRainoutPanel() {
-  const panel = document.getElementById('organizer-rainout-panel');
-  if (!panel) return;
-
-  const user = API.currentUser;
-  if (!user || (!user.canManageEvents && !user.isAdmin)) {
-    panel.style.display = 'none';
-    panel.innerHTML = '';
-    return;
-  }
-
-  const ev = eventData.event;
-  const isRainout = ev.status === 'rainout';
-  const attendeeCount = (eventData.attendees || []).length;
-
-  panel.style.display = 'block';
-  panel.className = `organizer-inline-panel${isRainout ? ' rainout-active' : ''}`;
-
-  if (!isRainout) {
-    panel.innerHTML = `
-      <div class="panel-header" style="margin-bottom: 6px;">
-        <span class="panel-icon" style="font-size: 1.1rem;">🌦️</span>
-        <div style="display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px;">
-          <h3 class="panel-title" style="font-size: 0.88rem; margin: 0;">Weather &amp; Rainout</h3>
-          <span class="panel-desc" style="font-size: 0.75rem;">Cancel for rain if fields are unplayable</span>
-        </div>
-      </div>
-      <div class="panel-body" style="padding-top: 6px;">
-        <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 6px;">
-          <input type="text" id="rainout-note-input" class="form-control" style="flex: 1 1 190px; min-width: 150px; padding: 5px 8px; font-size: 0.84rem; border-radius: var(--radius-sm); border: 1.5px solid var(--border);" placeholder="Rainout note (optional, e.g. flooded infield)">
-          <label style="display: inline-flex; align-items: center; gap: 5px; font-size: 0.78rem; cursor: pointer; margin: 0; white-space: nowrap;">
-            <input type="checkbox" id="rainout-send-email-check" checked style="width: 14px; height: 14px;">
-            <span>Email (${attendeeCount})</span>
-          </label>
-          <button type="button" id="btn-call-rainout" class="btn btn-danger btn-sm" style="font-weight: 700; padding: 5px 11px; font-size: 0.78rem; white-space: nowrap;">
-            🌧️ Call Rainout
-          </button>
-        </div>
-      </div>
-    `;
-
-    const callBtn = document.getElementById('btn-call-rainout');
-    if (callBtn) {
-      callBtn.onclick = async function() {
-        const note = document.getElementById('rainout-note-input').value.trim();
-        const sendEmail = document.getElementById('rainout-send-email-check').checked;
-
-        const ok = window.PBFDialog
-          ? await window.PBFDialog.confirm(`Are you sure you want to call this game for rain?${sendEmail ? ` An email will be sent to ${attendeeCount} confirmed group(s).` : ''}`, { danger: true, title: '🌧️ Call Rainout' })
-          : false;
-        if (!ok) {
-          return;
-        }
-
-        callBtn.disabled = true;
-        callBtn.textContent = 'Calling Rainout...';
-        try {
-          const res = await API.callRainout(eventId, { note: note, sendEmail: sendEmail });
-          if (res.error) {
-            if (window.PBFDialog) window.PBFDialog.toast(res.error, { type: 'error' });
-            callBtn.disabled = false;
-            callBtn.textContent = '🌧️ Call Rainout';
-          } else {
-            await loadEventData();
-          }
-        } catch (err) {
-          if (window.PBFDialog) window.PBFDialog.toast('Failed to call rainout.', { type: 'error' });
-          callBtn.disabled = false;
-          callBtn.textContent = '🌧️ Call Rainout';
-        }
-      };
-    }
-  } else {
-    panel.innerHTML = `
-      <div class="panel-header">
-        <span class="panel-icon">🌧️</span>
-        <div>
-          <h3 class="panel-title" style="color: #ef4444;">Game is Currently Marked as Rained Out</h3>
-          <p class="panel-desc">RSVPs and task commitments are excused. You can send the email to attendees now or reopen the game if conditions improve.</p>
-        </div>
-      </div>
-      <div class="panel-body">
-        ${ev.rainout_email_sent ? `
-          <div style="font-size: 0.85rem; color: var(--success); margin-bottom: 14px; font-weight: 700;">
-            ✓ Confirmed attendees have been notified via rainout email.
-          </div>
-        ` : `
-          <div style="background: var(--bg-subtle); border: 1px solid var(--border); border-left: 4px solid var(--primary); padding: 10px 14px; border-radius: 6px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
-            <span style="font-size: 0.85rem; color: var(--text-main); font-weight: 600;">
-              ⚠️ Confirmed attendees have not been emailed about this rainout yet.
-            </span>
-            <button type="button" id="btn-send-rainout-email" class="btn btn-outline btn-sm" style="font-weight: 700;">
-              📧 Send Email to Attendees (${attendeeCount})
-            </button>
-          </div>
-        `}
-
-        <div style="border-top: 1px solid var(--border); padding-top: 14px; margin-top: 6px;">
-          <h4 style="font-size: 0.95rem; margin: 0 0 8px; color: var(--secondary); font-weight: 800;">
-            Un-Cancel / Reopen Game (Weather Cleared Up):
-          </h4>
-          <div class="form-group" style="margin-bottom: 10px;">
-            <label for="reopen-note-input" style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 4px; display: block;">
-              Optional reopening message:
-            </label>
-            <input type="text" id="reopen-note-input" class="form-control" style="width: 100%; box-sizing: border-box; padding: 8px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border);" placeholder="e.g. Sun dried out the field, game is back on at noon!">
-          </div>
-          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
-            <label style="display: flex; align-items: center; gap: 8px; font-size: 0.88rem; cursor: pointer;">
-              <input type="checkbox" id="reopen-send-email-check" checked>
-              <span>Send &quot;Game Back On&quot; email to confirmed groups (<strong>${attendeeCount}</strong>)</span>
-            </label>
-            <button type="button" id="btn-reopen-game" class="btn btn-primary btn-sm" style="font-weight: 700; padding: 7px 16px;">
-              ⚾ Reopen Game (Back On)
-            </button>
-          </div>
-        </div>
-      </div>
-    `;
-
-    const sendEmailBtn = document.getElementById('btn-send-rainout-email');
-    if (sendEmailBtn) {
-      sendEmailBtn.onclick = async function() {
-        const ok = window.PBFDialog
-          ? await window.PBFDialog.confirm(`Send rainout notification email to all ${attendeeCount} group(s)?`)
-          : false;
-        if (!ok) return;
-        sendEmailBtn.disabled = true;
-        sendEmailBtn.textContent = 'Sending Emails...';
-        try {
-          const res = await API.sendRainoutEmail(eventId, { note: ev.rainout_note });
-          if (res.error) {
-            if (window.PBFDialog) window.PBFDialog.toast(res.error, { type: 'error' });
-            sendEmailBtn.disabled = false;
-            sendEmailBtn.textContent = '📧 Send Email to Attendees';
-          } else {
-            if (window.PBFDialog) window.PBFDialog.toast('Rainout emails have been sent to attendees.', { type: 'success' });
-            await loadEventData();
-          }
-        } catch (err) {
-          if (window.PBFDialog) window.PBFDialog.toast('Failed to send rainout email.', { type: 'error' });
-          sendEmailBtn.disabled = false;
-          sendEmailBtn.textContent = '📧 Send Email to Attendees';
-        }
-      };
-    }
-
-    const reopenBtn = document.getElementById('btn-reopen-game');
-    if (reopenBtn) {
-      reopenBtn.onclick = async function() {
-        const note = document.getElementById('reopen-note-input').value.trim();
-        const sendEmail = document.getElementById('reopen-send-email-check').checked;
-
-        const ok = window.PBFDialog
-          ? await window.PBFDialog.confirm(`Reopen this game and restore it as active?${sendEmail ? ` A "Game Back On" email will be sent to ${attendeeCount} confirmed group(s).` : ''}`)
-          : false;
-        if (!ok) {
-          return;
-        }
-
-        reopenBtn.disabled = true;
-        reopenBtn.textContent = 'Reopening Game...';
-        try {
-          const res = await API.reopenEvent(eventId, { note: note, sendEmail: sendEmail });
-          if (res.error) {
-            if (window.PBFDialog) window.PBFDialog.toast(res.error, { type: 'error' });
-            reopenBtn.disabled = false;
-            reopenBtn.textContent = '⚾ Reopen Game (Back On)';
-          } else {
-            await loadEventData();
-          }
-        } catch (err) {
-          if (window.PBFDialog) window.PBFDialog.toast('Failed to reopen game.', { type: 'error' });
-          reopenBtn.disabled = false;
-          reopenBtn.textContent = '⚾ Reopen Game (Back On)';
-        }
-      };
-    }
-  }
-}
-
-function renderOrganizerInvitePanel() {
-  const panel = document.getElementById('organizer-invite-panel');
-  if (!panel) return;
-
-  const user = API.currentUser;
-  if (!user || (!user.canManageEvents && !user.isAdmin) || !eventData || !eventData.event || !eventData.event.is_restricted) {
-    panel.style.display = 'none';
-    panel.innerHTML = '';
-    return;
-  }
-
-  const ev = eventData.event;
-  const isEnabled = Boolean(ev.invite_enabled);
-  const version = ev.invite_version != null ? ev.invite_version : 1;
-  const inviteUrl = ev.invite_url || (window.location.origin + '/event.html?id=' + encodeURIComponent(ev.id) + (ev.invite_token ? '&invite=' + encodeURIComponent(ev.invite_token) : ''));
-
-  panel.style.display = 'block';
-  panel.innerHTML = `
-    <div class="card" style="padding: 12px 14px; background: var(--bg-card); border-left: 4px solid var(--secondary); border-inline-start: 4px solid var(--secondary); border-radius: 6px;">
-      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-          <span style="font-weight: 700; font-size: 0.9rem; color: var(--secondary);" data-i18n="event.invite_panel_title">${API.escapeHtml(API.t('event.invite_panel_title', '🔒 Invite Link'))}</span>
-          <span class="badge ${isEnabled ? 'badge-green' : 'badge-gray'}" style="font-size: 0.75rem;">
-            ${isEnabled ? 'Active (v' + version + ')' : 'Disabled'}
-          </span>
-        </div>
-        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-          ${isEnabled ? `
-            <button type="button" id="btn-copy-invite-link" class="btn btn-outline btn-sm" style="font-weight: 600;" data-i18n="event.invite_copy_btn">
-              ${API.escapeHtml(API.t('event.invite_copy_btn', '📋 Copy Invite Link'))}
-            </button>
-            <button type="button" id="btn-rotate-invite-link" class="btn btn-outline btn-sm" style="font-weight: 600; color: var(--danger); border-color: var(--danger);" data-i18n="event.invite_rotate_btn">
-              ${API.escapeHtml(API.t('event.invite_rotate_btn', '🔄 Rotate Link'))}
-            </button>
-            <button type="button" id="btn-toggle-invite-link" class="btn btn-outline btn-sm" data-i18n="event.invite_disable_btn">
-              ${API.escapeHtml(API.t('event.invite_disable_btn', 'Disable'))}
-            </button>
-          ` : `
-            <button type="button" id="btn-toggle-invite-link" class="btn btn-primary btn-sm" data-i18n="event.invite_enable_btn">
-              ${API.escapeHtml(API.t('event.invite_enable_btn', 'Enable Invite Link'))}
-            </button>
-          `}
-        </div>
-      </div>
-      <p style="margin: 6px 0 0 0; font-size: 0.78rem; color: var(--text-muted); line-height: 1.4;">
-        Anyone with this link can view details and RSVP for this restricted pickup game. Rotating invalidates the previous link without affecting players already confirmed on the roster.
-      </p>
-    </div>
-  `;
-
-  const copyBtn = document.getElementById('btn-copy-invite-link');
-  if (copyBtn) {
-    copyBtn.onclick = function() {
-      if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-        navigator.clipboard.writeText(inviteUrl).then(function() {
-          if (window.PBFDialog && typeof window.PBFDialog.toast === 'function') {
-            window.PBFDialog.toast(API.t('event.invite_copied', 'Invite link copied to clipboard!'), { type: 'success' });
-          }
-        }).catch(function() {});
-      }
-    };
-  }
-
-  const toggleBtn = document.getElementById('btn-toggle-invite-link');
-  if (toggleBtn) {
-    toggleBtn.onclick = async function() {
-      toggleBtn.disabled = true;
-      try {
-        const res = await API.toggleEventInvite(ev.id, !isEnabled);
-        if (res.error) {
-          if (window.PBFDialog) window.PBFDialog.toast(res.error, { type: 'error' });
-        } else {
-          if (window.PBFDialog) window.PBFDialog.toast(res.message || 'Invite link updated.', { type: 'success' });
-          await loadEventData(true);
-        }
-      } catch (err) {
-        if (window.PBFDialog) window.PBFDialog.toast('Failed to update invite link.', { type: 'error' });
-      } finally {
-        toggleBtn.disabled = false;
-      }
-    };
-  }
-
-  const rotateBtn = document.getElementById('btn-rotate-invite-link');
-  if (rotateBtn) {
-    rotateBtn.onclick = async function() {
-      const ok = window.PBFDialog
-        ? await window.PBFDialog.confirm('Rotate this invite link? The previous link will stop working immediately, but confirmed attendees will keep their roster spots.')
-        : false;
-      if (!ok) return;
-
-      rotateBtn.disabled = true;
-      try {
-        const res = await API.rotateEventInvite(ev.id);
-        if (res.error) {
-          if (window.PBFDialog) window.PBFDialog.toast(res.error, { type: 'error' });
-        } else {
-          if (window.PBFDialog) window.PBFDialog.toast('Invite link rotated. Previous link invalidated.', { type: 'success' });
-          await loadEventData(true);
-        }
-      } catch (err) {
-        if (window.PBFDialog) window.PBFDialog.toast('Failed to rotate invite link.', { type: 'error' });
-      } finally {
-        rotateBtn.disabled = false;
-      }
-    };
-  }
-}
-
-function renderOrganizerAttendancePanel() {
-  const panel = document.getElementById('organizer-attendance-panel');
-  if (!panel) return;
-
-  const user = API.currentUser;
-  if (!user || (!user.canManageEvents && !user.isAdmin)) {
-    panel.style.display = 'none';
-    panel.innerHTML = '';
-    return;
-  }
-
-  const ev = eventData.event;
-  if (ev.status === 'rainout' && ev.actual_attendance == null) {
-    panel.style.display = 'none';
-    panel.innerHTML = '';
-    return;
-  }
-
-  panel.style.display = 'block';
-
-  if (ev.actual_attendance != null) {
-    panel.innerHTML = `
-      <div class="organizer-turnout-card is-recorded">
-        <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
-          <span style="font-size: 1.15rem; line-height: 1;">⚾</span>
-          <div>
-            <div style="font-weight: 700; color: var(--secondary); font-size: 0.88rem;">
-              Turnout: ${ev.actual_attendance} Played
-            </div>
-            <div style="font-size: 0.74rem; color: var(--text-muted);">
-              ${API.t('event.turnout_count_sub', { count: eventData.totalAttendees })}
-            </div>
-          </div>
-        </div>
-        <div id="attendance-edit-controls-${ev.id}">
-          <button type="button" data-action="show-inline-attendance-edit" class="btn btn-outline btn-sm" style="padding: 4px 10px; font-size: 0.76rem;">
-            ✏️ Edit
-          </button>
-        </div>
-      </div>
-    `;
-  } else {
-    panel.innerHTML = `
-      <div class="organizer-turnout-card">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-          <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
-            <span style="font-size: 1.15rem; line-height: 1;">⚾</span>
-            <div>
-              <div style="font-weight: 700; color: var(--secondary); font-size: 0.88rem;">
-                Actual Turnout
-              </div>
-              <div style="font-size: 0.74rem; color: var(--text-muted);">
-                ${eventData.totalAttendees} signed up online
-              </div>
-            </div>
-          </div>
-          <form id="quick-attendance-form" data-action="save-quick-attendance" style="display: flex; align-items: center; gap: 6px; margin: 0;">
-            <input type="number" id="quick-attendance-input" min="0" max="200" placeholder="e.g. 18" required style="width: 72px; padding: 5px 8px; font-weight: 700; font-size: 0.88rem; border-radius: 6px; border: 1.5px solid var(--border);">
-            <button type="submit" id="quick-attendance-save-btn" class="btn btn-primary btn-sm" style="padding: 5px 10px; font-size: 0.78rem; white-space: nowrap;">💾 Save</button>
-          </form>
-        </div>
-        <div id="quick-attendance-alert" style="margin-top: 4px;"></div>
-      </div>
-    `;
-  }
-
-  if (!panel.dataset.cspBound) {
-    panel.dataset.cspBound = '1';
-    panel.addEventListener('click', function(e) {
-      const btn = e.target.closest('[data-action]');
-      if (!btn || !panel.contains(btn)) return;
-      if (btn.dataset.action === 'show-inline-attendance-edit') {
-        window.showInlineAttendanceEdit();
-      } else if (btn.dataset.action === 'cancel-inline-attendance-edit') {
-        renderOrganizerAttendancePanel();
-      }
-    });
-    panel.addEventListener('submit', function(e) {
-      const form = e.target.closest('form[data-action="save-quick-attendance"]');
-      if (!form || !panel.contains(form)) return;
-      window.saveQuickAttendance(e);
-    });
-  }
-}
-
-window.showInlineAttendanceEdit = function() {
-  const panel = document.getElementById('organizer-attendance-panel');
-  if (!panel || !eventData) return;
-  const ev = eventData.event;
-
-  panel.innerHTML = `
-    <div style="background: var(--bg-card); border: 1.5px solid var(--border); border-left: 4px solid var(--primary); border-radius: 8px; padding: 12px 16px; box-shadow: var(--shadow-sm);">
-      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-        <div style="display: flex; align-items: center; gap: 10px;">
-          <span style="font-size: 1.5rem;">⚾</span>
-          <div>
-            <div style="font-weight: 700; color: var(--secondary); font-size: 0.98rem;">
-              Update Actual Game Attendance
-            </div>
-            <div style="font-size: 0.82rem; color: var(--text-muted);">
-              Current headcount: <strong>${ev.actual_attendance != null ? ev.actual_attendance : 'Not set'}</strong> (${eventData.totalAttendees} online players)
-            </div>
-          </div>
-        </div>
-        <form id="quick-attendance-form" data-action="save-quick-attendance" style="display: flex; align-items: center; gap: 8px; margin: 0;">
-          <input type="number" id="quick-attendance-input" value="${ev.actual_attendance != null ? ev.actual_attendance : ''}" min="0" max="200" placeholder="e.g. 18" required style="width: 85px; padding: 6px 10px; font-weight: 700; font-size: 1rem; border-radius: 6px; border: 1.5px solid var(--border);">
-          <button type="submit" id="quick-attendance-save-btn" class="btn btn-primary btn-sm">💾 Save</button>
-          <button type="button" data-action="cancel-inline-attendance-edit" class="btn btn-outline btn-sm">Cancel</button>
-        </form>
-      </div>
-      <div id="quick-attendance-alert" style="margin-top: 6px;"></div>
-    </div>
-  `;
-  const input = document.getElementById('quick-attendance-input');
-  if (input) input.focus();
-};
-
-window.saveQuickAttendance = async function(e) {
-  e.preventDefault();
-  const saveBtn = document.getElementById('quick-attendance-save-btn');
-  const alertBox = document.getElementById('quick-attendance-alert');
-  const input = document.getElementById('quick-attendance-input');
-  if (!input) return;
-
-  const count = parseInt(input.value.trim(), 10);
-  if (isNaN(count) || count < 0) {
-    alertBox.innerHTML = '<div class="alert alert-error" style="font-size: 0.82rem;">Please enter a valid number of players.</div>';
-    return;
-  }
-
-  saveBtn.disabled = true;
-  saveBtn.textContent = 'Saving...';
-  alertBox.innerHTML = '';
-
-  try {
-    const res = await API.updateEvent(eventId, { actual_attendance: count });
-    if (res.error) {
-      alertBox.innerHTML = `<div class="alert alert-error" style="font-size: 0.82rem;">${API.escapeHtml(res.error)}</div>`;
-      saveBtn.disabled = false;
-      saveBtn.textContent = '💾 Save Turnout';
-    } else {
-      await loadEventData();
-    }
-  } catch (err) {
-    alertBox.innerHTML = '<div class="alert alert-error" style="font-size: 0.82rem;">Failed to save attendance. Please try again.</div>';
-    saveBtn.disabled = false;
-    saveBtn.textContent = '💾 Save Turnout';
-  }
-};
-
-function setupRsvpForm() {
-  const form = document.getElementById('rsvp-form');
-  const alertBox = document.getElementById('rsvp-alert');
-  const playersInput = document.getElementById('rsvp-players-count');
-  const spectatorsInput = document.getElementById('rsvp-spectators-count');
-  const pDecBtn = document.getElementById('players-dec-btn');
-  const pIncBtn = document.getElementById('players-inc-btn');
-  const sDecBtn = document.getElementById('spectators-dec-btn');
-  const sIncBtn = document.getElementById('spectators-inc-btn');
-  const dutiesList = document.getElementById('rsvp-duties-list');
-  const cancelBtn = document.getElementById('rsvp-cancel-btn');
-
-  function stepValue(inputEl, delta) {
-    if (!inputEl) return;
-    const current = parseInt(inputEl.value, 10) || 0;
-    const next = Math.max(0, Math.min(25, current + delta));
-    inputEl.value = String(next);
-    updateGroupSummaryUi();
-  }
-
-  if (pDecBtn) pDecBtn.addEventListener('click', function() { stepValue(playersInput, -1); });
-  if (pIncBtn) pIncBtn.addEventListener('click', function() { stepValue(playersInput, 1); });
-  if (sDecBtn) sDecBtn.addEventListener('click', function() { stepValue(spectatorsInput, -1); });
-  if (sIncBtn) sIncBtn.addEventListener('click', function() { stepValue(spectatorsInput, 1); });
-  if (playersInput) playersInput.addEventListener('input', updateGroupSummaryUi);
-  if (spectatorsInput) spectatorsInput.addEventListener('input', updateGroupSummaryUi);
-
-  if (dutiesList) {
-    dutiesList.addEventListener('change', function(e) {
-      if (e.target && e.target.name === 'duty_id') {
-        const row = e.target.closest('.rsvp-task-row');
-        if (row) {
-          row.classList.toggle('is-checked', e.target.checked);
-        }
-        updateGroupSummaryUi();
-      }
-    });
-  }
-
-  if (cancelBtn) {
-    cancelBtn.addEventListener('click', async function() {
-      const submitBtn = document.getElementById('rsvp-submit-btn');
-      cancelBtn.disabled = true;
-      cancelBtn.textContent = 'Cancelling...';
-      if (submitBtn) submitBtn.disabled = true;
-      alertBox.innerHTML = '';
-
-      const name = document.getElementById('rsvp-name').value;
-      const email = document.getElementById('rsvp-email').value;
-
-      try {
-        const res = await API.postRsvp(eventId, {
-          status: 'declined',
-          name: name,
-          email: email,
-          players_count: 0,
-          spectators_count: 0,
-          gear_bringing: '',
-          guest_names: '',
-          duty_ids: [],
-          management_token: guestToken,
-          invite_token: inviteToken
-        });
-
-        if (res.error) {
-          alertBox.innerHTML = `<div class="alert alert-error">${API.escapeHtml(res.error)}</div>`;
-        } else {
-          if (res.managementToken) {
-            guestToken = res.managementToken;
-            try { localStorage.setItem('guest_token_' + eventId, guestToken); } catch (e) { /* localStorage unavailable */ }
-          }
-          alertBox.innerHTML = `<div class="alert alert-info">${API.escapeHtml(res.message || 'Your RSVP has been cancelled.')}</div>`;
-          await loadEventData(true);
-        }
-      } catch (err) {
-        alertBox.innerHTML = '<div class="alert alert-error">Network error. Please try again.</div>';
-      } finally {
-        cancelBtn.disabled = false;
-        cancelBtn.textContent = API.t('event.cancel_rsvp_btn', "Can't Make It");
-        if (submitBtn) submitBtn.disabled = false;
-      }
-    });
-  }
-
-  form.addEventListener('submit', async function(e) {
-    e.preventDefault();
-    alertBox.innerHTML = '';
-
-    const counts = getGroupFormCounts();
-    let playersCount = counts.playersCount;
-    let spectatorsCount = counts.spectatorsCount;
-
-    const checkedDuties = Array.from(document.querySelectorAll('input[name="duty_id"]:checked'))
-      .map(function(cb) { return parseInt(cb.value, 10); });
-
-    if (playersCount === 0 && spectatorsCount === 0 && checkedDuties.length === 0) {
-      alertBox.innerHTML = '<div class="alert alert-error">Please add at least 1 player, spectator, or group task to confirm your RSVP.</div>';
+    if (!API.currentUser) {
+      container.innerHTML =
+        '<p style="color: var(--text-muted); font-style: italic;">' +
+          '🔒 ' + API.escapeHtml(API.t('event.comments_members_only', 'Event discussion is visible to signed-in members only.')) +
+        '</p>';
       return;
     }
 
-    if (playersCount === 0 && spectatorsCount === 0 && checkedDuties.length > 0) {
-      spectatorsCount = 1;
+    if (comments.length === 0) {
+      container.innerHTML =
+        '<p style="color: var(--text-muted); font-style: italic;">' +
+          API.escapeHtml(API.t('event.no_comments_yet')) +
+        '</p>';
+      return;
     }
 
-    const submitBtn = document.getElementById('rsvp-submit-btn');
-    submitBtn.disabled = true;
-    submitBtn.dataset.submitting = 'true';
-    submitBtn.textContent = API.t('event.saving_rsvp', 'Saving RSVP...');
+    var commentAbbr = API.abbreviateDisplayNames(comments, 'author_name', 'user_id', 'Player');
+    container.innerHTML = comments.map(function (c, idx) {
+      var authorDisplay = c.show_full_name ? (c.author_name || 'Player') : (commentAbbr[idx] || API.formatDisplayName(c.author_name, 'Player'));
+      var safeAvatar = API.safeAvatarUrl(c.avatar_url);
+      var avatarImg = safeAvatar
+        ? '<img src="' + API.escapeHtml(safeAvatar) + '" alt="' + API.escapeHtml(authorDisplay) + '" class="comment-avatar" loading="lazy" decoding="async">'
+        : '<span class="comment-avatar-placeholder">' + API.escapeHtml((authorDisplay || 'P').charAt(0).toUpperCase()) + '</span>';
+      var canMod = Boolean(API.currentUser && API.currentUser.canManageEvents);
 
-    const name = document.getElementById('rsvp-name').value;
-    const email = document.getElementById('rsvp-email').value;
-    const gearEl = document.getElementById('rsvp-gear');
-    const gear = gearEl ? gearEl.value : '';
-    const guestNamesEl = document.getElementById('rsvp-guest-names');
-    const guestNames = ((guestNamesEl && guestNamesEl.value) || '').trim();
-    const redeemHeroEl = document.getElementById('redeem-hero-credit-checkbox');
-    const redeemHeroCredit = Boolean(isCertifiedShiftsEnabled() && redeemHeroEl && redeemHeroEl.checked);
+      return (
+        '<div class="comment-bubble" style="display: flex; gap: 12px; align-items: flex-start;">' +
+          avatarImg +
+          '<div style="flex: 1; min-width: 0;">' +
+            '<div class="comment-header">' +
+              '<div>' +
+                '<span class="comment-author">' + API.escapeHtml(authorDisplay) + '</span>' +
+                (c.bio ? '<span style="font-size: 0.75rem; color: var(--text-muted); font-style: italic; margin-left: 6px;">• ' + API.escapeHtml(c.bio) + '</span>' : '') +
+              '</div>' +
+              '<div style="display: flex; gap: 8px; align-items: center;">' +
+                '<span class="comment-time">' + API.formatDateTime(c.created_at) + '</span>' +
+                (canMod ? '<button type="button" data-action="delete-comment" data-comment-id="' + c.id + '" title="Delete comment" style="background:none;border:none;cursor:pointer;font-size:0.85rem;color:var(--danger);padding:0 2px;">🗑️</button>' : '') +
+              '</div>' +
+            '</div>' +
+            '<div class="comment-body">' + API.escapeHtml(c.content) + '</div>' +
+          '</div>' +
+        '</div>'
+      );
+    }).join('');
 
-    const bpSignupEl = document.getElementById('rsvp-bp-signup');
-    const bpSignup = Boolean(isBattingPracticeEnabled() && bpSignupEl && bpSignupEl.checked);
-
-    const payload = {
-      status: 'attending',
-      name: name,
-      email: email,
-      players_count: playersCount,
-      spectators_count: spectatorsCount,
-      additional_guests: Math.max(0, playersCount - 1),
-      guest_names: guestNames,
-      gear_bringing: gear,
-      duty_ids: checkedDuties,
-      redeem_hero_credit: redeemHeroCredit,
-      bp_signup: bpSignup,
-      management_token: guestToken,
-      invite_token: inviteToken
-    };
-
-    if (!API.currentUser) {
-      const rosterConsentEl = document.getElementById('rsvp-roster-consent');
-      const notifyEmailsEl = document.getElementById('rsvp-notify-emails');
-      payload.roster_consent = Boolean(rosterConsentEl && rosterConsentEl.checked);
-      payload.notify_emails = Boolean(notifyEmailsEl && notifyEmailsEl.checked);
-    }
-
-    try {
-      const res = await API.postRsvp(eventId, payload);
-      delete submitBtn.dataset.submitting;
-      submitBtn.disabled = false;
-
-      if (res.error) {
-        alertBox.innerHTML = `<div class="alert alert-error">${API.escapeHtml(res.error)}</div>`;
-        updateGroupSummaryUi();
-      } else {
-        if (res.managementToken) {
-          guestToken = res.managementToken;
-          try { localStorage.setItem('guest_token_' + eventId, guestToken); } catch (e) { /* localStorage unavailable */ }
-        }
-        const alertClass = res.status === 'waitlist' ? 'alert-info' : 'alert-success';
-        let promptHtml = '';
-        const currentWaiver = (API.currentUser && API.currentUser.waiver_status) || (eventData && eventData.myRsvp && eventData.myRsvp.waiver_status) || 'none';
-        if (currentWaiver === 'none') {
-          promptHtml = `
-            <div style="margin-top: 10px; padding: 10px 12px; background: var(--bg-surface); border: 1px dashed var(--primary); border-radius: 6px; font-size: 0.85rem; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
-              <span data-i18n="event.waiver_prompt_text">${API.escapeHtml(API.t('event.waiver_prompt_text', '📝 Player Waiver: Please sign the waiver online before arriving at the field.'))}</span>
-              <a href="/waiver.html?redirect=/event.html?id=${encodeURIComponent(eventId)}" class="btn btn-sm btn-primary" style="font-size: 0.8rem; font-weight: 700; text-decoration: none; padding: 4px 10px;" data-i18n="event.waiver_prompt_btn">${API.escapeHtml(API.t('event.waiver_prompt_btn', 'Sign Waiver Before Arrival →'))}</a>
-            </div>
-          `;
-        }
-        alertBox.innerHTML = `<div class="alert ${alertClass}">${API.escapeHtml(res.message)}${promptHtml}</div>`;
-        await loadEventData(true);
-      }
-    } catch (err) {
-      delete submitBtn.dataset.submitting;
-      submitBtn.disabled = false;
-      alertBox.innerHTML = '<div class="alert alert-error">Network error. Please try again.</div>';
-      updateGroupSummaryUi();
-    }
-  });
-}
-
-function setupEditLinkForm() {
-  const toggleBtn = document.getElementById('rsvp-edit-link-toggle-btn');
-  const form = document.getElementById('rsvp-edit-link-form');
-  const emailInput = document.getElementById('rsvp-edit-link-email');
-  const submitBtn = document.getElementById('rsvp-edit-link-submit-btn');
-  const statusEl = document.getElementById('rsvp-edit-link-status');
-  if (!toggleBtn || !form || !emailInput || !submitBtn) return;
-
-  toggleBtn.addEventListener('click', function() {
-    const isOpen = form.style.display !== 'none';
-    form.style.display = isOpen ? 'none' : 'flex';
-    toggleBtn.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
-    if (!isOpen) {
-      if (!emailInput.value) {
-        const rsvpEmailEl = document.getElementById('rsvp-email');
-        if (rsvpEmailEl && rsvpEmailEl.value) {
-          emailInput.value = rsvpEmailEl.value.trim();
-        }
-      }
-      emailInput.focus();
-    }
-  });
-
-  form.addEventListener('submit', async function(e) {
-    e.preventDefault();
-    const email = (emailInput.value || '').trim();
-    if (!email) return;
-
-    submitBtn.disabled = true;
-    submitBtn.textContent = API.t('event.edit_link_sending', 'Sending...');
-    if (statusEl) statusEl.innerHTML = '';
-
-    try {
-      const res = await API.requestRsvpEditLink(eventId, email);
-      if (statusEl) {
-        if (res && res.error) {
-          statusEl.innerHTML = `<div class="alert alert-error" style="font-size: 0.82rem; margin: 0;">${API.escapeHtml(res.error)}</div>`;
-        } else {
-          statusEl.innerHTML = `<div class="alert alert-success" style="font-size: 0.82rem; margin: 0;">${API.escapeHtml((res && res.message) || 'If an RSVP with that email exists for this event, a fresh edit link has been sent.')}</div>`;
-          emailInput.value = '';
-        }
-      }
-    } catch (err) {
-      if (statusEl) {
-        statusEl.innerHTML = '<div class="alert alert-error" style="font-size: 0.82rem; margin: 0;">Network error. Please try again.</div>';
-      }
-    } finally {
-      submitBtn.disabled = false;
-      submitBtn.textContent = API.t('event.edit_link_send_btn', 'Send Edit Link');
-    }
-  });
-}
-
-function setupCommentForm() {
-  const form = document.getElementById('comment-form');
-  form.addEventListener('submit', async function(e) {
-    e.preventDefault();
-    const submitBtn = document.getElementById('comment-submit-btn');
-    const content = document.getElementById('comment-content').value;
-    const authorNameEl = document.getElementById('comment-author-name');
-    const authorEmailEl = document.getElementById('comment-author-email');
-    const authorName = authorNameEl ? authorNameEl.value : '';
-    const authorEmail = authorEmailEl ? authorEmailEl.value : '';
-
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'Posting...';
-
-    try {
-      const res = await API.postComment(eventId, {
-        content: content,
-        author_name: authorName,
-        author_email: authorEmail
+    if (!container.dataset.cspBound) {
+      container.dataset.cspBound = '1';
+      container.addEventListener('click', function (e) {
+        var target = /** @type {HTMLElement|null} */ (e.target);
+        if (!target || typeof target.closest !== 'function') return;
+        var btn = /** @type {HTMLElement|null} */ (target.closest('[data-action="delete-comment"]'));
+        if (!btn || (container.contains && !container.contains(btn))) return;
+        deleteDiscussionComment(parseInt(btn.dataset.commentId || '0', 10));
       });
-
-      if (res.error) {
-        if (window.PBFDialog) window.PBFDialog.toast(res.error, { type: 'error' });
-      } else {
-        document.getElementById('comment-content').value = '';
-        await loadEventData();
-      }
-    } catch (err) {
-      if (window.PBFDialog) window.PBFDialog.toast('Error posting comment.', { type: 'error' });
-    } finally {
-      submitBtn.disabled = false;
-      submitBtn.textContent = 'Post to Discussion';
     }
-  });
-}
-
-async function handleSendReminders() {
-  const ok = window.PBFDialog
-    ? await window.PBFDialog.confirm('Send 24-hour reminder emails now to all confirmed attendees?')
-    : false;
-  if (!ok) {
-    return;
-  }
-  try {
-    const data = await API.sendReminders(eventId);
-    if (window.PBFDialog) {
-      window.PBFDialog.toast(data.message || data.error, { type: data.error ? 'error' : 'success' });
-    }
-  } catch (err) {
-    if (window.PBFDialog) window.PBFDialog.toast('Failed to send reminders.', { type: 'error' });
-  }
-}
-
-window.toggleEditEventPanel = function() {
-  const panel = document.getElementById('edit-event-panel');
-  const editBtn = document.getElementById('edit-event-btn');
-  if (!panel || !eventData || !eventData.event) return;
-  if (!API.currentUser || (!API.currentUser.canManageEvents && !API.currentUser.isAdmin)) return;
-
-  if (panel.style.display === 'block') {
-    panel.style.display = 'none';
-    panel.innerHTML = '';
-    if (editBtn) editBtn.textContent = '✏️ Edit Game';
-    return;
   }
 
-  panel.innerHTML = `
-    <div id="edit-event-alert"></div>
-    <form id="edit-event-form" style="background: var(--bg-subtle); padding: 16px; border-radius: var(--radius-sm); border: 1.5px solid var(--primary);">
-      <h3 style="font-size: 1rem; color: var(--secondary); margin: 0 0 12px 0;">✏️ Edit Game Details</h3>
-      ${API.renderEditGameFieldsHtml('edit-event', eventData.event)}
-      <datalist id="common-locations-list">
-        <option value="Bushrod Park Field 1">
-        <option value="Bushrod Park Field 2">
-      </datalist>
-      <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-        <button type="submit" id="save-edit-event-btn" class="btn btn-primary btn-sm">💾 Save Changes</button>
-        <button type="button" id="cancel-edit-event-btn" class="btn btn-outline btn-sm">Cancel</button>
-      </div>
-    </form>
-  `;
-
-  panel.style.display = 'block';
-  if (editBtn) editBtn.textContent = '✕ Close Editor';
-  API.bindEditGameCapToggle('edit-event');
-  const titleEl = document.getElementById('edit-event-title');
-  if (titleEl) titleEl.focus();
-
-  const cancelEditBtn = document.getElementById('cancel-edit-event-btn');
-  if (cancelEditBtn) {
-    cancelEditBtn.onclick = function() {
-      panel.style.display = 'none';
-      panel.innerHTML = '';
-      if (editBtn) editBtn.textContent = '✏️ Edit Game';
-    };
-  }
-
-  const form = document.getElementById('edit-event-form');
-  if (form) {
-    form.addEventListener('submit', async function(e) {
+  function setupCommentForm() {
+    var form = el('comment-form');
+    if (!form) return;
+    form.addEventListener('submit', async function (e) {
       e.preventDefault();
-      const saveBtn = document.getElementById('save-edit-event-btn');
-      const alertBox = document.getElementById('edit-event-alert');
-      const parsed = API.readEditGameFields('edit-event');
-      if (parsed.error) {
-        alertBox.innerHTML = '<div class="alert alert-error">' + API.escapeHtml(parsed.error) + '</div>';
-        return;
-      }
+      var submitBtn = /** @type {HTMLButtonElement|null} */ (el('comment-submit-btn'));
+      var contentEl = /** @type {HTMLTextAreaElement|null} */ (el('comment-content'));
+      var content = contentEl ? contentEl.value : '';
+      var authorNameEl = /** @type {HTMLInputElement|null} */ (el('comment-author-name'));
+      var authorEmailEl = /** @type {HTMLInputElement|null} */ (el('comment-author-email'));
+      var authorName = authorNameEl ? authorNameEl.value : '';
+      var authorEmail = authorEmailEl ? authorEmailEl.value : '';
 
-      saveBtn.disabled = true;
-      saveBtn.textContent = 'Saving...';
-      alertBox.innerHTML = '';
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Posting...';
+      }
 
       try {
-        const res = await API.updateEvent(eventId, parsed.payload);
+        var res = await API.postComment(state.eventId, {
+          content: content,
+          author_name: authorName,
+          author_email: authorEmail
+        });
+
         if (res.error) {
-          alertBox.innerHTML = '<div class="alert alert-error">' + API.escapeHtml(res.error) + '</div>';
-          saveBtn.disabled = false;
-          saveBtn.textContent = '💾 Save Changes';
+          if (root.PBFDialog) root.PBFDialog.toast(res.error, { type: 'error' });
         } else {
-          panel.style.display = 'none';
-          panel.innerHTML = '';
-          if (editBtn) editBtn.textContent = '✏️ Edit Game';
+          if (contentEl) contentEl.value = '';
           await loadEventData();
         }
       } catch (err) {
-        alertBox.innerHTML = '<div class="alert alert-error">Failed to save changes.</div>';
-        saveBtn.disabled = false;
-        saveBtn.textContent = '💾 Save Changes';
+        if (root.PBFDialog) root.PBFDialog.toast('Error posting comment.', { type: 'error' });
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Post to Discussion';
+        }
       }
     });
   }
-};
-const toggleEditEventPanel = window.toggleEditEventPanel;
 
-// ==========================================
-// BATTING PRACTICE (BP) ORDER UI & LOGIC
-// ==========================================
+  async function initEvent() {
+    var params = new URLSearchParams(window.location.search);
+    var rawEventId = params.get('id');
+    state.eventId = (rawEventId && /^\d+$/.test(rawEventId.trim())) ? rawEventId.trim() : null;
+    var storedVisitorToken = '';
+    try {
+      storedVisitorToken = state.eventId ? (localStorage.getItem('guest_token_' + state.eventId) || '') : '';
+    } catch (e) { /* localStorage unavailable */ }
+    state.visitorToken = params.get('token') || storedVisitorToken || '';
+    state.inviteToken = params.get('invite') || '';
 
-function renderBpOrder() {
-  const bpSection = document.getElementById('bp-order-section');
-  if (!isBattingPracticeEnabled()) {
-    if (bpSection) bpSection.style.display = 'none';
-    return;
-  }
-  const container = document.getElementById('bp-slots-grid');
-  if (!container || !eventData) return;
+    if (params.has('token') && typeof window.history !== 'undefined' && typeof window.history.replaceState === 'function') {
+      try {
+        var cleanUrl = new URL(window.location.href);
+        cleanUrl.searchParams.delete('token');
+        window.history.replaceState({}, document.title, cleanUrl.pathname + cleanUrl.search + cleanUrl.hash);
+      } catch (e) { /* best-effort URL token strip */ }
+    }
 
-  const isRainout = Boolean(eventData.event && eventData.event.status === 'rainout');
-  if (bpSection) {
-    bpSection.style.display = '';
-    bpSection.style.opacity = isRainout ? '0.6' : '1';
-  }
+    if (!state.eventId) {
+      showError('Invalid or missing event ID in URL.');
+      return;
+    }
 
-  const isSignedIn = Boolean(API.currentUser);
-  const canViewBpOrder = Boolean(isSignedIn && (eventData.canViewBpOrder !== false));
-  const signups = canViewBpOrder ? (eventData.bp_signups || []) : [];
-  const signupMap = new Map();
-  let maxSlot = 15;
-  for (let i = 0; i < signups.length; i++) {
-    const s = signups[i];
-    signupMap.set(s.slot_number, s);
-    if (s.slot_number > maxSlot) maxSlot = s.slot_number;
-  }
-
-  const totalDisplaySlots = Math.max(15, maxSlot);
-  const aggregateBpCount = canViewBpOrder
-    ? signups.length
-    : (eventData.bpCount != null ? eventData.bpCount : 0);
-
-  const badgeEl = document.getElementById('bp-slots-badge');
-  if (badgeEl) {
-    badgeEl.textContent = `${aggregateBpCount}/${totalDisplaySlots} Slots`;
-  }
-
-  const metaBpSummary = document.getElementById('event-bp-summary');
-  if (metaBpSummary) {
-    if (isRainout) {
-      metaBpSummary.textContent = 'Cancelled (Rainout)';
-      metaBpSummary.style.color = 'var(--danger)';
+    // Instant 0ms nav + cached event render on low-signal mobile connections
+    var cachedUser = API.getCachedUser();
+    if (cachedUser) {
+      API.currentUser = cachedUser;
+      API.renderNav(cachedUser);
     } else {
-      metaBpSummary.textContent = `${aggregateBpCount}/${totalDisplaySlots} Slots Claimed`;
-      metaBpSummary.style.color = 'var(--primary)';
-    }
-  }
-
-  const isOrganizer = Boolean(API.currentUser && (API.currentUser.canManageEvents || API.currentUser.isAdmin));
-  const orgControls = document.getElementById('bp-organizer-controls');
-  if (orgControls) {
-    orgControls.style.display = (canViewBpOrder && isOrganizer && signups.length > 0) ? 'inline-flex' : 'none';
-  }
-
-  const quickJoinBtn = document.getElementById('bp-quick-claim-btn') || document.getElementById('bp-quick-join-btn');
-  if (!canViewBpOrder) {
-    if (quickJoinBtn) quickJoinBtn.style.display = 'none';
-    container.innerHTML = `
-      <div class="roster-private-card" style="grid-column: 1 / -1; text-align: center; padding: 24px 18px; background: var(--surface-2, #f5f8f7); border: 1.5px dashed var(--border); border-radius: 12px; margin-top: 6px;">
-        <div style="font-size: 2rem; margin-bottom: 8px;">🔒</div>
-        <h3 style="margin: 0 0 6px 0; color: var(--text); font-size: 1.08rem; font-weight: 700;">
-          Batting Practice Order is Private
-        </h3>
-        <p style="margin: 0 auto 14px auto; max-width: 440px; color: var(--text-muted); font-size: 0.88rem; line-height: 1.5;">
-          Sign in to view the batting practice lineup and claim a hitting slot.
-        </p>
-        <a href="/login.html" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 8px; text-decoration: none; padding: 8px 16px; font-size: 0.88rem; font-weight: 600; border-radius: 8px;">
-          <span>⚾</span> <span>Log In to View Order</span>
-        </a>
-      </div>
-    `;
-    return;
-  }
-
-  if (quickJoinBtn) {
-    quickJoinBtn.style.display = 'inline-flex';
-  }
-  const mySignup = signups.find(function(s) { return s.is_mine; });
-  if (quickJoinBtn) {
-    if (isRainout) {
-      quickJoinBtn.disabled = true;
-      quickJoinBtn.textContent = 'Game Called (Rainout)';
-    } else if (mySignup) {
-      quickJoinBtn.disabled = false;
-      quickJoinBtn.innerHTML = `⭐ ${API.escapeHtml(API.t('event.bp_your_slot', 'Your Spot'))}: Slot #${mySignup.slot_number}`;
-      quickJoinBtn.onclick = function() { openBpModal(mySignup.slot_number, mySignup); };
-    } else {
-      quickJoinBtn.disabled = false;
-      quickJoinBtn.innerHTML = `⚡ ${API.escapeHtml(API.t('event.bp_quick_claim', 'Claim Next Slot'))}`;
-      quickJoinBtn.onclick = function() {
-        let nextSlot = 1;
-        while (signupMap.has(nextSlot)) nextSlot++;
-        openBpModal(nextSlot, null);
-      };
-    }
-  }
-
-  const bpAbbrList = API.abbreviateDisplayNames(signups, 'player_name', 'user_id', 'Player');
-  const bpDisplayById = new Map();
-  signups.forEach(function(s, idx) {
-    bpDisplayById.set(s.slot_number, s.show_full_name ? (s.player_name || 'Player') : (bpAbbrList[idx] || API.formatDisplayName(s.player_name, 'Player')));
-  });
-
-  let html = '';
-  for (let slot = 1; slot <= totalDisplaySlots; slot++) {
-    const item = signupMap.get(slot);
-    let groupLbl = 'Rd 1';
-    if (slot > 10) {
-      groupLbl = 'Rd 3';
-    } else if (slot > 5) {
-      groupLbl = 'Rd 2';
+      API.renderNav(null);
     }
 
-    if (item) {
-      const bpDisplayName = bpDisplayById.get(slot) || API.formatDisplayName(item.player_name, 'Player');
-      const isMine = Boolean(item.is_mine);
-      const safeAvatar = API.safeAvatarUrl(item.avatar_url);
-      const avatarImg = safeAvatar
-        ? `<img src="${API.escapeHtml(safeAvatar)}" alt="${API.escapeHtml(bpDisplayName)}" class="roster-avatar" style="width: 26px; height: 26px; border-radius: 50%;" loading="lazy">`
-        : `<span class="roster-avatar-placeholder" style="width: 26px; height: 26px; font-size: 0.74rem; border-radius: 50%;">${API.escapeHtml((bpDisplayName || 'P').charAt(0).toUpperCase())}</span>`;
-
-      html += `
-        <div class="bp-slot-card is-taken ${isMine ? 'is-mine' : ''}" data-slot="${slot}">
-          <div class="bp-slot-num-badge">
-            <span>#${slot}</span>
-            <span class="bp-slot-round-lbl">${groupLbl}</span>
-          </div>
-          ${avatarImg}
-          <div class="bp-slot-details">
-            <div class="bp-slot-name-row">
-              <span class="bp-slot-name">${API.escapeHtml(bpDisplayName)}</span>
-              ${isMine ? `<span class="badge badge-green" style="font-size: 0.65rem; padding: 2px 6px;">${API.escapeHtml(API.t('event.bp_your_slot', 'Your Spot'))}</span>` : ''}
-            </div>
-            ${item.notes ? `<div class="bp-slot-notes">🎯 ${API.escapeHtml(item.notes)}</div>` : ''}
-          </div>
-          <div class="bp-slot-actions">
-            ${(isMine || isOrganizer) && !isRainout ? `
-              <button type="button" class="bp-slot-icon-btn" data-action="edit-bp-slot" data-slot="${slot}" data-signup-id="${item.id}" title="Edit or move slot">✏️</button>
-              <button type="button" class="bp-slot-icon-btn" data-action="delete-bp-slot" data-signup-id="${item.id}" title="Remove from lineup" style="color: var(--danger);">✕</button>
-            ` : ''}
-          </div>
-        </div>
-      `;
-    } else {
-      html += `
-        <div class="bp-slot-card is-open" data-slot="${slot}">
-          <div class="bp-slot-num-badge" style="opacity: 0.7;">
-            <span>#${slot}</span>
-            <span class="bp-slot-round-lbl">${groupLbl}</span>
-          </div>
-          <div class="bp-slot-details">
-            <div class="bp-slot-name" style="color: var(--text-muted); font-size: 0.88rem; font-weight: normal;">
-              ${API.escapeHtml(API.t('event.bp_open_slot', 'Open Slot'))}
-            </div>
-          </div>
-          <div class="bp-slot-actions">
-            ${!isRainout ? `
-              <button type="button" class="bp-claim-slot-btn" data-action="claim-bp-slot" data-slot="${slot}">
-                + ${API.escapeHtml(API.t('event.bp_claim_btn', 'Claim Slot'))}
-              </button>
-            ` : '<span style="font-size: 0.75rem; color: var(--text-muted);">Unavailable</span>'}
-          </div>
-        </div>
-      `;
-    }
-  }
-
-  container.innerHTML = html;
-  if (!container.dataset.cspBound) {
-    container.dataset.cspBound = '1';
-    container.addEventListener('click', function(e) {
-      const btn = e.target.closest('[data-action]');
-      if (!btn || !container.contains(btn)) return;
-      const action = btn.dataset.action;
-      if (action === 'edit-bp-slot') {
-        openBpModal(parseInt(btn.dataset.slot, 10), parseInt(btn.dataset.signupId, 10));
-      } else if (action === 'claim-bp-slot') {
-        openBpModal(parseInt(btn.dataset.slot, 10), null);
-      } else if (action === 'delete-bp-slot' && typeof window.handleDeleteBpSignup === 'function') {
-        window.handleDeleteBpSignup(parseInt(btn.dataset.signupId, 10));
+    window.addEventListener('pickup:langchange', function () {
+      if (state.eventData && state.eventData.event) {
+        renderEventDetails();
+        if (typeof EventUI.renderAttendeesRoster === 'function') EventUI.renderAttendeesRoster();
+        if (typeof EventUI.renderBpOrder === 'function') EventUI.renderBpOrder();
+        renderComments();
+        if (typeof EventUI.setupRsvpState === 'function') EventUI.setupRsvpState();
       }
     });
-  }
-}
 
-function openBpModal(preferredSlot, existingSignupOrId) {
-  const modal = document.getElementById('bp-signup-modal');
-  if (!modal) return;
-
-  const titleEl = document.getElementById('bp-modal-title');
-  const signupIdInput = document.getElementById('bp-form-signup-id');
-  const nameInput = document.getElementById('bp-player-name');
-  const slotSelect = document.getElementById('bp-slot-select');
-  const notesInput = document.getElementById('bp-player-notes');
-
-  let signupObj = null;
-  if (existingSignupOrId && typeof existingSignupOrId === 'object') {
-    signupObj = existingSignupOrId;
-  } else if (existingSignupOrId) {
-    const list = (eventData && eventData.bp_signups) || [];
-    signupObj = list.find(function(s) { return s.id === existingSignupOrId; });
+    if (typeof EventUI.setupRsvpForm === 'function') EventUI.setupRsvpForm();
+    if (typeof EventUI.setupEditLinkForm === 'function') EventUI.setupEditLinkForm();
+    setupCommentForm();
+    if (typeof EventUI.setupBpOrderUi === 'function') EventUI.setupBpOrderUi();
+    var configPromise = typeof API.getPublicConfig === 'function'
+      ? API.getPublicConfig().then(function (cfg) {
+          state.eventPublicConfig = cfg;
+          applyEventFeatureFlags();
+        }).catch(function () {})
+      : Promise.resolve();
+    await Promise.all([configPromise, loadEventData()]);
+    applyEventFeatureFlags();
   }
 
-  const signups = (eventData && eventData.bp_signups) || [];
-  const takenMap = new Map();
-  signups.forEach(function(s) { takenMap.set(s.slot_number, s); });
+  EventUI.isBattingPracticeEnabled = isBattingPracticeEnabled;
+  EventUI.isCertifiedShiftsEnabled = isCertifiedShiftsEnabled;
+  EventUI.applyEventFeatureFlags = applyEventFeatureFlags;
+  EventUI.showError = showError;
+  EventUI.applyLoadedEventToDom = applyLoadedEventToDom;
+  EventUI.loadEventData = loadEventData;
+  EventUI.renderEventDetails = renderEventDetails;
+  EventUI.renderComments = renderComments;
+  EventUI.deleteDiscussionComment = deleteDiscussionComment;
+  EventUI.setupCommentForm = setupCommentForm;
+  EventUI.initEvent = initEvent;
 
-  let maxSlot = 20;
-  signups.forEach(function(s) { if (s.slot_number > maxSlot) maxSlot = s.slot_number + 1; });
-  const bpOptionAbbr = API.abbreviateDisplayNames(signups, 'player_name', 'user_id', 'Player');
-  const bpOptionDisplay = new Map();
-  signups.forEach(function(s, idx) {
-    bpOptionDisplay.set(s.slot_number, s.show_full_name ? (s.player_name || 'Player') : (bpOptionAbbr[idx] || API.formatDisplayName(s.player_name, 'Player')));
-  });
-  let selectHtml = '';
-  for (let i = 1; i <= maxSlot; i++) {
-    const occ = takenMap.get(i);
-    const isCurrent = signupObj && signupObj.slot_number === i;
-    if (!occ || isCurrent) {
-      selectHtml += `<option value="${i}" ${i === preferredSlot ? 'selected' : ''}>Slot #${i} (Open)</option>`;
-    } else {
-      selectHtml += `<option value="${i}" disabled>Slot #${i} (${API.escapeHtml(bpOptionDisplay.get(i) || API.formatDisplayName(occ.player_name, 'Player'))})</option>`;
-    }
-  }
-  slotSelect.innerHTML = selectHtml;
-
-  if (signupObj) {
-    titleEl.textContent = `Edit Batting Practice Slot #${signupObj.slot_number}`;
-    signupIdInput.value = signupObj.id;
-    nameInput.value = signupObj.player_name || '';
-    slotSelect.value = String(signupObj.slot_number);
-    notesInput.value = signupObj.notes || '';
-  } else {
-    titleEl.textContent = `Sign Up for Batting Practice Slot #${preferredSlot}`;
-    signupIdInput.value = '';
-    const rsvpNameEl = document.getElementById('rsvp-name');
-    nameInput.value = (API.currentUser && API.currentUser.name) || (rsvpNameEl && rsvpNameEl.value) || '';
-    slotSelect.value = String(preferredSlot);
-    notesInput.value = '';
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = EventUI;
   }
 
-  modal.style.display = 'flex';
-  nameInput.focus();
-}
-window.openBpModal = openBpModal;
-
-function closeBpModal() {
-  const modal = document.getElementById('bp-signup-modal');
-  if (modal) modal.style.display = 'none';
-}
-window.closeBpModal = closeBpModal;
-
-async function handleDeleteBpSignup(signupId) {
-  const ok = window.PBFDialog
-    ? await window.PBFDialog.confirm('Withdraw from this batting practice slot?', { danger: true })
-    : false;
-  if (!ok) return;
-  const alertEl = document.getElementById('bp-alert');
-  try {
-    const res = await API.deleteBpSignup(eventId, signupId, { management_token: guestToken });
-    if (res.error) {
-      if (alertEl) alertEl.innerHTML = `<div class="alert alert-error">${API.escapeHtml(res.error)}</div>`;
-    } else {
-      if (alertEl) alertEl.innerHTML = `<div class="alert alert-success">${API.escapeHtml(res.message)}</div>`;
-      await loadEventData(true);
-    }
-  } catch (err) {
-    console.error('Error removing BP signup:', err);
+  if (typeof document !== 'undefined') {
+    document.addEventListener('DOMContentLoaded', initEvent);
   }
-}
-window.handleDeleteBpSignup = handleDeleteBpSignup;
-
-function setupBpOrderUi() {
-  const modal = document.getElementById('bp-signup-modal');
-  const closeBtn = document.getElementById('bp-modal-close');
-  const cancelBtn = document.getElementById('bp-modal-cancel');
-  const form = document.getElementById('bp-signup-form');
-  const clearBtn = document.getElementById('bp-clear-btn');
-
-  if (closeBtn) closeBtn.onclick = closeBpModal;
-  if (cancelBtn) cancelBtn.onclick = closeBpModal;
-  if (modal) {
-    modal.onclick = function(e) {
-      if (e.target === modal) closeBpModal();
-    };
-  }
-
-  if (clearBtn) {
-    clearBtn.onclick = async function() {
-      const ok = window.PBFDialog
-        ? await window.PBFDialog.confirm('Are you sure you want to clear the entire batting practice order?', { danger: true })
-        : false;
-      if (!ok) return;
-      const alertEl = document.getElementById('bp-alert');
-      try {
-        const res = await API.clearBpOrder(eventId);
-        if (res.error) {
-          if (alertEl) alertEl.innerHTML = `<div class="alert alert-error">${API.escapeHtml(res.error)}</div>`;
-        } else {
-          if (alertEl) alertEl.innerHTML = `<div class="alert alert-success">${API.escapeHtml(res.message)}</div>`;
-          await loadEventData(true);
-        }
-      } catch (e) {
-        console.error('Error clearing BP order:', e);
-      }
-    };
-  }
-
-  if (form) {
-    form.onsubmit = async function(e) {
-      e.preventDefault();
-      const signupId = document.getElementById('bp-form-signup-id').value;
-      const playerName = document.getElementById('bp-player-name').value;
-      const slotNumber = parseInt(document.getElementById('bp-slot-select').value, 10);
-      const notes = document.getElementById('bp-player-notes').value;
-      const submitBtn = document.getElementById('bp-modal-submit');
-      const alertEl = document.getElementById('bp-alert');
-
-      submitBtn.disabled = true;
-      submitBtn.textContent = 'Saving...';
-
-      try {
-        let res;
-        const payload = {
-          player_name: playerName,
-          slot_number: slotNumber,
-          notes: notes,
-          management_token: guestToken
-        };
-        if (signupId) {
-          res = await API.updateBpSignup(eventId, signupId, payload);
-        } else {
-          res = await API.postBpSignup(eventId, payload);
-        }
-
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Confirm BP Slot';
-
-        if (res.error) {
-          closeBpModal();
-          if (alertEl) alertEl.innerHTML = `<div class="alert alert-error">${API.escapeHtml(res.error)}</div>`;
-        } else {
-          closeBpModal();
-          if (alertEl) alertEl.innerHTML = `<div class="alert alert-success">${API.escapeHtml(res.message)}</div>`;
-          await loadEventData(true);
-        }
-      } catch (err) {
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Confirm BP Slot';
-        console.error('Error saving BP signup:', err);
-        closeBpModal();
-        if (alertEl) alertEl.innerHTML = '<div class="alert alert-error">Failed to save batting practice slot. Please try again.</div>';
-      }
-    };
-  }
-}
-
-document.addEventListener('DOMContentLoaded', initEvent);
+})();

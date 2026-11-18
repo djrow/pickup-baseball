@@ -387,25 +387,28 @@
 
     listContainer.innerHTML = html;
 
-    listContainer.querySelectorAll('.btn-approve-media').forEach(function(btn) {
+    listContainer.querySelectorAll('.btn-approve-media').forEach(function(node) {
+      var btn = /** @type {HTMLButtonElement} */ (node);
       btn.addEventListener('click', async function() {
-        var id = btn.getAttribute('data-media-id');
+        var id = btn.getAttribute('data-media-id') || '';
         btn.disabled = true;
         btn.textContent = 'Approving...';
         try {
           await API.approveMedia(id);
           await loadGalleryData();
         } catch (e) {
-          if (window.PBFDialog) window.PBFDialog.toast(e.message || 'Failed to approve media.', { type: 'error' });
+          var errObj = /** @type {any} */ (e);
+          if (window.PBFDialog) window.PBFDialog.toast((errObj && errObj.message) || 'Failed to approve media.', { type: 'error' });
           btn.disabled = false;
           btn.textContent = '✓ Approve';
         }
       });
     });
 
-    listContainer.querySelectorAll('.btn-reject-media').forEach(function(btn) {
+    listContainer.querySelectorAll('.btn-reject-media').forEach(function(node) {
+      var btn = /** @type {HTMLButtonElement} */ (node);
       btn.addEventListener('click', async function() {
-        var id = btn.getAttribute('data-media-id');
+        var id = btn.getAttribute('data-media-id') || '';
         var ok = window.PBFDialog
           ? await window.PBFDialog.confirm('Reject and permanently delete this pending submission?', { danger: true })
           : false;
@@ -416,7 +419,8 @@
           await API.deleteMedia(id);
           await loadGalleryData();
         } catch (e) {
-          if (window.PBFDialog) window.PBFDialog.toast(e.message || 'Failed to reject media.', { type: 'error' });
+          var errObj = /** @type {any} */ (e);
+          if (window.PBFDialog) window.PBFDialog.toast((errObj && errObj.message) || 'Failed to reject media.', { type: 'error' });
           btn.disabled = false;
           btn.textContent = '✕ Reject';
         }
@@ -633,9 +637,10 @@
     // Attach Lightbox click handlers
     container.querySelectorAll('.photo-card').forEach(function(card) {
       card.addEventListener('click', function(e) {
-        if (e.target.closest && e.target.closest('.btn-delete-photo')) return;
-        if (e.target.classList.contains('btn-delete-photo')) return;
-        var idx = parseInt(card.getAttribute('data-global-index'), 10);
+        var target = /** @type {HTMLElement|null} */ (e.target);
+        if (target && target.closest && target.closest('.btn-delete-photo')) return;
+        if (target && target.classList.contains('btn-delete-photo')) return;
+        var idx = parseInt(card.getAttribute('data-global-index') || '', 10);
         if (!isNaN(idx)) openLightbox(idx);
       });
     });
@@ -678,7 +683,7 @@
       var currentVisibleSlug = null;
 
       for (var i = 0; i < cards.length; i++) {
-        var card = cards[i];
+        var card = /** @type {HTMLElement} */ (cards[i]);
         if (card.offsetLeft >= trackLeft - 20) {
           currentVisibleSlug = card.getAttribute('data-album-slug');
           break;
@@ -795,8 +800,9 @@
     // Attach YouTube Lite Facade Click Listeners
     container.querySelectorAll('.video-facade-container').forEach(function(facade) {
       facade.addEventListener('click', function(e) {
-        if (e.target.closest && (e.target.closest('.btn-delete-video') || e.target.closest('.btn-delete-media'))) return;
-        if (e.target.classList.contains('btn-delete-video') || e.target.classList.contains('btn-delete-media')) return;
+        var target = /** @type {HTMLElement|null} */ (e.target);
+        if (target && target.closest && (target.closest('.btn-delete-video') || target.closest('.btn-delete-media'))) return;
+        if (target && (target.classList.contains('btn-delete-video') || target.classList.contains('btn-delete-media'))) return;
         var ytId = facade.getAttribute('data-youtube-id');
         if (!ytId) return;
         var iframe = document.createElement('iframe');
@@ -973,7 +979,7 @@
     var photo = currentPhotoItems[currentLightboxIndex];
     if (!photo) return;
 
-    var img = document.getElementById('lightbox-img');
+    var img = /** @type {HTMLImageElement|null} */ (document.getElementById('lightbox-img'));
     var caption = document.getElementById('lightbox-caption');
     var meta = document.getElementById('lightbox-meta');
 
@@ -1012,13 +1018,13 @@
     var modeLinkBtn = document.getElementById('tab-mode-link');
     var uploadContainer = document.getElementById('mode-upload-container');
     var linkContainer = document.getElementById('mode-link-container');
-    var fileInput = document.getElementById('media-file-input');
+    var fileInput = /** @type {HTMLInputElement|null} */ (document.getElementById('media-file-input'));
     var browseBtn = document.getElementById('btn-browse-files');
     var dropzone = document.getElementById('media-dropzone');
-    var dateInput = document.getElementById('media-date-input');
-    var albumSelect = document.getElementById('media-album-select');
+    var dateInput = /** @type {HTMLInputElement|null} */ (document.getElementById('media-date-input'));
+    var albumSelect = /** @type {HTMLSelectElement|null} */ (document.getElementById('media-album-select'));
     var newAlbumWrap = document.getElementById('new-album-wrap');
-    var urlInput = document.getElementById('media-url-input');
+    var urlInput = /** @type {HTMLInputElement|null} */ (document.getElementById('media-url-input'));
 
     // Default date input to most recent Sunday
     if (dateInput) {
@@ -1198,8 +1204,9 @@
   function updateLivePreview() {
     var previewBox = document.getElementById('media-preview-box');
     var previewTarget = document.getElementById('media-preview-target');
-    var isLinkMode = document.getElementById('tab-mode-link') && document.getElementById('tab-mode-link').classList.contains('active');
-    var urlInput = document.getElementById('media-url-input');
+    var tabModeLink = document.getElementById('tab-mode-link');
+    var isLinkMode = tabModeLink && tabModeLink.classList.contains('active');
+    var urlInput = /** @type {HTMLInputElement|null} */ (document.getElementById('media-url-input'));
 
     if (!previewBox || !previewTarget) return;
 
@@ -1285,16 +1292,17 @@
   async function handleFormSubmit(e) {
     e.preventDefault();
     var alertBox = document.getElementById('media-submit-alert');
-    var submitBtn = document.getElementById('media-submit-btn');
-    var isLinkMode = document.getElementById('tab-mode-link') && document.getElementById('tab-mode-link').classList.contains('active');
-    var fileInput = document.getElementById('media-file-input');
-    var urlInput = document.getElementById('media-url-input');
-    var dateInput = document.getElementById('media-date-input');
-    var albumSelect = document.getElementById('media-album-select');
-    var newAlbumInput = document.getElementById('media-new-album-input');
-    var titleInput = document.getElementById('media-title-input');
-    var captionInput = document.getElementById('media-caption-input');
-    var contributorInput = document.getElementById('media-contributor-input');
+    var submitBtn = /** @type {HTMLButtonElement|null} */ (document.getElementById('media-submit-btn'));
+    var tabModeLink = document.getElementById('tab-mode-link');
+    var isLinkMode = tabModeLink && tabModeLink.classList.contains('active');
+    var fileInput = /** @type {HTMLInputElement|null} */ (document.getElementById('media-file-input'));
+    var urlInput = /** @type {HTMLInputElement|null} */ (document.getElementById('media-url-input'));
+    var dateInput = /** @type {HTMLInputElement|null} */ (document.getElementById('media-date-input'));
+    var albumSelect = /** @type {HTMLSelectElement|null} */ (document.getElementById('media-album-select'));
+    var newAlbumInput = /** @type {HTMLInputElement|null} */ (document.getElementById('media-new-album-input'));
+    var titleInput = /** @type {HTMLInputElement|null} */ (document.getElementById('media-title-input'));
+    var captionInput = /** @type {HTMLInputElement|null} */ (document.getElementById('media-caption-input'));
+    var contributorInput = /** @type {HTMLInputElement|null} */ (document.getElementById('media-contributor-input'));
 
     if (alertBox) alertBox.innerHTML = '';
 
@@ -1313,6 +1321,7 @@
       }
     }
 
+    /** @type {Record<string, any>} */
     var payload = {
       date_taken: dateTaken,
       album: chosenAlbum,
@@ -1321,7 +1330,7 @@
       contributor_name: contributorInput ? contributorInput.value.trim() : ''
     };
 
-    var publishCheckbox = document.getElementById('media-publish-immediately');
+    var publishCheckbox = /** @type {HTMLInputElement|null} */ (document.getElementById('media-publish-immediately'));
     if (isManagerUser() && publishCheckbox && !publishCheckbox.checked) {
       payload.publish_immediately = false;
     }
@@ -1513,7 +1522,7 @@
   }
 
   function populateAlbumSelectOptions() {
-    var select = document.getElementById('media-album-select');
+    var select = /** @type {HTMLSelectElement|null} */ (document.getElementById('media-album-select'));
     if (!select) return;
 
     var curVal = select.value;
@@ -1537,7 +1546,7 @@
   // 9. Toolbar Controls (Chronological Sort)
   // ---------------------------------------------------------------------------
   function setupToolbarListeners() {
-    var sortSelect = document.getElementById('gallery-sort-select');
+    var sortSelect = /** @type {HTMLSelectElement|null} */ (document.getElementById('gallery-sort-select'));
 
     if (sortSelect) {
       sortSelect.addEventListener('change', async function() {

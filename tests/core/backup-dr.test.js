@@ -721,14 +721,16 @@ function registerBackupDrTests() {
 
     await t.test('5. Admin UI & 14-locale i18n parity for two-mode backup controls', () => {
       const adminHtml = fs.readFileSync(path.join(ROOT_DIR, 'public', 'admin.html'), 'utf8');
-      const adminJs = fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'admin.js'), 'utf8');
+      const adminJs = ['admin/backup.js', 'admin/events-tasks.js', 'admin/users-moderation.js', 'admin/content-media.js', 'admin.js']
+        .map((f) => fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', f), 'utf8'))
+        .join('\n');
       const apiJs = fs.existsSync(path.join(ROOT_DIR, 'public', 'js', 'api', 'i18n.js'))
         ? fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'api', 'i18n.js'), 'utf8')
         : fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'api.js'), 'utf8');
 
       assert.ok(adminHtml.includes('id="btn-backup-db"'), 'admin.html must include #btn-backup-db');
       assert.ok(adminHtml.includes('id="btn-backup-dr"'), 'admin.html must include #btn-backup-dr');
-      assert.ok(adminJs.includes("getElementById('btn-backup-dr')"), 'admin.js must bind #btn-backup-dr');
+      assert.ok(adminJs.includes("'btn-backup-dr'"), 'admin.js must bind #btn-backup-dr');
       assert.ok(adminJs.includes('PBFDialog.prompt'), 'admin.js must prompt for DR passphrase via PBFDialog.prompt');
       assert.ok(adminJs.includes('PBKDF2') && adminJs.includes('600000'), 'admin.js must stretch passphrase with WebCrypto PBKDF2 600,000 iterations');
       assert.ok(adminJs.includes('.pbfenc'), 'admin.js must download .pbfenc encrypted DR files');
@@ -768,6 +770,39 @@ function registerBackupDrTests() {
           assert.ok(typeof dict[key] === 'string' && dict[key].length > 0, `${file} must define non-empty "${key}"`);
         }
       }
+
+      // Verify 5-module Admin split (backup, events-tasks, users-moderation, content-media, admin) exposes zero window.* page functions
+      const vm = require('node:vm');
+      const adminModules = ['admin/backup.js', 'admin/events-tasks.js', 'admin/users-moderation.js', 'admin/content-media.js', 'admin.js'];
+      const baselineWindow = {
+        API: {
+          isFeatureEnabled: () => true,
+          escapeHtml: (s) => String(s || ''),
+          t: (_k, fb) => fb || ''
+        }
+      };
+      const sandbox = {
+        window: baselineWindow,
+        document: {
+          addEventListener: () => {},
+          getElementById: () => null,
+          querySelectorAll: () => []
+        }
+      };
+      sandbox.window.window = sandbox.window;
+      for (const rel of adminModules) {
+        const src = fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', rel), 'utf8');
+        assert.ok(src.startsWith('// @ts-check'), `${rel} must start with // @ts-check`);
+        assert.ok(src.includes("'use strict';"), `${rel} must enable strict mode inside an IIFE`);
+        vm.runInNewContext(src, sandbox, { filename: 'public/js/' + rel });
+      }
+      const windowKeys = Object.keys(sandbox.window).filter((k) => k !== 'window' && k !== 'API');
+      assert.deepEqual(windowKeys, [], 'Admin 5-module split must attach zero ad-hoc window.* page exports');
+      assert.equal(typeof sandbox.window.API._adminUi.initAdmin, 'function', 'Admin orchestrator must wire API._adminUi.initAdmin');
+      assert.equal(typeof sandbox.window.API._adminUi.setupAdminBackupButton, 'function', 'backup.js must wire setupAdminBackupButton');
+      assert.equal(typeof sandbox.window.API._adminUi.loadAdminEvents, 'function', 'events-tasks.js must wire loadAdminEvents');
+      assert.equal(typeof sandbox.window.API._adminUi.setupAdminUserManagement, 'function', 'users-moderation.js must wire setupAdminUserManagement');
+      assert.equal(typeof sandbox.window.API._adminUi.setupMediaCarouselsAdmin, 'function', 'content-media.js must wire setupMediaCarouselsAdmin');
     });
   });
 }

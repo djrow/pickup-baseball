@@ -159,35 +159,38 @@
   }
 
   function setupSignatureCanvas() {
-    var canvas = document.getElementById('waiver-sig-canvas');
+    var canvas = /** @type {HTMLCanvasElement|null} */ (document.getElementById('waiver-sig-canvas'));
     if (!canvas) return null;
     var ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    var canvasEl = canvas;
+    var ctx2d = ctx;
 
     function clearCanvas() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx2d.clearRect(0, 0, canvasEl.width, canvasEl.height);
       hasDrawnStrokes = false;
     }
 
     function renderTypedSignatureOnCanvas(text) {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx2d.clearRect(0, 0, canvasEl.width, canvasEl.height);
       var clean = String(text || '').trim();
       if (!clean) {
         hasDrawnStrokes = false;
         return;
       }
-      ctx.save();
-      ctx.fillStyle = '#0c1f1a';
-      ctx.font = 'italic 600 40px "Brush Script MT", "Segoe Script", "Lucida Handwriting", "Snell Roundhand", Georgia, cursive';
-      ctx.textBaseline = 'alphabetic';
-      ctx.fillText(clean, 32, 108);
-      ctx.restore();
+      ctx2d.save();
+      ctx2d.fillStyle = '#0c1f1a';
+      ctx2d.font = 'italic 600 40px "Brush Script MT", "Segoe Script", "Lucida Handwriting", "Snell Roundhand", Georgia, cursive';
+      ctx2d.textBaseline = 'alphabetic';
+      ctx2d.fillText(clean, 32, 108);
+      ctx2d.restore();
       hasDrawnStrokes = true;
     }
 
     function getCanvasPos(evt) {
-      var rect = canvas.getBoundingClientRect();
-      var scaleX = canvas.width / (rect.width || 1);
-      var scaleY = canvas.height / (rect.height || 1);
+      var rect = canvasEl.getBoundingClientRect();
+      var scaleX = canvasEl.width / (rect.width || 1);
+      var scaleY = canvasEl.height / (rect.height || 1);
       var clientX = evt.clientX;
       var clientY = evt.clientY;
       if (evt.touches && evt.touches.length > 0) {
@@ -207,10 +210,10 @@
       var pos = getCanvasPos(evt);
       lastX = pos.x;
       lastY = pos.y;
-      ctx.beginPath();
-      ctx.arc(lastX, lastY, 1.4, 0, Math.PI * 2);
-      ctx.fillStyle = '#0c1f1a';
-      ctx.fill();
+      ctx2d.beginPath();
+      ctx2d.arc(lastX, lastY, 1.4, 0, Math.PI * 2);
+      ctx2d.fillStyle = '#0c1f1a';
+      ctx2d.fill();
       hasDrawnStrokes = true;
     }
 
@@ -218,14 +221,14 @@
       if (!isDrawing || sigMode !== 'drawn') return;
       evt.preventDefault();
       var pos = getCanvasPos(evt);
-      ctx.beginPath();
-      ctx.moveTo(lastX, lastY);
-      ctx.lineTo(pos.x, pos.y);
-      ctx.strokeStyle = '#0c1f1a';
-      ctx.lineWidth = 2.6;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.stroke();
+      ctx2d.beginPath();
+      ctx2d.moveTo(lastX, lastY);
+      ctx2d.lineTo(pos.x, pos.y);
+      ctx2d.strokeStyle = '#0c1f1a';
+      ctx2d.lineWidth = 2.6;
+      ctx2d.lineCap = 'round';
+      ctx2d.lineJoin = 'round';
+      ctx2d.stroke();
       lastX = pos.x;
       lastY = pos.y;
       hasDrawnStrokes = true;
@@ -247,8 +250,8 @@
     var btnType = document.getElementById('btn-sig-mode-type');
     var btnClear = document.getElementById('btn-clear-signature');
     var typeWrap = document.getElementById('waiver-type-sig-wrap');
-    var typedInput = document.getElementById('waiver-typed-sig-input');
-    var printedInput = document.getElementById('waiver-printed-name');
+    var typedInput = /** @type {HTMLInputElement|null} */ (document.getElementById('waiver-typed-sig-input'));
+    var printedInput = /** @type {HTMLInputElement|null} */ (document.getElementById('waiver-printed-name'));
 
     if (btnDraw) {
       btnDraw.addEventListener('click', function() {
@@ -303,7 +306,7 @@
     }
 
     var todayStr = getPacificTodayString();
-    var dateInput = document.getElementById('waiver-signed-date');
+    var dateInput = /** @type {HTMLInputElement|null} */ (document.getElementById('waiver-signed-date'));
     if (dateInput) dateInput.value = todayStr;
     var printDateSpan = document.getElementById('print-dated-val');
     if (printDateSpan) printDateSpan.textContent = todayStr;
@@ -367,20 +370,21 @@
       emailPill.textContent = '✓ Verified Email: ' + currentUser.email;
     }
 
-    var printedInput = document.getElementById('waiver-printed-name');
+    var printedInput = /** @type {HTMLInputElement|null} */ (document.getElementById('waiver-printed-name'));
     if (printedInput && !printedInput.value) {
       printedInput.value = currentUser.name || '';
     }
 
     var pad = setupSignatureCanvas();
+    if (!signForm) return;
 
     signForm.addEventListener('submit', async function(e) {
       e.preventDefault();
       var printedName = printedInput ? printedInput.value.trim() : '';
       var signedDate = dateInput ? dateInput.value.trim() : todayStr;
-      var ageBox = document.getElementById('waiver-age-attestation');
-      var consentBox = document.getElementById('waiver-consent-checkbox');
-      var submitBtn = document.getElementById('btn-submit-waiver');
+      var ageBox = /** @type {HTMLInputElement|null} */ (document.getElementById('waiver-age-attestation'));
+      var consentBox = /** @type {HTMLInputElement|null} */ (document.getElementById('waiver-consent-checkbox'));
+      var submitBtn = /** @type {HTMLButtonElement|null} */ (document.getElementById('btn-submit-waiver'));
 
       if (!printedName || printedName.length < 2) {
         showWaiverAlert(API.t('waiver.printed_name_required_error', 'Please enter your full Printed Name.'), true);

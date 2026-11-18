@@ -1,226 +1,252 @@
+// @ts-check
 /**
  * Archive page application logic
  */
+(function () {
+  'use strict';
 
-let lastLoadedArchiveEvents = [];
+  /** @type {any[]} */
+  var lastLoadedArchiveEvents = [];
 
-function applyUserToArchiveUi(user) {
-  API.renderNav(user);
-}
-
-async function initArchive() {
-  const cachedUser = API.getCachedUser();
-  if (cachedUser) {
-    API.currentUser = cachedUser;
-    applyUserToArchiveUi(cachedUser);
-  } else {
-    API.renderNav(null);
+  /**
+   * @param {any} member
+   */
+  function applyMemberToArchiveUi(member) {
+    API.renderNav(member);
   }
 
-  window.addEventListener('pickup:langchange', () => {
-    applyUserToArchiveUi(API.currentUser);
-    const container = document.getElementById('archive-games-container');
-    if (container) {
-      renderArchiveList(lastLoadedArchiveEvents, container);
+  async function initArchive() {
+    var cachedMember = API.getCachedUser();
+    if (cachedMember) {
+      API.currentUser = cachedMember;
+      applyMemberToArchiveUi(cachedMember);
+    } else {
+      API.renderNav(null);
     }
-  });
 
-  await loadArchiveGames();
-}
-
-async function loadArchiveGames() {
-  const container = document.getElementById('archive-games-container');
-  const cacheKey = 'pickup_cached_events_past';
-
-  let renderedFromCache = false;
-  try {
-    const cachedRaw = localStorage.getItem(cacheKey);
-    if (cachedRaw) {
-      const cachedEvents = JSON.parse(cachedRaw);
-      if (Array.isArray(cachedEvents) && cachedEvents.length > 0) {
-        renderArchiveList(cachedEvents, container);
-        renderedFromCache = true;
+    window.addEventListener('pickup:langchange', function () {
+      applyMemberToArchiveUi(API.currentUser);
+      var container = document.getElementById('archive-games-container');
+      if (container) {
+        renderArchiveList(lastLoadedArchiveEvents, container);
       }
-    }
-  } catch (e) { /* localStorage unavailable or invalid cache */ }
+    });
 
-  if (!renderedFromCache) {
-    container.innerHTML = `<p style="color: var(--text-muted);">${API.escapeHtml(API.t('home.loading_games'))}</p>`;
+    await loadArchiveEvents();
   }
 
-  try {
-    const data = await API.getEvents('past');
-    const events = data.events || [];
-    lastLoadedArchiveEvents = events;
+  async function loadArchiveEvents() {
+    var container = document.getElementById('archive-games-container');
+    if (!container) return;
+    var cacheKey = 'pickup_cached_events_past';
 
-    if (data.user !== undefined) {
-      applyUserToArchiveUi(data.user);
+    var renderedFromCache = false;
+    try {
+      var cachedRaw = localStorage.getItem(cacheKey);
+      if (cachedRaw) {
+        var cachedEvents = JSON.parse(cachedRaw);
+        if (Array.isArray(cachedEvents) && cachedEvents.length > 0) {
+          renderArchiveList(cachedEvents, container);
+          renderedFromCache = true;
+        }
+      }
+    } catch (e) { /* localStorage unavailable or invalid cache */ }
+
+    if (!renderedFromCache) {
+      container.innerHTML = `<p style="color: var(--text-muted);">${API.escapeHtml(API.t('home.loading_games'))}</p>`;
     }
 
     try {
-      localStorage.setItem(cacheKey, JSON.stringify(events));
-    } catch (e) { /* storage quota / private mode */ }
+      var data = await API.getEvents('past');
+      var events = data.events || [];
+      lastLoadedArchiveEvents = events;
 
-    renderArchiveList(events, container);
-  } catch (err) {
-    console.error('Failed to load past games archive:', err);
-    if (!renderedFromCache) {
-      container.innerHTML = `
-        <div class="alert alert-error">
-          Failed to load past games archive. Please check your internet connection and refresh.
-        </div>
-      `;
-    }
-  }
-}
+      if (data.user !== undefined) {
+        applyMemberToArchiveUi(data.user);
+      }
 
-function renderArchiveList(events, container) {
-  lastLoadedArchiveEvents = events || [];
+      try {
+        localStorage.setItem(cacheKey, JSON.stringify(events));
+      } catch (e) { /* storage quota / private mode */ }
 
-  if (events.length === 0) {
-    container.innerHTML = `
-      <div class="card" style="text-align: center; padding: 48px 20px;">
-        <div style="font-size: 2.8rem; margin-bottom: 12px;">📜</div>
-        <h3 style="color: var(--secondary); margin-bottom: 8px;">
-          ${API.escapeHtml(API.t('archive.no_games', 'No past games found in the archive yet.'))}
-        </h3>
-        <p style="color: var(--text-muted); max-width: 440px; margin: 0 auto 20px;">
-          Once upcoming games conclude, their boxscores, attendance turnouts, and discussion recaps are archived here.
-        </p>
-        <a href="/index.html" class="btn btn-primary btn-sm">
-          ${API.escapeHtml(API.t('archive.back_to_upcoming', '← Back to Upcoming Games'))}
-        </a>
-      </div>
-    `;
-    return;
-  }
-
-  const user = API.currentUser;
-  const canManage = Boolean(user && (user.canManageEvents || user.isAdmin));
-
-  container.innerHTML = `
-    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 18px;">
-      ${events.map(ev => {
-        const dateFormatted = API.formatDateTime(ev.event_date);
-        const translatedTitle = API.translateEventTitle(ev);
-        const isRainout = ev.status === 'rainout';
-
-        const statusBadge = isRainout
-          ? `<span class="badge badge-rainout">🌧️ ${API.escapeHtml(API.t('event.rained_out_badge', 'Rained Out'))}</span>`
-          : `<span class="badge badge-gray">⚾ ${API.escapeHtml(API.t('home.sunday_game_badge', 'Sunday Game'))}</span>`;
-
-        return `
-          <div class="card" style="display: flex; flex-direction: column; justify-content: space-between; margin-bottom: 0; ${isRainout ? 'border-left: 4px solid #38bdf8;' : ''}">
-            <div>
-              <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
-                ${statusBadge}
-                ${ev.my_rsvp && ev.my_rsvp.status === 'attending'
-                  ? `<span class="badge badge-green">${API.escapeHtml(API.t('home.you_are_attending', 'You Attended'))}</span>`
-                  : ''}
-              </div>
-              <h3 style="font-size: 1.15rem; color: var(--secondary); margin-bottom: 6px;">
-                <a href="/event.html?id=${ev.id}" style="color: inherit; text-decoration: none;">
-                  ${API.escapeHtml(translatedTitle)}
-                </a>
-              </h3>
-              <p style="font-size: 0.88rem; font-weight: 600; color: var(--text-main); margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
-                <span style="color: var(--secondary);">${API.icon('calendar', 15)}</span> ${dateFormatted}
-              </p>
-              <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
-                <span style="color: var(--primary);">${API.icon('pin', 15)}</span> ${API.escapeHtml(ev.location)}
-              </p>
-            </div>
-
-            <div style="border-top: 1px solid var(--border); padding-top: 12px; margin-top: 12px; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
-              ${isRainout
-                ? `<span style="font-weight: 700; color: #0284c7; font-size: 0.88rem;">🌧️ ${API.escapeHtml(API.t('event.rained_out_badge', 'Rained Out'))}</span>`
-                : (ev.actual_attendance != null
-                  ? `
-                    <div style="display: flex; flex-direction: column;">
-                      <span style="font-weight: 800; color: var(--secondary); font-size: 0.95rem; display: inline-flex; align-items: center; gap: 5px; font-variant-numeric: tabular-nums;">
-                        <span>⚾</span> <span>${API.escapeHtml(API.t('home.players_played', { count: ev.actual_attendance }))}</span>
-                      </span>
-                      <span style="font-size: 0.74rem; color: var(--text-muted); font-weight: 500;">
-                        ${API.escapeHtml(API.t('home.online_rsvps_sub', { count: ev.attendee_count }))}
-                      </span>
-                      ${canManage ? `
-                        <button type="button" data-action="edit-archive-turnout" data-event-id="${ev.id}" data-attendance="${ev.actual_attendance}" class="btn btn-outline btn-sm" style="font-size: 0.72rem; padding: 2px 6px; margin-top: 4px; align-self: flex-start;">
-                          ✏️ Edit Turnout
-                        </button>
-                      ` : ''}
-                    </div>
-                  `
-                  : `
-                    <div style="display: flex; flex-direction: column;">
-                      <span style="font-weight: 700; color: var(--primary); font-size: 0.9rem; display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums;">
-                        ${API.icon('users', 16)} ${API.escapeHtml(API.t('home.on_roster_count', { count: ev.attendee_count }))}
-                      </span>
-                      ${canManage ? `
-                        <button type="button" data-action="record-archive-turnout" data-event-id="${ev.id}" class="btn btn-primary btn-sm" style="font-size: 0.75rem; padding: 2px 8px; margin-top: 4px; align-self: flex-start;">
-                          📊 Record Turnout
-                        </button>
-                      ` : ''}
-                    </div>
-                  `
-                )
-              }
-              <a href="/event.html?id=${ev.id}" class="btn btn-outline btn-sm" style="white-space: nowrap;">
-                ${API.escapeHtml(API.t('home.view_game', 'View Game →'))}
-              </a>
-            </div>
+      renderArchiveList(events, container);
+    } catch (err) {
+      console.error('Failed to load past games archive:', err);
+      if (!renderedFromCache) {
+        container.innerHTML = `
+          <div class="alert alert-error">
+            Failed to load past games archive. Please check your internet connection and refresh.
           </div>
         `;
-      }).join('')}
-    </div>
-  `;
-
-  if (!container.dataset.cspBound) {
-    container.dataset.cspBound = '1';
-    container.addEventListener('click', function(e) {
-      const btn = e.target.closest('[data-action]');
-      if (!btn || !container.contains(btn)) return;
-      const action = btn.dataset.action;
-      const eventId = parseInt(btn.dataset.eventId, 10);
-      if (action === 'edit-archive-turnout') {
-        window.quickEditArchiveTurnout(eventId, parseInt(btn.dataset.attendance, 10));
-      } else if (action === 'record-archive-turnout') {
-        window.quickRecordArchiveTurnout(eventId);
       }
-    });
-  }
-}
-
-async function promptArchiveTurnout(eventId, message, defaultValue) {
-  if (!window.PBFDialog) return;
-  const current = await window.PBFDialog.prompt(message, defaultValue !== undefined ? defaultValue : '', {
-    title: API.t('archive.turnout_title', 'Game Attendance'),
-    inputType: 'number'
-  });
-  if (current === null) return;
-  const count = parseInt(String(current).trim(), 10);
-  if (isNaN(count) || count < 0) {
-    window.PBFDialog.toast(API.t('archive.invalid_attendance', 'Please enter a valid attendance number.'), { type: 'error' });
-    return;
-  }
-  try {
-    const res = await API.updateEvent(eventId, { actual_attendance: count });
-    if (res && res.error) {
-      window.PBFDialog.toast(res.error, { type: 'error' });
-    } else {
-      window.PBFDialog.toast(API.t('archive.turnout_saved', 'Attendance saved.'), { type: 'success' });
-      await loadArchiveGames();
     }
-  } catch (err) {
-    window.PBFDialog.toast(API.t('archive.save_failed', 'Failed to save turnout.'), { type: 'error' });
   }
-}
 
-window.quickRecordArchiveTurnout = function(eventId) {
-  return promptArchiveTurnout(eventId, API.t('archive.record_prompt', 'Enter the number of players who attended and played in this game:'), '');
-};
+  /**
+   * @param {any[]} events
+   * @param {HTMLElement} container
+   */
+  function renderArchiveList(events, container) {
+    lastLoadedArchiveEvents = events || [];
 
-window.quickEditArchiveTurnout = function(eventId, currentCount) {
-  return promptArchiveTurnout(eventId, API.t('archive.edit_prompt', 'Update actual headcount for this game:'), currentCount);
-};
+    if (events.length === 0) {
+      container.innerHTML = `
+        <div class="card" style="text-align: center; padding: 48px 20px;">
+          <div style="font-size: 2.8rem; margin-bottom: 12px;">📜</div>
+          <h3 style="color: var(--secondary); margin-bottom: 8px;">
+            ${API.escapeHtml(API.t('archive.no_games', 'No past games found in the archive yet.'))}
+          </h3>
+          <p style="color: var(--text-muted); max-width: 440px; margin: 0 auto 20px;">
+            Once upcoming games conclude, their boxscores, attendance turnouts, and discussion recaps are archived here.
+          </p>
+          <a href="/index.html" class="btn btn-primary btn-sm">
+            ${API.escapeHtml(API.t('archive.back_to_upcoming', '← Back to Upcoming Games'))}
+          </a>
+        </div>
+      `;
+      return;
+    }
 
-document.addEventListener('DOMContentLoaded', initArchive);
+    var member = API.currentUser;
+    var canManage = Boolean(member && (member.canManageEvents || member.isAdmin));
+
+    container.innerHTML = `
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 18px;">
+        ${events.map(function (ev) {
+          var dateFormatted = API.formatDateTime(ev.event_date);
+          var translatedTitle = API.translateEventTitle(ev);
+          var isRainout = ev.status === 'rainout';
+
+          var statusBadge = isRainout
+            ? `<span class="badge badge-rainout">🌧️ ${API.escapeHtml(API.t('event.rained_out_badge', 'Rained Out'))}</span>`
+            : `<span class="badge badge-gray">⚾ ${API.escapeHtml(API.t('home.sunday_game_badge', 'Sunday Game'))}</span>`;
+
+          return `
+            <div class="card" style="display: flex; flex-direction: column; justify-content: space-between; margin-bottom: 0; ${isRainout ? 'border-left: 4px solid #38bdf8;' : ''}">
+              <div>
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                  ${statusBadge}
+                  ${ev.my_rsvp && ev.my_rsvp.status === 'attending'
+                    ? `<span class="badge badge-green">${API.escapeHtml(API.t('home.you_are_attending', 'You Attended'))}</span>`
+                    : ''}
+                </div>
+                <h3 style="font-size: 1.15rem; color: var(--secondary); margin-bottom: 6px;">
+                  <a href="/event.html?id=${ev.id}" style="color: inherit; text-decoration: none;">
+                    ${API.escapeHtml(translatedTitle)}
+                  </a>
+                </h3>
+                <p style="font-size: 0.88rem; font-weight: 600; color: var(--text-main); margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                  <span style="color: var(--secondary);">${API.icon('calendar', 15)}</span> ${dateFormatted}
+                </p>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+                  <span style="color: var(--primary);">${API.icon('pin', 15)}</span> ${API.escapeHtml(ev.location)}
+                </p>
+              </div>
+
+              <div style="border-top: 1px solid var(--border); padding-top: 12px; margin-top: 12px; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                ${isRainout
+                  ? `<span style="font-weight: 700; color: #0284c7; font-size: 0.88rem;">🌧️ ${API.escapeHtml(API.t('event.rained_out_badge', 'Rained Out'))}</span>`
+                  : (ev.actual_attendance != null
+                    ? `
+                      <div style="display: flex; flex-direction: column;">
+                        <span style="font-weight: 800; color: var(--secondary); font-size: 0.95rem; display: inline-flex; align-items: center; gap: 5px; font-variant-numeric: tabular-nums;">
+                          <span>⚾</span> <span>${API.escapeHtml(API.t('home.players_played', { count: ev.actual_attendance }))}</span>
+                        </span>
+                        <span style="font-size: 0.74rem; color: var(--text-muted); font-weight: 500;">
+                          ${API.escapeHtml(API.t('home.online_rsvps_sub', { count: ev.attendee_count }))}
+                        </span>
+                        ${canManage ? `
+                          <button type="button" data-action="edit-archive-turnout" data-event-id="${ev.id}" data-attendance="${ev.actual_attendance}" class="btn btn-outline btn-sm" style="font-size: 0.72rem; padding: 2px 6px; margin-top: 4px; align-self: flex-start;">
+                            ✏️ Edit Turnout
+                          </button>
+                        ` : ''}
+                      </div>
+                    `
+                    : `
+                      <div style="display: flex; flex-direction: column;">
+                        <span style="font-weight: 700; color: var(--primary); font-size: 0.9rem; display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums;">
+                          ${API.icon('users', 16)} ${API.escapeHtml(API.t('home.on_roster_count', { count: ev.attendee_count }))}
+                        </span>
+                        ${canManage ? `
+                          <button type="button" data-action="record-archive-turnout" data-event-id="${ev.id}" class="btn btn-primary btn-sm" style="font-size: 0.75rem; padding: 2px 8px; margin-top: 4px; align-self: flex-start;">
+                            📊 Record Turnout
+                          </button>
+                        ` : ''}
+                      </div>
+                    `
+                  )
+                }
+                <a href="/event.html?id=${ev.id}" class="btn btn-outline btn-sm" style="white-space: nowrap;">
+                  ${API.escapeHtml(API.t('home.view_game', 'View Game →'))}
+                </a>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+
+    if (!container.dataset.cspBound) {
+      container.dataset.cspBound = '1';
+      container.addEventListener('click', function (e) {
+        var target = /** @type {HTMLElement|null} */ (e.target);
+        var btn = target && typeof target.closest === 'function' ? /** @type {HTMLElement|null} */ (target.closest('[data-action]')) : null;
+        if (!btn || !container.contains(btn)) return;
+        var action = btn.dataset.action;
+        var eventId = parseInt(btn.dataset.eventId || '0', 10);
+        if (action === 'edit-archive-turnout') {
+          editArchiveTurnout(eventId, parseInt(btn.dataset.attendance || '0', 10));
+        } else if (action === 'record-archive-turnout') {
+          recordArchiveTurnout(eventId);
+        }
+      });
+    }
+  }
+
+  /**
+   * @param {number} eventId
+   * @param {string} message
+   * @param {string|number} defaultValue
+   */
+  async function promptArchiveTurnout(eventId, message, defaultValue) {
+    if (!window.PBFDialog) return;
+    var current = await window.PBFDialog.prompt(message, defaultValue !== undefined ? String(defaultValue) : '', {
+      title: API.t('archive.turnout_title', 'Game Attendance'),
+      inputType: 'number'
+    });
+    if (current === null) return;
+    var count = parseInt(String(current).trim(), 10);
+    if (isNaN(count) || count < 0) {
+      window.PBFDialog.toast(API.t('archive.invalid_attendance', 'Please enter a valid attendance number.'), { type: 'error' });
+      return;
+    }
+    try {
+      var res = await API.updateEvent(eventId, { actual_attendance: count });
+      if (res && res.error) {
+        window.PBFDialog.toast(res.error, { type: 'error' });
+      } else {
+        window.PBFDialog.toast(API.t('archive.turnout_saved', 'Attendance saved.'), { type: 'success' });
+        await loadArchiveEvents();
+      }
+    } catch (err) {
+      window.PBFDialog.toast(API.t('archive.save_failed', 'Failed to save turnout.'), { type: 'error' });
+    }
+  }
+
+  /**
+   * @param {number} eventId
+   */
+  function recordArchiveTurnout(eventId) {
+    return promptArchiveTurnout(eventId, API.t('archive.record_prompt', 'Enter the number of players who attended and played in this game:'), '');
+  }
+
+  /**
+   * @param {number} eventId
+   * @param {number} currentCount
+   */
+  function editArchiveTurnout(eventId, currentCount) {
+    return promptArchiveTurnout(eventId, API.t('archive.edit_prompt', 'Update actual headcount for this game:'), currentCount);
+  }
+
+  document.addEventListener('DOMContentLoaded', initArchive);
+})();

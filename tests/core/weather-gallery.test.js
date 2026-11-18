@@ -271,7 +271,9 @@ module.exports = async function registerWeatherGalleryTests(ctx, t9) {
     const adminHtml = fs.readFileSync(path.join(publicDir, 'admin.html'), 'utf8');
     assert.ok(adminHtml.includes('/js/weather.js'), 'admin.html must script-load weather.js');
 
-    const adminJs = fs.readFileSync(path.join(publicDir, 'js', 'admin.js'), 'utf8');
+    const adminJs = ['admin/backup.js', 'admin/events-tasks.js', 'admin/users-moderation.js', 'admin/content-media.js', 'admin.js']
+      .map((f) => fs.readFileSync(path.join(publicDir, 'js', f), 'utf8'))
+      .join('\n');
     assert.ok(adminJs.includes('toggleAdminWeatherPanel'), 'admin.js must define toggleAdminWeatherPanel');
 
     const indexHtml = fs.readFileSync(path.join(publicDir, 'index.html'), 'utf8');
@@ -837,7 +839,9 @@ module.exports = async function registerWeatherGalleryTests(ctx, t9) {
     assert.ok(adminHtml.includes('setting-appscript-url'), 'admin.html must contain #setting-appscript-url for Google Drive');
     assert.ok(adminHtml.includes('id="setting-disallow-zero-login-media"'), 'admin.html must contain #setting-disallow-zero-login-media checkbox');
 
-    const adminJs = fs.readFileSync(path.join(publicDir, 'js', 'admin.js'), 'utf8');
+    const adminJs = ['admin/backup.js', 'admin/events-tasks.js', 'admin/users-moderation.js', 'admin/content-media.js', 'admin.js']
+      .map((f) => fs.readFileSync(path.join(publicDir, 'js', f), 'utf8'))
+      .join('\n');
     assert.ok(adminJs.includes('setupMediaCarouselsAdmin'), 'admin.js must implement setupMediaCarouselsAdmin');
     assert.ok(adminJs.includes('appscript_upload_url'), 'admin.js must handle appscript_upload_url');
     assert.ok(adminJs.includes('disallow_zero_login_media'), 'admin.js must handle disallow_zero_login_media policy setting');
@@ -1029,7 +1033,9 @@ module.exports = async function registerWeatherGalleryTests(ctx, t9) {
     assert.ok(eventHtml.includes('id="bp-signup-modal"'), 'event.html must include bp-signup-modal');
     assert.ok(eventHtml.includes('id="rsvp-bp-signup"'), 'event.html must include rsvp-bp-signup checkbox');
 
-    const eventJs = fs.readFileSync(path.join(publicDir, 'js', 'event.js'), 'utf8');
+    const eventJs = ['event/rsvp.js', 'event/organizer.js', 'event/bp.js', 'event.js']
+      .map((rel) => fs.readFileSync(path.join(publicDir, 'js', rel), 'utf8'))
+      .join('\n');
     assert.ok(eventJs.includes('function renderBpOrder'), 'event.js must define renderBpOrder');
     assert.ok(eventJs.includes('function openBpModal'), 'event.js must define openBpModal');
     assert.ok(eventJs.includes('function setupBpOrderUi'), 'event.js must define setupBpOrderUi');

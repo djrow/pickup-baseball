@@ -10,6 +10,12 @@ declare const module: {
   exports: any;
 };
 
+declare const require: {
+  (id: string): any;
+  resolve(id: string): string;
+  cache?: Record<string, any>;
+};
+
 interface PBFUser {
   id: number;
   name: string;
@@ -81,7 +87,7 @@ interface PBFDialogFormField {
   label?: string;
   type?: string;
   placeholder?: string;
-  value?: string;
+  value?: string | number;
   checked?: boolean;
   required?: boolean;
   options?: Array<{ value: string; label: string }>;
@@ -103,14 +109,80 @@ interface PBFDialogFacade {
   confirm(message: string, options?: PBFDialogFormOptions): Promise<boolean>;
   confirmWithCheckbox(
     message: string,
+    checkboxLabelOrOptions?: string | PBFDialogFormOptions,
     options?: PBFDialogFormOptions
   ): Promise<{ confirmed: boolean; checked: boolean }>;
-  prompt(message: string, options?: PBFDialogFormOptions): Promise<string | null>;
+  prompt(message: string, defaultValueOrOptions?: string | PBFDialogFormOptions, options?: PBFDialogFormOptions): Promise<string | null>;
   form(
     titleOrMessage: string,
     fieldsOrOptions: PBFDialogFormField[] | PBFDialogFormOptions,
     options?: PBFDialogFormOptions
   ): Promise<Record<string, any> | null>;
+  trapFocus?(containerEl: Element, opts?: Record<string, any>): { release(): void; update(): void };
+}
+
+interface PBFAdminUIFacade {
+  state: Record<string, any>;
+  cloneList(arr: any[]): any[];
+  isAdminCertifiedShiftsEnabled(): boolean;
+  applyAdminFeatureFlags(): void;
+  applyRoleUI(user: PBFUser | null): void;
+  showAlert(msg: string, isError?: boolean): void;
+  initAdmin(): Promise<void>;
+  loadDefaultDuties(): Promise<void>;
+  setDefaultDateTime(): void;
+  readEditableTaskRows(containerId: string): any[];
+  renderEditableTaskRows(containerId: string, list: any[], removeKind: string, emptyHtml: string): void;
+  renderTaskBuilder(): void;
+  renderDefaultTemplateList(): void;
+  removeTaskBuilderRow(index: number): void;
+  removeTemplateRow(index: number): void;
+  setupTaskBuilder(): void;
+  setupDefaultTemplateEditor(): void;
+  saveDefaultsToBackend(dutiesToSave: any[]): Promise<void>;
+  setupQuickSundayButton(): void;
+  loadCandidateMembers(): Promise<void>;
+  renderCandidateMembers(members: any[]): void;
+  updateSelectedMembersCount(): void;
+  setupCreateForm(): void;
+  setupAdminEventSearch(): void;
+  renderAdminEventCardHtml(ev: any): string;
+  renderAdminEventsList(query?: string): void;
+  loadAdminEvents(): Promise<void>;
+  toggleAdminWeatherPanel(eventId: number): Promise<void>;
+  toggleQuickTurnout(eventId: number): void;
+  saveAdminQuickTurnout(e: Event, eventId: number): Promise<void>;
+  toggleEditEventPanel(eventId: number): void;
+  saveEditedEvent(eventId: number): Promise<void>;
+  toggleTaskManager(eventId: number): Promise<void>;
+  renderTaskManagerContent(eventId: number): Promise<void>;
+  addDutyToEvent(eventId: number): Promise<void>;
+  editDutyInline(eventId: number, dutyId: number, encodedTitle: string, encodedDesc: string, slots: number, grantsCoordinator: boolean, requiredBadge: string): Promise<void>;
+  deleteDutyInline(eventId: number, dutyId: number): Promise<void>;
+  sendReminders(eventId: number): Promise<void>;
+  deleteEvent(eventId: number): Promise<void>;
+  setupAdminBackupButton?(): void;
+  setupAdminSetupHealthCard?(): Promise<void>;
+  setupAdminUserManagement?(user: PBFUser): Promise<void>;
+  setupAdminSecurity?(): Promise<void>;
+  setupCommunityHighlightsAdmin?(): void;
+  setupMediaCarouselsAdmin?(): Promise<void>;
+  updateAdminPostEventDropdown?(events: any[]): void;
+  [key: string]: any;
+}
+
+interface ClubhouseUIFacade {
+  uiState: Record<string, any>;
+  loadUpcomingEventCard(): void;
+  renderUpcomingEventCard(data: any): void;
+  renderMembersDirectory(): void;
+  confirmAndTogglePeerBlock(targetUserId: number | string, targetUserName?: string): Promise<boolean>;
+  openOrCreateDmWithUser(targetUserId: number | string, targetUserName?: string): Promise<any>;
+  handleJoinVoiceLounge(channelId: number | string): Promise<any>;
+  renderVoiceVideoTiles(): void;
+  isClubhouseTurnConfigured(): boolean;
+  syncPrivacyRelayToggleUi(): void;
+  [key: string]: any;
 }
 
 interface PBFAPIError extends Error {
@@ -122,6 +194,7 @@ interface PBFAPIError extends Error {
 
 interface PBFApiFacade {
   CLIENT_VERSION: string;
+  APP_VERSION?: string;
   currentUser?: PBFUser | null;
   SUPPORTED_LANGUAGES: Array<{ code: string; label: string; dir?: string; [key: string]: any }>;
   COLOR_THEMES: Array<{ id: string; label: string; [key: string]: any }>;
@@ -135,6 +208,8 @@ interface PBFApiFacade {
   setLang(lang: string): Promise<void>;
   applyTranslations(root?: Document | Element): void;
   initI18n(): Promise<void>;
+  loadSurfaceDict?(surface: string): Promise<any>;
+  activeSurfaces?: string[];
   getThemeMode(): string;
   getEffectiveTheme(): string;
   getTheme(): string;
@@ -162,12 +237,18 @@ interface PBFApiFacade {
   clearClubhouseIndexedDb(): Promise<void>;
   clearDataCaches(skipIndexedDb?: boolean): Promise<void>;
   recordDiagnostic(entry: Record<string, any>): void;
+  clearDiagnostics(): void;
+  formatDiagnosticsText?(extraDiagnostic?: any): string;
   request(method: string, url: string, body?: any, opts?: PBFApiRequestOptions): Promise<any>;
   getPublicConfig(forceRefresh?: boolean): Promise<Record<string, any>>;
   isFeatureEnabled(flagKey: string, configOverride?: Record<string, any> | null): boolean;
   getMe(): Promise<PBFUser | null>;
   regenerateCalendarToken(): Promise<any>;
   logout(): Promise<void>;
+  exportMyData(): Promise<any>;
+  deleteMyAccount(payload: Record<string, any>): Promise<any>;
+  requestVisitorErasure(email: string): Promise<any>;
+  confirmVisitorErasure(payload: Record<string, any>): Promise<any>;
   getPosts(): Promise<any>;
   createPost(payload: Record<string, any>): Promise<any>;
   deletePost(id: number | string): Promise<any>;
@@ -177,20 +258,24 @@ interface PBFApiFacade {
   updateMedia(id: number | string, payload: Record<string, any>): Promise<any>;
   deleteMedia(id: number | string, token?: string): Promise<any>;
   getEvents(filter?: string): Promise<any>;
-  getEvent(id: number | string, token?: string): Promise<any>;
-  postRsvp(id: number | string, payload: Record<string, any>): Promise<any>;
-  postComment(id: number | string, payload: Record<string, any>): Promise<any>;
-  deleteComment(eventId: number | string, commentId: number | string): Promise<any>;
-  removeAttendee(eventId: number | string, attendeeId: number | string): Promise<any>;
-  callRainout(id: number | string, payload?: Record<string, any>): Promise<any>;
-  reopenEvent(id: number | string, payload?: Record<string, any>): Promise<any>;
-  sendRainoutEmail(id: number | string, payload?: Record<string, any>): Promise<any>;
-  sendReminders(id: number | string): Promise<any>;
-  getBpOrder(eventId: number | string, token?: string): Promise<any>;
-  postBpSignup(eventId: number | string, payload: Record<string, any>): Promise<any>;
-  updateBpSignup(eventId: number | string, signupId: number | string, payload: Record<string, any>): Promise<any>;
-  deleteBpSignup(eventId: number | string, signupId: number | string, payload?: Record<string, any>): Promise<any>;
-  clearBpOrder(eventId: number | string): Promise<any>;
+  getEvent(id: number | string | null, token?: string, invite?: string): Promise<any>;
+  getEventInvite(id: number | string | null): Promise<any>;
+  toggleEventInvite(id: number | string | null, enabled: boolean): Promise<any>;
+  rotateEventInvite(id: number | string | null): Promise<any>;
+  postRsvp(id: number | string | null, payload: Record<string, any>): Promise<any>;
+  requestRsvpEditLink(id: number | string | null, email: string): Promise<any>;
+  postComment(id: number | string | null, payload: Record<string, any>): Promise<any>;
+  deleteComment(eventId: number | string | null, commentId: number | string): Promise<any>;
+  removeAttendee(eventId: number | string | null, attendeeId: number | string): Promise<any>;
+  callRainout(id: number | string | null, payload?: Record<string, any>): Promise<any>;
+  reopenEvent(id: number | string | null, payload?: Record<string, any>): Promise<any>;
+  sendRainoutEmail(id: number | string | null, payload?: Record<string, any>): Promise<any>;
+  sendReminders(id: number | string | null): Promise<any>;
+  getBpOrder(eventId: number | string | null, token?: string): Promise<any>;
+  postBpSignup(eventId: number | string | null, payload: Record<string, any>): Promise<any>;
+  updateBpSignup(eventId: number | string | null, signupId: number | string, payload: Record<string, any>): Promise<any>;
+  deleteBpSignup(eventId: number | string | null, signupId: number | string, payload?: Record<string, any>): Promise<any>;
+  clearBpOrder(eventId: number | string | null): Promise<any>;
   sendLoginCode(email: string, name?: string, sharedDevice?: boolean): Promise<any>;
   verifyLoginCode(email: string, code: string, sharedDevice?: boolean): Promise<any>;
   getActiveSessions(): Promise<any>;
@@ -218,10 +303,15 @@ interface PBFApiFacade {
   getWaiverStatus(): Promise<any>;
   signWaiver(payload: Record<string, any>): Promise<any>;
   updateUserWaiverStatus(userId: number | string, waiverStatus: string): Promise<any>;
+  updateAttendeeWaiverStatus(attendeeId: number | string, waiverStatus: string): Promise<any>;
   deleteUser(userId: number | string, ban?: boolean, reason?: string): Promise<any>;
+  getQuarantinedWaivers(): Promise<any>;
+  purgeQuarantinedWaivers(): Promise<any>;
   getBannedEmails(): Promise<any>;
   banEmail(email: string, reason?: string): Promise<any>;
   unbanEmail(id: number | string): Promise<any>;
+  getSuppressions(): Promise<any>;
+  clearSuppression(email: string): Promise<any>;
   getSettings(): Promise<any>;
   updateSettings(settings: Record<string, any>): Promise<any>;
   testAppscript(url: string): Promise<any>;
@@ -230,7 +320,7 @@ interface PBFApiFacade {
   readEditGameFields(prefix: string): Record<string, any>;
   formatDate(isoString: string): string;
   formatDateTime(isoString: string): string;
-  isoToPacificLocalInput(isoString: string): { date: string; time: string } | string;
+  isoToPacificLocalInput(isoString: string): string;
   localToPacificIso(dateString: string, timeString?: string): string;
   getNextSundayNoonPacificIso(): string;
   getGoogleCalendarUrl(ev: PBFEvent | Record<string, any>): string;
@@ -252,14 +342,17 @@ interface PBFApiFacade {
   safeAvatarUrl(rawUrl: string): string;
   icon(name: string, size?: number): string;
   renderCookieNotice(): void;
+  updateOfflineUi?(): void;
+  _eventUi?: Record<string, any>;
+  _adminUi?: PBFAdminUIFacade;
 }
 
 interface WeatherServiceFacade {
   HEURISTIC_CONFIG: Record<string, any>;
-  extractCoordinates(text: string): { lat: number; lon: number } | null;
-  getCoordsForLocation(location: string): { lat: number; lon: number; name?: string };
-  resolveCoordsForLocation(location: string): Promise<{ lat: number; lon: number; name?: string }>;
-  getWeatherCodeInfo(code: number): { label: string; emoji: string; [key: string]: any };
+  extractCoordinates(text: string): { latitude: number; longitude: number; name?: string; [key: string]: any } | null;
+  getCoordsForLocation(location: string): { latitude?: number; longitude?: number; lat?: number; lon?: number; name?: string; [key: string]: any };
+  resolveCoordsForLocation(location: string): Promise<{ latitude?: number; longitude?: number; lat?: number; lon?: number; name?: string; [key: string]: any }>;
+  getWeatherCodeInfo(code: number): { emoji: string; condition?: string; label?: string; isRain?: boolean; [key: string]: any };
   getPacificDateParts(dateInput?: Date | string | number): Record<string, any>;
   getPacificTodayDateKey(): string;
   fetchForecast(lat: number, lon: number): Promise<any>;
@@ -268,96 +361,156 @@ interface WeatherServiceFacade {
   renderDailyRainTrackHtml(days: any[]): string;
   renderMiniDailyRainRowHtml(days: any[]): string;
   getForecastForGame(isoDate: string, location?: string): Promise<Record<string, any>>;
-  renderAssistantWidget(containerEl: Element | null, isoDate: string, location?: string, options?: Record<string, any>): Promise<void>;
+  renderAssistantWidget(containerEl: Element | string | null, isoDateOrForecast?: string | Record<string, any> | null, locationOrOptions?: string | Record<string, any>, options?: Record<string, any>): Promise<void> | void;
   populateCardWeatherBadges(): void;
 }
 
 interface ClubhouseCryptoFacade {
   clearMemoryKeys(): void;
   setPinOwner(userId: number): void;
-  stripJpegMetadata(buffer: ArrayBuffer): Promise<ArrayBuffer>;
+  stripJpegMetadata(buffer: ArrayBuffer): any;
   arrayBufferToBase64(buffer: ArrayBuffer | Uint8Array): string;
   base64ToUint8Array(base64: string): Uint8Array;
   generateIdentityKeyPair(): Promise<Record<string, any>>;
   deriveVaultKeyFromPassphrase(passphrase: string, saltBase64: string): Promise<CryptoKey>;
   encryptVault(vaultObj: any, passphrase: string): Promise<Record<string, any>>;
-  decryptVault(vaultPayload: Record<string, any>, passphrase: string): Promise<any>;
+  decryptVault(vaultPayload: Record<string, any> | string, passphrase: string, saltBase64?: string, ivBase64?: string): Promise<any>;
   generateChannelKey(): Promise<CryptoKey>;
   deriveEcdhSharedKey(privateKey: CryptoKey, publicKeyJwk: JsonWebKey): Promise<CryptoKey>;
-  wrapChannelKey(channelKey: CryptoKey, wrappingKey: CryptoKey): Promise<string>;
-  unwrapChannelKey(wrappedBase64: string, wrappingKey: CryptoKey): Promise<CryptoKey>;
-  encryptPayload(key: CryptoKey, plaintext: string): Promise<string>;
-  decryptPayload(key: CryptoKey, ciphertext: string): Promise<string>;
-  encryptBinaryBuffer(key: CryptoKey, buffer: ArrayBuffer): Promise<ArrayBuffer>;
-  decryptBinaryBuffer(key: CryptoKey, buffer: ArrayBuffer): Promise<ArrayBuffer>;
-  enrollIdentityWithPassphrase(passphrase: string): Promise<Record<string, any>>;
-  restoreIdentityFromServerVault(vaultRecord: Record<string, any>, passphrase: string): Promise<Record<string, any>>;
+  wrapChannelKey(channelKey: CryptoKey, wrappingKey: CryptoKey): Promise<any>;
+  unwrapChannelKey(wrappedBase64: string, wrappingKey: CryptoKey, wrapIv?: string, extractable?: boolean): Promise<CryptoKey>;
+  encryptPayload(key: CryptoKey, plaintext: string): Promise<any>;
+  decryptPayload(key: CryptoKey, ciphertext: string, iv?: string): Promise<string>;
+  encryptBinaryBuffer(key: CryptoKey, buffer: ArrayBuffer): Promise<any>;
+  decryptBinaryBuffer(key: CryptoKey, buffer: ArrayBuffer, iv?: string): Promise<ArrayBuffer>;
+  enrollIdentityWithPassphrase(passphrase: string, usePrivacyRelay?: boolean): Promise<Record<string, any>>;
+  restoreIdentityFromServerVault(vaultRecordOrPassphrase: Record<string, any> | string, passphrase?: string): Promise<Record<string, any>>;
   hasLocalIdentityKeys(): Promise<boolean>;
   getStoredIdentityKeys(): Promise<Record<string, any> | null>;
   toNonExtractableAesKey(rawOrJwk: any): Promise<CryptoKey>;
   computeKeyFingerprint(publicKeyJwk: JsonWebKey): Promise<string>;
-  computeSafetyNumber(jwkA: JsonWebKey, jwkB: JsonWebKey): Promise<string>;
+  computeSafetyNumber(userIdA: number | JsonWebKey, jwkA: JsonWebKey, userIdB?: number, jwkB?: JsonWebKey): Promise<string>;
   getPeerVerificationState(peerUserId: number, currentFingerprint: string): Promise<Record<string, any>>;
   markPeerFingerprintVerified(peerUserId: number, fingerprint: string): Promise<Record<string, any>>;
+  clearPeerVerificationPin?(peerUserId: number): Promise<void>;
+  decryptExportBundle?(bundle: Record<string, any>, opts?: Record<string, any>): Promise<any>;
   idbGet(key: string): Promise<any>;
   idbPut(key: string, value: any): Promise<void>;
+  idbDelete?(key: string): Promise<void>;
+  idbDeleteByPrefix?(prefix: string): Promise<void>;
 }
 
 interface ClubhouseStoreFacade {
+  DB_NAME: string;
+  DB_VERSION: number;
+  VISIBLE_ACTIVE_SYNC_MS: number;
+  VISIBLE_IDLE_SYNC_MS: number;
+  HIDDEN_SYNC_MS: number;
+  SYNC_ACTIVE_MS: number;
+  SYNC_IDLE_MS: number;
+  SYNC_DEEP_IDLE_MS: number;
+  SYNC_VOICE_HIDDEN_MS: number;
+  ACTIVE_CHAT_WINDOW_MS: number;
+  DEEP_IDLE_WINDOW_MS: number;
+  CHUNK_SIZE_BYTES: number;
   state: Record<string, any>;
-  subscribe(listener: (eventName: string, payload?: any) => void): () => void;
-  bootstrap(): Promise<any>;
-  fetchChannelMessages(channelId: number, opts?: Record<string, any>): Promise<any>;
-  markChannelRead(channelId: number, lastMessageId?: number): Promise<any>;
-  sendMessage(channelId: number, body: string, opts?: Record<string, any>): Promise<any>;
-  createChannel(payload: Record<string, any>): Promise<any>;
-  updateChannel(channelId: number, payload: Record<string, any>): Promise<any>;
-  deleteChannel(channelId: number): Promise<any>;
-  hideDmChannel(channelId: number): Promise<any>;
-  unhideDmChannel(channelId: number): Promise<any>;
+  subscribe(listener: (eventName: string, payload?: any, state?: any) => void): () => void;
+  emit(eventType: string, detail?: any): void;
+  notify(eventType: string, detail?: any): void;
+  apiRequest(method: string, url: string, body?: any, opts?: Record<string, any>): Promise<any>;
+  createStoreHttpError(res: any, fallbackMsg?: string): PBFAPIError;
+  normalizeIdList(list: any): number[];
+  idListsEqual(a: any[], b: any[]): boolean;
+  findChannelById(channelId: number | string): any;
+  findMessageChannelId(messageId: number | string): number | null;
+  upsertMessageInState(msg: any): void;
+  closeStoreDbHandle(): void;
+  broadcastClearSignal(): void;
+  openStoreDb(): Promise<any>;
+  saveChannelsToIdb(channels: any[]): Promise<void>;
+  clearCryptoIdb(): Promise<void>;
+  clearStoreIdb(storeNames?: string[]): Promise<void>;
+  deleteChannelFromIdb(channelId: number | string): Promise<void>;
+  getMetaFromIdb(key: string): Promise<any>;
+  setMetaInIdb(key: string, value: any): Promise<void>;
+  saveMessagesToIdb(messages: any[]): Promise<void>;
+  loadCachedChannelsFromIdb(): Promise<any[]>;
+  evictErasedUserMessagesFromIdb(erasedUserId: number | string): Promise<void>;
   clearLocalSessionData(): Promise<void>;
+  loadPublicGuestChannels(): Promise<any[]>;
+  bootstrap(): Promise<any>;
+  fetchChannelMessages(channelId: number | string, opts?: Record<string, any>): Promise<any>;
+  markChannelRead(channelId: number | string, lastMessageId?: number): Promise<any>;
+  sendMessage(channelId: number | string, bodyOrOpts?: any, opts?: Record<string, any>): Promise<any>;
+  createChannel(payload: Record<string, any>): Promise<any>;
+  updateChannel(channelId: number | string, payload: Record<string, any>): Promise<any>;
+  deleteChannel(channelId: number | string): Promise<any>;
+  hideDmChannel(channelId: number | string): Promise<any>;
+  unhideDmChannel(channelId: number | string): Promise<any>;
   setClubhouseOptIn(optedIn: boolean): Promise<any>;
-  editMessage(messageId: number, body: string): Promise<any>;
-  deleteMessage(messageId: number): Promise<any>;
-  hideMessage(messageId: number): Promise<any>;
-  unhideMessage(messageId: number): Promise<any>;
-  toggleReaction(messageId: number, emoji: string): Promise<any>;
+  editMessage(messageId: number | string, body: string, channelId?: number | string): Promise<any>;
+  deleteMessage(messageId: number | string): Promise<any>;
+  hideMessage(messageId: number | string, reason?: string): Promise<any>;
+  unhideMessage(messageId: number | string): Promise<any>;
+  toggleReaction(messageId: number | string, emoji: string): Promise<any>;
   submitReport(payload: Record<string, any>): Promise<any>;
-  fetchModerationReports(): Promise<any>;
-  resolveReport(reportId: number, action?: string): Promise<any>;
+  fetchModerationReports(status?: string): Promise<any>;
+  resolveReport(reportId: number | string, action?: string, resolutionNote?: string): Promise<any>;
   fetchModerationUsers(): Promise<any>;
-  setUserGlobalMute(userId: number, muted: boolean, reason?: string): Promise<any>;
-  setUserModerator(userId: number, isModerator: boolean): Promise<any>;
-  muteUserPersonal(userId: number): Promise<any>;
-  unmuteUserPersonal(userId: number): Promise<any>;
-  isUserMutedByMe(userId: number): boolean;
+  setUserGlobalMute(userId: number | string, muted: boolean, reason?: string): Promise<any>;
+  setUserModerator(userId: number | string, isModerator: boolean): Promise<any>;
+  muteUserPersonal(userId: number | string, reason?: string): Promise<any>;
+  unmuteUserPersonal(userId: number | string): Promise<any>;
+  isUserMutedByMe(userId: number | string): boolean;
   fetchBlockedPeers(): Promise<any>;
-  blockPeer(userId: number): Promise<any>;
-  unblockPeer(userId: number): Promise<any>;
-  isPeerBlockedByMe(userId: number): boolean;
-  uploadAttachment(channelId: number, file: File | Blob, opts?: Record<string, any>): Promise<any>;
-  getDmE2eeStatus(channelId: number): Record<string, any>;
-  ensureChannelE2eeKey(channelId: number): Promise<any>;
-  getActiveChannelEpoch(channelId: number): number;
-  getChannelVerificationInfo(channelId: number): Promise<any>;
-  verifyPeerIdentityKey(peerUserId: number, fingerprint: string): Promise<any>;
-  decryptAttachmentToBlobUrl(attachment: Record<string, any>, channelId: number): Promise<string>;
-  redecryptChannelMessages(channelId: number): Promise<void>;
+  blockPeer(userId: number | string): Promise<any>;
+  unblockPeer(userId: number | string): Promise<any>;
+  isPeerBlockedByMe(userId: number | string): boolean;
+  maybeOptimizeChatImage(file: any, rawBuf: ArrayBuffer): Promise<{ buffer: ArrayBuffer; mimeType: string; fileName: string }>;
+  uploadAttachment(channelId: number | string, file: File | Blob, opts?: any): Promise<any>;
+  uploadChunksToGDrive(uploadUrl: string, arrayBuffer: ArrayBuffer, mimeType: string, progressCb: (pct: number, msg: string) => void): Promise<any>;
+  getDmE2eeStatus(channelId: number | string): Promise<Record<string, any>> | Record<string, any>;
+  ensureChannelE2eeKey(channelId: number | string, options?: Record<string, any>): Promise<any>;
+  ensureDmChannelKey(channelId: number | string, options?: Record<string, any>): Promise<any>;
+  getActiveChannelEpoch(channelId: number | string): number;
+  createE2eeError(code: string, msg: string, extra?: Record<string, any>): any;
+  parseJwkSafe(raw: any): any;
+  getChannelParticipantIds(ch: any): number[];
+  memberSetsEqual(aList: any[], bList: any[]): boolean;
+  fetchAndUnwrapChannelShare(channelId: number | string, requestedEpoch: number, idKeys: any, exactEpoch?: boolean): Promise<any>;
+  publishRotatedChannelKey(chNum: number, epoch: number, participantIds: number[], idKeys: any, forceRotate?: boolean): Promise<any>;
+  verifyCachedDmPeersTofu(chObj: any): Promise<void>;
+  getChannelVerificationInfo(channelId: number | string): Promise<any>;
+  verifyPeerIdentityKey(peerUserId: number | string, fingerprint: string): Promise<any>;
+  isServerSystemNotice(msg: any): boolean;
+  maybeDecryptMessage(msg: any): Promise<any>;
+  decryptMessageList(messages: any[]): Promise<any[]>;
+  decryptAttachmentToBlobUrl(attachment: Record<string, any>, channelId?: number | string): Promise<string | null>;
+  redecryptChannelMessages(channelId?: number | string): Promise<any>;
   clearCachedDmKeys(): void;
+  invalidateChannelVerifiedEpoch(channelId: number | string): void;
+  evictChannelDmKeyCache(channelId: number | string): void;
+  revokeAttachmentBlobUrl(attachmentId: number | string): void;
   isDmChannel(channel: Record<string, any> | null | undefined): boolean;
   isPrivateBoardChannel(channel: Record<string, any> | null | undefined): boolean;
   requiresE2eeChannel(channel: Record<string, any> | null | undefined): boolean;
   pollDeltaSync(): Promise<any>;
+  applySyncEventToState(ev: any): any;
+  evictErasedUserState(erasedUid: number | string, payload?: any): Promise<void>;
   markChatActivity(): void;
   isChatRecentlyActive(): boolean;
+  getSteppedSyncDelay(): number;
+  scheduleNextSyncTick(): void;
+  onUserActivity(): void;
   startAdaptiveSyncLoop(): void;
   stopAdaptiveSyncLoop(): void;
-  apiRequest(method: string, url: string, body?: any, opts?: Record<string, any>): Promise<any>;
+  _ui?: ClubhouseUIFacade;
+  [key: string]: any;
 }
 
 interface ClubhouseRTCFacade {
   state: Record<string, any>;
-  onRtcEvent(listener: (eventName: string, payload?: any) => void): () => void;
+  onRtcEvent(listener: (eventName: string, payload?: any, rtcState?: any) => void): () => void;
   setTurnConfigured(configured: boolean): boolean;
   isTurnConfigured(): boolean;
   setIceServers(servers: any[]): any[];

@@ -492,8 +492,12 @@ function registerKeyRotationAuditTests() {
 
     await t.test('6. Client TOFU hard-block (E2EE_KEY_CHANGED) blocks DM encryption/decryption until peer re-verifies & handles key_rotated delta sync', async () => {
       const cryptoJs = fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'crypto.js'), 'utf8');
-      const storeJs = fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'store.js'), 'utf8');
-      const clubhouseJs = fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'clubhouse.js'), 'utf8');
+      const storeJs = ['store.js', 'store/idb.js', 'store/e2ee.js', 'store/sync.js', 'store/actions.js']
+        .map((f) => fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', f), 'utf8'))
+        .join('\n');
+      const clubhouseJs = ['clubhouse/layout.js', 'clubhouse/messages.js', 'clubhouse/e2ee-ui.js', 'clubhouse/panels.js', 'clubhouse.js']
+        .map((f) => fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', f), 'utf8'))
+        .join('\n');
 
       for (const [name, src] of [
         ['crypto.js', cryptoJs],

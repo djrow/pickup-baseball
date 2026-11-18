@@ -108,12 +108,14 @@ module.exports = [
         ClubhouseCrypto: 'readonly',
         ClubhouseRTC: 'readonly',
         ArtStudio: 'readonly',
-        module: 'readonly'
+        module: 'readonly',
+        require: 'readonly'
       }
     },
     rules: {
       ...SHARED_SECURITY_RULES,
-      'no-restricted-syntax': CLIENT_ES6_RESTRICTIONS
+      'no-restricted-syntax': CLIENT_ES6_RESTRICTIONS,
+      'no-implicit-globals': ['error', { lexicalBindings: true }]
     }
   },
   // `api.js` declares top-level `const API = ...`; expose `API` only to other client scripts
@@ -124,26 +126,6 @@ module.exports = [
       globals: {
         API: 'readonly'
       }
-    }
-  },
-
-  // Existing IIFE client modules: enforce zero accidental top-level globals
-  {
-    files: [
-      'public/js/api.js',
-      'public/js/api/*.js',
-      'public/js/art.js',
-      'public/js/clubhouse.js',
-      'public/js/crypto.js',
-      'public/js/dialog.js',
-      'public/js/gallery.js',
-      'public/js/rtc.js',
-      'public/js/store.js',
-      'public/js/waiver.js',
-      'public/js/weather.js'
-    ],
-    rules: {
-      'no-implicit-globals': ['error', { lexicalBindings: true }]
     }
   }
 ];

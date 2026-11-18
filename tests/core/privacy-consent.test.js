@@ -561,7 +561,9 @@ function registerPrivacyConsentTests() {
       const profileHtml = fs.readFileSync(path.join(ROOT_DIR, 'public', 'profile.html'), 'utf8');
       const profileJs = fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'profile.js'), 'utf8');
       const eventHtml = fs.readFileSync(path.join(ROOT_DIR, 'public', 'event.html'), 'utf8');
-      const eventJs = fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'event.js'), 'utf8');
+      const eventJs = ['event/rsvp.js', 'event/organizer.js', 'event/bp.js', 'event.js']
+        .map((rel) => fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', rel), 'utf8'))
+        .join('\n');
       const apiEndpointsJs = fs.existsSync(path.join(ROOT_DIR, 'public', 'js', 'api', 'endpoints.js'))
         ? fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'api', 'endpoints.js'), 'utf8')
         : fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'api.js'), 'utf8');
@@ -808,8 +810,9 @@ function registerPrivacyConsentTests() {
       });
 
       // Visitor with no myRsvp -> visitor-consent-wrap shown, checkboxes unchecked
+      const EventUI = evSandbox.window.API._eventUi;
       evSandbox.window.API.currentUser = null;
-      await evSandbox.applyLoadedEventToDom({
+      await EventUI.applyLoadedEventToDom({
         event: { id: 1, title: 'Sunday Pickup', event_date: upcomingDate, location: 'Field 1', status: 'active', is_allowed_to_rsvp: true },
         duties: [], attendees: [], waitlist: [], comments: [], bp_signups: [],
         canViewRoster: false, canViewBpOrder: false, myRsvp: null,
@@ -820,7 +823,7 @@ function registerPrivacyConsentTests() {
       assert.equal(evElements.get('rsvp-notify-emails').checked, false);
 
       // Visitor submits RSVP with roster_consent checked
-      evSandbox.setupRsvpForm();
+      EventUI.setupRsvpForm();
       evElements.get('rsvp-name').value = 'Vicky Visitor';
       evElements.get('rsvp-players-count').value = '1';
       evElements.get('rsvp-spectators-count').value = '0';
@@ -834,7 +837,7 @@ function registerPrivacyConsentTests() {
 
       // Signed-in Member -> visitor-consent-wrap hidden
       evSandbox.window.API.currentUser = { id: 7, name: 'Alice Anderson' };
-      await evSandbox.applyLoadedEventToDom({
+      await EventUI.applyLoadedEventToDom({
         event: { id: 1, title: 'Sunday Pickup', event_date: upcomingDate, location: 'Field 1', status: 'active', is_allowed_to_rsvp: true },
         duties: [], attendees: [], waitlist: [], comments: [], bp_signups: [],
         canViewRoster: true, canViewBpOrder: true, myRsvp: null,
