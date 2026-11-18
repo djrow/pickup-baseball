@@ -35,6 +35,9 @@ function applyApiSecurityHeaders(c) {
   c.header('X-Frame-Options', 'DENY');
   c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
   c.header('Permissions-Policy', 'camera=(self), microphone=(self), display-capture=(self), geolocation=(), payment=()');
+  c.header('Cross-Origin-Opener-Policy', 'same-origin');
+  c.header('Cross-Origin-Resource-Policy', 'same-origin');
+  c.header('Cross-Origin-Embedder-Policy', 'credentialless');
   const existingCsp = (c.res && c.res.headers && c.res.headers.get('Content-Security-Policy')) || '';
   if (!existingCsp) {
     const ct = (c.res && c.res.headers && c.res.headers.get('Content-Type')) || '';

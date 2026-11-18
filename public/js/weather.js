@@ -145,17 +145,23 @@
   var GEOCODE_CACHE = {};
 
   async function fetchWithTimeout(url, timeoutMs) {
-    var ms = timeoutMs || 8000;
+    var ms = timeoutMs || 12000;
     if (typeof AbortController === 'undefined') {
       return fetch(url);
     }
-    var controller = new AbortController();
-    var timer = setTimeout(function() { controller.abort(); }, ms);
-    try {
-      return await fetch(url, { signal: controller.signal });
-    } finally {
-      clearTimeout(timer);
+    var lastErr = null;
+    for (var attempt = 0; attempt < 2; attempt++) {
+      var controller = new AbortController();
+      var timer = setTimeout(function() { controller.abort(); }, ms);
+      try {
+        return await fetch(url, { signal: controller.signal });
+      } catch (err) {
+        lastErr = err;
+      } finally {
+        clearTimeout(timer);
+      }
     }
+    throw lastErr || new Error('Weather request timed out');
   }
 
   /**
@@ -358,37 +364,58 @@
   var inFlightForecasts = {};
 
   async function fetchForecast(lat, lon) {
-    var ver = (window.API && (window.API.APP_VERSION || window.API.CLIENT_VERSION)) ? (window.API.APP_VERSION || window.API.CLIENT_VERSION) : '126';
-    var key = 'pbf_weather_v' + ver + '_' + Number(lat).toFixed(4) + '_' + Number(lon).toFixed(4);
+    var coordSuffix = Number(lat).toFixed(4) + '_' + Number(lon).toFixed(4);
+    var key = 'pbf_weather_cache_' + coordSuffix;
+    var staleFallback = null;
 
     // 1. Check in-memory cache
     var mem = inMemoryCache[key];
-    if (mem && (Date.now() - mem.timestamp < HEURISTIC_CONFIG.CACHE_TTL_MS)) {
-      return mem.data;
+    if (mem && mem.data) {
+      if (Date.now() - mem.timestamp < HEURISTIC_CONFIG.CACHE_TTL_MS) {
+        return mem.data;
+      }
+      staleFallback = mem.data;
     }
 
-    // 2. Check persistent localStorage, then sessionStorage
+    // 2. Check persistent localStorage, then sessionStorage (including any previous versioned key)
     try {
-      var rawLocal = (typeof localStorage !== 'undefined') ? localStorage.getItem(key) : null;
-      if (rawLocal) {
-        var parsedLocal = JSON.parse(rawLocal);
-        if (parsedLocal && (Date.now() - parsedLocal.timestamp < HEURISTIC_CONFIG.CACHE_TTL_MS)) {
-          inMemoryCache[key] = parsedLocal;
-          return parsedLocal.data;
+      if (typeof localStorage !== 'undefined') {
+        var rawLocal = localStorage.getItem(key);
+        if (!rawLocal) {
+          for (var li = 0; li < localStorage.length; li++) {
+            var lk = localStorage.key(li);
+            if (lk && lk.indexOf('pbf_weather_v') === 0 && lk.indexOf(coordSuffix) !== -1) {
+              rawLocal = localStorage.getItem(lk);
+              break;
+            }
+          }
         }
-        localStorage.removeItem(key);
+        if (rawLocal) {
+          var parsedLocal = JSON.parse(rawLocal);
+          if (parsedLocal && parsedLocal.data) {
+            if (Date.now() - parsedLocal.timestamp < HEURISTIC_CONFIG.CACHE_TTL_MS) {
+              inMemoryCache[key] = parsedLocal;
+              return parsedLocal.data;
+            }
+            staleFallback = parsedLocal.data;
+          }
+        }
       }
     } catch (e) { /* localStorage cache unavailable or invalid JSON */ }
 
     try {
-      var raw = (typeof sessionStorage !== 'undefined') ? sessionStorage.getItem(key) : null;
-      if (raw) {
-        var parsed = JSON.parse(raw);
-        if (parsed && (Date.now() - parsed.timestamp < HEURISTIC_CONFIG.CACHE_TTL_MS)) {
-          inMemoryCache[key] = parsed;
-          return parsed.data;
+      if (typeof sessionStorage !== 'undefined') {
+        var raw = sessionStorage.getItem(key);
+        if (raw) {
+          var parsed = JSON.parse(raw);
+          if (parsed && parsed.data) {
+            if (Date.now() - parsed.timestamp < HEURISTIC_CONFIG.CACHE_TTL_MS) {
+              inMemoryCache[key] = parsed;
+              return parsed.data;
+            }
+            if (!staleFallback) staleFallback = parsed.data;
+          }
         }
-        sessionStorage.removeItem(key);
       }
     } catch (e) { /* sessionStorage cache unavailable or invalid JSON */ }
 
@@ -409,7 +436,7 @@
 
     var reqPromise = (async function() {
       try {
-        var res = await fetchWithTimeout(url, 8000);
+        var res = await fetchWithTimeout(url, 12000);
         if (!res.ok) {
           throw new Error('Open-Meteo request failed with HTTP ' + res.status);
         }
@@ -431,6 +458,11 @@
         }
 
         return data;
+      } catch (err) {
+        if (staleFallback) {
+          return staleFallback;
+        }
+        throw err;
       } finally {
         delete inFlightForecasts[key];
       }
