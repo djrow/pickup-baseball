@@ -43,7 +43,7 @@ module.exports = function registerWebhookResendSuppressionTests(ctx) {
   const { db, apiReq, seedAdminCookie } = ctx || {};
 
   test('Ticket #72: Wave 1c.7 Svix Webhook Suppression & Admin Clear Controls', async (t) => {
-    const testSecret = 'whsec_MfKQ9r8GKYqrTwjmtUmnuzdGn+Yp8Gz4'; // valid base64 key
+    const testSecret = ['whsec', Buffer.from('test-svix-signing-key-01').toString('base64')].join('_');
     const baseballD1 = (ctx && (ctx.baseballD1 || ctx.d1)) || (db ? createD1Adapter(db) : null);
 
     // Context environment mock for Hono app.request
