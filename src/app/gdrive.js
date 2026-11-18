@@ -488,3 +488,67 @@ export async function getGDriveStorageQuota(env) {
     usageInDriveTrash: 0
   };
 }
+
+/**
+ * Export a Google Sheet as CSV via Google Drive v3 API
+ * @param {Record<string, any>} env
+ * @param {string} fileId
+ * @returns {Promise<string | null>}
+ */
+export async function exportGDriveSheetCsv(env, fileId) {
+  if (!fileId || !isGDriveConfigured(env)) return null;
+  const apiBase = getGDriveApiBase(env);
+  const accessToken = await getGDriveAccessToken(env);
+  const res = await fetch(`${apiBase}/drive/v3/files/${encodeURIComponent(fileId)}/export?mimeType=text%2Fcsv`, {
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+  if (!res.ok) return null;
+  return res.text();
+}
+
+/**
+ * Parse a specific 1-based (row, col) cell from RFC 4180 CSV text
+ * @param {string} csvText
+ * @param {number} targetRow1
+ * @param {number} targetCol1
+ * @returns {string}
+ */
+export function parseCsvCell(csvText, targetRow1, targetCol1) {
+  if (!csvText || typeof csvText !== 'string') return '';
+  let row = 1;
+  let col = 1;
+  let cur = '';
+  let inQuotes = false;
+  for (let i = 0; i < csvText.length; i++) {
+    const ch = csvText[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (csvText[i + 1] === '"') {
+          cur += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        cur += ch;
+      }
+    } else if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === ',') {
+      if (row === targetRow1 && col === targetCol1) return cur;
+      cur = '';
+      col++;
+    } else if (ch === '\r' || ch === '\n') {
+      if (ch === '\r' && csvText[i + 1] === '\n') i++;
+      if (row === targetRow1 && col === targetCol1) return cur;
+      if (row >= targetRow1) return '';
+      cur = '';
+      row++;
+      col = 1;
+    } else {
+      cur += ch;
+    }
+  }
+  if (row === targetRow1 && col === targetCol1) return cur;
+  return '';
+}

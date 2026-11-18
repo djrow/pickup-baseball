@@ -1138,4 +1138,26 @@
       });
     }
   }
+
+  async function loadMailingListCount() {
+    const link = document.getElementById('mailing-list-link');
+    if (!link) return;
+    try {
+      const res = await fetch('/api/mailing-list/count');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data && typeof data.count === 'number' && data.count >= 0) {
+        let badge = link.querySelector('.mailing-list-count');
+        if (!badge) {
+          badge = document.createElement('span');
+          badge.className = 'mailing-list-count';
+          badge.style.fontWeight = '700';
+          link.appendChild(badge);
+        }
+        badge.textContent = ' (' + data.count + ')';
+      }
+    } catch (e) { /* ignore non-critical mailing list count failure */ }
+  }
+
+  loadMailingListCount();
 })();

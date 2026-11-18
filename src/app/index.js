@@ -8,6 +8,7 @@ import { getCookie } from 'hono/cookie';
 import { CURRENT_APP_VERSION } from './version.js';
 import { resolveConfig, getPublicConfig, getPreviewOriginLockout } from './config.js';
 import { ensureD1Schema, ensureChatD1Schema, ensureClubhouseOptInBackfill } from './schema.js';
+import { exportGDriveSheetCsv, parseCsvCell, isGDriveConfigured } from './gdrive.js';
 import { SESSION_COOKIE_NAME, getUserFromSession, requireAdmin, requireAuth } from './security.js';
 import { ERROR_CODES, getRequestId, jsonError, logEvent, normalizeApiErrorResponse } from './errors.js';
 import { renderFeedXmlResponse } from './feeds.js';
@@ -211,6 +212,53 @@ app.get('/health', (c) => {
 app.get('/config/public', (c) => {
   c.header('Cache-Control', 'public, max-age=300, s-maxage=300, stale-while-revalidate=600');
   return c.json(getPublicConfig(c.env));
+});
+
+const DEFAULT_MAILING_LIST_SHEET_ID = '1luZsEVs65bOjMt9RbUWnKHGsNAIbFzAXjVyG04oRZd4';
+const MAILING_LIST_CACHE_TTL_MS = 15 * 60 * 1000;
+
+app.get('/mailing-list/count', async (c) => {
+  c.header('Cache-Control', 'public, max-age=300, s-maxage=300, stale-while-revalidate=600');
+  const db = c.env && (c.env.BASEBALL_DB || c.env.DB);
+  let cachedCount = null;
+  let cachedAt = 0;
+  if (db) {
+    try {
+      const row = await db.prepare('SELECT value FROM app_settings WHERE key = ?').bind('mailing_list_count_cache').first();
+      if (row && row.value) {
+        const parsed = JSON.parse(String(row.value));
+        if (parsed && typeof parsed.count === 'number') {
+          cachedCount = parsed.count;
+          cachedAt = Number(parsed.updatedAt || 0);
+        }
+      }
+    } catch (e) { /* ignore invalid cache */ }
+  }
+  if (cachedCount !== null && (Date.now() - cachedAt) < MAILING_LIST_CACHE_TTL_MS) {
+    return c.json({ count: cachedCount });
+  }
+  const sheetId = (c.env && c.env.MAILING_LIST_SHEET_ID) || DEFAULT_MAILING_LIST_SHEET_ID;
+  if (isGDriveConfigured(c.env)) {
+    try {
+      const csv = await exportGDriveSheetCsv(c.env, sheetId);
+      if (csv !== null) {
+        // Sheet1 cell E2 = row 2, column 5
+        const cellE2 = parseCsvCell(csv, 2, 5);
+        const count = cellE2
+          ? cellE2.split(',').map((s) => s.trim()).filter(Boolean).length
+          : 0;
+        if (db) {
+          try {
+            await db.prepare('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)').bind('mailing_list_count_cache', JSON.stringify({ count, updatedAt: Date.now() })).run();
+          } catch (e) { /* ignore cache write failure */ }
+        }
+        return c.json({ count });
+      }
+    } catch (e) {
+      logEvent('warn', 'mailing_list_count_fetch_failed', { err: e });
+    }
+  }
+  return c.json({ count: cachedCount });
 });
 
 app.get('/users/:id/avatar', requireAuth, serveUserAvatar);
