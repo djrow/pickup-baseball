@@ -506,7 +506,14 @@
           var storageProvider = initRes.data.storageProvider || initRes.data.storage_provider ||
             (initRes.data.uploadMode === 'gdrive_resumable' ? 'gdrive' : 'local');
 
-          if (storageProvider === 'gdrive' && uploadUrl && uploadUrl.indexOf('googleapis.com') !== -1) {
+          var isGdriveUploadUrl = false;
+          if (storageProvider === 'gdrive' && uploadUrl) {
+            try {
+              var uHost = new URL(uploadUrl).hostname.toLowerCase();
+              isGdriveUploadUrl = (uHost === 'googleapis.com' || uHost.endsWith('.googleapis.com'));
+            } catch (e) { isGdriveUploadUrl = false; }
+          }
+          if (isGdriveUploadUrl) {
             return uploadChunksToGDrive(uploadUrl, uploadBuf, prepared.isEncrypted ? 'application/octet-stream' : uploadMimeType, progressCb).then(function (gdriveMeta) {
               progressCb(95, 'Finalizing Google Drive attachment...');
               var resolvedDriveId = (gdriveMeta && gdriveMeta.id) ? gdriveMeta.id : initRes.data.driveFileId;

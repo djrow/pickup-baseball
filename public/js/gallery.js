@@ -1394,7 +1394,15 @@
         var uploadUrl = initRes.uploadUrl || initRes.upload_url;
         var storageProvider = initRes.storageProvider || initRes.storage_provider || 'local';
 
-        if (storageProvider === 'gdrive' && uploadUrl && uploadUrl.indexOf('googleapis.com') !== -1) {
+        var isGdriveUploadUrl = false;
+        if (storageProvider === 'gdrive' && uploadUrl) {
+          try {
+            var uHost = new URL(uploadUrl).hostname.toLowerCase();
+            isGdriveUploadUrl = (uHost === 'googleapis.com' || uHost.endsWith('.googleapis.com'));
+          } catch (e) { isGdriveUploadUrl = false; }
+        }
+
+        if (isGdriveUploadUrl) {
           if (submitBtn) submitBtn.textContent = 'Uploading to Drive…';
           var gdriveMeta = await uploadChunksToGDrive(uploadUrl, uploadBuf, mimeToUpload);
           var resolvedDriveId = (gdriveMeta && gdriveMeta.id) ? gdriveMeta.id : initRes.driveFileId;

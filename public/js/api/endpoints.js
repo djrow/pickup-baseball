@@ -613,8 +613,15 @@
       icsLines.push('DTSTAMP:' + formatIcsDate(new Date()));
       icsLines.push('DTSTART:' + formatIcsDate(startDate));
       icsLines.push('DTEND:' + formatIcsDate(endDate));
-      icsLines.push('SUMMARY:' + summary.replace(/,/g, '\\,'));
-      icsLines.push('LOCATION:' + (ev.location || 'Bushrod Park Field 1, Oakland, CA').replace(/,/g, '\\,'));
+      var escapeIcsText = function (val) {
+        return String(val || '')
+          .replace(/\\/g, '\\\\')
+          .replace(/;/g, '\\;')
+          .replace(/,/g, '\\,')
+          .replace(/\r?\n/g, '\\n');
+      };
+      icsLines.push('SUMMARY:' + escapeIcsText(summary));
+      icsLines.push('LOCATION:' + escapeIcsText(ev.location || 'Bushrod Park Field 1, Oakland, CA'));
       icsLines.push('DESCRIPTION:Free community pickup baseball. Check headcount and volunteer at https://www.pickupbaseballfoundation.org/event.html?id=' + ev.id);
       icsLines.push('STATUS:CONFIRMED');
       icsLines.push('END:VEVENT');

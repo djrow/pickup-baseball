@@ -446,6 +446,7 @@
         ${ev.rainout_note ? `<div style="font-size: 0.82rem; color: var(--text-muted);"><em>Rainout note: "${API.escapeHtml(ev.rainout_note)}"</em></div>` : ''}
       `;
     } else if (ev) {
+      const safeDateKey = String(dateKey || '').replace(/[^0-9-]/g, '');
       const isRainout = ev.status === 'rainout';
       const dateFormatted = API.formatDateTime(ev.event_date);
       const translatedTitle = API.translateEventTitle(ev);
@@ -478,17 +479,18 @@
         <div class="drawer-meta">
           <span class="drawer-meta-item"><span>📅</span> <strong>${API.escapeHtml(dateFormatted)}</strong></span>
           <span class="drawer-meta-item"><span>📍</span> ${API.escapeHtml(ev.location)}</span>
-          <span class="drawer-meta-item drawer-weather-meta" id="drawer-weather-${dateKey}" style="display: none;"></span>
+          <span class="drawer-meta-item drawer-weather-meta" id="drawer-weather-${safeDateKey}" style="display: none;"></span>
           <span class="drawer-meta-item" style="color: var(--secondary); font-weight: 700;"><span>👥</span> ${API.escapeHtml(API.t('home.players_count', { count: ev.attendee_count }))}${ev.spectator_count > 0 ? ` + ${ev.spectator_count} ${ev.spectator_count === 1 ? 'Spectator' : 'Spectators'}` : ''}</span>
           <span class="drawer-meta-item"><span>🛡️</span> ${API.escapeHtml(API.t('home.duties_configured', { count: ev.duty_count }))}</span>
         </div>
         ${ev.rainout_note ? `<div style="font-size: 0.82rem; color: var(--text-muted);"><em>Rainout note: "${API.escapeHtml(ev.rainout_note)}"</em></div>` : ''}
-        <div class="drawer-5day-weather-section" id="drawer-5day-weather-${dateKey}" style="display: none;"></div>
+        <div class="drawer-5day-weather-section" id="drawer-5day-weather-${safeDateKey}" style="display: none;"></div>
       `;
     } else {
-      const [y, m, d] = dateKey.split('-').map(Number);
+      const safeDateKey = String(dateKey || '').replace(/[^0-9-]/g, '');
+      const [y, m, d] = safeDateKey.split('-').map(Number);
       const dateObj = new Date(y, m - 1, d, 12, 0, 0);
-      let dateFormatted = dateKey;
+      let dateFormatted = safeDateKey;
       try {
         dateFormatted = new Intl.DateTimeFormat(API.getLang(), {
           weekday: 'long',

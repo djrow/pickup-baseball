@@ -83,9 +83,17 @@ export function normalizeMediaItem(m) {
       file_url: (m.file_url && m.file_url.startsWith('/api/attachments/')) ? m.file_url : m.original_url
     };
   }
+  const isDriveHost = (u) => {
+    try {
+      const h = new URL(u).hostname.toLowerCase();
+      return h === 'drive.google.com' || h.endsWith('.drive.google.com');
+    } catch (e) {
+      return false;
+    }
+  };
   const isDirectExternal = m.media_type === 'youtube' ||
-    Boolean(m.file_url && (m.file_url.includes('drive.google.com') || /\.(mp4|webm)($|[?#])/i.test(m.file_url))) ||
-    Boolean(m.original_url && (m.original_url.includes('drive.google.com') || /\.(mp4|webm)($|[?#])/i.test(m.original_url)));
+    Boolean(m.file_url && (isDriveHost(m.file_url) || /\.(mp4|webm)($|[?#])/i.test(m.file_url))) ||
+    Boolean(m.original_url && (isDriveHost(m.original_url) || /\.(mp4|webm)($|[?#])/i.test(m.original_url)));
   if (!isDirectExternal) {
     return {
       ...m,

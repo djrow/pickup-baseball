@@ -183,19 +183,6 @@
       return GEOCODE_CACHE[cacheKey];
     }
 
-    if (typeof window !== 'undefined' && window.sessionStorage) {
-      try {
-        var cached = window.sessionStorage.getItem('pbf_geo_' + cacheKey);
-        if (cached) {
-          var parsed = JSON.parse(cached);
-          if (parsed && typeof parsed.latitude === 'number' && typeof parsed.longitude === 'number') {
-            GEOCODE_CACHE[cacheKey] = parsed;
-            return parsed;
-          }
-        }
-      } catch (e) { /* sessionStorage unavailable or invalid JSON */ }
-    }
-
     try {
       var url = 'https://geocoding-api.open-meteo.com/v1/search?name=' + encodeURIComponent(query) + '&count=1&language=en&format=json';
       var res = await fetchWithTimeout(url, 8000);
@@ -210,11 +197,6 @@
           name: nameStr
         };
         GEOCODE_CACHE[cacheKey] = result;
-        if (typeof window !== 'undefined' && window.sessionStorage) {
-          try {
-            window.sessionStorage.setItem('pbf_geo_' + cacheKey, JSON.stringify(result));
-          } catch (e) { /* sessionStorage quota / private mode */ }
-        }
         return result;
       }
     } catch (err) {
