@@ -569,7 +569,9 @@ function registerVisitorPrivacyTests() {
         .filter((p) => fs.existsSync(p))
         .map((p) => fs.readFileSync(p, 'utf8'))
         .join('\n');
-      const eventCode = fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'event.js'), 'utf8');
+      const eventCode = ['event/rsvp.js', 'event/organizer.js', 'event/bp.js', 'event.js']
+        .map((rel) => fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', rel), 'utf8'))
+        .join('\n');
 
       // Ensure event.js does not cache res.comments into localStorage
       assert.ok(!/publicCacheCopy[\s\S]*comments:\s*res\.comments/.test(eventCode), 'event.js must not store comments in publicCacheCopy');
@@ -666,8 +668,9 @@ function registerVisitorPrivacyTests() {
 
       elements.get('comment-form').innerHTML = '<div id="comment-guest-fields"></div><input id="comment-author-name"><textarea id="comment-content"></textarea>';
 
+      const EventUI = sandbox.window.API._eventUi;
       sandbox.window.API.currentUser = null;
-      sandbox.applyLoadedEventToDom({
+      await EventUI.applyLoadedEventToDom({
         event: { id: 1, title: 'Sunday Pickup', event_date: upcomingDate, location: 'Field 1', status: 'active' },
         duties: [],
         attendees: [],
@@ -694,7 +697,7 @@ function registerVisitorPrivacyTests() {
 
       // Also verify signed-in Member view restores comment form and respects show_full_name vs First L.
       sandbox.window.API.currentUser = { id: 99, name: 'Victor Viewer', canManageEvents: false };
-      sandbox.applyLoadedEventToDom({
+      await EventUI.applyLoadedEventToDom({
         event: { id: 1, title: 'Sunday Pickup', event_date: upcomingDate, location: 'Field 1', status: 'active', is_allowed_to_rsvp: true },
         duties: [],
         attendees: [

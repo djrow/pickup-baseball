@@ -186,20 +186,24 @@ interface PBFApiFacade {
   updateMedia(id: number | string, payload: Record<string, any>): Promise<any>;
   deleteMedia(id: number | string, token?: string): Promise<any>;
   getEvents(filter?: string): Promise<any>;
-  getEvent(id: number | string, token?: string): Promise<any>;
-  postRsvp(id: number | string, payload: Record<string, any>): Promise<any>;
-  postComment(id: number | string, payload: Record<string, any>): Promise<any>;
-  deleteComment(eventId: number | string, commentId: number | string): Promise<any>;
-  removeAttendee(eventId: number | string, attendeeId: number | string): Promise<any>;
-  callRainout(id: number | string, payload?: Record<string, any>): Promise<any>;
-  reopenEvent(id: number | string, payload?: Record<string, any>): Promise<any>;
-  sendRainoutEmail(id: number | string, payload?: Record<string, any>): Promise<any>;
-  sendReminders(id: number | string): Promise<any>;
-  getBpOrder(eventId: number | string, token?: string): Promise<any>;
-  postBpSignup(eventId: number | string, payload: Record<string, any>): Promise<any>;
-  updateBpSignup(eventId: number | string, signupId: number | string, payload: Record<string, any>): Promise<any>;
-  deleteBpSignup(eventId: number | string, signupId: number | string, payload?: Record<string, any>): Promise<any>;
-  clearBpOrder(eventId: number | string): Promise<any>;
+  getEvent(id: number | string | null, token?: string, invite?: string): Promise<any>;
+  getEventInvite(id: number | string | null): Promise<any>;
+  toggleEventInvite(id: number | string | null, enabled: boolean): Promise<any>;
+  rotateEventInvite(id: number | string | null): Promise<any>;
+  postRsvp(id: number | string | null, payload: Record<string, any>): Promise<any>;
+  requestRsvpEditLink(id: number | string | null, email: string): Promise<any>;
+  postComment(id: number | string | null, payload: Record<string, any>): Promise<any>;
+  deleteComment(eventId: number | string | null, commentId: number | string): Promise<any>;
+  removeAttendee(eventId: number | string | null, attendeeId: number | string): Promise<any>;
+  callRainout(id: number | string | null, payload?: Record<string, any>): Promise<any>;
+  reopenEvent(id: number | string | null, payload?: Record<string, any>): Promise<any>;
+  sendRainoutEmail(id: number | string | null, payload?: Record<string, any>): Promise<any>;
+  sendReminders(id: number | string | null): Promise<any>;
+  getBpOrder(eventId: number | string | null, token?: string): Promise<any>;
+  postBpSignup(eventId: number | string | null, payload: Record<string, any>): Promise<any>;
+  updateBpSignup(eventId: number | string | null, signupId: number | string, payload: Record<string, any>): Promise<any>;
+  deleteBpSignup(eventId: number | string | null, signupId: number | string, payload?: Record<string, any>): Promise<any>;
+  clearBpOrder(eventId: number | string | null): Promise<any>;
   sendLoginCode(email: string, name?: string, sharedDevice?: boolean): Promise<any>;
   verifyLoginCode(email: string, code: string, sharedDevice?: boolean): Promise<any>;
   getActiveSessions(): Promise<any>;
@@ -227,6 +231,7 @@ interface PBFApiFacade {
   getWaiverStatus(): Promise<any>;
   signWaiver(payload: Record<string, any>): Promise<any>;
   updateUserWaiverStatus(userId: number | string, waiverStatus: string): Promise<any>;
+  updateAttendeeWaiverStatus(attendeeId: number | string, waiverStatus: string): Promise<any>;
   deleteUser(userId: number | string, ban?: boolean, reason?: string): Promise<any>;
   getBannedEmails(): Promise<any>;
   banEmail(email: string, reason?: string): Promise<any>;
@@ -261,6 +266,8 @@ interface PBFApiFacade {
   safeAvatarUrl(rawUrl: string): string;
   icon(name: string, size?: number): string;
   renderCookieNotice(): void;
+  updateOfflineUi?(): void;
+  _eventUi?: Record<string, any>;
 }
 
 interface WeatherServiceFacade {
@@ -277,7 +284,7 @@ interface WeatherServiceFacade {
   renderDailyRainTrackHtml(days: any[]): string;
   renderMiniDailyRainRowHtml(days: any[]): string;
   getForecastForGame(isoDate: string, location?: string): Promise<Record<string, any>>;
-  renderAssistantWidget(containerEl: Element | null, isoDate: string, location?: string, options?: Record<string, any>): Promise<void>;
+  renderAssistantWidget(containerEl: Element | string | null, isoDateOrForecast?: string | Record<string, any> | null, locationOrOptions?: string | Record<string, any>, options?: Record<string, any>): Promise<void> | void;
   populateCardWeatherBadges(): void;
 }
 

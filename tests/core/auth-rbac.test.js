@@ -751,7 +751,9 @@ test('T3: User Role Management & Session Persistence', async (t) => {
 
     // 5. Verify public/community modules wire through display-name formatting
     const appJs = fs.readFileSync(path.join(ctx.rootDir, 'public', 'js', 'app.js'), 'utf8');
-    const eventJs = fs.readFileSync(path.join(ctx.rootDir, 'public', 'js', 'event.js'), 'utf8');
+    const eventJs = ['event/rsvp.js', 'event/organizer.js', 'event/bp.js', 'event.js']
+      .map((f) => fs.readFileSync(path.join(ctx.rootDir, 'public', 'js', f), 'utf8'))
+      .join('\n');
     const galleryJs = fs.readFileSync(path.join(ctx.rootDir, 'public', 'js', 'gallery.js'), 'utf8');
     const clubhouseJs = ['clubhouse/layout.js', 'clubhouse/messages.js', 'clubhouse/e2ee-ui.js', 'clubhouse/panels.js', 'clubhouse.js']
       .map((f) => fs.readFileSync(path.join(ctx.rootDir, 'public', 'js', f), 'utf8'))

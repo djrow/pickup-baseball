@@ -1029,7 +1029,9 @@ module.exports = async function registerWeatherGalleryTests(ctx, t9) {
     assert.ok(eventHtml.includes('id="bp-signup-modal"'), 'event.html must include bp-signup-modal');
     assert.ok(eventHtml.includes('id="rsvp-bp-signup"'), 'event.html must include rsvp-bp-signup checkbox');
 
-    const eventJs = fs.readFileSync(path.join(publicDir, 'js', 'event.js'), 'utf8');
+    const eventJs = ['event/rsvp.js', 'event/organizer.js', 'event/bp.js', 'event.js']
+      .map((rel) => fs.readFileSync(path.join(publicDir, 'js', rel), 'utf8'))
+      .join('\n');
     assert.ok(eventJs.includes('function renderBpOrder'), 'event.js must define renderBpOrder');
     assert.ok(eventJs.includes('function openBpModal'), 'event.js must define openBpModal');
     assert.ok(eventJs.includes('function setupBpOrderUi'), 'event.js must define setupBpOrderUi');

@@ -138,6 +138,8 @@ module.exports = [
       'public/js/clubhouse/*.js',
       'public/js/crypto.js',
       'public/js/dialog.js',
+      'public/js/event.js',
+      'public/js/event/*.js',
       'public/js/gallery.js',
       'public/js/rtc.js',
       'public/js/store.js',

@@ -559,7 +559,9 @@ function registerDutyFeatureFlagTests() {
     await t.test('5. Frontend scripts wire getPublicConfig() feature flags with strict ES6 syntax', () => {
       const apiJs = fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'api.js'), 'utf8');
       const appJs = fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'app.js'), 'utf8');
-      const eventJs = fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'event.js'), 'utf8');
+      const eventJs = ['event/rsvp.js', 'event/organizer.js', 'event/bp.js', 'event.js']
+        .map((f) => fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', f), 'utf8'))
+        .join('\n');
       const adminJs = fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', 'admin.js'), 'utf8');
       const clubhouseJs = ['clubhouse/layout.js', 'clubhouse/messages.js', 'clubhouse/e2ee-ui.js', 'clubhouse/panels.js', 'clubhouse.js']
         .map((f) => fs.readFileSync(path.join(ROOT_DIR, 'public', 'js', f), 'utf8'))

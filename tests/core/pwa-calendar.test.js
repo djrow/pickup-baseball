@@ -207,7 +207,14 @@ module.exports = async function registerPwaCalendarTests(ctx, t9) {
     assert.ok(eventHtml.includes('id="spectators-badge"'), 'event.html must include spectators badge in roster header');
     assert.ok(!eventHtml.includes('id="duties-grid"'), 'event.html must not include duplicate standalone duties-grid card');
 
-    const eventJs = fs.readFileSync(path.join(publicDir, 'js/event.js'), 'utf8');
+    const eventJs = ['js/event/rsvp.js', 'js/event/organizer.js', 'js/event/bp.js', 'js/event.js']
+      .map((rel) => {
+        const code = fs.readFileSync(path.join(publicDir, rel), 'utf8');
+        assert.ok(code.startsWith('// @ts-check'), `${rel} must start with // @ts-check`);
+        assert.ok(!/window\.(toggle|open|close|delete|quick|remove|save|show|handle)/i.test(code), `${rel} must not attach ad-hoc window.* callbacks`);
+        return code;
+      })
+      .join('\n');
     assert.ok(!eventJs.includes('?.'), 'event.js must not use optional chaining for broad ES6 compatibility');
     assert.ok(!eventJs.includes('??'), 'event.js must not use nullish coalescing for broad ES6 compatibility');
 
@@ -353,12 +360,14 @@ module.exports = async function registerPwaCalendarTests(ctx, t9) {
 
     // 11. Anonymous guest RSVPs without email address (name + optional details only)
     const noEmailHtml = fs.readFileSync(path.join(publicDir, 'event.html'), 'utf8');
-    const noEmailEventJs = fs.readFileSync(path.join(publicDir, 'js/event.js'), 'utf8');
+    const noEmailEventJs = ['js/event/rsvp.js', 'js/event/organizer.js', 'js/event/bp.js', 'js/event.js']
+      .map((rel) => fs.readFileSync(path.join(publicDir, rel), 'utf8'))
+      .join('\n');
     const noEmailApiJs = fs.existsSync(path.join(publicDir, 'js/api/i18n.js'))
       ? fs.readFileSync(path.join(publicDir, 'js/api/i18n.js'), 'utf8')
       : fs.readFileSync(path.join(publicDir, 'js/api.js'), 'utf8');
     assert.ok(!noEmailHtml.includes('id="rsvp-email" required') && noEmailHtml.includes('Email Address (Optional)'), 'event.html must clearly mark email as optional');
-    assert.ok(!noEmailEventJs.includes("getElementById('rsvp-email').required = true"), 'event.js must not require rsvp-email for guests');
+    assert.ok(!noEmailEventJs.includes("getElementById('rsvp-email').required = true") && !noEmailEventJs.includes('rsvpEmailEl.required = true'), 'event.js must not require rsvp-email for guests');
     assert.ok(noEmailApiJs.includes('"event.email_label": "Email Address (Optional)"'), 'api.js EN_DICT must label guest email as optional');
 
     const badEmailGuest = await apiReq('POST', `/api/events/${groupEventId}/rsvp`, null, {

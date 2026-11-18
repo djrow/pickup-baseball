@@ -27,7 +27,9 @@ module.exports = function registerInviteLinksTests(ctx) {
     // 0. Static checks for client ES6 compatibility & CSP compliance
     await t.test('INVITE-0.1: Client JS and HTML compatibility and CSP compliance', () => {
       const appJs = fs.readFileSync(path.join(publicDir, 'js/app.js'), 'utf8');
-      const eventJs = fs.readFileSync(path.join(publicDir, 'js/event.js'), 'utf8');
+      const eventJs = ['js/event/rsvp.js', 'js/event/organizer.js', 'js/event/bp.js', 'js/event.js']
+        .map((rel) => fs.readFileSync(path.join(publicDir, rel), 'utf8'))
+        .join('\n');
       const eventHtml = fs.readFileSync(path.join(publicDir, 'event.html'), 'utf8');
 
       // Vanilla ES6 restrictions
