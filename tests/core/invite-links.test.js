@@ -117,16 +117,25 @@ module.exports = function registerInviteLinksTests(ctx) {
     await t.test('INVITE-5: RSVP via invite link honors require_login setting', async () => {
       // 5.1 If require_login is true, anonymous RSVP must return 401
       // Check current require_login setting in test DB
+      const prevSetting = db.prepare("SELECT value FROM app_settings WHERE key = 'require_login_to_rsvp'").get();
       db.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('require_login_to_rsvp', 'true')").run();
 
-      const anonRsvp = await apiReq('POST', `/api/events/${eventId}/rsvp?invite=${encodeURIComponent(inviteTokenV1)}`, null, {
-        name: 'Guest Player',
-        email: 'guest_invite@example.org',
-        players_count: 1,
-        spectators_count: 0,
-        invite_token: inviteTokenV1
-      });
-      assert.equal(anonRsvp.status, 401, 'Anonymous RSVP with invite link must return 401 when require_login is enabled');
+      try {
+        const anonRsvp = await apiReq('POST', `/api/events/${eventId}/rsvp?invite=${encodeURIComponent(inviteTokenV1)}`, null, {
+          name: 'Guest Player',
+          email: 'guest_invite@example.org',
+          players_count: 1,
+          spectators_count: 0,
+          invite_token: inviteTokenV1
+        });
+        assert.equal(anonRsvp.status, 401, 'Anonymous RSVP with invite link must return 401 when require_login is enabled');
+      } finally {
+        if (prevSetting) {
+          db.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('require_login_to_rsvp', ?)").run(prevSetting.value);
+        } else {
+          db.prepare("DELETE FROM app_settings WHERE key = 'require_login_to_rsvp'").run();
+        }
+      }
 
       // 5.2 Registered visitor (not in allowed_emails) can RSVP with invite link
       const userRes = db.prepare(`

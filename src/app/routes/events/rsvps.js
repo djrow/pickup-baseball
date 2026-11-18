@@ -212,8 +212,8 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
     const allowedList = parseAllowedEmails(event.allowed_emails);
     if (allowedList.length > 0) {
       const isOrganizerUser = Boolean(user && user.canManageEvents);
-      const isEmailAllowed = Boolean(hasEmail && allowedList.includes(email.toLowerCase()));
-      const isExistingAttendee = Boolean(existingAttendee && existingAttendee.id);
+      const isEmailAllowed = Boolean(user && hasEmail && allowedList.includes(email.toLowerCase()));
+      const isExistingAttendee = Boolean(existingAttendee && existingAttendee.id && (user || management_token));
 
       if (!isOrganizerUser && !isEmailAllowed && !hasValidInviteToken && !isExistingAttendee) {
         if (!user) {
@@ -618,8 +618,16 @@ eventsRsvpsRouter.post('/:id/rsvp', async (c) => {
       // Skip duplicate confirmation emails when editing an existing attending RSVP unless resend is requested
       let shouldSendEmail = hasEmail && isDeliverableEmail(storedEmail) && (send_confirmation_email !== false) && (!wasAttending || Boolean(resend_confirmation));
       const confirmUser = c.get('user');
-      if (shouldSendEmail && confirmUser && confirmUser.id) {
-        const allowed = await filterByPreference(db, [{ user_id: confirmUser.id, email: storedEmail }], 'notify_rsvp_confirm');
+      if (shouldSendEmail) {
+        let visitorNotifyVal = 1;
+        if (!confirmUser && parsedNotifyEmails === false) {
+          visitorNotifyVal = 0;
+        }
+        const allowed = await filterByPreference(db, [{
+          user_id: confirmUser && confirmUser.id ? confirmUser.id : null,
+          email: storedEmail,
+          notify_emails: visitorNotifyVal
+        }], 'notify_rsvp_confirm');
         if (allowed.length === 0) shouldSendEmail = false;
       }
       if (shouldSendEmail) {

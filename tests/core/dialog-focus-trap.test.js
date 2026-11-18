@@ -178,6 +178,7 @@ function createDOMFixture() {
   };
 }
 
+function registerDialogFocusTrapTests() {
 test('PBFDialog.trapFocus: manages inert on siblings, cycles Tab, and handles Escape', async (_t) => {
   const fx = createDOMFixture();
   const sandbox = {
@@ -255,3 +256,9 @@ test('PBFDialog.trapFocus: manages inert on siblings, cycles Tab, and handles Es
   assert.equal(fx.footer.inert, false, 'footer is no longer inert');
   assert.equal(fx.getActiveElement(), fx.buttonOutside, 'Focus restored to buttonOutside');
 });
+}
+
+if (require.main === module) {
+  registerDialogFocusTrapTests();
+}
+module.exports = registerDialogFocusTrapTests;

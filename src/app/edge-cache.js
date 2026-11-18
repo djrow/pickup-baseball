@@ -19,6 +19,7 @@ function isUnauthenticatedPublicGet(c) {
   if (getCookie(c, SESSION_COOKIE_NAME)) return false;
   if (c.req.header('Authorization')) return false;
   if (c.req.query('token')) return false; // RSVP management token bypass
+  if (c.req.query('invite')) return false; // Rotatable invite token bypass
   if (c.env && (c.env.TURN_ICE_SERVERS_JSON || c.env.TURN_ICE_SERVERS)) return false;
   return true;
 }

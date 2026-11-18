@@ -927,6 +927,7 @@ async function runAdminEventAndTaskJourney(browser, server, tracker, record) {
     const shareBtnFound = await session.evaluate('Boolean(document.getElementById("event-share-btn"))');
     assert(shareBtnFound, 'event.html renders native Share Event button in header');
 
+    await session.evaluate('try { Object.defineProperty(navigator, "share", { value: undefined, configurable: true, writable: true }); } catch (_) {}');
     await clickEl(session, '#event-share-btn');
     await session.waitFor('Boolean(document.querySelector(".pbf-toast"))', 5000);
     const toastShown = await session.evaluate('Boolean(document.querySelector(".pbf-toast"))');

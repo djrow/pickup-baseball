@@ -877,6 +877,9 @@ function setupCreateForm() {
         allowedEmails = combined;
       }
 
+      const autoRemindersToggle = document.getElementById('event-auto-reminders-toggle');
+      const autoReminders = autoRemindersToggle ? (autoRemindersToggle.checked ? 1 : 0) : 1;
+
       const data = await API.createEvent({
         title: title,
         event_date: API.localToPacificIso(rawDate),
@@ -885,6 +888,7 @@ function setupCreateForm() {
         description: document.getElementById('event-desc-input').value.trim(),
         max_players: maxPlayers,
         allowed_emails: allowedEmails,
+        auto_reminders: autoReminders,
         custom_duties: builderDuties
       });
 

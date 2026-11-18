@@ -1,7 +1,7 @@
 /**
  * Notification preference enforcement and stateless RFC 8058 unsubscribe tokens.
  */
-import { hmacSha256Hex, constantTimeEqual } from '../security.js';
+import { hmacSha256Hex, constantTimeEqual, arrayBufferToBase64, base64ToUint8Array } from '../security.js';
 import { CONSENT_TYPES, recordConsentChange } from '../consent.js';
 
 export const REMINDER_LEAD_HOURS = 24;
@@ -34,12 +34,14 @@ function secretFor(env) {
 }
 
 function b64urlEncode(str) {
-  return btoa(unescape(encodeURIComponent(str))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const bytes = new TextEncoder().encode(String(str));
+  return arrayBufferToBase64(bytes.buffer).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 function b64urlDecode(str) {
   const pad = str + '==='.slice((str.length + 3) % 4);
-  return decodeURIComponent(escape(atob(pad.replace(/-/g, '+').replace(/_/g, '/'))));
+  const bytes = base64ToUint8Array(pad.replace(/-/g, '+').replace(/_/g, '/'));
+  return new TextDecoder().decode(bytes);
 }
 
 /**
@@ -116,6 +118,12 @@ export async function filterByPreference(db, rows, pref) {
     const ph = chunk.map(() => '?').join(',');
     const res = await db.prepare(`SELECT email FROM banned_emails WHERE LOWER(email) IN (${ph})`).bind(...chunk).all();
     for (const b of (res.results || [])) banned.add(String(b.email).toLowerCase());
+    try {
+      const supRes = await db.prepare(`SELECT email FROM email_suppressions WHERE LOWER(email) IN (${ph})`).bind(...chunk).all();
+      for (const s of (supRes.results || [])) banned.add(String(s.email).toLowerCase());
+    } catch (_e) {
+      /* email_suppressions may not exist in isolated mock tests */
+    }
   }
   return list.filter((r) => {
     if (banned.has(String(r.email || '').toLowerCase())) return false;

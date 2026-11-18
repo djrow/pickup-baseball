@@ -272,22 +272,34 @@ function renderEventDetails() {
       const shareUrl = window.location.href;
       const shareTitle = (ev && ev.title) ? ev.title : 'Sunday Pickup Baseball';
       const shareText = 'Check out this pickup baseball game: ' + shareTitle;
-      if (window.PBFDialog && typeof window.PBFDialog.toast === 'function') {
-        window.PBFDialog.toast('Event link copied to clipboard!', { type: 'success' });
-      }
-      if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-        try {
-          navigator.clipboard.writeText(shareUrl).catch(function() {});
-        } catch (e) { /* ignore clipboard error */ }
-      }
+      const fallbackCopy = function() {
+        if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+          try {
+            navigator.clipboard.writeText(shareUrl).catch(function() {});
+          } catch (e) { /* ignore clipboard error */ }
+        }
+        if (window.PBFDialog && typeof window.PBFDialog.toast === 'function') {
+          window.PBFDialog.toast(API.t('event.share_copied', 'Event link copied to clipboard!'), { type: 'success' });
+        }
+      };
       if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
         try {
           Promise.resolve(navigator.share({
             title: shareTitle,
             text: shareText,
             url: shareUrl
-          })).catch(function() {});
-        } catch (e) { /* ignore Web Share error */ }
+          })).catch(function(err) {
+            if (!err || err.name !== 'AbortError') {
+              fallbackCopy();
+            }
+          });
+        } catch (err) {
+          if (!err || err.name !== 'AbortError') {
+            fallbackCopy();
+          }
+        }
+      } else {
+        fallbackCopy();
       }
     };
   }
@@ -553,19 +565,19 @@ function renderAttendeesRoster() {
           let waiverCheckinHtml = '';
           if (isOrganizer) {
             let badgeClass = 'badge-gray';
-            let badgeLabel = '⏳ Unsigned';
+            let badgeLabel = API.t('event.waiver_badge_unsigned', '⏳ Unsigned');
             let nextAction = 'paper';
             let nextTitle = 'Click to record paper waiver on file';
             let isClickable = true;
 
             if (wStatus === 'digital') {
               badgeClass = 'badge-green';
-              badgeLabel = '🔏 Digital';
+              badgeLabel = API.t('event.waiver_badge_digital', '🔏 Digital');
               nextTitle = 'Signed digital waiver (ESIGN sealed)';
               isClickable = false;
             } else if (wStatus === 'paper') {
               badgeClass = 'badge-blue';
-              badgeLabel = '📄 Paper';
+              badgeLabel = API.t('event.waiver_badge_paper', '📄 Paper');
               nextAction = 'none';
               nextTitle = 'Click to remove paper waiver';
             }
@@ -575,13 +587,14 @@ function renderAttendeesRoster() {
               ? `data-action="toggle-paper-waiver" data-attendee-id="${a.id}" data-user-id="${a.user_id || ''}" data-target-status="${nextAction}"`
               : '';
 
-            waiverCheckinHtml = `<button type="button" class="badge ${badgeClass}" ${actionAttr} title="${nextTitle}" style="font-size: 0.68rem; font-weight: 700; border: none; padding: 2px 7px; ${cursorStyle}">${badgeLabel}</button>`;
+            waiverCheckinHtml = `<button type="button" class="badge ${badgeClass}" ${actionAttr} title="${nextTitle}" style="font-size: 0.68rem; font-weight: 700; border: none; padding: 2px 7px; ${cursorStyle}">${API.escapeHtml(badgeLabel)}</button>`;
           }
 
           let companionsVerifyHtml = '';
           const companionCount = (a.players_count != null ? a.players_count : (1 + (a.additional_guests || 0))) + (a.spectators_count || 0) - 1;
           if (isOrganizer && companionCount > 0) {
-            companionsVerifyHtml = `<div style="font-size: 0.74rem; color: var(--text-muted); margin-top: 2px;">⚠️ +${companionCount} ${companionCount === 1 ? 'companion' : 'companions'} — verify at field</div>`;
+            const compWarn = API.t('event.companions_verify_warning', '⚠️ +{count} companion(s) — verify at field', { count: companionCount });
+            companionsVerifyHtml = `<div style="font-size: 0.74rem; color: var(--text-muted); margin-top: 2px;">${API.escapeHtml(compWarn)}</div>`;
           }
 
           return `
@@ -1512,25 +1525,25 @@ function renderOrganizerInvitePanel() {
     <div class="card" style="padding: 12px 14px; background: var(--bg-card); border-left: 4px solid var(--secondary); border-inline-start: 4px solid var(--secondary); border-radius: 6px;">
       <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
         <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-          <span style="font-weight: 700; font-size: 0.9rem; color: var(--secondary);">🔒 Invite Link</span>
+          <span style="font-weight: 700; font-size: 0.9rem; color: var(--secondary);" data-i18n="event.invite_panel_title">${API.escapeHtml(API.t('event.invite_panel_title', '🔒 Invite Link'))}</span>
           <span class="badge ${isEnabled ? 'badge-green' : 'badge-gray'}" style="font-size: 0.75rem;">
             ${isEnabled ? 'Active (v' + version + ')' : 'Disabled'}
           </span>
         </div>
         <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
           ${isEnabled ? `
-            <button type="button" id="btn-copy-invite-link" class="btn btn-outline btn-sm" style="font-weight: 600;">
-              📋 Copy Invite Link
+            <button type="button" id="btn-copy-invite-link" class="btn btn-outline btn-sm" style="font-weight: 600;" data-i18n="event.invite_copy_btn">
+              ${API.escapeHtml(API.t('event.invite_copy_btn', '📋 Copy Invite Link'))}
             </button>
-            <button type="button" id="btn-rotate-invite-link" class="btn btn-outline btn-sm" style="font-weight: 600; color: var(--danger); border-color: var(--danger);">
-              🔄 Rotate Link
+            <button type="button" id="btn-rotate-invite-link" class="btn btn-outline btn-sm" style="font-weight: 600; color: var(--danger); border-color: var(--danger);" data-i18n="event.invite_rotate_btn">
+              ${API.escapeHtml(API.t('event.invite_rotate_btn', '🔄 Rotate Link'))}
             </button>
-            <button type="button" id="btn-toggle-invite-link" class="btn btn-outline btn-sm">
-              Disable
+            <button type="button" id="btn-toggle-invite-link" class="btn btn-outline btn-sm" data-i18n="event.invite_disable_btn">
+              ${API.escapeHtml(API.t('event.invite_disable_btn', 'Disable'))}
             </button>
           ` : `
-            <button type="button" id="btn-toggle-invite-link" class="btn btn-primary btn-sm">
-              Enable Invite Link
+            <button type="button" id="btn-toggle-invite-link" class="btn btn-primary btn-sm" data-i18n="event.invite_enable_btn">
+              ${API.escapeHtml(API.t('event.invite_enable_btn', 'Enable Invite Link'))}
             </button>
           `}
         </div>
@@ -1547,7 +1560,7 @@ function renderOrganizerInvitePanel() {
       if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
         navigator.clipboard.writeText(inviteUrl).then(function() {
           if (window.PBFDialog && typeof window.PBFDialog.toast === 'function') {
-            window.PBFDialog.toast('Invite link copied to clipboard!', { type: 'success' });
+            window.PBFDialog.toast(API.t('event.invite_copied', 'Invite link copied to clipboard!'), { type: 'success' });
           }
         }).catch(function() {});
       }
@@ -1913,8 +1926,8 @@ function setupRsvpForm() {
         if (currentWaiver === 'none') {
           promptHtml = `
             <div style="margin-top: 10px; padding: 10px 12px; background: var(--bg-surface); border: 1px dashed var(--primary); border-radius: 6px; font-size: 0.85rem; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
-              <span>📝 <strong>Player Waiver:</strong> Please sign the waiver online before arriving at the field.</span>
-              <a href="/waiver.html?redirect=/event.html?id=${encodeURIComponent(eventId)}" class="btn btn-sm btn-primary" style="font-size: 0.8rem; font-weight: 700; text-decoration: none; padding: 4px 10px;">Sign Waiver Before Arrival →</a>
+              <span data-i18n="event.waiver_prompt_text">${API.escapeHtml(API.t('event.waiver_prompt_text', '📝 Player Waiver: Please sign the waiver online before arriving at the field.'))}</span>
+              <a href="/waiver.html?redirect=/event.html?id=${encodeURIComponent(eventId)}" class="btn btn-sm btn-primary" style="font-size: 0.8rem; font-weight: 700; text-decoration: none; padding: 4px 10px;" data-i18n="event.waiver_prompt_btn">${API.escapeHtml(API.t('event.waiver_prompt_btn', 'Sign Waiver Before Arrival →'))}</a>
             </div>
           `;
         }

@@ -668,11 +668,17 @@
           '</div>' +
         '</div>' +
       '</div>' +
-      '<div class="form-group" style="background: var(--bg-card); padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 12px;">' +
+      '<div class="form-group" style="background: var(--bg-card); padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 10px;">' +
         '<label for="' + prefix + '-allowed-emails" style="font-weight: 600; font-size: 0.84rem; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">' +
           '<span>🔒</span> <span>Allowed Player Emails (Whitelist — Optional)</span>' +
         '</label>' +
         '<textarea id="' + prefix + '-allowed-emails" rows="2" placeholder="Leave blank to allow all players; or enter emails separated by commas or lines" style="font-size: 0.82rem;">' + this.escapeHtml((allowedArr || []).join(', ')) + '</textarea>' +
+      '</div>' +
+      '<div class="form-group" style="background: var(--bg-card); padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 12px;">' +
+        '<label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; font-size: 0.84rem; margin: 0;">' +
+          '<input type="checkbox" id="' + prefix + '-auto-reminders" ' + (ev.auto_reminders === 0 ? '' : 'checked') + ' style="width: 16px; height: 16px; accent-color: var(--primary);">' +
+          '<span data-i18n="event.auto_reminders_label">' + this.escapeHtml(this.t('event.auto_reminders_label', '📬 Send automatic 24-hour pre-event reminder emails to confirmed attendees')) + '</span>' +
+        '</label>' +
       '</div>'
     );
   };
@@ -713,6 +719,8 @@
 
     var allowedRaw = allowedEl ? allowedEl.value : '';
     var allowedList = allowedRaw.split(/[,\n;]/).map(function (s) { return s.trim().toLowerCase(); }).filter(function (s) { return s.indexOf('@') !== -1; });
+    var autoRemEl = /** @type {HTMLInputElement|null} */ (document.getElementById(prefix + '-auto-reminders'));
+    var autoReminders = autoRemEl ? (autoRemEl.checked ? 1 : 0) : 1;
 
     return {
       payload: {
@@ -723,7 +731,8 @@
         description: descEl ? descEl.value.trim() : '',
         max_players: maxPlayers,
         actual_attendance: (parsedAtt === null || isNaN(parsedAtt)) ? null : parsedAtt,
-        allowed_emails: allowedList.length > 0 ? allowedList : null
+        allowed_emails: allowedList.length > 0 ? allowedList : null,
+        auto_reminders: autoReminders
       }
     };
   };

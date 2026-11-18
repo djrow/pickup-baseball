@@ -397,8 +397,8 @@ function renderCalendarDrawer(dateKey, game, isPast) {
           <h3>${API.escapeHtml(translatedTitle)}</h3>
         </div>
         <div class="drawer-actions">
-          <button type="button" class="btn btn-outline btn-sm drawer-share-event-btn" data-event-id="${game.id}" data-event-title="${API.escapeHtml(translatedTitle)}" title="Share Event link">
-            🔗 Share Event
+          <button type="button" class="btn btn-outline btn-sm drawer-share-event-btn" data-event-id="${game.id}" data-event-title="${API.escapeHtml(translatedTitle)}" data-i18n="event.share_btn" title="Share Event link">
+            ${API.escapeHtml(API.t('event.share_btn', '🔗 Share Event'))}
           </button>
           <a href="/event.html?id=${game.id}" class="btn btn-primary btn-sm" style="font-weight: 700;">
             📜 View Recap &amp; Comments →
@@ -437,8 +437,8 @@ function renderCalendarDrawer(dateKey, game, isPast) {
               ⚾ BP Signup Sheet
             </a>
           ` : ''}
-          <button type="button" class="btn btn-outline btn-sm drawer-share-event-btn" data-event-id="${game.id}" data-event-title="${API.escapeHtml(translatedTitle)}" title="Share Event link">
-            🔗 Share Event
+          <button type="button" class="btn btn-outline btn-sm drawer-share-event-btn" data-event-id="${game.id}" data-event-title="${API.escapeHtml(translatedTitle)}" data-i18n="event.share_btn" title="Share Event link">
+            ${API.escapeHtml(API.t('event.share_btn', '🔗 Share Event'))}
           </button>
           <a href="/event.html?id=${game.id}" class="btn btn-primary btn-sm" style="font-weight: 700;">
             ${API.escapeHtml(API.t('calendar.view_details', 'RSVP & View Game Details →'))}
@@ -504,18 +504,34 @@ function renderCalendarDrawer(dateKey, game, isPast) {
       const shareUrl = window.location.origin + '/event.html?id=' + encodeURIComponent(game.id);
       const shareTitle = game.title || 'Sunday Pickup Baseball';
       const shareText = 'Join us for ' + shareTitle + '!';
+      const fallbackCopy = function() {
+        if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+          try {
+            navigator.clipboard.writeText(shareUrl).catch(function() {});
+          } catch (e) { /* ignore */ }
+        }
+        if (window.PBFDialog && typeof window.PBFDialog.toast === 'function') {
+          window.PBFDialog.toast(API.t('event.share_copied', 'Event link copied to clipboard!'), { type: 'success' });
+        }
+      };
       if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
-        navigator.share({
-          title: shareTitle,
-          text: shareText,
-          url: shareUrl
-        }).catch(function() {});
-      } else if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-        navigator.clipboard.writeText(shareUrl).then(function() {
-          if (window.PBFDialog && typeof window.PBFDialog.toast === 'function') {
-            window.PBFDialog.toast('Event link copied to clipboard!', { type: 'success' });
+        try {
+          Promise.resolve(navigator.share({
+            title: shareTitle,
+            text: shareText,
+            url: shareUrl
+          })).catch(function(err) {
+            if (!err || err.name !== 'AbortError') {
+              fallbackCopy();
+            }
+          });
+        } catch (err) {
+          if (!err || err.name !== 'AbortError') {
+            fallbackCopy();
           }
-        }).catch(function() {});
+        }
+      } else {
+        fallbackCopy();
       }
     });
   }

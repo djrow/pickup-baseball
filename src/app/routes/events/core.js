@@ -1102,7 +1102,7 @@ eventsCoreRouter.post('/', requireOrganizer, async (c) => {
     const {
       title, description, location, location_url,
       event_date, max_players, use_default_duties,
-      custom_duties, allowed_emails
+      custom_duties, allowed_emails, auto_reminders
     } = await c.req.json();
 
     if (!title || !String(title).trim() || !location || !String(location).trim() || !event_date) {
@@ -1139,10 +1139,11 @@ eventsCoreRouter.post('/', requireOrganizer, async (c) => {
 
     const allowedList = parseAllowedEmails(allowed_emails);
     const allowedEmailsJson = allowedList.length > 0 ? JSON.stringify(allowedList) : null;
+    const autoRemindersVal = (auto_reminders === false || auto_reminders === 0 || auto_reminders === '0' || auto_reminders === 'false') ? 0 : 1;
 
     const insertEventRes = await c.env.DB.prepare(`
-      INSERT INTO events (title, description, location, location_url, event_date, max_players, allowed_emails, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO events (title, description, location, location_url, event_date, max_players, allowed_emails, auto_reminders, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       String(title).trim().slice(0, 150),
       String(description || '').trim().slice(0, 2000),
@@ -1151,6 +1152,7 @@ eventsCoreRouter.post('/', requireOrganizer, async (c) => {
       event_date,
       max_players ? parseInt(max_players, 10) : null,
       allowedEmailsJson,
+      autoRemindersVal,
       user.id
     ).run();
 
@@ -1188,7 +1190,7 @@ eventsCoreRouter.put('/:id', requireOrganizer, async (c) => {
     if (!eventId || isNaN(eventId) || eventId <= 0) {
       return c.json({ error: 'Invalid event ID.' }, 400);
     }
-    const { title, description, location, location_url, event_date, max_players, actual_attendance, status, allowed_emails, invite_enabled } = await c.req.json();
+    const { title, description, location, location_url, event_date, max_players, actual_attendance, status, allowed_emails, invite_enabled, auto_reminders } = await c.req.json();
 
     const existingEvent = await c.env.DB.prepare('SELECT * FROM events WHERE id = ?').bind(eventId).first();
     if (!existingEvent) {
@@ -1238,6 +1240,10 @@ eventsCoreRouter.put('/:id', requireOrganizer, async (c) => {
       ? (invite_enabled ? 1 : 0)
       : existingEvent.invite_enabled;
 
+    const newAutoReminders = auto_reminders !== undefined
+      ? ((auto_reminders === false || auto_reminders === 0 || auto_reminders === '0' || auto_reminders === 'false') ? 0 : 1)
+      : (existingEvent.auto_reminders !== undefined && existingEvent.auto_reminders !== null ? existingEvent.auto_reminders : 1);
+
     const dateChanged = Boolean(
       event_date !== undefined &&
       event_date !== null &&
@@ -1255,6 +1261,7 @@ eventsCoreRouter.put('/:id', requireOrganizer, async (c) => {
           actual_attendance = ?,
           allowed_emails = ?,
           invite_enabled = ?,
+          auto_reminders = ?,
           status = COALESCE(?, status),
           reminder_sent = CASE WHEN ? = 1 THEN 0 ELSE reminder_sent END
       WHERE id = ?
@@ -1268,6 +1275,7 @@ eventsCoreRouter.put('/:id', requireOrganizer, async (c) => {
       newActualAttendance,
       newAllowedEmails,
       newInviteEnabled,
+      newAutoReminders,
       status || null,
       dateChanged ? 1 : 0,
       eventId

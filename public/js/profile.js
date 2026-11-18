@@ -670,12 +670,17 @@ function setupHistoryPanel() {
   panel.addEventListener('toggle', function() {
     if (!panel.open || loaded) return;
     loaded = true;
-    body.textContent = 'Loading...';
+    body.textContent = API.t('profile.history_loading', 'Loading...');
     fetch('/api/auth/me/history', { credentials: 'same-origin' }).then(function(r) { return r.json(); }).then(function(d) {
       const esc = API.escapeHtml;
       const badges = (d.milestones || []).map(function(m) { return '<li>' + esc(m.label) + '</li>'; }).join('');
-      body.innerHTML = '<p id="history-counts">' + esc(String(d.events_attended || 0)) + ' Events attended, ' + esc(String(d.tasks_completed || 0)) + ' Volunteer Tasks completed</p>' +
-        '<ul id="history-milestones">' + (badges || '<li>No milestones yet</li>') + '</ul>';
-    }).catch(function() { loaded = false; body.textContent = 'Could not load history.'; });
+      const countsText = API.t('profile.history_counts', '{events} Events attended, {tasks} Volunteer Tasks completed', {
+        events: String(d.events_attended || 0),
+        tasks: String(d.tasks_completed || 0)
+      });
+      const noMilestonesText = API.t('profile.history_no_milestones', 'No milestones yet');
+      body.innerHTML = '<p id="history-counts">' + esc(countsText) + '</p>' +
+        '<ul id="history-milestones">' + (badges || '<li>' + esc(noMilestonesText) + '</li>') + '</ul>';
+    }).catch(function() { loaded = false; body.textContent = API.t('profile.history_load_error', 'Could not load history.'); });
   });
 }

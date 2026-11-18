@@ -14,6 +14,7 @@ const { createD1Adapter } = require('../../src/d1-sqlite');
 const { ensureD1Schema } = require('../../src/app/schema.js');
 const { buildRsvpConfirmationEmail } = require('../../src/app/mailer/templates.js');
 
+function registerWaiverCheckinTests() {
 test('Issue #60: Organizer paper check-in, peer status stripping & waiver prompt', async (t) => {
   const { app: honoApp } = await import('../../src/app/index.js');
 
@@ -281,3 +282,9 @@ test('Issue #60: Organizer paper check-in, peer status stripping & waiver prompt
 
   rawDb.close();
 });
+}
+
+if (require.main === module) {
+  registerWaiverCheckinTests();
+}
+module.exports = registerWaiverCheckinTests;

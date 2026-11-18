@@ -116,15 +116,21 @@ export async function promoteNextWaitlistedPlayer(c, origin, eventId) {
     if (!firstPromoted) firstPromoted = nextWaitlisted;
 
     if (isDeliverableEmail(nextWaitlisted.email)) {
-      runBackground(c, sendWaitlistPromotionEmail(c.env, origin, {
-        email: nextWaitlisted.email,
-        name: nextWaitlisted.name,
-        event
-      }).catch(err => logEvent('error', 'waitlist_promotion_email_failed', {
-        code: ERROR_CODES.MAIL_ERROR,
-        email: nextWaitlisted.email,
-        msg: err && err.message ? err.message : 'Waitlist promotion email failed'
-      })));
+      const promoCandidate = Object.assign({}, nextWaitlisted, {
+        notify_emails: 1
+      });
+      const allowedPromo = await filterByPreference(db, [promoCandidate], 'notify_rsvp_confirm');
+      if (allowedPromo.length > 0) {
+        runBackground(c, sendWaitlistPromotionEmail(c.env, origin, {
+          email: nextWaitlisted.email,
+          name: nextWaitlisted.name,
+          event
+        }).catch(err => logEvent('error', 'waitlist_promotion_email_failed', {
+          code: ERROR_CODES.MAIL_ERROR,
+          email: nextWaitlisted.email,
+          msg: err && err.message ? err.message : 'Waitlist promotion email failed'
+        })));
+      }
     }
   }
 
