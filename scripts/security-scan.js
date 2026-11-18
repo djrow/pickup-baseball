@@ -298,6 +298,11 @@ const PUBLIC_OR_TOKEN_ROUTE_MANIFEST = [
     reason: 'Public community/fork branding & feature-flag configuration (ADR-0001)'
   },
   {
+    ast: 'index.js:GET:/mailing-list/count',
+    route: 'GET /api/mailing-list/count',
+    reason: 'Public cached integer count of mailing list subscribers'
+  },
+  {
     ast: 'index.js:GET:/settings',
     route: 'GET /api/settings',
     reason: 'Public login/upload policy flags (admin-only appscript_upload_url gated inside handler)'
