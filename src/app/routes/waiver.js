@@ -15,6 +15,7 @@ import {
   constantTimeEqual,
   checkRateLimit,
   requireAuth,
+  requireOrganizer,
   requireAdmin
 } from '../security.js';
 import { isGDriveConfigured, uploadGDriveTextFile } from '../gdrive.js';
@@ -1003,8 +1004,8 @@ waiverRouter.get('/admin/quarantined/:id', requireAdmin, async (c) => {
   });
 });
 
-// PUT /api/waiver/admin/users/:id — Admin endpoint to set waiver_status ('none' | 'paper' | 'digital')
-waiverRouter.put('/admin/users/:id', requireAdmin, async (c) => {
+// PUT /api/waiver/checkin/users/:id or PUT /api/waiver/admin/users/:id — Organizer/Admin endpoint to set waiver_status ('none' | 'paper' | 'digital')
+const handleUserWaiverCheckin = async (c) => {
   const targetId = parseInt(c.req.param('id'), 10);
   if (!targetId || isNaN(targetId) || targetId <= 0) {
     return c.json({ error: 'Invalid user ID.' }, 400);
@@ -1026,6 +1027,11 @@ waiverRouter.put('/admin/users/:id', requireAdmin, async (c) => {
     return c.json({ error: "Invalid waiver_status. Must be 'none', 'paper', or 'digital'." }, 400);
   }
 
+  const currentStatus = targetUser.waiver_status || 'none';
+  if (currentStatus === 'digital' && newStatus !== 'digital') {
+    return c.json({ error: 'Cannot overwrite an existing digital ESIGN waiver.' }, 409);
+  }
+
   const newSignedAt = newStatus === 'none'
     ? null
     : (targetUser.waiver_signed_at || new Date().toISOString());
@@ -1042,6 +1048,74 @@ waiverRouter.put('/admin/users/:id', requireAdmin, async (c) => {
       waiver_status: newStatus,
       waiver_signed: newStatus === 'paper' || newStatus === 'digital',
       waiver_signed_at: newSignedAt
+    }
+  });
+};
+
+waiverRouter.put('/checkin/users/:id', requireOrganizer, handleUserWaiverCheckin);
+waiverRouter.put('/admin/users/:id', requireAdmin, handleUserWaiverCheckin);
+
+// PUT /api/waiver/checkin/attendees/:id — Organizer/Admin endpoint to toggle paper waiver on Visitor RSVP row
+waiverRouter.put('/checkin/attendees/:id', requireOrganizer, async (c) => {
+  const attendeeId = parseInt(c.req.param('id'), 10);
+  if (!attendeeId || isNaN(attendeeId) || attendeeId <= 0) {
+    return c.json({ error: 'Invalid attendee ID.' }, 400);
+  }
+  const user = c.get('user');
+  const attendee = await c.env.DB.prepare(`
+    SELECT a.id, a.user_id, a.name, a.email, a.paper_waiver_at, a.paper_waiver_by, u.waiver_status as user_waiver_status
+    FROM attendees a
+    LEFT JOIN users u ON a.user_id = u.id
+    WHERE a.id = ?
+  `).bind(attendeeId).first();
+  if (!attendee) {
+    return c.json({ error: 'Attendee not found.' }, 404);
+  }
+
+  // Check if this attendee is already covered by an active digital waiver (via user account or waivers table)
+  if (attendee.user_waiver_status === 'digital') {
+    return c.json({ error: 'Cannot overwrite an existing digital ESIGN waiver.' }, 409);
+  }
+  if (attendee.email) {
+    const activeDigital = await c.env.DB.prepare(`
+      SELECT id FROM waivers
+      WHERE email = ? AND COALESCE(status, 'active') != 'quarantined'
+      LIMIT 1
+    `).bind(String(attendee.email).toLowerCase()).first();
+    if (activeDigital) {
+      return c.json({ error: 'Cannot overwrite an existing digital ESIGN waiver.' }, 409);
+    }
+  }
+
+  let body;
+  try {
+    body = await c.req.json();
+  } catch (e) {
+    return c.json({ error: 'Invalid JSON request body.' }, 400);
+  }
+
+  const requestedStatus = String(body.waiver_status || '').trim().toLowerCase();
+  if (!['none', 'paper'].includes(requestedStatus)) {
+    return c.json({ error: "Invalid waiver_status. Must be 'none' or 'paper'." }, 400);
+  }
+
+  const newPaperAt = requestedStatus === 'paper' ? new Date().toISOString() : null;
+  const newPaperBy = requestedStatus === 'paper' ? (user ? user.id : null) : null;
+
+  await c.env.DB.prepare(`
+    UPDATE attendees
+    SET paper_waiver_at = ?, paper_waiver_by = ?
+    WHERE id = ?
+  `).bind(newPaperAt, newPaperBy, attendeeId).run();
+
+  return c.json({
+    success: true,
+    message: `Paper waiver for ${attendee.name} updated to ${requestedStatus}.`,
+    attendee: {
+      id: attendeeId,
+      waiver_status: requestedStatus,
+      paper_waiver_at: newPaperAt,
+      paper_waiver_by: newPaperBy
     }
   });
 });

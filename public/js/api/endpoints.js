@@ -366,7 +366,11 @@
   };
 
   API.updateUserWaiverStatus = function (userId, waiverStatus) {
-    return this.request('PUT', '/api/waiver/admin/users/' + encodeURIComponent(userId), { waiver_status: waiverStatus });
+    return this.request('PUT', '/api/waiver/checkin/users/' + encodeURIComponent(userId), { waiver_status: waiverStatus });
+  };
+
+  API.updateAttendeeWaiverStatus = function (attendeeId, waiverStatus) {
+    return this.request('PUT', '/api/waiver/checkin/attendees/' + encodeURIComponent(attendeeId), { waiver_status: waiverStatus });
   };
 
   API.deleteUser = function (userId, ban, reason) {

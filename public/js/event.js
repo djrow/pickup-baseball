@@ -544,6 +544,42 @@ function renderAttendeesRoster() {
             roleBadges.push(`<span class="badge badge-volunteer" style="font-size: 0.7rem;">🙌 Volunteer (Non-Playing)</span>`);
           }
 
+          const isOrganizer = Boolean(API.currentUser && (API.currentUser.canManageEvents || API.currentUser.isAdmin));
+          const wStatus = a.waiver_status || 'none';
+          let waiverCheckinHtml = '';
+          if (isOrganizer) {
+            let badgeClass = 'badge-gray';
+            let badgeLabel = '⏳ Unsigned';
+            let nextAction = 'paper';
+            let nextTitle = 'Click to record paper waiver on file';
+            let isClickable = true;
+
+            if (wStatus === 'digital') {
+              badgeClass = 'badge-green';
+              badgeLabel = '🔏 Digital';
+              nextTitle = 'Signed digital waiver (ESIGN sealed)';
+              isClickable = false;
+            } else if (wStatus === 'paper') {
+              badgeClass = 'badge-blue';
+              badgeLabel = '📄 Paper';
+              nextAction = 'none';
+              nextTitle = 'Click to remove paper waiver';
+            }
+
+            const cursorStyle = isClickable ? 'cursor: pointer;' : 'cursor: default;';
+            const actionAttr = isClickable
+              ? `data-action="toggle-paper-waiver" data-attendee-id="${a.id}" data-user-id="${a.user_id || ''}" data-target-status="${nextAction}"`
+              : '';
+
+            waiverCheckinHtml = `<button type="button" class="badge ${badgeClass}" ${actionAttr} title="${nextTitle}" style="font-size: 0.68rem; font-weight: 700; border: none; padding: 2px 7px; ${cursorStyle}">${badgeLabel}</button>`;
+          }
+
+          let companionsVerifyHtml = '';
+          const companionCount = (a.players_count != null ? a.players_count : (1 + (a.additional_guests || 0))) + (a.spectators_count || 0) - 1;
+          if (isOrganizer && companionCount > 0) {
+            companionsVerifyHtml = `<div style="font-size: 0.74rem; color: var(--text-muted); margin-top: 2px;">⚠️ +${companionCount} ${companionCount === 1 ? 'companion' : 'companions'} — verify at field</div>`;
+          }
+
           return `
             <li class="roster-item" style="display: flex; gap: 12px; align-items: flex-start;">
               ${avatarImg}
@@ -555,9 +591,11 @@ function renderAttendeesRoster() {
                   </div>
                   <div style="display: flex; gap: 5px; align-items: center; flex-wrap: wrap;">
                     ${roleBadges.join('')}
+                    ${waiverCheckinHtml}
                     ${canMod ? `<button type="button" data-action="remove-attendee" data-attendee-id="${a.id}" title="Remove from roster" style="background:none;border:none;cursor:pointer;font-size:0.85rem;color:var(--danger);padding:0 2px;">🗑️</button>` : ''}
                   </div>
                 </div>
+                ${companionsVerifyHtml}
                 ${a.guest_names ? `<div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 3px;">👥 <em>${API.escapeHtml(API.t('event.guests_prefix', 'Group:'))} ${API.escapeHtml(API.formatDisplayNameList(a.guest_names))}</em></div>` : ''}
                 ${translatedDuties ? `<div style="font-size: 0.79rem; color: var(--primary); font-weight: 700; margin-top: 3px;">🛡️ Group Tasks: ${API.escapeHtml(translatedDuties)}</div>` : ''}
                 ${a.gear_bringing ? `<div class="roster-gear">🎒 <em>${API.escapeHtml(a.gear_bringing)}</em></div>` : ''}
@@ -618,11 +656,45 @@ function renderAttendeesRoster() {
   container.innerHTML = rosterHtml + waitlistHtml;
   if (!container.dataset.cspBound) {
     container.dataset.cspBound = '1';
-    container.addEventListener('click', function(e) {
-      const btn = e.target.closest('[data-action="remove-attendee"]');
-      if (!btn || !container.contains(btn)) return;
-      if (typeof window.removeRosterAttendee === 'function') {
-        window.removeRosterAttendee(parseInt(btn.dataset.attendeeId, 10));
+    container.addEventListener('click', async function(e) {
+      const removeBtn = e.target.closest('[data-action="remove-attendee"]');
+      if (removeBtn && container.contains(removeBtn)) {
+        if (typeof window.removeRosterAttendee === 'function') {
+          window.removeRosterAttendee(parseInt(removeBtn.dataset.attendeeId, 10));
+        }
+        return;
+      }
+
+      const waiverBtn = e.target.closest('[data-action="toggle-paper-waiver"]');
+      if (waiverBtn && container.contains(waiverBtn)) {
+        const attendeeId = waiverBtn.dataset.attendeeId ? parseInt(waiverBtn.dataset.attendeeId, 10) : null;
+        const userId = waiverBtn.dataset.userId ? parseInt(waiverBtn.dataset.userId, 10) : null;
+        const targetStatus = waiverBtn.dataset.targetStatus || 'paper';
+
+        waiverBtn.disabled = true;
+        try {
+          let res;
+          if (userId) {
+            res = await API.updateUserWaiverStatus(userId, targetStatus);
+          } else if (attendeeId) {
+            res = await API.updateAttendeeWaiverStatus(attendeeId, targetStatus);
+          }
+          if (res && res.error) {
+            if (window.PBFDialog && typeof window.PBFDialog.toast === 'function') {
+              window.PBFDialog.toast(res.error, { type: 'error' });
+            } else {
+              alert(res.error);
+            }
+            waiverBtn.disabled = false;
+          } else {
+            await loadEventData(true);
+          }
+        } catch (err) {
+          if (window.PBFDialog && typeof window.PBFDialog.toast === 'function') {
+            window.PBFDialog.toast(err.message || 'Failed to update waiver status', { type: 'error' });
+          }
+          waiverBtn.disabled = false;
+        }
       }
     });
   }
@@ -1832,7 +1904,17 @@ function setupRsvpForm() {
           try { localStorage.setItem('guest_token_' + eventId, guestToken); } catch (e) { /* localStorage unavailable */ }
         }
         const alertClass = res.status === 'waitlist' ? 'alert-info' : 'alert-success';
-        alertBox.innerHTML = `<div class="alert ${alertClass}">${API.escapeHtml(res.message)}</div>`;
+        let promptHtml = '';
+        const currentWaiver = (API.currentUser && API.currentUser.waiver_status) || (eventData && eventData.myRsvp && eventData.myRsvp.waiver_status) || 'none';
+        if (currentWaiver === 'none') {
+          promptHtml = `
+            <div style="margin-top: 10px; padding: 10px 12px; background: var(--bg-surface); border: 1px dashed var(--primary); border-radius: 6px; font-size: 0.85rem; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+              <span>📝 <strong>Player Waiver:</strong> Please sign the waiver online before arriving at the field.</span>
+              <a href="/waiver.html?redirect=/event.html?id=${encodeURIComponent(eventId)}" class="btn btn-sm btn-primary" style="font-size: 0.8rem; font-weight: 700; text-decoration: none; padding: 4px 10px;">Sign Waiver Before Arrival →</a>
+            </div>
+          `;
+        }
+        alertBox.innerHTML = `<div class="alert ${alertClass}">${API.escapeHtml(res.message)}${promptHtml}</div>`;
         await loadEventData(true);
       }
     } catch (err) {

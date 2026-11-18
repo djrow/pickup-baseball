@@ -1359,6 +1359,9 @@ authRouter.put('/users/:id/badges', requireAdmin, async (c) => {
       if (!['none', 'paper', 'digital'].includes(requestedStatus)) {
         return c.json({ error: "Invalid waiver_status. Must be 'none', 'paper', or 'digital'." }, 400);
       }
+      if (targetUser.waiver_status === 'digital' && requestedStatus !== 'digital') {
+        return c.json({ error: 'Cannot overwrite an existing digital ESIGN waiver.' }, 409);
+      }
       newWaiverStatus = requestedStatus;
       newWaiverSignedAt = requestedStatus === 'none' ? null : (targetUser.waiver_signed_at || new Date().toISOString());
     }

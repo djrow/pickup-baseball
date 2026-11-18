@@ -682,8 +682,17 @@ eventsCoreRouter.get('/:id', async (c) => {
           COALESCE(a.spectators_count, 0) as spectators_count,
           a.additional_guests, a.guest_names, a.is_guest, a.created_at,
           COALESCE(a.roster_consent, 0) as roster_consent,
+          a.paper_waiver_at, a.paper_waiver_by,
           u.bio,
-          COALESCE(u.waiver_status, 'none') as waiver_status,
+          COALESCE(
+            CASE
+              WHEN u.waiver_status = 'digital' THEN 'digital'
+              WHEN (SELECT 1 FROM waivers w WHERE w.email = a.email AND COALESCE(w.status, 'active') != 'quarantined' LIMIT 1) IS NOT NULL THEN 'digital'
+              WHEN a.paper_waiver_at IS NOT NULL OR u.waiver_status = 'paper' THEN 'paper'
+              ELSE 'none'
+            END,
+            'none'
+          ) as waiver_status,
           COALESCE(u.roster_visibility, 0) as roster_visibility,
           COALESCE(u.profile_sharing, 0) as profile_sharing,
           ${AVATAR_EXPR} as avatar_url,
@@ -704,8 +713,17 @@ eventsCoreRouter.get('/:id', async (c) => {
           COALESCE(a.spectators_count, 0) as spectators_count,
           a.additional_guests, a.guest_names, a.is_guest, a.created_at,
           COALESCE(a.roster_consent, 0) as roster_consent,
+          a.paper_waiver_at, a.paper_waiver_by,
           u.bio,
-          COALESCE(u.waiver_status, 'none') as waiver_status,
+          COALESCE(
+            CASE
+              WHEN u.waiver_status = 'digital' THEN 'digital'
+              WHEN (SELECT 1 FROM waivers w WHERE w.email = a.email AND COALESCE(w.status, 'active') != 'quarantined' LIMIT 1) IS NOT NULL THEN 'digital'
+              WHEN a.paper_waiver_at IS NOT NULL OR u.waiver_status = 'paper' THEN 'paper'
+              ELSE 'none'
+            END,
+            'none'
+          ) as waiver_status,
           COALESCE(u.roster_visibility, 0) as roster_visibility,
           COALESCE(u.profile_sharing, 0) as profile_sharing,
           ${AVATAR_EXPR} as avatar_url
@@ -752,6 +770,16 @@ eventsCoreRouter.get('/:id', async (c) => {
             a.additional_guests, a.guest_names,
             COALESCE(a.notify_emails, 0) as notify_emails,
             COALESCE(a.roster_consent, 0) as roster_consent,
+            a.paper_waiver_at, a.paper_waiver_by,
+            COALESCE(
+              CASE
+                WHEN u.waiver_status = 'digital' THEN 'digital'
+                WHEN (SELECT 1 FROM waivers w WHERE w.email = a.email AND COALESCE(w.status, 'active') != 'quarantined' LIMIT 1) IS NOT NULL THEN 'digital'
+                WHEN a.paper_waiver_at IS NOT NULL OR u.waiver_status = 'paper' THEN 'paper'
+                ELSE 'none'
+              END,
+              'none'
+            ) as waiver_status,
             COALESCE(u.machine_badge, 0) as machine_badge,
             COALESCE(u.field_badge, 0) as field_badge,
             COALESCE(u.hero_credits, 0) as hero_credits,
