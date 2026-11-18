@@ -69,7 +69,7 @@ async function initAdmin() {
   }
 
   currentAdminUser = user;
-  const adminMain = document.getElementById('admin-main-container');
+  const adminMain = document.getElementById('admin-main-container') || document.getElementById('main-content');
   if (adminMain) adminMain.style.display = 'block';
   API.renderNav(user);
   applyRoleUI(user);

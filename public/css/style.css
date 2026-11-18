@@ -17,6 +17,30 @@
    9.  Footer Security Verification Badges
    ========================================================================== */
 
+/* Accessibility: Skip to Main Content Link */
+.pbf-skip-link {
+  position: absolute;
+  top: -9999px;
+  left: 16px;
+  z-index: 100000;
+  padding: 10px 16px;
+  background: var(--primary, #FD5A1E);
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 14px;
+  text-decoration: none;
+  border-radius: 0 0 6px 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  transition: top 0.15s ease;
+}
+
+.pbf-skip-link:focus,
+.pbf-skip-link:focus-visible {
+  top: 0;
+  outline: 3px solid #ffffff;
+  outline-offset: 2px;
+}
+
 :root,
 [data-color-theme="bay-area"] {
   /* Bay Area Heritage Palette */

@@ -101,10 +101,11 @@
   </style>
 </head>
 <body>
+  <a href="#main-content" class="pbf-skip-link">Skip to main content</a>
 
   <!-- Site Header -->
   <header class="site-header">
-    <div class="container" id="main-nav">
+    <nav class="container" id="main-nav" aria-label="Main Navigation">
       <div class="nav-wrap">
         <a href="/index.html" class="brand">
           <img src="/logo.svg" alt="Pickup Baseball Foundation Logo" class="brand-logo">
@@ -128,10 +129,10 @@
           </div>
         </div>
       </div>
-    </div>
+    </nav>
   </header>
 
-  <main class="container" style="max-width: 780px; margin-top: 28px; margin-bottom: 60px;">
+  <main class="container" id="main-content" style="max-width: 780px; margin-top: 28px; margin-bottom: 60px;">
     <div class="no-print" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
       <a href="/index.html" style="color: var(--secondary); text-decoration: none; font-weight: 600; font-size: 0.9rem;" data-i18n="waiver.back_to_games">
         ← Back to Game Schedule
@@ -191,7 +192,7 @@
 
       <!-- Sign-In Required Prompt (shown when not logged in) -->
       <div id="waiver-auth-prompt" class="no-print" style="display: none; margin-top: 28px; padding: 20px; background: var(--bg-subtle); border: 1.5px solid var(--border); border-radius: var(--radius-sm); font-family: var(--font-sans);">
-        <h3 style="color: var(--secondary); font-size: 1.05rem; margin: 0 0 6px 0;" data-i18n="waiver.sign_online_title">🔏 Sign Online with Verified Email Provenance</h3>
+        <h2 style="color: var(--secondary); font-size: 1.05rem; margin: 0 0 6px 0;" data-i18n="waiver.sign_online_title">🔏 Sign Online with Verified Email Provenance</h2>
         <p style="font-size: 0.88rem; color: var(--text-muted); margin: 0 0 14px 0; text-align: left;">
           To sign this waiver digitally with a verifiable cryptographic audit trail, please sign in with your email address first. If you already signed a paper waiver at the field, an administrator can also mark your account as waived.
         </p>
@@ -203,7 +204,7 @@
       <!-- Interactive Digital Signature Form (shown when logged in) -->
       <form id="waiver-sign-form" class="no-print" style="display: none; margin-top: 28px; padding-top: 24px; border-top: 2px solid var(--border); font-family: var(--font-sans);">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
-          <h3 style="color: var(--secondary); font-size: 1.08rem; margin: 0;" data-i18n="waiver.execute_sig">✍️ Execute Digital Signature</h3>
+          <h2 style="color: var(--secondary); font-size: 1.08rem; margin: 0;" data-i18n="waiver.execute_sig">✍️ Execute Digital Signature</h2>
           <span id="waiver-verified-email-pill" class="badge badge-green" style="font-size: 0.78rem;"></span>
         </div>
 

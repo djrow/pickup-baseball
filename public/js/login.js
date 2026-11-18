@@ -29,7 +29,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     const visitorErasureCard = document.getElementById('visitor-erasure-card');
     if (visitorErasureCard) visitorErasureCard.style.display = 'none';
 
-    const mainContainer = document.getElementById('login-main-container');
+    const mainContainer = document.getElementById('login-main-container') || document.getElementById('main-content');
     if (mainContainer) mainContainer.style.maxWidth = '560px';
 
     const alreadyLoggedInBox = document.getElementById('already-logged-in');

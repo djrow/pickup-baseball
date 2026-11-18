@@ -155,6 +155,145 @@
     activeBackdrop = null;
   }
 
+  var FOCUSABLE_SELECTOR = 'a[href], area[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), iframe, object, embed, [tabindex]:not([tabindex="-1"]), [contenteditable]';
+
+  function isVisible(el) {
+    if (!el || el.nodeType !== 1) return false;
+    if (el.offsetWidth === 0 && el.offsetHeight === 0 && !el.getClientRects().length) return false;
+    if (typeof window !== 'undefined' && window.getComputedStyle) {
+      var style = window.getComputedStyle(el);
+      if (style.display === 'none' || style.visibility === 'hidden') return false;
+    }
+    return true;
+  }
+
+  function getFocusableElements(container) {
+    if (!container || typeof container.querySelectorAll !== 'function') return [];
+    var list = container.querySelectorAll(FOCUSABLE_SELECTOR);
+    var res = [];
+    for (var i = 0; i < list.length; i++) {
+      var el = list[i];
+      if (isVisible(el) && el.tabIndex >= 0) {
+        res.push(el);
+      }
+    }
+    return res;
+  }
+
+  function trapFocus(containerEl, opts) {
+    if (!containerEl) {
+      return {
+        release: function () {},
+        update: function () {}
+      };
+    }
+    var options = opts || {};
+    var triggerEl = options.triggerEl || (typeof document !== 'undefined' ? document.activeElement : null);
+    var onEscape = typeof options.onEscape === 'function' ? options.onEscape : null;
+    var enableEscape = options.escape !== false;
+    var siblingInert = options.siblingInert !== false;
+    var initialFocus = options.initialFocus !== undefined ? options.initialFocus : true;
+
+    var inertElements = [];
+
+    if (siblingInert && typeof document !== 'undefined' && document.body) {
+      var cur = containerEl;
+      while (cur && cur !== document.body && cur.parentElement) {
+        var parent = cur.parentElement;
+        var siblings = parent.children;
+        for (var s = 0; s < siblings.length; s++) {
+          var sib = siblings[s];
+          if (sib !== cur && sib.nodeType === 1 && !sib.inert) {
+            sib.inert = true;
+            inertElements.push(sib);
+          }
+        }
+        cur = parent;
+      }
+    }
+
+    function onKeyDown(e) {
+      if (enableEscape && e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        if (onEscape) {
+          onEscape();
+        }
+        return;
+      }
+      if (e.key === 'Tab') {
+        var focusables = getFocusableElements(containerEl);
+        if (focusables.length === 0) {
+          e.preventDefault();
+          return;
+        }
+        var first = focusables[0];
+        var last = focusables[focusables.length - 1];
+        var active = document.activeElement;
+
+        if (e.shiftKey) {
+          if (active === first || !containerEl.contains(active)) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (active === last || !containerEl.contains(active)) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }
+    }
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('keydown', onKeyDown, true);
+    }
+
+    if (initialFocus) {
+      var target = null;
+      if (typeof initialFocus === 'string') {
+        target = containerEl.querySelector(initialFocus);
+      } else if (initialFocus && initialFocus.nodeType === 1) {
+        target = initialFocus;
+      } else {
+        var all = getFocusableElements(containerEl);
+        if (all.length > 0) target = all[0];
+      }
+      if (target && typeof target.focus === 'function') {
+        setTimeout(function () {
+          try { target.focus(); } catch (e) { /* best-effort focus */ }
+        }, 0);
+      }
+    }
+
+    var released = false;
+    function release() {
+      if (released) return;
+      released = true;
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('keydown', onKeyDown, true);
+      }
+      for (var i = 0; i < inertElements.length; i++) {
+        try {
+          inertElements[i].inert = false;
+        } catch (e) { /* ignore */ }
+      }
+      inertElements = [];
+      if (triggerEl && typeof triggerEl.focus === 'function') {
+        try { triggerEl.focus(); } catch (e) { /* best-effort restore */ }
+      }
+    }
+
+    function update() {
+      // Refresh inert siblings if container was remounted or DOM changed
+    }
+
+    return {
+      release: release,
+      update: update
+    };
+  }
+
   function openModal(config) {
     if (typeof document === 'undefined' || !document.body) {
       return Promise.resolve(config.defaultCancelValue !== undefined ? config.defaultCancelValue : null);
@@ -206,24 +345,18 @@
       }
       card.appendChild(footer);
 
+      var focusController = null;
+
       function finish(result) {
         if (settled) return;
         settled = true;
-        document.removeEventListener('keydown', onKeyDown, true);
+        if (focusController) {
+          focusController.release();
+          focusController = null;
+        }
         if (backdrop.parentNode) backdrop.parentNode.removeChild(backdrop);
         if (activeBackdrop === backdrop) activeBackdrop = null;
-        if (previouslyFocused && typeof previouslyFocused.focus === 'function') {
-          try { previouslyFocused.focus(); } catch (e) { /* best-effort focus restore */ }
-        }
         resolve(result);
-      }
-
-      function onKeyDown(e) {
-        if (e.key === 'Escape') {
-          e.preventDefault();
-          e.stopPropagation();
-          finish(config.defaultCancelValue !== undefined ? config.defaultCancelValue : null);
-        }
       }
 
       backdrop.addEventListener('click', function (e) {
@@ -232,16 +365,18 @@
         }
       });
 
-      document.addEventListener('keydown', onKeyDown, true);
       activeBackdrop = backdrop;
       document.body.appendChild(backdrop);
 
-      var focusTarget = card.querySelector('input, textarea, select, button.pbf-dialog-btn-primary, button');
-      if (focusTarget && typeof focusTarget.focus === 'function') {
-        setTimeout(function () {
-          try { focusTarget.focus(); } catch (e) { /* best-effort initial focus */ }
-        }, 0);
-      }
+      focusController = trapFocus(backdrop, {
+        triggerEl: previouslyFocused,
+        escape: true,
+        onEscape: function () {
+          finish(config.defaultCancelValue !== undefined ? config.defaultCancelValue : null);
+        },
+        siblingInert: true,
+        initialFocus: card.querySelector('input, textarea, select, button.pbf-dialog-btn-primary, button')
+      });
     });
   }
 
@@ -499,7 +634,8 @@
     confirm: showConfirm,
     confirmWithCheckbox: showConfirmWithCheckbox,
     prompt: showPrompt,
-    form: showForm
+    form: showForm,
+    trapFocus: trapFocus
   };
 
   if (typeof window !== 'undefined') {

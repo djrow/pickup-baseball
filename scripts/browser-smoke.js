@@ -647,6 +647,24 @@ async function runPublicShellAndDiagnosticsSmoke(browser, session, server, track
   await session.evaluate('localStorage.removeItem("pickup_theme_mode"); localStorage.removeItem("pickup_theme"); localStorage.removeItem("pickup_color_theme");');
   record('clubhouse.html theme modal switches Light/Dark mode & MLB market palettes cleanly');
 
+  // Verify unified overlay focus controller on clubhouse modals (inert siblings, focus trap, Escape)
+  await clickEl(session, '#btn-user-vault');
+  await session.waitFor('!document.getElementById("ch-vault-modal").classList.contains("hidden")');
+  const vaultInertState = await session.evaluate(`({
+    appInert: document.getElementById("clubhouse-app").inert === true,
+    activeRole: document.activeElement ? document.activeElement.tagName : ''
+  })`);
+  assert(vaultInertState.appInert, 'Opening ch-vault-modal sets sibling #clubhouse-app to inert');
+  await session.evaluate('document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))');
+  await session.waitFor('document.getElementById("ch-vault-modal").classList.contains("hidden")');
+  const vaultRestoredState = await session.evaluate(`({
+    appInert: document.getElementById("clubhouse-app").inert === true,
+    focusRestored: document.activeElement === document.getElementById("btn-user-vault")
+  })`);
+  assert(!vaultRestoredState.appInert, 'Closing ch-vault-modal clears inert from #clubhouse-app');
+  assert(vaultRestoredState.focusRestored, 'Closing ch-vault-modal restores focus to trigger button');
+  record('clubhouse.html vault modal verifies unified focus trap, sibling inert, and trigger focus restoration');
+
   // Clubhouse Mobile Drawers RTL check (sidebar & context drawers in RTL)
   for (const rtlLang of ['ar', 'fa']) {
     await session.evaluate(`localStorage.setItem("pickup_lang", "${rtlLang}");`);
@@ -839,7 +857,7 @@ async function runAdminEventAndTaskJourney(browser, server, tracker, record) {
   try {
     await session.setCookie(server.adminCookie, server.baseUrl);
     await session.navigateAndCheck(`${server.baseUrl}/admin.html`, 'admin.html', tracker);
-    await session.waitFor('document.getElementById("admin-main-container").style.display === "block" && Boolean(document.getElementById("btn-add-task-row"))');
+    await session.waitFor('(document.getElementById("main-content") || document.getElementById("admin-main-container")).style.display === "block" && Boolean(document.getElementById("btn-add-task-row"))');
 
     await fillInput(session, '#event-title-input', 'Browser Smoke Sandlot Event');
     await fillInput(session, '#event-location-input', 'Bushrod Park Field 2');

@@ -112,6 +112,53 @@ function checkHtmlAndCspHeaders() {
     record('PASS', 'HTML CSP Compliance (No inline scripts/handlers)', `${htmlFiles.length} HTML files clean`);
   }
 
+  // Check WCAG landmarks, skip links, and single-h1 non-skipping heading hierarchy
+  const a11yFindings = [];
+  for (const file of htmlFiles) {
+    const content = fs.readFileSync(file, 'utf8');
+    const relFile = rel(file);
+
+    // Skip link and main-content landmark
+    if (!content.includes('href="#main-content"')) {
+      a11yFindings.push(`${relFile}: missing #main-content skip link`);
+    }
+    if (!/<main\b[^>]*\bid=["']main-content["']/i.test(content)) {
+      a11yFindings.push(`${relFile}: missing <main id="main-content"> landmark`);
+    }
+
+    // Navigation landmark with aria-label
+    const navMatch = content.match(/<nav\b[^>]*>/i);
+    if (!navMatch) {
+      a11yFindings.push(`${relFile}: missing <nav> landmark`);
+    } else if (!/\baria-label=["'][^"']+["']/i.test(navMatch[0])) {
+      a11yFindings.push(`${relFile}: <nav> landmark missing aria-label attribute`);
+    }
+
+    // Heading hierarchy: single h1 and no skipping
+    const headings = [];
+    for (const m of content.matchAll(/<(h[1-6])\b[^>]*>([\s\S]*?)<\/\1>/gi)) {
+      headings.push({ tag: m[1].toLowerCase(), text: m[2].replace(/<[^>]*>/g, '').trim().slice(0, 30) });
+    }
+    const h1Count = headings.filter((h) => h.tag === 'h1').length;
+    if (h1Count !== 1) {
+      a11yFindings.push(`${relFile}: expected exactly one <h1>, found ${h1Count}`);
+    }
+    let prevLevel = 0;
+    for (const h of headings) {
+      const level = parseInt(h.tag[1], 10);
+      if (prevLevel > 0 && level > prevLevel + 1) {
+        a11yFindings.push(`${relFile}: heading hierarchy skipped from h${prevLevel} to h${level} ("${h.text}")`);
+      }
+      prevLevel = level;
+    }
+  }
+
+  if (a11yFindings.length > 0) {
+    record('FAIL', 'HTML Accessibility Landmarks & Heading Hierarchy', a11yFindings.join('; '));
+  } else {
+    record('PASS', 'HTML Accessibility Landmarks & Heading Hierarchy', `${htmlFiles.length} HTML files have valid skip links, nav landmarks, and single-h1 non-skipping headings`);
+  }
+
   const headersPath = path.join(ROOT, 'public', '_headers');
   if (!fs.existsSync(headersPath)) {
     record('FAIL', 'Cloudflare _headers file', 'public/_headers missing');
