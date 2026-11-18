@@ -320,6 +320,11 @@ const PUBLIC_OR_TOKEN_ROUTE_MANIFEST = [
     reason: 'Public cached integer count of mailing list subscribers'
   },
   {
+    ast: 'push.js:GET:/vapid-public-key',
+    route: 'GET /api/push/vapid-public-key',
+    reason: 'Public VAPID applicationServerKey for opt-in browser Web Push'
+  },
+  {
     ast: 'index.js:GET:/settings',
     route: 'GET /api/settings',
     reason: 'Public login/upload policy flags (admin-only appscript_upload_url gated inside handler)'

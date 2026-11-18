@@ -735,4 +735,139 @@
       }).catch(function () { loaded = false; body.textContent = API.t('profile.history_load_error', 'Could not load history.'); });
     });
   }
+
+  function urlBase64ToUint8Array(base64String) {
+    var padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    var base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    var rawData = window.atob(base64);
+    var outputArray = new Uint8Array(rawData.length);
+    for (var i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  }
+
+  function setupPushNotifications() {
+    var statusEl = document.getElementById('profile-push-status');
+    var toggleBtn = /** @type {HTMLButtonElement | null} */ (document.getElementById('btn-toggle-push'));
+    var prefsBox = document.getElementById('profile-push-prefs');
+    var cbRainouts = /** @type {HTMLInputElement | null} */ (document.getElementById('push-notify-rainouts'));
+    var cbReminders = /** @type {HTMLInputElement | null} */ (document.getElementById('push-notify-reminders'));
+    var cbAnnouncements = /** @type {HTMLInputElement | null} */ (document.getElementById('push-notify-announcements'));
+    if (!statusEl || !toggleBtn || !prefsBox) return;
+
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      statusEl.textContent = 'Browser push notifications are not supported in this browser.';
+      return;
+    }
+
+    var vapidPublicKey = null;
+    var isSubscribed = false;
+
+    function syncUi() {
+      toggleBtn.disabled = !vapidPublicKey;
+      toggleBtn.textContent = isSubscribed ? 'Disable Push' : 'Enable Push';
+      prefsBox.style.display = isSubscribed ? 'flex' : 'none';
+      if (!vapidPublicKey) {
+        statusEl.textContent = 'Push notifications are not configured on this server yet (VAPID_PUBLIC_KEY unset).';
+      } else {
+        statusEl.textContent = isSubscribed
+          ? 'Enabled on this browser. Choose which alerts you want below:'
+          : 'Opt in to receive instant rainout or pre-game alerts in this browser.';
+      }
+    }
+
+    function readPrefPayload() {
+      return {
+        notify_rainouts: cbRainouts ? cbRainouts.checked : true,
+        notify_reminders: cbReminders ? cbReminders.checked : true,
+        notify_announcements: cbAnnouncements ? cbAnnouncements.checked : false
+      };
+    }
+
+    Promise.all([
+      fetch('/api/push/vapid-public-key', { credentials: 'same-origin' }).then(function (r) { return r.json(); }),
+      fetch('/api/push/preferences', { credentials: 'same-origin' }).then(function (r) { return r.json(); })
+    ]).then(function (results) {
+      var keyRes = results[0] || {};
+      var prefRes = results[1] || {};
+      vapidPublicKey = keyRes.enabled ? keyRes.publicKey : null;
+      isSubscribed = Boolean(prefRes.subscribed);
+      if (cbRainouts && typeof prefRes.notify_rainouts === 'boolean') cbRainouts.checked = prefRes.notify_rainouts;
+      if (cbReminders && typeof prefRes.notify_reminders === 'boolean') cbReminders.checked = prefRes.notify_reminders;
+      if (cbAnnouncements && typeof prefRes.notify_announcements === 'boolean') cbAnnouncements.checked = prefRes.notify_announcements;
+      syncUi();
+    }).catch(function () {
+      statusEl.textContent = 'Unable to load push notification settings.';
+    });
+
+    toggleBtn.addEventListener('click', function () {
+      if (!vapidPublicKey) return;
+      toggleBtn.disabled = true;
+      navigator.serviceWorker.ready.then(function (reg) {
+        if (isSubscribed) {
+          return reg.pushManager.getSubscription().then(function (sub) {
+            var endpoint = sub ? sub.endpoint : '';
+            var unsubPromise = sub ? sub.unsubscribe() : Promise.resolve(true);
+            return unsubPromise.then(function () {
+              return fetch('/api/push/subscribe', {
+                method: 'DELETE',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ endpoint: endpoint })
+              });
+            });
+          }).then(function () {
+            isSubscribed = false;
+            syncUi();
+          });
+        }
+        return Notification.requestPermission().then(function (perm) {
+          if (perm !== 'granted') {
+            statusEl.textContent = 'Browser notification permission was denied.';
+            syncUi();
+            return;
+          }
+          return reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
+          }).then(function (sub) {
+            var subJson = sub.toJSON();
+            var payload = Object.assign({
+              endpoint: subJson.endpoint,
+              keys: subJson.keys
+            }, readPrefPayload());
+            return fetch('/api/push/subscribe', {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+          }).then(function (r) {
+            if (r && r.ok) isSubscribed = true;
+            syncUi();
+          });
+        });
+      }).catch(function () {
+        statusEl.textContent = 'Failed to update push subscription.';
+        syncUi();
+      });
+    });
+
+    [cbRainouts, cbReminders, cbAnnouncements].forEach(function (cb) {
+      if (!cb) return;
+      cb.addEventListener('change', function () {
+        if (!isSubscribed) return;
+        fetch('/api/push/preferences', {
+          method: 'PUT',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(readPrefPayload())
+        }).catch(function () { /* ignore transient error */ });
+      });
+    });
+  }
+
+  setupHistoryPanel();
+  setupPushNotifications();
 })();

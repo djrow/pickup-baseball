@@ -26,6 +26,7 @@ import { baseballRouter } from './routes/baseball.js';
 import { waiverRouter } from './routes/waiver.js';
 import { notificationsRouter } from './routes/notifications.js';
 import { gifsRouter } from './routes/gifs.js';
+import { pushRouter } from './routes/push.js';
 
 export const app = /** @type {AppHono} */ (new Hono()).basePath('/api');
 
@@ -281,6 +282,7 @@ app.route('/voice', voiceRouter);
 app.route('/rtc', rtcRouter);
 app.route('/baseball', baseballRouter);
 app.route('/waiver', waiverRouter);
+app.route('/push', pushRouter);
 app.route('/notifications', notificationsRouter);
 app.route('/gifs', gifsRouter);
 app.route('/', chatRouter);

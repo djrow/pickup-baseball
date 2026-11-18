@@ -247,6 +247,29 @@
               <span data-i18n="profile.notify_community_label">Community updates and announcements</span>
             </label>
           </div>
+          <div id="profile-push-section" style="margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--border);">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
+              <div>
+                <div style="font-size: 0.88rem; font-weight: 700; color: var(--secondary);">🔔 Browser Push Notifications (Opt-In)</div>
+                <div id="profile-push-status" style="font-size: 0.78rem; color: var(--text-muted);">Checking browser push support...</div>
+              </div>
+              <button type="button" id="btn-toggle-push" class="btn btn-outline btn-sm" disabled>Enable Push</button>
+            </div>
+            <div id="profile-push-prefs" style="display: none; flex-direction: column; gap: 8px; margin-top: 10px;">
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.82rem; color: var(--text-main);">
+                <input type="checkbox" id="push-notify-rainouts" checked style="width: 15px; height: 15px; accent-color: var(--primary);">
+                <span>Rainouts &amp; urgent field updates</span>
+              </label>
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.82rem; color: var(--text-main);">
+                <input type="checkbox" id="push-notify-reminders" checked style="width: 15px; height: 15px; accent-color: var(--primary);">
+                <span>24-hour pre-game reminders</span>
+              </label>
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.82rem; color: var(--text-main);">
+                <input type="checkbox" id="push-notify-announcements" style="width: 15px; height: 15px; accent-color: var(--primary);">
+                <span>Community announcements</span>
+              </label>
+            </div>
+          </div>
         </div>
 
         <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border); flex-wrap: wrap; gap: 10px;">

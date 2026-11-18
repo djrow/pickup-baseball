@@ -238,6 +238,18 @@ export const CREATE_TABLES_SQL = [
     retention_until DATETIME DEFAULT NULL,
     signer_ip_scrubbed_at DATETIME DEFAULT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS push_subscriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    endpoint TEXT NOT NULL UNIQUE,
+    p256dh TEXT NOT NULL,
+    auth TEXT NOT NULL,
+    notify_rainouts INTEGER NOT NULL DEFAULT 1,
+    notify_reminders INTEGER NOT NULL DEFAULT 1,
+    notify_announcements INTEGER NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`,
   `CREATE TABLE IF NOT EXISTS consent_records (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     subject_type TEXT NOT NULL CHECK(subject_type IN ('member', 'visitor')),

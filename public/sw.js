@@ -190,3 +190,41 @@ sw.addEventListener('message', (event) => {
     sw.skipWaiting();
   }
 });
+
+// Web Push: display opt-in notification
+sw.addEventListener('push', (event) => {
+  let payload = { title: 'Pickup Baseball', body: 'New field or game update.', url: '/' };
+  try {
+    if (event.data) {
+      const parsed = event.data.json();
+      if (parsed && typeof parsed === 'object') {
+        payload = Object.assign(payload, parsed);
+      }
+    }
+  } catch (e) {
+    if (event.data) payload.body = event.data.text();
+  }
+  event.waitUntil(
+    sw.registration.showNotification(payload.title || 'Pickup Baseball', {
+      body: payload.body || '',
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      data: { url: payload.url || '/' }
+    })
+  );
+});
+
+sw.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const targetUrl = (event.notification && event.notification.data && event.notification.data.url) ? event.notification.data.url : '/';
+  event.waitUntil(
+    sw.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url.indexOf(targetUrl) !== -1 && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      if (sw.clients.openWindow) return sw.clients.openWindow(targetUrl);
+    })
+  );
+});
