@@ -1147,7 +1147,7 @@
       if (!res.ok) return;
       const data = await res.json();
       if (data && typeof data.count === 'number' && data.count >= 0) {
-        let badge = link.querySelector('.mailing-list-count');
+        let badge = /** @type {HTMLElement | null} */ (link.querySelector('.mailing-list-count'));
         if (!badge) {
           badge = document.createElement('span');
           badge.className = 'mailing-list-count';
