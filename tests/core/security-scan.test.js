@@ -259,7 +259,7 @@ test('Unified Check, Release Gate & Decoupled CI Matrix Invariants (Ticket #26)'
       assert.ok(workflow.includes(cmd), `workflow must run blocking command: ${cmd}`);
     }
     assert.match(workflow, /^\s{2}codeql:/m);
-    assert.match(workflow, /github\/codeql-action\/analyze@v3/);
+    assert.match(workflow, /github\/codeql-action\/analyze@v[34]/);
 
     const auditJobMatch = workflow.match(/\n\s{2}dependency-audit:\r?\n([\s\S]*?)(?:\n\s{2}[a-zA-Z0-9_-]+:\r?\n|$)/);
     assert.ok(auditJobMatch, 'workflow must define a separate dependency-audit job');

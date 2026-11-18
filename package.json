@@ -41,6 +41,12 @@
     "globals": "^17.14.0",
     "miniflare": "^5.20261113.0-beta",
     "typescript": "^7.0.2",
-    "wrangler": "^4.162.0"
+    "wrangler": "^4.164.0"
+  },
+  "allowScripts": {
+    "better-sqlite3@13.0.3": true,
+    "esbuild@0.28.2": true,
+    "workerd@1.20261113.1": true,
+    "workerd@1.20261117.1": true
   }
 }
