@@ -227,7 +227,7 @@ test('Clubhouse Frontend & Native Waiver Verification', async (t) => {
     const mainOpenIdx = archiveHtml.indexOf('<main');
     assert.ok(hdrCloseIdx !== -1 && mainOpenIdx !== -1 && hdrCloseIdx < mainOpenIdx, 'archive.html must close </header> before <main>');
 
-    // 2. All 14 i18n JSON files must have 100% key parity with EN_DICT
+    // 2. All 14 i18n JSON files must have 100% key parity with EN_DICT (across Core, Clubhouse & Admin split bundles)
     const i18nPath = path.join(publicDir, 'js', 'api', 'i18n.js');
     const apiJsSrc = fs.existsSync(i18nPath)
       ? fs.readFileSync(i18nPath, 'utf8')
@@ -238,7 +238,14 @@ test('Clubhouse Frontend & Native Waiver Verification', async (t) => {
     const enKeys = Object.keys(enObj);
     const i18nDir = path.join(publicDir, 'i18n');
     for (const lang of ['ar', 'es', 'fa', 'fr', 'hi', 'hy', 'ja', 'ko', 'pa', 'pt', 'ru', 'tl', 'vi', 'zh']) {
-      const dict = JSON.parse(fs.readFileSync(path.join(i18nDir, `${lang}.json`), 'utf8'));
+      const coreDict = JSON.parse(fs.readFileSync(path.join(i18nDir, `${lang}.json`), 'utf8'));
+      const chDict = fs.existsSync(path.join(i18nDir, 'clubhouse', `${lang}.json`))
+        ? JSON.parse(fs.readFileSync(path.join(i18nDir, 'clubhouse', `${lang}.json`), 'utf8'))
+        : {};
+      const admDict = fs.existsSync(path.join(i18nDir, 'admin', `${lang}.json`))
+        ? JSON.parse(fs.readFileSync(path.join(i18nDir, 'admin', `${lang}.json`), 'utf8'))
+        : {};
+      const dict = Object.assign({}, coreDict, chDict, admDict);
       const missing = enKeys.filter((k) => !(k in dict));
       assert.deepEqual(missing, [], `${lang}.json must contain all EN_DICT keys`);
     }

@@ -800,6 +800,14 @@ async function runMemberLoginAndWaiverJourney(browser, server, tracker, record) 
     await session.navigateAndCheck(`${server.baseUrl}/waiver.html`, 'waiver.html (member signing)', tracker);
     await session.waitFor('document.getElementById("waiver-sign-form") && document.getElementById("waiver-sign-form").style.display !== "none"');
 
+    // Switch language to Spanish (es) to verify localized waiver rendering & collapsible English original
+    await session.evaluate(`(async () => {
+      await window.API.setLang('es');
+    })()`);
+    await session.waitFor('document.getElementById("waiver-english-original-details") && document.getElementById("waiver-english-original-details").style.display !== "none"');
+    const noticeVisible = await session.evaluate('document.getElementById("waiver-controlling-notice-banner").style.display !== "none"');
+    assert(noticeVisible, 'Non-English locale displays controlling-English notice banner');
+
     await fillInput(session, '#waiver-printed-name', 'Charlie Player');
     const canvasBox = await session.evaluate(`(() => {
       const c = document.getElementById('waiver-sig-canvas');
@@ -834,16 +842,23 @@ async function runMemberLoginAndWaiverJourney(browser, server, tracker, record) 
     })()`);
 
     await clickEl(session, '#btn-submit-waiver');
-    await session.waitFor('document.querySelector("#waiver-alert .alert-success") && document.getElementById("waiver-status-banner").textContent.includes("Digital Waiver Signed")', 10000);
+    await session.waitFor('document.querySelector("#waiver-alert .alert-success") && document.getElementById("waiver-status-banner").textContent.includes("Exención digital firmada")', 10000);
 
     const waiverRow = server.baseballDb.prepare(
-      'SELECT printed_name, signature_type, document_sha256, certificate_id FROM waivers WHERE user_id = ? ORDER BY id DESC LIMIT 1'
+      'SELECT printed_name, signature_type, document_sha256, certificate_id, waiver_locale FROM waivers WHERE user_id = ? ORDER BY id DESC LIMIT 1'
     ).get(server.playerUser.id);
     assert(
       waiverRow && waiverRow.printed_name === 'Charlie Player' && waiverRow.signature_type === 'drawn' && Boolean(waiverRow.document_sha256) && Boolean(waiverRow.certificate_id),
       'Signed digital waiver with SHA-256 provenance persisted to database'
     );
-    record('waiver.html canvas signature drawing + ESIGN consent + SHA-256 sealing succeeds');
+    assert(waiverRow.waiver_locale === 'es', 'Signed waiver seals waiver_locale onto waivers table');
+
+    // Restore language to English
+    await session.evaluate(`(async () => {
+      await window.API.setLang('en');
+    })()`);
+
+    record('waiver.html localized rendering + canvas signature drawing + ESIGN consent + SHA-256 sealing succeeds');
   } finally {
     await browser.disposeSessionContext(session, 'Member Login & Waiver Journey', tracker);
   }

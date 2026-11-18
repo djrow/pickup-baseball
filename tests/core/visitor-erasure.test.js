@@ -572,7 +572,14 @@ function registerVisitorErasureTests() {
 
       const i18nDir = path.join(ROOT_DIR, 'public', 'i18n');
       for (const lang of ['ar', 'es', 'fa', 'fr', 'hi', 'hy', 'ja', 'ko', 'pa', 'pt', 'ru', 'tl', 'vi', 'zh']) {
-        const dict = JSON.parse(fs.readFileSync(path.join(i18nDir, `${lang}.json`), 'utf8'));
+        const coreDict = JSON.parse(fs.readFileSync(path.join(i18nDir, `${lang}.json`), 'utf8'));
+        const chDict = fs.existsSync(path.join(i18nDir, 'clubhouse', `${lang}.json`))
+          ? JSON.parse(fs.readFileSync(path.join(i18nDir, 'clubhouse', `${lang}.json`), 'utf8'))
+          : {};
+        const admDict = fs.existsSync(path.join(i18nDir, 'admin', `${lang}.json`))
+          ? JSON.parse(fs.readFileSync(path.join(i18nDir, 'admin', `${lang}.json`), 'utf8'))
+          : {};
+        const dict = Object.assign({}, coreDict, chDict, admDict);
         const missing = enKeys.filter((k) => !(k in dict));
         assert.deepEqual(missing, [], `${lang}.json must contain all EN_DICT keys`);
       }

@@ -59,6 +59,19 @@ function applyRoleUI(user) {
 }
 
 async function initAdmin() {
+  if (typeof API.loadSurfaceDict === 'function') {
+    if (!API.activeSurfaces) API.activeSurfaces = [];
+    if (API.activeSurfaces.indexOf('admin') === -1) {
+      API.activeSurfaces.push('admin');
+    }
+    try {
+      await API.loadSurfaceDict('admin');
+      if (typeof API.applyTranslations === 'function') {
+        API.applyTranslations();
+      }
+    } catch (e) { /* ignore surface load error */ }
+  }
+
   const user = await API.getMe();
   if (!user || (!user.isAdmin && !user.canManageEvents)) {
     if (window.PBFDialog) {

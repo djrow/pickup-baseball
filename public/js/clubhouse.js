@@ -3452,6 +3452,18 @@
   function initClubhouseApp() {
     if (typeof document === 'undefined' || !el('clubhouse-app')) return;
 
+    if (typeof window !== 'undefined' && window.API && typeof window.API.loadSurfaceDict === 'function') {
+      if (!window.API.activeSurfaces) window.API.activeSurfaces = [];
+      if (window.API.activeSurfaces.indexOf('clubhouse') === -1) {
+        window.API.activeSurfaces.push('clubhouse');
+      }
+      window.API.loadSurfaceDict('clubhouse').then(function () {
+        if (typeof window.API.applyTranslations === 'function') {
+          window.API.applyTranslations(el('clubhouse-app'));
+        }
+      }).catch(function () {});
+    }
+
     initDomEvents();
 
     Store.subscribe(function (eventType, detail) {

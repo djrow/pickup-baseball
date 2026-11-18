@@ -149,10 +149,15 @@
 
     <!-- Legal Document Card -->
     <article class="waiver-paper" id="waiver-document-card">
+      <div id="waiver-controlling-notice-banner" class="no-print" style="margin-bottom: 20px; padding: 12px 16px; background: rgba(0, 56, 49, 0.08); border-left: 4px solid var(--secondary); border-radius: 4px; font-size: 0.88rem; color: var(--text-main);">
+        <strong data-i18n="waiver.controlling_notice">The official and legally controlling text of this Consent, Waiver and Indemnity is in English. Translations are provided solely for convenience and mutual understanding.</strong>
+      </div>
+
       <h1 data-i18n="waiver.title">CONSENT, WAIVER AND INDEMNITY</h1>
 
+      <!-- Localized / Displayed Waiver Body -->
       <div id="waiver-paragraphs">
-        <p>
+        <p data-i18n="waiver.paragraph_1">
           I wish to participate in the baseball and other outdoor activities (the “Activities”) with Pickup
           Baseball Foundation volunteers and other participants (collectively, the “Participants”). I
           understand that the Released Parties will not permit me to participate in the Activities if I do not
@@ -160,7 +165,7 @@
           to accept.
         </p>
 
-        <p>
+        <p data-i18n="waiver.paragraph_2">
           I understand that the Activities carry some risk of harm to myself and others. I voluntarily
           assume full responsibility for all risks of personal injury, death and property damage while
           participating in the Activities, including the risk of passive or active negligence on the part of the
@@ -168,7 +173,7 @@
           such location is under the control of any of the Participants or any other party.
         </p>
 
-        <p>
+        <p data-i18n="waiver.paragraph_3">
           Accordingly, I agree that I release, and will not bring any legal action of any nature whatsoever
           against the Participants, or any of their trustees, directors, agents, employees or representatives,
           including volunteer managers, chaperones and the other participants (the "Released Parties”) in
@@ -183,12 +188,33 @@
           other provision.
         </p>
 
-        <p class="waiver-bold">
+        <p class="waiver-bold" data-i18n="waiver.paragraph_4">
           I am signing this Waiver and Indemnity to induce the Participants to allow me to
           participate in the Activities described above for my convenience. I understand this Waiver
           and Indemnity and would not sign it if I did not.
         </p>
       </div>
+
+      <!-- Collapsible English Original (Shown when viewing non-English locale) -->
+      <details id="waiver-english-original-details" class="no-print" style="margin-top: 24px; padding: 14px 18px; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.9rem;">
+        <summary style="font-weight: 700; color: var(--secondary); cursor: pointer;" data-i18n="waiver.original_summary">
+          View Original Controlling English Text
+        </summary>
+        <div style="margin-top: 14px; font-family: Georgia, 'Times New Roman', Times, serif; line-height: 1.6; color: var(--text-muted); font-size: 0.92rem;">
+          <p style="margin: 0 0 14px 0;">
+            I wish to participate in the baseball and other outdoor activities (the “Activities”) with Pickup Baseball Foundation volunteers and other participants (collectively, the “Participants”). I understand that the Released Parties will not permit me to participate in the Activities if I do not sign this Consent, Waiver and Indemnity, because the possibility of liability for them is too great to accept.
+          </p>
+          <p style="margin: 0 0 14px 0;">
+            I understand that the Activities carry some risk of harm to myself and others. I voluntarily assume full responsibility for all risks of personal injury, death and property damage while participating in the Activities, including the risk of passive or active negligence on the part of the Participants, or hidden, latent or obvious defects at the location of any of the Activities, whether such location is under the control of any of the Participants or any other party.
+          </p>
+          <p style="margin: 0 0 14px 0;">
+            Accordingly, I agree that I release, and will not bring any legal action of any nature whatsoever against the Participants, or any of their trustees, directors, agents, employees or representatives, including volunteer managers, chaperones and the other participants (the "Released Parties”) in connection with the Activities, including, without limitation, any and all claims which may be based upon negligence of any of the Released Parties. Furthermore, I agree to indemnify, defend and hold the Released Parties and their respective agents and representatives harmless from any loss, claim, expense (including attorneys' fees), demand or cause of action of any kind or character arising from the assertion by me, my family members, or any other person, firm, or corporation that may have, or claim to have, a claim or claims connected with my participation in the Activities. This agreement is intended to be construed to be as comprehensive as is allowed by law, as severable, and the invalidity of any portion of which will not affect the validity of any other provision.
+          </p>
+          <p style="margin: 0 0 8px 0; font-weight: 700;">
+            I am signing this Waiver and Indemnity to induce the Participants to allow me to participate in the Activities described above for my convenience. I understand this Waiver and Indemnity and would not sign it if I did not.
+          </p>
+        </div>
+      </details>
 
       <!-- Sign-In Required Prompt (shown when not logged in) -->
       <div id="waiver-auth-prompt" class="no-print" style="display: none; margin-top: 28px; padding: 20px; background: var(--bg-subtle); border: 1.5px solid var(--border); border-radius: var(--radius-sm); font-family: var(--font-sans);">
@@ -210,11 +236,11 @@
 
         <div class="grid-2" style="gap: 16px; margin-bottom: 16px;">
           <div class="form-group" style="margin-bottom: 0;">
-            <label for="waiver-printed-name">Printed Name (Full Legal Name) *</label>
-            <input type="text" id="waiver-printed-name" required maxlength="120" placeholder="Enter your full legal name">
+            <label for="waiver-printed-name" data-i18n="waiver.printed_name_label">Printed Name (Full Legal Name) *</label>
+            <input type="text" id="waiver-printed-name" required maxlength="120" placeholder="Enter your full legal name" data-i18n-placeholder="waiver.printed_name_placeholder">
           </div>
           <div class="form-group" style="margin-bottom: 0;">
-            <label for="waiver-signed-date">Dated *</label>
+            <label for="waiver-signed-date" data-i18n="waiver.dated_label">Dated *</label>
             <input type="date" id="waiver-signed-date" required>
           </div>
         </div>
@@ -222,22 +248,22 @@
         <!-- Signature Mode Tabs -->
         <div class="form-group" style="margin-bottom: 16px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 8px;">
-            <label style="margin: 0;">Signature *</label>
+            <label style="margin: 0;" data-i18n="waiver.sig_label">Signature *</label>
             <div style="display: flex; gap: 6px; align-items: center;">
-              <button type="button" id="btn-sig-mode-draw" class="btn btn-outline btn-sm active" style="font-size: 0.76rem; padding: 3px 10px;">✍️ Draw Signature</button>
-              <button type="button" id="btn-sig-mode-type" class="btn btn-outline btn-sm" style="font-size: 0.76rem; padding: 3px 10px;">⌨️ Type Signature</button>
-              <button type="button" id="btn-clear-signature" class="btn btn-outline btn-sm" style="font-size: 0.76rem; padding: 3px 10px; color: var(--danger);">🗑️ Clear</button>
+              <button type="button" id="btn-sig-mode-draw" class="btn btn-outline btn-sm active" style="font-size: 0.76rem; padding: 3px 10px;" data-i18n="waiver.btn_draw_sig">✍️ Draw Signature</button>
+              <button type="button" id="btn-sig-mode-type" class="btn btn-outline btn-sm" style="font-size: 0.76rem; padding: 3px 10px;" data-i18n="waiver.btn_type_sig">⌨️ Type Signature</button>
+              <button type="button" id="btn-clear-signature" class="btn btn-outline btn-sm" style="font-size: 0.76rem; padding: 3px 10px; color: var(--danger);" data-i18n="waiver.btn_clear_sig">🗑️ Clear</button>
             </div>
           </div>
 
           <div id="waiver-type-sig-wrap" style="display: none; margin-bottom: 10px;">
-            <input type="text" id="waiver-typed-sig-input" maxlength="120" placeholder="Type your full name to generate signature on the line below..." style="font-style: italic; font-size: 1rem;">
+            <input type="text" id="waiver-typed-sig-input" maxlength="120" placeholder="Type your full name to generate signature on the line below..." data-i18n-placeholder="waiver.type_sig_placeholder" style="font-style: italic; font-size: 1rem;">
           </div>
 
           <div class="waiver-sig-canvas-wrap">
             <canvas id="waiver-sig-canvas" class="waiver-sig-canvas" width="680" height="150"></canvas>
             <div class="waiver-sig-baseline"></div>
-            <div class="waiver-sig-hint">Sign above the line using your mouse, finger, or stylus</div>
+            <div class="waiver-sig-hint" data-i18n="waiver.sig_canvas_hint">Sign above the line using your mouse, finger, or stylus</div>
           </div>
         </div>
 
@@ -256,13 +282,13 @@
           <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; font-size: 0.86rem; color: var(--text-main); margin: 0; line-height: 1.45;">
             <input type="checkbox" id="waiver-consent-checkbox" required style="width: 18px; height: 18px; margin-top: 2px; accent-color: var(--primary); flex-shrink: 0;">
             <span>
-              <strong>Electronic Signature Consent (ESIGN / UETA):</strong> I have read and understand this Consent, Waiver and Indemnity, and I voluntarily agree to sign it electronically. I understand that my electronic signature, verified email identity, timestamp, and cryptographic SHA-256 digest carry the same legal validity and enforceability as a handwritten ink signature.
+              <strong data-i18n="waiver.consent_label_strong">Electronic Signature Consent (ESIGN / UETA):</strong> <span data-i18n="waiver.consent_label_body">I have read and understand this Consent, Waiver and Indemnity, and I voluntarily agree to sign it electronically. I understand that my electronic signature, verified email identity, timestamp, and cryptographic SHA-256 digest carry the same legal validity and enforceability as a handwritten ink signature.</span>
             </span>
           </label>
         </div>
 
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-          <button type="submit" id="btn-submit-waiver" class="btn btn-primary btn-lg" style="font-weight: 700;">
+          <button type="submit" id="btn-submit-waiver" class="btn btn-primary btn-lg" style="font-weight: 700;" data-i18n="waiver.btn_submit">
             🔏 Sign &amp; Seal Waiver
           </button>
           <span id="waiver-form-id-label" style="font-size: 0.76rem; color: var(--text-muted); font-family: monospace;">

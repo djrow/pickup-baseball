@@ -1437,7 +1437,8 @@ function checkPwaAssetSync(rootDir = ROOT, options = {}) {
 }
 
 /**
- * 9. Audit i18n dictionary completeness against canonical EN_DICT in public/js/api/i18n.js.
+ * 9. Audit i18n dictionary completeness against canonical bundles across
+ * Core, Clubhouse, and Admin surfaces (Issue #62).
  */
 function checkI18nKeyParity() {
   const i18nFile = fs.existsSync(path.join(ROOT, 'public', 'js', 'api', 'i18n.js'))
@@ -1452,26 +1453,77 @@ function checkI18nKeyParity() {
 
   const enObj = vm.runInNewContext(`({${enMatch[1]}})`);
   const enKeys = Object.keys(enObj);
-  const i18nDir = path.join(ROOT, 'public', 'i18n');
-  const jsonFiles = fs.readdirSync(i18nDir).filter((f) => f.endsWith('.json')).sort();
-  const issues = [];
 
-  for (const file of jsonFiles) {
-    try {
-      const dict = JSON.parse(fs.readFileSync(path.join(i18nDir, file), 'utf8'));
-      const missing = enKeys.filter((k) => !(k in dict));
-      if (missing.length) {
-        issues.push(`${file} missing ${missing.length} key(s): ${missing.slice(0, 3).join(', ')}`);
-      }
-    } catch (err) {
-      issues.push(`${file} invalid JSON (${err.message})`);
+  const i18nDir = path.join(ROOT, 'public', 'i18n');
+  const surfaces = [
+    { name: 'Core', dir: i18nDir, canonical: path.join(i18nDir, 'en.json') },
+    { name: 'Clubhouse', dir: path.join(i18nDir, 'clubhouse'), canonical: path.join(i18nDir, 'clubhouse', 'en.json') },
+    { name: 'Admin', dir: path.join(i18nDir, 'admin'), canonical: path.join(i18nDir, 'admin', 'en.json') }
+  ];
+
+  const expectedLangs = ['en', 'ar', 'es', 'fa', 'fr', 'hi', 'hy', 'ja', 'ko', 'pa', 'pt', 'ru', 'tl', 'vi', 'zh'];
+  const issues = [];
+  let totalBundlesChecked = 0;
+  let splitKeysCount = 0;
+
+  for (const surface of surfaces) {
+    if (!fs.existsSync(surface.canonical)) {
+      issues.push(`Missing canonical ${surface.name} bundle: ${rel(surface.canonical)}`);
+      continue;
     }
+    let refDict;
+    try {
+      refDict = JSON.parse(fs.readFileSync(surface.canonical, 'utf8'));
+    } catch (err) {
+      issues.push(`Invalid JSON in ${surface.name} canonical bundle: ${err.message}`);
+      continue;
+    }
+    const refKeys = Object.keys(refDict);
+    splitKeysCount += refKeys.length;
+
+    for (const lang of expectedLangs) {
+      const file = path.join(surface.dir, `${lang}.json`);
+      if (!fs.existsSync(file)) {
+        issues.push(`${surface.name} bundle missing for locale ${lang} (${rel(file)})`);
+        continue;
+      }
+      totalBundlesChecked++;
+      try {
+        const dict = JSON.parse(fs.readFileSync(file, 'utf8'));
+        const missing = refKeys.filter((k) => !(k in dict));
+        if (missing.length) {
+          issues.push(`${surface.name}/${lang}.json missing ${missing.length} key(s): ${missing.slice(0, 3).join(', ')}`);
+        }
+      } catch (err) {
+        issues.push(`${surface.name}/${lang}.json invalid JSON (${err.message})`);
+      }
+    }
+  }
+
+  // Also verify that EN_DICT contains every key across all split bundles
+  const missingInEnDict = [];
+  for (const surface of surfaces) {
+    if (fs.existsSync(surface.canonical)) {
+      const refDict = JSON.parse(fs.readFileSync(surface.canonical, 'utf8'));
+      for (const k of Object.keys(refDict)) {
+        if (!(k in enObj)) {
+          missingInEnDict.push(`${surface.name}:${k}`);
+        }
+      }
+    }
+  }
+  if (missingInEnDict.length) {
+    issues.push(`EN_DICT missing ${missingInEnDict.length} key(s) from split bundles: ${missingInEnDict.slice(0, 3).join(', ')}`);
   }
 
   if (issues.length) {
     record('FAIL', 'i18n Translation Key Parity', issues.join('; '));
   } else {
-    record('PASS', 'i18n Translation Key Parity', `${jsonFiles.length} language bundles match all ${enKeys.length} EN_DICT keys`);
+    record(
+      'PASS',
+      'i18n Translation Key Parity',
+      `${totalBundlesChecked} split bundles (Core, Clubhouse, Admin across 15 locales) match all ${splitKeysCount} keys in parity with EN_DICT (${enKeys.length} keys)`
+    );
   }
 }
 

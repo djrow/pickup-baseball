@@ -755,11 +755,15 @@ function registerBackupDrTests() {
       }
 
       const i18nDir = path.join(ROOT_DIR, 'public', 'i18n');
-      const localeFiles = fs.readdirSync(i18nDir).filter((f) => f.endsWith('.json'));
+      const localeFiles = fs.readdirSync(i18nDir).filter((f) => f.endsWith('.json') && f !== 'en.json');
       assert.equal(localeFiles.length, 14, 'Must have 14 non-English locale JSON files');
 
       for (const file of localeFiles) {
-        const dict = JSON.parse(fs.readFileSync(path.join(i18nDir, file), 'utf8'));
+        const lang = file.replace('.json', '');
+        const coreDict = JSON.parse(fs.readFileSync(path.join(i18nDir, file), 'utf8'));
+        const adminDictPath = path.join(i18nDir, 'admin', `${lang}.json`);
+        const adminDict = fs.existsSync(adminDictPath) ? JSON.parse(fs.readFileSync(adminDictPath, 'utf8')) : {};
+        const dict = Object.assign({}, coreDict, adminDict);
         for (const key of requiredKeys) {
           assert.ok(typeof dict[key] === 'string' && dict[key].length > 0, `${file} must define non-empty "${key}"`);
         }

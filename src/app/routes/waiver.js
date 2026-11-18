@@ -218,9 +218,10 @@ export function buildCanonicalWaiverPayload({
   signed_date,
   signature_type,
   signature_sha256,
-  electronic_consent
+  electronic_consent,
+  waiver_locale
 }) {
-  return JSON.stringify({
+  const payloadObj = {
     document_version: String(document_version || WAIVER_DOC_VERSION),
     waiver_text_sha256: String(waiver_text_sha256 || ''),
     email: String(email || '').trim().toLowerCase(),
@@ -229,7 +230,11 @@ export function buildCanonicalWaiverPayload({
     signature_type: String(signature_type || 'drawn'),
     signature_sha256: String(signature_sha256 || ''),
     electronic_consent: Boolean(electronic_consent)
-  });
+  };
+  if (waiver_locale && typeof waiver_locale === 'string') {
+    payloadObj.waiver_locale = String(waiver_locale).trim().toLowerCase();
+  }
+  return JSON.stringify(payloadObj);
 }
 
 export function renderSignedWaiverCertificateHtml(waiverRow, integrityVerified = true, includePii = false, env = null) {
@@ -250,6 +255,7 @@ export function renderSignedWaiverCertificateHtml(waiverRow, integrityVerified =
   const safeTextHash = escapeHtml(waiverRow.waiver_text_sha256 || '');
   const safeDocHash = escapeHtml(waiverRow.document_sha256 || '');
   const safeSeal = escapeHtml(waiverRow.provenance_seal || '');
+  const safeLocale = escapeHtml(waiverRow.waiver_locale || 'en');
   const sigData = includePii ? String(waiverRow.signature_data || '') : '';
   const isImgSig = includePii && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(sigData);
 
@@ -467,6 +473,8 @@ export function renderSignedWaiverCertificateHtml(waiverRow, integrityVerified =
         <div class="prov-val">Explicitly affirmed by signer prior to execution</div>
         <div class="prov-label">Waiver Text SHA-256:</div>
         <div class="prov-val">${safeTextHash}</div>
+        <div class="prov-label">Waiver Signed Locale:</div>
+        <div class="prov-val">${safeLocale}</div>
         <div class="prov-label">Signed Record SHA-256:</div>
         <div class="prov-val">${safeDocHash}</div>
         <div class="prov-label">HMAC-SHA256 Provenance Seal:</div>
@@ -617,6 +625,10 @@ waiverRouter.post('/sign', requireAuth, async (c) => {
 
   const cfg = resolveConfig(c.env);
   const spec = getWaiverSpec(c.env);
+  const rawLocale = String(body.waiver_locale || body.locale || '').trim().toLowerCase();
+  const validLocales = ['en', 'ar', 'es', 'fa', 'fr', 'hi', 'hy', 'ja', 'ko', 'pa', 'pt', 'ru', 'tl', 'vi', 'zh'];
+  const waiverLocale = validLocales.indexOf(rawLocale) !== -1 ? rawLocale : 'en';
+
   const waiverTextSha256 = await sha256Hex(spec.officialText);
   const signatureSha256 = await sha256Hex(signatureData);
   const canonicalPayload = buildCanonicalWaiverPayload({
@@ -627,7 +639,8 @@ waiverRouter.post('/sign', requireAuth, async (c) => {
     signed_date: signedDate,
     signature_type: signatureType,
     signature_sha256: signatureSha256,
-    electronic_consent: true
+    electronic_consent: true,
+    waiver_locale: waiverLocale
   });
   const documentSha256 = await sha256Hex(canonicalPayload);
   const certificateId = generateCertificateId(signedDate, spec.certificatePrefix);
@@ -645,8 +658,9 @@ waiverRouter.post('/sign', requireAuth, async (c) => {
         certificate_id, user_id, email, printed_name, signed_date,
         signature_type, signature_data, document_version,
         waiver_text_sha256, document_sha256, provenance_seal,
-        signer_ip, user_agent, electronic_consent, signed_at, retention_until
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+        signer_ip, user_agent, electronic_consent, signed_at, retention_until,
+        waiver_locale
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
     `).bind(
       certificateId,
       user.id,
@@ -662,7 +676,8 @@ waiverRouter.post('/sign', requireAuth, async (c) => {
       clientIp,
       userAgent,
       signedAtIso,
-      retentionUntilIso
+      retentionUntilIso,
+      waiverLocale
     ),
     c.env.DB.prepare(
       "UPDATE users SET waiver_status = 'digital', waiver_signed_at = ? WHERE id = ?"
@@ -681,6 +696,7 @@ waiverRouter.post('/sign', requireAuth, async (c) => {
     waiver_text_sha256: waiverTextSha256,
     document_sha256: documentSha256,
     provenance_seal: provenanceSeal,
+    waiver_locale: waiverLocale,
     signed_at: signedAtIso
   };
 
@@ -756,14 +772,15 @@ waiverRouter.post('/sign', requireAuth, async (c) => {
       document_version: spec.documentVersion,
       waiver_text_sha256: waiverTextSha256,
       document_sha256: documentSha256,
-      provenance_seal: provenanceSeal
+      provenance_seal: provenanceSeal,
+      waiver_locale: waiverLocale
     }
   }, 201);
 });
 
 async function verifyWaiverIntegrity(env, row, db) {
   const sigSha256 = await sha256Hex(row.signature_data);
-  const expectedCanonical = buildCanonicalWaiverPayload({
+  const computePayloadWithLocale = (includeLocale) => buildCanonicalWaiverPayload({
     document_version: row.document_version,
     waiver_text_sha256: row.waiver_text_sha256,
     email: row.email,
@@ -771,15 +788,35 @@ async function verifyWaiverIntegrity(env, row, db) {
     signed_date: row.signed_date,
     signature_type: row.signature_type,
     signature_sha256: sigSha256,
-    electronic_consent: Boolean(row.electronic_consent)
+    electronic_consent: Boolean(row.electronic_consent),
+    waiver_locale: includeLocale ? (row.waiver_locale || null) : null
   });
-  const recomputedDocSha256 = await sha256Hex(expectedCanonical);
-  const sealVerified = await verifyWaiverProvenanceSeal(
+
+  // Try sealed payload with waiver_locale first
+  let expectedCanonical = computePayloadWithLocale(true);
+  let recomputedDocSha256 = await sha256Hex(expectedCanonical);
+  let sealVerified = await verifyWaiverProvenanceSeal(
     env,
     `${row.certificate_id}:${recomputedDocSha256}`,
     row.provenance_seal,
     db
   );
+
+  // If seal mismatch and row.document_sha256 doesn't match, fallback to legacy payload without waiver_locale
+  if (!constantTimeEqual(recomputedDocSha256, row.document_sha256) || !sealVerified) {
+    const legacyCanonical = computePayloadWithLocale(false);
+    const legacyDocSha256 = await sha256Hex(legacyCanonical);
+    const legacySealVerified = await verifyWaiverProvenanceSeal(
+      env,
+      `${row.certificate_id}:${legacyDocSha256}`,
+      row.provenance_seal,
+      db
+    );
+    if (constantTimeEqual(legacyDocSha256, row.document_sha256) && legacySealVerified) {
+      return true;
+    }
+  }
+
   return Boolean(
     constantTimeEqual(recomputedDocSha256, row.document_sha256) &&
     sealVerified

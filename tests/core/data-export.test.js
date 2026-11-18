@@ -696,7 +696,7 @@ function registerDataExportTests() {
         'profile.export_wrong_passphrase'
       ];
       const i18nDir = path.join(ROOT_DIR, 'public', 'i18n');
-      const localeFiles = fs.readdirSync(i18nDir).filter((f) => f.endsWith('.json'));
+      const localeFiles = fs.readdirSync(i18nDir).filter((f) => f.endsWith('.json') && f !== 'en.json');
       assert.equal(localeFiles.length, 14, 'Expected 14 non-English locale files');
       for (const file of localeFiles) {
         const dict = JSON.parse(fs.readFileSync(path.join(i18nDir, file), 'utf8'));
