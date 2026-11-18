@@ -8,6 +8,7 @@
     "dev": "node --watch src/server.js",
     "pages:dev": "npx wrangler pages dev public",
     "deploy": "npx wrangler pages deploy public --project-name pickup-baseball --branch trunk --commit-dirty=true",
+    "deploy:cron": "npx wrangler deploy --config workers/cron-reminders/wrangler.toml",
     "d1:backup": "npx wrangler d1 export pickup-baseball-db --remote --output ./d1_backup.sql",
     "d1:backup:chat": "npx wrangler d1 export pickup-chat-db --remote --output ./d1_chat_backup.sql",
     "db:migrate": "node scripts/migrate-db.js",

@@ -1,26 +1,28 @@
-<#
+﻿<#
 .SYNOPSIS
-  Bump version, test, commit, tag, deploy to Cloudflare Pages, and push to GitHub.
+  Bump version, test, commit, tag, deploy to Cloudflare Pages (and optional Cron Worker), and push to GitHub.
 
 .DESCRIPTION
-  Editable release workflow script.
+  Editable release workflow script for both interactive human releases and non-interactive agent releases.
   Default flow:
     1. Verify current git branch matches $DefaultBranch (unless -AllowWrongBranch)
-    2. Bump app & cache version (npm run bump)
+    2. Bump app & cache version (npm run bump) — auto-skipped if working tree is clean and current version is not yet tagged (e.g. after merging a pre-bumped branch), unless -ForceBump is passed
     3. Run the unified verification gate on the bumped files (npm run check)
     4. Show `git status --short`, confirm staging, prompt for commit summary if -Message wasn't passed, and commit
-    5. Create git tag `v<version>`
-    6. Deploy to Cloudflare Pages (`npm run deploy`)
+    5. Create git tag `v<version>` (even if -SkipCommit was used or changes were already committed)
+    6. Deploy to Cloudflare Pages (`npm run deploy`) and optionally the Cron Worker (`npm run deploy:cron` via -DeployCron)
     7. Push branch and tag to GitHub (`origin/trunk`)
     8. Run live production security verification (`npm run security:scan:live`, unless -SkipDeploy)
 
   You do NOT need to edit this file for commit messages: pass `-Message "..."` when
   running it, or just run `.\scripts\ship.ps1` and type the message when prompted.
+  Agents should pass `-Message "..." -Yes` for non-interactive execution.
 
 .EXAMPLE
   .\scripts\ship.ps1
   .\scripts\ship.ps1 -Message "Change sportsmanship to goodwill"
   .\scripts\ship.ps1 -Message "Quick fix" -Yes
+  .\scripts\ship.ps1 -DeployCron -Message "Update reminder worker" -Yes
   .\scripts\ship.ps1 -NoPush -SkipDeploy
   .\scripts\ship.ps1 -DryRun
 #>
@@ -28,9 +30,11 @@
 param(
   [string]$Message = '',
   [switch]$SkipBump,
+  [switch]$ForceBump,
   [switch]$SkipTest,
   [switch]$SkipCommit,
   [switch]$SkipDeploy,
+  [switch]$DeployCron,
   [switch]$StagedOnly,
   [switch]$NoPush,
   [switch]$NoTag,
@@ -80,8 +84,18 @@ try {
   }
 
   # 2. Bump version first so tests verify the exact files we will commit & deploy
+  #    Auto-detect if working tree is clean and CURRENT_APP_VERSION is not yet tagged (e.g. merged a pre-bumped branch)
+  $PreVersionSrc = Get-Content (Join-Path $RepoRoot 'src\app\version.js') -Raw
+  $PreVersion = if ($PreVersionSrc -match "CURRENT_APP_VERSION\s*=\s*'(\d+)'") { $Matches[1] } else { 'unknown' }
+  $PreTagExists = if ($PreVersion -ne 'unknown') { ((git tag -l "v$PreVersion") -join '').Trim() } else { '' }
+  $InitialDirty = ((git status --porcelain) -join "`n").Trim()
+
   if (-not $SkipBump) {
-    Invoke-Step -Label 'Bumping app & asset version (npm run bump)' -Command { npm run bump }
+    if (-not $ForceBump -and [string]::IsNullOrWhiteSpace($InitialDirty) -and [string]::IsNullOrWhiteSpace($PreTagExists) -and $PreVersion -ne 'unknown') {
+      Write-Host "`n==> Working tree is clean and v$PreVersion is not yet tagged; skipping duplicate version bump (pass -ForceBump to override)." -ForegroundColor DarkGray
+    } else {
+      Invoke-Step -Label 'Bumping app & asset version (npm run bump)' -Command { npm run bump }
+    }
   }
 
   # 3. Run unified verification gate (lint, typecheck, test, test:workerd, test:browser, security:scan)
@@ -151,22 +165,25 @@ try {
         Invoke-Step -Label "Committing ($FullCommitMsg)" -Command { git commit -m $FullCommitMsg }
       }
     }
+  }
 
-    # 5. Tag release if it doesn't already exist
-    if ($ShouldTag) {
-      $ExistingTag = ((git tag -l $TagName) -join '').Trim()
-      if ([string]::IsNullOrWhiteSpace($ExistingTag)) {
-        Invoke-Step -Label "Creating git tag ($TagName)" -Command { git tag $TagName }
-        $TagCreated = $true
-      } else {
-        Write-Host "`n==> Tag $TagName already exists; skipping tag creation." -ForegroundColor DarkGray
-      }
+  # 5. Tag release if it doesn't already exist (works even when -SkipCommit is used on pre-committed merges)
+  if ($ShouldTag) {
+    $ExistingTag = ((git tag -l $TagName) -join '').Trim()
+    if ([string]::IsNullOrWhiteSpace($ExistingTag)) {
+      Invoke-Step -Label "Creating git tag ($TagName)" -Command { git tag $TagName }
+      $TagCreated = $true
+    } else {
+      Write-Host "`n==> Tag $TagName already exists; skipping tag creation." -ForegroundColor DarkGray
     }
   }
 
-  # 6. Deploy to Cloudflare Pages
+  # 6. Deploy to Cloudflare Pages (and optional Cron Worker)
   if (-not $SkipDeploy) {
     Invoke-Step -Label 'Deploying to Cloudflare Pages (npm run deploy)' -Command { npm run deploy }
+    if ($DeployCron) {
+      Invoke-Step -Label 'Deploying Standalone Cron Worker (npm run deploy:cron)' -Command { npm run deploy:cron }
+    }
   }
 
   # 7. Push branch (and new release tag) to remote
