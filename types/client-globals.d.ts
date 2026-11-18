@@ -130,6 +130,7 @@ interface PBFAPIError extends Error {
 
 interface PBFApiFacade {
   CLIENT_VERSION: string;
+  APP_VERSION?: string;
   currentUser?: PBFUser | null;
   SUPPORTED_LANGUAGES: Array<{ code: string; label: string; dir?: string; [key: string]: any }>;
   COLOR_THEMES: Array<{ id: string; label: string; [key: string]: any }>;
@@ -172,12 +173,18 @@ interface PBFApiFacade {
   clearClubhouseIndexedDb(): Promise<void>;
   clearDataCaches(skipIndexedDb?: boolean): Promise<void>;
   recordDiagnostic(entry: Record<string, any>): void;
+  clearDiagnostics(): void;
+  formatDiagnosticsText?(extraDiagnostic?: any): string;
   request(method: string, url: string, body?: any, opts?: PBFApiRequestOptions): Promise<any>;
   getPublicConfig(forceRefresh?: boolean): Promise<Record<string, any>>;
   isFeatureEnabled(flagKey: string, configOverride?: Record<string, any> | null): boolean;
   getMe(): Promise<PBFUser | null>;
   regenerateCalendarToken(): Promise<any>;
   logout(): Promise<void>;
+  exportMyData(): Promise<any>;
+  deleteMyAccount(payload: Record<string, any>): Promise<any>;
+  requestVisitorErasure(email: string): Promise<any>;
+  confirmVisitorErasure(payload: Record<string, any>): Promise<any>;
   getPosts(): Promise<any>;
   createPost(payload: Record<string, any>): Promise<any>;
   deletePost(id: number | string): Promise<any>;
@@ -278,10 +285,10 @@ interface PBFApiFacade {
 
 interface WeatherServiceFacade {
   HEURISTIC_CONFIG: Record<string, any>;
-  extractCoordinates(text: string): { lat: number; lon: number } | null;
-  getCoordsForLocation(location: string): { lat: number; lon: number; name?: string };
-  resolveCoordsForLocation(location: string): Promise<{ lat: number; lon: number; name?: string }>;
-  getWeatherCodeInfo(code: number): { label: string; emoji: string; [key: string]: any };
+  extractCoordinates(text: string): { latitude: number; longitude: number; name?: string; [key: string]: any } | null;
+  getCoordsForLocation(location: string): { latitude?: number; longitude?: number; lat?: number; lon?: number; name?: string; [key: string]: any };
+  resolveCoordsForLocation(location: string): Promise<{ latitude?: number; longitude?: number; lat?: number; lon?: number; name?: string; [key: string]: any }>;
+  getWeatherCodeInfo(code: number): { emoji: string; condition?: string; label?: string; isRain?: boolean; [key: string]: any };
   getPacificDateParts(dateInput?: Date | string | number): Record<string, any>;
   getPacificTodayDateKey(): string;
   fetchForecast(lat: number, lon: number): Promise<any>;
@@ -303,7 +310,7 @@ interface ClubhouseCryptoFacade {
   generateIdentityKeyPair(): Promise<Record<string, any>>;
   deriveVaultKeyFromPassphrase(passphrase: string, saltBase64: string): Promise<CryptoKey>;
   encryptVault(vaultObj: any, passphrase: string): Promise<Record<string, any>>;
-  decryptVault(vaultPayload: Record<string, any>, passphrase: string): Promise<any>;
+  decryptVault(vaultPayload: Record<string, any> | string, passphrase: string, saltBase64?: string, ivBase64?: string): Promise<any>;
   generateChannelKey(): Promise<CryptoKey>;
   deriveEcdhSharedKey(privateKey: CryptoKey, publicKeyJwk: JsonWebKey): Promise<CryptoKey>;
   wrapChannelKey(channelKey: CryptoKey, wrappingKey: CryptoKey): Promise<any>;
@@ -322,6 +329,7 @@ interface ClubhouseCryptoFacade {
   getPeerVerificationState(peerUserId: number, currentFingerprint: string): Promise<Record<string, any>>;
   markPeerFingerprintVerified(peerUserId: number, fingerprint: string): Promise<Record<string, any>>;
   clearPeerVerificationPin?(peerUserId: number): Promise<void>;
+  decryptExportBundle?(bundle: Record<string, any>, opts?: Record<string, any>): Promise<any>;
   idbGet(key: string): Promise<any>;
   idbPut(key: string, value: any): Promise<void>;
   idbDelete?(key: string): Promise<void>;

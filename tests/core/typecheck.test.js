@@ -44,7 +44,7 @@ module.exports = function registerTypecheckTests() {
 
       const clientCfg = JSON.parse(fs.readFileSync(path.join(ROOT_DIR, 'tsconfig.client.json'), 'utf8'));
       assert.equal(clientCfg.compilerOptions.allowJs, true);
-      assert.equal(clientCfg.compilerOptions.checkJs, false);
+      assert.equal(clientCfg.compilerOptions.checkJs, true);
       assert.equal(clientCfg.compilerOptions.noEmit, true);
       assert.equal(clientCfg.compilerOptions.target, 'ES2019');
       assert.equal(clientCfg.compilerOptions.moduleDetection, 'force');
@@ -53,8 +53,13 @@ module.exports = function registerTypecheckTests() {
       assert.ok(clientCfg.include.includes('public/js/**/*.js'));
       assert.ok(clientCfg.include.includes('types/client-globals.d.ts'));
 
-      const navInitSrc = fs.readFileSync(path.join(ROOT_DIR, 'public/js/nav-init.js'), 'utf8');
-      assert.match(navInitSrc, /^\/\/\s*@ts-check/m, 'public/js/nav-init.js must opt in with // @ts-check');
+      for (const rel of ['public/js/app.js', 'public/js/archive.js', 'public/js/login.js', 'public/js/nav-init.js', 'public/js/profile.js']) {
+        const src = fs.readFileSync(path.join(ROOT_DIR, rel), 'utf8');
+        assert.match(src, /^\/\/\s*@ts-check/m, `${rel} must opt in with // @ts-check`);
+        assert.match(src, /\(function\s*\(/, `${rel} must be encapsulated in an IIFE`);
+        assert.match(src, /'use strict';/, `${rel} must enable strict mode inside its IIFE`);
+        assert.equal(/window\.(getGoogleCalendarUrl|downloadCalendarIcs|quickRecordArchiveTurnout|quickEditArchiveTurnout)/.test(src), false, `${rel} must have zero window.* page exports`);
+      }
     });
 
     await t10.test('T10.2: tsconfig.client.json passes cleanly including @ts-check client files', () => {

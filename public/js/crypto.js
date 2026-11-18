@@ -15,7 +15,7 @@
  *
  * @global ClubhouseCrypto
  */
-(function (root) {
+(function (/** @type {any} */ root) {
   'use strict';
 
   var CRYPTO_DB_NAME = 'pickup_clubhouse_crypto';
@@ -119,11 +119,12 @@
 
   if (typeof window !== 'undefined' && typeof BroadcastChannel !== 'undefined') {
     try {
+      /** @type {any} */
       var keyClearChannel = new BroadcastChannel('pickup_clubhouse_clear');
       if (typeof keyClearChannel.unref === 'function') {
         keyClearChannel.unref();
       }
-      keyClearChannel.addEventListener('message', function (ev) {
+      keyClearChannel.addEventListener('message', function (/** @type {any} */ ev) {
         if (ev && ev.data && ev.data.type === 'clear') {
           memoryKeyStore = {};
           closeKeyDbHandle();
@@ -141,13 +142,13 @@
       }
       try {
         var req = root.indexedDB.open(CRYPTO_DB_NAME, CRYPTO_DB_VERSION);
-        req.onupgradeneeded = function (ev) {
+        req.onupgradeneeded = function (/** @type {any} */ ev) {
           var db = ev.target.result;
           if (!db.objectStoreNames.contains(KEY_STORE_NAME)) {
             db.createObjectStore(KEY_STORE_NAME);
           }
         };
-        req.onsuccess = function (ev) {
+        req.onsuccess = function (/** @type {any} */ ev) {
           var db = ev.target.result;
           openKeyDbInstance = db;
           db.onversionchange = function () {
@@ -282,13 +283,13 @@
       }
       try {
         var req = root.indexedDB.open(PIN_DB_NAME, PIN_DB_VERSION);
-        req.onupgradeneeded = function (ev) {
+        req.onupgradeneeded = function (/** @type {any} */ ev) {
           var db = ev.target.result;
           if (!db.objectStoreNames.contains(PIN_STORE_NAME)) {
             db.createObjectStore(PIN_STORE_NAME);
           }
         };
-        req.onsuccess = function (ev) {
+        req.onsuccess = function (/** @type {any} */ ev) {
           var db = ev.target.result;
           db.onversionchange = function () {
             try { db.close(); } catch (e) { /* best-effort close on versionchange */ }
@@ -1023,7 +1024,7 @@
 
         return passPromise.then(function (passphrase) {
           if (passphrase === null || passphrase === undefined || passphrase === '') {
-            var cancelErr = new Error('E2EE vault unlock cancelled.');
+            var cancelErr = /** @type {any} */ (new Error('E2EE vault unlock cancelled.'));
             cancelErr.code = 'EXPORT_DECRYPT_CANCELLED';
             throw cancelErr;
           }

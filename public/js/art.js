@@ -53,15 +53,17 @@
     if (banner) {
       banner.style.display = isAdmin ? 'flex' : 'none';
     }
-    document.querySelectorAll('.art-admin-only').forEach(el => {
+    document.querySelectorAll('.art-admin-only').forEach(node => {
+      const el = /** @type {HTMLElement} */ (node);
       el.style.display = isAdmin ? 'inline-flex' : 'none';
     });
   }
 
   function initPixelDiamond() {
-    const canvas = document.getElementById('pixel-diamond-canvas');
+    const canvas = /** @type {HTMLCanvasElement|null} */ (document.getElementById('pixel-diamond-canvas'));
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
     // Build palette swatches
     const paletteRow = document.getElementById('pixel-palette-row');
@@ -156,6 +158,7 @@
         exportCanvas.width = 512;
         exportCanvas.height = 512;
         const eCtx = exportCanvas.getContext('2d');
+        if (!eCtx) return;
         eCtx.imageSmoothingEnabled = false;
         eCtx.drawImage(canvas, 0, 0, 512, 512);
 
@@ -501,8 +504,9 @@
 
     // Click on trunk to slap sticker
     stage.addEventListener('click', (e) => {
+      const target = /** @type {HTMLElement|null} */ (e.target);
       // If clicking directly on an existing sticker, handle in sticker click
-      if (e.target.classList.contains('placed-trunk-sticker') || e.target.closest('.placed-trunk-sticker')) {
+      if (target && (target.classList.contains('placed-trunk-sticker') || target.closest('.placed-trunk-sticker'))) {
         return;
       }
 
@@ -510,7 +514,7 @@
       const x = Math.max(20, Math.min(rect.width - 60, e.clientX - rect.left - 20));
       const y = Math.max(20, Math.min(rect.height - 60, e.clientY - rect.top - 20));
 
-      const tagInput = document.getElementById('sticker-tag-input');
+      const tagInput = /** @type {HTMLInputElement|null} */ (document.getElementById('sticker-tag-input'));
       const tagText = tagInput && tagInput.value ? tagInput.value.trim().slice(0, 30) : '';
 
       const rotation = Math.floor(Math.random() * 30) - 15; // -15 to +15 deg
@@ -632,12 +636,14 @@
   let chalkHistory = [];
 
   function initDugoutChalkboard() {
-    const canvas = document.getElementById('chalkboard-canvas');
+    const canvas = /** @type {HTMLCanvasElement|null} */ (document.getElementById('chalkboard-canvas'));
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
     // Handle high DPI resizing
     function resizeCanvas() {
+      if (!canvas || !ctx) return;
       const rect = canvas.getBoundingClientRect();
       if (rect.width > 0 && canvas.width !== rect.width) {
         // Save state before resizing
@@ -664,6 +670,7 @@
     saveHistoryState(ctx, canvas);
 
     function startDraw(e) {
+      if (!canvas || !ctx) return;
       if (chalkboardFrozen) {
         showToast('🔒 The dugout chalkboard is currently locked by organizers.');
         return;
@@ -677,7 +684,7 @@
     }
 
     function moveDraw(e) {
-      if (!isDrawing) return;
+      if (!isDrawing || !canvas || !ctx) return;
       const rect = canvas.getBoundingClientRect();
       const clientX = e.touches ? e.touches[0].clientX : e.clientX;
       const clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -708,7 +715,7 @@
     }
 
     function endDraw() {
-      if (!isDrawing) return;
+      if (!isDrawing || !canvas || !ctx) return;
       isDrawing = false;
       saveHistoryState(ctx, canvas);
       localStorage.setItem('pbf_chalkboard_data', canvas.toDataURL());
@@ -734,14 +741,15 @@
       btn.addEventListener('click', () => {
         document.querySelectorAll('.chalk-btn').forEach(b => b.classList.remove('selected'));
         btn.classList.add('selected');
-        chalkColor = btn.getAttribute('data-chalk-color');
+        chalkColor = btn.getAttribute('data-chalk-color') || '#F8F9FA';
       });
     });
 
-    const sizeSelect = document.getElementById('chalk-size-select');
+    const sizeSelect = /** @type {HTMLSelectElement|null} */ (document.getElementById('chalk-size-select'));
     if (sizeSelect) {
       sizeSelect.addEventListener('change', (e) => {
-        chalkSize = parseInt(e.target.value, 10) || 4;
+        const target = /** @type {HTMLSelectElement|null} */ (e.target);
+        chalkSize = parseInt((target && target.value) || '4', 10) || 4;
       });
     }
 
@@ -787,6 +795,7 @@
         offscreen.width = canvas.width;
         offscreen.height = canvas.height;
         const offCtx = offscreen.getContext('2d');
+        if (!offCtx) return;
 
         // 1. Draw chalk slate drawing
         offCtx.drawImage(canvas, 0, 0);

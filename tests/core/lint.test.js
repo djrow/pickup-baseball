@@ -73,6 +73,12 @@ module.exports = function registerLintTests() {
 
       const iifeGlobalRes = await eslint.lintText('var leakedGlobal = 1;\nvoid leakedGlobal;\n', { filePath: iifeTarget });
       assert.ok(ruleIds(iifeGlobalRes).includes('no-implicit-globals'), 'IIFE client modules must reject top-level globals');
+
+      for (const rel of ['app.js', 'archive.js', 'login.js', 'nav-init.js', 'profile.js']) {
+        const legacyTarget = path.join(ROOT_DIR, 'public', 'js', rel);
+        const globalRes = await eslint.lintText('var leakedGlobal = 1;\nvoid leakedGlobal;\n', { filePath: legacyTarget });
+        assert.ok(ruleIds(globalRes).includes('no-implicit-globals'), `${rel} must reject top-level globals universally`);
+      }
     });
   });
 };
