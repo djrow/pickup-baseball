@@ -490,16 +490,20 @@ export async function getGDriveStorageQuota(env) {
 }
 
 /**
- * Export a Google Sheet as CSV via Google Drive v3 API
+ * Export a Google Sheet as CSV via Google Drive v3 API (or gviz/tq when sheetName is specified)
  * @param {Record<string, any>} env
  * @param {string} fileId
+ * @param {string} [sheetName]
  * @returns {Promise<string | null>}
  */
-export async function exportGDriveSheetCsv(env, fileId) {
+export async function exportGDriveSheetCsv(env, fileId, sheetName) {
   if (!fileId || !isGDriveConfigured(env)) return null;
   const apiBase = getGDriveApiBase(env);
   const accessToken = await getGDriveAccessToken(env);
-  const res = await fetch(`${apiBase}/drive/v3/files/${encodeURIComponent(fileId)}/export?mimeType=text%2Fcsv`, {
+  const url = sheetName
+    ? `https://docs.google.com/spreadsheets/d/${encodeURIComponent(fileId)}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`
+    : `${apiBase}/drive/v3/files/${encodeURIComponent(fileId)}/export?mimeType=text%2Fcsv`;
+  const res = await fetch(url, {
     headers: { Authorization: `Bearer ${accessToken}` }
   });
   if (!res.ok) return null;

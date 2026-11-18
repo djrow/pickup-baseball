@@ -4,9 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Player Profile &amp; Settings - Sunday Pickup Baseball</title>
-  <link rel="stylesheet" href="/css/style.css?v=158">
-  <link rel="stylesheet" href="/css/dialog.css?v=158">
-  <link rel="stylesheet" href="/css/themes.css?v=158">
+  <link rel="stylesheet" href="/css/style.css?v=159">
+  <link rel="stylesheet" href="/css/dialog.css?v=159">
+  <link rel="stylesheet" href="/css/themes.css?v=159">
   <link rel="alternate" type="application/rss+xml" title="Sunday Pickup Baseball Highlights &amp; Updates" href="/feed.xml">
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
@@ -77,94 +77,23 @@
 
       <div id="profile-alert"></div>
 
-      <!-- Player Consent & Liability Waiver Card -->
-      <div id="profile-waiver-card" style="padding: 16px 20px; background: var(--bg-subtle); border: 1.5px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-        <div>
-          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px;">
-            <h2 style="font-size: 0.95rem; color: var(--secondary); margin: 0;" data-i18n="profile.waiver_card_title">📝 Player Consent &amp; Liability Waiver</h2>
-            <span id="badge-waiver-pill" class="badge badge-gray">⏳ Unsigned</span>
-          </div>
-          <p id="profile-waiver-desc" style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">
-            Sign the Pickup Baseball Foundation Consent, Waiver and Indemnity online, or ask an organizer if you signed a paper copy at the field.
-          </p>
-        </div>
-        <a id="profile-waiver-btn" href="/waiver.html" class="btn btn-primary btn-sm" style="font-weight: 700; white-space: nowrap;">
-          ✍️ Sign Waiver →
-        </a>
-      </div>
+      <nav aria-label="Profile sections" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; padding-top: 4px; border-top: 1px solid var(--border);">
+        <a href="#section-profile" class="btn btn-outline btn-sm">👤 Profile &amp; Preferences</a>
+        <a href="#section-community" class="btn btn-outline btn-sm">⚾ Community &amp; Waiver</a>
+        <a href="#section-security" class="btn btn-outline btn-sm">🔐 Security &amp; Data</a>
+        <a href="#section-danger" class="btn btn-outline btn-sm" style="color: var(--danger); border-color: var(--danger);">🗑️ Delete Account</a>
+      </nav>
+    </div>
 
-      <!-- Badges & Hero Credits Section -->
-      <div id="profile-certified-shifts-card" style="padding: 16px 20px; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 18px;">
-        <h2 style="font-size: 0.95rem; color: var(--secondary); margin-bottom: 8px;">🏅 Operations Badges &amp; Hero Credits</h2>
-        <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center; font-size: 0.85rem;">
-          <span id="badge-machine-pill" class="badge badge-gray">⚡ Pitching Machine: Uncertified</span>
-          <span id="badge-field-pill" class="badge badge-gray">🚜 Field Dragging: Uncertified</span>
-          <span id="hero-credits-pill" class="badge badge-orange">🛡️ 0 Backup Hero Credits</span>
-        </div>
-        <p style="font-size: 0.77rem; color: var(--text-muted); margin-top: 8px; margin-bottom: 0;">
-          Badges allow claiming paid tasks up to 12 weeks ahead. Backup Hero Credits can be redeemed for early Tier 1 access above your 3-month fair-share cap.
-        </p>
-      </div>
-
-      <!-- Clubhouse Opt-In / Opt-Out Card -->
-      <div id="profile-clubhouse-card" style="padding: 16px 20px; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-        <div style="flex: 1; min-width: 220px;">
-          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px;">
-            <h2 style="font-size: 0.95rem; color: var(--secondary); margin: 0;">💬 Clubhouse Community</h2>
-            <span id="badge-clubhouse-pill" class="badge badge-gray">Not Opted In</span>
-          </div>
-          <p id="profile-clubhouse-desc" style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">
-            Opt in to appear in the Clubhouse members list, chat, react, and join DMs or voice lounges. Leaving hides your messages and reactions from Clubhouse until you rejoin.
-          </p>
-        </div>
-        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-          <a id="profile-clubhouse-link" href="/clubhouse.html" class="btn btn-outline btn-sm" style="display: none; white-space: nowrap;">Open Clubhouse →</a>
-          <button type="button" id="btn-profile-clubhouse-optin" class="btn btn-primary btn-sm" style="font-weight: 700; white-space: nowrap;">Join Clubhouse</button>
-        </div>
-      </div>
-
-      <!-- Account Security & Signed-In Devices Card -->
-      <div id="profile-security-card" style="padding: 16px 20px; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-        <div style="flex: 1; min-width: 220px;">
-          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px;">
-            <h2 style="font-size: 0.95rem; color: var(--secondary); margin: 0;" data-i18n="profile.sessions_title">🔐 Signed-In Devices</h2>
-            <span id="badge-sessions-pill" class="badge badge-gray">Checking...</span>
-          </div>
-          <p id="profile-sessions-desc" style="font-size: 0.8rem; color: var(--text-muted); margin: 0;" data-i18n="profile.sessions_desc">
-            Accounts stay signed in on up to 5 devices at once. If you forgot to log out on a friend's phone, sign out everywhere else below.
-          </p>
-        </div>
-        <button type="button" id="btn-logout-other-devices" class="btn btn-outline btn-sm" style="color: var(--danger); border-color: var(--danger); font-weight: 600; white-space: nowrap;" data-i18n="profile.logout_other_devices_btn">
-          Sign Out of All Other Devices
-        </button>
-      </div>
-
-      <!-- Data Portability / Personal Data Export Card -->
-      <div id="profile-export-card" style="padding: 16px 20px; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 24px;">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px;">
-          <div style="flex: 1; min-width: 220px;">
-            <h2 style="font-size: 0.95rem; color: var(--secondary); margin: 0 0 4px 0;" data-i18n="profile.export_title">📦 Download Your Data</h2>
-            <p id="profile-export-desc" style="font-size: 0.8rem; color: var(--text-muted); margin: 0;" data-i18n="profile.export_desc">
-              Download a JSON archive of your profile, consent history, RSVPs, volunteer tasks, signed waivers, and Clubhouse messages.
-            </p>
-          </div>
-          <button type="button" id="btn-export-my-data" class="btn btn-outline btn-sm" style="font-weight: 600; white-space: nowrap;" data-i18n="profile.export_btn">
-            📥 Download JSON Export
-          </button>
-        </div>
-        <div style="margin-top: 10px;">
-          <label style="display: flex; align-items: center; gap: 8px; font-size: 0.82rem; color: var(--text-main); cursor: pointer; font-weight: 500;">
-            <input type="checkbox" id="export-decrypt-e2ee-checkbox" style="width: auto; margin: 0;">
-            <span data-i18n="profile.export_decrypt_label">Decrypt my encrypted Clubhouse messages in-browser before saving</span>
-          </label>
-        </div>
-      </div>
+    <!-- Section 1: Profile & Preferences -->
+    <section id="section-profile" class="card" style="box-shadow: var(--shadow-md); margin-top: 20px;">
+      <h2 style="color: var(--secondary); font-size: 1.15rem; margin: 0 0 16px 0;">👤 Profile &amp; Preferences</h2>
 
       <!-- Avatar Section -->
       <div style="display: flex; align-items: center; gap: 20px; padding: 20px; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 24px; flex-wrap: wrap;">
         <div id="avatar-preview-container"></div>
         <div style="flex: 1; min-width: 200px;">
-          <h2 style="font-size: 0.95rem; color: var(--secondary); margin-bottom: 4px;" data-i18n="profile.picture_title">Profile Picture</h2>
+          <h3 style="font-size: 0.95rem; color: var(--secondary); margin-bottom: 4px;" data-i18n="profile.picture_title">Profile Picture</h3>
           <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 12px;" data-i18n="profile.picture_desc">
             JPEG, PNG, WebP or GIF (up to 5MB).
           </p>
@@ -284,9 +213,111 @@
           </div>
         </div>
       </form>
+    </section>
 
+    <!-- Section 2: Community, Waiver & Badges -->
+    <section id="section-community" class="card" style="box-shadow: var(--shadow-md); margin-top: 20px;">
+      <h2 style="color: var(--secondary); font-size: 1.15rem; margin: 0 0 16px 0;">⚾ Community, Waiver &amp; Badges</h2>
+
+      <!-- Player Consent & Liability Waiver Card -->
+      <div id="profile-waiver-card" style="padding: 16px 20px; background: var(--bg-subtle); border: 1.5px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+        <div>
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px;">
+            <h3 style="font-size: 0.95rem; color: var(--secondary); margin: 0;" data-i18n="profile.waiver_card_title">📝 Player Consent &amp; Liability Waiver</h3>
+            <span id="badge-waiver-pill" class="badge badge-gray">⏳ Unsigned</span>
+          </div>
+          <p id="profile-waiver-desc" style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">
+            Sign the Pickup Baseball Foundation Consent, Waiver and Indemnity online, or ask an organizer if you signed a paper copy at the field.
+          </p>
+        </div>
+        <a id="profile-waiver-btn" href="/waiver.html" class="btn btn-primary btn-sm" style="font-weight: 700; white-space: nowrap;">
+          ✍️ Sign Waiver →
+        </a>
+      </div>
+
+      <!-- Badges & Hero Credits Section -->
+      <div id="profile-certified-shifts-card" style="padding: 16px 20px; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 16px;">
+        <h3 style="font-size: 0.95rem; color: var(--secondary); margin-bottom: 8px;">🏅 Operations Badges &amp; Hero Credits</h3>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center; font-size: 0.85rem;">
+          <span id="badge-machine-pill" class="badge badge-gray">⚡ Pitching Machine: Uncertified</span>
+          <span id="badge-field-pill" class="badge badge-gray">🚜 Field Dragging: Uncertified</span>
+          <span id="hero-credits-pill" class="badge badge-orange">🛡️ 0 Backup Hero Credits</span>
+        </div>
+        <p style="font-size: 0.77rem; color: var(--text-muted); margin-top: 8px; margin-bottom: 0;">
+          Badges allow claiming paid tasks up to 12 weeks ahead. Backup Hero Credits can be redeemed for early Tier 1 access above your 3-month fair-share cap.
+        </p>
+      </div>
+
+      <!-- Clubhouse Opt-In / Opt-Out Card -->
+      <div id="profile-clubhouse-card" style="padding: 16px 20px; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+        <div style="flex: 1; min-width: 220px;">
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px;">
+            <h3 style="font-size: 0.95rem; color: var(--secondary); margin: 0;">💬 Clubhouse Community</h3>
+            <span id="badge-clubhouse-pill" class="badge badge-gray">Not Opted In</span>
+          </div>
+          <p id="profile-clubhouse-desc" style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">
+            Opt in to appear in the Clubhouse members list, chat, react, and join DMs or voice lounges. Leaving hides your messages and reactions from Clubhouse until you rejoin.
+          </p>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+          <a id="profile-clubhouse-link" href="/clubhouse.html" class="btn btn-outline btn-sm" style="display: none; white-space: nowrap;">Open Clubhouse →</a>
+          <button type="button" id="btn-profile-clubhouse-optin" class="btn btn-primary btn-sm" style="font-weight: 700; white-space: nowrap;">Join Clubhouse</button>
+        </div>
+      </div>
+
+      <details id="profile-history-panel" style="padding: 14px 18px; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm);">
+        <summary style="cursor: pointer; font-weight: 600;" data-i18n="profile.history_title">My Attendance &amp; Milestones</summary>
+        <p style="font-size: 0.8rem;" data-i18n="profile.history_privacy_note">Private to you. Never shown to other players.</p>
+        <div id="profile-history-body" aria-live="polite"></div>
+      </details>
+    </section>
+
+    <!-- Section 3: Security & Data -->
+    <section id="section-security" class="card" style="box-shadow: var(--shadow-md); margin-top: 20px;">
+      <h2 style="color: var(--secondary); font-size: 1.15rem; margin: 0 0 16px 0;">🔐 Security &amp; Data</h2>
+
+      <!-- Account Security & Signed-In Devices Card -->
+      <div id="profile-security-card" style="padding: 16px 20px; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+        <div style="flex: 1; min-width: 220px;">
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px;">
+            <h3 style="font-size: 0.95rem; color: var(--secondary); margin: 0;" data-i18n="profile.sessions_title">🔐 Signed-In Devices</h3>
+            <span id="badge-sessions-pill" class="badge badge-gray">Checking...</span>
+          </div>
+          <p id="profile-sessions-desc" style="font-size: 0.8rem; color: var(--text-muted); margin: 0;" data-i18n="profile.sessions_desc">
+            Accounts stay signed in on up to 5 devices at once. If you forgot to log out on a friend's phone, sign out everywhere else below.
+          </p>
+        </div>
+        <button type="button" id="btn-logout-other-devices" class="btn btn-outline btn-sm" style="color: var(--danger); border-color: var(--danger); font-weight: 600; white-space: nowrap;" data-i18n="profile.logout_other_devices_btn">
+          Sign Out of All Other Devices
+        </button>
+      </div>
+
+      <!-- Data Portability / Personal Data Export Card -->
+      <div id="profile-export-card" style="padding: 16px 20px; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm);">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px;">
+          <div style="flex: 1; min-width: 220px;">
+            <h3 style="font-size: 0.95rem; color: var(--secondary); margin: 0 0 4px 0;" data-i18n="profile.export_title">📦 Download Your Data</h3>
+            <p id="profile-export-desc" style="font-size: 0.8rem; color: var(--text-muted); margin: 0;" data-i18n="profile.export_desc">
+              Download a JSON archive of your profile, consent history, RSVPs, volunteer tasks, signed waivers, and Clubhouse messages.
+            </p>
+          </div>
+          <button type="button" id="btn-export-my-data" class="btn btn-outline btn-sm" style="font-weight: 600; white-space: nowrap;" data-i18n="profile.export_btn">
+            📥 Download JSON Export
+          </button>
+        </div>
+        <div style="margin-top: 10px;">
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 0.82rem; color: var(--text-main); cursor: pointer; font-weight: 500;">
+            <input type="checkbox" id="export-decrypt-e2ee-checkbox" style="width: auto; margin: 0;">
+            <span data-i18n="profile.export_decrypt_label">Decrypt my encrypted Clubhouse messages in-browser before saving</span>
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 4: Danger Zone -->
+    <section id="section-danger" class="card" style="box-shadow: var(--shadow-md); margin-top: 20px;">
       <!-- Account Deletion & Two-Tier Erasure Card -->
-      <div id="profile-erasure-card" style="margin-top: 28px; padding: 18px 20px; background: var(--bg-subtle); border: 1.5px solid var(--danger); border-radius: var(--radius-sm);">
+      <div id="profile-erasure-card" style="padding: 18px 20px; background: var(--bg-subtle); border: 1.5px solid var(--danger); border-radius: var(--radius-sm);">
         <h2 style="font-size: 0.98rem; color: var(--danger); margin: 0 0 8px 0;" data-i18n="profile.erasure_title">🗑️ Delete Account &amp; Erase Data</h2>
         <p id="profile-erasure-notice" style="font-size: 0.82rem; color: var(--text-muted); margin: 0 0 12px 0; line-height: 1.45;" data-i18n="profile.erasure_notice">
           Deleting your account immediately removes your profile, sessions, login codes, consent records, future RSVPs, task assignments, and batting practice slots. Past attendance counts, discussions, and posts are anonymized. Legal Waiver Retention Notice: Signed liability waivers remain sealed in restricted Admin-only quarantine for 3 years from signing or your last attended event before permanent deletion.
@@ -320,22 +351,17 @@
           </div>
         </div>
       </div>
-    </div>
-    <details class="card" id="profile-history-panel" style="margin-top: 24px; padding: 16px;">
-      <summary style="cursor: pointer; font-weight: 600;" data-i18n="profile.history_title">My Attendance &amp; Milestones</summary>
-      <p style="font-size: 0.8rem;" data-i18n="profile.history_privacy_note">Private to you. Never shown to other players.</p>
-      <div id="profile-history-body" aria-live="polite"></div>
-    </details>
+    </section>
   </main>
 
   <footer id="site-footer" class="site-footer"></footer>
 
-  <script src="/js/api/i18n.js?v=158"></script>
-  <script src="/js/api/ui.js?v=158"></script>
-  <script src="/js/api/endpoints.js?v=158"></script>
-  <script src="/js/api.js?v=158"></script>
-  <script src="/js/dialog.js?v=158"></script>
-  <script src="/js/crypto.js?v=158"></script>
-  <script src="/js/profile.js?v=158"></script>
+  <script src="/js/api/i18n.js?v=159"></script>
+  <script src="/js/api/ui.js?v=159"></script>
+  <script src="/js/api/endpoints.js?v=159"></script>
+  <script src="/js/api.js?v=159"></script>
+  <script src="/js/dialog.js?v=159"></script>
+  <script src="/js/crypto.js?v=159"></script>
+  <script src="/js/profile.js?v=159"></script>
 </body>
 </html>
