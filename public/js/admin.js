@@ -28,7 +28,7 @@
     builderDuties: /** @type {any[]} */ ([]),
     templateDuties: /** @type {any[]} */ ([]),
     openTaskManagerEventId: /** @type {number|null} */ (null),
-    openEditGameEventId: /** @type {number|null} */ (null),
+    openEditEventId: /** @type {number|null} */ (null),
     openQuickTurnoutEventId: /** @type {number|null} */ (null),
     loadedAdminEventsMap: new Map(),
     allAdminEventsCache: /** @type {any[]} */ ([]),
@@ -156,7 +156,7 @@
     await Promise.all([
       typeof AdminUI.loadDefaultDuties === 'function' ? AdminUI.loadDefaultDuties() : Promise.resolve(),
       typeof AdminUI.setupMediaCarouselsAdmin === 'function' ? AdminUI.setupMediaCarouselsAdmin() : Promise.resolve(),
-      typeof AdminUI.loadAdminGames === 'function' ? AdminUI.loadAdminGames() : Promise.resolve()
+      typeof AdminUI.loadAdminEvents === 'function' ? AdminUI.loadAdminEvents() : Promise.resolve()
     ]);
     if (typeof AdminUI.renderTaskBuilder === 'function') AdminUI.renderTaskBuilder();
 

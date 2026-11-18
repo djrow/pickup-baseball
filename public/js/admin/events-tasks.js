@@ -8,7 +8,7 @@
  * 1. Default Volunteer Tasks & Certified Shift Template Loader (`loadDefaultDuties`, `setDefaultDateTime`)
  * 2. Editable Volunteer Task Rows & Default Template Editor (`setupTaskBuilder`, `setupDefaultTemplateEditor`)
  * 3. Event Creation Form, 1-Click Next Sunday Helper & Restricted Candidate Picker (`setupQuickSundayButton`, `setupCreateForm`)
- * 4. Scheduled Event Management Cards, Inline Turnout, Field Drainage & Task Manager (`loadAdminGames`, `renderTaskManagerContent`)
+ * 4. Scheduled Event Management Cards, Inline Turnout, Field Drainage & Task Manager (`loadAdminEvents`, `renderTaskManagerContent`)
  */
 (function () {
   'use strict';
@@ -19,20 +19,7 @@
   var API = root.API = root.API || /** @type {any} */ ({});
   /** @type {any} */
   var AdminUI = API._adminUi = API._adminUi || {};
-  var state = AdminUI.state = AdminUI.state || {
-    currentAdminUser: /** @type {any} */ (null),
-    adminPublicConfig: /** @type {any} */ (null),
-    orgDefaultDuties: /** @type {any[]} */ ([]),
-    builderDuties: /** @type {any[]} */ ([]),
-    templateDuties: /** @type {any[]} */ ([]),
-    openTaskManagerEventId: /** @type {number|null} */ (null),
-    openEditGameEventId: /** @type {number|null} */ (null),
-    openQuickTurnoutEventId: /** @type {number|null} */ (null),
-    loadedAdminEventsMap: new Map(),
-    allAdminEventsCache: /** @type {any[]} */ ([]),
-    candidateMembersCache: /** @type {any[]} */ ([]),
-    reloadBannedEmailsFn: /** @type {Function|null} */ (null)
-  };
+  var state = AdminUI.state = AdminUI.state || /** @type {any} */ ({});
 
   function el(id) {
     return typeof document !== 'undefined' ? /** @type {any} */ (document.getElementById(id)) : null;
@@ -359,7 +346,7 @@
           if (newId) {
             setTimeout(function () { window.location.href = '/event.html?id=' + newId; }, 600);
           } else {
-            await loadAdminGames();
+            await loadAdminEvents();
           }
         }
       } catch (err) {
@@ -371,19 +358,19 @@
     });
   }
 
-  async function loadCandidatePlayers() {
+  async function loadCandidateMembers() {
     var container = el('allowed-players-list');
     if (!container) return;
     try {
       var res = await API.getAttendeeCandidates();
       state.candidateMembersCache = res.users || [];
-      renderCandidatePlayers(state.candidateMembersCache);
+      renderCandidateMembers(state.candidateMembersCache);
     } catch (err) {
       container.innerHTML = '<span style="color: var(--danger); font-size: 0.85rem;">Failed to load player accounts.</span>';
     }
   }
 
-  function renderCandidatePlayers(members) {
+  function renderCandidateMembers(members) {
     var container = el('allowed-players-list');
     if (!container) return;
     if (!members || members.length === 0) {
@@ -401,12 +388,12 @@
     }).join('');
 
     container.querySelectorAll('.allowed-player-cb').forEach(function (cb) {
-      cb.addEventListener('change', updateSelectedPlayersCount);
+      cb.addEventListener('change', updateSelectedMembersCount);
     });
-    updateSelectedPlayersCount();
+    updateSelectedMembersCount();
   }
 
-  function updateSelectedPlayersCount() {
+  function updateSelectedMembersCount() {
     var countEl = el('selected-players-count');
     var checked = document.querySelectorAll('.allowed-player-cb:checked');
     if (countEl) {
@@ -430,7 +417,7 @@
       restrictToggle.addEventListener('change', function () {
         restrictWrap.style.display = restrictToggle.checked ? 'block' : 'none';
         if (restrictToggle.checked && state.candidateMembersCache.length === 0) {
-          loadCandidatePlayers();
+          loadCandidateMembers();
         }
       });
     }
@@ -456,7 +443,7 @@
             if (cb) cb.checked = true;
           }
         });
-        updateSelectedPlayersCount();
+        updateSelectedMembersCount();
       });
     }
 
@@ -466,7 +453,7 @@
         document.querySelectorAll('.allowed-player-cb').forEach(function (cb) {
           /** @type {HTMLInputElement} */ (cb).checked = false;
         });
-        updateSelectedPlayersCount();
+        updateSelectedMembersCount();
       });
     }
 
@@ -553,7 +540,7 @@
           if (newId) {
             setTimeout(function () { window.location.href = '/event.html?id=' + newId; }, 600);
           } else {
-            await loadAdminGames();
+            await loadAdminEvents();
           }
         }
       } catch (err) {
@@ -572,7 +559,7 @@
   // -------------------------------------------------------------
   var adminGameSearchBound = false;
 
-  function setupAdminGameSearch() {
+  function setupAdminEventSearch() {
     var searchInput = /** @type {HTMLInputElement|null} */ (el('admin-game-search-input'));
     if (!searchInput || adminGameSearchBound) return;
     adminGameSearchBound = true;
@@ -581,12 +568,12 @@
     searchInput.addEventListener('input', function () {
       if (searchTimer) clearTimeout(searchTimer);
       searchTimer = setTimeout(function () {
-        renderAdminGamesList(searchInput.value);
+        renderAdminEventsList(searchInput.value);
       }, 150);
     });
   }
 
-  function renderAdminGameCardHtml(ev) {
+  function renderAdminEventCardHtml(ev) {
     var isAdmin = Boolean(state.currentAdminUser && state.currentAdminUser.isAdmin);
     var isRainout = ev.status === 'rainout';
     var editPrefix = 'edit-ev-' + ev.id;
@@ -650,7 +637,7 @@
         '<!-- Inline Smart Rainout Assistant & Field Drainage Panel -->' +
         '<div id="admin-weather-panel-' + ev.id + '" style="display: none; margin-top: 10px;"></div>' +
         '<!-- Inline Game Details Edit Panel -->' +
-        '<div id="edit-game-panel-' + ev.id + '" style="display: ' + (state.openEditGameEventId === ev.id ? 'block' : 'none') + '; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border);">' +
+        '<div id="edit-game-panel-' + ev.id + '" style="display: ' + (state.openEditEventId === ev.id ? 'block' : 'none') + '; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border);">' +
           '<div id="edit-game-alert-' + ev.id + '"></div>' +
           '<div style="background: var(--bg-subtle); padding: 14px; border-radius: var(--radius-sm); border: 1px solid var(--border);">' +
             '<h4 style="color: var(--secondary); font-size: 0.95rem; margin: 0 0 10px 0;">✏️ Edit Game Details</h4>' +
@@ -667,7 +654,7 @@
     );
   }
 
-  function renderAdminGamesList(query) {
+  function renderAdminEventsList(query) {
     var container = el('admin-games-container');
     var countBadge = el('admin-games-count-badge');
     if (!container) return;
@@ -702,7 +689,7 @@
       return;
     }
 
-    container.innerHTML = events.map(function (ev) { return renderAdminGameCardHtml(ev); }).join('');
+    container.innerHTML = events.map(function (ev) { return renderAdminEventCardHtml(ev); }).join('');
     events.forEach(function (ev) { API.bindEditGameCapToggle('edit-ev-' + ev.id); });
 
     if (root.WeatherService && typeof root.WeatherService.getForecastForGame === 'function') {
@@ -736,12 +723,12 @@
         var action = btn.dataset.action;
         var eventId = parseInt(btn.dataset.eventId || '0', 10);
         if (action === 'toggle-tasks') return toggleTaskManager(eventId);
-        if (action === 'toggle-edit-game') return toggleEditGamePanel(eventId);
+        if (action === 'toggle-edit-game') return toggleEditEventPanel(eventId);
         if (action === 'toggle-quick-turnout') return toggleQuickTurnout(eventId);
         if (action === 'toggle-weather') return toggleAdminWeatherPanel(eventId);
         if (action === 'send-reminders') return sendReminders(eventId);
-        if (action === 'delete-game') return deleteGame(eventId);
-        if (action === 'save-edited-game') return saveEditedGame(eventId);
+        if (action === 'delete-game') return deleteEvent(eventId);
+        if (action === 'save-edited-game') return saveEditedEvent(eventId);
         if (action === 'edit-duty') {
           return editDutyInline(
             eventId,
@@ -766,7 +753,7 @@
     }
   }
 
-  async function loadAdminGames() {
+  async function loadAdminEvents() {
     var container = el('admin-games-container');
     try {
       var data = await API.getEvents('all');
@@ -788,8 +775,8 @@
         }).join('');
       }
 
-      setupAdminGameSearch();
-      renderAdminGamesList();
+      setupAdminEventSearch();
+      renderAdminEventsList();
     } catch (err) {
       if (container) {
         container.innerHTML = '<div class="alert alert-error">Unable to load games.</div>';
@@ -858,7 +845,7 @@
       } else {
         state.openQuickTurnoutEventId = null;
         showAlert('Game turnout successfully recorded (' + count + ' players played).', false);
-        await loadAdminGames();
+        await loadAdminEvents();
       }
     } catch (err) {
       if (alertBox) alertBox.innerHTML = '<div class="alert alert-error" style="font-size: 0.82rem; margin-top: 8px;">Failed to save turnout. Please try again.</div>';
@@ -866,24 +853,24 @@
     }
   }
 
-  function toggleEditGamePanel(eventId) {
+  function toggleEditEventPanel(eventId) {
     var panel = el('edit-game-panel-' + eventId);
     if (!panel) return;
-    if (state.openEditGameEventId === eventId) {
-      state.openEditGameEventId = null;
+    if (state.openEditEventId === eventId) {
+      state.openEditEventId = null;
       panel.style.display = 'none';
     } else {
-      if (state.openEditGameEventId) {
-        var prev = el('edit-game-panel-' + state.openEditGameEventId);
+      if (state.openEditEventId) {
+        var prev = el('edit-game-panel-' + state.openEditEventId);
         if (prev) prev.style.display = 'none';
       }
-      state.openEditGameEventId = eventId;
+      state.openEditEventId = eventId;
       panel.style.display = 'block';
       API.bindEditGameCapToggle('edit-ev-' + eventId);
     }
   }
 
-  async function saveEditedGame(eventId) {
+  async function saveEditedEvent(eventId) {
     var saveBtn = /** @type {HTMLButtonElement|null} */ (el('save-game-btn-' + eventId));
     var alertBox = el('edit-game-alert-' + eventId);
     var parsed = API.readEditGameFields('edit-ev-' + eventId);
@@ -907,9 +894,9 @@
           saveBtn.textContent = '💾 Save Changes';
         }
       } else {
-        state.openEditGameEventId = null;
+        state.openEditEventId = null;
         showAlert('Updated game details for "' + parsed.payload.title + '".', false);
-        await loadAdminGames();
+        await loadAdminEvents();
       }
     } catch (err) {
       if (alertBox) alertBox.innerHTML = '<div class="alert alert-error">Failed to update game details.</div>';
@@ -1041,7 +1028,7 @@
         if (root.PBFDialog) root.PBFDialog.toast(data.error, { type: 'error' });
       } else {
         await renderTaskManagerContent(eventId);
-        await loadAdminGames();
+        await loadAdminEvents();
       }
     } catch (err) {
       if (root.PBFDialog) root.PBFDialog.toast('Failed to add task.', { type: 'error' });
@@ -1089,7 +1076,7 @@
         root.PBFDialog.toast(data.error, { type: 'error' });
       } else {
         await renderTaskManagerContent(eventId);
-        await loadAdminGames();
+        await loadAdminEvents();
       }
     } catch (err) {
       root.PBFDialog.toast('Failed to update task.', { type: 'error' });
@@ -1109,7 +1096,7 @@
         if (root.PBFDialog) root.PBFDialog.toast(data.error, { type: 'error' });
       } else {
         await renderTaskManagerContent(eventId);
-        await loadAdminGames();
+        await loadAdminEvents();
       }
     } catch (err) {
       if (root.PBFDialog) root.PBFDialog.toast('Failed to delete task.', { type: 'error' });
@@ -1129,7 +1116,7 @@
     }
   }
 
-  async function deleteGame(eventId) {
+  async function deleteEvent(eventId) {
     var ok = root.PBFDialog
       ? await root.PBFDialog.confirm('Are you sure you want to delete this game? This cannot be undone.', { danger: true })
       : false;
@@ -1138,7 +1125,7 @@
       var data = await API.deleteEvent(eventId);
       if (data.success) {
         showAlert('Game deleted.', false);
-        await loadAdminGames();
+        await loadAdminEvents();
       } else {
         showAlert(data.error || 'Failed to delete game.', true);
       }
@@ -1159,24 +1146,24 @@
   AdminUI.setupDefaultTemplateEditor = setupDefaultTemplateEditor;
   AdminUI.saveDefaultsToBackend = saveDefaultsToBackend;
   AdminUI.setupQuickSundayButton = setupQuickSundayButton;
-  AdminUI.loadCandidatePlayers = loadCandidatePlayers;
-  AdminUI.renderCandidatePlayers = renderCandidatePlayers;
-  AdminUI.updateSelectedPlayersCount = updateSelectedPlayersCount;
+  AdminUI.loadCandidateMembers = loadCandidateMembers;
+  AdminUI.renderCandidateMembers = renderCandidateMembers;
+  AdminUI.updateSelectedMembersCount = updateSelectedMembersCount;
   AdminUI.setupCreateForm = setupCreateForm;
-  AdminUI.setupAdminGameSearch = setupAdminGameSearch;
-  AdminUI.renderAdminGameCardHtml = renderAdminGameCardHtml;
-  AdminUI.renderAdminGamesList = renderAdminGamesList;
-  AdminUI.loadAdminGames = loadAdminGames;
+  AdminUI.setupAdminEventSearch = setupAdminEventSearch;
+  AdminUI.renderAdminEventCardHtml = renderAdminEventCardHtml;
+  AdminUI.renderAdminEventsList = renderAdminEventsList;
+  AdminUI.loadAdminEvents = loadAdminEvents;
   AdminUI.toggleAdminWeatherPanel = toggleAdminWeatherPanel;
   AdminUI.toggleQuickTurnout = toggleQuickTurnout;
   AdminUI.saveAdminQuickTurnout = saveAdminQuickTurnout;
-  AdminUI.toggleEditGamePanel = toggleEditGamePanel;
-  AdminUI.saveEditedGame = saveEditedGame;
+  AdminUI.toggleEditEventPanel = toggleEditEventPanel;
+  AdminUI.saveEditedEvent = saveEditedEvent;
   AdminUI.toggleTaskManager = toggleTaskManager;
   AdminUI.renderTaskManagerContent = renderTaskManagerContent;
   AdminUI.addDutyToEvent = addDutyToEvent;
   AdminUI.editDutyInline = editDutyInline;
   AdminUI.deleteDutyInline = deleteDutyInline;
   AdminUI.sendReminders = sendReminders;
-  AdminUI.deleteGame = deleteGame;
+  AdminUI.deleteEvent = deleteEvent;
 })();

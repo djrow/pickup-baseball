@@ -20,13 +20,7 @@
   var API = root.API = root.API || /** @type {any} */ ({});
   /** @type {any} */
   var EventUI = API._eventUi = API._eventUi || {};
-  var state = EventUI.state = EventUI.state || {
-    eventId: /** @type {string|null} */ (null),
-    visitorToken: '',
-    inviteToken: '',
-    eventData: /** @type {any} */ (null),
-    eventPublicConfig: /** @type {any} */ (null)
-  };
+  var state = EventUI.state = EventUI.state || /** @type {any} */ ({});
 
   function el(id) {
     return typeof document !== 'undefined' ? /** @type {any} */ (document.getElementById(id)) : null;

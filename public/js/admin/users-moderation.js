@@ -19,20 +19,7 @@
   var API = root.API = root.API || /** @type {any} */ ({});
   /** @type {any} */
   var AdminUI = API._adminUi = API._adminUi || {};
-  var state = AdminUI.state = AdminUI.state || {
-    currentAdminUser: /** @type {any} */ (null),
-    adminPublicConfig: /** @type {any} */ (null),
-    orgDefaultDuties: /** @type {any[]} */ ([]),
-    builderDuties: /** @type {any[]} */ ([]),
-    templateDuties: /** @type {any[]} */ ([]),
-    openTaskManagerEventId: /** @type {number|null} */ (null),
-    openEditGameEventId: /** @type {number|null} */ (null),
-    openQuickTurnoutEventId: /** @type {number|null} */ (null),
-    loadedAdminEventsMap: new Map(),
-    allAdminEventsCache: /** @type {any[]} */ ([]),
-    candidateMembersCache: /** @type {any[]} */ ([]),
-    reloadBannedEmailsFn: /** @type {Function|null} */ (null)
-  };
+  var state = AdminUI.state = AdminUI.state || /** @type {any} */ ({});
 
   function el(id) {
     return typeof document !== 'undefined' ? /** @type {any} */ (document.getElementById(id)) : null;
@@ -343,7 +330,7 @@
               var roleTitle = newRole === 'organizer' ? 'Organizer' : 'Member';
               setUserMgmtAlert('success', 'Your role has been updated to ' + roleTitle + '. Admin management features are now restricted.');
               if (typeof AdminUI.applyRoleUI === 'function') AdminUI.applyRoleUI(currentUser);
-              if (typeof AdminUI.loadAdminGames === 'function') await AdminUI.loadAdminGames();
+              if (typeof AdminUI.loadAdminEvents === 'function') await AdminUI.loadAdminEvents();
               if (API.isMemberRole(newRole)) {
                 setTimeout(async function () {
                   if (root.PBFDialog) {

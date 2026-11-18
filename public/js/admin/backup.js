@@ -17,6 +17,20 @@
   var API = root.API = root.API || /** @type {any} */ ({});
   /** @type {any} */
   var AdminUI = API._adminUi = API._adminUi || {};
+  AdminUI.state = AdminUI.state || {
+    currentAdminUser: /** @type {any} */ (null),
+    adminPublicConfig: /** @type {any} */ (null),
+    orgDefaultDuties: /** @type {any[]} */ ([]),
+    builderDuties: /** @type {any[]} */ ([]),
+    templateDuties: /** @type {any[]} */ ([]),
+    openTaskManagerEventId: /** @type {number|null} */ (null),
+    openEditEventId: /** @type {number|null} */ (null),
+    openQuickTurnoutEventId: /** @type {number|null} */ (null),
+    loadedAdminEventsMap: new Map(),
+    allAdminEventsCache: /** @type {any[]} */ ([]),
+    candidateMembersCache: /** @type {any[]} */ ([]),
+    reloadBannedEmailsFn: /** @type {Function|null} */ (null)
+  };
 
   function el(id) {
     return typeof document !== 'undefined' ? /** @type {any} */ (document.getElementById(id)) : null;

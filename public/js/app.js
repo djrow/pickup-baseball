@@ -91,7 +91,7 @@
     const pill = document.getElementById('calendar-sync-pill');
     if (pill) {
       pill.addEventListener('click', function () {
-        loadGames(false, true);
+        loadEvents(false, true);
       });
     }
 
@@ -99,13 +99,13 @@
       if (document.visibilityState === 'visible') {
         updateSyncPillUi();
         if (Date.now() - lastCloudSyncedAt > 30000) {
-          loadGames(false, true);
+          loadEvents(false, true);
         }
       }
     });
 
     window.addEventListener('online', function () {
-      loadGames(false, true);
+      loadEvents(false, true);
     });
 
     window.addEventListener('offline', function () {
@@ -117,7 +117,7 @@
       if (document.visibilityState !== 'visible') return;
       updateSyncPillUi();
       if (navigator.onLine !== false && (Date.now() - lastCloudSyncedAt > 900000)) {
-        loadGames(false, true);
+        loadEvents(false, true);
       }
     }, 30000);
 
@@ -190,7 +190,7 @@
     }
 
     // Single API request fetches both events AND current session user
-    await loadGames(justLoggedIn);
+    await loadEvents(justLoggedIn);
   }
 
   function setupFilters() {
@@ -209,7 +209,7 @@
     renderCalendar(lastLoadedEvents);
   }
 
-  async function loadGames(justLoggedIn = false, isBackgroundRefresh = false) {
+  async function loadEvents(justLoggedIn = false, isBackgroundRefresh = false) {
     if (isSyncInFlight) return;
     isSyncInFlight = true;
 
@@ -401,10 +401,10 @@
 
   /**
    * @param {string|null} dateKey
-   * @param {any} game
+   * @param {any} ev
    * @param {boolean} [isPast]
    */
-  function renderCalendarDrawer(dateKey, game, isPast) {
+  function renderCalendarDrawer(dateKey, ev, isPast) {
     const drawer = document.getElementById('calendar-date-drawer');
     if (!drawer) return;
     if (!dateKey) {
@@ -412,23 +412,23 @@
       return;
     }
     drawer.style.display = 'flex';
-    if (game && isPast) {
-      const isRainout = game.status === 'rainout';
-      const dateFormatted = API.formatDateTime(game.event_date);
-      const translatedTitle = API.translateEventTitle(game);
-      const turnoutCount = game.actual_attendance != null ? game.actual_attendance : (game.attendee_count || 0);
+    if (ev && isPast) {
+      const isRainout = ev.status === 'rainout';
+      const dateFormatted = API.formatDateTime(ev.event_date);
+      const translatedTitle = API.translateEventTitle(ev);
+      const turnoutCount = ev.actual_attendance != null ? ev.actual_attendance : (ev.attendee_count || 0);
       drawer.innerHTML = `
         <div class="drawer-header-row">
           <div class="drawer-title-group">
             ${isRainout ? '<span class="badge badge-rainout">🌧️ Rained Out</span>' : '<span class="badge badge-gray">📜 Past Game Recap</span>'}
-            ${game.my_rsvp && game.my_rsvp.status === 'attending' ? '<span class="badge badge-green">✓ You Attended</span>' : ''}
+            ${ev.my_rsvp && ev.my_rsvp.status === 'attending' ? '<span class="badge badge-green">✓ You Attended</span>' : ''}
             <h3>${API.escapeHtml(translatedTitle)}</h3>
           </div>
           <div class="drawer-actions">
-            <button type="button" class="btn btn-outline btn-sm drawer-share-event-btn" data-event-id="${game.id}" data-event-title="${API.escapeHtml(translatedTitle)}" data-i18n="event.share_btn" title="Share Event link">
+            <button type="button" class="btn btn-outline btn-sm drawer-share-event-btn" data-event-id="${ev.id}" data-event-title="${API.escapeHtml(translatedTitle)}" data-i18n="event.share_btn" title="Share Event link">
               ${API.escapeHtml(API.t('event.share_btn', '🔗 Share Event'))}
             </button>
-            <a href="/event.html?id=${game.id}" class="btn btn-primary btn-sm" style="font-weight: 700;">
+            <a href="/event.html?id=${ev.id}" class="btn btn-primary btn-sm" style="font-weight: 700;">
               📜 View Recap &amp; Comments →
             </a>
             <a href="/archive.html" class="btn btn-outline btn-sm">
@@ -439,21 +439,21 @@
         </div>
         <div class="drawer-meta">
           <span class="drawer-meta-item"><span>📅</span> <strong>${API.escapeHtml(dateFormatted)}</strong></span>
-          <span class="drawer-meta-item"><span>📍</span> ${API.escapeHtml(game.location)}</span>
-          <span class="drawer-meta-item" style="color: var(--secondary); font-weight: 700;"><span>👥</span> ${turnoutCount} Players${game.spectator_count > 0 ? ` + ${game.spectator_count} ${game.spectator_count === 1 ? 'Spectator' : 'Spectators'}` : ''}</span>
-          <span class="drawer-meta-item"><span>🛡️</span> ${API.escapeHtml(API.t('home.duties_configured', { count: game.duty_count }))}</span>
+          <span class="drawer-meta-item"><span>📍</span> ${API.escapeHtml(ev.location)}</span>
+          <span class="drawer-meta-item" style="color: var(--secondary); font-weight: 700;"><span>👥</span> ${turnoutCount} Players${ev.spectator_count > 0 ? ` + ${ev.spectator_count} ${ev.spectator_count === 1 ? 'Spectator' : 'Spectators'}` : ''}</span>
+          <span class="drawer-meta-item"><span>🛡️</span> ${API.escapeHtml(API.t('home.duties_configured', { count: ev.duty_count }))}</span>
         </div>
-        ${game.rainout_note ? `<div style="font-size: 0.82rem; color: var(--text-muted);"><em>Rainout note: "${API.escapeHtml(game.rainout_note)}"</em></div>` : ''}
+        ${ev.rainout_note ? `<div style="font-size: 0.82rem; color: var(--text-muted);"><em>Rainout note: "${API.escapeHtml(ev.rainout_note)}"</em></div>` : ''}
       `;
-    } else if (game) {
-      const isRainout = game.status === 'rainout';
-      const dateFormatted = API.formatDateTime(game.event_date);
-      const translatedTitle = API.translateEventTitle(game);
+    } else if (ev) {
+      const isRainout = ev.status === 'rainout';
+      const dateFormatted = API.formatDateTime(ev.event_date);
+      const translatedTitle = API.translateEventTitle(ev);
       drawer.innerHTML = `
         <div class="drawer-header-row">
           <div class="drawer-title-group">
             ${isRainout ? '<span class="badge badge-rainout">🌧️ Rained Out</span>' : '<span class="badge badge-orange">⚾ Game Day</span>'}
-            ${game.my_rsvp && game.my_rsvp.status === 'attending' ? '<span class="badge badge-green">✓ You\'re Attending</span>' : ''}
+            ${ev.my_rsvp && ev.my_rsvp.status === 'attending' ? '<span class="badge badge-green">✓ You\'re Attending</span>' : ''}
             <h3>${API.escapeHtml(translatedTitle)}</h3>
           </div>
           <div class="drawer-actions">
@@ -461,14 +461,14 @@
               ${API.escapeHtml(API.t('calendar.subscribe_game_btn', '🔄 Subscribe Game (.ics)'))}
             </button>
             ${isAppBpEnabled() ? `
-              <a href="/event.html?id=${game.id}#bp-order-section" class="btn btn-outline btn-sm" style="font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
+              <a href="/event.html?id=${ev.id}#bp-order-section" class="btn btn-outline btn-sm" style="font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
                 ⚾ BP Signup Sheet
               </a>
             ` : ''}
-            <button type="button" class="btn btn-outline btn-sm drawer-share-event-btn" data-event-id="${game.id}" data-event-title="${API.escapeHtml(translatedTitle)}" data-i18n="event.share_btn" title="Share Event link">
+            <button type="button" class="btn btn-outline btn-sm drawer-share-event-btn" data-event-id="${ev.id}" data-event-title="${API.escapeHtml(translatedTitle)}" data-i18n="event.share_btn" title="Share Event link">
               ${API.escapeHtml(API.t('event.share_btn', '🔗 Share Event'))}
             </button>
-            <a href="/event.html?id=${game.id}" class="btn btn-primary btn-sm" style="font-weight: 700;">
+            <a href="/event.html?id=${ev.id}" class="btn btn-primary btn-sm" style="font-weight: 700;">
               ${API.escapeHtml(API.t('calendar.view_details', 'RSVP & View Game Details →'))}
             </a>
             <button type="button" class="calendar-drawer-close-btn" aria-label="Close details" title="Close">✕</button>
@@ -477,12 +477,12 @@
         <div id="drawer-game-subscribe-panel" class="calendar-subscribe-panel" style="display: none; margin-top: 6px; margin-bottom: 8px;"></div>
         <div class="drawer-meta">
           <span class="drawer-meta-item"><span>📅</span> <strong>${API.escapeHtml(dateFormatted)}</strong></span>
-          <span class="drawer-meta-item"><span>📍</span> ${API.escapeHtml(game.location)}</span>
+          <span class="drawer-meta-item"><span>📍</span> ${API.escapeHtml(ev.location)}</span>
           <span class="drawer-meta-item drawer-weather-meta" id="drawer-weather-${dateKey}" style="display: none;"></span>
-          <span class="drawer-meta-item" style="color: var(--secondary); font-weight: 700;"><span>👥</span> ${API.escapeHtml(API.t('home.players_count', { count: game.attendee_count }))}${game.spectator_count > 0 ? ` + ${game.spectator_count} ${game.spectator_count === 1 ? 'Spectator' : 'Spectators'}` : ''}</span>
-          <span class="drawer-meta-item"><span>🛡️</span> ${API.escapeHtml(API.t('home.duties_configured', { count: game.duty_count }))}</span>
+          <span class="drawer-meta-item" style="color: var(--secondary); font-weight: 700;"><span>👥</span> ${API.escapeHtml(API.t('home.players_count', { count: ev.attendee_count }))}${ev.spectator_count > 0 ? ` + ${ev.spectator_count} ${ev.spectator_count === 1 ? 'Spectator' : 'Spectators'}` : ''}</span>
+          <span class="drawer-meta-item"><span>🛡️</span> ${API.escapeHtml(API.t('home.duties_configured', { count: ev.duty_count }))}</span>
         </div>
-        ${game.rainout_note ? `<div style="font-size: 0.82rem; color: var(--text-muted);"><em>Rainout note: "${API.escapeHtml(game.rainout_note)}"</em></div>` : ''}
+        ${ev.rainout_note ? `<div style="font-size: 0.82rem; color: var(--text-muted);"><em>Rainout note: "${API.escapeHtml(ev.rainout_note)}"</em></div>` : ''}
         <div class="drawer-5day-weather-section" id="drawer-5day-weather-${dateKey}" style="display: none;"></div>
       `;
     } else {
@@ -527,10 +527,10 @@
     }
 
     const shareBtn = drawer.querySelector('.drawer-share-event-btn');
-    if (shareBtn && game) {
+    if (shareBtn && ev) {
       shareBtn.addEventListener('click', function () {
-        const shareUrl = window.location.origin + '/event.html?id=' + encodeURIComponent(game.id);
-        const shareTitle = game.title || 'Sunday Pickup Baseball';
+        const shareUrl = window.location.origin + '/event.html?id=' + encodeURIComponent(ev.id);
+        const shareTitle = ev.title || 'Sunday Pickup Baseball';
         const shareText = 'Join us for ' + shareTitle + '!';
         const fallbackCopy = function () {
           if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
@@ -579,7 +579,7 @@
 
     const gameSubBtn = document.getElementById('drawer-game-subscribe-btn');
     const gameSubPanel = document.getElementById('drawer-game-subscribe-panel');
-    if (gameSubBtn && gameSubPanel && game) {
+    if (gameSubBtn && gameSubPanel && ev) {
       const closeGameSub = function () {
         gameSubPanel.style.display = 'none';
         gameSubBtn.setAttribute('aria-expanded', 'false');
@@ -591,7 +591,7 @@
         } else {
           API.renderSubscribePanel(gameSubPanel, {
             mode: 'game',
-            event: game,
+            event: ev,
             idPrefix: 'drawer-game',
             onClose: closeGameSub
           });
@@ -603,8 +603,8 @@
 
     // Load weather & field drainage forecast asynchronously for selected game/date
     if (window.WeatherService && typeof window.WeatherService.getForecastForGame === 'function') {
-      var targetIso = game ? game.event_date : dateKey + 'T20:00:00.000Z';
-      var loc = game ? game.location : 'Bushrod Park Field 1';
+      var targetIso = ev ? ev.event_date : dateKey + 'T20:00:00.000Z';
+      var loc = ev ? ev.location : 'Bushrod Park Field 1';
       window.WeatherService.getForecastForGame(targetIso, loc).then(function (fc) {
         var wEl = document.getElementById('drawer-weather-' + dateKey);
         var stripEl = document.getElementById('drawer-5day-weather-' + dateKey);
@@ -795,12 +795,12 @@
     const selectedUpcoming = upcomingItems.slice(0, neededUpcoming);
 
     // Combine: 1 most recent past event + upcoming scheduled games to fill complete rows
-    const gameDates = pastItem ? [pastItem, ...selectedUpcoming] : selectedUpcoming;
+    const eventDates = pastItem ? [pastItem, ...selectedUpcoming] : selectedUpcoming;
 
     // Update header label with visible month range (e.g. "Oct – Nov 2026" or "November 2026")
-    if (gameDates.length > 0) {
-      const firstDate = gameDates[0].dateObj;
-      const lastDate = gameDates[gameDates.length - 1].dateObj;
+    if (eventDates.length > 0) {
+      const firstDate = eventDates[0].dateObj;
+      const lastDate = eventDates[eventDates.length - 1].dateObj;
       const firstMonth = firstDate.getMonth();
       const lastMonth = lastDate.getMonth();
       const firstYear = firstDate.getFullYear();
@@ -823,7 +823,7 @@
     }
 
     let cardsHtml = '';
-    for (const item of gameDates) {
+    for (const item of eventDates) {
       const dateKey = item.dateKey;
       const isPast = (dateKey < todayKey);
       const isToday = (dateKey === todayKey);
@@ -944,7 +944,7 @@
       });
     });
 
-    if (selectedCalendarDateKey && !gameDates.some(g => g.dateKey === selectedCalendarDateKey)) {
+    if (selectedCalendarDateKey && !eventDates.some(g => g.dateKey === selectedCalendarDateKey)) {
       selectedCalendarDateKey = null;
       renderCalendarDrawer(null, null);
     } else if (selectedCalendarDateKey) {

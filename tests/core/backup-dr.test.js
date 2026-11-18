@@ -800,7 +800,7 @@ function registerBackupDrTests() {
       assert.deepEqual(windowKeys, [], 'Admin 5-module split must attach zero ad-hoc window.* page exports');
       assert.equal(typeof sandbox.window.API._adminUi.initAdmin, 'function', 'Admin orchestrator must wire API._adminUi.initAdmin');
       assert.equal(typeof sandbox.window.API._adminUi.setupAdminBackupButton, 'function', 'backup.js must wire setupAdminBackupButton');
-      assert.equal(typeof sandbox.window.API._adminUi.loadAdminGames, 'function', 'events-tasks.js must wire loadAdminGames');
+      assert.equal(typeof sandbox.window.API._adminUi.loadAdminEvents, 'function', 'events-tasks.js must wire loadAdminEvents');
       assert.equal(typeof sandbox.window.API._adminUi.setupAdminUserManagement, 'function', 'users-moderation.js must wire setupAdminUserManagement');
       assert.equal(typeof sandbox.window.API._adminUi.setupMediaCarouselsAdmin, 'function', 'content-media.js must wire setupMediaCarouselsAdmin');
     });

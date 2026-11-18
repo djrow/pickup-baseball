@@ -34,20 +34,20 @@ Mounted under `/api` in `src/app/index.js`:
 
 ### Frontend (`public/`)
 Vanilla **ES6** scripts (IIFEs attaching to `window`, loaded via ordered `<script>` tags in `public/*.html`):
-- **Shared Core:** `api.js` (auth state, `apiFetch`, i18n, themes, footer/nav, subscribe panels, `escapeHtml`), `dialog.js` (`window.PBFDialog` non-blocking accessible modals & toasts), `weather.js` (`window.WeatherService` — Open-Meteo 10-day forecast horizon, 5-day rainfall prediction, 24h drainage model), `nav-init.js`.
+- **Shared Core (`public/js/` & `public/js/api/`):** `api.js` + `api/` (`i18n.js`, `ui.js`, `endpoints.js` — auth state, `apiFetch`, i18n, themes, footer/nav, subscribe panels, `escapeHtml`), `dialog.js` (`window.PBFDialog` non-blocking accessible modals & toasts), `weather.js` (`window.WeatherService` — Open-Meteo 10-day forecast horizon, 5-day rainfall prediction, 24h drainage model), `nav-init.js`.
 - **Pages (`public/*.html` → JS):**
-  - `index.html` → `api.js`, `weather.js`, `app.js`
-  - `event.html` → `api.js`, `weather.js`, `event.js`
-  - `admin.html` → `api.js`, `weather.js`, `admin.js`
-  - `clubhouse.html` → `crypto.js`, `store.js`, `rtc.js`, `clubhouse.js` (plus `clubhouse.css`)
-  - `gallery.html` → `api.js`, `gallery.js`
-  - `art.html` → `api.js`, `art.js` (legacy path with relocation banner pointing to `gallery.html`)
-  - `archive.html` → `api.js`, `archive.js`
-  - `login.html` → `api.js`, `login.js`
-  - `profile.html` → `api.js`, `profile.js`
-  - `waiver.html` → `api.js`, `waiver.js`
-  - `about.html`, `donate.html`, `404.html` → `api.js`, `nav-init.js`
-- **Stylesheets, Translations & PWA:** `public/css/style.css`, `public/css/themes.css`, `public/css/clubhouse.css`, `public/i18n/*.json` (14 non-English locales), `public/sw.js` (precache list), `public/_headers`.
+  - `index.html` → `api/*.js`, `api.js`, `weather.js`, `app.js`
+  - `event.html` → `api/*.js`, `api.js`, `weather.js`, `event/` (`rsvp.js`, `organizer.js`, `bp.js`), `event.js` (plus `event.css`)
+  - `admin.html` → `api/*.js`, `api.js`, `weather.js`, `admin/` (`backup.js`, `events-tasks.js`, `users-moderation.js`, `content-media.js`), `admin.js`
+  - `clubhouse.html` → `api/*.js`, `api.js`, `crypto.js`, `store.js`, `store/` (`idb.js`, `e2ee.js`, `sync.js`, `actions.js`), `rtc.js`, `clubhouse/` (`layout.js`, `messages.js`, `e2ee-ui.js`, `panels.js`), `clubhouse.js` (plus `clubhouse.css`)
+  - `gallery.html` → `api/*.js`, `api.js`, `gallery.js` (plus `gallery.css`)
+  - `art.html` → `api/*.js`, `api.js`, `art.js` (plus `art.css`; legacy path with relocation banner pointing to `gallery.html`)
+  - `archive.html` → `api/*.js`, `api.js`, `archive.js`
+  - `login.html` → `api/*.js`, `api.js`, `login.js`
+  - `profile.html` → `api/*.js`, `api.js`, `profile.js`
+  - `waiver.html` → `api/*.js`, `api.js`, `waiver.js`
+  - `about.html`, `donate.html`, `404.html` → `api/*.js`, `api.js`, `nav-init.js`
+- **Stylesheets, Translations & PWA:** `public/css/` (`style.css`, `dialog.css`, `weather.css`, `event.css`, `gallery.css`, `art.css`, `themes.css`, `clubhouse.css`), `public/i18n/*.json` (14 non-English locales + per-surface `*.admin.json` / `*.clubhouse.json` bundles), `public/sw.js` (precache list), `public/_headers`.
 
 ## 2. Hard Invariants (Must Never Break)
 1. **Strict CSP (`public/_headers`, `src/server.js`):** Never add inline `<script>` tags, `javascript:` URLs, `eval()`, `new Function()`, or inline HTML event handlers (`onclick=`, `onchange=`, etc.). Bind events in `.js` files.

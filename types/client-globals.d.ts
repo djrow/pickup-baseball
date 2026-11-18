@@ -121,6 +121,70 @@ interface PBFDialogFacade {
   trapFocus?(containerEl: Element, opts?: Record<string, any>): { release(): void; update(): void };
 }
 
+interface PBFAdminUIFacade {
+  state: Record<string, any>;
+  cloneList(arr: any[]): any[];
+  isAdminCertifiedShiftsEnabled(): boolean;
+  applyAdminFeatureFlags(): void;
+  applyRoleUI(user: PBFUser | null): void;
+  showAlert(msg: string, isError?: boolean): void;
+  initAdmin(): Promise<void>;
+  loadDefaultDuties(): Promise<void>;
+  setDefaultDateTime(): void;
+  readEditableTaskRows(containerId: string): any[];
+  renderEditableTaskRows(containerId: string, list: any[], removeKind: string, emptyHtml: string): void;
+  renderTaskBuilder(): void;
+  renderDefaultTemplateList(): void;
+  removeTaskBuilderRow(index: number): void;
+  removeTemplateRow(index: number): void;
+  setupTaskBuilder(): void;
+  setupDefaultTemplateEditor(): void;
+  saveDefaultsToBackend(dutiesToSave: any[]): Promise<void>;
+  setupQuickSundayButton(): void;
+  loadCandidateMembers(): Promise<void>;
+  renderCandidateMembers(members: any[]): void;
+  updateSelectedMembersCount(): void;
+  setupCreateForm(): void;
+  setupAdminEventSearch(): void;
+  renderAdminEventCardHtml(ev: any): string;
+  renderAdminEventsList(query?: string): void;
+  loadAdminEvents(): Promise<void>;
+  toggleAdminWeatherPanel(eventId: number): Promise<void>;
+  toggleQuickTurnout(eventId: number): void;
+  saveAdminQuickTurnout(e: Event, eventId: number): Promise<void>;
+  toggleEditEventPanel(eventId: number): void;
+  saveEditedEvent(eventId: number): Promise<void>;
+  toggleTaskManager(eventId: number): Promise<void>;
+  renderTaskManagerContent(eventId: number): Promise<void>;
+  addDutyToEvent(eventId: number): Promise<void>;
+  editDutyInline(eventId: number, dutyId: number, encodedTitle: string, encodedDesc: string, slots: number, grantsCoordinator: boolean, requiredBadge: string): Promise<void>;
+  deleteDutyInline(eventId: number, dutyId: number): Promise<void>;
+  sendReminders(eventId: number): Promise<void>;
+  deleteEvent(eventId: number): Promise<void>;
+  setupAdminBackupButton?(): void;
+  setupAdminSetupHealthCard?(): Promise<void>;
+  setupAdminUserManagement?(user: PBFUser): Promise<void>;
+  setupAdminSecurity?(): Promise<void>;
+  setupCommunityHighlightsAdmin?(): void;
+  setupMediaCarouselsAdmin?(): Promise<void>;
+  updateAdminPostEventDropdown?(events: any[]): void;
+  [key: string]: any;
+}
+
+interface ClubhouseUIFacade {
+  uiState: Record<string, any>;
+  loadUpcomingEventCard(): void;
+  renderUpcomingEventCard(data: any): void;
+  renderMembersDirectory(): void;
+  confirmAndTogglePeerBlock(targetUserId: number | string, targetUserName?: string): Promise<boolean>;
+  openOrCreateDmWithUser(targetUserId: number | string, targetUserName?: string): Promise<any>;
+  handleJoinVoiceLounge(channelId: number | string): Promise<any>;
+  renderVoiceVideoTiles(): void;
+  isClubhouseTurnConfigured(): boolean;
+  syncPrivacyRelayToggleUi(): void;
+  [key: string]: any;
+}
+
 interface PBFAPIError extends Error {
   status?: number;
   data?: any;
@@ -280,7 +344,7 @@ interface PBFApiFacade {
   renderCookieNotice(): void;
   updateOfflineUi?(): void;
   _eventUi?: Record<string, any>;
-  _adminUi?: Record<string, any>;
+  _adminUi?: PBFAdminUIFacade;
 }
 
 interface WeatherServiceFacade {
@@ -440,6 +504,7 @@ interface ClubhouseStoreFacade {
   onUserActivity(): void;
   startAdaptiveSyncLoop(): void;
   stopAdaptiveSyncLoop(): void;
+  _ui?: ClubhouseUIFacade;
   [key: string]: any;
 }
 

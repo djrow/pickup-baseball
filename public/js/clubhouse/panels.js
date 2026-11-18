@@ -5,7 +5,7 @@
  *
  * TABLE OF CONTENTS:
  * 1. TURN Privacy Relay Toggle State & Voice Lounge Join/Grid (`syncPrivacyRelayToggleUi`, `handleJoinVoiceLounge`, `renderVoiceVideoTiles`)
- * 2. Embedded Upcoming Event Card, Quick RSVP & 28-Slot Batting Practice Grid (`loadUpcomingBaseballCard`, `renderSundayCard`)
+ * 2. Embedded Upcoming Event Card, Quick RSVP & 28-Slot Batting Practice Grid (`loadUpcomingEventCard`, `renderUpcomingEventCard`)
  * 3. Members Directory, 1:1 DM Creation & Peer Block Controls (`renderMembersDirectory`, `confirmAndTogglePeerBlock`)
  * 4. Moderator Reports, Blanket Mutes & Storage Status Panel (`loadModerationPanel`, `renderModerationPanel`, `loadStorageStatusWidget`)
  * 5. Right Context Panel & Voice Bar DOM Event Wiring
@@ -174,15 +174,15 @@
     }
   }
 
-  function loadUpcomingBaseballCard() {
+  function loadUpcomingEventCard() {
     Store.apiRequest('GET', '/api/baseball/upcoming').then(function (res) {
       if (!res.ok || !res.data) return;
       uiState.upcomingData = res.data;
-      renderSundayCard(res.data);
+      renderUpcomingEventCard(res.data);
     });
   }
 
-  function renderSundayCard(data) {
+  function renderUpcomingEventCard(data) {
     var detailsEl = el('ch-sunday-details');
     var statusPill = el('ch-sunday-status-pill');
     var guestNoticeEl = el('ch-sunday-guest-notice');
@@ -334,7 +334,7 @@
       status: status
     }).then(function (res) {
       if (res.ok) {
-        loadUpcomingBaseballCard();
+        loadUpcomingEventCard();
       }
     });
   }
@@ -343,7 +343,7 @@
     Store.apiRequest('POST', '/api/baseball/events/' + encodeURIComponent(eventId) + '/quick-bp', {
       slot_number: slotNumber
     }).then(function () {
-      loadUpcomingBaseballCard();
+      loadUpcomingEventCard();
     });
   }
 
@@ -889,8 +889,8 @@
     syncPrivacyRelayToggleUi: syncPrivacyRelayToggleUi,
     handleJoinVoiceLounge: handleJoinVoiceLounge,
     renderVoiceVideoTiles: renderVoiceVideoTiles,
-    loadUpcomingBaseballCard: loadUpcomingBaseballCard,
-    renderSundayCard: renderSundayCard,
+    loadUpcomingEventCard: loadUpcomingEventCard,
+    renderUpcomingEventCard: renderUpcomingEventCard,
     handleQuickRsvp: handleQuickRsvp,
     handleQuickBpSlot: handleQuickBpSlot,
     openOrCreateDmWithUser: openOrCreateDmWithUser,

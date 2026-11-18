@@ -16,6 +16,7 @@
   var API = root.API = root.API || /** @type {any} */ ({});
   /** @type {any} */
   var AdminUI = API._adminUi = API._adminUi || {};
+  AdminUI.state = AdminUI.state || /** @type {any} */ ({});
 
   function el(id) {
     return typeof document !== 'undefined' ? /** @type {any} */ (document.getElementById(id)) : null;

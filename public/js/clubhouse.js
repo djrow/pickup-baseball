@@ -83,7 +83,7 @@
         UI.renderChannelSidebar();
         UI.renderMembersDirectory();
         if (uiState.upcomingData) {
-          UI.renderSundayCard(uiState.upcomingData);
+          UI.renderUpcomingEventCard(uiState.upcomingData);
         }
         if (!uiState.activeChannelId && Store.state.channels.length > 0) {
           var general = null;
@@ -100,7 +100,7 @@
         if (authWarn) authWarn.classList.remove('hidden');
         UI.clearSignedOutUi();
         if (uiState.upcomingData) {
-          UI.renderSundayCard(uiState.upcomingData);
+          UI.renderUpcomingEventCard(uiState.upcomingData);
         }
       } else if (eventType === 'public_channels_loaded') {
         var pubAuthWarn = el('ch-auth-banner');
@@ -271,7 +271,7 @@
         }
         UI.syncPrivacyRelayToggleUi();
         if (uiState.upcomingData) {
-          UI.renderSundayCard(uiState.upcomingData);
+          UI.renderUpcomingEventCard(uiState.upcomingData);
         } else if (!UI.isClubhouseBpEnabled()) {
           var bpCard = el('ch-bp-card');
           if (bpCard) bpCard.classList.add('hidden');
@@ -281,7 +281,7 @@
     }
 
     Store.bootstrap().then(function () {
-      UI.loadUpcomingBaseballCard();
+      UI.loadUpcomingEventCard();
     }).catch(function () {
       var authFallback = el('ch-auth-banner');
       if (authFallback && !Store.state.user) authFallback.classList.remove('hidden');
@@ -290,7 +290,7 @@
       } else {
         UI.renderUserBar();
       }
-      UI.loadUpcomingBaseballCard();
+      UI.loadUpcomingEventCard();
     });
 
     if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
