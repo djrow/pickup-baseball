@@ -211,7 +211,6 @@ const BASEBALL_V2_COLUMNS = [
   { table: 'users', column: 'notify_rainouts', sql: 'ALTER TABLE users ADD COLUMN notify_rainouts INTEGER NOT NULL DEFAULT 1' },
   { table: 'users', column: 'notify_event_reminders', sql: 'ALTER TABLE users ADD COLUMN notify_event_reminders INTEGER NOT NULL DEFAULT 1' },
   { table: 'users', column: 'notify_community_updates', sql: 'ALTER TABLE users ADD COLUMN notify_community_updates INTEGER NOT NULL DEFAULT 0' },
-  { table: 'users', column: 'walkup_song', sql: 'ALTER TABLE users ADD COLUMN walkup_song TEXT DEFAULT NULL' },
   { table: 'attendees', column: 'reminder_sent_at', sql: 'ALTER TABLE attendees ADD COLUMN reminder_sent_at DATETIME DEFAULT NULL' },
   { table: 'attendees', column: 'last_notice_key', sql: 'ALTER TABLE attendees ADD COLUMN last_notice_key TEXT DEFAULT NULL' },
   { table: 'attendees', column: 'last_notice_sent_at', sql: 'ALTER TABLE attendees ADD COLUMN last_notice_sent_at DATETIME DEFAULT NULL' },
@@ -389,6 +388,13 @@ export const BASEBALL_MIGRATIONS = [
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )`).run();
     }
+  },
+  {
+    version: 6,
+    name: 'add-users-walkup-song',
+    columns: [
+      { table: 'users', column: 'walkup_song', sql: 'ALTER TABLE users ADD COLUMN walkup_song TEXT DEFAULT NULL' }
+    ]
   }
 ];
 
