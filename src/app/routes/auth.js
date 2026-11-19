@@ -1013,7 +1013,7 @@ async function applyMemberProfileAndConsents(db, user, body, profileFields, env 
   if (profileFields) {
     await db.prepare(`
       UPDATE users
-      SET name = ?, bio = ?,
+      SET name = ?, bio = ?, walkup_song = ?,
           roster_visibility = ?, profile_sharing = ?,
           notify_rsvp_confirm = ?, notify_rainouts = ?,
           notify_event_reminders = ?, notify_community_updates = ?
@@ -1021,6 +1021,7 @@ async function applyMemberProfileAndConsents(db, user, body, profileFields, env 
     `).bind(
       profileFields.cleanName,
       profileFields.cleanBio,
+      profileFields.cleanWalkupSong,
       nextValues.roster_visibility,
       nextValues.profile_sharing,
       nextValues.notify_rsvp_confirm,
@@ -1031,6 +1032,7 @@ async function applyMemberProfileAndConsents(db, user, body, profileFields, env 
     ).run();
     user.name = profileFields.cleanName;
     user.bio = profileFields.cleanBio;
+    user.walkup_song = profileFields.cleanWalkupSong;
   } else {
     await db.prepare(`
       UPDATE users
@@ -1073,19 +1075,50 @@ authRouter.put('/profile', requireAuth, async (c) => {
   if (!db) return c.json({ error: 'Database unavailable.' }, 500);
   try {
     const body = await c.req.json();
-    const { name, bio } = body || {};
+    const { name, bio, walkup_song } = body || {};
     if (!name || !String(name).trim()) {
       return c.json({ error: 'Name cannot be empty.' }, 400);
     }
     const cleanName = String(name).trim().slice(0, 120);
     const cleanBio = String(bio || '').trim().slice(0, 280);
+    const cleanWalkupSong = String(walkup_song || '').trim().slice(0, 140) || null;
 
-    await applyMemberProfileAndConsents(db, user, body || {}, { cleanName, cleanBio }, c.env);
+    await applyMemberProfileAndConsents(db, user, body || {}, { cleanName, cleanBio, cleanWalkupSong }, c.env);
 
     return c.json({ success: true, message: 'Profile updated successfully.', user });
   } catch (err) {
     console.error('[Auth] Error updating profile:', err);
     return c.json({ error: 'Failed to update profile.' }, 500);
+  }
+});
+
+authRouter.get('/music-search', requireAuth, async (c) => {
+  const q = String(c.req.query('q') || '').trim().slice(0, 100);
+  if (q.length < 2) {
+    return c.json({ results: [] });
+  }
+  try {
+    const url = `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=song&limit=6`;
+    const resp = await fetch(url, {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(4000)
+    });
+    if (!resp.ok) {
+      return c.json({ results: [] });
+    }
+    const data = await resp.json();
+    const list = Array.isArray(data && data.results) ? data.results : [];
+    const results = list
+      .filter((item) => item && item.trackName && item.artistName)
+      .map((item) => ({
+        trackName: String(item.trackName).slice(0, 80),
+        artistName: String(item.artistName).slice(0, 60),
+        label: `${String(item.trackName).slice(0, 80)} — ${String(item.artistName).slice(0, 60)}`,
+        artworkUrl: typeof item.artworkUrl60 === 'string' ? item.artworkUrl60 : ''
+      }));
+    return c.json({ results });
+  } catch (err) {
+    return c.json({ results: [] });
   }
 });
 

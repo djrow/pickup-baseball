@@ -59,9 +59,11 @@
     var nameInput = /** @type {HTMLInputElement|null} */ (document.getElementById('profile-name'));
     var emailInput = /** @type {HTMLInputElement|null} */ (document.getElementById('profile-email'));
     var bioInput = /** @type {HTMLTextAreaElement|null} */ (document.getElementById('profile-bio'));
+    var walkupInput = /** @type {HTMLInputElement|null} */ (document.getElementById('profile-walkup-song'));
     if (nameInput) nameInput.value = currentMember.name || '';
     if (emailInput) emailInput.value = currentMember.email || '';
     if (bioInput) bioInput.value = currentMember.bio || '';
+    if (walkupInput) walkupInput.value = currentMember.walkup_song || '';
 
     var charCount = document.getElementById('bio-char-count');
     if (charCount) charCount.textContent = (currentMember.bio || '').length + ' / 280';
@@ -542,6 +544,8 @@
       var nameInput = /** @type {HTMLInputElement|null} */ (document.getElementById('profile-name'));
       var name = nameInput ? nameInput.value.trim() : '';
       var bio = bioInput.value.trim();
+      var walkupInput = /** @type {HTMLInputElement|null} */ (document.getElementById('profile-walkup-song'));
+      var walkupSong = walkupInput ? walkupInput.value.trim() : '';
       var rosterVisEl = /** @type {HTMLInputElement|null} */ (document.getElementById('profile-roster-visibility'));
       var profileShareEl = /** @type {HTMLInputElement|null} */ (document.getElementById('profile-profile-sharing'));
       var notifyRsvpEl = /** @type {HTMLInputElement|null} */ (document.getElementById('profile-notify-rsvp'));
@@ -550,7 +554,7 @@
       var notifyCommEl = /** @type {HTMLInputElement|null} */ (document.getElementById('profile-notify-community'));
 
       /** @type {Record<string, any>} */
-      var consentPayload = {};
+      var consentPayload = { walkup_song: walkupSong };
       if (rosterVisEl) consentPayload.roster_visibility = Boolean(rosterVisEl.checked);
       if (profileShareEl) consentPayload.profile_sharing = Boolean(profileShareEl.checked);
       if (notifyRsvpEl) consentPayload.notify_rsvp_confirm = Boolean(notifyRsvpEl.checked);
@@ -868,6 +872,64 @@
     });
   }
 
+  function setupWalkupSongAutocomplete() {
+    var input = /** @type {HTMLInputElement | null} */ (document.getElementById('profile-walkup-song'));
+    var listEl = document.getElementById('walkup-song-results');
+    if (!input || !listEl) return;
+
+    var timer = null;
+    var lastQuery = '';
+
+    function hideList() {
+      listEl.style.display = 'none';
+      listEl.innerHTML = '';
+    }
+
+    input.addEventListener('input', function () {
+      var q = input.value.trim();
+      if (timer) clearTimeout(timer);
+      if (q.length < 2) {
+        hideList();
+        return;
+      }
+      timer = setTimeout(function () {
+        lastQuery = q;
+        fetch('/api/auth/music-search?q=' + encodeURIComponent(q), { credentials: 'same-origin' })
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (input.value.trim() !== lastQuery) return;
+            var items = (data && Array.isArray(data.results)) ? data.results : [];
+            if (!items.length) {
+              hideList();
+              return;
+            }
+            listEl.innerHTML = '';
+            items.forEach(function (item) {
+              var btn = document.createElement('button');
+              btn.type = 'button';
+              btn.style.cssText = 'display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:8px 12px;border:none;background:transparent;color:var(--text);cursor:pointer;font-size:0.86rem;border-bottom:1px solid var(--border);';
+              btn.textContent = item.label || '';
+              btn.addEventListener('click', function () {
+                input.value = item.label || '';
+                hideList();
+              });
+              listEl.appendChild(btn);
+            });
+            listEl.style.display = 'block';
+          })
+          .catch(function () { hideList(); });
+      }, 300);
+    });
+
+    document.addEventListener('click', function (e) {
+      var target = /** @type {Node | null} */ (e.target);
+      if (target && !input.contains(target) && !listEl.contains(target)) {
+        hideList();
+      }
+    });
+  }
+
   setupHistoryPanel();
   setupPushNotifications();
+  setupWalkupSongAutocomplete();
 })();

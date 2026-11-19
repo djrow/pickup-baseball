@@ -47,7 +47,8 @@ export const CREATE_TABLES_SQL = [
     notify_rsvp_confirm INTEGER NOT NULL DEFAULT 1,
     notify_rainouts INTEGER NOT NULL DEFAULT 1,
     notify_event_reminders INTEGER NOT NULL DEFAULT 1,
-    notify_community_updates INTEGER NOT NULL DEFAULT 0
+    notify_community_updates INTEGER NOT NULL DEFAULT 0,
+    walkup_song TEXT DEFAULT NULL
   )`,
   `CREATE TABLE IF NOT EXISTS sessions (
     id TEXT PRIMARY KEY,

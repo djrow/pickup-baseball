@@ -582,6 +582,7 @@ export async function getUserFromSession(db, sessionId, chatDb, options = {}) {
       u.name, 
       u.email, 
       u.bio, 
+      u.walkup_song, 
       CASE
         WHEN u.avatar_url LIKE 'data:%' THEN '/api/users/' || u.id || '/avatar?v=' || length(u.avatar_url)
         ELSE COALESCE(u.avatar_url, '')
