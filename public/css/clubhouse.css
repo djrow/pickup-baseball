@@ -313,6 +313,17 @@ html, body.clubhouse-body {
   min-width: 0;
 }
 
+.ch-user-vault-btn {
+  flex-shrink: 0;
+  background-color: var(--ch-bg-surface);
+  border-color: var(--ch-border);
+}
+
+.ch-user-vault-btn:hover {
+  background-color: var(--ch-bg-active);
+  border-color: var(--ch-accent);
+}
+
 .ch-user-name {
   font-size: 13px;
   font-weight: 700;
@@ -345,6 +356,40 @@ html, body.clubhouse-body {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
+}
+
+.ch-user-quick-actions > .ch-quick-nav-wrap {
+  grid-column: 1 / -1;
+}
+
+.ch-user-quick-btn.is-open {
+  background-color: var(--ch-bg-active);
+  border-color: var(--ch-accent);
+  color: var(--ch-text-primary);
+}
+
+.ch-user-settings-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--ch-border);
+  background-color: var(--ch-bg-sidebar);
+}
+
+.ch-user-settings-card.hidden {
+  display: none;
+}
+
+.ch-settings-item-btn {
+  width: 100%;
+  justify-content: flex-start;
+  padding: 6px 8px;
+}
+
+.ch-settings-opt-btn.hidden {
+  display: none;
 }
 
 .ch-user-quick-btn {

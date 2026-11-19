@@ -524,11 +524,13 @@
     var attachBtn = el('btn-attach-file');
     var gifBtn = el('btn-open-gif-picker');
     var facCard = el('ch-facilitator-checklist-card');
+    var optToggleBtn = el('btn-clubhouse-opt-toggle');
 
     if (!u) {
       nameEl.textContent = 'Guest Player';
       roleEl.innerHTML = '<a href="/login.html?redirect=/clubhouse.html" style="color:var(--ch-accent);text-decoration:none;font-weight:600;">Sign In →</a>';
       avatarEl.textContent = '⚾';
+      if (optToggleBtn) optToggleBtn.classList.add('hidden');
       if (modTabBtn) modTabBtn.style.display = 'none';
       if (contextTabsEl) contextTabsEl.classList.remove('has-mod');
       if (newChanBtn) newChanBtn.style.display = 'none';
@@ -563,17 +565,13 @@
     if (u.playingSunday || u.playing_sunday) badges.push('⚾ Playing');
     if (u.chatMuted) badges.push('🔇 Muted');
     if (!isOptedIn) badges.push('Opted Out');
-    var optToggleLabel = isOptedIn ? 'Leave Clubhouse' : 'Join Clubhouse';
-    roleEl.innerHTML = escapeHtml(badges.join(' • ')) +
-      ' • <button type="button" class="ch-covenant-link" id="btn-clubhouse-opt-toggle" style="font-size:inherit;padding:0;">' + optToggleLabel + '</button>' +
-      ' • <a href="/login.html?redirect=/clubhouse.html" style="color:var(--ch-text-secondary);text-decoration:underline;" title="Switch or manage account">Switch</a>';
+    var optToggleLabel = isOptedIn ? '🚪 Leave Clubhouse' : '⚾ Join Clubhouse';
+    roleEl.textContent = badges.join(' • ');
     avatarEl.textContent = (u.name || 'P').charAt(0).toUpperCase();
 
-    var optToggleBtn = el('btn-clubhouse-opt-toggle');
     if (optToggleBtn) {
-      optToggleBtn.addEventListener('click', function () {
-        handleClubhouseOptToggle(!isOptedIn, optToggleBtn);
-      });
+      optToggleBtn.textContent = optToggleLabel;
+      optToggleBtn.classList.remove('hidden');
     }
 
     var isMod = isModeratorUser(u);
@@ -1112,6 +1110,27 @@
   }
 
   function initLayoutDomEvents() {
+    // Expandable Settings card & Leave/Join Clubhouse toggle in left sidebar footer
+    var settingsBtn = el('btn-user-settings');
+    var settingsCard = el('ch-user-settings-card');
+    if (settingsBtn && settingsCard) {
+      settingsBtn.addEventListener('click', function () {
+        var isHidden = settingsCard.classList.toggle('hidden');
+        var isOpen = !isHidden;
+        settingsBtn.classList.toggle('is-open', isOpen);
+        settingsBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+      });
+    }
+    var optToggleBtn = el('btn-clubhouse-opt-toggle');
+    if (optToggleBtn) {
+      optToggleBtn.addEventListener('click', function () {
+        var u = Store && Store.state ? Store.state.user : null;
+        if (!u) return;
+        var isOptedIn = Boolean(u.clubhouseOptedIn || u.clubhouse_opted_in === 1);
+        handleClubhouseOptToggle(!isOptedIn, optToggleBtn);
+      });
+    }
+
     // Create / edit message boards (#btn-new-channel, #ch-board-modal)
     var newChanBtn = el('btn-new-channel');
     if (newChanBtn) {

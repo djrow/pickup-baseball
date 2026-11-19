@@ -7,9 +7,9 @@
   <link rel="shortcut icon" href="/favicon.ico" />
   <link rel="icon" type="image/svg+xml" href="/logo.svg" />
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png" />
-  <link rel="stylesheet" href="/css/clubhouse.css?v=162">
-  <link rel="stylesheet" href="/css/dialog.css?v=162">
-  <link rel="stylesheet" href="/css/themes.css?v=162">
+  <link rel="stylesheet" href="/css/clubhouse.css?v=163">
+  <link rel="stylesheet" href="/css/dialog.css?v=163">
+  <link rel="stylesheet" href="/css/themes.css?v=163">
 </head>
 <body class="clubhouse-body">
   <a href="#main-content" class="pbf-skip-link">Skip to main content</a>
@@ -46,6 +46,7 @@
             <div class="ch-user-name" id="ch-current-user-name">Signing in...</div>
             <div class="ch-user-role" id="ch-current-user-role">Community Member</div>
           </div>
+          <button type="button" class="ch-icon-btn ch-user-vault-btn" id="btn-user-vault" aria-label="Security Vault" title="E2EE Security Vault, Privacy Relay &amp; PBF Shared Drive Status">🔐</button>
         </div>
         <div class="ch-voice-controls">
           <button type="button" class="ch-icon-btn" id="btn-voice-mute" aria-label="Mute or unmute microphone" title="Mute / Unmute Microphone">🎙️</button>
@@ -55,8 +56,11 @@
         </div>
         <div class="ch-user-quick-actions">
           <a href="/index.html" class="ch-user-quick-btn" id="btn-user-calendar" title="Sunday Game Schedule &amp; RSVPs">📅 Game Calendar</a>
-          <button type="button" class="ch-user-quick-btn" id="btn-user-vault" title="E2EE Security Vault, Privacy Relay &amp; PBF Shared Drive Status">🔐 Security Vault</button>
-          <button type="button" class="ch-user-quick-btn" id="btn-user-theme" title="Change Appearance Theme &amp; Colors">🎨 Theme</button>
+          <button type="button" class="ch-user-quick-btn" id="btn-user-settings" aria-expanded="false" aria-controls="ch-user-settings-card" title="Clubhouse Settings">⚙️ Settings</button>
+        </div>
+        <div class="ch-user-settings-card hidden" id="ch-user-settings-card" role="region" aria-label="Clubhouse Settings">
+          <button type="button" class="ch-user-quick-btn ch-settings-item-btn" id="btn-user-theme" title="Change Appearance Theme &amp; Colors">🎨 Theme</button>
+          <button type="button" class="ch-user-quick-btn ch-settings-item-btn ch-settings-opt-btn hidden" id="btn-clubhouse-opt-toggle" title="Leave or rejoin Clubhouse">🚪 Leave Clubhouse</button>
         </div>
       </footer>
     </aside>
@@ -465,22 +469,22 @@
     </div>
   </div>
 
-  <script defer src="/js/api/i18n.js?v=162"></script>
-  <script defer src="/js/api/ui.js?v=162"></script>
-  <script defer src="/js/api/endpoints.js?v=162"></script>
-  <script defer src="/js/api.js?v=162"></script>
-  <script defer src="/js/dialog.js?v=162"></script>
-  <script defer src="/js/crypto.js?v=162"></script>
-  <script defer src="/js/store.js?v=162"></script>
-  <script defer src="/js/store/idb.js?v=162"></script>
-  <script defer src="/js/store/e2ee.js?v=162"></script>
-  <script defer src="/js/store/sync.js?v=162"></script>
-  <script defer src="/js/store/actions.js?v=162"></script>
-  <script defer src="/js/rtc.js?v=162"></script>
-  <script defer src="/js/clubhouse/layout.js?v=162"></script>
-  <script defer src="/js/clubhouse/messages.js?v=162"></script>
-  <script defer src="/js/clubhouse/e2ee-ui.js?v=162"></script>
-  <script defer src="/js/clubhouse/panels.js?v=162"></script>
-  <script defer src="/js/clubhouse.js?v=162"></script>
+  <script defer src="/js/api/i18n.js?v=163"></script>
+  <script defer src="/js/api/ui.js?v=163"></script>
+  <script defer src="/js/api/endpoints.js?v=163"></script>
+  <script defer src="/js/api.js?v=163"></script>
+  <script defer src="/js/dialog.js?v=163"></script>
+  <script defer src="/js/crypto.js?v=163"></script>
+  <script defer src="/js/store.js?v=163"></script>
+  <script defer src="/js/store/idb.js?v=163"></script>
+  <script defer src="/js/store/e2ee.js?v=163"></script>
+  <script defer src="/js/store/sync.js?v=163"></script>
+  <script defer src="/js/store/actions.js?v=163"></script>
+  <script defer src="/js/rtc.js?v=163"></script>
+  <script defer src="/js/clubhouse/layout.js?v=163"></script>
+  <script defer src="/js/clubhouse/messages.js?v=163"></script>
+  <script defer src="/js/clubhouse/e2ee-ui.js?v=163"></script>
+  <script defer src="/js/clubhouse/panels.js?v=163"></script>
+  <script defer src="/js/clubhouse.js?v=163"></script>
 </body>
 </html>

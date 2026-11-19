@@ -611,7 +611,9 @@ async function runPublicShellAndDiagnosticsSmoke(browser, session, server, track
   assert(Array.isArray(chMenuLinks) && chMenuLinks.includes('/gallery.html') && chMenuLinks.includes('/waiver.html'), 'Clubhouse dynamic quick-nav exposes /gallery.html and /waiver.html');
   record('clubhouse.html renders dynamic quick-nav menu linking to Gallery & Waiver');
 
-  await session.waitFor('document.getElementById("btn-user-theme") && document.getElementById("btn-header-theme")');
+  await session.waitFor('document.getElementById("btn-user-settings") && document.getElementById("btn-user-theme") && document.getElementById("btn-header-theme")');
+  await clickEl(session, '#btn-user-settings');
+  await session.waitFor('!document.getElementById("ch-user-settings-card").classList.contains("hidden")');
   await clickEl(session, '#btn-user-theme');
   await session.waitFor('!document.getElementById("ch-theme-modal").classList.contains("hidden") && document.querySelector("#ch-theme-picker-body .theme-palette-card[data-color-theme=\\"fenway-red\\"]")');
   await clickEl(session, '#ch-theme-picker-body .theme-mode-tab[data-mode="dark"]');
