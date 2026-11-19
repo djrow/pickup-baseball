@@ -1053,6 +1053,7 @@
     menu.setAttribute('role', 'menu');
 
     var links = [
+      { href: '/index.html', label: '📅 Game Calendar' },
       { href: '/gallery.html', label: '📸 Photo & Video Gallery' },
       { href: '/archive.html', label: '🏆 Season Archive' },
       { href: '/waiver.html', label: '📝 Safety Waiver' },

@@ -42,7 +42,9 @@ test('Clubhouse Frontend & Native Waiver Verification', async (t) => {
     assert.ok(!clubhouseHtml.includes('id="rail-home-btn"'), 'clubhouse.html must remove left rail Clubhouse button');
     assert.ok(!clubhouseHtml.includes('href="/gallery.html"'), 'clubhouse.html must remove left rail gallery button');
     assert.ok(!clubhouseHtml.includes('HANDBOOK.md'), 'clubhouse.html must remove left rail handbook button');
-    assert.ok(clubhouseHtml.includes('id="btn-user-calendar"') && clubhouseHtml.includes('href="/index.html"'), 'clubhouse.html must place calendar button in user card');
+    assert.ok(clubhouseHtml.includes('id="btn-user-settings"') && clubhouseHtml.includes('id="ch-user-settings-card"'), 'clubhouse.html must place expandable settings button and card in user bar');
+    const layoutJs = fs.readFileSync(path.join(publicDir, 'js/clubhouse/layout.js'), 'utf8');
+    assert.ok(layoutJs.includes("href: '/index.html'"), 'layout.js More Pages menu must include Game Calendar (/index.html)');
     assert.ok(clubhouseHtml.includes('id="btn-user-vault"'), 'clubhouse.html must place Security Vault button in user card');
     assert.ok(clubhouseHtml.includes('id="ch-channel-list"'), 'clubhouse.html must include channel sidebar');
     assert.ok(clubhouseHtml.includes('id="ch-message-stream"'), 'clubhouse.html must include message stream');

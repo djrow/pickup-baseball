@@ -358,10 +358,6 @@ html, body.clubhouse-body {
   gap: 6px;
 }
 
-.ch-user-quick-actions > .ch-quick-nav-wrap {
-  grid-column: 1 / -1;
-}
-
 .ch-user-quick-btn.is-open {
   background-color: var(--ch-bg-active);
   border-color: var(--ch-accent);
