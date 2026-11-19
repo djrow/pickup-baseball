@@ -180,6 +180,23 @@ try {
 
   # 6. Deploy to Cloudflare Pages (and optional Cron Worker)
   if (-not $SkipDeploy) {
+    # Load per-project Cloudflare credentials from untracked .env / .dev.vars if not already set
+    foreach ($EnvFile in @('.env', '.dev.vars')) {
+      $EnvPath = Join-Path $RepoRoot $EnvFile
+      if (Test-Path $EnvPath) {
+        foreach ($Line in Get-Content $EnvPath) {
+          if ($Line -match '^\s*(CLOUDFLARE_API_TOKEN|CLOUDFLARE_ACCOUNT_ID)\s*=\s*(.+?)\s*$') {
+            $Key = $Matches[1]
+            $Val = $Matches[2].Trim('"').Trim("'")
+            if (-not [string]::IsNullOrWhiteSpace($Val) -and [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($Key, 'Process'))) {
+              [Environment]::SetEnvironmentVariable($Key, $Val, 'Process')
+              Write-Host "Loaded $Key from $EnvFile for Wrangler deploy." -ForegroundColor DarkGray
+            }
+          }
+        }
+      }
+    }
+
     Invoke-Step -Label 'Deploying to Cloudflare Pages (npm run deploy)' -Command { npm run deploy }
     if ($DeployCron) {
       Invoke-Step -Label 'Deploying Standalone Cron Worker (npm run deploy:cron)' -Command { npm run deploy:cron }
