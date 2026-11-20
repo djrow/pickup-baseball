@@ -1066,6 +1066,92 @@ html, body.clubhouse-body {
   font-weight: 700;
 }
 
+.ch-bp-slot.dj-playing {
+  border-color: var(--ch-gold, #fbbf24);
+  box-shadow: 0 0 0 1px var(--ch-gold, #fbbf24);
+}
+
+.ch-bp-slot-play {
+  display: inline-block;
+  margin-top: 2px;
+  padding: 1px 5px;
+  font-size: 9px;
+  border-radius: 3px;
+  background: rgba(251, 191, 36, 0.16);
+  color: var(--ch-gold, #fbbf24);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ch-bp-slot-play:hover {
+  background: rgba(251, 191, 36, 0.3);
+}
+
+.ch-bp-dj-bar {
+  background: var(--ch-bg-surface);
+  border: 1px solid var(--ch-border);
+  border-radius: 6px;
+  padding: 8px 9px;
+  margin-bottom: 8px;
+}
+
+.ch-bp-dj-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ch-bp-dj-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ch-gold, #fbbf24);
+  letter-spacing: 0.02em;
+}
+
+.ch-bp-dj-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ch-bp-dj-btn {
+  background: var(--ch-bg-sidebar);
+  border: 1px solid var(--ch-border);
+  color: var(--ch-text-primary);
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.ch-bp-dj-btn:hover {
+  border-color: var(--ch-accent);
+}
+
+.ch-bp-dj-btn.ch-bp-dj-play {
+  background: var(--ch-accent);
+  border-color: var(--ch-accent);
+  color: #fff;
+  font-weight: 700;
+}
+
+.ch-bp-dj-now {
+  font-size: 11px;
+  color: var(--ch-text-secondary);
+  margin-top: 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ch-bp-dj-yt-wrap {
+  margin-top: 6px;
+  border-radius: 5px;
+  overflow: hidden;
+  border: 1px solid var(--ch-border);
+}
+
 /* Modals */
 .ch-modal-backdrop {
   position: fixed;

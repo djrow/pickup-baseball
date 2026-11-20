@@ -184,6 +184,270 @@
     }
   }
 
+  /** @type {{ lineup: Array<any>, activeSlot: number | null, isPlaying: boolean, audio: HTMLAudioElement | null, stopTimer: any, previewCache: Record<string, string> }} */
+  var djState = {
+    lineup: [],
+    activeSlot: null,
+    isPlaying: false,
+    audio: null,
+    stopTimer: null,
+    previewCache: {}
+  };
+
+  function formatDjSeconds(secs) {
+    var s = Math.max(0, Math.round(Number(secs) || 0));
+    var m = Math.floor(s / 60);
+    var rem = s % 60;
+    return m + ':' + (rem < 10 ? '0' : '') + rem;
+  }
+
+  function parseBpWalkupSong(raw) {
+    if (!raw) return null;
+    var s = String(raw).trim();
+    if (!s) return null;
+    if (s.charAt(0) === '{') {
+      try {
+        var obj = JSON.parse(s);
+        if (obj && typeof obj === 'object' && obj.label) {
+          var clipStart = Number(obj.clipStart);
+          if (!isFinite(clipStart) || clipStart < 0) clipStart = 0;
+          if (clipStart > 25) clipStart = 25;
+          var ytStart = Number(obj.youtubeStart);
+          if (!isFinite(ytStart) || ytStart < 0) ytStart = 0;
+          return {
+            label: String(obj.label).slice(0, 140),
+            trackName: obj.trackName ? String(obj.trackName).slice(0, 80) : '',
+            artistName: obj.artistName ? String(obj.artistName).slice(0, 60) : '',
+            deezerId: obj.deezerId ? String(obj.deezerId).replace(/\D/g, '').slice(0, 15) : '',
+            previewUrl: typeof obj.previewUrl === 'string' && obj.previewUrl.indexOf('https://') === 0 ? obj.previewUrl : '',
+            clipStart: Math.round(clipStart),
+            youtubeId: typeof obj.youtubeId === 'string' && /^[A-Za-z0-9_-]{11}$/.test(obj.youtubeId) ? obj.youtubeId : '',
+            youtubeStart: Math.round(ytStart)
+          };
+        }
+      } catch (e) { /* fall through */ }
+    }
+    return { label: s, trackName: s, artistName: '', deezerId: '', previewUrl: '', clipStart: 0, youtubeId: '', youtubeStart: 0 };
+  }
+
+  function syncDjBarUi(statusOverride) {
+    var djBar = el('ch-bp-dj-bar');
+    var nowEl = el('ch-bp-dj-now');
+    var playBtn = el('btn-bp-dj-play');
+    if (!djBar) return;
+    if (!djState.lineup.length) {
+      djBar.classList.add('hidden');
+      return;
+    }
+    djBar.classList.remove('hidden');
+    if (playBtn) {
+      playBtn.textContent = djState.isPlaying ? '⏹' : '▶';
+      playBtn.title = djState.isPlaying ? 'Stop walk-up clip' : 'Play 5-second walk-up clip';
+    }
+    if (nowEl) {
+      if (statusOverride) {
+        nowEl.textContent = statusOverride;
+      } else {
+        var entry = null;
+        for (var i = 0; i < djState.lineup.length; i++) {
+          if (djState.lineup[i].slot === djState.activeSlot) {
+            entry = djState.lineup[i];
+            break;
+          }
+        }
+        if (!entry) entry = djState.lineup[0];
+        if (entry) {
+          var startSec = entry.song.youtubeId ? entry.song.youtubeStart : entry.song.clipStart;
+          var srcTag = entry.song.youtubeId ? 'YT ' : '';
+          nowEl.textContent = (djState.isPlaying ? '♪ ' : '') + '#' + entry.slot + ' ' + entry.playerName + ' — ' +
+            (entry.song.trackName || entry.song.label) + ' (' + srcTag + formatDjSeconds(startSec) + '–' + formatDjSeconds(startSec + 5) + ')';
+        }
+      }
+    }
+    var bpGrid = el('ch-bp-grid');
+    if (bpGrid) {
+      var btns = bpGrid.querySelectorAll('[data-bp-slot]');
+      for (var k = 0; k < btns.length; k++) {
+        var sNum = Number(btns[k].getAttribute('data-bp-slot'));
+        var isActive = djState.isPlaying && djState.activeSlot === sNum;
+        btns[k].classList.toggle('dj-playing', isActive);
+        var badge = btns[k].querySelector('[data-bp-play-slot]');
+        if (badge) badge.textContent = isActive ? '⏹' : '▶';
+      }
+    }
+  }
+
+  function stopAtBatDj() {
+    if (djState.stopTimer) {
+      clearTimeout(djState.stopTimer);
+      djState.stopTimer = null;
+    }
+    if (djState.audio) {
+      try { djState.audio.pause(); } catch (e) { /* ignore */ }
+    }
+    var ytWrap = el('ch-bp-dj-yt-wrap');
+    if (ytWrap) {
+      ytWrap.innerHTML = '';
+      ytWrap.classList.add('hidden');
+    }
+    djState.isPlaying = false;
+    syncDjBarUi();
+  }
+
+  function updateAtBatDjLineup(bpSignups) {
+    var list = [];
+    for (var i = 0; i < bpSignups.length; i++) {
+      var row = bpSignups[i];
+      var parsed = parseBpWalkupSong(row.walkup_song);
+      if (parsed) {
+        list.push({
+          slot: Number(row.slot_number),
+          playerName: (row.player_name || 'Batter').split(' ')[0],
+          song: parsed
+        });
+      }
+    }
+    list.sort(function (a, b) { return a.slot - b.slot; });
+    djState.lineup = list;
+    if (!list.length) {
+      djState.activeSlot = null;
+      stopAtBatDj();
+      return;
+    }
+    var found = false;
+    for (var j = 0; j < list.length; j++) {
+      if (list[j].slot === djState.activeSlot) {
+        found = true;
+        break;
+      }
+    }
+    if (!found) djState.activeSlot = list[0].slot;
+    syncDjBarUi();
+  }
+
+  function playBpSlotWalkup(slotNumber) {
+    var entry = null;
+    for (var i = 0; i < djState.lineup.length; i++) {
+      if (djState.lineup[i].slot === Number(slotNumber)) {
+        entry = djState.lineup[i];
+        break;
+      }
+    }
+    if (!entry) return;
+
+    if (djState.isPlaying && djState.activeSlot === entry.slot) {
+      stopAtBatDj();
+      return;
+    }
+
+    stopAtBatDj();
+    djState.activeSlot = entry.slot;
+    djState.isPlaying = true;
+
+    // YouTube 5-second clip fallback
+    if (entry.song.youtubeId) {
+      var ytWrap = el('ch-bp-dj-yt-wrap');
+      if (ytWrap) {
+        var ytStart = entry.song.youtubeStart || 0;
+        var ytEnd = ytStart + 5;
+        ytWrap.innerHTML = '';
+        var iframe = document.createElement('iframe');
+        iframe.src = 'https://www.youtube-nocookie.com/embed/' + encodeURIComponent(entry.song.youtubeId) + '?start=' + ytStart + '&end=' + ytEnd + '&autoplay=1&rel=0';
+        iframe.title = 'At-Bat DJ YouTube walk-up clip';
+        iframe.allow = 'autoplay; encrypted-media';
+        iframe.style.cssText = 'width:100%;height:110px;border:0;display:block;';
+        ytWrap.appendChild(iframe);
+        ytWrap.classList.remove('hidden');
+        syncDjBarUi();
+        djState.stopTimer = setTimeout(function () {
+          stopAtBatDj();
+        }, 7000);
+        return;
+      }
+    }
+
+    // Deezer / iTunes 30s preview 5-second clip
+    var cacheKey = entry.song.deezerId || entry.song.label;
+    var cachedUrl = djState.previewCache[cacheKey] || entry.song.previewUrl || '';
+    syncDjBarUi('Loading #' + entry.slot + ' ' + entry.playerName + '...');
+
+    var urlPromise = cachedUrl
+      ? Promise.resolve(cachedUrl)
+      : (function () {
+          var params = [];
+          if (entry.song.deezerId) params.push('deezerId=' + encodeURIComponent(entry.song.deezerId));
+          var q = (entry.song.trackName && entry.song.artistName) ? (entry.song.trackName + ' ' + entry.song.artistName) : entry.song.label;
+          if (q) params.push('q=' + encodeURIComponent(q));
+          return Store.apiRequest('GET', '/api/auth/music-preview?' + params.join('&')).then(function (res) {
+            var u = (res && res.ok && res.data && typeof res.data.previewUrl === 'string' && res.data.previewUrl.indexOf('https://') === 0)
+              ? res.data.previewUrl
+              : '';
+            if (u) djState.previewCache[cacheKey] = u;
+            return u;
+          }).catch(function () { return ''; });
+        })();
+
+    urlPromise.then(function (url) {
+      if (!djState.isPlaying || djState.activeSlot !== entry.slot) return;
+      if (!url) {
+        djState.isPlaying = false;
+        syncDjBarUi('No preview audio for #' + entry.slot + ' ' + entry.playerName);
+        return;
+      }
+      if (!djState.audio) {
+        djState.audio = new Audio();
+        djState.audio.preload = 'auto';
+      }
+      var startSec = entry.song.clipStart || 0;
+      var beginPlay = function () {
+        if (!djState.audio || !djState.isPlaying || djState.activeSlot !== entry.slot) return;
+        try { djState.audio.currentTime = startSec; } catch (e) { /* ignore */ }
+        var p = djState.audio.play();
+        syncDjBarUi();
+        if (djState.stopTimer) clearTimeout(djState.stopTimer);
+        djState.stopTimer = setTimeout(function () {
+          stopAtBatDj();
+        }, 5000);
+        if (p && typeof p.catch === 'function') {
+          p.catch(function () {
+            stopAtBatDj();
+            syncDjBarUi('Playback blocked by browser autoplay policy.');
+          });
+        }
+      };
+
+      djState.audio.onended = function () { stopAtBatDj(); };
+      djState.audio.onerror = function () {
+        stopAtBatDj();
+        syncDjBarUi('Unable to load preview audio.');
+      };
+
+      if (djState.audio.src !== url) {
+        djState.audio.src = url;
+        djState.audio.onloadedmetadata = function () {
+          if (djState.audio) djState.audio.onloadedmetadata = null;
+          beginPlay();
+        };
+        djState.audio.load();
+      } else {
+        beginPlay();
+      }
+    });
+  }
+
+  function stepAtBatDj(delta) {
+    if (!djState.lineup.length) return;
+    var idx = 0;
+    for (var i = 0; i < djState.lineup.length; i++) {
+      if (djState.lineup[i].slot === djState.activeSlot) {
+        idx = i;
+        break;
+      }
+    }
+    var nextIdx = (idx + delta + djState.lineup.length) % djState.lineup.length;
+    playBpSlotWalkup(djState.lineup[nextIdx].slot);
+  }
+
   function loadUpcomingEventCard() {
     Store.apiRequest('GET', '/api/baseball/upcoming').then(function (res) {
       if (!res.ok || !res.data) return;
@@ -283,7 +547,7 @@
     if (yesBtn) yesBtn.className = 'ch-rsvp-btn attending' + (myStatus === 'attending' ? ' active' : '');
     if (noBtn) noBtn.className = 'ch-rsvp-btn declined' + (myStatus === 'declined' ? ' active' : '');
 
-    // Render 28-Slot Batting Practice Grid
+    // Render 28-Slot Batting Practice Grid & At-Bat DJ Player
     var bpSignups = bpEnabled && Array.isArray(data.bp_signups) ? data.bp_signups : [];
     var slotMap = {};
     for (var b = 0; b < bpSignups.length; b++) {
@@ -292,36 +556,34 @@
     if (bpCountLabel) {
       bpCountLabel.textContent = bpSignups.length + '/28';
     }
+    updateAtBatDjLineup(bpEnabled ? bpSignups : []);
     if (bpGrid && bpEnabled) {
       var gridHtml = '';
       for (var s = 1; s <= 28; s++) {
         var taken = slotMap[s];
         var isMine = taken && currentUserId && Number(taken.user_id) === currentUserId;
-        var cls = 'ch-bp-slot' + (isMine ? ' mine' : (taken ? ' taken' : ''));
-        var walkupShort = '';
-        var walkupFull = '';
-        if (taken && taken.walkup_song) {
-          var rawWs = String(taken.walkup_song).trim();
-          if (rawWs.charAt(0) === '{') {
-            try {
-              var parsedWs = JSON.parse(rawWs);
-              if (parsedWs && parsedWs.label) {
-                walkupShort = String(parsedWs.trackName || parsedWs.label);
-                walkupFull = String(parsedWs.label);
-              }
-            } catch (e) { /* ignore */ }
-          } else if (rawWs) {
-            walkupShort = rawWs;
-            walkupFull = rawWs;
-          }
-        }
+        var isDjPlaying = djState.activeSlot === s && djState.isPlaying;
+        var cls = 'ch-bp-slot' + (isMine ? ' mine' : (taken ? ' taken' : '')) + (isDjPlaying ? ' dj-playing' : '');
+        var parsedSong = taken ? parseBpWalkupSong(taken.walkup_song) : null;
+        var walkupShort = parsedSong ? (parsedSong.trackName || parsedSong.label) : '';
+        var walkupFull = parsedSong ? parsedSong.label : '';
         var nameLine = taken ? ('#' + s + ' ' + (taken.player_name || '').split(' ')[0]) : ('#' + s + ' Open');
         var innerHtml = '<span class="ch-bp-slot-name">' + escapeHtml(nameLine) + '</span>' +
-          (walkupShort ? '<span class="ch-bp-slot-song">🎵 ' + escapeHtml(walkupShort) + '</span>' : '');
+          (walkupShort ? '<span class="ch-bp-slot-song">🎵 ' + escapeHtml(walkupShort) + '</span>' : '') +
+          (parsedSong ? '<span class="ch-bp-slot-play" data-bp-play-slot="' + s + '" title="Play 5s walk-up clip">' + (isDjPlaying ? '⏹' : '▶') + '</span>' : '');
         var titleText = taken ? (taken.player_name + (walkupFull ? (' • 🎵 ' + walkupFull) : '')) : ('Claim Slot #' + s);
         gridHtml += '<button type="button" class="' + cls + '" data-bp-slot="' + s + '" title="' + escapeHtml(titleText) + '">' + innerHtml + '</button>';
       }
       bpGrid.innerHTML = gridHtml;
+
+      var playBadges = bpGrid.querySelectorAll('[data-bp-play-slot]');
+      for (var p = 0; p < playBadges.length; p++) {
+        playBadges[p].addEventListener('click', function (evClick) {
+          evClick.stopPropagation();
+          var playSlot = Number(this.getAttribute('data-bp-play-slot'));
+          playBpSlotWalkup(playSlot);
+        });
+      }
 
       var slotBtns = bpGrid.querySelectorAll('[data-bp-slot]');
       for (var k = 0; k < slotBtns.length; k++) {
@@ -964,6 +1226,23 @@
           renderVoiceVideoTiles();
           Store.pollDeltaSync();
         });
+      });
+    }
+
+    var djPrevBtn = el('btn-bp-dj-prev');
+    var djPlayBtn = el('btn-bp-dj-play');
+    var djNextBtn = el('btn-bp-dj-next');
+    if (djPrevBtn) {
+      djPrevBtn.addEventListener('click', function () { stepAtBatDj(-1); });
+    }
+    if (djNextBtn) {
+      djNextBtn.addEventListener('click', function () { stepAtBatDj(1); });
+    }
+    if (djPlayBtn) {
+      djPlayBtn.addEventListener('click', function () {
+        if (!djState.lineup.length) return;
+        var targetSlot = djState.activeSlot != null ? djState.activeSlot : djState.lineup[0].slot;
+        playBpSlotWalkup(targetSlot);
       });
     }
   }

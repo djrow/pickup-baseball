@@ -1081,7 +1081,7 @@ authRouter.put('/profile', requireAuth, async (c) => {
     }
     const cleanName = String(name).trim().slice(0, 120);
     const cleanBio = String(bio || '').trim().slice(0, 280);
-    const cleanWalkupSong = String(walkup_song || '').trim().slice(0, 500) || null;
+    const cleanWalkupSong = String(walkup_song || '').trim().slice(0, 1000) || null;
 
     await applyMemberProfileAndConsents(db, user, body || {}, { cleanName, cleanBio, cleanWalkupSong }, c.env);
 
@@ -1126,13 +1126,19 @@ authRouter.get('/music-search', requireAuth, async (c) => {
           const artworkUrl = (item.album && typeof item.album.cover_medium === 'string')
             ? item.album.cover_medium
             : ((item.album && typeof item.album.cover_small === 'string') ? item.album.cover_small : '');
+          const previewUrl = (typeof item.preview === 'string' && item.preview.startsWith('https://'))
+            ? item.preview
+            : '';
+          const deezerId = item.id != null ? String(item.id).replace(/\D/g, '').slice(0, 15) : '';
           return {
             trackName,
             artistName,
             albumName,
             releaseYear: '',
             label: `${trackName} — ${artistName}`,
-            artworkUrl
+            artworkUrl,
+            deezerId,
+            previewUrl
           };
         });
       if (dzResults.length > 0) {
@@ -1163,12 +1169,80 @@ authRouter.get('/music-search', requireAuth, async (c) => {
         label: `${String(item.trackName).slice(0, 80)} — ${String(item.artistName).slice(0, 60)}`,
         artworkUrl: typeof item.artworkUrl100 === 'string'
           ? item.artworkUrl100
-          : (typeof item.artworkUrl60 === 'string' ? item.artworkUrl60 : '')
+          : (typeof item.artworkUrl60 === 'string' ? item.artworkUrl60 : ''),
+        deezerId: '',
+        previewUrl: (typeof item.previewUrl === 'string' && item.previewUrl.startsWith('https://'))
+          ? item.previewUrl
+          : ''
       }));
     return c.json({ results });
   } catch (err) {
     return c.json({ results: [] });
   }
+});
+
+authRouter.get('/music-preview', requireAuth, async (c) => {
+  const deezerId = String(c.req.query('deezerId') || '').trim().replace(/\D/g, '').slice(0, 15);
+  const q = String(c.req.query('q') || '').trim().slice(0, 100);
+  if (!deezerId && q.length < 2) {
+    return c.json({ previewUrl: '' });
+  }
+  const makeFetchOpts = () => {
+    const opts = {
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'CommunityHub/1.0'
+      }
+    };
+    if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
+      opts.signal = AbortSignal.timeout(5000);
+    }
+    return opts;
+  };
+
+  if (deezerId) {
+    try {
+      const dzResp = await fetch(`https://api.deezer.com/track/${encodeURIComponent(deezerId)}`, makeFetchOpts());
+      if (dzResp.ok) {
+        const dzTrack = JSON.parse(await dzResp.text());
+        if (dzTrack && typeof dzTrack.preview === 'string' && dzTrack.preview.startsWith('https://')) {
+          return c.json({ previewUrl: dzTrack.preview });
+        }
+      }
+    } catch (err) {
+      // Fall through to search fallback
+    }
+  }
+
+  if (q.length >= 2) {
+    try {
+      const dzResp = await fetch(`https://api.deezer.com/search?q=${encodeURIComponent(q)}&limit=1`, makeFetchOpts());
+      if (dzResp.ok) {
+        const dzData = JSON.parse(await dzResp.text());
+        const first = Array.isArray(dzData && dzData.data) ? dzData.data[0] : null;
+        if (first && typeof first.preview === 'string' && first.preview.startsWith('https://')) {
+          return c.json({ previewUrl: first.preview });
+        }
+      }
+    } catch (err) {
+      // Fall through to iTunes
+    }
+
+    try {
+      const itResp = await fetch(`https://itunes.apple.com/search?media=music&entity=song&limit=1&term=${encodeURIComponent(q)}`, makeFetchOpts());
+      if (itResp.ok) {
+        const itData = JSON.parse(await itResp.text());
+        const first = Array.isArray(itData && itData.results) ? itData.results[0] : null;
+        if (first && typeof first.previewUrl === 'string' && first.previewUrl.startsWith('https://')) {
+          return c.json({ previewUrl: first.previewUrl });
+        }
+      }
+    } catch (err) {
+      // Ignore
+    }
+  }
+
+  return c.json({ previewUrl: '' });
 });
 
 authRouter.get('/consent', requireAuth, async (c) => {
