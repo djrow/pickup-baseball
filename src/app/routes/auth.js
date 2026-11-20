@@ -43,6 +43,7 @@ import { sendAuthCode, sendErasureVerificationCode } from '../mailer.js';
 import { ERROR_CODES, jsonError, logEvent } from '../errors.js';
 import { executeTwoTierErasure } from '../erasure.js';
 import { purgePublicEdgeCache } from '../edge-cache.js';
+import { isGDriveConfigured, uploadGDriveBytes, streamGDriveFile } from '../gdrive.js';
 import {
   CONSENT_TYPES,
   getConsentPolicyMetadata,
@@ -1357,6 +1358,97 @@ authRouter.get('/youtube-search', requireAuth, async (c) => {
     return c.json({ results });
   } catch (err) {
     return c.json({ results: [] });
+  }
+});
+
+const ALLOWED_WALKUP_AUDIO_MIMES = new Set([
+  'audio/mpeg',
+  'audio/mp3',
+  'audio/mp4',
+  'audio/x-m4a',
+  'audio/aac',
+  'audio/wav',
+  'audio/x-wav',
+  'audio/ogg',
+  'audio/webm'
+]);
+const MAX_WALKUP_CLIP_BYTES = 2 * 1024 * 1024; // 2 MB
+
+authRouter.post('/walkup-clip', requireAuth, async (c) => {
+  const user = c.get('user');
+  const db = c.env && (c.env.BASEBALL_DB || c.env.DB);
+  if (!db) return c.json({ error: 'Database unavailable.' }, 500);
+
+  const rl = await checkRateLimit(db, `walkup_clip:${user.id}`, 10, 600, c.env);
+  if (!rl.allowed) {
+    return c.json({ error: 'Too many clip uploads. Please wait a few minutes.' }, 429);
+  }
+  if (!isGDriveConfigured(c.env)) {
+    return c.json({ error: 'Google Drive storage is not configured for custom audio clips.' }, 503);
+  }
+
+  try {
+    const formData = await c.req.formData();
+    const file = formData.get('audio');
+    if (!file || typeof file === 'string' || typeof file.arrayBuffer !== 'function') {
+      return c.json({ error: 'No audio file uploaded.' }, 400);
+    }
+    const mimeType = String(file.type || '').toLowerCase().split(';')[0].trim();
+    if (!ALLOWED_WALKUP_AUDIO_MIMES.has(mimeType)) {
+      return c.json({ error: 'Unsupported audio format. Please upload MP3, M4A, WAV, OGG, or WebM.' }, 400);
+    }
+    if (file.size > MAX_WALKUP_CLIP_BYTES) {
+      return c.json({ error: 'Audio clip must be 2 MB or smaller.' }, 400);
+    }
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    if (!bytes.length || bytes.length > MAX_WALKUP_CLIP_BYTES) {
+      return c.json({ error: 'Audio clip is empty or exceeds 2 MB.' }, 400);
+    }
+
+    const extMap = {
+      'audio/mpeg': 'mp3',
+      'audio/mp3': 'mp3',
+      'audio/mp4': 'm4a',
+      'audio/x-m4a': 'm4a',
+      'audio/aac': 'aac',
+      'audio/wav': 'wav',
+      'audio/x-wav': 'wav',
+      'audio/ogg': 'ogg',
+      'audio/webm': 'webm'
+    };
+    const ext = extMap[mimeType] || 'mp3';
+    const fileName = `walkup-u${user.id}-${Date.now()}.${ext}`;
+    const fileId = await uploadGDriveBytes(c.env, {
+      fileName,
+      mimeType,
+      bytes
+    });
+    if (!fileId) {
+      return c.json({ error: 'Failed to save audio clip to Google Drive.' }, 500);
+    }
+    return c.json({
+      success: true,
+      fileId,
+      clipUrl: `/api/auth/walkup-clip/${encodeURIComponent(fileId)}`
+    });
+  } catch (err) {
+    console.error('[Auth] Error uploading walk-up clip:', err);
+    return c.json({ error: 'Failed to upload audio clip.' }, 500);
+  }
+});
+
+authRouter.get('/walkup-clip/:fileId', requireAuth, async (c) => {
+  const fileId = String(c.req.param('fileId') || '').trim();
+  if (!/^[A-Za-z0-9_-]{8,128}$/.test(fileId)) {
+    return c.json({ error: 'Invalid clip ID.' }, 400);
+  }
+  if (!isGDriveConfigured(c.env)) {
+    return c.json({ error: 'Google Drive storage is not configured.' }, 503);
+  }
+  try {
+    return await streamGDriveFile(c.env, fileId, c.req.header('range') || '');
+  } catch (err) {
+    return c.json({ error: 'Audio clip not found.' }, 404);
   }
 });
 

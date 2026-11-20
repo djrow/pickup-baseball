@@ -184,6 +184,9 @@
     }
   }
 
+  var DJ_CLIP_DURATION = 10;
+  var DJ_DEEZER_MAX_START = 30 - DJ_CLIP_DURATION;
+
   /** @type {{ lineup: Array<any>, activeSlot: number | null, isPlaying: boolean, audio: HTMLAudioElement | null, stopTimer: any, previewCache: Record<string, string> }} */
   var djState = {
     lineup: [],
@@ -219,12 +222,13 @@
             deezerId: obj.deezerId ? String(obj.deezerId).replace(/\D/g, '').slice(0, 15) : '',
             previewUrl: typeof obj.previewUrl === 'string' && obj.previewUrl.indexOf('https://') === 0 ? obj.previewUrl : '',
             clipStart: Math.round(rawStart),
-            youtubeId: typeof obj.youtubeId === 'string' && /^[A-Za-z0-9_-]{11}$/.test(obj.youtubeId) ? obj.youtubeId : ''
+            youtubeId: typeof obj.youtubeId === 'string' && /^[A-Za-z0-9_-]{11}$/.test(obj.youtubeId) ? obj.youtubeId : '',
+            clipUrl: typeof obj.clipUrl === 'string' && obj.clipUrl.indexOf('/api/auth/walkup-clip/') === 0 ? obj.clipUrl : ''
           };
         }
       } catch (e) { /* fall through */ }
     }
-    return { label: s, trackName: s, artistName: '', deezerId: '', previewUrl: '', clipStart: 0, youtubeId: '' };
+    return { label: s, trackName: s, artistName: '', deezerId: '', previewUrl: '', clipStart: 0, youtubeId: '', clipUrl: '' };
   }
 
   function syncDjBarUi(statusOverride) {
@@ -255,9 +259,11 @@
         if (!entry) entry = djState.lineup[0];
         if (entry) {
           var startSec = entry.song.clipStart || 0;
-          var srcTag = (startSec > 25 && entry.song.youtubeId) ? 'YT ' : '';
+          var clipLabel = entry.song.clipUrl
+            ? ('Custom ' + DJ_CLIP_DURATION + 's')
+            : (((startSec > DJ_DEEZER_MAX_START && entry.song.youtubeId) ? 'YT ' : '') + formatDjSeconds(startSec) + '–' + formatDjSeconds(startSec + DJ_CLIP_DURATION));
           nowEl.textContent = (djState.isPlaying ? '♪ ' : '') + '#' + entry.slot + ' ' + entry.playerName + ' — ' +
-            (entry.song.trackName || entry.song.label) + ' (' + srcTag + formatDjSeconds(startSec) + '–' + formatDjSeconds(startSec + 5) + ')';
+            (entry.song.trackName || entry.song.label) + ' (' + clipLabel + ')';
         }
       }
     }
@@ -343,16 +349,56 @@
 
     var clipStart = entry.song.clipStart || 0;
 
-    // Past 25s: start YouTube player at the selected timestamp right in the Clubhouse player
-    if (clipStart > 25) {
+    // Priority 1: Custom uploaded Drive audio clip
+    if (entry.song.clipUrl) {
+      if (!djState.audio) {
+        djState.audio = new Audio();
+        djState.audio.preload = 'auto';
+      }
+      var playCustomClip = function () {
+        if (!djState.audio || !djState.isPlaying || djState.activeSlot !== entry.slot) return;
+        try { djState.audio.currentTime = 0; } catch (e) { /* ignore */ }
+        var p = djState.audio.play();
+        syncDjBarUi();
+        if (djState.stopTimer) clearTimeout(djState.stopTimer);
+        djState.stopTimer = setTimeout(function () {
+          stopAtBatDj();
+        }, DJ_CLIP_DURATION * 1000);
+        if (p && typeof p.catch === 'function') {
+          p.catch(function () {
+            stopAtBatDj();
+            syncDjBarUi('Playback blocked by browser autoplay policy.');
+          });
+        }
+      };
+      djState.audio.onended = function () { stopAtBatDj(); };
+      djState.audio.onerror = function () {
+        stopAtBatDj();
+        syncDjBarUi('Unable to load uploaded clip.');
+      };
+      if (djState.audio.src.indexOf(entry.song.clipUrl) === -1) {
+        djState.audio.src = entry.song.clipUrl;
+        djState.audio.onloadedmetadata = function () {
+          if (djState.audio) djState.audio.onloadedmetadata = null;
+          playCustomClip();
+        };
+        djState.audio.load();
+      } else {
+        playCustomClip();
+      }
+      return;
+    }
+
+    // Priority 2: Past 20s -> start YouTube player at the selected timestamp right in the Clubhouse player
+    if (clipStart > DJ_DEEZER_MAX_START) {
       if (!entry.song.youtubeId) {
         djState.isPlaying = false;
-        syncDjBarUi('#' + entry.slot + ' starts at ' + formatDjSeconds(clipStart) + ' — add a YouTube link on Profile');
+        syncDjBarUi('#' + entry.slot + ' starts at ' + formatDjSeconds(clipStart) + ' — pick a YouTube match on Profile');
         return;
       }
       var ytWrap = el('ch-bp-dj-yt-wrap');
       if (ytWrap) {
-        var ytEnd = clipStart + 5;
+        var ytEnd = clipStart + DJ_CLIP_DURATION;
         ytWrap.innerHTML = '';
         var iframe = document.createElement('iframe');
         iframe.src = 'https://www.youtube-nocookie.com/embed/' + encodeURIComponent(entry.song.youtubeId) + '?start=' + clipStart + '&end=' + ytEnd + '&autoplay=1&rel=0';
@@ -365,7 +411,7 @@
         syncDjBarUi();
         djState.stopTimer = setTimeout(function () {
           stopAtBatDj();
-        }, 10000);
+        }, (DJ_CLIP_DURATION + 5) * 1000);
         return;
       }
     }
@@ -411,7 +457,7 @@
         if (djState.stopTimer) clearTimeout(djState.stopTimer);
         djState.stopTimer = setTimeout(function () {
           stopAtBatDj();
-        }, 5000);
+        }, DJ_CLIP_DURATION * 1000);
         if (p && typeof p.catch === 'function') {
           p.catch(function () {
             stopAtBatDj();
