@@ -33,7 +33,9 @@
     { id: 'aurora-cycle', name: 'Aurora Drift', market: 'Smooth Hue-Cycling Background', primaryColor: '#4338ca', secondaryColor: '#0d9488' },
     { id: 'sunset-drift', name: 'Sunset Drift', market: 'Hue Cycle: Rose · Orange · Gold · Magenta · Violet', primaryColor: '#c2185b', secondaryColor: '#e65100' },
     { id: 'ocean-tide', name: 'Ocean Tide', market: 'Hue Cycle: Blue · Teal · Seafoam · Indigo (slow)', primaryColor: '#1565c0', secondaryColor: '#00897b' },
-    { id: 'neon-pulse', name: 'Neon Pulse', market: 'Hue Cycle: Full Spectrum (fast)', primaryColor: '#8e24aa', secondaryColor: '#00bfa5' }
+    { id: 'neon-pulse', name: 'Neon Pulse', market: 'Hue Cycle: Full Spectrum (fast)', primaryColor: '#8e24aa', secondaryColor: '#00bfa5' },
+    { id: 'graphite', name: 'Graphite', market: 'Soft Neutral Grayscale', primaryColor: '#4a4a4a', secondaryColor: '#9e9e9e' },
+    { id: 'mono-contrast', name: 'Monochrome Contrast', market: 'High-Contrast Black & White', primaryColor: '#000000', secondaryColor: '#ffffff' }
   ];
 
   API.COLOR_THEMES = COLOR_THEMES;
