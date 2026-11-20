@@ -1282,34 +1282,79 @@ authRouter.get('/youtube-search', requireAuth, async (c) => {
     return c.json({ results: [] });
   }
 
-  const fetchOpts = {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-      'Accept-Language': 'en-US,en;q=0.9'
+  const makeSignal = () => (
+    typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
+      ? AbortSignal.timeout(6000)
+      : undefined
+  );
+
+  let ytData = null;
+
+  // Primary: YouTube InnerTube JSON API (avoids HTML consent walls on Cloudflare Workers)
+  try {
+    const itResp = await fetch('https://www.youtube.com/youtubei/v1/search?prettyPrint=false', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Origin': 'https://www.youtube.com',
+        'Referer': 'https://www.youtube.com/'
+      },
+      body: JSON.stringify({
+        context: {
+          client: {
+            clientName: 'WEB',
+            clientVersion: '2.20240726.00.00',
+            hl: 'en',
+            gl: 'US'
+          }
+        },
+        query: q
+      }),
+      signal: makeSignal()
+    });
+    if (itResp.ok) {
+      ytData = JSON.parse(await itResp.text());
     }
-  };
-  if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
-    fetchOpts.signal = AbortSignal.timeout(6000);
+  } catch (err) {
+    // Fall through to HTML search fallback
+  }
+
+  // Fallback: YouTube HTML search page
+  if (!ytData) {
+    try {
+      const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}&hl=en`;
+      const resp = await fetch(searchUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Cookie': 'CONSENT=YES+cb.20210328-17-p0.en+FX+999'
+        },
+        signal: makeSignal()
+      });
+      if (resp.ok) {
+        const html = await resp.text();
+        const marker = 'var ytInitialData = ';
+        const startIdx = html.indexOf(marker);
+        if (startIdx !== -1) {
+          const jsonStart = startIdx + marker.length;
+          const endIdx = html.indexOf(';</script>', jsonStart);
+          if (endIdx !== -1) {
+            ytData = JSON.parse(html.slice(jsonStart, endIdx));
+          }
+        }
+      }
+    } catch (err) {
+      return c.json({ results: [] });
+    }
+  }
+
+  if (!ytData) {
+    return c.json({ results: [] });
   }
 
   try {
-    const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}&hl=en`;
-    const resp = await fetch(searchUrl, fetchOpts);
-    if (!resp.ok) {
-      return c.json({ results: [] });
-    }
-    const html = await resp.text();
-    const marker = 'var ytInitialData = ';
-    const startIdx = html.indexOf(marker);
-    if (startIdx === -1) {
-      return c.json({ results: [] });
-    }
-    const jsonStart = startIdx + marker.length;
-    const endIdx = html.indexOf(';</script>', jsonStart);
-    if (endIdx === -1) {
-      return c.json({ results: [] });
-    }
-    const ytData = JSON.parse(html.slice(jsonStart, endIdx));
     const renderers = [];
     collectYoutubeVideoRenderers(ytData, renderers);
 
