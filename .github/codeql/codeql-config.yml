@@ -1,0 +1,8 @@
+name: pickup-baseball CodeQL config
+# Analyse shipped app code only; skip tests, tooling, docs, locale bundles and the cron worker.
+paths-ignore:
+  - tests
+  - scripts
+  - docs
+  - public/i18n
+  - workers

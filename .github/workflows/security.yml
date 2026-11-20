@@ -124,13 +124,36 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # On pushes, only analyse when app source changed. PRs and the weekly schedule always run.
+      - name: Decide whether CodeQL needs to run
+        id: gate
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          run=true
+          if [ "$EVENT" = "push" ] && [ -n "$BEFORE" ] && ! echo "$BEFORE" | grep -qE '^0+$'; then
+            if changed=$(git diff --name-only "$BEFORE" "$GITHUB_SHA" 2>/dev/null); then
+              if ! echo "$changed" | grep -qE '^(src|functions|public/js)/|^public/sw\.js$|^package(-lock)?\.json$'; then
+                run=false
+              fi
+            fi
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          echo "CodeQL run: $run"
 
       - name: Initialize CodeQL
+        if: steps.gate.outputs.run == 'true'
         uses: github/codeql-action/init@v4
         with:
           languages: javascript-typescript
+          config-file: ./.github/codeql/codeql-config.yml
 
       - name: Perform CodeQL Analysis
+        if: steps.gate.outputs.run == 'true'
         uses: github/codeql-action/analyze@v4
 
   deploy:
