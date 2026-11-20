@@ -524,7 +524,7 @@
         <p style="margin: 0; font-size: 0.81rem; color: var(--text-muted); line-height: 1.4;">
           This Sunday date is prospective and not yet officially scheduled. Only near-future games with confirmed rosters are guaranteed. Organizers confirm field availability and publish official games as dates approach.
         </p>
-        <div class="drawer-5day-weather-section" id="drawer-5day-weather-${dateKey}" style="display: none;"></div>
+        <div class="drawer-5day-weather-section" id="drawer-5day-weather-${safeDateKey}" style="display: none;"></div>
       `;
     }
 
