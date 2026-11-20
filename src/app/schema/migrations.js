@@ -402,6 +402,29 @@ export const BASEBALL_MIGRATIONS = [
     columns: [
       { table: 'batting_practice_signups', column: 'walkup_song', sql: 'ALTER TABLE batting_practice_signups ADD COLUMN walkup_song TEXT DEFAULT NULL' }
     ]
+  },
+  {
+    version: 8,
+    name: 'add-push-mention-prefs',
+    columns: [
+      { table: 'push_subscriptions', column: 'notify_mentions', sql: 'ALTER TABLE push_subscriptions ADD COLUMN notify_mentions INTEGER NOT NULL DEFAULT 0' },
+      { table: 'push_subscriptions', column: 'notify_everyone', sql: 'ALTER TABLE push_subscriptions ADD COLUMN notify_everyone INTEGER NOT NULL DEFAULT 0' }
+    ]
+  },
+  {
+    version: 9,
+    name: 'add-push-extended-prefs',
+    columns: [
+      { table: 'push_subscriptions', column: 'notify_dms', sql: 'ALTER TABLE push_subscriptions ADD COLUMN notify_dms INTEGER NOT NULL DEFAULT 0' },
+      { table: 'push_subscriptions', column: 'notify_replies', sql: 'ALTER TABLE push_subscriptions ADD COLUMN notify_replies INTEGER NOT NULL DEFAULT 0' },
+      { table: 'push_subscriptions', column: 'notify_reactions', sql: 'ALTER TABLE push_subscriptions ADD COLUMN notify_reactions INTEGER NOT NULL DEFAULT 0' },
+      { table: 'push_subscriptions', column: 'notify_moderation', sql: 'ALTER TABLE push_subscriptions ADD COLUMN notify_moderation INTEGER NOT NULL DEFAULT 0' },
+      { table: 'push_subscriptions', column: 'hide_previews', sql: 'ALTER TABLE push_subscriptions ADD COLUMN hide_previews INTEGER NOT NULL DEFAULT 0' },
+      { table: 'push_subscriptions', column: 'quiet_enabled', sql: 'ALTER TABLE push_subscriptions ADD COLUMN quiet_enabled INTEGER NOT NULL DEFAULT 0' },
+      { table: 'push_subscriptions', column: 'quiet_start', sql: 'ALTER TABLE push_subscriptions ADD COLUMN quiet_start TEXT NOT NULL DEFAULT \'22:00\'' },
+      { table: 'push_subscriptions', column: 'quiet_end', sql: 'ALTER TABLE push_subscriptions ADD COLUMN quiet_end TEXT NOT NULL DEFAULT \'07:00\'' },
+      { table: 'push_subscriptions', column: 'quiet_tz', sql: 'ALTER TABLE push_subscriptions ADD COLUMN quiet_tz TEXT NOT NULL DEFAULT \'UTC\'' }
+    ]
   }
 ];
 

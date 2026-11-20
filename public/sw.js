@@ -209,6 +209,7 @@ sw.addEventListener('push', (event) => {
       body: payload.body || '',
       icon: '/icons/icon-192.png',
       badge: '/icons/icon-192.png',
+      tag: payload.tag || undefined,
       data: { url: payload.url || '/' }
     })
   );

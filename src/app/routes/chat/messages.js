@@ -15,6 +15,7 @@ import {
   normalizeMemberRole
 } from '../../security.js';
 import { logEvent } from '../../errors.js';
+import { schedulePush, dispatchMessagePush, dispatchReactionPush, dispatchModerationPush } from '../../push-sender.js';
 import {
   abbreviateMemberNames,
   resolveChannel,
@@ -377,6 +378,17 @@ chatMessagesRouter.post('/channels/:id/messages', requireAuth, async (c) => {
   const createdRow = await chatDb.prepare('SELECT * FROM messages WHERE id = ?').bind(newMsgId).first();
   const [hydrated] = await hydrateMessages(chatDb, [createdRow]);
 
+  const mentionIds = Array.isArray(body.mention_user_ids)
+    ? body.mention_user_ids.map((n) => parseInt(n, 10)).filter((n) => Number.isInteger(n) && n > 0).slice(0, 20)
+    : [];
+  schedulePush(c, () => dispatchMessagePush(c.env, {
+    channel,
+    message: createdRow,
+    author: user,
+    mentionIds,
+    mentionEveryone: body.mention_everyone === true
+  }));
+
   return c.json({
     ...hydrated,
     success: true,
@@ -639,6 +651,10 @@ chatMessagesRouter.post('/messages/:id/reactions', requireAuth, async (c) => {
     ).run();
   }
 
+  if (!existingRx) {
+    schedulePush(c, () => dispatchReactionPush(c.env, { channel, message: existingMsg, actor: user, emoji }));
+  }
+
   const { results: updatedReactions } = await chatDb.prepare(
     'SELECT * FROM message_reactions WHERE message_id = ? AND user_id NOT IN (SELECT user_id FROM clubhouse_opted_out) ORDER BY id ASC'
   ).bind(msgId).all();
@@ -711,6 +727,7 @@ async function hideMessageHandler(c) {
         hidden_reason = ?
     WHERE id = ?
   `).bind(nowIso, user.id, user.name, reason, msgId).run();
+  schedulePush(c, () => dispatchModerationPush(c.env, { kind: 'hidden', actorId: user.id, targetUserId: existing.author_id }));
 
   await chatDb.prepare(`
     INSERT INTO sync_events (channel_id, event_type, target_id, payload_json, created_at)

@@ -268,7 +268,8 @@ function checkSqlQueries() {
     /^whereClause$/,
     /^orderSql$/,
     /^filterSql$/,
-    /^table$/
+    /^table$/,
+    /^pref(Cols|Upserts|Sets)$/ // constant column lists from BOOL_PREFS in routes/push.js
   ];
 
   const suspicious = [];

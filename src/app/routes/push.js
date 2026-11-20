@@ -1,7 +1,7 @@
 /**
  * @fileoverview Opt-In, Configurable Web Push Notifications Router.
- * Manages per-member browser push subscriptions and topic preferences
- * (`notify_rainouts`, `notify_reminders`, `notify_announcements`).
+ * Manages per-member browser push subscriptions and preferences.
+ * Every notification category is OFF by default (explicit opt-in).
  *
  * @module app/routes/push
  */
@@ -11,6 +11,52 @@ import { requireAuth } from '../security.js';
 import { jsonError, ERROR_CODES } from '../errors.js';
 
 export const pushRouter = /** @type {AppHono} */ (new Hono());
+
+const BOOL_PREFS = [
+  'notify_rainouts', 'notify_reminders', 'notify_announcements',
+  'notify_mentions', 'notify_everyone', 'notify_dms', 'notify_replies',
+  'notify_reactions', 'notify_moderation', 'hide_previews', 'quiet_enabled'
+];
+const PREF_COLUMNS = BOOL_PREFS.concat(['quiet_start', 'quiet_end', 'quiet_tz']);
+
+/** @param {any} v @param {string} fallback */
+function cleanTime(v, fallback) {
+  return typeof v === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(v) ? v : fallback;
+}
+
+/** @param {any} v */
+function cleanTz(v) {
+  if (typeof v !== 'string' || v.length > 64) return 'UTC';
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: v });
+    return v;
+  } catch (e) {
+    return 'UTC';
+  }
+}
+
+/** Normalize request body into ordered DB values. @param {any} body */
+function parsePrefs(body) {
+  const b = body && typeof body === 'object' ? body : {};
+  /** @type {Record<string, any>} */
+  const out = {};
+  BOOL_PREFS.forEach((k) => { out[k] = b[k] === true ? 1 : 0; });
+  out.quiet_start = cleanTime(b.quiet_start, '22:00');
+  out.quiet_end = cleanTime(b.quiet_end, '07:00');
+  out.quiet_tz = cleanTz(b.quiet_tz);
+  return out;
+}
+
+/** @param {Record<string, any>|null} row */
+function prefsToJson(row) {
+  /** @type {Record<string, any>} */
+  const out = {};
+  BOOL_PREFS.forEach((k) => { out[k] = row ? Boolean(row[k]) : false; });
+  out.quiet_start = row && row.quiet_start ? row.quiet_start : '22:00';
+  out.quiet_end = row && row.quiet_end ? row.quiet_end : '07:00';
+  out.quiet_tz = row && row.quiet_tz ? row.quiet_tz : 'UTC';
+  return out;
+}
 
 pushRouter.get('/vapid-public-key', (c) => {
   const publicKey = (c.env && c.env.VAPID_PUBLIC_KEY) ? String(c.env.VAPID_PUBLIC_KEY).trim() : '';
@@ -26,17 +72,13 @@ pushRouter.get('/preferences', requireAuth, async (c) => {
   if (!db || !user) return jsonError(c, 500, ERROR_CODES.INTERNAL_ERROR, 'Database unavailable.');
 
   const rows = await db.prepare(
-    'SELECT id, endpoint, notify_rainouts, notify_reminders, notify_announcements, updated_at FROM push_subscriptions WHERE user_id = ? ORDER BY updated_at DESC'
+    'SELECT id, endpoint, ' + PREF_COLUMNS.join(', ') + ', updated_at FROM push_subscriptions WHERE user_id = ? ORDER BY updated_at DESC'
   ).bind(user.id).all();
   const list = (rows && rows.results) ? rows.results : [];
-  const first = list[0] || null;
-  return c.json({
+  return c.json(Object.assign({
     subscribed: list.length > 0,
-    subscriptionCount: list.length,
-    notify_rainouts: first ? Boolean(first.notify_rainouts) : true,
-    notify_reminders: first ? Boolean(first.notify_reminders) : true,
-    notify_announcements: first ? Boolean(first.notify_announcements) : false
-  });
+    subscriptionCount: list.length
+  }, prefsToJson(list[0] || null)));
 });
 
 pushRouter.post('/subscribe', requireAuth, async (c) => {
@@ -60,30 +102,23 @@ pushRouter.post('/subscribe', requireAuth, async (c) => {
     return jsonError(c, 400, ERROR_CODES.VALIDATION_ERROR, 'Valid HTTPS push subscription endpoint and keys are required.');
   }
 
-  const notifyRainouts = body.notify_rainouts === false ? 0 : 1;
-  const notifyReminders = body.notify_reminders === false ? 0 : 1;
-  const notifyAnnouncements = body.notify_announcements === true ? 1 : 0;
+  const prefs = parsePrefs(body);
+  const prefCols = PREF_COLUMNS.join(', ');
+  const placeholders = PREF_COLUMNS.map(() => '?').join(', ');
+  const prefUpserts = PREF_COLUMNS.map((k) => k + ' = excluded.' + k).join(', ');
 
   await db.prepare(
-    `INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, notify_rainouts, notify_reminders, notify_announcements, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, ${prefCols}, updated_at)
+     VALUES (?, ?, ?, ?, ${placeholders}, CURRENT_TIMESTAMP)
      ON CONFLICT(endpoint) DO UPDATE SET
        user_id = excluded.user_id,
        p256dh = excluded.p256dh,
        auth = excluded.auth,
-       notify_rainouts = excluded.notify_rainouts,
-       notify_reminders = excluded.notify_reminders,
-       notify_announcements = excluded.notify_announcements,
+       ${prefUpserts},
        updated_at = CURRENT_TIMESTAMP`
-  ).bind(user.id, endpoint, p256dh, auth, notifyRainouts, notifyReminders, notifyAnnouncements).run();
+  ).bind(user.id, endpoint, p256dh, auth, ...PREF_COLUMNS.map((k) => prefs[k])).run();
 
-  return c.json({
-    ok: true,
-    subscribed: true,
-    notify_rainouts: Boolean(notifyRainouts),
-    notify_reminders: Boolean(notifyReminders),
-    notify_announcements: Boolean(notifyAnnouncements)
-  });
+  return c.json(Object.assign({ ok: true, subscribed: true }, prefsToJson(prefs)));
 });
 
 pushRouter.put('/preferences', requireAuth, async (c) => {
@@ -98,22 +133,13 @@ pushRouter.put('/preferences', requireAuth, async (c) => {
     return jsonError(c, 400, ERROR_CODES.VALIDATION_ERROR, 'Invalid JSON body.');
   }
 
-  const notifyRainouts = body.notify_rainouts === false ? 0 : 1;
-  const notifyReminders = body.notify_reminders === false ? 0 : 1;
-  const notifyAnnouncements = body.notify_announcements === true ? 1 : 0;
-
+  const prefs = parsePrefs(body);
+  const prefSets = PREF_COLUMNS.map((k) => k + ' = ?').join(', ');
   await db.prepare(
-    `UPDATE push_subscriptions
-     SET notify_rainouts = ?, notify_reminders = ?, notify_announcements = ?, updated_at = CURRENT_TIMESTAMP
-     WHERE user_id = ?`
-  ).bind(notifyRainouts, notifyReminders, notifyAnnouncements, user.id).run();
+    `UPDATE push_subscriptions SET ${prefSets}, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?`
+  ).bind(...PREF_COLUMNS.map((k) => prefs[k]), user.id).run();
 
-  return c.json({
-    ok: true,
-    notify_rainouts: Boolean(notifyRainouts),
-    notify_reminders: Boolean(notifyReminders),
-    notify_announcements: Boolean(notifyAnnouncements)
-  });
+  return c.json(Object.assign({ ok: true }, prefsToJson(prefs)));
 });
 
 pushRouter.delete('/subscribe', requireAuth, async (c) => {

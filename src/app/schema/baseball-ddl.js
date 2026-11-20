@@ -250,7 +250,18 @@ export const CREATE_TABLES_SQL = [
     notify_reminders INTEGER NOT NULL DEFAULT 1,
     notify_announcements INTEGER NOT NULL DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    notify_mentions INTEGER NOT NULL DEFAULT 0,
+    notify_everyone INTEGER NOT NULL DEFAULT 0,
+    notify_dms INTEGER NOT NULL DEFAULT 0,
+    notify_replies INTEGER NOT NULL DEFAULT 0,
+    notify_reactions INTEGER NOT NULL DEFAULT 0,
+    notify_moderation INTEGER NOT NULL DEFAULT 0,
+    hide_previews INTEGER NOT NULL DEFAULT 0,
+    quiet_enabled INTEGER NOT NULL DEFAULT 0,
+    quiet_start TEXT NOT NULL DEFAULT '22:00',
+    quiet_end TEXT NOT NULL DEFAULT '07:00',
+    quiet_tz TEXT NOT NULL DEFAULT 'UTC'
   )`,
   `CREATE TABLE IF NOT EXISTS consent_records (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

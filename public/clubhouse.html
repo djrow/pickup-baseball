@@ -69,9 +69,22 @@
             </div>
             <div class="ch-settings-push-status" id="ch-push-status">Checking push support...</div>
             <div class="ch-settings-push-prefs hidden" id="ch-push-prefs">
-              <label><input type="checkbox" id="ch-push-rainouts" checked /> Rainouts</label>
-              <label><input type="checkbox" id="ch-push-reminders" checked /> Reminders</label>
+              <label><input type="checkbox" id="ch-push-rainouts" /> Rainouts</label>
+              <label><input type="checkbox" id="ch-push-reminders" /> Game reminders</label>
               <label><input type="checkbox" id="ch-push-announcements" /> Announcements</label>
+              <label><input type="checkbox" id="ch-push-mentions" /> @Mentions of me</label>
+              <label><input type="checkbox" id="ch-push-everyone" /> @channel / @everyone</label>
+              <label><input type="checkbox" id="ch-push-dms" /> Direct messages</label>
+              <label><input type="checkbox" id="ch-push-replies" /> Replies &amp; threads</label>
+              <label><input type="checkbox" id="ch-push-reactions" /> Reactions to my messages</label>
+              <label><input type="checkbox" id="ch-push-moderation" /> Moderation notices</label>
+              <label><input type="checkbox" id="ch-push-hide-previews" /> Hide message previews</label>
+              <label><input type="checkbox" id="ch-push-quiet" /> Quiet hours</label>
+              <div class="ch-push-quiet-row">
+                <input type="time" id="ch-push-quiet-start" value="22:00" aria-label="Quiet hours start" />
+                <span>to</span>
+                <input type="time" id="ch-push-quiet-end" value="07:00" aria-label="Quiet hours end" />
+              </div>
             </div>
           </div>
           <button type="button" class="ch-user-quick-btn ch-settings-item-btn ch-settings-opt-btn hidden" id="btn-clubhouse-opt-toggle" title="Leave or rejoin Clubhouse">🚪 Leave Clubhouse</button>

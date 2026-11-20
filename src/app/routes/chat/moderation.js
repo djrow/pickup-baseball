@@ -9,6 +9,7 @@
 import { Hono } from 'hono';
 import { requireAuth, requireModerator, rejectIfChatMuted, rejectIfClubhouseOptedOut, checkRateLimit, purgeUserSessionCache } from '../../security.js';
 import { logEvent } from '../../errors.js';
+import { schedulePush, dispatchModerationPush } from '../../push-sender.js';
 import { resolveChannel, canUserAccessChannel, chunkArray, abbreviateMemberNames } from './helpers.js';
 
 export const chatModerationRouter = /** @type {AppHono} */ (new Hono());
@@ -98,6 +99,7 @@ chatModerationRouter.post('/reports', requireAuth, async (c) => {
   `).bind(user.id, user.name, targetType, targetUserId, targetUserName, targetMessageId, channelId, reason).run();
 
   const report = await chatDb.prepare('SELECT * FROM chat_reports WHERE id = ?').bind(insRes.meta.last_row_id).first();
+  schedulePush(c, () => dispatchModerationPush(c.env, { kind: 'report', actorId: user.id }));
   if (report && report.target_user_name) {
     report.target_user_name = abbreviateMemberNames([{ user_id: Number(report.target_user_id), name: String(report.target_user_name) }])[0];
   }

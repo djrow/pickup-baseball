@@ -1187,9 +1187,18 @@
     var statusEl = el('ch-push-status');
     var toggleBtn = el('btn-ch-toggle-push');
     var prefsBox = el('ch-push-prefs');
-    var cbRainouts = el('ch-push-rainouts');
-    var cbReminders = el('ch-push-reminders');
-    var cbAnnouncements = el('ch-push-announcements');
+    var PUSH_BOOLS = {
+      notify_rainouts: 'ch-push-rainouts', notify_reminders: 'ch-push-reminders',
+      notify_announcements: 'ch-push-announcements', notify_mentions: 'ch-push-mentions',
+      notify_everyone: 'ch-push-everyone', notify_dms: 'ch-push-dms',
+      notify_replies: 'ch-push-replies', notify_reactions: 'ch-push-reactions',
+      notify_moderation: 'ch-push-moderation', hide_previews: 'ch-push-hide-previews',
+      quiet_enabled: 'ch-push-quiet'
+    };
+    var quietStart = el('ch-push-quiet-start');
+    var quietEnd = el('ch-push-quiet-end');
+    var pushInputs = [quietStart, quietEnd];
+    Object.keys(PUSH_BOOLS).forEach(function (k) { pushInputs.push(el(PUSH_BOOLS[k])); });
     if (!statusEl || !toggleBtn || !prefsBox) return;
     pushSettingsInitialized = true;
 
@@ -1213,13 +1222,16 @@
     }
 
     function readPrefPayload() {
-      return {
-        notify_rainouts: cbRainouts ? cbRainouts.checked : true,
-        notify_reminders: cbReminders ? cbReminders.checked : true,
-        notify_announcements: cbAnnouncements ? cbAnnouncements.checked : false
-      };
+      var out = {};
+      Object.keys(PUSH_BOOLS).forEach(function (k) {
+        var cb = el(PUSH_BOOLS[k]);
+        out[k] = cb ? cb.checked : false;
+      });
+      out.quiet_start = quietStart && quietStart.value ? quietStart.value : '22:00';
+      out.quiet_end = quietEnd && quietEnd.value ? quietEnd.value : '07:00';
+      try { out.quiet_tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (e) { out.quiet_tz = 'UTC'; }
+      return out;
     }
-
     Promise.all([
       fetch('/api/push/vapid-public-key', { credentials: 'same-origin' }).then(function (r) { return r.json(); }),
       fetch('/api/push/preferences', { credentials: 'same-origin' }).then(function (r) { return r.json(); })
@@ -1228,9 +1240,12 @@
       var prefRes = results[1] || {};
       vapidPublicKey = keyRes.enabled ? keyRes.publicKey : null;
       isSubscribed = Boolean(prefRes.subscribed);
-      if (cbRainouts && typeof prefRes.notify_rainouts === 'boolean') cbRainouts.checked = prefRes.notify_rainouts;
-      if (cbReminders && typeof prefRes.notify_reminders === 'boolean') cbReminders.checked = prefRes.notify_reminders;
-      if (cbAnnouncements && typeof prefRes.notify_announcements === 'boolean') cbAnnouncements.checked = prefRes.notify_announcements;
+      Object.keys(PUSH_BOOLS).forEach(function (k) {
+        var cb = el(PUSH_BOOLS[k]);
+        if (cb && typeof prefRes[k] === 'boolean') cb.checked = prefRes[k];
+      });
+      if (quietStart && prefRes.quiet_start) quietStart.value = prefRes.quiet_start;
+      if (quietEnd && prefRes.quiet_end) quietEnd.value = prefRes.quiet_end;
       syncPushUi();
     }).catch(function () {
       statusEl.textContent = 'Unable to load push settings.';
@@ -1289,7 +1304,7 @@
       });
     });
 
-    [cbRainouts, cbReminders, cbAnnouncements].forEach(function (cb) {
+    pushInputs.forEach(function (cb) {
       if (!cb) return;
       cb.addEventListener('change', function () {
         if (!isSubscribed) return;

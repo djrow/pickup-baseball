@@ -148,6 +148,21 @@
   /**
    * Post a new message (automatically encrypts with AES-GCM-256 when channel is E2EE and useClientE2ee is set).
    */
+  // Resolve @Name / @First / @channel tokens to member ids for opt-in push alerts (ids only; no plaintext leaves the client).
+  function extractMentions(text) {
+    var lower = String(text || '').toLowerCase();
+    var ids = [];
+    var list = Array.isArray(state.members) ? state.members : [];
+    for (var i = 0; i < list.length && ids.length < 20; i++) {
+      var full = String(list[i].name || '').trim().toLowerCase();
+      var first = full ? full.split(/\s+/)[0] : '';
+      if ((full && lower.indexOf('@' + full) !== -1) || (first.length >= 2 && new RegExp('@' + first.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![\\w])').test(lower))) {
+        ids.push(Number(list[i].id));
+      }
+    }
+    return { ids: ids, everyone: /@(channel|everyone|here)(?![\w])/.test(lower) };
+  }
+
   function sendMessage(channelId, options) {
     var opts = options || {};
     var text = String(opts.content || '');
@@ -161,6 +176,7 @@
       return Promise.reject(ClubhouseStore.createE2eeError('E2EE_CHANNEL_UNKNOWN', 'Unable to verify channel encryption state before sending message.'));
     }
     var needsE2ee = ClubhouseStore.requiresE2eeChannel(ch);
+    var mentions = extractMentions(text);
 
     var prepPromise;
     if (needsE2ee) {
@@ -197,6 +213,8 @@
         encryption_iv: prepared.encryption_iv,
         key_epoch: prepared.key_epoch,
         parent_message_id: parentMessageId,
+        mention_user_ids: mentions.ids,
+        mention_everyone: mentions.everyone,
         attachment_ids: attachmentIds,
         message_type: needsE2ee ? 'text' : (opts.message_type || opts.messageType || 'text'),
         embed_type: embedType,
