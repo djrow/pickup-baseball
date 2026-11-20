@@ -11,9 +11,38 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  verify:
-    name: Verification Gate
+  static-checks:
+    name: Static Checks (Lint, Typecheck, Security)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies (no native builds)
+        run: npm ci --ignore-scripts
+
+      - name: Run ESLint static checks
+        run: npm run lint
+
+      - name: Run TypeScript JSDoc typechecks
+        run: npm run typecheck
+
+      - name: Run security scan (static, secret, route-guard & policy checks)
+        run: node scripts/security-scan.js --skip-audit
+
+  e2e-tests:
+    name: E2E Verification Suite
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -28,23 +57,46 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run ESLint static checks
-        run: npm run lint
-
-      - name: Run TypeScript JSDoc typechecks
-        run: npm run typecheck
-
       - name: Run full verification suite
         run: npm test
+
+  workerd-tests:
+    name: Cloudflare Workerd Parity
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
 
       - name: Run Cloudflare workerd parity suite
         run: npm run test:workerd
 
+  browser-smoke:
+    name: Headless Browser Smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
       - name: Run headless browser smoke suite
         run: npm run test:browser
-
-      - name: Run security scan (static, secret, route-guard & policy checks)
-        run: npm run security:scan -- --skip-audit
 
   dependency-audit:
     name: Dependency Audit
@@ -58,10 +110,6 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: '22'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
 
       - name: Check npm dependency vulnerabilities (high/critical)
         run: npm audit --audit-level=high
@@ -87,7 +135,7 @@ jobs:
 
   deploy:
     name: Deploy to Cloudflare Pages
-    needs: verify
+    needs: [static-checks, e2e-tests, workerd-tests, browser-smoke]
     if: github.event_name == 'push' && github.ref == 'refs/heads/trunk'
     runs-on: ubuntu-latest
     steps:
@@ -98,10 +146,6 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: '22'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
 
       - name: Deploy to Cloudflare Pages
         env:
@@ -111,4 +155,4 @@ jobs:
             echo "CLOUDFLARE_API_TOKEN secret not set; skipping Cloudflare Pages deploy."
             exit 0
           fi
-          npm run deploy
+          npx --yes wrangler@4 pages deploy public --project-name pickup-baseball --branch trunk --commit-dirty=true
