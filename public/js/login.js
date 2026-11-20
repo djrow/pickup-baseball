@@ -181,6 +181,7 @@
           }
         }
       });
+      requestForm.dataset.loginReady = '1';
     }
 
     if (verifyForm) {

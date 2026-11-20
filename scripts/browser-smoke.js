@@ -779,7 +779,7 @@ async function runMemberLoginAndWaiverJourney(browser, server, tracker, record) 
   try {
     // Login Flow
     await session.navigateAndCheck(`${server.baseUrl}/login.html`, 'login.html (member sign-in)', tracker);
-    await session.waitFor('document.getElementById("step-request-form") && document.getElementById("player-email") && document.getElementById("nav-menu-toggle")');
+    await session.waitFor('document.getElementById("step-request-form") && document.getElementById("step-request-form").dataset.loginReady === "1" && document.getElementById("player-email")');
 
     await fillInput(session, '#player-email', 'player@pickupbaseball.org');
     await clickEl(session, '#send-code-btn');
