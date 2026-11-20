@@ -1098,15 +1098,22 @@ authRouter.get('/music-search', requireAuth, async (c) => {
     return c.json({ results: [] });
   }
   try {
-    const url = `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=song&limit=6`;
-    const resp = await fetch(url, {
-      headers: { Accept: 'application/json' },
-      signal: AbortSignal.timeout(4000)
-    });
+    const url = `https://itunes.apple.com/search?media=music&entity=song&limit=6&term=${encodeURIComponent(q)}`;
+    const fetchOpts = {
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'CommunityHub/1.0'
+      }
+    };
+    if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
+      fetchOpts.signal = AbortSignal.timeout(4000);
+    }
+    const resp = await fetch(url, fetchOpts);
     if (!resp.ok) {
       return c.json({ results: [] });
     }
-    const data = await resp.json();
+    const rawText = await resp.text();
+    const data = JSON.parse(rawText);
     const list = Array.isArray(data && data.results) ? data.results : [];
     const results = list
       .filter((item) => item && item.trackName && item.artistName)

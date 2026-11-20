@@ -34,6 +34,8 @@
     setupDataExport();
     setupAvatarUpload();
     setupProfileForm();
+    setupPushNotifications();
+    setupWalkupSongAutocomplete();
     setupAccountErasure();
     setupLogoutButtons();
   });
@@ -999,13 +1001,16 @@
       }
       timer = setTimeout(function () {
         lastQuery = q;
+        listEl.innerHTML = '<div style="padding:8px 12px;font-size:0.82rem;color:var(--text-muted);">Searching songs...</div>';
+        listEl.style.display = 'block';
         fetch('/api/auth/music-search?q=' + encodeURIComponent(q), { credentials: 'same-origin' })
           .then(function (r) { return r.json(); })
           .then(function (data) {
             if (input.value.trim() !== lastQuery) return;
             var items = (data && Array.isArray(data.results)) ? data.results : [];
             if (!items.length) {
-              hideList();
+              listEl.innerHTML = '<div style="padding:8px 12px;font-size:0.82rem;color:var(--text-muted);">No matching songs found. You can still type and save any song.</div>';
+              listEl.style.display = 'block';
               return;
             }
             listEl.innerHTML = '';
@@ -1065,8 +1070,4 @@
       }
     });
   }
-
-  setupHistoryPanel();
-  setupPushNotifications();
-  setupWalkupSongAutocomplete();
 })();
