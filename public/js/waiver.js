@@ -314,17 +314,21 @@
     try {
       var urlParams = new URLSearchParams(window.location.search);
       var redirectParam = urlParams.get('redirect');
-      if (redirectParam && redirectParam.startsWith('/') && !redirectParam.startsWith('//')) {
-        var backLink = document.querySelector('a[data-i18n="waiver.back_to_games"]');
-        if (backLink) {
-          backLink.setAttribute('href', redirectParam);
-          if (redirectParam.indexOf('event.html') !== -1) {
-            backLink.textContent = '← Back to Game Details';
+      if (redirectParam && /^\/(?!\/|\\)[a-zA-Z0-9._/?=&%-]*$/.test(redirectParam)) {
+        var parsedRedirect = new URL(redirectParam, window.location.origin);
+        if (parsedRedirect.origin === window.location.origin) {
+          var safeRedirect = parsedRedirect.pathname + parsedRedirect.search + parsedRedirect.hash;
+          var backLink = document.querySelector('a[data-i18n="waiver.back_to_games"]');
+          if (backLink) {
+            backLink.setAttribute('href', safeRedirect);
+            if (safeRedirect.indexOf('event.html') !== -1) {
+              backLink.textContent = '← Back to Game Details';
+            }
           }
-        }
-        var loginCta = document.querySelector('a[data-i18n="waiver.sign_cta"]');
-        if (loginCta) {
-          loginCta.setAttribute('href', '/login.html?redirect=' + encodeURIComponent('/waiver.html?redirect=' + redirectParam));
+          var loginCta = document.querySelector('a[data-i18n="waiver.sign_cta"]');
+          if (loginCta) {
+            loginCta.setAttribute('href', '/login.html?redirect=' + encodeURIComponent('/waiver.html?redirect=' + safeRedirect));
+          }
         }
       }
     } catch (e) {

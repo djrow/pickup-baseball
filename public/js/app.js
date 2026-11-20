@@ -518,7 +518,7 @@
         <div class="drawer-meta">
           <span class="drawer-meta-item"><span>📅</span> <strong>${API.escapeHtml(dateFormatted)} (Target: 12:00 PM)</strong></span>
           <span class="drawer-meta-item"><span>📍</span> <strong>Location: TBA</strong></span>
-          <span class="drawer-meta-item drawer-weather-meta" id="drawer-weather-${dateKey}" style="display: none;"></span>
+          <span class="drawer-meta-item drawer-weather-meta" id="drawer-weather-${safeDateKey}" style="display: none;"></span>
           <span class="drawer-meta-item" style="color: var(--text-muted);"><span>ℹ️</span> <em>RSVP not yet open</em></span>
         </div>
         <p style="margin: 0; font-size: 0.81rem; color: var(--text-muted); line-height: 1.4;">

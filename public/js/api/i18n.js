@@ -903,7 +903,12 @@
 
     target.querySelectorAll('[data-i18n-html]').forEach(function (el) {
       var key = el.getAttribute('data-i18n-html');
-      if (key) el.innerHTML = self.t(key, defaultVars);
+      if (key && /^[a-z0-9_.-]+$/i.test(key)) {
+        var htmlVal = self.t(key, defaultVars);
+        if (typeof htmlVal === 'string' && htmlVal !== key) {
+          el.innerHTML = htmlVal;
+        }
+      }
     });
 
     target.querySelectorAll('[data-i18n-placeholder]').forEach(function (el) {

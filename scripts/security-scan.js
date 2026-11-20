@@ -76,7 +76,7 @@ function checkHtmlAndCspHeaders() {
   for (const file of htmlFiles) {
     const content = fs.readFileSync(file, 'utf8');
     // Match <script ...> without src= attribute and with non-whitespace body
-    const scriptTags = content.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi);
+    const scriptTags = content.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\b[^>]*>/gi);
     for (const m of scriptTags) {
       const attrs = m[1] || '';
       const body = (m[2] || '').trim();
@@ -137,7 +137,13 @@ function checkHtmlAndCspHeaders() {
     // Heading hierarchy: single h1 and no skipping
     const headings = [];
     for (const m of content.matchAll(/<(h[1-6])\b[^>]*>([\s\S]*?)<\/\1>/gi)) {
-      headings.push({ tag: m[1].toLowerCase(), text: m[2].replace(/<[^>]*>/g, '').trim().slice(0, 30) });
+      let headingText = m[2];
+      let prevHeadingText;
+      do {
+        prevHeadingText = headingText;
+        headingText = headingText.replace(/<[^>]*>/g, '');
+      } while (headingText !== prevHeadingText);
+      headings.push({ tag: m[1].toLowerCase(), text: headingText.replace(/[<>]/g, '').trim().slice(0, 30) });
     }
     const h1Count = headings.filter((h) => h.tag === 'h1').length;
     if (h1Count !== 1) {
