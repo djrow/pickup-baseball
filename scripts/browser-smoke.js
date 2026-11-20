@@ -1231,6 +1231,8 @@ async function main() {
   const procState = { exited: false, code: null, signal: null, stderr: '' };
 
   try {
+    const chromeEnv = { ...process.env };
+    delete chromeEnv.DBUS_SESSION_BUS_ADDRESS;
     browserProc = spawn(exe, [
       '--headless=new',
       `--remote-debugging-port=${cdpPort}`,
@@ -1240,12 +1242,15 @@ async function main() {
       '--no-first-run',
       '--no-default-browser-check',
       '--disable-gpu',
+      '--disable-software-rasterizer',
       '--disable-dev-shm-usage',
       '--disable-setuid-sandbox',
       '--no-sandbox',
+      '--disable-extensions',
       '--disable-background-networking',
+      '--mute-audio',
       'about:blank'
-    ], { stdio: ['ignore', 'ignore', 'pipe'] });
+    ], { stdio: ['ignore', 'ignore', 'pipe'], env: chromeEnv });
 
     if (browserProc.stderr) {
       browserProc.stderr.on('data', (chunk) => {
@@ -1260,7 +1265,7 @@ async function main() {
       procState.signal = signal;
     });
 
-    const browserWsUrl = await waitForBrowserWsUrl(cdpPort, procState, 20000);
+    const browserWsUrl = await waitForBrowserWsUrl(cdpPort, procState, 45000);
     browser = new CdpBrowser(browserWsUrl);
     await browser.connect();
 
