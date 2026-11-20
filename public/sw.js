@@ -1,5 +1,5 @@
 // Service Worker for Pickup Baseball Foundation PWA
-const CACHE_NAME = 'pbf-cache-v179';
+const CACHE_NAME = 'pbf-cache-v180';
 /** @type {ServiceWorkerGlobalScope} */
 const sw = /** @type {any} */ (self);
 

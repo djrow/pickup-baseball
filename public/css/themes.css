@@ -242,3 +242,159 @@
     animation: none !important;
   }
 }
+
+/* ===== Hue-cycle palette variations (generated) ===== */
+/* sunset-drift: 5 keyframe hues, 36s */
+@keyframes pbf-sunset-drift-light {
+  0%, 100% { background-color: hsl(350 70% 93%); }
+  20.000% { background-color: hsl(22 70% 93%); }
+  40.000% { background-color: hsl(42 70% 93%); }
+  60.000% { background-color: hsl(320 70% 93%); }
+  80.000% { background-color: hsl(275 70% 93%); }
+}
+@keyframes pbf-sunset-drift-light-panel {
+  0%, 100% { background-color: hsl(350 70% 88%); }
+  20.000% { background-color: hsl(22 70% 88%); }
+  40.000% { background-color: hsl(42 70% 88%); }
+  60.000% { background-color: hsl(320 70% 88%); }
+  80.000% { background-color: hsl(275 70% 88%); }
+}
+@keyframes pbf-sunset-drift-dark {
+  0%, 100% { background-color: hsl(350 39% 11%); }
+  20.000% { background-color: hsl(22 39% 11%); }
+  40.000% { background-color: hsl(42 39% 11%); }
+  60.000% { background-color: hsl(320 39% 11%); }
+  80.000% { background-color: hsl(275 39% 11%); }
+}
+@keyframes pbf-sunset-drift-dark-panel {
+  0%, 100% { background-color: hsl(350 39% 8%); }
+  20.000% { background-color: hsl(22 39% 8%); }
+  40.000% { background-color: hsl(42 39% 8%); }
+  60.000% { background-color: hsl(320 39% 8%); }
+  80.000% { background-color: hsl(275 39% 8%); }
+}
+[data-color-theme="sunset-drift"] {
+  --hero-bg: linear-gradient(140deg, hsl(350 60% 10%) 0%, hsl(346 50% 22%) 55%, hsl(330 55% 24%) 100%); --hero-glow: radial-gradient(circle at 50% 0%, hsl(346 90% 60% / 0.3) 0%, transparent 62%); --hero-border: hsl(346 70% 40%); --hero-subtitle-bg: hsl(346 70% 40% / 0.32); --hero-subtitle-text: #ffffff;
+  --as-green: hsl(346 55% 22%); --as-green-hover: hsl(346 55% 15%); --as-green-light: hsl(346 50% 32%); --as-green-subtle: hsl(346 60% 94%); --as-green-border: hsl(346 50% 80%); --giants-orange: hsl(346 75% 38%); --giants-orange-hover: hsl(346 75% 30%); --giants-orange-light: hsl(346 75% 38% / 0.11); --giants-orange-border: hsl(346 75% 38% / 0.3); --giants-orange-glow: hsl(346 75% 38% / 0.22);
+  --on-primary: #ffffff; --on-secondary: #ffffff;
+  --bg-page: hsl(350 70% 93%); --bg-card: #ffffff; --bg-subtle: hsl(350 70% 88%); --bg-input: hsl(350 70% 88%); --border: rgba(15, 23, 42, 0.14); --text-main: #0f172a; --text-muted: #3b475a;
+  --ch-border: rgba(15, 23, 42, 0.14); --ch-bg-surface: rgba(15, 23, 42, 0.045); --ch-bg-hover: rgba(15, 23, 42, 0.075);
+}
+[data-color-theme="sunset-drift"][data-theme="dark"] {
+  --hero-bg: linear-gradient(140deg, hsl(350 50% 6%) 0%, hsl(346 40% 14%) 55%, hsl(330 45% 15%) 100%); --hero-glow: radial-gradient(circle at 50% 0%, hsl(346 90% 70% / 0.35) 0%, transparent 62%); --hero-border: hsl(346 85% 72%); --hero-subtitle-bg: hsl(346 85% 72% / 0.22); --hero-subtitle-text: #ffffff;
+  --as-green: hsl(330 80% 72%); --as-green-hover: hsl(330 80% 82%); --as-green-light: hsl(330 70% 28%); --as-green-subtle: hsl(330 80% 72% / 0.14); --as-green-border: hsl(330 80% 72% / 0.32); --giants-orange: hsl(346 90% 72%); --giants-orange-hover: hsl(346 90% 80%); --giants-orange-light: hsl(346 90% 72% / 0.16); --giants-orange-border: hsl(346 90% 72% / 0.4); --giants-orange-glow: hsl(346 90% 72% / 0.35);
+  --on-primary: #07111a; --on-secondary: #06211a;
+  --bg-page: hsl(350 39% 11%); --bg-card: hsl(350 39% 13%); --bg-subtle: hsl(350 39% 17%); --bg-input: hsl(350 39% 8%); --border: rgba(255, 255, 255, 0.12); --text-main: #f6f7ff; --text-muted: #a9b4c8;
+  --ch-border: rgba(255, 255, 255, 0.12); --ch-bg-surface: rgba(255, 255, 255, 0.05); --ch-bg-hover: rgba(255, 255, 255, 0.08);
+}
+[data-color-theme="sunset-drift"] body, [data-color-theme="sunset-drift"] .ch-stage, [data-color-theme="sunset-drift"] .ch-composer-wrap { animation: pbf-sunset-drift-light 36s linear infinite; }
+[data-color-theme="sunset-drift"] .ch-sidebar, [data-color-theme="sunset-drift"] .ch-context-panel, [data-color-theme="sunset-drift"] .ch-user-bar { animation: pbf-sunset-drift-light-panel 36s linear infinite; animation-delay: 0s; }
+[data-color-theme="sunset-drift"] .ch-composer-box, [data-color-theme="sunset-drift"] .ch-user-settings-card { background-color: rgba(255, 255, 255, 0.55); }
+[data-color-theme="sunset-drift"][data-theme="dark"] body, [data-color-theme="sunset-drift"][data-theme="dark"] .ch-stage, [data-color-theme="sunset-drift"][data-theme="dark"] .ch-composer-wrap { animation: pbf-sunset-drift-dark 36s linear infinite; }
+[data-color-theme="sunset-drift"][data-theme="dark"] .ch-sidebar, [data-color-theme="sunset-drift"][data-theme="dark"] .ch-context-panel, [data-color-theme="sunset-drift"][data-theme="dark"] .ch-user-bar { animation: pbf-sunset-drift-dark-panel 36s linear infinite; animation-delay: 0s; }
+[data-color-theme="sunset-drift"][data-theme="dark"] .ch-composer-box, [data-color-theme="sunset-drift"][data-theme="dark"] .ch-user-settings-card { background-color: rgba(0, 0, 0, 0.25); }
+@media (prefers-reduced-motion: reduce) { [data-color-theme="sunset-drift"] body, [data-color-theme="sunset-drift"] .ch-stage, [data-color-theme="sunset-drift"] .ch-composer-wrap, [data-color-theme="sunset-drift"] .ch-sidebar, [data-color-theme="sunset-drift"] .ch-context-panel, [data-color-theme="sunset-drift"] .ch-user-bar, [data-color-theme="sunset-drift"][data-theme="dark"] body, [data-color-theme="sunset-drift"][data-theme="dark"] .ch-stage, [data-color-theme="sunset-drift"][data-theme="dark"] .ch-composer-wrap, [data-color-theme="sunset-drift"][data-theme="dark"] .ch-sidebar, [data-color-theme="sunset-drift"][data-theme="dark"] .ch-context-panel, [data-color-theme="sunset-drift"][data-theme="dark"] .ch-user-bar { animation: none; } }
+/* ocean-tide: 5 keyframe hues, 44s */
+@keyframes pbf-ocean-tide-light {
+  0%, 100% { background-color: hsl(205 63% 93%); }
+  20.000% { background-color: hsl(188 63% 93%); }
+  40.000% { background-color: hsl(165 63% 93%); }
+  60.000% { background-color: hsl(222 63% 93%); }
+  80.000% { background-color: hsl(240 63% 93%); }
+}
+@keyframes pbf-ocean-tide-light-panel {
+  0%, 100% { background-color: hsl(205 63% 88%); }
+  20.000% { background-color: hsl(188 63% 88%); }
+  40.000% { background-color: hsl(165 63% 88%); }
+  60.000% { background-color: hsl(222 63% 88%); }
+  80.000% { background-color: hsl(240 63% 88%); }
+}
+@keyframes pbf-ocean-tide-dark {
+  0%, 100% { background-color: hsl(205 35% 11%); }
+  20.000% { background-color: hsl(188 35% 11%); }
+  40.000% { background-color: hsl(165 35% 11%); }
+  60.000% { background-color: hsl(222 35% 11%); }
+  80.000% { background-color: hsl(240 35% 11%); }
+}
+@keyframes pbf-ocean-tide-dark-panel {
+  0%, 100% { background-color: hsl(205 35% 8%); }
+  20.000% { background-color: hsl(188 35% 8%); }
+  40.000% { background-color: hsl(165 35% 8%); }
+  60.000% { background-color: hsl(222 35% 8%); }
+  80.000% { background-color: hsl(240 35% 8%); }
+}
+[data-color-theme="ocean-tide"] {
+  --hero-bg: linear-gradient(140deg, hsl(205 60% 10%) 0%, hsl(212 50% 22%) 55%, hsl(172 55% 24%) 100%); --hero-glow: radial-gradient(circle at 50% 0%, hsl(212 90% 60% / 0.3) 0%, transparent 62%); --hero-border: hsl(212 70% 40%); --hero-subtitle-bg: hsl(212 70% 40% / 0.32); --hero-subtitle-text: #ffffff;
+  --as-green: hsl(212 55% 22%); --as-green-hover: hsl(212 55% 15%); --as-green-light: hsl(212 50% 32%); --as-green-subtle: hsl(212 60% 94%); --as-green-border: hsl(212 50% 80%); --giants-orange: hsl(212 75% 38%); --giants-orange-hover: hsl(212 75% 30%); --giants-orange-light: hsl(212 75% 38% / 0.11); --giants-orange-border: hsl(212 75% 38% / 0.3); --giants-orange-glow: hsl(212 75% 38% / 0.22);
+  --on-primary: #ffffff; --on-secondary: #ffffff;
+  --bg-page: hsl(205 63% 93%); --bg-card: #ffffff; --bg-subtle: hsl(205 63% 88%); --bg-input: hsl(205 63% 88%); --border: rgba(15, 23, 42, 0.14); --text-main: #0f172a; --text-muted: #3b475a;
+  --ch-border: rgba(15, 23, 42, 0.14); --ch-bg-surface: rgba(15, 23, 42, 0.045); --ch-bg-hover: rgba(15, 23, 42, 0.075);
+}
+[data-color-theme="ocean-tide"][data-theme="dark"] {
+  --hero-bg: linear-gradient(140deg, hsl(205 50% 6%) 0%, hsl(212 40% 14%) 55%, hsl(172 45% 15%) 100%); --hero-glow: radial-gradient(circle at 50% 0%, hsl(212 90% 70% / 0.35) 0%, transparent 62%); --hero-border: hsl(212 85% 72%); --hero-subtitle-bg: hsl(212 85% 72% / 0.22); --hero-subtitle-text: #ffffff;
+  --as-green: hsl(172 80% 72%); --as-green-hover: hsl(172 80% 82%); --as-green-light: hsl(172 70% 28%); --as-green-subtle: hsl(172 80% 72% / 0.14); --as-green-border: hsl(172 80% 72% / 0.32); --giants-orange: hsl(212 90% 72%); --giants-orange-hover: hsl(212 90% 80%); --giants-orange-light: hsl(212 90% 72% / 0.16); --giants-orange-border: hsl(212 90% 72% / 0.4); --giants-orange-glow: hsl(212 90% 72% / 0.35);
+  --on-primary: #07111a; --on-secondary: #06211a;
+  --bg-page: hsl(205 35% 11%); --bg-card: hsl(205 35% 13%); --bg-subtle: hsl(205 35% 17%); --bg-input: hsl(205 35% 8%); --border: rgba(255, 255, 255, 0.12); --text-main: #f6f7ff; --text-muted: #a9b4c8;
+  --ch-border: rgba(255, 255, 255, 0.12); --ch-bg-surface: rgba(255, 255, 255, 0.05); --ch-bg-hover: rgba(255, 255, 255, 0.08);
+}
+[data-color-theme="ocean-tide"] body, [data-color-theme="ocean-tide"] .ch-stage, [data-color-theme="ocean-tide"] .ch-composer-wrap { animation: pbf-ocean-tide-light 44s linear infinite; }
+[data-color-theme="ocean-tide"] .ch-sidebar, [data-color-theme="ocean-tide"] .ch-context-panel, [data-color-theme="ocean-tide"] .ch-user-bar { animation: pbf-ocean-tide-light-panel 44s linear infinite; animation-delay: -11s; }
+[data-color-theme="ocean-tide"] .ch-composer-box, [data-color-theme="ocean-tide"] .ch-user-settings-card { background-color: rgba(255, 255, 255, 0.55); }
+[data-color-theme="ocean-tide"][data-theme="dark"] body, [data-color-theme="ocean-tide"][data-theme="dark"] .ch-stage, [data-color-theme="ocean-tide"][data-theme="dark"] .ch-composer-wrap { animation: pbf-ocean-tide-dark 44s linear infinite; }
+[data-color-theme="ocean-tide"][data-theme="dark"] .ch-sidebar, [data-color-theme="ocean-tide"][data-theme="dark"] .ch-context-panel, [data-color-theme="ocean-tide"][data-theme="dark"] .ch-user-bar { animation: pbf-ocean-tide-dark-panel 44s linear infinite; animation-delay: -11s; }
+[data-color-theme="ocean-tide"][data-theme="dark"] .ch-composer-box, [data-color-theme="ocean-tide"][data-theme="dark"] .ch-user-settings-card { background-color: rgba(0, 0, 0, 0.25); }
+@media (prefers-reduced-motion: reduce) { [data-color-theme="ocean-tide"] body, [data-color-theme="ocean-tide"] .ch-stage, [data-color-theme="ocean-tide"] .ch-composer-wrap, [data-color-theme="ocean-tide"] .ch-sidebar, [data-color-theme="ocean-tide"] .ch-context-panel, [data-color-theme="ocean-tide"] .ch-user-bar, [data-color-theme="ocean-tide"][data-theme="dark"] body, [data-color-theme="ocean-tide"][data-theme="dark"] .ch-stage, [data-color-theme="ocean-tide"][data-theme="dark"] .ch-composer-wrap, [data-color-theme="ocean-tide"][data-theme="dark"] .ch-sidebar, [data-color-theme="ocean-tide"][data-theme="dark"] .ch-context-panel, [data-color-theme="ocean-tide"][data-theme="dark"] .ch-user-bar { animation: none; } }
+/* neon-pulse: 6 keyframe hues, 20s */
+@keyframes pbf-neon-pulse-light {
+  0%, 100% { background-color: hsl(0 86% 93%); }
+  16.667% { background-color: hsl(45 86% 93%); }
+  33.333% { background-color: hsl(120 86% 93%); }
+  50.000% { background-color: hsl(180 86% 93%); }
+  66.667% { background-color: hsl(240 86% 93%); }
+  83.333% { background-color: hsl(300 86% 93%); }
+}
+@keyframes pbf-neon-pulse-light-panel {
+  0%, 100% { background-color: hsl(0 86% 88%); }
+  16.667% { background-color: hsl(45 86% 88%); }
+  33.333% { background-color: hsl(120 86% 88%); }
+  50.000% { background-color: hsl(180 86% 88%); }
+  66.667% { background-color: hsl(240 86% 88%); }
+  83.333% { background-color: hsl(300 86% 88%); }
+}
+@keyframes pbf-neon-pulse-dark {
+  0%, 100% { background-color: hsl(0 48% 11%); }
+  16.667% { background-color: hsl(45 48% 11%); }
+  33.333% { background-color: hsl(120 48% 11%); }
+  50.000% { background-color: hsl(180 48% 11%); }
+  66.667% { background-color: hsl(240 48% 11%); }
+  83.333% { background-color: hsl(300 48% 11%); }
+}
+@keyframes pbf-neon-pulse-dark-panel {
+  0%, 100% { background-color: hsl(0 48% 8%); }
+  16.667% { background-color: hsl(45 48% 8%); }
+  33.333% { background-color: hsl(120 48% 8%); }
+  50.000% { background-color: hsl(180 48% 8%); }
+  66.667% { background-color: hsl(240 48% 8%); }
+  83.333% { background-color: hsl(300 48% 8%); }
+}
+[data-color-theme="neon-pulse"] {
+  --hero-bg: linear-gradient(140deg, hsl(0 60% 10%) 0%, hsl(285 50% 22%) 55%, hsl(170 55% 24%) 100%); --hero-glow: radial-gradient(circle at 50% 0%, hsl(285 90% 60% / 0.3) 0%, transparent 62%); --hero-border: hsl(285 70% 40%); --hero-subtitle-bg: hsl(285 70% 40% / 0.32); --hero-subtitle-text: #ffffff;
+  --as-green: hsl(285 55% 22%); --as-green-hover: hsl(285 55% 15%); --as-green-light: hsl(285 50% 32%); --as-green-subtle: hsl(285 60% 94%); --as-green-border: hsl(285 50% 80%); --giants-orange: hsl(285 75% 38%); --giants-orange-hover: hsl(285 75% 30%); --giants-orange-light: hsl(285 75% 38% / 0.11); --giants-orange-border: hsl(285 75% 38% / 0.3); --giants-orange-glow: hsl(285 75% 38% / 0.22);
+  --on-primary: #ffffff; --on-secondary: #ffffff;
+  --bg-page: hsl(0 86% 93%); --bg-card: #ffffff; --bg-subtle: hsl(0 86% 88%); --bg-input: hsl(0 86% 88%); --border: rgba(15, 23, 42, 0.14); --text-main: #0f172a; --text-muted: #3b475a;
+  --ch-border: rgba(15, 23, 42, 0.14); --ch-bg-surface: rgba(15, 23, 42, 0.045); --ch-bg-hover: rgba(15, 23, 42, 0.075);
+}
+[data-color-theme="neon-pulse"][data-theme="dark"] {
+  --hero-bg: linear-gradient(140deg, hsl(0 50% 6%) 0%, hsl(285 40% 14%) 55%, hsl(170 45% 15%) 100%); --hero-glow: radial-gradient(circle at 50% 0%, hsl(285 90% 70% / 0.35) 0%, transparent 62%); --hero-border: hsl(285 85% 72%); --hero-subtitle-bg: hsl(285 85% 72% / 0.22); --hero-subtitle-text: #ffffff;
+  --as-green: hsl(170 80% 72%); --as-green-hover: hsl(170 80% 82%); --as-green-light: hsl(170 70% 28%); --as-green-subtle: hsl(170 80% 72% / 0.14); --as-green-border: hsl(170 80% 72% / 0.32); --giants-orange: hsl(285 90% 72%); --giants-orange-hover: hsl(285 90% 80%); --giants-orange-light: hsl(285 90% 72% / 0.16); --giants-orange-border: hsl(285 90% 72% / 0.4); --giants-orange-glow: hsl(285 90% 72% / 0.35);
+  --on-primary: #07111a; --on-secondary: #06211a;
+  --bg-page: hsl(0 48% 11%); --bg-card: hsl(0 48% 13%); --bg-subtle: hsl(0 48% 17%); --bg-input: hsl(0 48% 8%); --border: rgba(255, 255, 255, 0.12); --text-main: #f6f7ff; --text-muted: #a9b4c8;
+  --ch-border: rgba(255, 255, 255, 0.12); --ch-bg-surface: rgba(255, 255, 255, 0.05); --ch-bg-hover: rgba(255, 255, 255, 0.08);
+}
+[data-color-theme="neon-pulse"] body, [data-color-theme="neon-pulse"] .ch-stage, [data-color-theme="neon-pulse"] .ch-composer-wrap { animation: pbf-neon-pulse-light 20s linear infinite; }
+[data-color-theme="neon-pulse"] .ch-sidebar, [data-color-theme="neon-pulse"] .ch-context-panel, [data-color-theme="neon-pulse"] .ch-user-bar { animation: pbf-neon-pulse-light-panel 20s linear infinite; animation-delay: -7s; }
+[data-color-theme="neon-pulse"] .ch-composer-box, [data-color-theme="neon-pulse"] .ch-user-settings-card { background-color: rgba(255, 255, 255, 0.55); }
+[data-color-theme="neon-pulse"][data-theme="dark"] body, [data-color-theme="neon-pulse"][data-theme="dark"] .ch-stage, [data-color-theme="neon-pulse"][data-theme="dark"] .ch-composer-wrap { animation: pbf-neon-pulse-dark 20s linear infinite; }
+[data-color-theme="neon-pulse"][data-theme="dark"] .ch-sidebar, [data-color-theme="neon-pulse"][data-theme="dark"] .ch-context-panel, [data-color-theme="neon-pulse"][data-theme="dark"] .ch-user-bar { animation: pbf-neon-pulse-dark-panel 20s linear infinite; animation-delay: -7s; }
+[data-color-theme="neon-pulse"][data-theme="dark"] .ch-composer-box, [data-color-theme="neon-pulse"][data-theme="dark"] .ch-user-settings-card { background-color: rgba(0, 0, 0, 0.25); }
+@media (prefers-reduced-motion: reduce) { [data-color-theme="neon-pulse"] body, [data-color-theme="neon-pulse"] .ch-stage, [data-color-theme="neon-pulse"] .ch-composer-wrap, [data-color-theme="neon-pulse"] .ch-sidebar, [data-color-theme="neon-pulse"] .ch-context-panel, [data-color-theme="neon-pulse"] .ch-user-bar, [data-color-theme="neon-pulse"][data-theme="dark"] body, [data-color-theme="neon-pulse"][data-theme="dark"] .ch-stage, [data-color-theme="neon-pulse"][data-theme="dark"] .ch-composer-wrap, [data-color-theme="neon-pulse"][data-theme="dark"] .ch-sidebar, [data-color-theme="neon-pulse"][data-theme="dark"] .ch-context-panel, [data-color-theme="neon-pulse"][data-theme="dark"] .ch-user-bar { animation: none; } }

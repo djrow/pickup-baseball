@@ -30,7 +30,10 @@
     { id: 'friar-gold', name: 'Friar Brown & Sungold', market: 'San Diego Padres', primaryColor: '#C48200', secondaryColor: '#2F241D' },
     { id: 'sedona-red', name: 'Sedona Red & Desert Teal', market: 'Arizona Diamondbacks', primaryColor: '#A71930', secondaryColor: '#26696D' },
     { id: 'powder-blue', name: 'Powder Blue & Royal', market: 'Classic 1980s Retro', primaryColor: '#0284c7', secondaryColor: '#004687' },
-    { id: 'aurora-cycle', name: 'Aurora Drift', market: 'Smooth Hue-Cycling Background', primaryColor: '#4338ca', secondaryColor: '#0d9488' }
+    { id: 'aurora-cycle', name: 'Aurora Drift', market: 'Smooth Hue-Cycling Background', primaryColor: '#4338ca', secondaryColor: '#0d9488' },
+    { id: 'sunset-drift', name: 'Sunset Drift', market: 'Hue Cycle: Rose · Orange · Gold · Magenta · Violet', primaryColor: '#c2185b', secondaryColor: '#e65100' },
+    { id: 'ocean-tide', name: 'Ocean Tide', market: 'Hue Cycle: Blue · Teal · Seafoam · Indigo (slow)', primaryColor: '#1565c0', secondaryColor: '#00897b' },
+    { id: 'neon-pulse', name: 'Neon Pulse', market: 'Hue Cycle: Full Spectrum (fast)', primaryColor: '#8e24aa', secondaryColor: '#00bfa5' }
   ];
 
   API.COLOR_THEMES = COLOR_THEMES;

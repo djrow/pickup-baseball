@@ -97,7 +97,10 @@
 [data-color-theme="friar-gold"][data-theme="dark"],
 [data-color-theme="sedona-red"][data-theme="dark"],
 [data-color-theme="powder-blue"][data-theme="dark"],
-[data-color-theme="aurora-cycle"][data-theme="dark"] {
+[data-color-theme="aurora-cycle"][data-theme="dark"],
+[data-color-theme="sunset-drift"][data-theme="dark"],
+[data-color-theme="ocean-tide"][data-theme="dark"],
+[data-color-theme="neon-pulse"][data-theme="dark"] {
   --ch-on-accent: #07111a;
 }
 
