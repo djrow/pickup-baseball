@@ -327,6 +327,11 @@ html, body.clubhouse-body {
   flex-direction: column;
   align-items: stretch;
   gap: 8px;
+  max-height: 65vh;
+  max-height: 65dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  flex-shrink: 0;
 }
 
 .ch-user-identity {
