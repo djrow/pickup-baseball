@@ -443,7 +443,7 @@ async function fetchBaseballExportData(db, userId, userEmail) {
   ] = await Promise.all([
     db.prepare(`
       SELECT
-        id, name, email, bio, avatar_url, role, is_admin,
+        id, name, email, bio, walkup_song, avatar_url, role, is_admin,
         COALESCE(is_moderator, 0) as is_moderator,
         COALESCE(chat_muted, 0) as chat_muted,
         chat_muted_reason, chat_muted_at,
@@ -1070,6 +1070,39 @@ async function applyMemberProfileAndConsents(db, user, body, profileFields, env 
   await purgeUserSessionCache(db, user.id);
 }
 
+function sanitizeWalkupSongPayload(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return null;
+  if (s.startsWith('{')) {
+    try {
+      const obj = JSON.parse(s);
+      if (obj && typeof obj === 'object' && obj.label) {
+        const clean = {
+          label: String(obj.label).trim().slice(0, 140),
+          trackName: obj.trackName ? String(obj.trackName).trim().slice(0, 80) : '',
+          artistName: obj.artistName ? String(obj.artistName).trim().slice(0, 60) : '',
+          albumName: obj.albumName ? String(obj.albumName).trim().slice(0, 80) : '',
+          releaseYear: obj.releaseYear ? String(obj.releaseYear).trim().slice(0, 4) : '',
+          artworkUrl: typeof obj.artworkUrl === 'string' && obj.artworkUrl.startsWith('https://') ? obj.artworkUrl.slice(0, 300) : '',
+          deezerId: obj.deezerId ? String(obj.deezerId).replace(/\D/g, '').slice(0, 15) : '',
+          durationSec: Number(obj.durationSec) > 0 ? Math.min(3600, Math.round(Number(obj.durationSec))) : 0,
+          clipStart: Math.max(0, Math.min(3600, Math.round(Number(obj.clipStart) || 0))),
+          youtubeId: typeof obj.youtubeId === 'string' && /^[A-Za-z0-9_-]{11}$/.test(obj.youtubeId) ? obj.youtubeId : '',
+          youtubeTitle: obj.youtubeTitle ? String(obj.youtubeTitle).trim().slice(0, 100) : '',
+          clipUrl: typeof obj.clipUrl === 'string' && obj.clipUrl.startsWith('/api/auth/walkup-clip/') ? obj.clipUrl.slice(0, 200) : ''
+        };
+        if (!clean.deezerId && typeof obj.previewUrl === 'string' && obj.previewUrl.startsWith('https://')) {
+          clean.previewUrl = obj.previewUrl.slice(0, 400);
+        }
+        return JSON.stringify(clean).slice(0, 2000);
+      }
+    } catch (e) {
+      // Fall through to plain text truncation
+    }
+  }
+  return s.slice(0, 200);
+}
+
 authRouter.put('/profile', requireAuth, async (c) => {
   const user = c.get('user');
   const db = c.env && (c.env.BASEBALL_DB || c.env.DB);
@@ -1082,7 +1115,7 @@ authRouter.put('/profile', requireAuth, async (c) => {
     }
     const cleanName = String(name).trim().slice(0, 120);
     const cleanBio = String(bio || '').trim().slice(0, 280);
-    const cleanWalkupSong = String(walkup_song || '').trim().slice(0, 1000) || null;
+    const cleanWalkupSong = sanitizeWalkupSongPayload(walkup_song);
 
     await applyMemberProfileAndConsents(db, user, body || {}, { cleanName, cleanBio, cleanWalkupSong }, c.env);
 
@@ -1368,11 +1401,16 @@ authRouter.get('/youtube-search', requireAuth, async (c) => {
       const title = titleRuns.map((r) => r.text || '').join('').trim() || (vr.title && vr.title.simpleText) || '';
       const ownerRuns = vr.ownerText && Array.isArray(vr.ownerText.runs) ? vr.ownerText.runs : [];
       const channel = ownerRuns.map((r) => r.text || '').join('').trim() || '';
-      const durationText = (vr.lengthText && vr.lengthText.simpleText) ? String(vr.lengthText.simpleText).trim() : '';
+      const overlayLen = Array.isArray(vr.thumbnailOverlays)
+        ? vr.thumbnailOverlays.reduce((acc, ov) => acc || (ov && ov.thumbnailOverlayTimeStatusRenderer && ov.thumbnailOverlayTimeStatusRenderer.text && ov.thumbnailOverlayTimeStatusRenderer.text.simpleText) || '', '')
+        : '';
+      const durationText = (vr.lengthText && vr.lengthText.simpleText)
+        ? String(vr.lengthText.simpleText).trim()
+        : String(overlayLen || '').trim();
       const durationSec = parseDurationTextToSec(durationText);
       if (!title || durationSec === 0) continue; // skip live streams / shorts without duration
 
-      // Score: prefer matching duration + official audio/topic channels
+      // Score: prefer matching duration + embed-friendly audio/lyric uploads (avoid over-boosting VEVO which often blocks embeds)
       let score = 0;
       if (targetDuration > 0 && durationSec > 0) {
         const diff = Math.abs(durationSec - targetDuration);
@@ -1382,9 +1420,10 @@ authRouter.get('/youtube-search', requireAuth, async (c) => {
       }
       const lowerTitle = title.toLowerCase();
       const lowerChan = channel.toLowerCase();
-      if (lowerChan.includes('topic') || lowerChan.includes('vevo')) score += 25;
-      if (lowerTitle.includes('official audio') || lowerTitle.includes('audio')) score += 15;
-      if (lowerTitle.includes('lyrics')) score += 5;
+      if (lowerTitle.includes('official audio') || lowerTitle.includes('audio')) score += 16;
+      if (lowerTitle.includes('lyrics') || lowerTitle.includes('lyric')) score += 14;
+      if (lowerChan.includes('topic')) score += 10;
+      if (lowerChan.includes('vevo')) score -= 5;
       if (lowerTitle.includes('cover') || lowerTitle.includes('karaoke') || lowerTitle.includes('live')) score -= 20;
 
       candidates.push({
@@ -1399,7 +1438,7 @@ authRouter.get('/youtube-search', requireAuth, async (c) => {
     }
 
     candidates.sort((a, b) => b._score - a._score);
-    const results = candidates.slice(0, 5).map(({ _score, ...rest }) => rest);
+    const results = candidates.slice(0, 8).map(({ _score, ...rest }) => rest);
     return c.json({ results });
   } catch (err) {
     return c.json({ results: [] });

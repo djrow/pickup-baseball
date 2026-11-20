@@ -923,6 +923,15 @@
   var walkupStatusRef = null;
   /** @type {HTMLElement | null} */
   var walkupYtContainerRef = null;
+  /** @type {{ seekTo: (s: number, d?: number) => void, destroy: () => void } | null} */
+  var walkupYtCtrl = null;
+  /** @type {(() => Promise<Array<{ videoId: string, title: string, channel?: string, durationText?: string, durationSec?: number, thumbnail?: string }>>) | null} */
+  var walkupEnsureYtMatchesRef = null;
+  /** @type {((videoId: string, title?: string, durationText?: string) => void) | null} */
+  var walkupSelectYtMatchRef = null;
+  /** @type {Record<string, boolean>} */
+  var walkupFailedYtIds = {};
+  var walkupPlaySeq = 0;
 
   /**
    * @param {any} val
@@ -930,7 +939,9 @@
    * @returns {number}
    */
   function normalizeClipStart(val, durationSec) {
-    var maxSec = (durationSec && Number(durationSec) > 30) ? Math.max(25, Math.round(Number(durationSec)) - 5) : 600;
+    var maxSec = (durationSec && Number(durationSec) > 30)
+      ? Math.max(DEEZER_MAX_START, Math.round(Number(durationSec)) - WALKUP_CLIP_DURATION)
+      : 600;
     if (typeof val === 'string' && val.indexOf(':') !== -1) {
       var parts = val.trim().split(':');
       if (parts.length === 2) {
@@ -958,6 +969,7 @@
   }
 
   function stopWalkupPreview() {
+    walkupPlaySeq++;
     if (walkupStopTimer) {
       clearTimeout(walkupStopTimer);
       walkupStopTimer = null;
@@ -967,11 +979,16 @@
         walkupAudio.pause();
       } catch (e) { /* ignore */ }
     }
+    if (walkupYtCtrl) {
+      try { walkupYtCtrl.destroy(); } catch (e) { /* ignore */ }
+      walkupYtCtrl = null;
+    }
     if (walkupYtContainerRef) {
       walkupYtContainerRef.innerHTML = '';
       walkupYtContainerRef.style.display = 'none';
     }
     if (walkupPlayBtnRef) {
+      walkupPlayBtnRef.disabled = false;
       walkupPlayBtnRef.textContent = '▶ Preview ' + WALKUP_CLIP_DURATION + 's';
     }
   }
@@ -1000,15 +1017,147 @@
   }
 
   /**
-   * @param {{ label: string, trackName?: string, artistName?: string, deezerId?: string, previewUrl?: string, durationSec?: number, clipStart?: number, youtubeId?: string, clipUrl?: string }} song
+   * @param {{ label: string, trackName?: string, artistName?: string, deezerId?: string, previewUrl?: string, durationSec?: number, clipStart?: number, youtubeId?: string, youtubeTitle?: string, clipUrl?: string }} song
+   * @param {number} startSec
+   * @param {number} seq
+   */
+  function startYoutubeWalkupPreview(song, startSec, seq) {
+    if (!walkupYtContainerRef) return;
+
+    var mountVideo = function (videoId) {
+      if (seq !== walkupPlaySeq || !walkupYtContainerRef) return;
+      if (!videoId || !/^[A-Za-z0-9_-]{11}$/.test(videoId)) {
+        if (walkupStatusRef) walkupStatusRef.textContent = 'No YouTube match found. Paste a YouTube link under "Change ▾" or upload a clip.';
+        if (walkupPlayBtnRef) {
+          walkupPlayBtnRef.disabled = false;
+          walkupPlayBtnRef.textContent = '▶ Preview ' + WALKUP_CLIP_DURATION + 's';
+        }
+        return;
+      }
+
+      if (walkupYtCtrl) {
+        try { walkupYtCtrl.destroy(); } catch (e) { /* ignore */ }
+        walkupYtCtrl = null;
+      }
+
+      var ytEnd = startSec + WALKUP_CLIP_DURATION;
+      walkupYtContainerRef.style.display = 'block';
+      if (walkupPlayBtnRef) {
+        walkupPlayBtnRef.disabled = false;
+        walkupPlayBtnRef.textContent = '⏹ Stop';
+      }
+      if (walkupStatusRef) {
+        walkupStatusRef.textContent = 'Loading YouTube clip ' + formatClipSeconds(startSec) + ' – ' + formatClipSeconds(ytEnd) + '...';
+      }
+
+      walkupYtCtrl = API.mountYouTubeClipPlayer(walkupYtContainerRef, {
+        videoId: videoId,
+        startSec: startSec,
+        durationSec: WALKUP_CLIP_DURATION,
+        height: 200,
+        title: 'Walk-up song YouTube clip preview',
+        onPlaying: function () {
+          if (seq !== walkupPlaySeq) return;
+          if (walkupStatusRef) {
+            walkupStatusRef.textContent = 'Playing YouTube clip ' + formatClipSeconds(startSec) + ' – ' + formatClipSeconds(ytEnd);
+          }
+        },
+        onEnded: function () {
+          if (seq !== walkupPlaySeq) return;
+          stopWalkupPreview();
+          if (walkupStatusRef) walkupStatusRef.textContent = '';
+        },
+        onError: function (code) {
+          if (seq !== walkupPlaySeq) return;
+          walkupFailedYtIds[videoId] = true;
+          var tryNext = function (matches) {
+            if (seq !== walkupPlaySeq) return;
+            var nextMatch = null;
+            for (var i = 0; i < matches.length; i++) {
+              if (matches[i] && matches[i].videoId && !walkupFailedYtIds[matches[i].videoId]) {
+                nextMatch = matches[i];
+                break;
+              }
+            }
+            if (nextMatch) {
+              if (walkupSelectYtMatchRef) {
+                walkupSelectYtMatchRef(nextMatch.videoId, nextMatch.title, nextMatch.durationText);
+              } else {
+                song.youtubeId = nextMatch.videoId;
+                song.youtubeTitle = nextMatch.title;
+                if (selectedWalkupSong) {
+                  selectedWalkupSong.youtubeId = nextMatch.videoId;
+                  selectedWalkupSong.youtubeTitle = nextMatch.title;
+                }
+              }
+              if (walkupStatusRef) {
+                walkupStatusRef.textContent = 'Previous video blocked embeds (code ' + code + ') — switching to another YouTube match...';
+              }
+              mountVideo(nextMatch.videoId);
+            } else {
+              if (walkupStatusRef) {
+                walkupStatusRef.textContent = 'This YouTube video restricts embeds (code ' + code + '). Pick another match under "Change ▾", paste a link, or open on YouTube below.';
+              }
+            }
+          };
+          if (walkupEnsureYtMatchesRef) {
+            walkupEnsureYtMatchesRef().then(tryNext).catch(function () { tryNext([]); });
+          } else {
+            tryNext([]);
+          }
+        }
+      });
+    };
+
+    if (song.youtubeId && /^[A-Za-z0-9_-]{11}$/.test(song.youtubeId)) {
+      mountVideo(song.youtubeId);
+      return;
+    }
+
+    if (walkupStatusRef) {
+      walkupStatusRef.textContent = 'Finding YouTube match for ' + formatClipSeconds(startSec) + '...';
+    }
+    if (walkupPlayBtnRef) walkupPlayBtnRef.disabled = true;
+
+    if (walkupEnsureYtMatchesRef) {
+      walkupEnsureYtMatchesRef().then(function (matches) {
+        if (seq !== walkupPlaySeq) return;
+        if (walkupPlayBtnRef) walkupPlayBtnRef.disabled = false;
+        var chosen = song.youtubeId;
+        if (!chosen && matches && matches.length > 0) {
+          for (var i = 0; i < matches.length; i++) {
+            if (matches[i] && matches[i].videoId && !walkupFailedYtIds[matches[i].videoId]) {
+              chosen = matches[i].videoId;
+              if (walkupSelectYtMatchRef) {
+                walkupSelectYtMatchRef(matches[i].videoId, matches[i].title, matches[i].durationText);
+              }
+              break;
+            }
+          }
+        }
+        mountVideo(chosen || '');
+      }).catch(function () {
+        if (seq !== walkupPlaySeq) return;
+        if (walkupPlayBtnRef) walkupPlayBtnRef.disabled = false;
+        mountVideo('');
+      });
+    } else {
+      if (walkupPlayBtnRef) walkupPlayBtnRef.disabled = false;
+      mountVideo('');
+    }
+  }
+
+  /**
+   * @param {{ label: string, trackName?: string, artistName?: string, deezerId?: string, previewUrl?: string, durationSec?: number, clipStart?: number, youtubeId?: string, youtubeTitle?: string, clipUrl?: string }} song
    */
   function playWalkupPreview(song) {
-    var isYtPlaying = Boolean(walkupYtContainerRef && walkupYtContainerRef.style.display !== 'none' && walkupYtContainerRef.innerHTML);
+    var isYtPlaying = Boolean(walkupYtCtrl || (walkupYtContainerRef && walkupYtContainerRef.style.display !== 'none' && walkupYtContainerRef.innerHTML));
     if ((walkupAudio && !walkupAudio.paused) || isYtPlaying) {
       stopWalkupPreview();
       return;
     }
 
+    var seq = ++walkupPlaySeq;
     var startSec = normalizeClipStart(song.clipStart, song.durationSec);
 
     // Priority 1: Custom uploaded audio clip (stored in Google Drive)
@@ -1018,7 +1167,7 @@
         walkupAudio.preload = 'auto';
       }
       var playUploaded = function () {
-        if (!walkupAudio) return;
+        if (seq !== walkupPlaySeq || !walkupAudio) return;
         try { walkupAudio.currentTime = 0; } catch (e) { /* ignore */ }
         var p = walkupAudio.play();
         if (walkupPlayBtnRef) walkupPlayBtnRef.textContent = '⏹ Stop';
@@ -1056,62 +1205,39 @@
       return;
     }
 
-    var useYoutube = startSec > DEEZER_MAX_START;
+    var isYoutubeOnly = Boolean(song.youtubeId && !song.deezerId && !song.previewUrl);
+    var useYoutube = startSec > DEEZER_MAX_START || isYoutubeOnly;
 
     if (useYoutube) {
-      if (!song.youtubeId || !/^[A-Za-z0-9_-]{11}$/.test(song.youtubeId)) {
-        if (walkupStatusRef) {
-          walkupStatusRef.textContent = 'Finding YouTube match for ' + formatClipSeconds(startSec) + '...';
-        }
-        return;
-      }
-      if (walkupYtContainerRef) {
-        var ytEnd = startSec + WALKUP_CLIP_DURATION;
-        walkupYtContainerRef.innerHTML = '';
-        var iframe = document.createElement('iframe');
-        iframe.src = 'https://www.youtube-nocookie.com/embed/' + encodeURIComponent(song.youtubeId) + '?start=' + startSec + '&end=' + ytEnd + '&autoplay=1&rel=0';
-        iframe.title = 'Walk-up song YouTube clip preview';
-        iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
-        iframe.referrerPolicy = 'strict-origin-when-cross-origin';
-        iframe.style.cssText = 'width:100%;height:180px;border:0;display:block;border-radius:6px;';
-        walkupYtContainerRef.appendChild(iframe);
-        walkupYtContainerRef.style.display = 'block';
-        if (walkupPlayBtnRef) walkupPlayBtnRef.textContent = '⏹ Stop';
-        if (walkupStatusRef) {
-          walkupStatusRef.textContent = 'Playing YouTube clip ' + formatClipSeconds(startSec) + ' – ' + formatClipSeconds(ytEnd);
-        }
-        if (walkupStopTimer) clearTimeout(walkupStopTimer);
-        walkupStopTimer = setTimeout(function () {
-          stopWalkupPreview();
-          if (walkupStatusRef) walkupStatusRef.textContent = '';
-        }, (WALKUP_CLIP_DURATION + 5) * 1000);
-        return;
-      }
+      startYoutubeWalkupPreview(song, startSec, seq);
+      return;
     }
 
     if (walkupStatusRef) walkupStatusRef.textContent = 'Loading 30s preview...';
     if (walkupPlayBtnRef) walkupPlayBtnRef.disabled = true;
 
     resolveWalkupPreviewUrl(song).then(function (url) {
+      if (seq !== walkupPlaySeq) return;
       if (walkupPlayBtnRef) walkupPlayBtnRef.disabled = false;
       if (!url) {
-        if (walkupStatusRef) walkupStatusRef.textContent = 'No 30s audio preview available for this track.';
+        // Automatic fallback to YouTube embed at startSec when Deezer preview is unavailable
+        startYoutubeWalkupPreview(song, startSec, seq);
         return;
       }
       if (!walkupAudio) {
         walkupAudio = new Audio();
         walkupAudio.preload = 'auto';
       }
-      var startSec = normalizeClipStart(song.clipStart);
+      var curStart = normalizeClipStart(song.clipStart, song.durationSec);
       var startPlayback = function () {
-        if (!walkupAudio) return;
+        if (seq !== walkupPlaySeq || !walkupAudio) return;
         try {
-          walkupAudio.currentTime = startSec;
+          walkupAudio.currentTime = curStart;
         } catch (e) { /* ignore seek error */ }
         var p = walkupAudio.play();
         if (walkupPlayBtnRef) walkupPlayBtnRef.textContent = '⏹ Stop';
         if (walkupStatusRef) {
-          walkupStatusRef.textContent = 'Playing ' + formatClipSeconds(startSec) + ' – ' + formatClipSeconds(startSec + WALKUP_CLIP_DURATION);
+          walkupStatusRef.textContent = 'Playing ' + formatClipSeconds(curStart) + ' – ' + formatClipSeconds(curStart + WALKUP_CLIP_DURATION);
         }
         if (walkupStopTimer) clearTimeout(walkupStopTimer);
         walkupStopTimer = setTimeout(function () {
@@ -1131,8 +1257,8 @@
         if (walkupStatusRef) walkupStatusRef.textContent = '';
       };
       walkupAudio.onerror = function () {
-        stopWalkupPreview();
-        if (walkupStatusRef) walkupStatusRef.textContent = 'Preview audio could not be loaded.';
+        if (seq !== walkupPlaySeq) return;
+        startYoutubeWalkupPreview(song, curStart, seq);
       };
 
       if (walkupAudio.src !== url) {
@@ -1169,13 +1295,32 @@
             deezerId: obj.deezerId ? String(obj.deezerId).replace(/\D/g, '').slice(0, 15) : '',
             previewUrl: typeof obj.previewUrl === 'string' && obj.previewUrl.indexOf('https://') === 0 ? obj.previewUrl : '',
             durationSec: Number(obj.durationSec) > 0 ? Math.min(3600, Math.round(Number(obj.durationSec))) : 0,
-            clipStart: normalizeClipStart(obj.youtubeStart && Number(obj.youtubeStart) > 25 ? obj.youtubeStart : obj.clipStart, obj.durationSec),
+            clipStart: normalizeClipStart(obj.youtubeStart && Number(obj.youtubeStart) > DEEZER_MAX_START ? obj.youtubeStart : obj.clipStart, obj.durationSec),
             youtubeId: typeof obj.youtubeId === 'string' && /^[A-Za-z0-9_-]{11}$/.test(obj.youtubeId) ? obj.youtubeId : '',
             youtubeTitle: obj.youtubeTitle ? String(obj.youtubeTitle).slice(0, 100) : '',
             clipUrl: typeof obj.clipUrl === 'string' && obj.clipUrl.indexOf('/api/auth/walkup-clip/') === 0 ? obj.clipUrl : ''
           };
         }
       } catch (e) { /* fall through to plain string */ }
+    }
+    var pastedYtId = API.getYouTubeId ? API.getYouTubeId(s) : null;
+    if (pastedYtId) {
+      var pastedStart = API.getYouTubeStartSeconds ? API.getYouTubeStartSeconds(s) : 0;
+      return {
+        label: s.slice(0, 140),
+        trackName: 'YouTube Walk-Up Clip',
+        artistName: '',
+        albumName: '',
+        releaseYear: '',
+        artworkUrl: 'https://i.ytimg.com/vi/' + pastedYtId + '/mqdefault.jpg',
+        deezerId: '',
+        previewUrl: '',
+        durationSec: Math.max(240, pastedStart + WALKUP_CLIP_DURATION),
+        clipStart: pastedStart,
+        youtubeId: pastedYtId,
+        youtubeTitle: 'YouTube (' + pastedYtId + ')',
+        clipUrl: ''
+      };
     }
     return { label: s, trackName: s, artistName: '', albumName: '', releaseYear: '', artworkUrl: '', deezerId: '', previewUrl: '', durationSec: 0, clipStart: 0, youtubeId: '', youtubeTitle: '', clipUrl: '' };
   }
@@ -1189,6 +1334,9 @@
     stopWalkupPreview();
     walkupPlayBtnRef = null;
     walkupStatusRef = null;
+    walkupEnsureYtMatchesRef = null;
+    walkupSelectYtMatchRef = null;
+    walkupFailedYtIds = {};
     if (!song || !song.label) {
       cardEl.style.display = 'none';
       cardEl.innerHTML = '';
@@ -1247,9 +1395,11 @@
     topRow.appendChild(clearBtn);
     cardEl.appendChild(topRow);
 
-    // Unified 5-Second Walk-Up Timestamp Selector (0–25s = Deezer preview; >25s = YouTube link)
-    var maxStartSec = (song.durationSec && song.durationSec > 30) ? Math.max(25, song.durationSec - 5) : 240;
-    var clipStart = normalizeClipStart(song.clipStart, maxStartSec + 5);
+    // Unified 10-Second Walk-Up Timestamp Selector (0–20s = Deezer preview; >20s = YouTube embed)
+    var maxStartSec = (song.durationSec && song.durationSec > 30)
+      ? Math.max(DEEZER_MAX_START, song.durationSec - WALKUP_CLIP_DURATION)
+      : Math.max(240, (Number(song.clipStart) || 0) + WALKUP_CLIP_DURATION);
+    var clipStart = normalizeClipStart(song.clipStart, maxStartSec + WALKUP_CLIP_DURATION);
     song.clipStart = clipStart;
 
     var clipperWrap = document.createElement('div');
@@ -1346,95 +1496,169 @@
 
     /** @type {Array<{ videoId: string, title: string, channel?: string, durationText?: string, durationSec?: number, thumbnail?: string }>} */
     var ytMatches = [];
-    var ytFetched = false;
+    /** @type {Promise<Array<{ videoId: string, title: string, channel?: string, durationText?: string, durationSec?: number, thumbnail?: string }>> | null} */
+    var ytFetchPromise = null;
     var ytListOpen = false;
+
+    var updateSliderDuration = function (nextDurationSec) {
+      var d = Number(nextDurationSec) || 0;
+      if (d > 30 && (!song.durationSec || song.durationSec < d)) {
+        song.durationSec = Math.min(3600, Math.round(d));
+        if (selectedWalkupSong) selectedWalkupSong.durationSec = song.durationSec;
+        maxStartSec = Math.max(DEEZER_MAX_START, song.durationSec - WALKUP_CLIP_DURATION);
+        slider.max = String(maxStartSec);
+        endLbl.textContent = formatClipSeconds(maxStartSec);
+      }
+    };
+
+    var applySelectedYtMatch = function (videoId, title, durationText, durationSec) {
+      song.youtubeId = videoId;
+      song.youtubeTitle = title || videoId;
+      if (selectedWalkupSong) {
+        selectedWalkupSong.youtubeId = videoId;
+        selectedWalkupSong.youtubeTitle = song.youtubeTitle;
+      }
+      if (durationSec) updateSliderDuration(durationSec);
+      ytChoiceText.textContent = '▶ YouTube: ' + song.youtubeTitle + (durationText ? (' (' + durationText + ')') : '');
+      renderYtMatches();
+    };
+    walkupSelectYtMatchRef = applySelectedYtMatch;
 
     var renderYtMatches = function () {
       ytMatchesList.innerHTML = '';
       if (!ytMatches.length) {
         var emptyMsg = document.createElement('div');
         emptyMsg.style.cssText = 'padding:6px 8px;font-size:0.76rem;color:var(--text-muted);';
-        emptyMsg.textContent = 'No YouTube matches found.';
+        emptyMsg.textContent = 'No YouTube matches found automatically — paste any YouTube URL below.';
         ytMatchesList.appendChild(emptyMsg);
-        return;
-      }
-      ytMatches.forEach(function (m) {
-        var rowBtn = document.createElement('button');
-        rowBtn.type = 'button';
-        var isSelected = song.youtubeId === m.videoId;
-        rowBtn.style.cssText = 'display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:5px 6px;border:1px solid ' +
-          (isSelected ? 'var(--primary)' : 'transparent') + ';border-radius:5px;background:' +
-          (isSelected ? 'var(--bg-subtle)' : 'transparent') + ';color:var(--text-main);cursor:pointer;font-size:0.78rem;';
-        if (m.thumbnail) {
-          var thumb = document.createElement('img');
-          thumb.src = m.thumbnail;
-          thumb.alt = '';
-          thumb.style.cssText = 'width:44px;height:28px;border-radius:3px;object-fit:cover;flex-shrink:0;';
-          rowBtn.appendChild(thumb);
-        }
-        var meta = document.createElement('div');
-        meta.style.cssText = 'flex:1;min-width:0;';
-        var tLine = document.createElement('div');
-        tLine.style.cssText = 'font-weight:' + (isSelected ? '700' : '500') + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
-        tLine.textContent = m.title;
-        meta.appendChild(tLine);
-        var cLine = document.createElement('div');
-        cLine.style.cssText = 'font-size:0.72rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
-        cLine.textContent = (m.channel || 'YouTube') + (m.durationText ? (' • ' + m.durationText) : '');
-        meta.appendChild(cLine);
-        rowBtn.appendChild(meta);
-        rowBtn.addEventListener('click', function () {
-          song.youtubeId = m.videoId;
-          song.youtubeTitle = m.title;
-          if (selectedWalkupSong) {
-            selectedWalkupSong.youtubeId = m.videoId;
-            selectedWalkupSong.youtubeTitle = m.title;
+      } else {
+        ytMatches.forEach(function (m) {
+          var rowBtn = document.createElement('button');
+          rowBtn.type = 'button';
+          var isSelected = song.youtubeId === m.videoId;
+          rowBtn.style.cssText = 'display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:5px 6px;border:1px solid ' +
+            (isSelected ? 'var(--primary)' : 'transparent') + ';border-radius:5px;background:' +
+            (isSelected ? 'var(--bg-subtle)' : 'transparent') + ';color:var(--text-main);cursor:pointer;font-size:0.78rem;';
+          if (m.thumbnail) {
+            var thumb = document.createElement('img');
+            thumb.src = m.thumbnail;
+            thumb.alt = '';
+            thumb.style.cssText = 'width:44px;height:28px;border-radius:3px;object-fit:cover;flex-shrink:0;';
+            rowBtn.appendChild(thumb);
           }
-          ytChoiceText.textContent = '▶ YouTube: ' + m.title + (m.durationText ? (' (' + m.durationText + ')') : '');
-          ytListOpen = false;
-          ytMatchesList.style.display = 'none';
-          ytChoiceCaret.textContent = 'Change ▾';
-          renderYtMatches();
-          stopWalkupPreview();
+          var meta = document.createElement('div');
+          meta.style.cssText = 'flex:1;min-width:0;';
+          var tLine = document.createElement('div');
+          tLine.style.cssText = 'font-weight:' + (isSelected ? '700' : '500') + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+          tLine.textContent = m.title;
+          meta.appendChild(tLine);
+          var cLine = document.createElement('div');
+          cLine.style.cssText = 'font-size:0.72rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+          cLine.textContent = (m.channel || 'YouTube') + (m.durationText ? (' • ' + m.durationText) : '');
+          meta.appendChild(cLine);
+          rowBtn.appendChild(meta);
+          rowBtn.addEventListener('click', function () {
+            delete walkupFailedYtIds[m.videoId];
+            applySelectedYtMatch(m.videoId, m.title, m.durationText, m.durationSec);
+            ytListOpen = false;
+            ytMatchesList.style.display = 'none';
+            ytChoiceCaret.textContent = 'Change ▾';
+            stopWalkupPreview();
+          });
+          ytMatchesList.appendChild(rowBtn);
         });
-        ytMatchesList.appendChild(rowBtn);
+      }
+
+      // Custom YouTube URL paste row (supports timestamps like ?t=75 or &t=1m15s)
+      var pasteRow = document.createElement('div');
+      pasteRow.style.cssText = 'display:flex;gap:6px;align-items:center;padding:6px 4px 2px;margin-top:4px;border-top:1px dashed var(--border);';
+      var pasteInput = document.createElement('input');
+      pasteInput.type = 'text';
+      pasteInput.id = 'walkup-youtube-url-input';
+      pasteInput.placeholder = 'Or paste YouTube link (e.g. youtu.be/...?t=75)';
+      pasteInput.setAttribute('aria-label', 'Paste YouTube URL');
+      pasteInput.style.cssText = 'flex:1;min-width:0;font-size:0.76rem;padding:4px 7px;';
+      var pasteBtn = document.createElement('button');
+      pasteBtn.type = 'button';
+      pasteBtn.className = 'btn btn-outline btn-sm';
+      pasteBtn.style.cssText = 'font-size:0.74rem;padding:4px 8px;white-space:nowrap;';
+      pasteBtn.textContent = 'Use Link';
+      var applyPastedLink = function () {
+        var rawUrl = pasteInput.value.trim();
+        var ytId = API.getYouTubeId ? API.getYouTubeId(rawUrl) : null;
+        if (!ytId && /^[A-Za-z0-9_-]{11}$/.test(rawUrl)) ytId = rawUrl;
+        if (!ytId) {
+          if (walkupStatusRef) walkupStatusRef.textContent = 'Please paste a valid YouTube link or 11-character video ID.';
+          return;
+        }
+        delete walkupFailedYtIds[ytId];
+        var parsedStart = API.getYouTubeStartSeconds ? API.getYouTubeStartSeconds(rawUrl) : 0;
+        applySelectedYtMatch(ytId, 'YouTube (' + ytId + ')', '', 0);
+        if (parsedStart > 0) {
+          if (parsedStart > maxStartSec) {
+            maxStartSec = Math.min(3600, parsedStart + WALKUP_CLIP_DURATION);
+            slider.max = String(maxStartSec);
+            endLbl.textContent = formatClipSeconds(maxStartSec);
+          }
+          syncTimestampUi(parsedStart, false, false);
+        }
+        ytListOpen = false;
+        ytMatchesList.style.display = 'none';
+        ytChoiceCaret.textContent = 'Change ▾';
+        stopWalkupPreview();
+        if (walkupStatusRef) {
+          walkupStatusRef.textContent = 'YouTube video set' + (parsedStart > 0 ? (' at ' + formatClipSeconds(parsedStart)) : '') + '. Click Preview to test!';
+        }
+      };
+      pasteBtn.addEventListener('click', applyPastedLink);
+      pasteInput.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter') {
+          ev.preventDefault();
+          applyPastedLink();
+        }
       });
+      pasteRow.appendChild(pasteInput);
+      pasteRow.appendChild(pasteBtn);
+      ytMatchesList.appendChild(pasteRow);
     };
 
     var fetchYtMatches = function () {
-      if (ytFetched) return;
-      ytFetched = true;
+      if (ytFetchPromise) return ytFetchPromise;
       var q = (song.trackName && song.artistName) ? (song.trackName + ' ' + song.artistName + ' official audio') : (song.label || '');
-      if (!q) return;
+      if (!q || (API.getYouTubeId && API.getYouTubeId(q))) {
+        ytFetchPromise = Promise.resolve(ytMatches);
+        return ytFetchPromise;
+      }
       var url = '/api/auth/youtube-search?q=' + encodeURIComponent(q) + '&duration=' + encodeURIComponent(String(song.durationSec || 0));
-      fetch(url, { credentials: 'same-origin' })
+      ytFetchPromise = fetch(url, { credentials: 'same-origin' })
         .then(function (r) { return r.json(); })
         .then(function (data) {
           ytMatches = (data && Array.isArray(data.results)) ? data.results : [];
           if (ytMatches.length > 0 && !song.youtubeId) {
-            song.youtubeId = ytMatches[0].videoId;
-            song.youtubeTitle = ytMatches[0].title;
-            if (selectedWalkupSong) {
-              selectedWalkupSong.youtubeId = ytMatches[0].videoId;
-              selectedWalkupSong.youtubeTitle = ytMatches[0].title;
-            }
-            ytChoiceText.textContent = '▶ YouTube: ' + ytMatches[0].title + (ytMatches[0].durationText ? (' (' + ytMatches[0].durationText + ')') : '');
+            applySelectedYtMatch(ytMatches[0].videoId, ytMatches[0].title, ytMatches[0].durationText, ytMatches[0].durationSec);
           } else if (ytMatches.length === 0 && !song.youtubeId) {
-            ytChoiceText.textContent = 'No YouTube match found';
+            ytChoiceText.textContent = 'No YouTube match found (paste link ▾)';
+            renderYtMatches();
+          } else {
+            renderYtMatches();
           }
-          renderYtMatches();
+          return ytMatches;
         })
         .catch(function () {
-          if (!song.youtubeId) ytChoiceText.textContent = 'Unable to load YouTube matches';
+          if (!song.youtubeId) ytChoiceText.textContent = 'Unable to load YouTube matches (paste link ▾)';
+          renderYtMatches();
+          return ytMatches;
         });
+      return ytFetchPromise;
     };
+    walkupEnsureYtMatchesRef = fetchYtMatches;
 
     ytChoiceBtn.addEventListener('click', function () {
       ytListOpen = !ytListOpen;
       ytMatchesList.style.display = ytListOpen ? 'flex' : 'none';
       ytChoiceCaret.textContent = ytListOpen ? 'Hide ▴' : 'Change ▾';
       if (ytListOpen) {
-        if (!ytFetched) {
+        if (!ytFetchPromise) {
           ytMatchesList.innerHTML = '<div style="padding:6px 8px;font-size:0.76rem;color:var(--text-muted);">Searching YouTube matches...</div>';
           fetchYtMatches();
         } else {
@@ -1443,13 +1667,14 @@
       }
     });
 
-    var syncTimestampUi = function (nextStart, fromTextInput) {
+    var syncTimestampUi = function (nextStart, fromTextInput, seekActiveYt) {
       var clamped = normalizeClipStart(nextStart, maxStartSec + WALKUP_CLIP_DURATION);
       song.clipStart = clamped;
       if (selectedWalkupSong) selectedWalkupSong.clipStart = clamped;
       slider.value = String(clamped);
       if (!fromTextInput) tsInput.value = formatClipSeconds(clamped);
-      var needsYt = clamped > DEEZER_MAX_START;
+      var isYoutubeOnly = Boolean(song.youtubeId && !song.deezerId && !song.previewUrl);
+      var needsYt = clamped > DEEZER_MAX_START || isYoutubeOnly;
       ytWrap.style.display = (!song.clipUrl && (needsYt || song.youtubeId)) ? 'flex' : 'none';
       if (song.clipUrl) {
         windowLabel.textContent = 'Custom Audio Clip (' + WALKUP_CLIP_DURATION + 's max)';
@@ -1459,7 +1684,17 @@
       } else {
         windowLabel.textContent = 'Deezer Preview: ' + formatClipSeconds(clamped) + ' – ' + formatClipSeconds(clamped + WALKUP_CLIP_DURATION) + ' (' + WALKUP_CLIP_DURATION + 's)';
       }
-      if (!song.clipUrl && !needsYt && walkupAudio && !walkupAudio.paused) {
+
+      if (!song.clipUrl && needsYt && walkupAudio && !walkupAudio.paused) {
+        stopWalkupPreview();
+      } else if (!song.clipUrl && !needsYt && walkupYtCtrl) {
+        stopWalkupPreview();
+      } else if (!song.clipUrl && needsYt && walkupYtCtrl && seekActiveYt) {
+        walkupYtCtrl.seekTo(clamped, WALKUP_CLIP_DURATION);
+        if (walkupStatusRef) {
+          walkupStatusRef.textContent = 'Loading YouTube clip ' + formatClipSeconds(clamped) + ' – ' + formatClipSeconds(clamped + WALKUP_CLIP_DURATION) + '...';
+        }
+      } else if (!song.clipUrl && !needsYt && walkupAudio && !walkupAudio.paused) {
         try { walkupAudio.currentTime = clamped; } catch (e) { /* ignore */ }
         if (walkupStopTimer) clearTimeout(walkupStopTimer);
         walkupStopTimer = setTimeout(function () {
@@ -1473,10 +1708,19 @@
     };
 
     slider.addEventListener('input', function () {
-      syncTimestampUi(slider.value, false);
+      syncTimestampUi(slider.value, false, false);
+    });
+    slider.addEventListener('change', function () {
+      syncTimestampUi(slider.value, false, true);
     });
     tsInput.addEventListener('change', function () {
-      syncTimestampUi(tsInput.value, false);
+      syncTimestampUi(tsInput.value, false, true);
+    });
+    tsInput.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') {
+        ev.preventDefault();
+        syncTimestampUi(tsInput.value, false, true);
+      }
     });
 
     // Optional Custom Audio Clip Upload (stored in Google Drive)
@@ -1509,7 +1753,7 @@
       uploadLabelText.textContent = '📤 Upload Audio Clip (MP3/M4A/WAV)';
       removeClipBtn.style.display = 'none';
       if (walkupStatusRef) walkupStatusRef.textContent = 'Custom clip removed. Using Deezer/YouTube preview.';
-      syncTimestampUi(song.clipStart, false);
+      syncTimestampUi(song.clipStart, false, false);
     });
     uploadRow.appendChild(removeClipBtn);
 
@@ -1542,7 +1786,7 @@
           uploadLabelText.textContent = '🔄 Replace Audio Clip';
           removeClipBtn.style.display = 'inline-block';
           if (walkupStatusRef) walkupStatusRef.textContent = 'Custom clip uploaded! Click Save Changes to keep it.';
-          syncTimestampUi(song.clipStart, false);
+          syncTimestampUi(song.clipStart, false, false);
         })
         .catch(function () {
           uploadInput.value = '';
@@ -1558,7 +1802,7 @@
     clipperWrap.appendChild(ytWrap);
     clipperWrap.appendChild(uploadRow);
     clipperWrap.appendChild(statusEl);
-    syncTimestampUi(clipStart, false);
+    syncTimestampUi(clipStart, false, false);
     // Pre-fetch YouTube matches in the background so switching past 0:20 is instant
     fetchYtMatches();
 
@@ -1581,6 +1825,15 @@
 
     input.addEventListener('input', function () {
       var q = input.value.trim();
+      var directYtId = API.getYouTubeId ? API.getYouTubeId(q) : null;
+      if (directYtId) {
+        if (timer) clearTimeout(timer);
+        hideList();
+        var parsedDirect = parseWalkupSong(q);
+        selectedWalkupSong = parsedDirect;
+        renderWalkupSongCard(parsedDirect);
+        return;
+      }
       if (selectedWalkupSong && selectedWalkupSong.label !== q) {
         selectedWalkupSong = null;
       }

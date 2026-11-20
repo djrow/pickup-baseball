@@ -675,6 +675,8 @@ export async function getUserFromSession(db, sessionId, chatDb, options = {}) {
     name: session.name,
     email: session.email,
     bio: session.bio || '',
+    walkup_song: session.walkup_song || null,
+    walkupSong: session.walkup_song || null,
     avatarUrl: session.avatar_url || '',
     avatar_url: session.avatar_url || '',
     role,

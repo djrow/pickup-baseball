@@ -343,4 +343,5 @@ require('../tests/core/waiver-checkin.test.js')(ctx);
 require('../tests/core/dialog-focus-trap.test.js')();
 require('../tests/core/attendance-history.test.js')(ctx);
 require('../tests/core/clubhouse-sync-voice.test.js')(ctx);
+require('../tests/core/walkup-youtube.test.js')(ctx);
 require('../tests/clubhouse/index.js')();

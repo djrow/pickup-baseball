@@ -335,7 +335,24 @@ interface PBFApiFacade {
   escapeHtml(str: any): string;
   parseMediaType(url: string, explicitType?: string): string;
   getYouTubeId(url: string): string | null;
+  getYouTubeStartSeconds(url: string): number;
   getYouTubeEmbedUrl(url: string): string | null;
+  mountYouTubeClipPlayer(
+    container: HTMLElement | null,
+    options: {
+      videoId: string;
+      startSec?: number;
+      durationSec?: number;
+      height?: number;
+      title?: string;
+      onPlaying?: () => void;
+      onEnded?: () => void;
+      onError?: (code: number) => void;
+    }
+  ): {
+    seekTo(nextStartSec: number, nextDurationSec?: number): void;
+    destroy(): void;
+  } | null;
   getGoogleDriveId(url: string): string | null;
   getGoogleDriveEmbedUrl(url: string): string | null;
   safeUrl(rawUrl: string): string;

@@ -866,14 +866,289 @@
 
   API.getYouTubeId = function (url) {
     if (!url) return null;
-    var match = String(url).match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([\w-]{11})/i);
+    var match = String(url).match(/(?:youtu\.be\/|(?:www\.|m\.|music\.)?youtube(?:-nocookie)?\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([\w-]{11})/i);
     return match ? match[1] : null;
+  };
+
+  API.getYouTubeStartSeconds = function (url) {
+    if (!url) return 0;
+    var s = String(url);
+    var m = s.match(/[?&#](?:t|start)=([^&#]+)/i);
+    if (!m || !m[1]) return 0;
+    var val = String(m[1]).trim().toLowerCase();
+    if (/^\d+s?$/.test(val)) {
+      return Math.min(3600, Math.max(0, parseInt(val, 10) || 0));
+    }
+    var total = 0;
+    var hm = val.match(/(\d+)h/);
+    var mm = val.match(/(\d+)m/);
+    var sm = val.match(/(\d+)s/);
+    if (hm) total += parseInt(hm[1], 10) * 3600;
+    if (mm) total += parseInt(mm[1], 10) * 60;
+    if (sm) total += parseInt(sm[1], 10);
+    return Math.min(3600, Math.max(0, total));
   };
 
   API.getYouTubeEmbedUrl = function (url) {
     var id = this.getYouTubeId(url);
     if (!id) return '';
     return 'https://www.youtube-nocookie.com/embed/' + id;
+  };
+
+  var ytClipPlayerSeq = 0;
+
+  /**
+   * Mounts a CSP-safe YouTube clip embed with timestamp seeking, postMessage state/error tracking,
+   * accurate post-play auto-stop, and a direct timestamped YouTube fallback link.
+   * @param {HTMLElement|null} container
+   * @param {{
+   *   videoId: string,
+   *   startSec?: number,
+   *   durationSec?: number,
+   *   height?: number,
+   *   title?: string,
+   *   onPlaying?: () => void,
+   *   onEnded?: () => void,
+   *   onError?: (code: number) => void
+   * }} options
+   */
+  API.mountYouTubeClipPlayer = function (container, options) {
+    if (!container || !options || !options.videoId || !/^[A-Za-z0-9_-]{11}$/.test(String(options.videoId))) {
+      return null;
+    }
+
+    var videoId = String(options.videoId);
+    var safeStart = Math.max(0, Math.min(3600, Math.floor(Number(options.startSec) || 0)));
+    var safeDur = Math.max(1, Math.min(60, Math.floor(Number(options.durationSec) || 10)));
+    var endSec = safeStart + safeDur;
+    var height = Math.max(150, Math.min(400, Math.floor(Number(options.height) || 180)));
+    var playerId = ++ytClipPlayerSeq;
+    var destroyed = false;
+    var readyReceived = false;
+    var hasStartedPlaying = false;
+    var didInitialSeek = false;
+    var endedFired = false;
+    var errorFired = false;
+    /** @type {ReturnType<typeof setTimeout>|null} */
+    var endTimer = null;
+    /** @type {Array<ReturnType<typeof setTimeout>>} */
+    var handshakeTimers = [];
+
+    function fmtTs(sec) {
+      var s = Math.max(0, Math.round(Number(sec) || 0));
+      var m = Math.floor(s / 60);
+      var rem = s % 60;
+      return m + ':' + (rem < 10 ? '0' : '') + rem;
+    }
+
+    function buildEmbedSrc(startVal, endVal) {
+      var qs = 'start=' + startVal +
+        '&end=' + endVal +
+        '&autoplay=1&playsinline=1&rel=0&modestbranding=1&enablejsapi=1';
+      try {
+        if (typeof window !== 'undefined' && window.location && window.location.origin && /^https?:\/\//i.test(window.location.origin)) {
+          qs += '&origin=' + encodeURIComponent(window.location.origin);
+        }
+      } catch (e) { /* ignore origin lookup error */ }
+      return 'https://www.youtube-nocookie.com/embed/' + encodeURIComponent(videoId) + '?' + qs;
+    }
+
+    function clearHandshakeTimers() {
+      for (var i = 0; i < handshakeTimers.length; i++) {
+        clearTimeout(handshakeTimers[i]);
+      }
+      handshakeTimers = [];
+    }
+
+    function clearEndTimer() {
+      if (endTimer) {
+        clearTimeout(endTimer);
+        endTimer = null;
+      }
+    }
+
+    function postCmd(payload) {
+      if (destroyed || !iframe || !iframe.contentWindow) return;
+      try {
+        iframe.contentWindow.postMessage(JSON.stringify(payload), '*');
+      } catch (e) { /* ignore cross-origin postMessage failure */ }
+    }
+
+    function finishClip() {
+      if (destroyed || endedFired) return;
+      endedFired = true;
+      clearEndTimer();
+      postCmd({ event: 'command', func: 'pauseVideo', args: [] });
+      if (typeof options.onEnded === 'function') {
+        options.onEnded();
+      }
+    }
+
+    function scheduleEndTimer(currentSec) {
+      clearEndTimer();
+      var base = typeof currentSec === 'number' && isFinite(currentSec) && currentSec >= safeStart
+        ? currentSec
+        : safeStart;
+      var remainMs = Math.max(900, Math.round((endSec - base) * 1000) + 500);
+      endTimer = setTimeout(function () {
+        finishClip();
+      }, remainMs);
+    }
+
+    function sendListeningHandshake() {
+      if (destroyed || readyReceived) return;
+      postCmd({ event: 'listening', id: playerId, channel: 'widget' });
+    }
+
+    function scheduleHandshakes() {
+      clearHandshakeTimers();
+      sendListeningHandshake();
+      var delays = [250, 700, 1400, 2400];
+      for (var i = 0; i < delays.length; i++) {
+        handshakeTimers.push(setTimeout(sendListeningHandshake, delays[i]));
+      }
+    }
+
+    container.innerHTML = '';
+
+    var iframe = document.createElement('iframe');
+    iframe.title = options.title || 'YouTube clip player';
+    iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+    iframe.allowFullscreen = true;
+    iframe.referrerPolicy = 'strict-origin-when-cross-origin';
+    iframe.style.cssText = 'width:100%;height:' + height + 'px;border:0;display:block;border-radius:6px;background:#000;';
+
+    var footerBar = document.createElement('div');
+    footerBar.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px;font-size:0.74rem;color:var(--text-muted, var(--ch-text-secondary, #888));';
+
+    var windowSpan = document.createElement('span');
+    windowSpan.textContent = 'Clip: ' + fmtTs(safeStart) + ' – ' + fmtTs(endSec);
+    footerBar.appendChild(windowSpan);
+
+    var openLink = document.createElement('a');
+    openLink.href = 'https://www.youtube.com/watch?v=' + encodeURIComponent(videoId) + '&t=' + safeStart + 's';
+    openLink.target = '_blank';
+    openLink.rel = 'noopener noreferrer';
+    openLink.style.cssText = 'color:var(--primary, var(--ch-accent, #fd5a1e));text-decoration:underline;font-weight:600;white-space:nowrap;';
+    openLink.textContent = 'Open on YouTube at ' + fmtTs(safeStart) + ' ↗';
+    footerBar.appendChild(openLink);
+
+    function handleMessage(ev) {
+      if (destroyed || !ev) return;
+      if (ev.origin !== 'https://www.youtube-nocookie.com' && ev.origin !== 'https://www.youtube.com') return;
+      if (!iframe || !iframe.contentWindow || ev.source !== iframe.contentWindow) return;
+
+      var data = null;
+      if (typeof ev.data === 'string') {
+        try { data = JSON.parse(ev.data); } catch (e) { return; }
+      } else if (ev.data && typeof ev.data === 'object') {
+        data = ev.data;
+      }
+      if (!data || typeof data !== 'object') return;
+
+      var evtName = data.event || '';
+      var info = data.info;
+
+      if (evtName === 'onReady' || (!readyReceived && evtName === 'initialDelivery')) {
+        readyReceived = true;
+        clearHandshakeTimers();
+        postCmd({ event: 'command', func: 'addEventListener', args: ['onStateChange'] });
+        postCmd({ event: 'command', func: 'addEventListener', args: ['onError'] });
+      }
+
+      if (evtName === 'onError' || (info && typeof info === 'object' && typeof info.errorCode === 'number' && info.errorCode > 0)) {
+        if (!errorFired) {
+          errorFired = true;
+          clearEndTimer();
+          var errCode = evtName === 'onError' ? Number(info || 0) : Number(info.errorCode || 0);
+          if (typeof options.onError === 'function') {
+            options.onError(errCode);
+          }
+        }
+        return;
+      }
+
+      var playerState = null;
+      var currentTime = null;
+      if (evtName === 'onStateChange' && typeof info === 'number') {
+        playerState = info;
+      } else if (info && typeof info === 'object') {
+        if (typeof info.playerState === 'number') playerState = info.playerState;
+        if (typeof info.currentTime === 'number') currentTime = info.currentTime;
+      }
+
+      if (playerState === 1) {
+        if (safeStart > 0 && !didInitialSeek && typeof currentTime === 'number' && currentTime < safeStart - 1.5) {
+          didInitialSeek = true;
+          postCmd({ event: 'command', func: 'seekTo', args: [safeStart, true] });
+          return;
+        }
+        didInitialSeek = true;
+        if (!hasStartedPlaying) {
+          hasStartedPlaying = true;
+          if (typeof options.onPlaying === 'function') {
+            options.onPlaying();
+          }
+        }
+        scheduleEndTimer(currentTime);
+      } else if (playerState === 0 && hasStartedPlaying) {
+        finishClip();
+        return;
+      } else if (playerState === 2) {
+        clearEndTimer();
+      }
+
+      if (hasStartedPlaying && typeof currentTime === 'number' && currentTime >= endSec - 0.15) {
+        finishClip();
+      }
+    }
+
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('message', handleMessage);
+    }
+
+    iframe.addEventListener('load', function () {
+      if (!destroyed) {
+        scheduleHandshakes();
+      }
+    });
+
+    iframe.src = buildEmbedSrc(safeStart, endSec);
+    container.appendChild(iframe);
+    container.appendChild(footerBar);
+
+    return {
+      seekTo: function (nextStartSec, nextDurationSec) {
+        if (destroyed) return;
+        safeStart = Math.max(0, Math.min(3600, Math.floor(Number(nextStartSec) || 0)));
+        if (nextDurationSec != null) {
+          safeDur = Math.max(1, Math.min(60, Math.floor(Number(nextDurationSec) || safeDur)));
+        }
+        endSec = safeStart + safeDur;
+        readyReceived = false;
+        hasStartedPlaying = false;
+        didInitialSeek = false;
+        endedFired = false;
+        errorFired = false;
+        clearEndTimer();
+        clearHandshakeTimers();
+        windowSpan.textContent = 'Clip: ' + fmtTs(safeStart) + ' – ' + fmtTs(endSec);
+        openLink.href = 'https://www.youtube.com/watch?v=' + encodeURIComponent(videoId) + '&t=' + safeStart + 's';
+        openLink.textContent = 'Open on YouTube at ' + fmtTs(safeStart) + ' ↗';
+        // Reload embed URL with fresh start/end so YouTube's native end parameter never clips early
+        iframe.src = buildEmbedSrc(safeStart, endSec);
+      },
+      destroy: function () {
+        if (destroyed) return;
+        destroyed = true;
+        clearEndTimer();
+        clearHandshakeTimers();
+        if (typeof window !== 'undefined' && typeof window.removeEventListener === 'function') {
+          window.removeEventListener('message', handleMessage);
+        }
+        container.innerHTML = '';
+      }
+    };
   };
 
   API.getGoogleDriveId = function (url) {
