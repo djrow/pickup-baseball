@@ -134,7 +134,7 @@
 
   <main class="container" id="main-content" style="max-width: 780px; margin-top: 28px; margin-bottom: 60px;">
     <div class="no-print" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
-      <a href="/index.html" style="color: var(--secondary); text-decoration: none; font-weight: 600; font-size: 0.9rem;" data-i18n="waiver.back_to_games">
+      <a href="/index.html" style="display: inline-flex; align-items: center; min-height: 28px; color: var(--secondary); text-decoration: none; font-weight: 600; font-size: 0.9rem;" data-i18n="waiver.back_to_games">
         ← Back to Game Schedule
       </a>
       <button type="button" id="btn-print-blank-waiver" class="btn btn-outline btn-sm" style="font-size: 0.8rem;" data-i18n="waiver.print_blank">
@@ -248,7 +248,7 @@
         <!-- Signature Mode Tabs -->
         <div class="form-group" style="margin-bottom: 16px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 8px;">
-            <label style="margin: 0;" data-i18n="waiver.sig_label">Signature *</label>
+            <span id="waiver-sig-heading" style="font-weight: 600; font-size: 0.9rem; color: var(--as-green); margin: 0;" data-i18n="waiver.sig_label">Signature *</span>
             <div style="display: flex; gap: 6px; align-items: center;">
               <button type="button" id="btn-sig-mode-draw" class="btn btn-outline btn-sm active" style="font-size: 0.76rem; padding: 3px 10px;" data-i18n="waiver.btn_draw_sig">✍️ Draw Signature</button>
               <button type="button" id="btn-sig-mode-type" class="btn btn-outline btn-sm" style="font-size: 0.76rem; padding: 3px 10px;" data-i18n="waiver.btn_type_sig">⌨️ Type Signature</button>
@@ -257,11 +257,11 @@
           </div>
 
           <div id="waiver-type-sig-wrap" style="display: none; margin-bottom: 10px;">
-            <input type="text" id="waiver-typed-sig-input" maxlength="120" placeholder="Type your full name to generate signature on the line below..." data-i18n-placeholder="waiver.type_sig_placeholder" style="font-style: italic; font-size: 1rem;">
+            <input type="text" id="waiver-typed-sig-input" aria-label="Type your full name to generate signature" maxlength="120" placeholder="Type your full name to generate signature on the line below..." data-i18n-placeholder="waiver.type_sig_placeholder" style="font-style: italic; font-size: 1rem;">
           </div>
 
           <div class="waiver-sig-canvas-wrap">
-            <canvas id="waiver-sig-canvas" class="waiver-sig-canvas" width="680" height="150"></canvas>
+            <canvas id="waiver-sig-canvas" class="waiver-sig-canvas" width="680" height="150" role="img" aria-label="Signature drawing pad. Draw with mouse, finger, or stylus, or switch to Type Signature."></canvas>
             <div class="waiver-sig-baseline"></div>
             <div class="waiver-sig-hint" data-i18n="waiver.sig_canvas_hint">Sign above the line using your mouse, finger, or stylus</div>
           </div>

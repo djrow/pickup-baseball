@@ -808,19 +808,18 @@ pickup-baseball/
 │   ├── feed.xml.js                # RSS 2.0 + Media RSS feed endpoint
 │   └── health.js                  # Edge health check (/health)
 │
-├── tests/                         # Native node:test suites (core/*, clubhouse/tier1–5, helpers/*)
+├── tests/                         # Native node:test suites (core/*, clubhouse/tier1–6, workerd/*, helpers/*)
 ├── scripts/
-│   ├── verify-all.js              # Automated 223-test E2E suite (`npm test`)
-│   ├── security-scan.js           # 12-check static/live security & parity scanner
+│   ├── verify-all.js              # Automated E2E verification suite (`npm test`)
+│   ├── security-scan.js           # Static/live security & parity scanner
 │   ├── bump-version.js            # Atomic version/cache-bust bumper (`npm run bump`)
 │   └── ship.ps1                   # Automated Windows release workflow script
-├── d1_schema.sql                  # Core SQLite / Cloudflare D1 table definitions
 └── wrangler.toml                  # Cloudflare Pages project config, env vars, & D1 bindings
 ```
 
 > ### 💡 Single Unified Backend Architecture
 > - **One API Codebase (`src/app/`):** You no longer have to duplicate changes across separate Cloudflare and Node backend files. Both `functions/api/[[route]].js` (production Cloudflare Pages + D1) and `src/server.js` (local `npm run dev` + `npm test` via `src/d1-sqlite.js`) execute the exact same Hono routers in `src/app/`.
-> - **Schema & Migrations (`src/app/schema.js`):** Database tables and idempotent `ALTER TABLE` statements for both `BASEBALL_DB` and `CHAT_DB` live in `src/app/schema.js` (keep `d1_schema.sql` aligned for fresh D1 initializations).
+> - **Schema & Migrations (`src/app/schema/`):** Database tables and versioned migrations for both `BASEBALL_DB` and `CHAT_DB` live in `src/app/schema/{baseball-ddl,chat-ddl,migrations,engine}.js` (with `src/app/schema.js` as the stable barrel and `npm run db:migrate` for pre-deploy runs).
 
 ---
 
@@ -927,9 +926,10 @@ When `CURRENT_APP_VERSION` on the server increases, any player with an older tab
 
 ### Recipe E: Adding a New Column to the Database (Zero-Downtime)
 If you ever need to store a new field in `BASEBALL_DB` or `CHAT_DB`:
-1. Add the column to `CREATE_TABLES_SQL` (or `CREATE_CHAT_TABLES_SQL`) and append an `'ALTER TABLE ... ADD COLUMN ...'` statement to `ALTER_STATEMENTS` (or `CHAT_ALTER_STATEMENTS`) inside **`src/app/schema.js`**.
-2. Also update **`d1_schema.sql`** so fresh core D1 setups match cleanly.
-   - *Why this works so well:* Both `npm test` and production Cloudflare Workers invoke `ensureD1Schema` / `ensureChatD1Schema` automatically, safely adding new columns to existing D1 databases without losing a single row!
+1. Add the column to `CREATE_TABLES_SQL` in **`src/app/schema/baseball-ddl.js`** (or `CREATE_CHAT_TABLES_SQL` in **`src/app/schema/chat-ddl.js`**).
+2. Add a new versioned migration step to `BASEBALL_MIGRATIONS` (or `CHAT_MIGRATIONS`) inside **`src/app/schema/migrations.js`**.
+3. Run `npm run db:migrate` locally (and `node scripts/migrate-db.js --remote` for production D1 if migrating ahead of traffic).
+   - *Why this works so well:* Both `npm test` and production Cloudflare Workers invoke `ensureDualD1Schema` (`src/app/schema/engine.js`) automatically, safely applying pending versioned migrations to existing D1 databases without losing a single row!
 
 ---
 

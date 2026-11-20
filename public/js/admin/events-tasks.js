@@ -130,32 +130,34 @@
     container.innerHTML = list.map(function (duty, idx) {
       var isCoord = Boolean(duty.grants_coordinator);
       var reqBadge = duty.required_badge || '';
+      var rowPrefix = API.escapeHtml(containerId + '-row-' + idx);
+      var taskTitleLabel = API.escapeHtml(duty.title || ('#' + (idx + 1)));
       return (
         '<div class="editable-task-row" data-required-badge="' + API.escapeHtml(reqBadge) + '" style="display: grid; grid-template-columns: 2fr 3fr 100px 40px; gap: 10px; align-items: center; background: var(--bg-card); padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);">' +
           '<div>' +
-            '<label style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 2px;">Task Name</label>' +
-            '<input type="text" class="editable-task-title" value="' + API.escapeHtml(duty.title) + '" placeholder="e.g. Umpire, Baseballs..." required style="padding: 6px 10px; font-size: 0.9rem;">' +
+            '<label for="' + rowPrefix + '-title" style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 2px;">Task Name</label>' +
+            '<input type="text" id="' + rowPrefix + '-title" name="' + rowPrefix + '-title" class="editable-task-title" value="' + API.escapeHtml(duty.title) + '" placeholder="e.g. Umpire, Baseballs..." required style="padding: 6px 10px; font-size: 0.9rem;">' +
           '</div>' +
           '<div>' +
-            '<label style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 2px;">Description / Details</label>' +
-            '<input type="text" class="editable-task-desc" value="' + API.escapeHtml(duty.description) + '" placeholder="e.g. Bring bucket of balls..." style="padding: 6px 10px; font-size: 0.9rem;">' +
+            '<label for="' + rowPrefix + '-desc" style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 2px;">Description / Details</label>' +
+            '<input type="text" id="' + rowPrefix + '-desc" name="' + rowPrefix + '-desc" class="editable-task-desc" value="' + API.escapeHtml(duty.description) + '" placeholder="e.g. Bring bucket of balls..." style="padding: 6px 10px; font-size: 0.9rem;">' +
           '</div>' +
           '<div>' +
-            '<label style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 2px;">Volunteers</label>' +
-            '<input type="number" class="editable-task-slots" min="1" max="15" value="' + (duty.slots_needed || 1) + '" required style="padding: 6px 8px; font-size: 0.9rem; text-align: center;">' +
+            '<label for="' + rowPrefix + '-slots" style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 2px;">Volunteers</label>' +
+            '<input type="number" id="' + rowPrefix + '-slots" name="' + rowPrefix + '-slots" class="editable-task-slots" min="1" max="15" value="' + (duty.slots_needed || 1) + '" required style="padding: 6px 8px; font-size: 0.9rem; text-align: center;">' +
           '</div>' +
           '<div style="text-align: right; padding-top: 18px;">' +
-            '<button type="button" data-action="remove-task-row" data-row-idx="' + idx + '" data-remove-kind="' + removeKind + '" title="Remove task" style="background: none; border: none; cursor: pointer; color: var(--danger); font-size: 1.15rem; line-height: 1;">🗑️</button>' +
+            '<button type="button" data-action="remove-task-row" data-row-idx="' + idx + '" data-remove-kind="' + removeKind + '" title="Remove task" aria-label="Remove task ' + taskTitleLabel + '" style="background: none; border: none; cursor: pointer; color: var(--danger); font-size: 1.15rem; line-height: 1; min-width: 28px; min-height: 28px; display: inline-flex; align-items: center; justify-content: center;">🗑️</button>' +
           '</div>' +
           '<div style="grid-column: 1 / -1; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding-top: 4px; border-top: 1px dashed var(--border); font-size: 0.78rem; color: var(--text-muted);">' +
             '<label style="display: inline-flex; align-items: center; gap: 5px; cursor: pointer; font-weight: 600; margin: 0;">' +
-              '<input type="checkbox" class="editable-task-coordinator" ' + (isCoord ? 'checked' : '') + ' style="width: 14px; height: 14px; accent-color: var(--primary);">' +
+              '<input type="checkbox" id="' + rowPrefix + '-coord" name="' + rowPrefix + '-coord" class="editable-task-coordinator" ' + (isCoord ? 'checked' : '') + ' style="width: 14px; height: 14px; accent-color: var(--primary);">' +
               '<span>📋 Coordinator Access</span>' +
             '</label>' +
             (showCertified ? (
               '<label style="display: inline-flex; align-items: center; gap: 6px; font-weight: 600; margin: 0;">' +
                 '<span>Required Badge:</span>' +
-                '<select class="editable-task-badge" style="padding: 2px 6px; font-size: 0.76rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-input); color: var(--text-main);">' +
+                '<select id="' + rowPrefix + '-badge" name="' + rowPrefix + '-badge" class="editable-task-badge" style="padding: 2px 6px; font-size: 0.76rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-input); color: var(--text-main);">' +
                   '<option value="" ' + (reqBadge === '' ? 'selected' : '') + '>None (Standard Task)</option>' +
                   '<option value="machine" ' + (reqBadge === 'machine' ? 'selected' : '') + '>⚡ Pitching Machine</option>' +
                   '<option value="field" ' + (reqBadge === 'field' ? 'selected' : '') + '>🚜 Field Dragging</option>' +
@@ -377,10 +379,11 @@
       container.innerHTML = '<span style="color: var(--text-muted); font-size: 0.85rem;">No user accounts found.</span>';
       return;
     }
-    container.innerHTML = members.map(function (m) {
+    container.innerHTML = members.map(function (m, idx) {
+      var cbId = 'allowed-player-cb-' + (m.id != null ? String(m.id) : String(idx));
       return (
         '<label class="allowed-player-row" style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; cursor: pointer; margin: 0; padding: 2px 0;">' +
-          '<input type="checkbox" class="allowed-player-cb" value="' + API.escapeHtml(m.email) + '" style="accent-color: var(--primary);">' +
+          '<input type="checkbox" id="' + API.escapeHtml(cbId) + '" name="allowed-player-cb" class="allowed-player-cb" value="' + API.escapeHtml(m.email) + '" style="accent-color: var(--primary);">' +
           '<span style="font-weight: 600; color: var(--secondary);">' + API.escapeHtml(m.name) + '</span>' +
           '<span style="color: var(--text-muted); font-size: 0.78rem;">(' + API.escapeHtml(m.email) + ')</span>' +
         '</label>'

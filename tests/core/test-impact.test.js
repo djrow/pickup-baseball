@@ -1,10 +1,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const path = require('node:path');
 const { execFileSync, spawnSync } = require('node:child_process');
 
 const ROOT_DIR = path.resolve(__dirname, '..', '..');
-const { analyzeTestImpact } = require('../../scripts/test-impact.js');
+const { analyzeTestImpact, getRegisteredVerifySuites } = require('../../scripts/test-impact.js');
 
 test('Selective Diff-to-Test Impact Mapper & Suite Filter (Wave 4)', async (t) => {
   await t.test('maps waiver route cleanly via reverse imports + domain rules without hub explosion', () => {
@@ -21,7 +22,7 @@ test('Selective Diff-to-Test Impact Mapper & Suite Filter (Wave 4)', async (t) =
     assert.ok(res.workerdTests.includes('tests/workerd/wave2-organizing.test.js'));
   });
 
-  await t.test('maps domain fallbacks for i18n, cron worker, and standalone push-sender tests', () => {
+  await t.test('maps domain fallbacks for i18n, cron worker, and push-sender suites', () => {
     const i18nImpact = analyzeTestImpact({ rootDir: ROOT_DIR, files: ['public/i18n/es.json'] });
     assert.equal(i18nImpact.fullSuiteRecommended, false);
     assert.ok(i18nImpact.verifySuites.includes('security-scan'));
@@ -31,7 +32,17 @@ test('Selective Diff-to-Test Impact Mapper & Suite Filter (Wave 4)', async (t) =
     assert.ok(cronImpact.verifySuites.includes('cron-reminders'));
 
     const pushImpact = analyzeTestImpact({ rootDir: ROOT_DIR, files: ['src/app/push-sender.js'] });
-    assert.ok(pushImpact.standaloneTests.includes('tests/core/push-sender.test.js'));
+    assert.ok(pushImpact.verifySuites.includes('push-sender'));
+    assert.ok(pushImpact.verifySuites.includes('clubhouse'));
+  });
+
+  await t.test('keeps every tests/core/*.test.js file registered in scripts/verify-all.js', () => {
+    const registered = getRegisteredVerifySuites(ROOT_DIR);
+    const coreFiles = fs.readdirSync(path.join(ROOT_DIR, 'tests', 'core'))
+      .filter((name) => name.endsWith('.test.js'))
+      .map((name) => name.replace(/\.test\.js$/, ''));
+    const orphaned = coreFiles.filter((suiteId) => !registered.has(suiteId));
+    assert.deepEqual(orphaned, [], `Orphaned tests/core suites not registered in verify-all.js: ${orphaned.join(', ')}`);
   });
 
   await t.test('flags high-blast-radius core files with fullSuiteRecommended', () => {

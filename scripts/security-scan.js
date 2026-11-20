@@ -1273,6 +1273,27 @@ function checkSecretAndFileHygiene() {
   } else {
     record('PASS', 'Hardcoded Secret Scan', `${tracked.length} tracked files clean`);
   }
+
+  const LOCAL_MACHINE_PATH_RE = /(?:file:\/\/\/[a-z]:\/users\/|\b[a-z]:[\\/]+users[\\/]+)/i;
+  const localPathHits = [];
+  let localPathChecked = 0;
+  for (const relPath of tracked) {
+    if (relPath === 'scripts/security-scan.js' || relPath.startsWith('tests/')) continue;
+    if (!(/\.(md|txt|js|mjs|cjs|ts|html|css|json|yml|yaml|toml|sql|ps1|sh)$/i.test(relPath))) continue;
+    const full = path.join(ROOT, relPath);
+    if (!fs.existsSync(full) || fs.statSync(full).size > 1024 * 1024) continue;
+    localPathChecked++;
+    const content = fs.readFileSync(full, 'utf8');
+    if (LOCAL_MACHINE_PATH_RE.test(content)) {
+      localPathHits.push(relPath);
+    }
+  }
+
+  if (localPathHits.length) {
+    record('FAIL', 'Local Machine Path Hygiene', localPathHits.join(', '));
+  } else {
+    record('PASS', 'Local Machine Path Hygiene', `${localPathChecked} tracked docs/source files clean`);
+  }
 }
 
 /**

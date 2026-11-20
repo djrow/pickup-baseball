@@ -1,6 +1,6 @@
 /**
  * Pickup Baseball Clubhouse — Multi-Theme 4-Column Sandlot Layout (WP-6)
- * Inherits Webapp Light / Dark Mode + 12 MLB Market Palettes from /css/themes.css
+ * Inherits Webapp Light / Dark Mode + Market & Ambient Palettes from /css/themes.css
  */
 
 :root {
@@ -9,8 +9,8 @@
   --as-green-hover: #002823;
   --as-green-subtle: #e6f0ed;
   --as-green-border: #b8d7cf;
-  --giants-orange: #FD5A1E;
-  --giants-orange-hover: #e04a11;
+  --giants-orange: #b83708;
+  --giants-orange-hover: #9a2d06;
   --giants-orange-light: #fff2ed;
   --giants-orange-border: #fed3c4;
   --bg-page: #f5f8f7;
@@ -28,16 +28,16 @@
   --ch-bg-elevated: var(--bg-subtle, #eaf1ee);
   --ch-bg-surface: rgba(0, 0, 0, 0.035);
   --ch-bg-hover: rgba(0, 0, 0, 0.055);
-  --ch-bg-active: var(--giants-orange-light, rgba(253, 90, 30, 0.12));
+  --ch-bg-active: var(--giants-orange-light, rgba(184, 55, 8, 0.12));
   --ch-border: var(--border, #d0ddd8);
   --ch-text-primary: var(--text-main, #0c1f1a);
   --ch-text-secondary: var(--text-muted, #4b655d);
   --ch-text-muted: var(--text-muted, #4b655d);
-  --ch-accent: var(--giants-orange, #FD5A1E);
-  --ch-accent-hover: var(--giants-orange-hover, #e04a11);
+  --ch-accent: var(--giants-orange, #b83708);
+  --ch-accent-hover: var(--giants-orange-hover, #9a2d06);
   --ch-on-accent: #ffffff;
-  --ch-green: #15803d;
-  --ch-gold: #9a6700;
+  --ch-green: #116932;
+  --ch-gold: #7d5200;
   --ch-danger: #c81e1e;
   --ch-toast-err-bg: #fef2f2;
   --ch-toast-err-text: #991b1b;
@@ -51,10 +51,10 @@
   --as-green-hover: #6ee7b7;
   --as-green-subtle: rgba(16, 185, 129, 0.14);
   --as-green-border: rgba(52, 211, 153, 0.32);
-  --giants-orange: #fd5a1e;
-  --giants-orange-hover: #ff713d;
-  --giants-orange-light: rgba(253, 90, 30, 0.16);
-  --giants-orange-border: rgba(253, 90, 30, 0.42);
+  --giants-orange: #ff8a5b;
+  --giants-orange-hover: #ffa07a;
+  --giants-orange-light: rgba(255, 138, 91, 0.16);
+  --giants-orange-border: rgba(255, 138, 91, 0.42);
   --bg-page: #0b1916;
   --bg-card: #132a25;
   --bg-subtle: #1b3b34;
@@ -69,14 +69,14 @@
   --ch-bg-elevated: var(--bg-subtle, #1b3b34);
   --ch-bg-surface: rgba(255, 255, 255, 0.04);
   --ch-bg-hover: rgba(255, 255, 255, 0.06);
-  --ch-bg-active: var(--giants-orange-light, rgba(253, 90, 30, 0.16));
+  --ch-bg-active: var(--giants-orange-light, rgba(255, 138, 91, 0.16));
   --ch-border: var(--border, rgba(255, 255, 255, 0.1));
   --ch-text-primary: var(--text-main, #f5f7f6);
   --ch-text-secondary: var(--text-muted, #b4c6c1);
   --ch-text-muted: var(--text-muted, #7f9992);
-  --ch-accent: var(--giants-orange, #fd5a1e);
-  --ch-accent-hover: var(--giants-orange-hover, #ff713d);
-  --ch-on-accent: #ffffff;
+  --ch-accent: var(--giants-orange, #ff8a5b);
+  --ch-accent-hover: var(--giants-orange-hover, #ffa07a);
+  --ch-on-accent: #091311;
   --ch-green: #2ecc71;
   --ch-gold: #f1c40f;
   --ch-danger: #e74c3c;
@@ -96,8 +96,13 @@
 [data-color-theme="camden-orange"][data-theme="dark"],
 [data-color-theme="friar-gold"][data-theme="dark"],
 [data-color-theme="sedona-red"][data-theme="dark"],
-[data-color-theme="powder-blue"][data-theme="dark"] {
+[data-color-theme="powder-blue"][data-theme="dark"],
+[data-color-theme="aurora-cycle"][data-theme="dark"] {
   --ch-on-accent: #07111a;
+}
+
+[data-color-theme="fenway-red"][data-theme="dark"] {
+  --ch-on-accent: #ffffff;
 }
 
 * {
@@ -822,7 +827,8 @@ html, body.clubhouse-body {
   color: var(--ch-gold);
   border: 1px solid rgba(241, 196, 15, 0.4);
   border-radius: 5px;
-  padding: 3px 8px;
+  padding: 4px 10px;
+  min-height: 28px;
   font-size: 11px;
   font-weight: 700;
   cursor: pointer;
@@ -846,7 +852,8 @@ html, body.clubhouse-body {
   border: 1px solid var(--ch-border);
   color: var(--ch-text-secondary);
   border-radius: 999px;
-  padding: 2px 8px;
+  padding: 3px 8px;
+  min-height: 26px;
   font-size: 12px;
   cursor: pointer;
   display: inline-flex;
@@ -868,7 +875,8 @@ html, body.clubhouse-body {
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  padding: 2px 6px;
+  padding: 3px 6px;
+  min-height: 26px;
 }
 
 /* Composer Bar */
@@ -1349,6 +1357,11 @@ html, body.clubhouse-body {
   cursor: pointer;
   font-size: 12px;
   padding: 2px 4px;
+  min-width: 26px;
+  min-height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 4px;
   line-height: 1;
 }
@@ -1547,7 +1560,8 @@ html, body.clubhouse-body {
   border: 1px solid var(--as-green-border, var(--ch-border));
   color: var(--ch-accent);
   border-radius: 5px;
-  padding: 2px 8px;
+  padding: 4px 8px;
+  min-height: 26px;
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
@@ -2069,8 +2083,8 @@ html, body.clubhouse-body {
   left: 16px;
   z-index: 100000;
   padding: 10px 16px;
-  background: var(--ch-accent, #FD5A1E);
-  color: #ffffff;
+  background: var(--ch-accent, #b83708);
+  color: var(--ch-on-accent, #ffffff);
   font-weight: 700;
   font-size: 14px;
   text-decoration: none;
@@ -2082,7 +2096,12 @@ html, body.clubhouse-body {
 .pbf-skip-link:focus,
 .pbf-skip-link:focus-visible {
   top: 0;
-  outline: 3px solid #ffffff;
+  outline: 3px solid var(--as-green, #34d399);
+  outline-offset: 2px;
+}
+
+:is(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2.5px solid var(--as-green, #34d399);
   outline-offset: 2px;
 }
 

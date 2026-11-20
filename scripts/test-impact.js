@@ -133,8 +133,7 @@ const DOMAIN_RULES = [
   {
     label: 'web push notifications',
     match: (rel) => rel === 'src/app/routes/push.js' || rel === 'src/app/push-sender.js',
-    standaloneTests: ['tests/core/push-sender.test.js'],
-    verifySuites: ['clubhouse']
+    verifySuites: ['push-sender', 'clubhouse']
   },
   {
     label: 'mailer & suppression domain',
@@ -193,7 +192,7 @@ const DOMAIN_RULES = [
   },
   {
     label: 'PWA shell & headers',
-    match: (rel) => rel === 'public/sw.js' || rel === 'public/_headers' || rel === 'public/manifest.json',
+    match: (rel) => rel === 'public/sw.js' || rel === 'public/_headers' || rel === 'public/manifest.webmanifest',
     verifySuites: ['security-scan', 'pwa-calendar']
   },
   {

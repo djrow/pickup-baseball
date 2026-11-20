@@ -191,7 +191,7 @@
                 ? 'data-action="toggle-paper-waiver" data-attendee-id="' + a.id + '" data-user-id="' + (a.user_id || '') + '" data-target-status="' + nextAction + '"'
                 : '';
 
-              waiverCheckinHtml = '<button type="button" class="badge ' + badgeClass + '" ' + actionAttr + ' title="' + nextTitle + '" style="font-size: 0.68rem; font-weight: 700; border: none; padding: 2px 7px; ' + cursorStyle + '">' + API.escapeHtml(badgeLabel) + '</button>';
+              waiverCheckinHtml = '<button type="button" class="badge ' + badgeClass + '" ' + actionAttr + ' title="' + nextTitle + '" style="font-size: 0.68rem; font-weight: 700; border: none; padding: 4px 8px; min-height: 26px; ' + cursorStyle + '">' + API.escapeHtml(badgeLabel) + '</button>';
             }
 
             var companionsVerifyHtml = '';
@@ -213,7 +213,7 @@
                     '<div style="display: flex; gap: 5px; align-items: center; flex-wrap: wrap;">' +
                       roleBadges.join('') +
                       waiverCheckinHtml +
-                      (canMod ? '<button type="button" data-action="remove-attendee" data-attendee-id="' + a.id + '" title="Remove from roster" style="background:none;border:none;cursor:pointer;font-size:0.85rem;color:var(--danger);padding:0 2px;">🗑️</button>' : '') +
+                      (canMod ? '<button type="button" data-action="remove-attendee" data-attendee-id="' + a.id + '" title="Remove from roster" aria-label="Remove ' + API.escapeHtml(displayName) + ' from roster" style="background:none;border:none;cursor:pointer;font-size:0.85rem;color:var(--danger);min-width:28px;min-height:28px;display:inline-flex;align-items:center;justify-content:center;padding:0;">🗑️</button>' : '') +
                     '</div>' +
                   '</div>' +
                   companionsVerifyHtml +

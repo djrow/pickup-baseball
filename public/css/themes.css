@@ -15,6 +15,7 @@
    - friar-gold         (San Diego Padres)
    - sedona-red         (Arizona Diamondbacks)
    - powder-blue        (Classic 1980s Retro)
+   - aurora-cycle       (Smooth Hue-Cycling Background)
    ========================================================================== */
 
 /* 1. Dodger Blue & Silver (Los Angeles Dodgers) */
@@ -46,6 +47,7 @@
   --bg-page: #faf6f7; --bg-card: #ffffff; --bg-subtle: #fbf8f9; --border: #e2d9dc; --text-main: #160a0d; --text-muted: #5e4c51;
 }
 [data-color-theme="fenway-red"][data-theme="dark"] {
+  --on-primary: #ffffff;
   --hero-bg: linear-gradient(140deg, #050b14 0%, #0d1e36 50%, #3d0c15 100%); --hero-glow: radial-gradient(circle at 50% 0%, rgba(230, 25, 60, 0.38) 0%, transparent 62%); --hero-border: #E6193C; --hero-subtitle-bg: rgba(230, 25, 60, 0.24); --hero-subtitle-text: #ffe4e8;
   --as-green: #7aa2f7; --as-green-hover: #9bbbf9; --as-green-light: #1e3a8a; --as-green-subtle: rgba(122, 162, 247, 0.14); --as-green-border: rgba(122, 162, 247, 0.32); --giants-orange: #E6193C; --giants-orange-hover: #ff2d55; --giants-orange-light: rgba(230, 25, 60, 0.18); --giants-orange-border: rgba(230, 25, 60, 0.42); --giants-orange-glow: rgba(230, 25, 60, 0.38);
   --bg-page: #0f0709; --bg-card: #1a0e12; --bg-subtle: #25141a; --bg-input: #12090c; --border: #3d1c25; --text-main: #fff0f3; --text-muted: #c2a3ab;
@@ -143,4 +145,100 @@
   --hero-bg: linear-gradient(140deg, #020912 0%, #05162b 50%, #092647 100%); --hero-glow: radial-gradient(circle at 50% 0%, rgba(56, 189, 248, 0.35) 0%, transparent 62%); --hero-border: #38bdf8; --hero-subtitle-bg: rgba(56, 189, 248, 0.22); --hero-subtitle-text: #f0f9ff;
   --as-green: #7dd3fc; --as-green-hover: #bae6fd; --as-green-light: #0369a1; --as-green-subtle: rgba(125, 211, 252, 0.14); --as-green-border: rgba(125, 211, 252, 0.32); --giants-orange: #38bdf8; --giants-orange-hover: #60a5fa; --giants-orange-light: rgba(56, 189, 248, 0.16); --giants-orange-border: rgba(56, 189, 248, 0.38); --giants-orange-glow: rgba(56, 189, 248, 0.35);
   --bg-page: #070e17; --bg-card: #0d1a29; --bg-subtle: #13253a; --bg-input: #08121e; --border: #1c3654; --text-main: #f0f9ff; --text-muted: #88a2bc;
+}
+
+/* 12. Aurora Drift (Smooth Hue-Cycling Background) */
+[data-color-theme="aurora-cycle"] {
+  --hero-bg: linear-gradient(140deg, #0b132b 0%, #1d2d50 52%, #134e4a 100%); --hero-glow: radial-gradient(circle at 50% 0%, rgba(99, 102, 241, 0.30) 0%, transparent 62%); --hero-border: #4338ca; --hero-subtitle-bg: rgba(67, 56, 202, 0.32); --hero-subtitle-text: #eef2ff;
+  --as-green: #1e3a5f; --as-green-hover: #132742; --as-green-light: #2d5180; --as-green-subtle: #eaf1f8; --as-green-border: #bfd2e8; --giants-orange: #4338ca; --giants-orange-hover: #3730a3; --giants-orange-light: rgba(67, 56, 202, 0.11); --giants-orange-border: rgba(67, 56, 202, 0.30); --giants-orange-glow: rgba(67, 56, 202, 0.22);
+  --on-primary: #ffffff; --on-secondary: #ffffff;
+  --bg-page: #e4f0fd; --bg-card: #ffffff; --bg-subtle: #d7e8fb; --bg-input: #d7e8fb; --border: rgba(15, 23, 42, 0.14); --text-main: #0f172a; --text-muted: #3b475a;
+  --ch-border: rgba(15, 23, 42, 0.14); --ch-bg-surface: rgba(15, 23, 42, 0.045); --ch-bg-hover: rgba(15, 23, 42, 0.075);
+}
+[data-color-theme="aurora-cycle"][data-theme="dark"] {
+  --hero-bg: linear-gradient(140deg, #070b1a 0%, #131d3b 52%, #0c3535 100%); --hero-glow: radial-gradient(circle at 50% 0%, rgba(129, 140, 248, 0.35) 0%, transparent 62%); --hero-border: #818cf8; --hero-subtitle-bg: rgba(129, 140, 248, 0.22); --hero-subtitle-text: #eef2ff;
+  --as-green: #6ee7b7; --as-green-hover: #a7f3d0; --as-green-light: #047857; --as-green-subtle: rgba(110, 231, 183, 0.14); --as-green-border: rgba(110, 231, 183, 0.32); --giants-orange: #818cf8; --giants-orange-hover: #a5b4fc; --giants-orange-light: rgba(129, 140, 248, 0.16); --giants-orange-border: rgba(129, 140, 248, 0.40); --giants-orange-glow: rgba(129, 140, 248, 0.35);
+  --on-primary: #07111a; --on-secondary: #06211a;
+  --bg-page: #0f172b; --bg-card: #121829; --bg-subtle: #192136; --bg-input: #0a1020; --border: rgba(255, 255, 255, 0.12); --text-main: #f3f6ff; --text-muted: #a6b4cc;
+  --ch-border: rgba(255, 255, 255, 0.12); --ch-bg-surface: rgba(255, 255, 255, 0.05); --ch-bg-hover: rgba(255, 255, 255, 0.08);
+}
+
+@keyframes pbf-hue-cycle-light {
+  0%, 100% { background-color: #e4f0fd; }
+  16.667% { background-color: #ece8fd; }
+  33.333% { background-color: #fce8f1; }
+  50% { background-color: #fdf1e2; }
+  66.667% { background-color: #e4f7ec; }
+  83.333% { background-color: #e2f5f8; }
+}
+@keyframes pbf-hue-cycle-light-panel {
+  0%, 100% { background-color: #d7e8fb; }
+  16.667% { background-color: #e1dbfb; }
+  33.333% { background-color: #f8dce9; }
+  50% { background-color: #fae6cf; }
+  66.667% { background-color: #d6f1e2; }
+  83.333% { background-color: #d3eef3; }
+}
+@keyframes pbf-hue-cycle-dark {
+  0%, 100% { background-color: #0f172b; }
+  16.667% { background-color: #1c1230; }
+  33.333% { background-color: #291224; }
+  50% { background-color: #291910; }
+  66.667% { background-color: #0f241c; }
+  83.333% { background-color: #0d2229; }
+}
+@keyframes pbf-hue-cycle-dark-panel {
+  0%, 100% { background-color: #0a1020; }
+  16.667% { background-color: #140d24; }
+  33.333% { background-color: #1f0d1b; }
+  50% { background-color: #1f130b; }
+  66.667% { background-color: #0a1b14; }
+  83.333% { background-color: #09191f; }
+}
+
+[data-color-theme="aurora-cycle"] body,
+[data-color-theme="aurora-cycle"] .ch-stage,
+[data-color-theme="aurora-cycle"] .ch-composer-wrap {
+  animation: pbf-hue-cycle-light 28s linear infinite;
+}
+[data-color-theme="aurora-cycle"] .ch-sidebar,
+[data-color-theme="aurora-cycle"] .ch-context-panel,
+[data-color-theme="aurora-cycle"] .ch-user-bar {
+  animation: pbf-hue-cycle-light-panel 28s linear infinite;
+}
+[data-color-theme="aurora-cycle"] .ch-composer-box,
+[data-color-theme="aurora-cycle"] .ch-user-settings-card {
+  background-color: rgba(255, 255, 255, 0.55);
+}
+
+[data-color-theme="aurora-cycle"][data-theme="dark"] body,
+[data-color-theme="aurora-cycle"][data-theme="dark"] .ch-stage,
+[data-color-theme="aurora-cycle"][data-theme="dark"] .ch-composer-wrap {
+  animation: pbf-hue-cycle-dark 28s linear infinite;
+}
+[data-color-theme="aurora-cycle"][data-theme="dark"] .ch-sidebar,
+[data-color-theme="aurora-cycle"][data-theme="dark"] .ch-context-panel,
+[data-color-theme="aurora-cycle"][data-theme="dark"] .ch-user-bar {
+  animation: pbf-hue-cycle-dark-panel 28s linear infinite;
+}
+[data-color-theme="aurora-cycle"][data-theme="dark"] .ch-composer-box,
+[data-color-theme="aurora-cycle"][data-theme="dark"] .ch-user-settings-card {
+  background-color: rgba(0, 0, 0, 0.25);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-color-theme="aurora-cycle"] body,
+  [data-color-theme="aurora-cycle"] .ch-stage,
+  [data-color-theme="aurora-cycle"] .ch-composer-wrap,
+  [data-color-theme="aurora-cycle"] .ch-sidebar,
+  [data-color-theme="aurora-cycle"] .ch-context-panel,
+  [data-color-theme="aurora-cycle"] .ch-user-bar,
+  [data-color-theme="aurora-cycle"][data-theme="dark"] body,
+  [data-color-theme="aurora-cycle"][data-theme="dark"] .ch-stage,
+  [data-color-theme="aurora-cycle"][data-theme="dark"] .ch-composer-wrap,
+  [data-color-theme="aurora-cycle"][data-theme="dark"] .ch-sidebar,
+  [data-color-theme="aurora-cycle"][data-theme="dark"] .ch-context-panel,
+  [data-color-theme="aurora-cycle"][data-theme="dark"] .ch-user-bar {
+    animation: none !important;
+  }
 }

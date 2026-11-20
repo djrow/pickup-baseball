@@ -491,14 +491,14 @@
       for (var r = 0; r < reactions.length; r++) {
         var rx = reactions[r];
         var tooltip = rx.users && rx.users.length ? rx.users.join(', ') : rx.emoji;
-        html += '<button type="button" class="ch-reaction-pill" title="' + escapeHtml(tooltip) + '" data-rx-msg="' + msg.id + '" data-rx-emoji="' + escapeHtml(rx.emoji) + '">';
+        html += '<button type="button" class="ch-reaction-pill" title="' + escapeHtml(tooltip) + '" aria-label="React ' + escapeHtml(rx.emoji) + ' (' + Number(rx.count || 1) + ')" data-rx-msg="' + msg.id + '" data-rx-emoji="' + escapeHtml(rx.emoji) + '">';
         html += '<span>' + escapeHtml(rx.emoji) + '</span><span>' + Number(rx.count || 1) + '</span>';
         html += '</button>';
       }
       if (currentUser) {
         for (var d = 0; d < DEFAULT_EMOJIS.length; d++) {
           var em = DEFAULT_EMOJIS[d];
-          html += '<button type="button" class="ch-reaction-pill" style="opacity:0.55;" title="React ' + em + '" data-rx-msg="' + msg.id + '" data-rx-emoji="' + em + '">' + em + '</button>';
+          html += '<button type="button" class="ch-reaction-pill" style="opacity:0.55;" title="React ' + em + '" aria-label="React with ' + em + '" data-rx-msg="' + msg.id + '" data-rx-emoji="' + em + '">' + em + '</button>';
         }
       }
     }

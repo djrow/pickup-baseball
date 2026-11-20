@@ -1202,14 +1202,14 @@
     }
 
     container.innerHTML = `
-      <div class="card smart-rainout-card" style="border-top: 4px solid ${escW(r.statusColor)}; margin-bottom: 14px; box-shadow: var(--shadow-sm);">
+      <div class="card smart-rainout-card status-${escW(r.status)}" style="margin-bottom: 14px; box-shadow: var(--shadow-sm);">
         <!-- Top Status Bar (Badge + Title + Prognosis + Temp chip aligned cleanly) -->
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;">
           <div style="flex: 1 1 360px; min-width: 0;">
             <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-              <h3 style="color: var(--secondary); font-size: 1.05rem; margin: 0;">
+              <h2 style="color: var(--secondary); font-size: 1.05rem; margin: 0;">
                 🌧️ Smart Rainout &amp; Surface Drainage
-              </h3>
+              </h2>
               <span class="badge ${escW(r.badgeClass)}" style="font-size: 0.74rem; padding: 2px 8px; font-weight: 700;">
                 ${escW(r.statusIcon)} ${escW(r.statusLabel)}
               </span>
@@ -1221,8 +1221,8 @@
               ${escW(r.prognosis)}
             </p>
           </div>
-          <div style="display: flex; align-items: center; gap: 8px; background: ${escW(r.statusBg)}; border: 1px solid ${escW(r.statusBorder)}; padding: 5px 10px; border-radius: var(--radius-sm); flex-shrink: 0;">
-            <span style="font-size: 1.15rem; font-weight: 800; color: ${escW(r.statusColor)}; display: inline-flex; align-items: center; gap: 4px;">
+          <div class="weather-noon-chip">
+            <span class="weather-noon-temp">
               <span>${escW(r.emoji)}</span> <span>${escW(r.temperature)}°F</span>
             </span>
             <span style="font-size: 0.74rem; color: var(--text-muted); font-weight: 600;">
@@ -1253,7 +1253,7 @@
 
           <div class="weather-kpi-tile">
             <div class="weather-kpi-label">Surface Moisture</div>
-            <div class="weather-kpi-val" style="color: ${escW(r.statusColor)};">🌊 ${escW(r.effectiveMoistureFormatted)}</div>
+            <div class="weather-kpi-val weather-moisture-val">🌊 ${escW(r.effectiveMoistureFormatted)}</div>
             <div class="weather-kpi-sub">Exponential drainage</div>
           </div>
 

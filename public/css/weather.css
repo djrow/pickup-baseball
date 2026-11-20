@@ -31,6 +31,69 @@
   margin-top: 1px;
 }
 
+.smart-rainout-card {
+  --w-accent: #003831;
+  --w-bg: #e6f0ed;
+  --w-border: #b8d7cf;
+  border-top: 4px solid var(--w-accent);
+}
+.smart-rainout-card.status-moderate {
+  --w-accent: #075985;
+  --w-bg: #e0f2fe;
+  --w-border: #bae6fd;
+}
+.smart-rainout-card.status-alert {
+  --w-accent: #b83708;
+  --w-bg: #fff2ed;
+  --w-border: #fed3c4;
+}
+.smart-rainout-card.status-rainout_risk {
+  --w-accent: #b91c1c;
+  --w-bg: #fee2e2;
+  --w-border: #fca5a5;
+}
+[data-theme="dark"] .smart-rainout-card {
+  --w-accent: #34d399;
+  --w-bg: rgba(52, 211, 153, 0.14);
+  --w-border: rgba(52, 211, 153, 0.35);
+}
+[data-theme="dark"] .smart-rainout-card.status-moderate {
+  --w-accent: #38bdf8;
+  --w-bg: rgba(56, 189, 248, 0.14);
+  --w-border: rgba(56, 189, 248, 0.35);
+}
+[data-theme="dark"] .smart-rainout-card.status-alert {
+  --w-accent: #ff8a5b;
+  --w-bg: rgba(255, 138, 91, 0.16);
+  --w-border: rgba(255, 138, 91, 0.38);
+}
+[data-theme="dark"] .smart-rainout-card.status-rainout_risk {
+  --w-accent: #fca5a5;
+  --w-bg: rgba(239, 68, 68, 0.18);
+  --w-border: rgba(248, 113, 113, 0.42);
+}
+.weather-noon-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--w-bg);
+  border: 1px solid var(--w-border);
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+.weather-noon-temp {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--w-accent);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.weather-moisture-val {
+  color: var(--w-accent);
+}
+
 .weather-kpi-sub {
   font-size: 0.68rem;
   color: var(--text-muted);
@@ -178,7 +241,7 @@
   font-size: 0.68rem;
   font-weight: 800;
   background: var(--secondary);
-  color: #fff;
+  color: var(--on-secondary, #ffffff);
   padding: 2px 6px;
   border-radius: 4px;
   text-transform: uppercase;
@@ -213,12 +276,20 @@
 }
 
 .five-day-rain-col .day-rain.has-rain {
-  color: #0284c7;
+  color: #075985;
   font-weight: 800;
 }
 
+[data-theme="dark"] .five-day-rain-col .day-rain.has-rain {
+  color: #38bdf8;
+}
+
 .five-day-rain-col.is-game-day .day-rain.has-rain {
-  color: #dc2626;
+  color: #b91c1c;
+}
+
+[data-theme="dark"] .five-day-rain-col.is-game-day .day-rain.has-rain {
+  color: #fca5a5;
 }
 
 .five-day-rain-col .day-temp {
@@ -242,7 +313,7 @@
 .five-day-rain-col .day-prob {
   font-size: 0.76rem;
   font-weight: 700;
-  color: #0284c7;
+  color: #075985;
   background: rgba(2, 132, 199, 0.10);
   padding: 2px 6px;
   border-radius: 4px;
@@ -258,7 +329,7 @@
   font-size: 0.68rem;
   font-weight: 800;
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary, #ffffff);
   padding: 2px 6px;
   border-radius: 4px;
   text-transform: uppercase;

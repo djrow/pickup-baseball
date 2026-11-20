@@ -42,13 +42,13 @@ The **Community Art Studio** consisted of three interactive, zero-login collabor
 ## 2. Source Code References & Preservation
 
 The core logic remains fully preserved in strict ES6 (no `?.` or `??`) inside:
-- [`public/js/art.js`](file:///c:/Users/david/Documents/antigravity/lucid-maxwell/public/js/art.js): Implements `window.ArtStudio` with:
+- [`public/js/art.js`](../public/js/art.js): Implements `window.ArtStudio` with:
   - `ArtStudio.initPixelDiamond()`
   - `ArtStudio.initEquipmentTrunk()`
   - `ArtStudio.initDugoutChalkboard()`
   - `ArtStudio.initUnifiedDugout()`
   - `ArtStudio.setUser(currentUser)`
-- [`public/css/style.css`](file:///c:/Users/david/Documents/antigravity/lucid-maxwell/public/css/style.css): Defines styling for:
+- [`public/css/art.css`](../public/css/art.css): Defines styling for:
   - `.pixel-board-container`, `.pixel-canvas-frame`, `.pixel-palette-row`, `.pixel-color-swatch`
   - `.trunk-outer-box`, `.dugout-wall-outer-box`, `.trunk-canvas-stage`, `.sticker-shelf`, `.sticker-item`
   - `.chalkboard-frame`, `.unified-dugout-stage`, `.chalk-btn`, `.chalk-toolbar`
@@ -57,7 +57,7 @@ The core logic remains fully preserved in strict ES6 (no `?.` or `??`) inside:
 
 ## 3. How to Re-Implement / Restore into the Webapp
 
-To restore the Community Art Studio to [`public/gallery.html`](file:///c:/Users/david/Documents/antigravity/lucid-maxwell/public/gallery.html) or a dedicated [`public/art.html`](file:///c:/Users/david/Documents/antigravity/lucid-maxwell/public/art.html):
+To restore the Community Art Studio to [`public/gallery.html`](../public/gallery.html) or a dedicated [`public/art.html`](../public/art.html):
 
 ### Step 1: Add the Quick Jump Navigation Pill (if placing on gallery page)
 ```html

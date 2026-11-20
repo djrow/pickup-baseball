@@ -987,7 +987,6 @@
     var pickerBody = el('ch-theme-picker-body');
     var summaryEl = el('ch-theme-summary');
     var userBtn = el('btn-user-theme');
-    var headerBtn = el('btn-header-theme');
     var closeBtn = el('btn-close-theme-modal');
     var doneBtn = el('btn-done-theme-modal');
 
@@ -1066,16 +1065,11 @@
         userBtn.appendChild(lbl);
         userBtn.title = 'Theme: ' + (meta.name || 'Bay Area') + ' (' + modeText + ')';
       }
-
-      if (headerBtn) {
-        headerBtn.title = 'Theme: ' + (meta.name || 'Bay Area') + ' (' + modeText + ')';
-      }
     }
 
     updateThemeUiGlobal = updateThemeUi;
 
     if (userBtn) userBtn.addEventListener('click', function () { openThemeModal(userBtn); });
-    if (headerBtn) headerBtn.addEventListener('click', function () { openThemeModal(headerBtn); });
     if (closeBtn) closeBtn.addEventListener('click', closeThemeModal);
     if (doneBtn) doneBtn.addEventListener('click', closeThemeModal);
     if (themeModal) {

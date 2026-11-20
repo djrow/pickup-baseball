@@ -609,7 +609,9 @@ async function runPublicShellAndDiagnosticsSmoke(browser, session, server, track
   assert(Array.isArray(chMenuLinks) && chMenuLinks.includes('/index.html') && chMenuLinks.includes('/gallery.html'), 'Clubhouse dynamic quick-nav exposes /index.html and /gallery.html');
   record('clubhouse.html renders dynamic quick-nav menu linking to Game Calendar & Gallery');
 
-  await session.waitFor('document.getElementById("btn-user-settings") && document.getElementById("btn-user-theme") && document.getElementById("btn-header-theme")');
+  await session.waitFor('document.getElementById("btn-user-settings") && document.getElementById("btn-user-theme")');
+  const headerThemeBtn = await session.evaluate('document.getElementById("btn-header-theme")');
+  assert(headerThemeBtn === null, 'Clubhouse stage top bar does not include btn-header-theme');
   await clickEl(session, '#btn-user-settings');
   await session.waitFor('!document.getElementById("ch-user-settings-card").classList.contains("hidden")');
   await clickEl(session, '#btn-user-theme');
@@ -640,12 +642,18 @@ async function runPublicShellAndDiagnosticsSmoke(browser, session, server, track
   const themeModalClosed = await session.evaluate('document.getElementById("ch-theme-modal").classList.contains("hidden")');
   assert(themeModalClosed, 'Clubhouse theme modal closes on Escape');
 
-  await clickEl(session, '#btn-header-theme');
-  const headerModalOpened = await session.evaluate('!document.getElementById("ch-theme-modal").classList.contains("hidden")');
-  assert(headerModalOpened, 'Clubhouse header theme button opens theme modal');
+  await clickEl(session, '#btn-user-theme');
+  await session.waitFor('!document.getElementById("ch-theme-modal").classList.contains("hidden") && document.querySelector("#ch-theme-picker-body .theme-palette-card[data-color-theme=\\"aurora-cycle\\"]")');
+  await clickEl(session, '#ch-theme-picker-body .theme-palette-card[data-color-theme="aurora-cycle"]');
+  const auroraLightState = await session.evaluate('({ colorTheme: document.documentElement.getAttribute("data-color-theme"), stageAnim: getComputedStyle(document.querySelector(".ch-stage")).animationName })');
+  assert(auroraLightState.colorTheme === 'aurora-cycle', 'Clubhouse switches to aurora-cycle palette');
+  assert(auroraLightState.stageAnim === 'pbf-hue-cycle-light', `Aurora Drift applies light hue-cycle animation (got ${auroraLightState.stageAnim})`);
+  await clickEl(session, '#ch-theme-picker-body .theme-mode-tab[data-mode="dark"]');
+  const auroraDarkAnim = await session.evaluate('getComputedStyle(document.querySelector(".ch-stage")).animationName');
+  assert(auroraDarkAnim === 'pbf-hue-cycle-dark', `Aurora Drift applies dark hue-cycle animation in Dark Mode (got ${auroraDarkAnim})`);
   await clickEl(session, '#btn-done-theme-modal');
   await session.evaluate('localStorage.removeItem("pickup_theme_mode"); localStorage.removeItem("pickup_theme"); localStorage.removeItem("pickup_color_theme");');
-  record('clubhouse.html theme modal switches Light/Dark mode & MLB market palettes cleanly');
+  record('clubhouse.html theme modal switches Light/Dark mode & MLB market + Aurora Drift palettes cleanly');
 
   // Verify unified overlay focus controller on clubhouse modals (inert siblings, focus trap, Escape)
   await clickEl(session, '#btn-user-vault');

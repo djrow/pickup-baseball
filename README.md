@@ -160,43 +160,46 @@ Designed with a **10+ year longevity philosophy**:
 │   ├── 404.html                   # Custom 404 page
 │   ├── .well-known/security.txt   # RFC 9116 vulnerability disclosure metadata
 │   ├── manifest.webmanifest       # PWA installable web app manifest
-│   ├── sw.js                      # Service Worker for offline shell caching (v143)
+│   ├── sw.js                      # Service Worker for offline shell caching
 │   ├── _headers                   # Cloudflare Pages security headers (CSP, HSTS, etc.)
 │   ├── _redirects                 # Enforces canonical custom domain over *.pages.dev & /handbook
 │   ├── _routes.json               # Routes /api/*, /feed.xml, and /health to Pages Functions
-│   ├── css/                       # Stylesheets (style.css, themes.css, clubhouse.css)
+│   ├── css/                       # Stylesheets (style.css, dialog.css, themes.css, clubhouse.css,
+│   │                              #   event.css, gallery.css, art.css, weather.css)
 │   ├── gifs/                      # Starter baseball GIF catalog & assets
-│   ├── i18n/                      # Translation dictionaries (14 non-English languages)
+│   ├── i18n/                      # Translation dictionaries (14 non-English locales + split bundles)
 │   ├── icons/                     # Favicons and PWA application icons
-│   ├── js/                        # Vanilla ES6 JS modules (api.js, weather.js, clubhouse.js,
-│   │                              #   crypto.js, store.js, rtc.js, event.js, gallery.js,
-│   │                              #   admin.js, app.js, archive.js, art.js, login.js,
+│   ├── js/                        # Vanilla ES6 JS modules (api/*, store/*, clubhouse/*, event/*,
+│   │                              #   admin/*, crypto.js, rtc.js, weather.js, dialog.js,
+│   │                              #   gallery.js, app.js, archive.js, art.js, login.js,
 │   │                              #   profile.js, waiver.js, nav-init.js)
 │   └── logo.svg                   # Vector home-plate shield logo
 ├── src/
 │   ├── app/                       # Unified ES-module Hono API (shared by Pages & Node)
 │   │   ├── index.js               # Security headers, CSRF, WAF, session middleware & router mounts
-│   │   ├── security.js            # Sessions, RBAC, rate limits, SSRF & metadata helpers
-│   │   ├── schema.js              # Dual-D1 DDL, migrations & default tasks/channels
-│   │   ├── gdrive.js              # Google Drive OAuth2 upload & byte-range streaming pool
-│   │   ├── mailer.js              # Resend transactional email dispatch
-│   │   ├── feeds.js / policy.js / version.js
-│   │   └── routes/                # auth, baseball, gifs, keys, media, posts, rtc, waiver,
+│   │   ├── security.js            # Barrel over security/{crypto,session,guards,ssrf}.js
+│   │   ├── schema.js              # Barrel over schema/{baseball-ddl,chat-ddl,migrations,engine}.js
+│   │   ├── storage/ & gdrive.js   # Pluggable media storage (R2, Google Drive OAuth2, local FS)
+│   │   ├── mailer/ & mailer.js    # Mailer adapters (Resend, Brevo, mock) & unsubscribe prefs
+│   │   ├── consent.js / erasure.js / feeds.js / policy.js / push-sender.js / version.js
+│   │   └── routes/                # auth, baseball, gifs, keys, posts, rtc, waiver, push,
+│   │                              #   notifications, webhooks, admin-suppressions,
 │   │                              #   events/{core,rsvps,bp-duties,helpers},
-│   │                              #   chat/{sync,channels,messages,moderation,helpers}
-│   ├── server.js / d1-sqlite.js / db.js / auth.js / seed.js  # Local Node + Express + SQLite runner
+│   │                              #   media/{gallery,attachments,admin},
+│   │                              #   chat/{sync,channels,messages,moderation,blocks,helpers}
+│   ├── server.js / d1-sqlite.js / db.js / seed.js  # Local Node + Express + SQLite runner
 ├── functions/                     # Thin Cloudflare Pages Functions entrypoints importing src/app/
 │   ├── api/[[route]].js           # Delegates /api/* to unified Hono app
 │   ├── feed.xml.js                # RSS 2.0 + Media RSS feed endpoint
 │   └── health.js                  # Health check endpoint (/health)
-├── tests/                         # Native node:test E2E suites (core/*, clubhouse/tier1–5, helpers/*)
+├── workers/cron-reminders/        # Standalone scheduled reminder Cron Worker
+├── tests/                         # Native node:test suites (core/*, clubhouse/tier1–6, workerd/*, helpers/*)
 ├── scripts/                       # verify-all.js, security-scan.js, bump-version.js, ship.ps1, etc.
+├── docs/                          # AGENT_MAP.md, ADRs (docs/adr/), SECURITY_WHITEPAPER.md
 ├── HANDBOOK.md                    # User guide & manual maintenance handbook
-├── PROJECT.md                     # Architecture overview & milestones
 ├── SECURITY.md                    # Vulnerability disclosure policy & built-in controls
 ├── AGENTS.md                      # Codebase map & engineering invariants
 ├── DEVELOPMENT_NARRATIVE.md       # Chronological development narrative
-├── d1_schema.sql                  # Cloudflare D1 SQLite schema snapshot
 └── wrangler.toml                  # Cloudflare Pages, env vars & dual D1 bindings (`BASEBALL_DB`, `CHAT_DB`)
 ```
 
@@ -252,13 +255,14 @@ Cloudflare D1 provides serverless SQLite at the edge using two isolated database
    ```
 
 3. **Initialize the schemas (Remote & Local)**:
-   Apply `d1_schema.sql` for the initial core schema, and note that `src/app/schema.js` (`ensureD1Schema` + `ensureChatD1Schema`) also applies idempotent table and column migrations automatically at runtime:
+   `src/app/schema/` (`ensureDualD1Schema` via `src/app/schema/engine.js`) is the single schema authority for both `BASEBALL_DB` and `CHAT_DB` (ADR-0009), applying consolidated DDL and versioned migrations automatically at runtime or on demand via `npm run db:migrate`:
    ```bash
-   # Apply base schema to the live remote D1 database in Cloudflare:
-   npx wrangler d1 execute pickup-baseball-db --remote --file=d1_schema.sql
+   # Apply schema & migrations to the live remote D1 databases in Cloudflare:
+   node scripts/migrate-db.js --remote
 
-   # Apply base schema to your local development D1 database:
-   npx wrangler d1 execute pickup-baseball-db --local --file=d1_schema.sql
+   # Apply schema & migrations to your local development D1 / SQLite databases:
+   npm run db:migrate
+   node scripts/migrate-db.js --local
    ```
 
 ---

@@ -50,9 +50,9 @@
         var embedUrl = API.getYouTubeEmbedUrl(url);
         previewTarget.innerHTML = embedUrl
           ? '<div class="feed-post-media feed-media-youtube" style="max-width: 480px; border-radius: var(--radius-sm); overflow: hidden;"><iframe src="' + API.escapeHtml(embedUrl) + '" title="YouTube Preview" allowfullscreen></iframe></div><small style="color: var(--text-muted); display: block; margin-top: 6px;">✓ YouTube detected (ID: ' + API.escapeHtml(API.getYouTubeId(url) || '') + ')</small>'
-          : '<span style="color: #ef4444;">⚠️ Could not parse YouTube video ID from URL.</span>';
+          : '<span style="color: var(--danger);">⚠️ Could not parse YouTube video ID from URL.</span>';
       } else if (!safeLink) {
-        previewTarget.innerHTML = '<span style="color: #ef4444;">⚠️ Invalid media URL.</span>';
+        previewTarget.innerHTML = '<span style="color: var(--danger);">⚠️ Invalid media URL.</span>';
       } else if (resolvedType === 'image') {
         previewTarget.innerHTML = '<div style="max-width: 360px;"><img src="' + API.escapeHtml(safeLink) + '" alt="Preview" style="max-width: 100%; border-radius: var(--radius-sm); border: 1px solid var(--border);"></div><small style="color: var(--text-muted); display: block; margin-top: 6px;">✓ Image link detected — will render photo card and RSS enclosure.</small>';
       } else if (resolvedType === 'video') {
@@ -172,7 +172,7 @@
               (mUrl ? '<div style="margin-top: 6px; font-size: 0.8rem;"><a href="' + API.escapeHtml(API.safeUrl(mUrl)) + '" target="_blank" rel="noopener noreferrer" style="color: var(--primary); text-decoration: underline; word-break: break-all;">' + API.escapeHtml(mUrl) + ' ↗</a></div>' : '') +
             '</div>' +
             '<div>' +
-              '<button type="button" class="btn btn-outline btn-sm admin-delete-post-btn" data-post-id="' + API.escapeHtml(String(post.id)) + '" style="color: #ef4444; border-color: #fca5a5;">🗑️ Delete</button>' +
+              '<button type="button" class="btn btn-outline btn-sm admin-delete-post-btn" data-post-id="' + API.escapeHtml(String(post.id)) + '" style="color: var(--danger); border-color: #fca5a5;">🗑️ Delete</button>' +
             '</div>' +
           '</div>'
         );
@@ -304,7 +304,7 @@
                 '</div>' +
                 (dateLabel ? '<div style="position: absolute; bottom: 6px; left: 6px; background: rgba(0,0,0,0.7); color: #fff; font-size: 0.7rem; font-weight: 700; padding: 2px 6px; border-radius: 4px;">📅 ' + dateLabel + '</div>' : '') +
               '</div>' +
-              '<h4 style="margin: 0 0 4px 0; font-size: 0.95rem; color: var(--secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="' + title + '">' + title + '</h4>' +
+              '<h3 style="margin: 0 0 4px 0; font-size: 0.95rem; color: var(--secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="' + title + '">' + title + '</h3>' +
               '<div style="font-size: 0.78rem; color: var(--text-muted); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 6px;">' +
                 '<span>📌 ' + album + '</span> &bull; <span>By ' + contributor + '</span>' +
               '</div>' +

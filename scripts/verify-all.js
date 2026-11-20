@@ -11,10 +11,11 @@
  * - tests/core/weather-gallery.test.js   (T9.19–T9.27: Weather, Fair-Share, Art, Gallery, Security, BP)
  * - tests/core/clubhouse-waiver.test.js  (Checks 8.2–8.5: Clubhouse UI, Waivers, Frugality, Parity)
  * - tests/core/typecheck.test.js         (T10: Split TypeScript Configs & Client Facades)
- * - tests/clubhouse/index.js             (Clubhouse E2E Verification Suite, Tiers 1–5)
+ * - tests/clubhouse/index.js             (Clubhouse E2E Verification Suite, Tiers 1–6)
  */
 
 const test = require('node:test');
+const crypto = require('node:crypto');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -41,7 +42,12 @@ const testDataDir = path.join(os.tmpdir(), `pickup_verify_data_${Date.now()}`);
 process.env.DATA_DIR = testDataDir;
 
 const { db, chatDb, d1, baseballD1, chatD1, initDatabase, getDefaultDuties } = require('../src/db');
-const { clearSessionMemoryCache } = require('../src/app/security.js');
+const {
+  clearSessionMemoryCache,
+  SESSION_HASH_PREFIX,
+  SESSION_DURATION_SECONDS,
+  generateToken
+} = require('../src/app/security.js');
 const { clearPublicEdgeMemoryCache } = require('../src/app/edge-cache.js');
 
 // Auto-invalidate in-memory caches when tests execute raw SQL mutations directly on test databases
@@ -78,7 +84,13 @@ chatDb.prepare = function(sql) {
   return stmt;
 };
 
-const { createSession } = require('../src/auth');
+function createSession(userId) {
+  const sessionId = generateToken();
+  const storedSessionId = `${SESSION_HASH_PREFIX}${crypto.createHash('sha256').update(String(sessionId)).digest('hex')}`;
+  const expiresAt = new Date(Date.now() + SESSION_DURATION_SECONDS * 1000).toISOString();
+  db.prepare('INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)').run(storedSessionId, userId, expiresAt);
+  return { sessionId, expiresAt };
+}
 const { createNodeHttpBridge, getFullRequestUrl, sendWebResponse } = require('../src/d1-sqlite');
 const { app: honoApp } = require('../src/app/index.js');
 const { CURRENT_APP_VERSION } = require('../src/app/version.js');
@@ -385,6 +397,7 @@ const MODULAR_SUITES = [
   ['attendance-history', () => require('../tests/core/attendance-history.test.js')(ctx)],
   ['clubhouse-sync-voice', () => require('../tests/core/clubhouse-sync-voice.test.js')(ctx)],
   ['walkup-youtube', () => require('../tests/core/walkup-youtube.test.js')(ctx)],
+  ['push-sender', () => require('../tests/core/push-sender.test.js')],
   ['clubhouse', () => require('../tests/clubhouse/index.js')()]
 ];
 

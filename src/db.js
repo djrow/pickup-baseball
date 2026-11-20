@@ -4,12 +4,9 @@ const fs = require('fs');
 const { createD1Adapter } = require('./d1-sqlite');
 const {
   DEFAULT_BASEBALL_DUTIES,
-  ensureBaseballD1Schema,
-  ensureChatD1Schema,
   ensureDualD1Schema
 } = require('./app/schema.js');
 const { getPresetDefaultDuties } = require('./app/schema/engine.js');
-const { normalizeDutyFlags } = require('./app/policy.js');
 
 const dbDir = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
 if (!fs.existsSync(dbDir)) {
@@ -47,15 +44,6 @@ function seedNodeBootstrapDefaults() {
   }
 }
 
-async function initBaseballDatabase(force = false) {
-  await ensureBaseballD1Schema(baseballD1, force, process.env);
-  seedNodeBootstrapDefaults();
-}
-
-async function initChatDatabase(force = false) {
-  await ensureChatD1Schema(chatD1, force);
-}
-
 async function initDatabase(force = false) {
   await ensureDualD1Schema({ BASEBALL_DB: baseballD1, CHAT_DB: chatD1 }, force, process.env);
   seedNodeBootstrapDefaults();
@@ -68,28 +56,6 @@ function getDefaultDuties() {
   return duties.length > 0 ? duties : getPresetDefaultDuties(process.env);
 }
 
-function saveDefaultDuties(duties) {
-  if (!Array.isArray(duties)) return;
-  const insert = baseballDb.prepare(
-    'INSERT INTO default_duties (title, description, slots_needed, sort_order, grants_coordinator, required_badge) VALUES (?, ?, ?, ?, ?, ?)'
-  );
-  const txn = baseballDb.transaction((list) => {
-    baseballDb.prepare('DELETE FROM default_duties').run();
-    list.filter(d => d && d.title && d.title.trim()).forEach((d, idx) => {
-      const flags = normalizeDutyFlags(d);
-      insert.run(
-        d.title.trim(),
-        (d.description || '').trim(),
-        parseInt(d.slots_needed || 1, 10),
-        idx,
-        flags.grantsCoordinator,
-        flags.invalidBadge ? null : flags.requiredBadge
-      );
-    });
-  });
-  txn(duties);
-}
-
 module.exports = {
   baseballDb,
   chatDb,
@@ -98,9 +64,6 @@ module.exports = {
   chatD1,
   d1,
   initDatabase,
-  initBaseballDatabase,
-  initChatDatabase,
   DEFAULT_BASEBALL_DUTIES,
-  getDefaultDuties,
-  saveDefaultDuties
+  getDefaultDuties
 };

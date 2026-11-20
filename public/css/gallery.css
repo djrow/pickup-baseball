@@ -49,7 +49,7 @@
 .album-bookmark-pill:hover,
 .album-bookmark-pill.active {
   background: var(--secondary);
-  color: #ffffff;
+  color: var(--on-secondary, #ffffff);
   border-color: var(--secondary);
 }
 .album-container-highlight {

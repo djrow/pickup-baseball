@@ -155,7 +155,7 @@
               <div class="meta-label">Batting Practice (BP)</div>
               <div class="meta-value">
                 <span id="event-bp-summary" style="font-size: 0.95rem; font-weight: 700; color: var(--primary);">12:30 PM – 1:30 PM</span>
-                <a href="#bp-order-section" style="display: inline-block; margin-left: 6px; font-size: 0.78rem; text-decoration: underline; color: var(--secondary); font-weight: 700;">View Lineup Sheet ↓</a>
+                <a href="#bp-order-section" style="display: inline-flex; align-items: center; min-height: 26px; padding: 2px 4px; margin-left: 6px; font-size: 0.78rem; text-decoration: underline; color: var(--secondary); font-weight: 700;">View Lineup Sheet ↓</a>
               </div>
             </div>
           </div>
@@ -222,7 +222,7 @@
             </button>
           </div>
           <form id="rsvp-edit-link-form" style="display: none; margin-top: 8px; gap: 8px; flex-wrap: wrap; align-items: center;">
-            <input type="email" id="rsvp-edit-link-email" placeholder="Enter the email used for your RSVP" data-i18n-placeholder="event.edit_link_email_placeholder" style="flex: 1 1 220px; min-width: 180px;" required>
+            <input type="email" id="rsvp-edit-link-email" aria-label="Email address used for your RSVP" placeholder="Enter the email used for your RSVP" data-i18n-placeholder="event.edit_link_email_placeholder" style="flex: 1 1 220px; min-width: 180px;" required>
             <button type="submit" id="rsvp-edit-link-submit-btn" class="btn btn-primary btn-sm" data-i18n="event.edit_link_send_btn">Send Edit Link</button>
           </form>
           <div id="rsvp-edit-link-status" style="margin-top: 6px;"></div>
@@ -275,10 +275,10 @@
           <!-- Unified Group Volunteer Tasks Checklist (Single source of truth on page) -->
           <div class="form-group" id="duties-selection-group" style="margin-bottom: 8px;">
             <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 6px; margin-bottom: 6px;">
-              <label style="margin-bottom: 0; font-size: 0.86rem;" data-i18n="event.duties_label">🛡️ Group Volunteer Tasks</label>
+              <span id="rsvp-duties-label" style="font-weight: 600; margin-bottom: 0; font-size: 0.86rem; color: var(--as-green);" data-i18n="event.duties_label">🛡️ Group Volunteer Tasks</span>
               <span style="font-size: 0.74rem; color: var(--text-muted);" data-i18n="event.duties_help">Your group covers checked tasks together</span>
             </div>
-            <div id="rsvp-duties-list" class="rsvp-tasks-checklist">
+            <div id="rsvp-duties-list" class="rsvp-tasks-checklist" role="group" aria-labelledby="rsvp-duties-label">
               <!-- Populated dynamically -->
             </div>
           </div>

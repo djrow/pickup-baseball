@@ -185,7 +185,7 @@
             '<td style="padding: 5px 10px; white-space: nowrap;">' + roleBadge + '</td>' +
             '<td style="padding: 5px 10px; white-space: nowrap;">' +
               '<div style="display: inline-flex; align-items: center; gap: 5px;">' +
-                '<select class="admin-waiver-selector" data-user-id="' + u.id + '" data-user-name="' + API.escapeHtml(u.name) + '" style="padding: 2px 6px; border-radius: var(--radius-sm); border: 1.5px solid ' + (wStatus === 'none' ? 'var(--border)' : 'var(--secondary)') + '; font-size: 0.78rem; font-weight: 700; background: ' + (wStatus === 'none' ? 'var(--bg-input)' : 'rgba(0, 56, 49, 0.08)') + '; color: ' + (wStatus === 'none' ? 'var(--text-muted)' : 'var(--secondary)') + '; cursor: pointer; height: 26px;">' +
+                '<select id="admin-waiver-user-' + u.id + '" name="admin-waiver-user-' + u.id + '" class="admin-waiver-selector" aria-label="Waiver status for ' + API.escapeHtml(u.name) + '" data-user-id="' + u.id + '" data-user-name="' + API.escapeHtml(u.name) + '" style="padding: 2px 6px; border-radius: var(--radius-sm); border: 1.5px solid ' + (wStatus === 'none' ? 'var(--border)' : 'var(--secondary)') + '; font-size: 0.78rem; font-weight: 700; background: ' + (wStatus === 'none' ? 'var(--bg-input)' : 'rgba(0, 56, 49, 0.08)') + '; color: ' + (wStatus === 'none' ? 'var(--text-muted)' : 'var(--secondary)') + '; cursor: pointer; height: 26px;">' +
                   '<option value="none" ' + (wStatus === 'none' ? 'selected' : '') + '>⏳ Unsigned</option>' +
                   '<option value="paper" ' + (wStatus === 'paper' ? 'selected' : '') + '>📄 Paper Waiver</option>' +
                   '<option value="digital" ' + (wStatus === 'digital' ? 'selected' : '') + '>🔏 Digital Signed</option>' +
@@ -195,21 +195,21 @@
             '</td>' +
             '<td class="admin-certified-col" style="padding: 5px 10px; white-space: nowrap;' + (showCertified ? '' : ' display: none;') + '">' +
               '<label style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.76rem; font-weight: 600; cursor: pointer; margin-right: 8px;">' +
-                '<input type="checkbox" class="admin-machine-badge" data-user-id="' + u.id + '" ' + (u.machine_badge ? 'checked' : '') + '> ⚡ Machine' +
+                '<input type="checkbox" id="admin-machine-user-' + u.id + '" name="admin-machine-user-' + u.id + '" class="admin-machine-badge" data-user-id="' + u.id + '" ' + (u.machine_badge ? 'checked' : '') + '> ⚡ Machine' +
               '</label>' +
               '<label style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.76rem; font-weight: 600; cursor: pointer;">' +
-                '<input type="checkbox" class="admin-field-badge" data-user-id="' + u.id + '" ' + (u.field_badge ? 'checked' : '') + '> 🚜 Dragging' +
+                '<input type="checkbox" id="admin-field-user-' + u.id + '" name="admin-field-user-' + u.id + '" class="admin-field-badge" data-user-id="' + u.id + '" ' + (u.field_badge ? 'checked' : '') + '> 🚜 Dragging' +
               '</label>' +
             '</td>' +
             '<td class="admin-certified-col" style="padding: 5px 10px; white-space: nowrap;' + (showCertified ? '' : ' display: none;') + '">' +
               '<div style="display: inline-flex; align-items: center; gap: 4px;">' +
-                '<button type="button" class="btn btn-outline btn-sm btn-credit-minus" data-user-id="' + u.id + '" style="padding: 0 6px; height: 24px; font-size: 0.78rem; line-height: 1;">−</button>' +
+                '<button type="button" class="btn btn-outline btn-sm btn-credit-minus" aria-label="Decrease hero credits for ' + API.escapeHtml(u.name) + '" data-user-id="' + u.id + '" style="padding: 0 6px; min-width: 28px; height: 28px; font-size: 0.78rem; line-height: 1;">−</button>' +
                 '<span class="admin-hero-credits-val" data-user-id="' + u.id + '" style="font-weight: 700; font-size: 0.82rem; min-width: 20px; text-align: center;">' + credits + '</span>' +
-                '<button type="button" class="btn btn-outline btn-sm btn-credit-plus" data-user-id="' + u.id + '" style="padding: 0 6px; height: 24px; font-size: 0.78rem; line-height: 1;">+</button>' +
+                '<button type="button" class="btn btn-outline btn-sm btn-credit-plus" aria-label="Increase hero credits for ' + API.escapeHtml(u.name) + '" data-user-id="' + u.id + '" style="padding: 0 6px; min-width: 28px; height: 28px; font-size: 0.78rem; line-height: 1;">+</button>' +
               '</div>' +
             '</td>' +
             '<td style="padding: 5px 10px;">' +
-              '<select class="admin-role-selector" data-user-id="' + u.id + '" data-user-name="' + API.escapeHtml(u.name) + '" style="padding: 2px 6px; border-radius: var(--radius-sm); border: 1.5px solid var(--border); font-size: 0.8rem; font-weight: 600; background: var(--bg-input); color: var(--text-main); cursor: pointer; height: 28px;">' +
+              '<select id="admin-role-user-' + u.id + '" name="admin-role-user-' + u.id + '" class="admin-role-selector" aria-label="Role for ' + API.escapeHtml(u.name) + '" data-user-id="' + u.id + '" data-user-name="' + API.escapeHtml(u.name) + '" style="padding: 2px 6px; border-radius: var(--radius-sm); border: 1.5px solid var(--border); font-size: 0.8rem; font-weight: 600; background: var(--bg-input); color: var(--text-main); cursor: pointer; height: 28px;">' +
                 '<option value="member" ' + ((API.isMemberRole(u.role) || !u.role) ? 'selected' : '') + '>👤 Member</option>' +
                 '<option value="organizer" ' + (u.role === 'organizer' ? 'selected' : '') + '>🛡️ Organizer (Can Post Games &amp; Record Turnout)</option>' +
                 '<option value="admin" ' + (u.role === 'admin' ? 'selected' : '') + '>👑 Admin (Full Access)</option>' +
@@ -219,7 +219,7 @@
               '<div style="display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap;">' +
                 (isAdminRole ? '<span class="badge badge-orange" style="font-size:0.72rem;">Full Mod</span>' : (
                   '<label style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.76rem; font-weight: 600; cursor: pointer;" title="Delegate Clubhouse moderation without granting Admin ownership">' +
-                    '<input type="checkbox" class="admin-mod-toggle" data-user-id="' + u.id + '" data-user-name="' + API.escapeHtml(u.name) + '" ' + (isClubhouseMod ? 'checked' : '') + '> 🛡️ Mod' +
+                    '<input type="checkbox" id="admin-mod-user-' + u.id + '" name="admin-mod-user-' + u.id + '" class="admin-mod-toggle" data-user-id="' + u.id + '" data-user-name="' + API.escapeHtml(u.name) + '" ' + (isClubhouseMod ? 'checked' : '') + '> 🛡️ Mod' +
                   '</label>' +
                   (isMe ? '' : '<button type="button" class="btn btn-outline btn-sm btn-chat-mute" data-user-id="' + u.id + '" data-user-name="' + API.escapeHtml(u.name) + '" data-muted="' + (isChatMuted ? '1' : '0') + '" style="font-size: 0.72rem; padding: 1px 6px; height: 24px; line-height: 1.2; ' + (isChatMuted ? 'border-color:var(--danger);color:var(--danger);' : '') + '">' + (isChatMuted ? '🔊 Unmute' : '🔇 Mute') + '</button>')
                 )) +

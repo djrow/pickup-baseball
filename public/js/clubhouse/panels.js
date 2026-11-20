@@ -697,7 +697,7 @@
     }
 
     detailsEl.innerHTML =
-      '<div style="font-weight:700;font-size:14px;color:#fff;margin-bottom:4px;">' + escapeHtml(ev.title) + '</div>' +
+      '<div style="font-weight:700;font-size:14px;color:var(--ch-text-primary);margin-bottom:4px;">' + escapeHtml(ev.title) + '</div>' +
       (dateText ? ('<div style="font-size:12px;color:var(--ch-text-secondary);margin-bottom:2px;">📅 ' + escapeHtml(dateText) + '</div>') : '') +
       '<div style="font-size:12px;color:var(--ch-text-secondary);">📍 ' + escapeHtml(ev.location || 'Bushrod Park Field 1') + '</div>' +
       '<div style="font-size:12px;color:var(--ch-text-secondary);margin-top:2px;">👥 <strong>' + totalPlayers + '</strong> / ' + (ev.max_players || 30) + ' Players Confirmed</div>';

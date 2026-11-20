@@ -29,7 +29,8 @@
     { id: 'camden-orange', name: 'Camden Orange & Black', market: 'Baltimore Orioles', primaryColor: '#DF4601', secondaryColor: '#212322' },
     { id: 'friar-gold', name: 'Friar Brown & Sungold', market: 'San Diego Padres', primaryColor: '#C48200', secondaryColor: '#2F241D' },
     { id: 'sedona-red', name: 'Sedona Red & Desert Teal', market: 'Arizona Diamondbacks', primaryColor: '#A71930', secondaryColor: '#26696D' },
-    { id: 'powder-blue', name: 'Powder Blue & Royal', market: 'Classic 1980s Retro', primaryColor: '#0284c7', secondaryColor: '#004687' }
+    { id: 'powder-blue', name: 'Powder Blue & Royal', market: 'Classic 1980s Retro', primaryColor: '#0284c7', secondaryColor: '#004687' },
+    { id: 'aurora-cycle', name: 'Aurora Drift', market: 'Smooth Hue-Cycling Background', primaryColor: '#4338ca', secondaryColor: '#0d9488' }
   ];
 
   API.COLOR_THEMES = COLOR_THEMES;
@@ -354,10 +355,10 @@
               '<span>security.txt</span><span class="footer-security-grade">Valid</span>' +
             '</a>' +
           '</div>' +
-          '<p style="margin-top: 12px; font-size: 0.8rem; color: #94a3b8; line-height: 1.5;">' +
+          '<p style="margin-top: 12px; font-size: 0.8rem; color: var(--text-muted); line-height: 1.5;">' +
             '<span data-i18n="footer.about_site">' + this.escapeHtml(this.t('footer.about_site', 'Prototyped with Google Gemini in October 2026 for simplicity and durability. Free & open-source')) + '</span> on <a href="https://github.com/djrow/pickup-baseball" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">GitHub</a> • <a href="/about.html" data-i18n="nav.about" style="color: inherit; text-decoration: underline;">About Us</a> • <a href="/waiver.html" style="color: inherit; text-decoration: underline;">Player Waiver</a> • <a href="/login.html#erase-data" data-i18n="footer.erase_data" style="color: inherit; text-decoration: underline;">' + this.escapeHtml(this.t('footer.erase_data', 'Erase My Data')) + '</a>.' +
           '</p>' +
-          '<p style="margin-top: 6px; font-size: 0.75rem; color: #64748b; line-height: 1.4;">' +
+          '<p style="margin-top: 6px; font-size: 0.75rem; color: var(--text-muted); line-height: 1.4;">' +
             '<a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;" data-i18n="footer.copyright">' + this.escapeHtml(this.t('footer.copyright', '© 2026 Pickup Baseball Foundation. Licensed under Apache License 2.0.')) + '</a> • <span id="footer-app-version" class="footer-app-version" title="Loaded web app version">v' + this.escapeHtml(this.CLIENT_VERSION) + '</span>' +
           '</p>' +
         '</div>';
@@ -756,7 +757,7 @@
         '<span style="font-size: 1.3rem;">🍪</span>' +
         '<span><strong>Cookie &amp; Privacy Notice:</strong> We only use essential session cookies and Cloudflare security cookies to prevent spam and keep your account safe. We do not use third-party tracking or advertising cookies.</span>' +
       '</div>' +
-      '<button type="button" id="cookie-notice-dismiss" class="btn btn-primary btn-sm" style="background: #FD5A1E; color: #ffffff; border: none; font-weight: 700; white-space: nowrap; padding: 6px 14px; border-radius: 6px; cursor: pointer;">Got It</button>';
+      '<button type="button" id="cookie-notice-dismiss" class="btn btn-primary btn-sm" style="background: #b83708; color: #ffffff; border: none; font-weight: 700; white-space: nowrap; padding: 6px 14px; border-radius: 6px; cursor: pointer;">Got It</button>';
 
     if (document.body && typeof document.body.appendChild === 'function') {
       document.body.appendChild(banner);

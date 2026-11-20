@@ -49,13 +49,13 @@
         '<div class="panel-header" style="margin-bottom: 6px;">' +
           '<span class="panel-icon" style="font-size: 1.1rem;">🌦️</span>' +
           '<div style="display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px;">' +
-            '<h3 class="panel-title" style="font-size: 0.88rem; margin: 0;">Weather &amp; Rainout</h3>' +
+            '<h2 class="panel-title" style="font-size: 0.88rem; margin: 0;">Weather &amp; Rainout</h2>' +
             '<span class="panel-desc" style="font-size: 0.75rem;">Cancel for rain if fields are unplayable</span>' +
           '</div>' +
         '</div>' +
         '<div class="panel-body" style="padding-top: 6px;">' +
           '<div style="display: flex; align-items: center; flex-wrap: wrap; gap: 6px;">' +
-            '<input type="text" id="rainout-note-input" class="form-control" style="flex: 1 1 190px; min-width: 150px; padding: 5px 8px; font-size: 0.84rem; border-radius: var(--radius-sm); border: 1.5px solid var(--border);" placeholder="Rainout note (optional, e.g. flooded infield)">' +
+            '<input type="text" id="rainout-note-input" aria-label="Rainout note (optional)" class="form-control" style="flex: 1 1 190px; min-width: 150px; padding: 5px 8px; font-size: 0.84rem; border-radius: var(--radius-sm); border: 1.5px solid var(--border);" placeholder="Rainout note (optional, e.g. flooded infield)">' +
             '<label style="display: inline-flex; align-items: center; gap: 5px; font-size: 0.78rem; cursor: pointer; margin: 0; white-space: nowrap;">' +
               '<input type="checkbox" id="rainout-send-email-check" checked style="width: 14px; height: 14px;">' +
               '<span>Email (' + attendeeCount + ')</span>' +
@@ -345,7 +345,7 @@
             '</div>' +
           '</div>' +
           '<form id="quick-attendance-form" data-action="save-quick-attendance" style="display: flex; align-items: center; gap: 8px; margin: 0;">' +
-            '<input type="number" id="quick-attendance-input" value="' + (ev.actual_attendance != null ? ev.actual_attendance : '') + '" min="0" max="200" placeholder="e.g. 18" required style="width: 85px; padding: 6px 10px; font-weight: 700; font-size: 1rem; border-radius: 6px; border: 1.5px solid var(--border);">' +
+            '<input type="number" id="quick-attendance-input" aria-label="Actual player attendance" value="' + (ev.actual_attendance != null ? ev.actual_attendance : '') + '" min="0" max="200" placeholder="e.g. 18" required style="width: 85px; padding: 6px 10px; font-weight: 700; font-size: 1rem; border-radius: 6px; border: 1.5px solid var(--border);">' +
             '<button type="submit" id="quick-attendance-save-btn" class="btn btn-primary btn-sm">💾 Save</button>' +
             '<button type="button" data-action="cancel-inline-attendance-edit" class="btn btn-outline btn-sm">Cancel</button>' +
           '</form>' +
@@ -452,7 +452,7 @@
               '</div>' +
             '</div>' +
             '<form id="quick-attendance-form" data-action="save-quick-attendance" style="display: flex; align-items: center; gap: 6px; margin: 0;">' +
-              '<input type="number" id="quick-attendance-input" min="0" max="200" placeholder="e.g. 18" required style="width: 72px; padding: 5px 8px; font-weight: 700; font-size: 0.88rem; border-radius: 6px; border: 1.5px solid var(--border);">' +
+              '<input type="number" id="quick-attendance-input" aria-label="Actual player attendance" min="0" max="200" placeholder="e.g. 18" required style="width: 72px; padding: 5px 8px; font-weight: 700; font-size: 0.88rem; border-radius: 6px; border: 1.5px solid var(--border);">' +
               '<button type="submit" id="quick-attendance-save-btn" class="btn btn-primary btn-sm" style="padding: 5px 10px; font-size: 0.78rem; white-space: nowrap;">💾 Save</button>' +
             '</form>' +
           '</div>' +
