@@ -125,6 +125,7 @@ baseballRouter.get('/upcoming', async (c) => {
   const bpSignups = cfg.FEATURE_BATTING_PRACTICE
     ? (await baseballDb.prepare(`
         SELECT bp.*,
+               u.walkup_song,
                COALESCE(a.roster_consent, 0) as roster_consent,
                COALESCE(u.roster_visibility, 0) as roster_visibility,
                COALESCE(u.profile_sharing, 0) as profile_sharing,

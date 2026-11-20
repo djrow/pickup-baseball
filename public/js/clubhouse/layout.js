@@ -708,9 +708,12 @@
             ? '<button type="button" class="ch-channel-edit-btn ch-dm-hide-btn" data-hide-dm-id="' + item.id + '" title="Hide DM from channel list" aria-label="Hide ' + escapeHtml(item.name) + ' from channel list">✕</button>'
             : '';
 
+          var unreadCount = (!isActive && !isVoice && Store.state.unreadByChannel) ? Number(Store.state.unreadByChannel[item.id] || 0) : 0;
+          var unreadBadgeHtml = unreadCount > 0 ? '<span class="ch-unread-badge">' + (unreadCount > 99 ? '99+' : unreadCount) + '</span>' : '';
+
           html += '<div class="ch-channel-row">';
           html += '<button type="button" class="ch-channel-item' + (isActive ? ' active' : '') + '" data-channel-id="' + item.id + '" data-channel-type="' + escapeHtml(item.channel_type) + '" aria-label="' + escapeHtml(item.name) + '">';
-          html += '<span class="ch-channel-label"><span>' + escapeHtml(item.name) + '</span>' + lockBadge + roleIcon + '</span>';
+          html += '<span class="ch-channel-label"><span>' + escapeHtml(item.name) + '</span>' + lockBadge + roleIcon + '</span>' + unreadBadgeHtml;
           html += '</button>';
           html += editBtnHtml + dmHideBtnHtml;
           html += '</div>';
@@ -861,8 +864,8 @@
         e2eeBadge.textContent = '📢 Public Announcements';
         e2eeBadge.style.display = 'inline-block';
       } else {
-        e2eeBadge.textContent = '🛡️ Moderated Board';
-        e2eeBadge.style.display = 'inline-block';
+        e2eeBadge.textContent = '';
+        e2eeBadge.style.display = 'none';
       }
     }
     if (inputEl) {
@@ -1459,6 +1462,35 @@
     }
     if (mobileBackdrop) {
       mobileBackdrop.addEventListener('click', closeMobileDrawers);
+    }
+
+    // Mobile swipe gestures to open/close left sidebar & right context drawer
+    var appRoot = el('clubhouse-app');
+    if (appRoot) {
+      var touchStartX = 0;
+      var touchStartY = 0;
+      appRoot.addEventListener('touchstart', function (ev) {
+        if (!ev.touches || ev.touches.length !== 1) return;
+        touchStartX = ev.touches[0].clientX;
+        touchStartY = ev.touches[0].clientY;
+      }, { passive: true });
+      appRoot.addEventListener('touchend', function (ev) {
+        if (!isNarrowViewport(960) || !ev.changedTouches || ev.changedTouches.length !== 1) return;
+        var dx = ev.changedTouches[0].clientX - touchStartX;
+        var dy = ev.changedTouches[0].clientY - touchStartY;
+        if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+        var sidebar = el('ch-sidebar');
+        var context = el('ch-context-panel');
+        var sidebarOpen = Boolean(sidebar && sidebar.classList.contains('mobile-open'));
+        var contextOpen = Boolean(context && context.classList.contains('mobile-open'));
+        if (dx > 0) {
+          if (contextOpen) closeMobileDrawers();
+          else if (!sidebarOpen && touchStartX < 64) openMobileSidebar(null);
+        } else {
+          if (sidebarOpen) closeMobileDrawers();
+          else if (!contextOpen && touchStartX > (window.innerWidth - 64)) openMobileContext(null);
+        }
+      }, { passive: true });
     }
 
     if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {

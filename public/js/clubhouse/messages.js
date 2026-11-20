@@ -437,7 +437,18 @@
       return html;
     }
 
-    html += '<article class="ch-msg-card" data-msg-id="' + msg.id + '">';
+    var isMentioned = false;
+    if (currentUser && !isHiddenByMod && displayContent) {
+      var myFull = String(currentUser.name || '').trim();
+      var myFirst = myFull ? myFull.split(/\s+/)[0] : '';
+      var lowerBody = String(displayContent).toLowerCase();
+      if ((myFull && lowerBody.indexOf('@' + myFull.toLowerCase()) !== -1) ||
+          (myFirst && myFirst.length >= 2 && lowerBody.indexOf('@' + myFirst.toLowerCase()) !== -1)) {
+        isMentioned = true;
+      }
+    }
+
+    html += '<article class="ch-msg-card' + (isMentioned ? ' ch-msg-mentioned' : '') + '" data-msg-id="' + msg.id + '">';
     html += '<div class="ch-msg-avatar">' + escapeHtml(initial) + '</div>';
     html += '<div class="ch-msg-body">';
     html += '<div class="ch-msg-header">';

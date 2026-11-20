@@ -171,7 +171,7 @@ eventsBpDutiesRouter.get('/:id/bp-order', async (c) => {
 
     const { results: rows } = await db.prepare(`
       SELECT bp.id, bp.event_id, bp.user_id, bp.attendee_id, bp.slot_number,
-        bp.player_name, bp.notes, bp.created_at,
+        bp.player_name, bp.notes, bp.created_at, u.walkup_song,
         COALESCE(a.roster_consent, 0) as roster_consent,
         COALESCE(u.roster_visibility, 0) as roster_visibility,
         COALESCE(u.profile_sharing, 0) as profile_sharing,

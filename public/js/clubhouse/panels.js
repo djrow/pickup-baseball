@@ -134,6 +134,16 @@
     var RtcEngine = root.ClubhouseRTC;
     var grid = el('ch-video-grid');
     var stage = el('ch-media-stage');
+    var voiceBar = el('ch-voice-status-bar');
+    var voiceBarName = el('ch-voice-status-name');
+    var hasActiveVoice = Boolean(RtcEngine && RtcEngine.state && RtcEngine.state.activeChannelId);
+    if (voiceBar) {
+      voiceBar.classList.toggle('hidden', !hasActiveVoice);
+      if (hasActiveVoice && voiceBarName && typeof UI.findChannelInStore === 'function') {
+        var activeCh = UI.findChannelInStore(RtcEngine.state.activeChannelId);
+        voiceBarName.textContent = (activeCh && activeCh.name) ? activeCh.name : 'Voice Lounge';
+      }
+    }
     if (!grid || !stage || !RtcEngine || !RtcEngine.state) return;
 
     if (!RtcEngine.state.activeChannelId) {
@@ -288,8 +298,20 @@
         var taken = slotMap[s];
         var isMine = taken && currentUserId && Number(taken.user_id) === currentUserId;
         var cls = 'ch-bp-slot' + (isMine ? ' mine' : (taken ? ' taken' : ''));
-        var label = taken ? ('#' + s + ' ' + (taken.player_name || '').split(' ')[0]) : ('#' + s + ' Open');
-        gridHtml += '<button type="button" class="' + cls + '" data-bp-slot="' + s + '" title="' + escapeHtml(taken ? taken.player_name : 'Claim Slot #' + s) + '">' + escapeHtml(label) + '</button>';
+        var walkupTitle = '';
+        if (taken && taken.walkup_song) {
+          var rawWs = String(taken.walkup_song).trim();
+          if (rawWs.charAt(0) === '{') {
+            try {
+              var parsedWs = JSON.parse(rawWs);
+              if (parsedWs && parsedWs.label) walkupTitle = ' • 🎵 ' + parsedWs.label;
+            } catch (e) { /* ignore */ }
+          } else if (rawWs) {
+            walkupTitle = ' • 🎵 ' + rawWs;
+          }
+        }
+        var label = taken ? ('#' + s + ' ' + (taken.player_name || '').split(' ')[0] + (walkupTitle ? ' 🎵' : '')) : ('#' + s + ' Open');
+        gridHtml += '<button type="button" class="' + cls + '" data-bp-slot="' + s + '" title="' + escapeHtml(taken ? (taken.player_name + walkupTitle) : 'Claim Slot #' + s) + '">' + escapeHtml(label) + '</button>';
       }
       bpGrid.innerHTML = gridHtml;
 
@@ -839,6 +861,60 @@
           if (res.ok) {
             Store.bootstrap();
           }
+        });
+      });
+    }
+
+    // Facilitator Balanced Team-Split Helper
+    var splitBtn = el('btn-split-teams');
+    var postSplitBtn = el('btn-post-team-split');
+    var splitOut = el('ch-team-split-output');
+    var lastSplitMessage = '';
+    if (splitBtn && splitOut) {
+      splitBtn.addEventListener('click', function () {
+        var attendees = (uiState.upcomingData && Array.isArray(uiState.upcomingData.attendees)) ? uiState.upcomingData.attendees : [];
+        var playing = [];
+        for (var i = 0; i < attendees.length; i++) {
+          if (attendees[i] && attendees[i].status === 'attending' && attendees[i].name) {
+            playing.push(String(attendees[i].name).trim());
+          }
+        }
+        if (playing.length < 2) {
+          splitOut.textContent = 'Need at least 2 confirmed players to split teams.';
+          splitOut.classList.remove('hidden');
+          if (postSplitBtn) postSplitBtn.classList.add('hidden');
+          return;
+        }
+        // Fisher-Yates shuffle
+        for (var j = playing.length - 1; j > 0; j--) {
+          var k = Math.floor(Math.random() * (j + 1));
+          var tmp = playing[j];
+          playing[j] = playing[k];
+          playing[k] = tmp;
+        }
+        var teamA = [];
+        var teamB = [];
+        for (var p = 0; p < playing.length; p++) {
+          if (p % 2 === 0) teamA.push(playing[p]);
+          else teamB.push(playing[p]);
+        }
+        lastSplitMessage = '⚾ Sandlot Team Split (' + playing.length + ' players)\n🟢 Team Green (' + teamA.length + '): ' + teamA.join(', ') + '\n🟠 Team Orange (' + teamB.length + '): ' + teamB.join(', ');
+        splitOut.innerHTML = '<div><strong>🟢 Team Green (' + teamA.length + '):</strong> ' + escapeHtml(teamA.join(', ')) + '</div>' +
+          '<div style="margin-top:4px;"><strong>🟠 Team Orange (' + teamB.length + '):</strong> ' + escapeHtml(teamB.join(', ')) + '</div>';
+        splitOut.classList.remove('hidden');
+        if (postSplitBtn) postSplitBtn.classList.remove('hidden');
+      });
+    }
+    if (postSplitBtn) {
+      postSplitBtn.addEventListener('click', function () {
+        if (!lastSplitMessage || !uiState.activeChannelId || typeof Store.sendMessage !== 'function') return;
+        postSplitBtn.disabled = true;
+        Store.sendMessage(uiState.activeChannelId, { content: lastSplitMessage }).then(function () {
+          if (typeof window !== 'undefined' && window.PBFDialog && typeof window.PBFDialog.toast === 'function') {
+            window.PBFDialog.toast('Posted team split to channel!', { type: 'success' });
+          }
+        }).catch(function () {}).finally(function () {
+          postSplitBtn.disabled = false;
         });
       });
     }

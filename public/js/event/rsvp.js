@@ -1012,7 +1012,10 @@
                 '<a href="/waiver.html?redirect=/event.html?id=' + encodeURIComponent(state.eventId || '') + '" class="btn btn-sm btn-primary" style="font-size: 0.8rem; font-weight: 700; text-decoration: none; padding: 4px 10px;" data-i18n="event.waiver_prompt_btn">' + API.escapeHtml(API.t('event.waiver_prompt_btn', 'Sign Waiver Before Arrival →')) + '</a>' +
               '</div>';
           }
-          if (alertBox) alertBox.innerHTML = '<div class="alert ' + alertClass + '">' + API.escapeHtml(res.message) + promptHtml + '</div>';
+          if (alertBox) {
+            alertBox.innerHTML = '<div class="alert ' + alertClass + '">' + API.escapeHtml(res.message) + promptHtml + '</div>';
+            maybeShowPostRsvpPushPrompt(alertBox);
+          }
           if (typeof EventUI.loadEventData === 'function') {
             await EventUI.loadEventData(true);
           }
@@ -1079,6 +1082,84 @@
         submitBtn.textContent = API.t('event.edit_link_send_btn', 'Send Edit Link');
       }
     });
+  }
+
+  function maybeShowPostRsvpPushPrompt(alertBox) {
+    if (!alertBox || !API.currentUser) return;
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window) || typeof Notification === 'undefined') return;
+    if (Notification.permission !== 'default') return;
+    try {
+      if (localStorage.getItem('pbf_push_prompt_dismissed') === '1') return;
+    } catch (e) { /* ignore */ }
+
+    fetch('/api/push/vapid-public-key', { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (keyRes) {
+        if (!keyRes || !keyRes.enabled || !keyRes.publicKey) return;
+        var banner = document.createElement('div');
+        banner.style.cssText = 'margin-top: 10px; padding: 10px 12px; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 6px; font-size: 0.84rem; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;';
+        var msg = document.createElement('span');
+        msg.textContent = '🔔 Want instant rainout & field-change alerts on this device?';
+        var actions = document.createElement('div');
+        actions.style.cssText = 'display: flex; gap: 6px; align-items: center;';
+        var enableBtn = document.createElement('button');
+        enableBtn.type = 'button';
+        enableBtn.className = 'btn btn-sm btn-primary';
+        enableBtn.textContent = 'Enable Rainout Alerts';
+        var dismissBtn = document.createElement('button');
+        dismissBtn.type = 'button';
+        dismissBtn.className = 'btn btn-sm btn-outline';
+        dismissBtn.textContent = 'Not now';
+
+        enableBtn.addEventListener('click', function () {
+          enableBtn.disabled = true;
+          Notification.requestPermission().then(function (perm) {
+            if (perm !== 'granted') {
+              banner.remove();
+              return;
+            }
+            var padding = '='.repeat((4 - (keyRes.publicKey.length % 4)) % 4);
+            var base64 = (keyRes.publicKey + padding).replace(/-/g, '+').replace(/_/g, '/');
+            var rawData = window.atob(base64);
+            var appKey = new Uint8Array(rawData.length);
+            for (var i = 0; i < rawData.length; i++) appKey[i] = rawData.charCodeAt(i);
+            return navigator.serviceWorker.ready.then(function (reg) {
+              return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: appKey });
+            }).then(function (sub) {
+              var subJson = sub.toJSON();
+              return fetch('/api/push/subscribe', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  endpoint: subJson.endpoint,
+                  keys: subJson.keys,
+                  notify_rainouts: true,
+                  notify_reminders: true,
+                  notify_announcements: false
+                })
+              });
+            }).then(function () {
+              msg.textContent = '✅ Rainout & reminder push alerts enabled!';
+              actions.remove();
+            });
+          }).catch(function () {
+            enableBtn.disabled = false;
+          });
+        });
+
+        dismissBtn.addEventListener('click', function () {
+          try { localStorage.setItem('pbf_push_prompt_dismissed', '1'); } catch (e) { /* ignore */ }
+          banner.remove();
+        });
+
+        actions.appendChild(enableBtn);
+        actions.appendChild(dismissBtn);
+        banner.appendChild(msg);
+        banner.appendChild(actions);
+        alertBox.appendChild(banner);
+      })
+      .catch(function () { /* ignore */ });
   }
 
   EventUI.renderAttendeesRoster = renderAttendeesRoster;

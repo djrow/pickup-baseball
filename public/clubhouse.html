@@ -7,9 +7,9 @@
   <link rel="shortcut icon" href="/favicon.ico" />
   <link rel="icon" type="image/svg+xml" href="/logo.svg" />
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png" />
-  <link rel="stylesheet" href="/css/clubhouse.css?v=172">
-  <link rel="stylesheet" href="/css/dialog.css?v=172">
-  <link rel="stylesheet" href="/css/themes.css?v=172">
+  <link rel="stylesheet" href="/css/clubhouse.css?v=173">
+  <link rel="stylesheet" href="/css/dialog.css?v=173">
+  <link rel="stylesheet" href="/css/themes.css?v=173">
 </head>
 <body class="clubhouse-body">
   <a href="#main-content" class="pbf-skip-link">Skip to main content</a>
@@ -48,6 +48,9 @@
           </div>
           <button type="button" class="ch-icon-btn ch-user-vault-btn" id="btn-user-vault" aria-label="Security Vault" title="E2EE Security Vault, Privacy Relay &amp; PBF Shared Drive Status">🔐</button>
         </div>
+        <div class="ch-voice-status-bar hidden" id="ch-voice-status-bar" role="status">
+          <span>🎙️ Connected: <strong id="ch-voice-status-name">Voice Lounge</strong></span>
+        </div>
         <div class="ch-voice-controls">
           <button type="button" class="ch-icon-btn" id="btn-voice-mute" aria-label="Mute or unmute microphone" title="Mute / Unmute Microphone">🎙️</button>
           <button type="button" class="ch-icon-btn" id="btn-voice-deafen" aria-label="Deafen or undeafen audio" title="Deafen / Undeafen Audio">🎧</button>
@@ -84,7 +87,7 @@
         <div class="ch-stage-title-wrap">
           <button type="button" class="ch-icon-btn ch-mobile-toggle-btn" id="btn-mobile-sidebar" aria-label="Open channels and DMs" title="Channels &amp; DMs">☰</button>
           <h1 class="ch-stage-title" id="ch-active-channel-name" style="display:inline-block;font-size:inherit;font-weight:inherit;margin:0;">#general</h1>
-          <span class="ch-e2ee-badge" id="ch-active-e2ee-badge">🛡️ Moderated Board</span>
+          <span class="ch-e2ee-badge" id="ch-active-e2ee-badge" style="display:none;"></span>
           <button type="button" class="ch-promote-btn hidden" id="btn-dm-verify-key" title="Verify E2EE Key Fingerprints & Safety Number" data-i18n="clubhouse.verify_key_btn">🛡️ Verify Key</button>
           <span class="ch-stage-topic" id="ch-active-channel-topic">Main community hangout for all players.</span>
         </div>
@@ -223,6 +226,13 @@
             <label><input type="checkbox" data-check="machine-test" /> 11:45 AM — Pitching Machine &amp; Generator Test</label>
             <label><input type="checkbox" data-check="bp-lineup" /> 12:00 PM — Batting Practice #1–#28 Lineup Call</label>
             <label><input type="checkbox" data-check="team-split" /> 12:30 PM — Balanced Sandlot Team Split</label>
+          </div>
+          <div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--ch-border);display:flex;flex-direction:column;gap:6px;">
+            <div style="display:flex;gap:6px;">
+              <button type="button" class="ch-promote-btn" id="btn-split-teams" style="flex:1;">⚾ Split 2 Teams</button>
+              <button type="button" class="ch-promote-btn hidden" id="btn-post-team-split">📤 Post to Chat</button>
+            </div>
+            <div id="ch-team-split-output" class="hidden" style="font-size:11.5px;line-height:1.45;color:var(--ch-text-secondary);background:var(--ch-bg-surface);border:1px solid var(--ch-border);border-radius:6px;padding:8px;"></div>
           </div>
         </div>
       </div>
@@ -480,22 +490,22 @@
     </div>
   </div>
 
-  <script defer src="/js/api/i18n.js?v=172"></script>
-  <script defer src="/js/api/ui.js?v=172"></script>
-  <script defer src="/js/api/endpoints.js?v=172"></script>
-  <script defer src="/js/api.js?v=172"></script>
-  <script defer src="/js/dialog.js?v=172"></script>
-  <script defer src="/js/crypto.js?v=172"></script>
-  <script defer src="/js/store.js?v=172"></script>
-  <script defer src="/js/store/idb.js?v=172"></script>
-  <script defer src="/js/store/e2ee.js?v=172"></script>
-  <script defer src="/js/store/sync.js?v=172"></script>
-  <script defer src="/js/store/actions.js?v=172"></script>
-  <script defer src="/js/rtc.js?v=172"></script>
-  <script defer src="/js/clubhouse/layout.js?v=172"></script>
-  <script defer src="/js/clubhouse/messages.js?v=172"></script>
-  <script defer src="/js/clubhouse/e2ee-ui.js?v=172"></script>
-  <script defer src="/js/clubhouse/panels.js?v=172"></script>
-  <script defer src="/js/clubhouse.js?v=172"></script>
+  <script defer src="/js/api/i18n.js?v=173"></script>
+  <script defer src="/js/api/ui.js?v=173"></script>
+  <script defer src="/js/api/endpoints.js?v=173"></script>
+  <script defer src="/js/api.js?v=173"></script>
+  <script defer src="/js/dialog.js?v=173"></script>
+  <script defer src="/js/crypto.js?v=173"></script>
+  <script defer src="/js/store.js?v=173"></script>
+  <script defer src="/js/store/idb.js?v=173"></script>
+  <script defer src="/js/store/e2ee.js?v=173"></script>
+  <script defer src="/js/store/sync.js?v=173"></script>
+  <script defer src="/js/store/actions.js?v=173"></script>
+  <script defer src="/js/rtc.js?v=173"></script>
+  <script defer src="/js/clubhouse/layout.js?v=173"></script>
+  <script defer src="/js/clubhouse/messages.js?v=173"></script>
+  <script defer src="/js/clubhouse/e2ee-ui.js?v=173"></script>
+  <script defer src="/js/clubhouse/panels.js?v=173"></script>
+  <script defer src="/js/clubhouse.js?v=173"></script>
 </body>
 </html>

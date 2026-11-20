@@ -837,7 +837,7 @@ module.exports = async function runTier5(t, ctx) {
       .join('\n');
     const cryptoJs = fs.readFileSync(path.join(__dirname, '..', '..', 'public', 'js', 'crypto.js'), 'utf8');
     assert.ok(clubhouseJs.includes('End-to-End Encrypted (ECDH)'), 'clubhouse.js must mark DMs as ECDH E2EE');
-    assert.ok(clubhouseJs.includes('Moderated Board'), 'clubhouse.js must label public boards honestly as Moderated Board');
+    assert.ok(clubhouseJs.includes("e2eeBadge.style.display = 'none'"), 'clubhouse.js must hide E2EE badge on standard public boards');
     assert.ok(storeJs.includes('ensureDmChannelKey'), 'store.js must wire ECDH DM key manager');
     for (const [fname, code] of [['clubhouse.js', clubhouseJs], ['store.js', storeJs], ['crypto.js', cryptoJs]]) {
       assert.ok(!code.includes('?.'), `${fname} must not contain ?.`);

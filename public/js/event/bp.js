@@ -117,6 +117,24 @@
     }
   }
 
+  function parseWalkupLabel(raw) {
+    if (!raw) return null;
+    var s = String(raw).trim();
+    if (!s) return null;
+    if (s.charAt(0) === '{') {
+      try {
+        var obj = JSON.parse(s);
+        if (obj && typeof obj === 'object' && obj.label) {
+          return {
+            short: String(obj.trackName || obj.label),
+            full: String(obj.label) + (obj.albumName ? (' (' + obj.albumName + ')') : '')
+          };
+        }
+      } catch (e) { /* plain text fallback */ }
+    }
+    return { short: s, full: s };
+  }
+
   function renderBpOrder() {
     var bpSection = el('bp-order-section');
     if (!isBattingPracticeEnabled()) {
@@ -247,6 +265,7 @@
           ? '<img src="' + API.escapeHtml(safeAvatar) + '" alt="' + API.escapeHtml(bpDisplayName) + '" class="roster-avatar" style="width: 26px; height: 26px; border-radius: 50%;" loading="lazy">'
           : '<span class="roster-avatar-placeholder" style="width: 26px; height: 26px; font-size: 0.74rem; border-radius: 50%;">' + API.escapeHtml((bpDisplayName || 'P').charAt(0).toUpperCase()) + '</span>';
 
+        var walkupInfo = parseWalkupLabel(item.walkup_song);
         html +=
           '<div class="bp-slot-card is-taken ' + (isMine ? 'is-mine' : '') + '" data-slot="' + slot + '">' +
             '<div class="bp-slot-num-badge">' +
@@ -259,6 +278,7 @@
                 '<span class="bp-slot-name">' + API.escapeHtml(bpDisplayName) + '</span>' +
                 (isMine ? '<span class="badge badge-green" style="font-size: 0.65rem; padding: 2px 6px;">' + API.escapeHtml(API.t('event.bp_your_slot', 'Your Spot')) + '</span>' : '') +
               '</div>' +
+              (walkupInfo ? '<div class="bp-slot-notes" title="' + API.escapeHtml(walkupInfo.full) + '">🎵 ' + API.escapeHtml(walkupInfo.short) + '</div>' : '') +
               (item.notes ? '<div class="bp-slot-notes">🎯 ' + API.escapeHtml(item.notes) + '</div>' : '') +
             '</div>' +
             '<div class="bp-slot-actions">' +
