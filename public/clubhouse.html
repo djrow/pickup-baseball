@@ -7,9 +7,9 @@
   <link rel="shortcut icon" href="/favicon.ico" />
   <link rel="icon" type="image/svg+xml" href="/logo.svg" />
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png" />
-  <link rel="stylesheet" href="/css/clubhouse.css?v=167">
-  <link rel="stylesheet" href="/css/dialog.css?v=167">
-  <link rel="stylesheet" href="/css/themes.css?v=167">
+  <link rel="stylesheet" href="/css/clubhouse.css?v=168">
+  <link rel="stylesheet" href="/css/dialog.css?v=168">
+  <link rel="stylesheet" href="/css/themes.css?v=168">
 </head>
 <body class="clubhouse-body">
   <a href="#main-content" class="pbf-skip-link">Skip to main content</a>
@@ -59,6 +59,18 @@
         </div>
         <div class="ch-user-settings-card hidden" id="ch-user-settings-card" role="region" aria-label="Clubhouse Settings">
           <button type="button" class="ch-user-quick-btn ch-settings-item-btn" id="btn-user-theme" title="Change Appearance Theme &amp; Colors">🎨 Theme</button>
+          <div class="ch-settings-push-section hidden" id="ch-settings-push-section">
+            <div class="ch-settings-push-header">
+              <span>🔔 Push Alerts</span>
+              <button type="button" class="ch-user-quick-btn ch-settings-push-toggle" id="btn-ch-toggle-push" disabled>Enable</button>
+            </div>
+            <div class="ch-settings-push-status" id="ch-push-status">Checking push support...</div>
+            <div class="ch-settings-push-prefs hidden" id="ch-push-prefs">
+              <label><input type="checkbox" id="ch-push-rainouts" checked /> Rainouts</label>
+              <label><input type="checkbox" id="ch-push-reminders" checked /> Reminders</label>
+              <label><input type="checkbox" id="ch-push-announcements" /> Announcements</label>
+            </div>
+          </div>
           <button type="button" class="ch-user-quick-btn ch-settings-item-btn ch-settings-opt-btn hidden" id="btn-clubhouse-opt-toggle" title="Leave or rejoin Clubhouse">🚪 Leave Clubhouse</button>
         </div>
       </footer>
@@ -468,22 +480,22 @@
     </div>
   </div>
 
-  <script defer src="/js/api/i18n.js?v=167"></script>
-  <script defer src="/js/api/ui.js?v=167"></script>
-  <script defer src="/js/api/endpoints.js?v=167"></script>
-  <script defer src="/js/api.js?v=167"></script>
-  <script defer src="/js/dialog.js?v=167"></script>
-  <script defer src="/js/crypto.js?v=167"></script>
-  <script defer src="/js/store.js?v=167"></script>
-  <script defer src="/js/store/idb.js?v=167"></script>
-  <script defer src="/js/store/e2ee.js?v=167"></script>
-  <script defer src="/js/store/sync.js?v=167"></script>
-  <script defer src="/js/store/actions.js?v=167"></script>
-  <script defer src="/js/rtc.js?v=167"></script>
-  <script defer src="/js/clubhouse/layout.js?v=167"></script>
-  <script defer src="/js/clubhouse/messages.js?v=167"></script>
-  <script defer src="/js/clubhouse/e2ee-ui.js?v=167"></script>
-  <script defer src="/js/clubhouse/panels.js?v=167"></script>
-  <script defer src="/js/clubhouse.js?v=167"></script>
+  <script defer src="/js/api/i18n.js?v=168"></script>
+  <script defer src="/js/api/ui.js?v=168"></script>
+  <script defer src="/js/api/endpoints.js?v=168"></script>
+  <script defer src="/js/api.js?v=168"></script>
+  <script defer src="/js/dialog.js?v=168"></script>
+  <script defer src="/js/crypto.js?v=168"></script>
+  <script defer src="/js/store.js?v=168"></script>
+  <script defer src="/js/store/idb.js?v=168"></script>
+  <script defer src="/js/store/e2ee.js?v=168"></script>
+  <script defer src="/js/store/sync.js?v=168"></script>
+  <script defer src="/js/store/actions.js?v=168"></script>
+  <script defer src="/js/rtc.js?v=168"></script>
+  <script defer src="/js/clubhouse/layout.js?v=168"></script>
+  <script defer src="/js/clubhouse/messages.js?v=168"></script>
+  <script defer src="/js/clubhouse/e2ee-ui.js?v=168"></script>
+  <script defer src="/js/clubhouse/panels.js?v=168"></script>
+  <script defer src="/js/clubhouse.js?v=168"></script>
 </body>
 </html>

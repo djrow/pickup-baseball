@@ -63,7 +63,12 @@
     if (nameInput) nameInput.value = currentMember.name || '';
     if (emailInput) emailInput.value = currentMember.email || '';
     if (bioInput) bioInput.value = currentMember.bio || '';
-    if (walkupInput) walkupInput.value = currentMember.walkup_song || '';
+    if (walkupInput) {
+      var parsedWalkup = parseWalkupSong(currentMember.walkup_song);
+      selectedWalkupSong = parsedWalkup;
+      walkupInput.value = parsedWalkup ? parsedWalkup.label : '';
+      renderWalkupSongCard(parsedWalkup);
+    }
 
     var charCount = document.getElementById('bio-char-count');
     if (charCount) charCount.textContent = (currentMember.bio || '').length + ' / 280';
@@ -545,7 +550,15 @@
       var name = nameInput ? nameInput.value.trim() : '';
       var bio = bioInput.value.trim();
       var walkupInput = /** @type {HTMLInputElement|null} */ (document.getElementById('profile-walkup-song'));
-      var walkupSong = walkupInput ? walkupInput.value.trim() : '';
+      var walkupRaw = walkupInput ? walkupInput.value.trim() : '';
+      var walkupSong = '';
+      if (walkupRaw) {
+        if (selectedWalkupSong && selectedWalkupSong.label === walkupRaw) {
+          walkupSong = JSON.stringify(selectedWalkupSong);
+        } else {
+          walkupSong = walkupRaw;
+        }
+      }
       var rosterVisEl = /** @type {HTMLInputElement|null} */ (document.getElementById('profile-roster-visibility'));
       var profileShareEl = /** @type {HTMLInputElement|null} */ (document.getElementById('profile-profile-sharing'));
       var notifyRsvpEl = /** @type {HTMLInputElement|null} */ (document.getElementById('profile-notify-rsvp'));
@@ -569,6 +582,9 @@
         } else if (currentMember && res.user) {
           currentMember.name = res.user.name;
           currentMember.bio = res.user.bio;
+          currentMember.walkup_song = res.user.walkup_song || null;
+          selectedWalkupSong = parseWalkupSong(currentMember.walkup_song);
+          renderWalkupSongCard(selectedWalkupSong);
           if (res.user.rosterVisibility !== undefined) currentMember.rosterVisibility = Boolean(res.user.rosterVisibility);
           if (res.user.roster_visibility !== undefined) currentMember.roster_visibility = res.user.roster_visibility ? 1 : 0;
           if (res.user.profileSharing !== undefined) currentMember.profileSharing = Boolean(res.user.profileSharing);
@@ -872,6 +888,92 @@
     });
   }
 
+  /** @type {{ label: string, trackName?: string, artistName?: string, albumName?: string, releaseYear?: string, artworkUrl?: string } | null} */
+  var selectedWalkupSong = null;
+
+  /**
+   * @param {string | null | undefined} raw
+   */
+  function parseWalkupSong(raw) {
+    if (!raw) return null;
+    var s = String(raw).trim();
+    if (!s) return null;
+    if (s.charAt(0) === '{') {
+      try {
+        var obj = JSON.parse(s);
+        if (obj && typeof obj === 'object' && obj.label) {
+          return {
+            label: String(obj.label).slice(0, 140),
+            trackName: obj.trackName ? String(obj.trackName).slice(0, 80) : '',
+            artistName: obj.artistName ? String(obj.artistName).slice(0, 60) : '',
+            albumName: obj.albumName ? String(obj.albumName).slice(0, 80) : '',
+            releaseYear: obj.releaseYear ? String(obj.releaseYear).slice(0, 4) : '',
+            artworkUrl: typeof obj.artworkUrl === 'string' && obj.artworkUrl.indexOf('https://') === 0 ? obj.artworkUrl : ''
+          };
+        }
+      } catch (e) { /* fall through to plain string */ }
+    }
+    return { label: s, trackName: s, artistName: '', albumName: '', releaseYear: '', artworkUrl: '' };
+  }
+
+  /**
+   * @param {{ label: string, trackName?: string, artistName?: string, albumName?: string, releaseYear?: string, artworkUrl?: string } | null} song
+   */
+  function renderWalkupSongCard(song) {
+    var cardEl = document.getElementById('walkup-song-card');
+    if (!cardEl) return;
+    if (!song || !song.label) {
+      cardEl.style.display = 'none';
+      cardEl.innerHTML = '';
+      return;
+    }
+    cardEl.innerHTML = '';
+    if (song.artworkUrl) {
+      var img = document.createElement('img');
+      img.src = song.artworkUrl;
+      img.alt = (song.trackName || song.label) + ' album art';
+      img.style.cssText = 'width:52px;height:52px;border-radius:6px;object-fit:cover;flex-shrink:0;border:1px solid var(--border);';
+      cardEl.appendChild(img);
+    } else {
+      var fallbackIcon = document.createElement('div');
+      fallbackIcon.textContent = '🎵';
+      fallbackIcon.style.cssText = 'width:52px;height:52px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:1.4rem;background:var(--bg-card);border:1px solid var(--border);flex-shrink:0;';
+      cardEl.appendChild(fallbackIcon);
+    }
+    var info = document.createElement('div');
+    info.style.cssText = 'flex:1;min-width:0;';
+    var titleEl = document.createElement('div');
+    titleEl.style.cssText = 'font-weight:700;font-size:0.9rem;color:var(--text-main);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+    titleEl.textContent = song.trackName || song.label;
+    info.appendChild(titleEl);
+    var subParts = [];
+    if (song.artistName) subParts.push(song.artistName);
+    if (song.albumName) subParts.push(song.albumName);
+    if (song.releaseYear) subParts.push(song.releaseYear);
+    if (subParts.length > 0) {
+      var subEl = document.createElement('div');
+      subEl.style.cssText = 'font-size:0.78rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;';
+      subEl.textContent = subParts.join(' • ');
+      info.appendChild(subEl);
+    }
+    cardEl.appendChild(info);
+
+    var clearBtn = document.createElement('button');
+    clearBtn.type = 'button';
+    clearBtn.className = 'btn btn-outline btn-sm';
+    clearBtn.textContent = '✕';
+    clearBtn.title = 'Clear walk-up song';
+    clearBtn.setAttribute('aria-label', 'Clear walk-up song');
+    clearBtn.addEventListener('click', function () {
+      var input = /** @type {HTMLInputElement | null} */ (document.getElementById('profile-walkup-song'));
+      if (input) input.value = '';
+      selectedWalkupSong = null;
+      renderWalkupSongCard(null);
+    });
+    cardEl.appendChild(clearBtn);
+    cardEl.style.display = 'flex';
+  }
+
   function setupWalkupSongAutocomplete() {
     var input = /** @type {HTMLInputElement | null} */ (document.getElementById('profile-walkup-song'));
     var listEl = document.getElementById('walkup-song-results');
@@ -887,6 +989,9 @@
 
     input.addEventListener('input', function () {
       var q = input.value.trim();
+      if (selectedWalkupSong && selectedWalkupSong.label !== q) {
+        selectedWalkupSong = null;
+      }
       if (timer) clearTimeout(timer);
       if (q.length < 2) {
         hideList();
@@ -907,10 +1012,42 @@
             items.forEach(function (item) {
               var btn = document.createElement('button');
               btn.type = 'button';
-              btn.style.cssText = 'display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:8px 12px;border:none;background:transparent;color:var(--text);cursor:pointer;font-size:0.86rem;border-bottom:1px solid var(--border);';
-              btn.textContent = item.label || '';
+              btn.style.cssText = 'display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:8px 12px;border:none;background:transparent;color:var(--text-main);cursor:pointer;font-size:0.86rem;border-bottom:1px solid var(--border);';
+              if (item.artworkUrl) {
+                var thumb = document.createElement('img');
+                thumb.src = item.artworkUrl;
+                thumb.alt = '';
+                thumb.style.cssText = 'width:36px;height:36px;border-radius:4px;object-fit:cover;flex-shrink:0;';
+                btn.appendChild(thumb);
+              }
+              var textWrap = document.createElement('div');
+              textWrap.style.cssText = 'flex:1;min-width:0;';
+              var trackLine = document.createElement('div');
+              trackLine.style.cssText = 'font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+              trackLine.textContent = item.trackName || item.label || '';
+              textWrap.appendChild(trackLine);
+              var metaParts = [];
+              if (item.artistName) metaParts.push(item.artistName);
+              if (item.albumName) metaParts.push(item.albumName);
+              if (item.releaseYear) metaParts.push(item.releaseYear);
+              if (metaParts.length > 0) {
+                var metaLine = document.createElement('div');
+                metaLine.style.cssText = 'font-size:0.76rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+                metaLine.textContent = metaParts.join(' • ');
+                textWrap.appendChild(metaLine);
+              }
+              btn.appendChild(textWrap);
               btn.addEventListener('click', function () {
                 input.value = item.label || '';
+                selectedWalkupSong = {
+                  label: item.label || '',
+                  trackName: item.trackName || '',
+                  artistName: item.artistName || '',
+                  albumName: item.albumName || '',
+                  releaseYear: item.releaseYear || '',
+                  artworkUrl: item.artworkUrl || ''
+                };
+                renderWalkupSongCard(selectedWalkupSong);
                 hideList();
               });
               listEl.appendChild(btn);

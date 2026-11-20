@@ -525,12 +525,14 @@
     var gifBtn = el('btn-open-gif-picker');
     var facCard = el('ch-facilitator-checklist-card');
     var optToggleBtn = el('btn-clubhouse-opt-toggle');
+    var pushSection = el('ch-settings-push-section');
 
     if (!u) {
       nameEl.textContent = 'Guest Player';
       roleEl.innerHTML = '<a href="/login.html?redirect=/clubhouse.html" style="color:var(--ch-accent);text-decoration:none;font-weight:600;">Sign In →</a>';
       avatarEl.textContent = '⚾';
       if (optToggleBtn) optToggleBtn.classList.add('hidden');
+      if (pushSection) pushSection.classList.add('hidden');
       if (modTabBtn) modTabBtn.style.display = 'none';
       if (contextTabsEl) contextTabsEl.classList.remove('has-mod');
       if (newChanBtn) newChanBtn.style.display = 'none';
@@ -572,6 +574,10 @@
     if (optToggleBtn) {
       optToggleBtn.textContent = optToggleLabel;
       optToggleBtn.classList.remove('hidden');
+    }
+    if (pushSection) {
+      pushSection.classList.remove('hidden');
+      initClubhousePushSettings();
     }
 
     var isMod = isModeratorUser(u);
@@ -1056,10 +1062,7 @@
       { href: '/index.html', label: '📅 Game Calendar' },
       { href: '/gallery.html', label: '📸 Photo & Video Gallery' },
       { href: '/archive.html', label: '🏆 Season Archive' },
-      { href: '/waiver.html', label: '📝 Safety Waiver' },
       { href: '/profile.html', label: '👤 Player Profile' },
-      { href: '/about.html', label: '⚾ About Us' },
-      { href: '/donate.html', label: '🧡 Donate' },
       { href: '/admin.html', label: '⚙️ Organizer Admin', adminOnly: true }
     ];
 
@@ -1108,6 +1111,140 @@
     wrap.appendChild(menu);
     wrap.appendChild(btn);
     quickActions.appendChild(wrap);
+  }
+
+  var pushSettingsInitialized = false;
+
+  function urlBase64ToUint8Array(base64String) {
+    var padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    var base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    var rawData = window.atob(base64);
+    var outputArray = new Uint8Array(rawData.length);
+    for (var i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  }
+
+  function initClubhousePushSettings() {
+    if (pushSettingsInitialized || typeof document === 'undefined') return;
+    var statusEl = el('ch-push-status');
+    var toggleBtn = el('btn-ch-toggle-push');
+    var prefsBox = el('ch-push-prefs');
+    var cbRainouts = el('ch-push-rainouts');
+    var cbReminders = el('ch-push-reminders');
+    var cbAnnouncements = el('ch-push-announcements');
+    if (!statusEl || !toggleBtn || !prefsBox) return;
+    pushSettingsInitialized = true;
+
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      statusEl.textContent = 'Push not supported in this browser.';
+      return;
+    }
+
+    var vapidPublicKey = null;
+    var isSubscribed = false;
+
+    function syncPushUi() {
+      toggleBtn.disabled = !vapidPublicKey;
+      toggleBtn.textContent = isSubscribed ? 'Disable' : 'Enable';
+      prefsBox.classList.toggle('hidden', !isSubscribed);
+      if (!vapidPublicKey) {
+        statusEl.textContent = 'Push not configured on server.';
+      } else {
+        statusEl.textContent = isSubscribed ? 'Enabled on this browser.' : 'Get instant rainout & game alerts.';
+      }
+    }
+
+    function readPrefPayload() {
+      return {
+        notify_rainouts: cbRainouts ? cbRainouts.checked : true,
+        notify_reminders: cbReminders ? cbReminders.checked : true,
+        notify_announcements: cbAnnouncements ? cbAnnouncements.checked : false
+      };
+    }
+
+    Promise.all([
+      fetch('/api/push/vapid-public-key', { credentials: 'same-origin' }).then(function (r) { return r.json(); }),
+      fetch('/api/push/preferences', { credentials: 'same-origin' }).then(function (r) { return r.json(); })
+    ]).then(function (results) {
+      var keyRes = results[0] || {};
+      var prefRes = results[1] || {};
+      vapidPublicKey = keyRes.enabled ? keyRes.publicKey : null;
+      isSubscribed = Boolean(prefRes.subscribed);
+      if (cbRainouts && typeof prefRes.notify_rainouts === 'boolean') cbRainouts.checked = prefRes.notify_rainouts;
+      if (cbReminders && typeof prefRes.notify_reminders === 'boolean') cbReminders.checked = prefRes.notify_reminders;
+      if (cbAnnouncements && typeof prefRes.notify_announcements === 'boolean') cbAnnouncements.checked = prefRes.notify_announcements;
+      syncPushUi();
+    }).catch(function () {
+      statusEl.textContent = 'Unable to load push settings.';
+    });
+
+    toggleBtn.addEventListener('click', function () {
+      if (!vapidPublicKey) return;
+      toggleBtn.disabled = true;
+      navigator.serviceWorker.ready.then(function (reg) {
+        if (isSubscribed) {
+          return reg.pushManager.getSubscription().then(function (sub) {
+            var endpoint = sub ? sub.endpoint : '';
+            var unsubPromise = sub ? sub.unsubscribe() : Promise.resolve(true);
+            return unsubPromise.then(function () {
+              return fetch('/api/push/subscribe', {
+                method: 'DELETE',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ endpoint: endpoint })
+              });
+            });
+          }).then(function () {
+            isSubscribed = false;
+            syncPushUi();
+          });
+        }
+        return Notification.requestPermission().then(function (perm) {
+          if (perm !== 'granted') {
+            statusEl.textContent = 'Notification permission denied.';
+            syncPushUi();
+            return;
+          }
+          return reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
+          }).then(function (sub) {
+            var subJson = sub.toJSON();
+            var payload = Object.assign({
+              endpoint: subJson.endpoint,
+              keys: subJson.keys
+            }, readPrefPayload());
+            return fetch('/api/push/subscribe', {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+          }).then(function (r) {
+            if (r && r.ok) isSubscribed = true;
+            syncPushUi();
+          });
+        });
+      }).catch(function () {
+        statusEl.textContent = 'Failed to update push subscription.';
+        syncPushUi();
+      });
+    });
+
+    [cbRainouts, cbReminders, cbAnnouncements].forEach(function (cb) {
+      if (!cb) return;
+      cb.addEventListener('change', function () {
+        if (!isSubscribed) return;
+        fetch('/api/push/preferences', {
+          method: 'PUT',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(readPrefPayload())
+        }).catch(function () {});
+      });
+    });
   }
 
   function initLayoutDomEvents() {

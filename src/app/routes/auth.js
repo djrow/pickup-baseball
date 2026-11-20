@@ -1081,7 +1081,7 @@ authRouter.put('/profile', requireAuth, async (c) => {
     }
     const cleanName = String(name).trim().slice(0, 120);
     const cleanBio = String(bio || '').trim().slice(0, 280);
-    const cleanWalkupSong = String(walkup_song || '').trim().slice(0, 140) || null;
+    const cleanWalkupSong = String(walkup_song || '').trim().slice(0, 500) || null;
 
     await applyMemberProfileAndConsents(db, user, body || {}, { cleanName, cleanBio, cleanWalkupSong }, c.env);
 
@@ -1113,8 +1113,12 @@ authRouter.get('/music-search', requireAuth, async (c) => {
       .map((item) => ({
         trackName: String(item.trackName).slice(0, 80),
         artistName: String(item.artistName).slice(0, 60),
+        albumName: typeof item.collectionName === 'string' ? String(item.collectionName).slice(0, 80) : '',
+        releaseYear: typeof item.releaseDate === 'string' ? String(item.releaseDate).slice(0, 4) : '',
         label: `${String(item.trackName).slice(0, 80)} — ${String(item.artistName).slice(0, 60)}`,
-        artworkUrl: typeof item.artworkUrl60 === 'string' ? item.artworkUrl60 : ''
+        artworkUrl: typeof item.artworkUrl100 === 'string'
+          ? item.artworkUrl100
+          : (typeof item.artworkUrl60 === 'string' ? item.artworkUrl60 : '')
       }));
     return c.json({ results });
   } catch (err) {

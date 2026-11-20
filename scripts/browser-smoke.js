@@ -608,8 +608,8 @@ async function runPublicShellAndDiagnosticsSmoke(browser, session, server, track
   await session.waitFor('document.getElementById("btn-ch-quick-nav")');
   await clickEl(session, '#btn-ch-quick-nav');
   const chMenuLinks = await session.evaluate('Array.from(document.querySelectorAll("#ch-quick-nav-menu a")).map(a => a.getAttribute("href"))');
-  assert(Array.isArray(chMenuLinks) && chMenuLinks.includes('/gallery.html') && chMenuLinks.includes('/waiver.html'), 'Clubhouse dynamic quick-nav exposes /gallery.html and /waiver.html');
-  record('clubhouse.html renders dynamic quick-nav menu linking to Gallery & Waiver');
+  assert(Array.isArray(chMenuLinks) && chMenuLinks.includes('/index.html') && chMenuLinks.includes('/gallery.html'), 'Clubhouse dynamic quick-nav exposes /index.html and /gallery.html');
+  record('clubhouse.html renders dynamic quick-nav menu linking to Game Calendar & Gallery');
 
   await session.waitFor('document.getElementById("btn-user-settings") && document.getElementById("btn-user-theme") && document.getElementById("btn-header-theme")');
   await clickEl(session, '#btn-user-settings');
