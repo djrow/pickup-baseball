@@ -1097,18 +1097,56 @@ authRouter.get('/music-search', requireAuth, async (c) => {
   if (q.length < 2) {
     return c.json({ results: [] });
   }
-  try {
-    const url = `https://itunes.apple.com/search?media=music&entity=song&limit=6&term=${encodeURIComponent(q)}`;
-    const fetchOpts = {
+  const makeFetchOpts = () => {
+    const opts = {
       headers: {
         Accept: 'application/json',
         'User-Agent': 'CommunityHub/1.0'
       }
     };
     if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
-      fetchOpts.signal = AbortSignal.timeout(4000);
+      opts.signal = AbortSignal.timeout(5000);
     }
-    const resp = await fetch(url, fetchOpts);
+    return opts;
+  };
+
+  // Primary: Deezer Search API (works reliably from Cloudflare Workers egress IPs)
+  try {
+    const deezerUrl = `https://api.deezer.com/search?q=${encodeURIComponent(q)}&limit=6`;
+    const dzResp = await fetch(deezerUrl, makeFetchOpts());
+    if (dzResp.ok) {
+      const dzData = JSON.parse(await dzResp.text());
+      const dzList = Array.isArray(dzData && dzData.data) ? dzData.data : [];
+      const dzResults = dzList
+        .filter((item) => item && item.title && item.artist && item.artist.name)
+        .map((item) => {
+          const trackName = String(item.title).slice(0, 80);
+          const artistName = String(item.artist.name).slice(0, 60);
+          const albumName = (item.album && typeof item.album.title === 'string') ? String(item.album.title).slice(0, 80) : '';
+          const artworkUrl = (item.album && typeof item.album.cover_medium === 'string')
+            ? item.album.cover_medium
+            : ((item.album && typeof item.album.cover_small === 'string') ? item.album.cover_small : '');
+          return {
+            trackName,
+            artistName,
+            albumName,
+            releaseYear: '',
+            label: `${trackName} — ${artistName}`,
+            artworkUrl
+          };
+        });
+      if (dzResults.length > 0) {
+        return c.json({ results: dzResults });
+      }
+    }
+  } catch (err) {
+    // Fall through to iTunes Search API
+  }
+
+  // Fallback: iTunes Search API
+  try {
+    const url = `https://itunes.apple.com/search?media=music&entity=song&limit=6&term=${encodeURIComponent(q)}`;
+    const resp = await fetch(url, makeFetchOpts());
     if (!resp.ok) {
       return c.json({ results: [] });
     }
