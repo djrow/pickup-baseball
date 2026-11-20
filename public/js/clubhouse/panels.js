@@ -298,20 +298,28 @@
         var taken = slotMap[s];
         var isMine = taken && currentUserId && Number(taken.user_id) === currentUserId;
         var cls = 'ch-bp-slot' + (isMine ? ' mine' : (taken ? ' taken' : ''));
-        var walkupTitle = '';
+        var walkupShort = '';
+        var walkupFull = '';
         if (taken && taken.walkup_song) {
           var rawWs = String(taken.walkup_song).trim();
           if (rawWs.charAt(0) === '{') {
             try {
               var parsedWs = JSON.parse(rawWs);
-              if (parsedWs && parsedWs.label) walkupTitle = ' • 🎵 ' + parsedWs.label;
+              if (parsedWs && parsedWs.label) {
+                walkupShort = String(parsedWs.trackName || parsedWs.label);
+                walkupFull = String(parsedWs.label);
+              }
             } catch (e) { /* ignore */ }
           } else if (rawWs) {
-            walkupTitle = ' • 🎵 ' + rawWs;
+            walkupShort = rawWs;
+            walkupFull = rawWs;
           }
         }
-        var label = taken ? ('#' + s + ' ' + (taken.player_name || '').split(' ')[0] + (walkupTitle ? ' 🎵' : '')) : ('#' + s + ' Open');
-        gridHtml += '<button type="button" class="' + cls + '" data-bp-slot="' + s + '" title="' + escapeHtml(taken ? (taken.player_name + walkupTitle) : 'Claim Slot #' + s) + '">' + escapeHtml(label) + '</button>';
+        var nameLine = taken ? ('#' + s + ' ' + (taken.player_name || '').split(' ')[0]) : ('#' + s + ' Open');
+        var innerHtml = '<span class="ch-bp-slot-name">' + escapeHtml(nameLine) + '</span>' +
+          (walkupShort ? '<span class="ch-bp-slot-song">🎵 ' + escapeHtml(walkupShort) + '</span>' : '');
+        var titleText = taken ? (taken.player_name + (walkupFull ? (' • 🎵 ' + walkupFull) : '')) : ('Claim Slot #' + s);
+        gridHtml += '<button type="button" class="' + cls + '" data-bp-slot="' + s + '" title="' + escapeHtml(titleText) + '">' + innerHtml + '</button>';
       }
       bpGrid.innerHTML = gridHtml;
 
