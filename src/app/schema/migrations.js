@@ -395,6 +395,13 @@ export const BASEBALL_MIGRATIONS = [
     columns: [
       { table: 'users', column: 'walkup_song', sql: 'ALTER TABLE users ADD COLUMN walkup_song TEXT DEFAULT NULL' }
     ]
+  },
+  {
+    version: 7,
+    name: 'add-bp-signups-walkup-song',
+    columns: [
+      { table: 'batting_practice_signups', column: 'walkup_song', sql: 'ALTER TABLE batting_practice_signups ADD COLUMN walkup_song TEXT DEFAULT NULL' }
+    ]
   }
 ];
 

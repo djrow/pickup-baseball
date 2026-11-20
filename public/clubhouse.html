@@ -7,9 +7,9 @@
   <link rel="shortcut icon" href="/favicon.ico" />
   <link rel="icon" type="image/svg+xml" href="/logo.svg" />
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png" />
-  <link rel="stylesheet" href="/css/clubhouse.css?v=176">
-  <link rel="stylesheet" href="/css/dialog.css?v=176">
-  <link rel="stylesheet" href="/css/themes.css?v=176">
+  <link rel="stylesheet" href="/css/clubhouse.css?v=177">
+  <link rel="stylesheet" href="/css/dialog.css?v=177">
+  <link rel="stylesheet" href="/css/themes.css?v=177">
 </head>
 <body class="clubhouse-body">
   <a href="#main-content" class="pbf-skip-link">Skip to main content</a>
@@ -201,7 +201,10 @@
         <div class="ch-widget-card" id="ch-bp-card">
           <div class="ch-widget-title">
             <span>Batting Practice (#1–#28)</span>
-            <span id="ch-bp-count-label">0/28</span>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span id="ch-bp-count-label">0/28</span>
+              <button type="button" class="ch-promote-btn hidden" id="btn-bp-mod-add" title="Add a batter and walk-up song to the BP lineup">➕ Add Batter</button>
+            </div>
           </div>
           <div id="ch-bp-dj-bar" class="ch-bp-dj-bar hidden" aria-label="At-Bat Walk-Up DJ Player">
             <div class="ch-bp-dj-top">
@@ -486,6 +489,69 @@
   </div>
 
   <!-- ====================================================================
+       MOD / ORGANIZER BATTING PRACTICE BATTER & WALK-UP SONG MODAL
+       ==================================================================== -->
+  <div class="ch-modal-backdrop hidden" id="ch-bp-mod-modal">
+    <div class="ch-modal" role="dialog" aria-modal="true" aria-labelledby="ch-bp-mod-modal-title">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <h2 id="ch-bp-mod-modal-title" style="margin:0;font-size:17px;">⚾ Add / Edit BP Batter</h2>
+        <button type="button" class="ch-icon-btn" id="btn-close-bp-mod-modal" aria-label="Close batting practice modal">✕</button>
+      </div>
+      <form id="ch-bp-mod-form">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+          <div>
+            <label for="bp-mod-slot" style="font-size:12px;font-weight:700;display:block;margin-bottom:4px;">BP Slot *</label>
+            <select class="ch-input" id="bp-mod-slot" style="margin-bottom:0;" required></select>
+          </div>
+          <div>
+            <label for="bp-mod-member" style="font-size:12px;font-weight:700;display:block;margin-bottom:4px;">Clubhouse Member (Optional)</label>
+            <select class="ch-input" id="bp-mod-member" style="margin-bottom:0;">
+              <option value="">— Guest / Walk-In —</option>
+            </select>
+          </div>
+        </div>
+
+        <label for="bp-mod-name" style="font-size:12px;font-weight:700;display:block;margin-bottom:4px;">Batter Name *</label>
+        <input type="text" class="ch-input" id="bp-mod-name" placeholder="Type batter name (member or walk-in guest)" required maxlength="100" />
+
+        <div style="position:relative;margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+            <label for="bp-mod-song-input" style="font-size:12px;font-weight:700;">🎵 Walk-Up Song or YouTube Link (Optional)</label>
+            <button type="button" class="ch-thread-btn hidden" id="btn-bp-mod-clear-song" style="font-size:11px;padding:0 4px;">Clear Song</button>
+          </div>
+          <input type="text" class="ch-input" id="bp-mod-song-input" autocomplete="off" placeholder="Search song &amp; artist, or paste YouTube URL (?t=75)" maxlength="200" style="margin-bottom:0;" />
+          <div id="bp-mod-song-results" class="ch-bp-song-results hidden"></div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:110px 1fr;gap:8px;align-items:end;margin-bottom:10px;">
+          <div>
+            <label for="bp-mod-clip-start" style="font-size:12px;font-weight:700;display:block;margin-bottom:4px;">Start Time</label>
+            <input type="text" class="ch-input" id="bp-mod-clip-start" placeholder="0:00" value="0:00" maxlength="10" style="margin-bottom:0;text-align:center;" />
+          </div>
+          <div id="bp-mod-clip-hint" style="font-size:11.5px;color:var(--ch-text-secondary);padding-bottom:8px;">
+            0:00–0:20 uses 30s preview; past 0:20 plays YouTube clip at timestamp.
+          </div>
+        </div>
+
+        <div id="bp-mod-yt-wrap" class="hidden" style="margin-bottom:10px;">
+          <label for="bp-mod-yt-select" style="font-size:12px;font-weight:700;display:block;margin-bottom:4px;">▶ YouTube Video Match</label>
+          <select class="ch-input" id="bp-mod-yt-select" style="margin-bottom:0;"></select>
+        </div>
+
+        <div id="ch-bp-mod-status" style="font-size:12px;color:#ff8a80;margin-bottom:10px;"></div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+          <button type="button" class="ch-rsvp-btn declined hidden" id="btn-bp-mod-remove" style="flex:0 0 auto;">🗑️ Remove Slot</button>
+          <div style="display:flex;gap:8px;margin-left:auto;">
+            <button type="button" class="ch-rsvp-btn" id="btn-cancel-bp-mod-modal">Cancel</button>
+            <button type="submit" class="ch-send-btn" id="btn-save-bp-mod">Save Batter</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ====================================================================
        APPEARANCE THEME & MLB MARKET PALETTE MODAL
        ==================================================================== -->
   <div class="ch-modal-backdrop hidden" id="ch-theme-modal">
@@ -502,22 +568,22 @@
     </div>
   </div>
 
-  <script defer src="/js/api/i18n.js?v=176"></script>
-  <script defer src="/js/api/ui.js?v=176"></script>
-  <script defer src="/js/api/endpoints.js?v=176"></script>
-  <script defer src="/js/api.js?v=176"></script>
-  <script defer src="/js/dialog.js?v=176"></script>
-  <script defer src="/js/crypto.js?v=176"></script>
-  <script defer src="/js/store.js?v=176"></script>
-  <script defer src="/js/store/idb.js?v=176"></script>
-  <script defer src="/js/store/e2ee.js?v=176"></script>
-  <script defer src="/js/store/sync.js?v=176"></script>
-  <script defer src="/js/store/actions.js?v=176"></script>
-  <script defer src="/js/rtc.js?v=176"></script>
-  <script defer src="/js/clubhouse/layout.js?v=176"></script>
-  <script defer src="/js/clubhouse/messages.js?v=176"></script>
-  <script defer src="/js/clubhouse/e2ee-ui.js?v=176"></script>
-  <script defer src="/js/clubhouse/panels.js?v=176"></script>
-  <script defer src="/js/clubhouse.js?v=176"></script>
+  <script defer src="/js/api/i18n.js?v=177"></script>
+  <script defer src="/js/api/ui.js?v=177"></script>
+  <script defer src="/js/api/endpoints.js?v=177"></script>
+  <script defer src="/js/api.js?v=177"></script>
+  <script defer src="/js/dialog.js?v=177"></script>
+  <script defer src="/js/crypto.js?v=177"></script>
+  <script defer src="/js/store.js?v=177"></script>
+  <script defer src="/js/store/idb.js?v=177"></script>
+  <script defer src="/js/store/e2ee.js?v=177"></script>
+  <script defer src="/js/store/sync.js?v=177"></script>
+  <script defer src="/js/store/actions.js?v=177"></script>
+  <script defer src="/js/rtc.js?v=177"></script>
+  <script defer src="/js/clubhouse/layout.js?v=177"></script>
+  <script defer src="/js/clubhouse/messages.js?v=177"></script>
+  <script defer src="/js/clubhouse/e2ee-ui.js?v=177"></script>
+  <script defer src="/js/clubhouse/panels.js?v=177"></script>
+  <script defer src="/js/clubhouse.js?v=177"></script>
 </body>
 </html>

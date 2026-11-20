@@ -1070,7 +1070,7 @@ async function applyMemberProfileAndConsents(db, user, body, profileFields, env 
   await purgeUserSessionCache(db, user.id);
 }
 
-function sanitizeWalkupSongPayload(raw) {
+export function sanitizeWalkupSongPayload(raw) {
   const s = String(raw || '').trim();
   if (!s) return null;
   if (s.startsWith('{')) {

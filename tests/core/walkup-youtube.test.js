@@ -490,6 +490,207 @@ function registerWalkupYoutubeTests(ctx) {
       assert.ok(ytIframe3 && ytIframe3.src.includes('start=12&end=22'), 'BP DJ must fall back to YouTube at 12..22 when Deezer preview is unavailable');
       assert.ok(apiCalls.some((u) => u.includes('/api/auth/music-preview')), 'Must check Deezer preview first for <=20s');
     });
+
+    await t.test('5. Clubhouse carries over profile avatar images to user bar, messages, members directory & voice', () => {
+      const env = createDomVm();
+      env.windowObj.ClubhouseStore = {
+        state: {
+          user: {
+            id: 7,
+            name: 'Alex Rivera',
+            role: 'member',
+            clubhouseOptedIn: true,
+            avatarUrl: '/api/users/7/avatar?v=420'
+          },
+          channels: [{ id: 1, slug: 'dugout-voice', name: 'Dugout Voice', category: 'Voice Lounges', channel_type: 'voice' }],
+          members: [
+            { id: 7, name: 'Alex R.', role: 'member', avatarUrl: '/api/users/7/avatar?v=420' },
+            { id: 8, name: 'Jordan K.', role: 'member', avatarUrl: '/api/users/8/avatar?v=512' },
+            { id: 9, name: 'Private P.', role: 'member', avatarUrl: '' }
+          ],
+          voiceParticipants: [{ channel_id: 1, user_id: 7, user_name: 'Alex R.' }],
+          unreadByChannel: {}
+        }
+      };
+      env.windowObj.ClubhouseRTC = { state: { activeChannelId: 1, speakingUsers: {} } };
+
+      ['ch-current-user-name', 'ch-current-user-role', 'ch-current-user-avatar',
+        'ch-channel-list', 'ch-members-directory', 'ch-video-grid', 'ch-media-stage',
+        'ch-voice-status-bar', 'ch-voice-status-name']
+        .forEach((id) => createEl(id, 'div', env.byId));
+
+      const layoutSrc = fs.readFileSync(path.join(PUBLIC_DIR, 'js/clubhouse/layout.js'), 'utf8');
+      const messagesSrc = fs.readFileSync(path.join(PUBLIC_DIR, 'js/clubhouse/messages.js'), 'utf8');
+      const panelsSrc = fs.readFileSync(path.join(PUBLIC_DIR, 'js/clubhouse/panels.js'), 'utf8');
+      vm.runInContext(layoutSrc, env.ctx, { filename: 'public/js/clubhouse/layout.js' });
+      vm.runInContext(messagesSrc, env.ctx, { filename: 'public/js/clubhouse/messages.js' });
+      vm.runInContext(panelsSrc, env.ctx, { filename: 'public/js/clubhouse/panels.js' });
+
+      const UI = env.windowObj.ClubhouseStore._ui;
+      UI.renderUserBar();
+      const userAvatarEl = env.byId['ch-current-user-avatar'];
+      assert.ok(userAvatarEl.innerHTML.includes('src="/api/users/7/avatar?v=420"'), 'User bar must render signed-in user avatar image');
+      assert.ok(userAvatarEl.classList.contains('has-avatar'), 'User bar avatar must set has-avatar class');
+
+      const msgHtmlWithAvatar = UI.buildMessageCardHtml(
+        { id: 101, channel_id: 1, author_id: 8, author_name: 'Jordan K.', content: 'Hey!', created_at: '2026-11-19T12:00:00Z' },
+        env.windowObj.ClubhouseStore.state.user,
+        false
+      );
+      assert.ok(msgHtmlWithAvatar.includes('src="/api/users/8/avatar?v=512"'), 'Message card must render member avatar image');
+
+      const msgHtmlPrivate = UI.buildMessageCardHtml(
+        { id: 102, channel_id: 1, author_id: 9, author_name: 'Private P.', content: 'Hi', created_at: '2026-11-19T12:00:00Z' },
+        env.windowObj.ClubhouseStore.state.user,
+        false
+      );
+      assert.ok(!msgHtmlPrivate.includes('<img'), 'Private member without shared avatar must fall back to initial');
+
+      UI.renderMembersDirectory();
+      const dirHtml = env.byId['ch-members-directory'].innerHTML;
+      assert.ok(dirHtml.includes('src="/api/users/7/avatar?v=420"'), 'Members directory must render self avatar');
+      assert.ok(dirHtml.includes('src="/api/users/8/avatar?v=512"'), 'Members directory must render peer avatar');
+
+      UI.renderChannelSidebar();
+      assert.ok(env.byId['ch-channel-list'].innerHTML.includes('src="/api/users/7/avatar?v=420"'), 'Voice roster must render participant avatar');
+
+      UI.renderVoiceVideoTiles();
+      assert.ok(env.byId['ch-video-grid'].innerHTML.includes('src="/api/users/7/avatar?v=420"'), 'Voice tile must render participant avatar');
+    });
+
+    await t.test('6. Clubhouse Moderator can add walk-in batters & walk-up songs to BP card (and regular members get 403)', async () => {
+      if (ctx && ctx.apiReq && ctx.createSession) {
+        const modEmail = `bp_mod_${Date.now()}@sundaypickup.org`;
+        const memEmail = `bp_mem_${Date.now()}@sundaypickup.org`;
+        const modRes = ctx.db.prepare(
+          "INSERT INTO users (name, email, role, is_admin, is_moderator, clubhouse_opted_in) VALUES ('Clubhouse Mod', ?, 'member', 0, 1, 1)"
+        ).run(modEmail);
+        const memRes = ctx.db.prepare(
+          "INSERT INTO users (name, email, role, is_admin, is_moderator, clubhouse_opted_in) VALUES ('Regular Member', ?, 'member', 0, 0, 1)"
+        ).run(memEmail);
+        const modSess = ctx.createSession(Number(modRes.lastInsertRowid));
+        const memSess = ctx.createSession(Number(memRes.lastInsertRowid));
+        const modCookie = `baseball_session=${typeof modSess === 'string' ? modSess : modSess.sessionId}`;
+        const memCookie = `baseball_session=${typeof memSess === 'string' ? memSess : memSess.sessionId}`;
+
+        const futureDate = new Date(Date.now() + 3 * 86400 * 1000).toISOString();
+        const evRes = ctx.db.prepare(
+          "INSERT INTO events (title, location, event_date, max_players, status, created_by) VALUES ('Sunday Mod BP Test', 'Bushrod Park', ?, 30, 'active', ?)"
+        ).run(futureDate, Number(modRes.lastInsertRowid));
+        const evId = Number(evRes.lastInsertRowid);
+
+        const songJson = JSON.stringify({
+          label: 'Enter Sandman — Metallica',
+          trackName: 'Enter Sandman',
+          artistName: 'Metallica',
+          clipStart: 55,
+          youtubeId: 'M7lc1UVf-VE',
+          youtubeTitle: 'Metallica - Enter Sandman'
+        });
+
+        // Regular member must be rejected with 403
+        const forbidden = await ctx.apiReq('POST', `/api/baseball/events/${evId}/quick-bp`, memCookie, {
+          action: 'mod_assign',
+          slot_number: 4,
+          player_name: 'Walk-In Carlos',
+          walkup_song: songJson
+        });
+        assert.equal(forbidden.status, 403, 'Non-moderator must receive 403 on mod_assign');
+
+        // Moderator adds walk-in batter + walk-up song
+        const assignRes = await ctx.apiReq('POST', `/api/baseball/events/${evId}/quick-bp`, modCookie, {
+          action: 'mod_assign',
+          slot_number: 4,
+          player_name: 'Walk-In Carlos',
+          walkup_song: songJson
+        });
+        assert.equal(assignRes.status, 200, 'Moderator mod_assign must return 200');
+        assert.equal(assignRes.data.player_name, 'Walk-In Carlos');
+        assert.ok(assignRes.data.walkup_song && assignRes.data.walkup_song.includes('M7lc1UVf-VE'));
+
+        // Verify BP order endpoint returns the slot's walkup_song
+        const bpOrderRes = await ctx.apiReq('GET', `/api/events/${evId}/bp-order`, modCookie);
+        assert.equal(bpOrderRes.status, 200);
+        const slot4 = (bpOrderRes.data.bp_signups || []).find((r) => Number(r.slot_number) === 4);
+        assert.ok(slot4 && slot4.walkup_song && JSON.parse(slot4.walkup_song).clipStart === 55, 'BP order must return slot walkup_song');
+
+        // Moderator can release the walk-in slot
+        const relRes = await ctx.apiReq('POST', `/api/baseball/events/${evId}/quick-bp`, modCookie, {
+          action: 'release',
+          slot_number: 4
+        });
+        assert.equal(relRes.status, 200, 'Moderator must be able to release any BP slot');
+      }
+
+      // VM UI check: Mod sees "+ Add Batter" button and submitting modal calls mod_assign
+      const env = createDomVm();
+      const posted = [];
+      env.windowObj.ClubhouseStore = {
+        state: {
+          user: { id: 10, name: 'Mod Pat', role: 'member', isModerator: true, is_moderator: 1 },
+          members: [{ id: 11, name: 'Teammate Sam' }],
+          voiceParticipants: []
+        },
+        apiRequest: async (method, url, body) => {
+          posted.push({ method, url, body });
+          return { ok: true, data: { success: true } };
+        },
+        _ui: {
+          uiState: { publicConfig: {}, remoteStreams: {}, upcomingData: null },
+          el: (id) => env.byId[id] || null,
+          escapeHtml: (s) => String(s || ''),
+          formatTime: () => '',
+          tClubhouse: (_k, fb) => fb || '',
+          isClubhouseBpEnabled: () => true,
+          isMemberRole: () => true,
+          isModeratorUser: (u) => Boolean((u || env.windowObj.ClubhouseStore.state.user).isModerator),
+          abbreviateMemberNames: (arr) => arr.map((x) => x.name || ''),
+          showPeerBlockedFeedback: () => {},
+          handlePeerActionError: () => {}
+        }
+      };
+
+      ['ch-sunday-details', 'ch-sunday-status-pill', 'ch-sunday-guest-notice', 'ch-quick-rsvp-group',
+        'ch-bp-card', 'ch-duties-card', 'ch-facilitator-checklist-card', 'btn-sync-game-channel',
+        'ch-bp-grid', 'ch-bp-count-label', 'ch-duties-list', 'btn-quick-rsvp-yes', 'btn-quick-rsvp-no',
+        'ch-bp-dj-bar', 'ch-bp-dj-now', 'btn-bp-dj-prev', 'btn-bp-dj-play', 'btn-bp-dj-next', 'ch-bp-dj-yt-wrap',
+        'btn-bp-mod-add', 'ch-bp-mod-modal', 'ch-bp-mod-modal-title', 'btn-close-bp-mod-modal',
+        'btn-cancel-bp-mod-modal', 'ch-bp-mod-form', 'bp-mod-slot', 'bp-mod-member', 'bp-mod-name',
+        'bp-mod-song-input', 'bp-mod-song-results', 'btn-bp-mod-clear-song', 'bp-mod-clip-start',
+        'bp-mod-clip-hint', 'bp-mod-yt-wrap', 'bp-mod-yt-select', 'ch-bp-mod-status', 'btn-bp-mod-remove', 'btn-save-bp-mod']
+        .forEach((id) => createEl(id, id === 'ch-bp-mod-form' ? 'form' : 'div', env.byId));
+
+      const panelsSrc = fs.readFileSync(path.join(PUBLIC_DIR, 'js/clubhouse/panels.js'), 'utf8');
+      vm.runInContext(panelsSrc, env.ctx, { filename: 'public/js/clubhouse/panels.js' });
+
+      const UI = env.windowObj.ClubhouseStore._ui;
+      UI.initPanelsDomEvents();
+      const upcoming = {
+        event: { id: 55, title: 'Sunday Game', status: 'active', location: 'Bushrod Park', event_date: '2026-11-22T20:00:00Z' },
+        attendees: [],
+        duties: [],
+        bp_signups: []
+      };
+      UI.uiState.upcomingData = upcoming;
+      UI.renderUpcomingEventCard(upcoming);
+
+      assert.equal(env.byId['btn-bp-mod-add'].classList.contains('hidden'), false, 'Mod must see + Add Batter button');
+      UI.openBpModModal(3);
+      env.byId['bp-mod-slot'].value = '3';
+      env.byId['bp-mod-name'].value = 'Guest Batter';
+      env.byId['bp-mod-song-input'].value = 'https://youtu.be/M7lc1UVf-VE?t=45';
+      env.byId['bp-mod-song-input'].dispatchEvent({ type: 'input' });
+      env.byId['ch-bp-mod-form'].dispatchEvent({ type: 'submit', preventDefault() {} });
+      await new Promise((r) => setTimeout(r, 20));
+
+      const assignCall = posted.find((p) => p.method === 'POST' && p.url.includes('/quick-bp'));
+      assert.ok(assignCall && assignCall.body.action === 'mod_assign', 'Submitting modal must POST action=mod_assign');
+      assert.equal(assignCall.body.slot_number, 3);
+      assert.equal(assignCall.body.player_name, 'Guest Batter');
+      const savedSong = JSON.parse(assignCall.body.walkup_song);
+      assert.equal(savedSong.youtubeId, 'M7lc1UVf-VE');
+      assert.equal(savedSong.clipStart, 45);
+    });
   });
 }
 

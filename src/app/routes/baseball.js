@@ -32,6 +32,7 @@ import { resolveConfig } from '../config.js';
 import { canUserAccessChannel } from './chat.js';
 import { chunkArray } from './chat/helpers.js';
 import { AVATAR_EXPR, promoteNextWaitlistedPlayer } from './events/helpers.js';
+import { sanitizeWalkupSongPayload } from './auth.js';
 import { logEvent } from '../errors.js';
 
 export const baseballRouter = /** @type {AppHono} */ (new Hono());
@@ -125,7 +126,7 @@ baseballRouter.get('/upcoming', async (c) => {
   const bpSignups = cfg.FEATURE_BATTING_PRACTICE
     ? (await baseballDb.prepare(`
         SELECT bp.*,
-               u.walkup_song,
+               COALESCE(NULLIF(bp.walkup_song, ''), u.walkup_song) as walkup_song,
                COALESCE(a.roster_consent, 0) as roster_consent,
                COALESCE(u.roster_visibility, 0) as roster_visibility,
                COALESCE(u.profile_sharing, 0) as profile_sharing,
@@ -421,6 +422,17 @@ baseballRouter.post('/events/:eventId/quick-bp', requireAuth, async (c) => {
 
   const body = await c.req.json().catch(() => ({}));
   const action = String(body.action || 'claim').toLowerCase();
+  const isBpManager = Boolean(
+    user && (
+      user.isAdmin ||
+      user.role === 'admin' ||
+      user.role === 'organizer' ||
+      user.canManageEvents ||
+      user.isModerator ||
+      user.canModerateChat ||
+      user.is_moderator === 1
+    )
+  );
 
   if (action === 'release' || action === 'withdraw' || action === 'delete') {
     if (body.slot_number !== undefined && body.slot_number !== null) {
@@ -431,12 +443,12 @@ baseballRouter.post('/events/:eventId/quick-bp', requireAuth, async (c) => {
       const occupant = await baseballDb.prepare(
         'SELECT id, user_id FROM batting_practice_signups WHERE event_id = ? AND slot_number = ?'
       ).bind(eventId, slotNum).first();
-      if (occupant && occupant.user_id !== user.id && !user.isAdmin) {
+      if (occupant && occupant.user_id !== user.id && !isBpManager) {
         return c.json({ error: 'Cannot release another player\'s batting practice slot.' }, 403);
       }
       await baseballDb.prepare(
         'DELETE FROM batting_practice_signups WHERE event_id = ? AND slot_number = ? AND (user_id = ? OR ? = 1)'
-      ).bind(eventId, slotNum, user.id, user.isAdmin ? 1 : 0).run();
+      ).bind(eventId, slotNum, user.id, isBpManager ? 1 : 0).run();
     } else {
       await baseballDb.prepare(
         'DELETE FROM batting_practice_signups WHERE event_id = ? AND user_id = ?'
@@ -448,6 +460,84 @@ baseballRouter.post('/events/:eventId/quick-bp', requireAuth, async (c) => {
       action: 'released',
       event_id: eventId,
       slot_number: body.slot_number || null
+    });
+  }
+
+  if (action === 'mod_assign') {
+    if (!isBpManager) {
+      return c.json({ error: 'Moderator, Organizer, or Admin permissions are required to assign batters or walk-up songs.' }, 403);
+    }
+
+    const modSlot = parseInt(body.slot_number, 10);
+    if (isNaN(modSlot) || modSlot < 1 || modSlot > 28) {
+      return c.json({ error: 'Batting practice slot_number must be an integer between 1 and 28.' }, 400);
+    }
+
+    let targetUserId = null;
+    let targetAttendeeId = null;
+    let resolvedName = body.player_name ? String(body.player_name).trim().slice(0, 100) : '';
+
+    if (body.target_user_id !== undefined && body.target_user_id !== null && String(body.target_user_id).trim() !== '') {
+      const parsedUid = parseInt(body.target_user_id, 10);
+      if (parsedUid > 0) {
+        const targetUserRow = await baseballDb.prepare('SELECT id, name FROM users WHERE id = ?').bind(parsedUid).first();
+        if (targetUserRow) {
+          targetUserId = Number(targetUserRow.id);
+          if (!resolvedName && targetUserRow.name) {
+            resolvedName = String(targetUserRow.name).trim().slice(0, 100);
+          }
+          const attRow = await baseballDb.prepare(
+            'SELECT id FROM attendees WHERE event_id = ? AND user_id = ? LIMIT 1'
+          ).bind(eventId, targetUserId).first();
+          if (attRow) targetAttendeeId = Number(attRow.id);
+        }
+      }
+    }
+
+    if (!resolvedName) {
+      return c.json({ error: 'Batter name is required.' }, 400);
+    }
+
+    const hasWalkupField = Object.prototype.hasOwnProperty.call(body, 'walkup_song');
+    const cleanWalkupSong = hasWalkupField ? sanitizeWalkupSongPayload(body.walkup_song) : undefined;
+    const modNotes = body.notes ? String(body.notes).trim().slice(0, 500) : null;
+
+    const existingAtSlot = await baseballDb.prepare(
+      'SELECT * FROM batting_practice_signups WHERE event_id = ? AND slot_number = ?'
+    ).bind(eventId, modSlot).first();
+
+    if (existingAtSlot) {
+      const nextWalkup = hasWalkupField ? cleanWalkupSong : (existingAtSlot.walkup_song || null);
+      const nextUserId = body.target_user_id !== undefined ? targetUserId : (existingAtSlot.user_id || null);
+      const nextAttId = body.target_user_id !== undefined ? targetAttendeeId : (existingAtSlot.attendee_id || null);
+      await baseballDb.prepare(`
+        UPDATE batting_practice_signups
+        SET user_id = ?, attendee_id = ?, player_name = ?, notes = COALESCE(?, notes), walkup_song = ?
+        WHERE id = ?
+      `).bind(nextUserId, nextAttId, resolvedName, modNotes, nextWalkup, existingAtSlot.id).run();
+    } else {
+      await baseballDb.prepare(`
+        INSERT INTO batting_practice_signups (event_id, user_id, attendee_id, slot_number, player_name, notes, walkup_song)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        eventId,
+        targetUserId,
+        targetAttendeeId,
+        modSlot,
+        resolvedName,
+        modNotes,
+        hasWalkupField ? cleanWalkupSong : null
+      ).run();
+    }
+
+    return c.json({
+      success: true,
+      action: 'mod_assign',
+      event_id: eventId,
+      slot_number: modSlot,
+      player_name: resolvedName,
+      user_id: targetUserId,
+      walkup_song: hasWalkupField ? cleanWalkupSong : (existingAtSlot ? existingAtSlot.walkup_song : null)
     });
   }
 

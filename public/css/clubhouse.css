@@ -299,6 +299,8 @@ html, body.clubhouse-body {
   font-weight: 700;
   margin-inline-end: 7px;
   border: 2px solid transparent;
+  overflow: hidden;
+  vertical-align: middle;
 }
 
 .ch-voice-avatar.speaking {
@@ -347,6 +349,38 @@ html, body.clubhouse-body {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  overflow: hidden;
+}
+
+.ch-member-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background-color: var(--ch-bg-elevated);
+  color: var(--ch-accent);
+  font-weight: 700;
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1px solid var(--ch-border);
+  overflow: hidden;
+}
+
+.ch-user-avatar.has-avatar,
+.ch-msg-avatar.has-avatar,
+.ch-voice-avatar.has-avatar,
+.ch-member-avatar.has-avatar {
+  background-color: var(--ch-bg-elevated);
+}
+
+.ch-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
 }
 
 .ch-user-meta {
@@ -679,6 +713,7 @@ html, body.clubhouse-body {
   justify-content: center;
   flex-shrink: 0;
   border: 1px solid var(--ch-border);
+  overflow: hidden;
 }
 
 .ch-msg-body {
@@ -1085,6 +1120,71 @@ html, body.clubhouse-body {
 
 .ch-bp-slot-play:hover {
   background: rgba(251, 191, 36, 0.3);
+}
+
+.ch-bp-slot-actions-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  margin-top: 2px;
+}
+
+.ch-bp-slot-actions-row .ch-bp-slot-play {
+  margin-top: 0;
+}
+
+.ch-bp-slot-edit {
+  display: inline-block;
+  padding: 1px 4px;
+  font-size: 9px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ch-text-secondary);
+  cursor: pointer;
+}
+
+.ch-bp-slot-edit:hover {
+  background: var(--ch-bg-active);
+  color: var(--ch-accent);
+}
+
+.ch-bp-song-results {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  margin-top: 4px;
+  z-index: 120;
+  background: var(--ch-bg-sidebar);
+  border: 1px solid var(--ch-border);
+  border-radius: 6px;
+  box-shadow: var(--ch-shadow-float);
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.ch-bp-song-results.hidden {
+  display: none;
+}
+
+.ch-bp-song-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 7px 9px;
+  border: none;
+  border-bottom: 1px solid var(--ch-border);
+  background: transparent;
+  color: var(--ch-text-primary);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.ch-bp-song-option:hover {
+  background: var(--ch-bg-hover);
 }
 
 .ch-bp-dj-bar {

@@ -213,6 +213,7 @@ export const CREATE_TABLES_SQL = [
     player_name TEXT NOT NULL,
     notes TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    walkup_song TEXT DEFAULT NULL,
     UNIQUE(event_id, slot_number)
   )`,
   `CREATE TABLE IF NOT EXISTS waivers (

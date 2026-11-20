@@ -448,8 +448,15 @@
       }
     }
 
+    var authorAvatarUrl = (!isSystemMsg && typeof UI.getAvatarUrlForUser === 'function')
+      ? UI.getAvatarUrlForUser(msg.author_id, msg.author_avatar_url || msg.avatar_url || '')
+      : '';
+    var avatarInner = (authorAvatarUrl && typeof UI.renderAvatarContentHtml === 'function')
+      ? UI.renderAvatarContentHtml(authorAvatarUrl, msg.author_name || 'Player', initial)
+      : escapeHtml(initial);
+
     html += '<article class="ch-msg-card' + (isMentioned ? ' ch-msg-mentioned' : '') + '" data-msg-id="' + msg.id + '">';
-    html += '<div class="ch-msg-avatar">' + escapeHtml(initial) + '</div>';
+    html += '<div class="ch-msg-avatar' + (authorAvatarUrl ? ' has-avatar' : '') + '">' + avatarInner + '</div>';
     html += '<div class="ch-msg-body">';
     html += '<div class="ch-msg-header">';
     html += '<span class="ch-msg-author">' + escapeHtml(msg.author_name) + '</span>';

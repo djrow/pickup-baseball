@@ -85,6 +85,49 @@
       .replace(/'/g, '&#39;');
   }
 
+  function safeClubhouseAvatarUrl(rawUrl) {
+    if (!rawUrl || typeof rawUrl !== 'string') return '';
+    if (typeof window !== 'undefined' && window.API && typeof window.API.safeAvatarUrl === 'function') {
+      return window.API.safeAvatarUrl(rawUrl);
+    }
+    var trimmed = rawUrl.trim();
+    if (/^\/api\/users\/\d+\/avatar(\?v=\d+)?$/i.test(trimmed)) return trimmed;
+    if (/^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/=]+$/i.test(trimmed)) return trimmed;
+    if (/^https?:\/\//i.test(trimmed)) return trimmed;
+    return '';
+  }
+
+  function getAvatarUrlForUser(userId, explicitUrl) {
+    var direct = safeClubhouseAvatarUrl(explicitUrl || '');
+    if (direct) return direct;
+    var uid = Number(userId || 0);
+    if (!uid) return '';
+    var curUser = Store && Store.state ? Store.state.user : null;
+    if (curUser && Number(curUser.id) === uid) {
+      var selfAv = safeClubhouseAvatarUrl(curUser.avatarUrl || curUser.avatar_url || '');
+      if (selfAv) return selfAv;
+    }
+    var members = (Store && Store.state && Array.isArray(Store.state.members)) ? Store.state.members : [];
+    for (var i = 0; i < members.length; i++) {
+      var m = members[i];
+      if (m && Number(m.id || m.user_id) === uid) {
+        var mAv = safeClubhouseAvatarUrl(m.avatarUrl || m.avatar_url || '');
+        if (mAv) return mAv;
+        break;
+      }
+    }
+    return '';
+  }
+
+  function renderAvatarContentHtml(avatarUrl, displayName, fallbackText) {
+    var safeUrl = safeClubhouseAvatarUrl(avatarUrl || '');
+    if (safeUrl) {
+      return '<img src="' + escapeHtml(safeUrl) + '" alt="' + escapeHtml(displayName || 'Player') + '" class="ch-avatar-img" loading="lazy" decoding="async" />';
+    }
+    var initial = fallbackText || (String(displayName || 'P').charAt(0).toUpperCase());
+    return escapeHtml(initial);
+  }
+
   function formatTime(isoStr) {
     if (!isoStr) return '';
     try {
@@ -275,6 +318,7 @@
     else if (modalId === 'ch-vault-modal' && typeof UI.closeVaultModal === 'function') UI.closeVaultModal();
     else if (modalId === 'ch-verify-modal' && typeof UI.closeVerifyModal === 'function') UI.closeVerifyModal();
     else if (modalId === 'ch-covenant-modal' && typeof UI.closeCovenantModal === 'function') UI.closeCovenantModal();
+    else if (modalId === 'ch-bp-mod-modal' && typeof UI.closeBpModModal === 'function') UI.closeBpModModal();
     else if (modalId === 'ch-theme-modal') closeThemeModal();
     else {
       var m = el(modalId);
@@ -530,6 +574,7 @@
     if (!u) {
       nameEl.textContent = 'Guest Player';
       roleEl.innerHTML = '<a href="/login.html?redirect=/clubhouse.html" style="color:var(--ch-accent);text-decoration:none;font-weight:600;">Sign In →</a>';
+      avatarEl.classList.remove('has-avatar');
       avatarEl.textContent = '⚾';
       if (optToggleBtn) optToggleBtn.classList.add('hidden');
       if (pushSection) pushSection.classList.add('hidden');
@@ -569,7 +614,14 @@
     if (!isOptedIn) badges.push('Opted Out');
     var optToggleLabel = isOptedIn ? '🚪 Leave Clubhouse' : '⚾ Join Clubhouse';
     roleEl.textContent = badges.join(' • ');
-    avatarEl.textContent = (u.name || 'P').charAt(0).toUpperCase();
+    var selfAvatarUrl = getAvatarUrlForUser(u.id, u.avatarUrl || u.avatar_url || '');
+    if (selfAvatarUrl) {
+      avatarEl.classList.add('has-avatar');
+      avatarEl.innerHTML = renderAvatarContentHtml(selfAvatarUrl, u.name || selfDisplay, '');
+    } else {
+      avatarEl.classList.remove('has-avatar');
+      avatarEl.textContent = (u.name || 'P').charAt(0).toUpperCase();
+    }
 
     if (optToggleBtn) {
       optToggleBtn.textContent = optToggleLabel;
@@ -730,9 +782,10 @@
               for (var m = 0; m < roomMembers.length; m++) {
                 var vp = roomMembers[m];
                 var initial = (vp.user_name || 'P').charAt(0).toUpperCase();
+                var vpAvatar = getAvatarUrlForUser(vp.user_id, vp.avatar_url || vp.avatarUrl || '');
                 var isSpeaking = RtcEngine && RtcEngine.state && RtcEngine.state.speakingUsers && RtcEngine.state.speakingUsers[vp.user_id];
                 html += '<div class="ch-voice-member">';
-                html += '<div><span class="ch-voice-avatar' + (isSpeaking ? ' speaking' : '') + '">' + escapeHtml(initial) + '</span>';
+                html += '<div><span class="ch-voice-avatar' + (vpAvatar ? ' has-avatar' : '') + (isSpeaking ? ' speaking' : '') + '">' + renderAvatarContentHtml(vpAvatar, vp.user_name || 'Player', initial) + '</span>';
                 html += '<span>' + escapeHtml(vp.user_name) + '</span></div>';
                 html += '<div>';
                 if (vp.screen_sharing) html += '<span class="ch-screen-pill">SCREEN</span> ';
@@ -1559,6 +1612,9 @@
   Object.assign(UI, {
     el: el,
     escapeHtml: escapeHtml,
+    safeClubhouseAvatarUrl: safeClubhouseAvatarUrl,
+    getAvatarUrlForUser: getAvatarUrlForUser,
+    renderAvatarContentHtml: renderAvatarContentHtml,
     formatTime: formatTime,
     tClubhouse: tClubhouse,
     isClubhouseBpEnabled: isClubhouseBpEnabled,
