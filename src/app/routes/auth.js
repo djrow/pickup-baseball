@@ -1130,6 +1130,7 @@ authRouter.get('/music-search', requireAuth, async (c) => {
             ? item.preview
             : '';
           const deezerId = item.id != null ? String(item.id).replace(/\D/g, '').slice(0, 15) : '';
+          const durationSec = Number(item.duration) > 0 ? Math.min(3600, Math.round(Number(item.duration))) : 0;
           return {
             trackName,
             artistName,
@@ -1138,7 +1139,8 @@ authRouter.get('/music-search', requireAuth, async (c) => {
             label: `${trackName} — ${artistName}`,
             artworkUrl,
             deezerId,
-            previewUrl
+            previewUrl,
+            durationSec
           };
         });
       if (dzResults.length > 0) {
@@ -1173,7 +1175,8 @@ authRouter.get('/music-search', requireAuth, async (c) => {
         deezerId: '',
         previewUrl: (typeof item.previewUrl === 'string' && item.previewUrl.startsWith('https://'))
           ? item.previewUrl
-          : ''
+          : '',
+        durationSec: Number(item.trackTimeMillis) > 0 ? Math.min(3600, Math.round(Number(item.trackTimeMillis) / 1000)) : 0
       }));
     return c.json({ results });
   } catch (err) {

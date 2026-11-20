@@ -209,25 +209,22 @@
       try {
         var obj = JSON.parse(s);
         if (obj && typeof obj === 'object' && obj.label) {
-          var clipStart = Number(obj.clipStart);
-          if (!isFinite(clipStart) || clipStart < 0) clipStart = 0;
-          if (clipStart > 25) clipStart = 25;
-          var ytStart = Number(obj.youtubeStart);
-          if (!isFinite(ytStart) || ytStart < 0) ytStart = 0;
+          var rawStart = (obj.youtubeStart && Number(obj.youtubeStart) > 25) ? Number(obj.youtubeStart) : Number(obj.clipStart);
+          if (!isFinite(rawStart) || rawStart < 0) rawStart = 0;
+          if (rawStart > 3600) rawStart = 3600;
           return {
             label: String(obj.label).slice(0, 140),
             trackName: obj.trackName ? String(obj.trackName).slice(0, 80) : '',
             artistName: obj.artistName ? String(obj.artistName).slice(0, 60) : '',
             deezerId: obj.deezerId ? String(obj.deezerId).replace(/\D/g, '').slice(0, 15) : '',
             previewUrl: typeof obj.previewUrl === 'string' && obj.previewUrl.indexOf('https://') === 0 ? obj.previewUrl : '',
-            clipStart: Math.round(clipStart),
-            youtubeId: typeof obj.youtubeId === 'string' && /^[A-Za-z0-9_-]{11}$/.test(obj.youtubeId) ? obj.youtubeId : '',
-            youtubeStart: Math.round(ytStart)
+            clipStart: Math.round(rawStart),
+            youtubeId: typeof obj.youtubeId === 'string' && /^[A-Za-z0-9_-]{11}$/.test(obj.youtubeId) ? obj.youtubeId : ''
           };
         }
       } catch (e) { /* fall through */ }
     }
-    return { label: s, trackName: s, artistName: '', deezerId: '', previewUrl: '', clipStart: 0, youtubeId: '', youtubeStart: 0 };
+    return { label: s, trackName: s, artistName: '', deezerId: '', previewUrl: '', clipStart: 0, youtubeId: '' };
   }
 
   function syncDjBarUi(statusOverride) {
@@ -257,8 +254,8 @@
         }
         if (!entry) entry = djState.lineup[0];
         if (entry) {
-          var startSec = entry.song.youtubeId ? entry.song.youtubeStart : entry.song.clipStart;
-          var srcTag = entry.song.youtubeId ? 'YT ' : '';
+          var startSec = entry.song.clipStart || 0;
+          var srcTag = (startSec > 25 && entry.song.youtubeId) ? 'YT ' : '';
           nowEl.textContent = (djState.isPlaying ? '♪ ' : '') + '#' + entry.slot + ' ' + entry.playerName + ' — ' +
             (entry.song.trackName || entry.song.label) + ' (' + srcTag + formatDjSeconds(startSec) + '–' + formatDjSeconds(startSec + 5) + ')';
         }
@@ -344,15 +341,21 @@
     djState.activeSlot = entry.slot;
     djState.isPlaying = true;
 
-    // YouTube 5-second clip fallback
-    if (entry.song.youtubeId) {
+    var clipStart = entry.song.clipStart || 0;
+
+    // Past 25s: start YouTube player at the selected timestamp right in the Clubhouse player
+    if (clipStart > 25) {
+      if (!entry.song.youtubeId) {
+        djState.isPlaying = false;
+        syncDjBarUi('#' + entry.slot + ' starts at ' + formatDjSeconds(clipStart) + ' — add a YouTube link on Profile');
+        return;
+      }
       var ytWrap = el('ch-bp-dj-yt-wrap');
       if (ytWrap) {
-        var ytStart = entry.song.youtubeStart || 0;
-        var ytEnd = ytStart + 5;
+        var ytEnd = clipStart + 5;
         ytWrap.innerHTML = '';
         var iframe = document.createElement('iframe');
-        iframe.src = 'https://www.youtube-nocookie.com/embed/' + encodeURIComponent(entry.song.youtubeId) + '?start=' + ytStart + '&end=' + ytEnd + '&autoplay=1&rel=0';
+        iframe.src = 'https://www.youtube-nocookie.com/embed/' + encodeURIComponent(entry.song.youtubeId) + '?start=' + clipStart + '&end=' + ytEnd + '&autoplay=1&rel=0';
         iframe.title = 'At-Bat DJ YouTube walk-up clip';
         iframe.allow = 'autoplay; encrypted-media';
         iframe.style.cssText = 'width:100%;height:110px;border:0;display:block;';
