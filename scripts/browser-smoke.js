@@ -882,7 +882,7 @@ async function runAdminEventAndTaskJourney(browser, server, tracker, record) {
 
     // 4.0 Admin Setup Health checklist card rendering & dismissal persistence (#63)
     await session.waitFor('document.getElementById("admin-setup-health-card") && document.getElementById("admin-setup-health-card").style.display === "block" && document.querySelectorAll("#admin-setup-health-list .setup-health-item").length >= 4', 10000);
-    await session.waitFor('document.getElementById("btn-dismiss-setup-health")');
+    await session.waitFor('document.getElementById("btn-dismiss-setup-health") && document.getElementById("btn-dismiss-setup-health").dataset.boundSetupHealthDismiss === "1"', 5000);
     await clickEl(session, '#btn-dismiss-setup-health');
     await session.waitFor(
       'document.getElementById("admin-setup-health-card").style.display === "none" && localStorage.getItem("pbf_setup_health_dismissed") === "1"',
