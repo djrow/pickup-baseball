@@ -161,6 +161,30 @@ test('Security Scan: Recursive PWA Asset & Version Parity', async (t) => {
     assert.match(output, /\[WARN\] npm Dependency Audit — Skipped via --skip-audit/);
   });
 
+  await t.test('CLI invocation with --skip-audit --quiet omits PASS lines and banner while keeping WARN and Summary', () => {
+    const output = execFileSync(process.execPath, [path.join(ROOT_DIR, 'scripts', 'security-scan.js'), '--skip-audit', '--quiet'], {
+      cwd: ROOT_DIR,
+      encoding: 'utf8'
+    });
+    assert.doesNotMatch(output, /\[PASS\]/);
+    assert.doesNotMatch(output, /Pickup Baseball Foundation — Security Scan/);
+    assert.match(output, /\[WARN\] npm Dependency Audit — Skipped via --skip-audit/);
+    assert.match(output, /Summary: \d+ passed, \d+ warnings, 0 failed\./);
+  });
+
+  await t.test('CLI invocation with --skip-audit --failures-only prints only the 1-line Summary when no checks fail', () => {
+    const output = execFileSync(process.execPath, [path.join(ROOT_DIR, 'scripts', 'security-scan.js'), '--skip-audit', '--failures-only'], {
+      cwd: ROOT_DIR,
+      encoding: 'utf8'
+    });
+    assert.doesNotMatch(output, /\[PASS\]/);
+    assert.doesNotMatch(output, /\[WARN\]/);
+    assert.doesNotMatch(output, /\[FAIL\]/);
+    const lines = output.trim().split(/\r?\n/);
+    assert.equal(lines.length, 1);
+    assert.match(lines[0], /^Summary: \d+ passed, \d+ warnings, 0 failed\.$/);
+  });
+
   await t.test('checkNpmAudit respects skipAudit option and handles pass/fail/offline outcomes', () => {
     const { checkNpmAudit } = require('../../scripts/security-scan.js');
     assert.equal(typeof checkNpmAudit, 'function', 'security-scan.js must export checkNpmAudit');

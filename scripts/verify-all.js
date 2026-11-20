@@ -299,49 +299,113 @@ test.after(async () => {
 // ---------------------------------------------------------------------------
 // Register Modular Test Suites
 // ---------------------------------------------------------------------------
-require('../tests/core/auth-rbac.test.js')(ctx);
-require('../tests/core/events-rsvp.test.js')(ctx);
-require('../tests/core/invite-links.test.js')(ctx);
+function normalizeSuiteToken(token) {
+  return String(token || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\\/g, '/')
+    .replace(/^\.\//, '')
+    .replace(/^tests\/core\//, '')
+    .replace(/^tests\//, '')
+    .replace(/\.test\.js$/, '')
+    .replace(/\.js$/, '')
+    .replace(/\/index$/, '');
+}
 
-test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
-  await require('../tests/core/pwa-calendar.test.js')(ctx, t9);
-  await require('../tests/core/weather-gallery.test.js')(ctx, t9);
-});
+function parseRequestedSuites() {
+  const rawTokens = [];
+  if (process.env.VERIFY_SUITES) {
+    rawTokens.push(...String(process.env.VERIFY_SUITES).split(','));
+  }
+  const argv = process.argv.slice(2);
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg.startsWith('--suite=') || arg.startsWith('--suites=')) {
+      rawTokens.push(...arg.slice(arg.indexOf('=') + 1).split(','));
+    } else if ((arg === '--suite' || arg === '--suites') && argv[i + 1]) {
+      rawTokens.push(...argv[++i].split(','));
+    }
+  }
+  const normalized = rawTokens.map(normalizeSuiteToken).filter(Boolean);
+  return normalized.length > 0 ? new Set(normalized) : null;
+}
 
-require('../tests/core/clubhouse-waiver.test.js')(ctx);
-require('../tests/core/waiver-telemetry.test.js')();
-require('../tests/core/security-scan.test.js');
-require('../tests/core/schema-barrel.test.js')();
-require('../tests/core/security-barrel.test.js')();
-require('../tests/core/migration-engine.test.js')();
-require('../tests/core/typecheck.test.js')();
-require('../tests/core/lint.test.js')();
-require('../tests/core/error-telemetry.test.js')(ctx);
-require('../tests/core/config.test.js')(ctx);
-require('../tests/core/dehardcode.test.js')(ctx);
-require('../tests/core/duty-feature-flags.test.js')();
-require('../tests/core/backup-dr.test.js')();
-require('../tests/core/key-rotation-audit.test.js')();
-require('../tests/core/turn-relay.test.js')();
-require('../tests/core/visitor-privacy.test.js')();
-require('../tests/core/rate-limit-hmac.test.js')();
-require('../tests/core/data-export.test.js')();
-require('../tests/core/two-tier-erasure.test.js')();
-require('../tests/core/privacy-consent.test.js')();
-require('../tests/core/visitor-erasure.test.js')();
-require('../tests/core/peer-block-ui.test.js')();
-require('../tests/core/cache-batching.test.js')(ctx);
-require('../tests/core/storage-provider.test.js')(ctx);
-require('../tests/core/gallery-direct-upload.test.js')(ctx);
-require('../tests/core/mailer-cursors.test.js')(ctx);
-require('../tests/core/mailer-preferences.test.js')(ctx);
-require('../tests/core/webhook-resend-suppression.test.js')(ctx);
-require('../tests/core/cron-reminders.test.js')(ctx);
-require('../tests/core/migrate-d1-media-to-r2.test.js')();
-require('../tests/core/setup-cli.test.js')(ctx);
-require('../tests/core/waiver-checkin.test.js')(ctx);
-require('../tests/core/dialog-focus-trap.test.js')();
-require('../tests/core/attendance-history.test.js')(ctx);
-require('../tests/core/clubhouse-sync-voice.test.js')(ctx);
-require('../tests/core/walkup-youtube.test.js')(ctx);
-require('../tests/clubhouse/index.js')();
+const selectedSuites = parseRequestedSuites();
+const shouldRunSuite = (id) => !selectedSuites || selectedSuites.has(id);
+
+const MODULAR_SUITES = [
+  ['auth-rbac', () => require('../tests/core/auth-rbac.test.js')(ctx)],
+  ['events-rsvp', () => require('../tests/core/events-rsvp.test.js')(ctx)],
+  ['invite-links', () => require('../tests/core/invite-links.test.js')(ctx)],
+  ['__t9__', () => {
+    const runPwaCalendar = shouldRunSuite('pwa-calendar') || shouldRunSuite('t9');
+    const runWeatherGallery = shouldRunSuite('weather-gallery') || shouldRunSuite('t9');
+    if (!runPwaCalendar && !runWeatherGallery) return;
+    test('T9: Progressive Web App (PWA) Verification Suite', async (t9) => {
+      if (runPwaCalendar) await require('../tests/core/pwa-calendar.test.js')(ctx, t9);
+      if (runWeatherGallery) await require('../tests/core/weather-gallery.test.js')(ctx, t9);
+    });
+  }],
+  ['clubhouse-waiver', () => require('../tests/core/clubhouse-waiver.test.js')(ctx)],
+  ['waiver-telemetry', () => require('../tests/core/waiver-telemetry.test.js')()],
+  ['security-scan', () => require('../tests/core/security-scan.test.js')],
+  ['agent-map', () => require('../tests/core/agent-map.test.js')],
+  ['token-tooling', () => require('../tests/core/token-tooling.test.js')],
+  ['test-impact', () => require('../tests/core/test-impact.test.js')],
+  ['schema-barrel', () => require('../tests/core/schema-barrel.test.js')()],
+  ['security-barrel', () => require('../tests/core/security-barrel.test.js')()],
+  ['migration-engine', () => require('../tests/core/migration-engine.test.js')()],
+  ['typecheck', () => require('../tests/core/typecheck.test.js')()],
+  ['lint', () => require('../tests/core/lint.test.js')()],
+  ['error-telemetry', () => require('../tests/core/error-telemetry.test.js')(ctx)],
+  ['config', () => require('../tests/core/config.test.js')(ctx)],
+  ['dehardcode', () => require('../tests/core/dehardcode.test.js')(ctx)],
+  ['duty-feature-flags', () => require('../tests/core/duty-feature-flags.test.js')()],
+  ['backup-dr', () => require('../tests/core/backup-dr.test.js')()],
+  ['key-rotation-audit', () => require('../tests/core/key-rotation-audit.test.js')()],
+  ['turn-relay', () => require('../tests/core/turn-relay.test.js')()],
+  ['visitor-privacy', () => require('../tests/core/visitor-privacy.test.js')()],
+  ['rate-limit-hmac', () => require('../tests/core/rate-limit-hmac.test.js')()],
+  ['data-export', () => require('../tests/core/data-export.test.js')()],
+  ['two-tier-erasure', () => require('../tests/core/two-tier-erasure.test.js')()],
+  ['privacy-consent', () => require('../tests/core/privacy-consent.test.js')()],
+  ['visitor-erasure', () => require('../tests/core/visitor-erasure.test.js')()],
+  ['peer-block-ui', () => require('../tests/core/peer-block-ui.test.js')()],
+  ['cache-batching', () => require('../tests/core/cache-batching.test.js')(ctx)],
+  ['storage-provider', () => require('../tests/core/storage-provider.test.js')(ctx)],
+  ['gallery-direct-upload', () => require('../tests/core/gallery-direct-upload.test.js')(ctx)],
+  ['mailer-cursors', () => require('../tests/core/mailer-cursors.test.js')(ctx)],
+  ['mailer-preferences', () => require('../tests/core/mailer-preferences.test.js')(ctx)],
+  ['webhook-resend-suppression', () => require('../tests/core/webhook-resend-suppression.test.js')(ctx)],
+  ['cron-reminders', () => require('../tests/core/cron-reminders.test.js')(ctx)],
+  ['migrate-d1-media-to-r2', () => require('../tests/core/migrate-d1-media-to-r2.test.js')()],
+  ['setup-cli', () => require('../tests/core/setup-cli.test.js')(ctx)],
+  ['waiver-checkin', () => require('../tests/core/waiver-checkin.test.js')(ctx)],
+  ['dialog-focus-trap', () => require('../tests/core/dialog-focus-trap.test.js')()],
+  ['attendance-history', () => require('../tests/core/attendance-history.test.js')(ctx)],
+  ['clubhouse-sync-voice', () => require('../tests/core/clubhouse-sync-voice.test.js')(ctx)],
+  ['walkup-youtube', () => require('../tests/core/walkup-youtube.test.js')(ctx)],
+  ['clubhouse', () => require('../tests/clubhouse/index.js')()]
+];
+
+if (selectedSuites) {
+  const knownSuiteIds = new Set(
+    MODULAR_SUITES.map(([id]) => id).filter((id) => id !== '__t9__')
+  );
+  knownSuiteIds.add('pwa-calendar');
+  knownSuiteIds.add('weather-gallery');
+  knownSuiteIds.add('t9');
+
+  const unknown = [...selectedSuites].filter((id) => !knownSuiteIds.has(id));
+  if (unknown.length > 0) {
+    const errMsg = `Unknown VERIFY_SUITES target(s): ${unknown.join(', ')}. Available suites: ${[...knownSuiteIds].sort().join(', ')}`;
+    console.error(errMsg);
+    throw new Error(errMsg);
+  }
+}
+
+for (const [id, registerFn] of MODULAR_SUITES) {
+  if (id === '__t9__' || shouldRunSuite(id)) {
+    registerFn();
+  }
+}

@@ -3,10 +3,12 @@
  * Periodic & Pre-Deploy Security Scan for Pickup Baseball Foundation
  *
  * Usage:
- *   node scripts/security-scan.js              # Local static + secret + audit scan
- *   node scripts/security-scan.js --live       # Also probe https://www.pickupbaseballfoundation.org
+ *   node scripts/security-scan.js                  # Local static + secret + audit scan
+ *   node scripts/security-scan.js --quiet          # Suppress header & PASS lines; show WARN/FAIL + summary
+ *   node scripts/security-scan.js --failures-only  # Suppress header, PASS & WARN lines; show FAIL + summary
+ *   node scripts/security-scan.js --live           # Also probe https://www.pickupbaseballfoundation.org
  *   node scripts/security-scan.js --live=https://example.org
- *   node scripts/security-scan.js --skip-audit # Skip npm audit network check
+ *   node scripts/security-scan.js --skip-audit     # Skip npm audit network check
  */
 
 const fs = require('node:fs');
@@ -20,6 +22,8 @@ const ROOT = path.resolve(__dirname, '..');
 const args = process.argv.slice(2);
 const liveArg = args.find((a) => a === '--live' || a.startsWith('--live='));
 const skipAudit = args.includes('--skip-audit');
+const failuresOnly = args.includes('--failures-only');
+const quiet = args.includes('--quiet') || failuresOnly;
 const liveOrigin = liveArg && liveArg.includes('=')
   ? liveArg.split('=').slice(1).join('=').replace(/\/+$/, '')
   : (liveArg ? 'https://www.pickupbaseballfoundation.org' : '');
@@ -28,6 +32,8 @@ const results = [];
 
 function record(status, name, detail = '') {
   results.push({ status, name, detail });
+  const shouldPrint = !quiet || status === 'FAIL' || (status === 'WARN' && !failuresOnly);
+  if (!shouldPrint) return;
   const icon = status === 'PASS' ? '✅' : (status === 'WARN' ? '⚠️' : '❌');
   const suffix = detail ? ` — ${detail}` : '';
   console.log(`${icon} [${status}] ${name}${suffix}`);
@@ -1574,7 +1580,9 @@ function checkI18nKeyParity() {
 }
 
 async function main() {
-  console.log('🛡️  Pickup Baseball Foundation — Security Scan\n');
+  if (!quiet) {
+    console.log('🛡️  Pickup Baseball Foundation — Security Scan\n');
+  }
 
   checkHtmlAndCspHeaders();
   checkClientJsSafety();
@@ -1587,13 +1595,15 @@ async function main() {
   checkI18nKeyParity();
 
   if (liveOrigin) {
-    console.log(`\n🌐 Running live production probes against ${liveOrigin}...\n`);
+    if (!quiet) {
+      console.log(`\n🌐 Running live production probes against ${liveOrigin}...\n`);
+    }
     await checkLiveProduction(liveOrigin);
   }
 
   const failures = results.filter((r) => r.status === 'FAIL');
   const warnings = results.filter((r) => r.status === 'WARN');
-  console.log(`\nSummary: ${results.length - failures.length - warnings.length} passed, ${warnings.length} warnings, ${failures.length} failed.`);
+  console.log(`${quiet ? '' : '\n'}Summary: ${results.length - failures.length - warnings.length} passed, ${warnings.length} warnings, ${failures.length} failed.`);
   if (failures.length > 0) {
     process.exitCode = 1;
   }

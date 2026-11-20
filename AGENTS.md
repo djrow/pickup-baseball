@@ -1,83 +1,65 @@
 # AGENTS.md — Codebase Map & Engineering Rules
 
-Sunday Pickup Baseball (`pickup-baseball`) runs identically on **Cloudflare Pages Functions + D1** (`functions/`) and **Node.js + Express + `better-sqlite3`** (`src/server.js`, `src/d1-sqlite.js`) via a single unified **Hono** API (`src/app/index.js`). Zero build step, zero frontend framework, strict CSP.
+Sunday Pickup Baseball (`pickup-baseball`) runs identically on **Cloudflare Pages Functions + D1** (`functions/`) and **Node.js + Express 5 + `better-sqlite3`** (`src/server.js`, `src/d1-sqlite.js`) via a unified **Hono** API (`src/app/index.js`), with Docker self-hosting (`Dockerfile`, `SELF_HOST.md`) and a reminder cron worker (`workers/cron-reminders/src/index.js`). Zero build step, zero frontend framework, strict CSP.
 
 ## 1. Directory & Module Map
 
 ### Backend (`src/app/`)
 Mounted under `/api` in `src/app/index.js`:
-- **Core & Security:**
-  - `src/app/index.js` — Hono app, global security headers, `.pages.dev` redirect/WAF, CSRF origin check, session middleware, router mounts.
-  - `src/app/errors.js` — Structured 9-code error taxonomy, correlation `X-Request-Id`, PII-scrubbed JSON logging, and error response normalization.
-  - `src/app/security.js` — Stable re-export barrel over `src/app/security/` (`crypto.js`, `session.js`, `guards.js`, `ssrf.js`) for sessions (`baseball_session`), role middleware (`requireAuth`, `requireOrganizer`, `requireModerator`, `requireAdmin`), `checkRateLimit`, SSRF validation (`validateExternalGifUrl`), HTML escaping, and base64 helpers.
-  - `src/app/schema.js` — Stable re-export barrel over `src/app/schema/` (`baseball-ddl.js`, `chat-ddl.js`, `migrations.js`, `engine.js`) for DDL, idempotent migrations, pruning, and settings helpers (`ensureD1Schema`, `ensureChatD1Schema`, `ensureClubhouseOptInBackfill`).
-  - `src/app/policy.js` — Roster privacy & guest-hiding helpers.
-  - `src/app/gdrive.js` — Google Drive OAuth2 refresh token + resumable uploads, metadata, byte-range streaming.
-  - `src/app/mailer.js` — Resend REST email dispatch (login codes, RSVPs, reminders, rainouts, reopenings).
-  - `src/app/feeds.js` — Media RSS 2.0 XML feed (`/feed.xml` & `/api/feed.xml`).
-  - `src/app/version.js` — `CURRENT_APP_VERSION` (stamped by `scripts/bump-version.js`).
+- **Core, Adapters & Policy:**
+  - `index.js` — Hono app, security headers, preview-origin lockout, CSRF, session & edge-cache middleware, router mounts.
+  - `config.js` — community presets, `STORAGE_PROVIDER`, `MAIL_PROVIDER`, `PUBLIC_ORIGIN`.
+  - `errors.js` — 9-code taxonomy, correlation `X-Request-Id`, PII-scrubbed JSON logging, response normalization.
+  - `security.js` — barrel over `security/{crypto,session,guards,ssrf}.js` (sessions, `requireAuth`/`requireOrganizer`/`requireModerator`/`requireAdmin`, `checkRateLimit`, SSRF, escaping).
+  - `schema.js` — barrel over `schema/{baseball-ddl,chat-ddl,migrations,engine}.js` (`ensureD1Schema`, `ensureChatD1Schema`, `ensureClubhouseOptInBackfill`).
+  - `storage/` (`index.js`, `r2.js`, `gdrive.js`, `local.js`) + `gdrive.js` — pluggable media storage (Cloudflare R2 `MEDIA_BUCKET`, Drive OAuth2, local FS).
+  - `mailer/` (`index.js`, `resend.js`, `brevo.js`, `mock.js`, `preferences.js`, `templates.js`) + `mailer.js` barrel.
+  - `push-sender.js` — Web Push notifications & quiet hours.
+  - `consent.js`, `erasure.js`, `policy.js` — privacy consents, two-tier erasure/quarantined waivers, roster privacy.
+  - `edge-cache.js`, `feeds.js`, `version.js` — public edge cache, RSS `/feed.xml`, `CURRENT_APP_VERSION`.
+  - **Contracts & Index:** `types/backend.d.ts`, `types/client-globals.d.ts`, `docs/AGENT_MAP.md` (generated via `npm run map:gen`; consult before grepping or reading full implementations), and `docs/adr/`.
 - **Routers (`src/app/routes/`):**
-  - `/auth` → `auth.js` (6-digit codes, magic links, shared-device 4h sessions, profile, avatars, user RBAC/bans, settings, clubhouse opt-in)
-  - `/events` → `events.js` aggregator mounting `events/core.js` (games, `.ics` calendars, reminders, rainout/reopen, DB SQL backup), `events/rsvps.js` (RSVPs/waitlist, moderation, comments), `events/bp-duties.js` (BP order, default/event volunteer tasks), and `events/helpers.js`
-  - `/posts` → `posts.js` (community highlights)
-  - `/media`, `/attachments` → `media.js` (gallery uploads/links, moderation approval, chat attachments; helpers in `media-helpers.js`)
-  - `/gifs` → `gifs.js` (starter catalog + Drive-backed GIF URL imports & streaming)
-  - `/keys` → `keys.js` (Clubhouse E2EE identity & private board key shares)
-  - `/voice`, `/rtc` → `rtc.js` (voice channel presence & WebRTC signaling)
-  - `/baseball` → `baseball.js` (Clubhouse embedded upcoming games, quick RSVP, quick BP, `#game-*` sync)
-  - `/waiver` → `waiver.js` (digital liability waiver signing & provenance-sealed certificates)
-  - `/` → `chat.js` aggregator mounting `chat/sync.js` (`/bootstrap`, `/sync`, `/public/channels`), `chat/channels.js` (`/channels`, membership, read watermarks), `chat/messages.js` (`/messages`, reactions, attachments), `chat/moderation.js` (reports, mutes, bans, moderator actions), and `chat/helpers.js`
+  - `/auth` → `auth.js`; `/events` → `events.js` (`events/{core,rsvps,bp-duties,helpers}.js`); `/posts` → `posts.js`
+  - `/media`, `/attachments` → `media.js` (`media/{gallery,attachments,admin}.js`, `media-helpers.js`)
+  - `/gifs` → `gifs.js`; `/keys` → `keys.js`; `/voice`, `/rtc` → `rtc.js`; `/baseball` → `baseball.js`; `/waiver` → `waiver.js`
+  - `/push` → `push.js`; `/notifications` → `notifications.js`; `/webhooks` → `webhooks.js`; `/admin/suppressions` → `admin-suppressions.js`
+  - `/` → `chat.js` (`chat/{sync,channels,messages,moderation,blocks,helpers}.js`)
 
 ### Dual Databases (`wrangler.toml` / `src/db.js`)
-- **`BASEBALL_DB` (`DB` alias):** `users`, `sessions`, `auth_codes`, `events`, `event_duties`, `attendees`, `duty_assignments`, `comments`, `default_duties`, `posts`, `media_items`, `banned_emails`, `app_settings`, `rate_limits`, `batting_practice_signups`, `waivers`.
-- **`CHAT_DB`:** `channels`, `channel_members`, `messages`, `message_reactions`, `chat_attachments`, `user_crypto_keys`, `channel_key_shares`, `voice_participants`, `rtc_signals`, `sync_events`, `chat_rate_limits`, `chat_reports`, `user_mutes`, `clubhouse_gifs`, `clubhouse_opted_out`.
+- **`BASEBALL_DB` (`DB` alias):** `users`, `sessions`, `auth_codes`, `events`, `event_duties`, `attendees`, `duty_assignments`, `comments`, `default_duties`, `posts`, `media_items`, `banned_emails`, `app_settings`, `rate_limits`, `batting_practice_signups`, `waivers`, `push_subscriptions`, `consent_records`, `email_suppressions`.
+- **`CHAT_DB`:** `channels`, `channel_members`, `messages`, `message_reactions`, `chat_attachments`, `user_crypto_keys`, `channel_key_shares`, `voice_participants`, `rtc_signals`, `sync_events`, `chat_rate_limits`, `chat_reports`, `user_mutes`, `clubhouse_gifs`, `clubhouse_opted_out`, `chat_meta`, `user_blocks`.
 
 ### Frontend (`public/`)
-Vanilla **ES6** scripts (IIFEs attaching to `window`, loaded via ordered `<script>` tags in `public/*.html`):
-- **Shared Core (`public/js/` & `public/js/api/`):** `api.js` + `api/` (`i18n.js`, `ui.js`, `endpoints.js` — auth state, `apiFetch`, i18n, themes, footer/nav, subscribe panels, `escapeHtml`), `dialog.js` (`window.PBFDialog` non-blocking accessible modals & toasts), `weather.js` (`window.WeatherService` — Open-Meteo 10-day forecast horizon, 5-day rainfall prediction, 24h drainage model), `nav-init.js`.
-- **Pages (`public/*.html` → JS):**
-  - `index.html` → `api/*.js`, `api.js`, `weather.js`, `app.js`
-  - `event.html` → `api/*.js`, `api.js`, `weather.js`, `event/` (`rsvp.js`, `organizer.js`, `bp.js`), `event.js` (plus `event.css`)
-  - `admin.html` → `api/*.js`, `api.js`, `weather.js`, `admin/` (`backup.js`, `events-tasks.js`, `users-moderation.js`, `content-media.js`), `admin.js`
-  - `clubhouse.html` → `api/*.js`, `api.js`, `crypto.js`, `store.js`, `store/` (`idb.js`, `e2ee.js`, `sync.js`, `actions.js`), `rtc.js`, `clubhouse/` (`layout.js`, `messages.js`, `e2ee-ui.js`, `panels.js`), `clubhouse.js` (plus `clubhouse.css`)
-  - `gallery.html` → `api/*.js`, `api.js`, `gallery.js` (plus `gallery.css`)
-  - `art.html` → `api/*.js`, `api.js`, `art.js` (plus `art.css`; legacy path with relocation banner pointing to `gallery.html`)
-  - `archive.html` → `api/*.js`, `api.js`, `archive.js`
-  - `login.html` → `api/*.js`, `api.js`, `login.js`
-  - `profile.html` → `api/*.js`, `api.js`, `profile.js`
-  - `waiver.html` → `api/*.js`, `api.js`, `waiver.js`
-  - `about.html`, `donate.html`, `404.html` → `api/*.js`, `api.js`, `nav-init.js`
-- **Stylesheets, Translations & PWA:** `public/css/` (`style.css`, `dialog.css`, `weather.css`, `event.css`, `gallery.css`, `art.css`, `themes.css`, `clubhouse.css`), `public/i18n/*.json` (14 non-English locales + per-surface `*.admin.json` / `*.clubhouse.json` bundles), `public/sw.js` (precache list), `public/_headers`.
+Vanilla **ES6** IIFEs on `window` loaded via `<script>` tags across 13 HTML pages (`index.html`, `event.html`, `admin.html`, `clubhouse.html`, `gallery.html`, `art.html`, `archive.html`, `login.html`, `profile.html`, `waiver.html`, `about.html`, `donate.html`, `404.html`):
+- **`public/js/`:** `api.js` (`api/{i18n,ui,endpoints}.js`), `dialog.js`, `weather.js`, `nav-init.js`, `crypto.js`, `rtc.js`, `store.js` (`store/{idb,e2ee,sync,actions}.js`), `app.js`, `event.js` (`event/{rsvp,organizer,bp}.js`), `admin.js` (`admin/{backup,events-tasks,users-moderation,content-media}.js`), `clubhouse.js` (`clubhouse/{layout,messages,e2ee-ui,panels}.js`), `gallery.js`, `art.js`, `archive.js`, `login.js`, `profile.js`, `waiver.js`.
+- **CSS, i18n & PWA:** `public/css/` (`style,dialog,weather,event,gallery,art,themes,clubhouse.css`), `public/i18n/*.json` (14 non-English locales + per-surface bundles), `public/sw.js`, `public/_headers`.
 
 ## 2. Hard Invariants (Must Never Break)
 1. **Strict CSP (`public/_headers`, `src/server.js`):** Never add inline `<script>` tags, `javascript:` URLs, `eval()`, `new Function()`, or inline HTML event handlers (`onclick=`, `onchange=`, etc.). Bind events in `.js` files.
-2. **Client JS Compatibility:** Keep `public/js/*.js` strict vanilla ES6 without optional chaining (`?.`), nullish coalescing (`??`), or module imports so CSP, legacy browsers, and test VMs work unchanged. Escape dynamic strings rendered into HTML with `API.escapeHtml` / `esc`.
-3. **Storage Policy:** Never store GIF binaries or heavy media in Cloudflare D1 (`clubhouse_gifs.local_data_base64` must never be written for GIFs); external imports require Google Drive.
+2. **Client JS Compatibility:** Keep `public/js/*.js` strict vanilla ES6 without optional chaining (`?.`), nullish coalescing (`??`), or module imports. Escape dynamic strings rendered into HTML with `API.escapeHtml` / `esc`.
+3. **Storage Policy:** Never store GIF binaries or heavy media in Cloudflare D1 (`clubhouse_gifs.local_data_base64` must never be written for GIFs); route media/external imports through the configured `STORAGE_PROVIDER` (Cloudflare R2 / Google Drive).
 4. **Parameterized SQL:** Always pass `?` parameters via `.prepare(...).bind(...)`; never interpolate variables into SQL strings.
 5. **PWA Cache & Asset Registration:** Every new file in `public/*.html`, `public/js/*.js`, or `public/css/*.css` must be added to `STATIC_ASSETS` in `public/sw.js` and use `?v=<N>` query strings managed by `scripts/bump-version.js`.
 6. **Never commit secrets:** Keep `.dev.vars`, `.env`, and SQLite/backup files untracked; never place credentials inside `scripts/`.
 
 ## 3. Verification Commands
-Always run after changes:
-- `npm run check` — unified release gate running `lint`, `typecheck`, `test`, `test:workerd`, `test:browser`, and `security:scan` in sequence.
-- `npm run lint` (`eslint . --cache --cache-location .eslintcache`) — zero-build ESLint AST & security/compatibility checks.
-- `npm run typecheck` — split zero-build JSDoc typechecks (`tsconfig.backend.json`, `tsconfig.sw.json`, `tsconfig.client.json`).
-- `npm test` (`node scripts/verify-all.js`) — full E2E suite across `tests/core/` and `tests/clubhouse/` Tiers 1–5.
-- `npm run test:workerd` (`node --test tests/workerd/*.test.js`) — Cloudflare `workerd` / Miniflare Pages Functions, D1 concurrency, and subrequest/query budget parity suite.
-- `npm run test:browser` (`node scripts/browser-smoke.js`) — headless Chrome/Edge CDP interactive smoke suite (DOM rendering, `PBFDialog`, `☰ Menu`, RTL/dark mode, forms, Clubhouse E2EE/WebRTC, Service Worker offline).
-- `npm run security:scan` (`node scripts/security-scan.js`) — static CSP, HTML, JS sink/syntax, SQL parameterization, route guard, asset, i18n, secret hygiene, and `npm audit` checks (`--skip-audit` skips `npm audit`; `npm run security:scan:live` checks production headers & endpoints).
-- `npm run bump` (`node scripts/bump-version.js`) — bumps `CURRENT_APP_VERSION`, `sw.js` `CACHE_NAME`, `api.js` `CLIENT_VERSION`, and HTML `?v=` tags before deploy (`scripts/ship.ps1` automates bump, `npm run check`, commit, tag, deploy, and live scan).
+- `npm run check` / `npm run check:quiet` — full release gate (`lint`, `typecheck`, `test`, `test:workerd`, `test:browser`, `security:scan`); prefer `:quiet` during development.
+- `npm run lint` — ESLint AST & security/compatibility checks (`eslint . --cache --cache-location .eslintcache`).
+- `npm run typecheck` — split zero-build JSDoc typechecks (`tsconfig.{backend,sw,client}.json`).
+- `npm test` / `npm run test:quiet` — full E2E suite (`scripts/verify-all.js`); `test:quiet` uses `--test-reporter=dot`.
+- `npm run test:workerd` / `npm run test:workerd:quiet` — Miniflare/`workerd` Pages Functions & D1 parity (`tests/workerd/*.test.js`).
+- `npm run test:browser` / `npm run test:browser:quiet` — headless Chrome/Edge CDP smoke suite (`scripts/browser-smoke.js`).
+- `npm run security:scan` / `npm run security:scan:quiet` — static CSP, HTML, JS, SQL, guard, asset, i18n, secret & `npm audit` scan (`--skip-audit`, `--quiet`, `--failures-only`; `--live` via `security:scan:live`).
+- `npm run map:check` (`npm run map:gen`) — verify or regenerate `docs/AGENT_MAP.md`.
+- `npm run bump` — bumps `CURRENT_APP_VERSION`, `sw.js`, `api.js`, and HTML `?v=` tags (`scripts/ship.ps1` automates full release).
 
 ## Agent skills
 
 ### Issue tracker
-
 GitHub Issues on `djrow/pickup-baseball` via `gh` CLI. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
-
 Default five-role label mapping (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
 
 ### Domain docs
-
 Single-context layout (`GLOSSARY.md` and `docs/adr/`). See `docs/agents/domain.md`.

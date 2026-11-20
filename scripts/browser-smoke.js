@@ -1211,6 +1211,7 @@ async function runServiceWorkerAndOfflineSmoke(browser, defaultSession, server, 
 }
 
 async function main() {
+  const quiet = process.argv.includes('--quiet');
   const exe = findBrowserExecutable();
   if (!exe) {
     console.log('ℹ️  No Chrome/Edge binary found; skipping browser smoke test.');
@@ -1221,7 +1222,9 @@ async function main() {
     process.exit(0);
   }
 
-  console.log(`🌐 Browser Smoke Suite using ${path.basename(exe)}`);
+  if (!quiet) {
+    console.log(`🌐 Browser Smoke Suite using ${path.basename(exe)}`);
+  }
   const server = await createClubhouseTestContext();
   const cdpPort = await getFreePort();
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pbf-cdp-'));
@@ -1274,7 +1277,9 @@ async function main() {
     const results = [];
     const record = (name) => {
       results.push(name);
-      console.log(`  ✓ ${name}`);
+      if (!quiet) {
+        console.log(`  ✓ ${name}`);
+      }
     };
 
     await runPublicShellAndDiagnosticsSmoke(browser, defaultSession, server, tracker, record);
@@ -1288,7 +1293,7 @@ async function main() {
 
     assert(tracker.exceptions.length === 0, `Uncaught page exceptions detected:\n${tracker.exceptions.join('\n')}`);
     assert(tracker.consoleErrors.length === 0, `Unexpected console.error messages detected:\n${tracker.consoleErrors.join('\n')}`);
-    console.log(`\n✅ Browser Smoke Suite Passed: ${results.length}/${results.length} checks, 0 uncaught JS errors`);
+    console.log(`${quiet ? '' : '\n'}✅ Browser Smoke Suite Passed: ${results.length}/${results.length} checks, 0 uncaught JS errors`);
   } finally {
     if (browser) browser.close();
     if (browserProc && !browserProc.killed) {
