@@ -883,11 +883,12 @@ async function runAdminEventAndTaskJourney(browser, server, tracker, record) {
 
     // 4.0 Admin Setup Health checklist card rendering & dismissal persistence (#63)
     await session.waitFor('document.getElementById("admin-setup-health-card") && document.getElementById("admin-setup-health-card").style.display === "block" && document.querySelectorAll("#admin-setup-health-list .setup-health-item").length >= 4', 10000);
+    await session.waitFor('document.getElementById("btn-dismiss-setup-health")');
     await clickEl(session, '#btn-dismiss-setup-health');
-    const setupHealthDismissed = await session.evaluate(
-      'document.getElementById("admin-setup-health-card").style.display === "none" && localStorage.getItem("pbf_setup_health_dismissed") === "1"'
+    await session.waitFor(
+      'document.getElementById("admin-setup-health-card").style.display === "none" && localStorage.getItem("pbf_setup_health_dismissed") === "1"',
+      5000
     );
-    assert(setupHealthDismissed, 'Dismissing Admin Setup Health card hides card and persists dismissal in localStorage');
     await session.navigateAndCheck(`${server.baseUrl}/admin.html`, 'admin.html (after setup-health dismiss)', tracker);
     await session.waitFor('(document.getElementById("main-content") || document.getElementById("admin-main-container")).style.display === "block" && Boolean(document.getElementById("btn-add-task-row"))');
     const setupHealthStillHidden = await session.evaluate('document.getElementById("admin-setup-health-card").style.display === "none"');
