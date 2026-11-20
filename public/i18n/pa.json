@@ -402,5 +402,8 @@
   "event.companions_verify_warning": "⚠️ +{count} companion(s) — verify at field",
   "event.waiver_prompt_text": "📝 Player Waiver: Please sign the waiver online before arriving at the field.",
   "event.waiver_prompt_btn": "Sign Waiver Before Arrival →",
-  "event.auto_reminders_label": "📬 Send automatic 24-hour pre-event reminder emails to confirmed attendees"
+  "event.auto_reminders_label": "📬 Send automatic 24-hour pre-event reminder emails to confirmed attendees",
+  "how.s5_title": "5. ਕਲੱਬਹਾਊਸ ਵਿੱਚ ਜੁੜੋ",
+  "how.s5_desc": "ਮੈਚਾਂ ਦੇ ਵਿਚਕਾਰ ਜੁੜੇ ਰਹਿਣ ਲਈ ਕਲੱਬਹਾਊਸ ਵਿੱਚ ਸ਼ਾਮਲ ਹੋਵੋ—ਬੈਟਿੰਗ ਅਭਿਆਸ ਲਈ ਆਪਣਾ ਵਾਕ-ਅੱਪ ਗੀਤ ਚੁਣੋ, ਵੌਇਸ ਕਾਲਾਂ ਵਿੱਚ ਜੁੜੋ, ਤਸਵੀਰ, GIF ਅਤੇ ਵੀਡੀਓ ਲਿੰਕ ਸਾਂਝੇ ਕਰੋ, ਆਪਣੀ ਮਰਜ਼ੀ ਨਾਲ ਪੁਸ਼ ਨੋਟੀਫਿਕੇਸ਼ਨਾਂ ਚਾਲੂ ਕਰੋ, ਅਤੇ ਕਿਸੇ ਵੀ ਸਮੇਂ ਆਪਣੀ ਸਮੱਗਰੀ ਨਾਲ ਲੈ ਕੇ ਬਾਹਰ ਨਿਕਲੋ।",
+  "how.s5_cta": "ਕਲੱਬਹਾਊਸ ਖੋਲ੍ਹੋ →"
 }

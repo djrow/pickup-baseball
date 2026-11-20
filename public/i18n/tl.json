@@ -402,5 +402,8 @@
   "event.companions_verify_warning": "⚠️ +{count} companion(s) — verify at field",
   "event.waiver_prompt_text": "📝 Player Waiver: Please sign the waiver online before arriving at the field.",
   "event.waiver_prompt_btn": "Sign Waiver Before Arrival →",
-  "event.auto_reminders_label": "📬 Send automatic 24-hour pre-event reminder emails to confirmed attendees"
+  "event.auto_reminders_label": "📬 Send automatic 24-hour pre-event reminder emails to confirmed attendees",
+  "how.s5_title": "5. Tumambay sa Clubhouse",
+  "how.s5_desc": "Sumali sa Clubhouse para manatiling konektado sa pagitan ng mga laro—magtakda ng walk-up song para sa batting practice, sumali sa voice calls, magbahagi ng link ng larawan, GIF, at video, mag-opt in sa push notifications, at umalis anumang oras dala ang sarili mong content.",
+  "how.s5_cta": "Buksan ang Clubhouse →"
 }

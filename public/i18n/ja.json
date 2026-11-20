@@ -402,5 +402,8 @@
   "event.companions_verify_warning": "⚠️ +{count} companion(s) — verify at field",
   "event.waiver_prompt_text": "📝 Player Waiver: Please sign the waiver online before arriving at the field.",
   "event.waiver_prompt_btn": "Sign Waiver Before Arrival →",
-  "event.auto_reminders_label": "📬 Send automatic 24-hour pre-event reminder emails to confirmed attendees"
+  "event.auto_reminders_label": "📬 Send automatic 24-hour pre-event reminder emails to confirmed attendees",
+  "how.s5_title": "5. クラブハウスで交流しよう",
+  "how.s5_desc": "試合の合間もクラブハウスでつながりましょう—バッティング練習の登場曲を設定したり、音声通話に参加したり、画像・GIF・動画リンクを共有したり、オプトインのプッシュ通知を受け取ったりでき、退会時はいつでも自分のコンテンツを持ち帰れます。",
+  "how.s5_cta": "クラブハウスを開く →"
 }

@@ -402,5 +402,8 @@
   "event.companions_verify_warning": "⚠️ +{count} companion(s) — verify at field",
   "event.waiver_prompt_text": "📝 Player Waiver: Please sign the waiver online before arriving at the field.",
   "event.waiver_prompt_btn": "Sign Waiver Before Arrival →",
-  "event.auto_reminders_label": "📬 Send automatic 24-hour pre-event reminder emails to confirmed attendees"
+  "event.auto_reminders_label": "📬 Send automatic 24-hour pre-event reminder emails to confirmed attendees",
+  "how.s5_title": "5. Շփվեք Clubhouse-ում",
+  "how.s5_desc": "Միացեք Clubhouse-ին՝ խաղերի միջև կապի մեջ մնալու համար. ընտրեք ձեր մուտքի երգը հարվածային մարզման համար, միացեք ձայնային զանգերին, կիսվեք պատկերների, GIF-ների և տեսանյութերի հղումներով, միացրեք կամընտիր push ծանուցումները և ցանկացած պահի դուրս եկեք՝ ձեր բովանդակությունը ձեզ հետ տանելով։",
+  "how.s5_cta": "Բացել Clubhouse-ը →"
 }

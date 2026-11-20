@@ -402,5 +402,8 @@
   "event.companions_verify_warning": "⚠️ +{count} companion(s) — verify at field",
   "event.waiver_prompt_text": "📝 Player Waiver: Please sign the waiver online before arriving at the field.",
   "event.waiver_prompt_btn": "Sign Waiver Before Arrival →",
-  "event.auto_reminders_label": "📬 Send automatic 24-hour pre-event reminder emails to confirmed attendees"
+  "event.auto_reminders_label": "📬 Send automatic 24-hour pre-event reminder emails to confirmed attendees",
+  "how.s5_title": "5. Retrouvez l'équipe au Clubhouse",
+  "how.s5_desc": "Rejoignez le Clubhouse pour rester en lien entre les matchs : choisissez votre musique d'entrée pour l'entraînement au bâton, participez aux appels vocaux, partagez des liens d'images, de GIF et de vidéos, activez les notifications push à la carte et partez à tout moment en emportant vos contenus.",
+  "how.s5_cta": "Ouvrir le Clubhouse →"
 }

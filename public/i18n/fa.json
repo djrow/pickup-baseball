@@ -402,5 +402,8 @@
   "event.companions_verify_warning": "⚠️ +{count} companion(s) — verify at field",
   "event.waiver_prompt_text": "📝 Player Waiver: Please sign the waiver online before arriving at the field.",
   "event.waiver_prompt_btn": "Sign Waiver Before Arrival →",
-  "event.auto_reminders_label": "📬 Send automatic 24-hour pre-event reminder emails to confirmed attendees"
+  "event.auto_reminders_label": "📬 Send automatic 24-hour pre-event reminder emails to confirmed attendees",
+  "how.s5_title": "۵. در کلاب‌هاوس (Clubhouse) بمانید",
+  "how.s5_desc": "بین بازی‌ها به کلاب‌هاوس بپیوندید تا در ارتباط بمانید—برای تمرین ضربه آهنگ ورود خود را انتخاب کنید، وارد تماس‌های صوتی شوید، لینک تصویر، گیف و ویدیو به اشتراک بگذارید، اعلان‌های پوش اختیاری را فعال کنید و هر زمان که خواستید همراه با محتوای خود خارج شوید.",
+  "how.s5_cta": "ورود به کلاب‌هاوس ←"
 }

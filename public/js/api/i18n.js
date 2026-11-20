@@ -511,7 +511,10 @@
       "event.companions_verify_warning": "⚠️ +{count} companion(s) — verify at field",
       "event.waiver_prompt_text": "📝 Player Waiver: Please sign the waiver online before arriving at the field.",
       "event.waiver_prompt_btn": "Sign Waiver Before Arrival →",
-      "event.auto_reminders_label": "📬 Send automatic 24-hour pre-event reminder emails to confirmed attendees"
+      "event.auto_reminders_label": "📬 Send automatic 24-hour pre-event reminder emails to confirmed attendees",
+      "how.s5_title": "5. Hang Out in the Clubhouse",
+      "how.s5_desc": "Join the Clubhouse to stay connected between games—set a walk-up song for batting practice, hop on voice calls, share image, GIF, and video links, turn on opt-in push notifications, and leave anytime while taking your content with you.",
+      "how.s5_cta": "Open the Clubhouse →"
   };
 
   /**

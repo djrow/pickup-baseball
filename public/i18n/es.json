@@ -402,5 +402,8 @@
   "event.companions_verify_warning": "⚠️ +{count} acompañante(s) — verificar en el campo",
   "event.waiver_prompt_text": "📝 Exención del Jugador: Por favor firme la exención en línea antes de llegar al campo.",
   "event.waiver_prompt_btn": "Firmar Exención Antes de Llegar →",
-  "event.auto_reminders_label": "📬 Enviar correos automáticos de recordatorio 24 horas antes del evento a los asistentes confirmados"
+  "event.auto_reminders_label": "📬 Enviar correos automáticos de recordatorio 24 horas antes del evento a los asistentes confirmados",
+  "how.s5_title": "5. Pasa el Rato en el Clubhouse",
+  "how.s5_desc": "Únete al Clubhouse para seguir conectado entre partidos: elige tu canción de entrada para la práctica de bateo, únete a llamadas de voz, comparte enlaces de imágenes, GIFs y videos, activa notificaciones push opcionales y sal cuando quieras llevándote tu contenido.",
+  "how.s5_cta": "Abrir el Clubhouse →"
 }

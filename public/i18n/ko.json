@@ -402,5 +402,8 @@
   "event.companions_verify_warning": "⚠️ +{count} companion(s) — verify at field",
   "event.waiver_prompt_text": "📝 Player Waiver: Please sign the waiver online before arriving at the field.",
   "event.waiver_prompt_btn": "Sign Waiver Before Arrival →",
-  "event.auto_reminders_label": "📬 Send automatic 24-hour pre-event reminder emails to confirmed attendees"
+  "event.auto_reminders_label": "📬 Send automatic 24-hour pre-event reminder emails to confirmed attendees",
+  "how.s5_title": "5. 클럽하우스에서 소통하세요",
+  "how.s5_desc": "경기 사이에도 클럽하우스에서 계속 소통하세요—타격 연습용 등장곡 설정, 음성 통화 참여, 이미지·GIF·영상 링크 공유, 선택형 푸시 알림 수신이 가능하며, 언제든 내 콘텐츠를 가지고 나갈 수 있습니다.",
+  "how.s5_cta": "클럽하우스 열기 →"
 }
