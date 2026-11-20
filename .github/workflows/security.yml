@@ -146,6 +146,10 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies (no native builds)
+        run: npm ci --ignore-scripts
 
       - name: Deploy to Cloudflare Pages
         env:
@@ -155,4 +159,4 @@ jobs:
             echo "CLOUDFLARE_API_TOKEN secret not set; skipping Cloudflare Pages deploy."
             exit 0
           fi
-          npx --yes wrangler@4 pages deploy public --project-name pickup-baseball --branch trunk --commit-dirty=true
+          npm run deploy
