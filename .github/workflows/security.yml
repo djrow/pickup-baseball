@@ -39,7 +39,7 @@ jobs:
         run: npm run typecheck
 
       - name: Run security scan (static, secret, route-guard & policy checks)
-        run: node scripts/security-scan.js --skip-audit
+        run: npm run security:scan -- --skip-audit
 
   e2e-tests:
     name: E2E Verification Suite
