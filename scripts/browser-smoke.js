@@ -451,8 +451,7 @@ const WEBRTC_MOCK_PRELOAD_SCRIPT = `(() => {
 async function runPublicShellAndDiagnosticsSmoke(browser, session, server, tracker, record) {
   await session.navigateAndCheck(`${server.baseUrl}/index.html`, 'index.html', tracker);
   await session.waitFor('document.querySelectorAll(".event-card, .calendar-sunday-card").length > 0');
-  const versionText = await session.evaluate('document.getElementById("footer-app-version") && document.getElementById("footer-app-version").textContent');
-  assert(versionText && versionText.trim().length > 0, 'footer version populated');
+  await session.waitFor('document.getElementById("footer-app-version") && document.getElementById("footer-app-version").textContent.trim().length > 0', 5000);
 
   const overflowDesktop = await session.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 2');
   assert(overflowDesktop, 'desktop index has no horizontal overflow');
