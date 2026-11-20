@@ -1248,6 +1248,118 @@ authRouter.get('/music-preview', requireAuth, async (c) => {
   return c.json({ previewUrl: '' });
 });
 
+function parseDurationTextToSec(text) {
+  const parts = String(text || '').trim().split(':').map((p) => parseInt(p, 10));
+  if (parts.some((n) => isNaN(n) || n < 0)) return 0;
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  return 0;
+}
+
+function collectYoutubeVideoRenderers(node, out) {
+  if (!node || typeof node !== 'object' || out.length >= 15) return;
+  if (Array.isArray(node)) {
+    for (let i = 0; i < node.length && out.length < 15; i++) {
+      collectYoutubeVideoRenderers(node[i], out);
+    }
+    return;
+  }
+  if (node.videoRenderer && node.videoRenderer.videoId) {
+    out.push(node.videoRenderer);
+    return;
+  }
+  const keys = Object.keys(node);
+  for (let i = 0; i < keys.length && out.length < 15; i++) {
+    collectYoutubeVideoRenderers(node[keys[i]], out);
+  }
+}
+
+authRouter.get('/youtube-search', requireAuth, async (c) => {
+  const q = String(c.req.query('q') || '').trim().slice(0, 120);
+  const targetDuration = parseInt(String(c.req.query('duration') || '0'), 10) || 0;
+  if (q.length < 2) {
+    return c.json({ results: [] });
+  }
+
+  const fetchOpts = {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      'Accept-Language': 'en-US,en;q=0.9'
+    }
+  };
+  if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
+    fetchOpts.signal = AbortSignal.timeout(6000);
+  }
+
+  try {
+    const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}&hl=en`;
+    const resp = await fetch(searchUrl, fetchOpts);
+    if (!resp.ok) {
+      return c.json({ results: [] });
+    }
+    const html = await resp.text();
+    const marker = 'var ytInitialData = ';
+    const startIdx = html.indexOf(marker);
+    if (startIdx === -1) {
+      return c.json({ results: [] });
+    }
+    const jsonStart = startIdx + marker.length;
+    const endIdx = html.indexOf(';</script>', jsonStart);
+    if (endIdx === -1) {
+      return c.json({ results: [] });
+    }
+    const ytData = JSON.parse(html.slice(jsonStart, endIdx));
+    const renderers = [];
+    collectYoutubeVideoRenderers(ytData, renderers);
+
+    const seen = new Set();
+    const candidates = [];
+    for (const vr of renderers) {
+      const videoId = String(vr.videoId || '');
+      if (!/^[A-Za-z0-9_-]{11}$/.test(videoId) || seen.has(videoId)) continue;
+      seen.add(videoId);
+      const titleRuns = vr.title && Array.isArray(vr.title.runs) ? vr.title.runs : [];
+      const title = titleRuns.map((r) => r.text || '').join('').trim() || (vr.title && vr.title.simpleText) || '';
+      const ownerRuns = vr.ownerText && Array.isArray(vr.ownerText.runs) ? vr.ownerText.runs : [];
+      const channel = ownerRuns.map((r) => r.text || '').join('').trim() || '';
+      const durationText = (vr.lengthText && vr.lengthText.simpleText) ? String(vr.lengthText.simpleText).trim() : '';
+      const durationSec = parseDurationTextToSec(durationText);
+      if (!title || durationSec === 0) continue; // skip live streams / shorts without duration
+
+      // Score: prefer matching duration + official audio/topic channels
+      let score = 0;
+      if (targetDuration > 0 && durationSec > 0) {
+        const diff = Math.abs(durationSec - targetDuration);
+        score -= diff * 2;
+        if (diff <= 5) score += 40;
+        else if (diff <= 15) score += 20;
+      }
+      const lowerTitle = title.toLowerCase();
+      const lowerChan = channel.toLowerCase();
+      if (lowerChan.includes('topic') || lowerChan.includes('vevo')) score += 25;
+      if (lowerTitle.includes('official audio') || lowerTitle.includes('audio')) score += 15;
+      if (lowerTitle.includes('lyrics')) score += 5;
+      if (lowerTitle.includes('cover') || lowerTitle.includes('karaoke') || lowerTitle.includes('live')) score -= 20;
+
+      candidates.push({
+        videoId,
+        title: title.slice(0, 100),
+        channel: channel.slice(0, 60),
+        durationText,
+        durationSec,
+        thumbnail: `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`,
+        _score: score
+      });
+    }
+
+    candidates.sort((a, b) => b._score - a._score);
+    const results = candidates.slice(0, 5).map(({ _score, ...rest }) => rest);
+    return c.json({ results });
+  } catch (err) {
+    return c.json({ results: [] });
+  }
+});
+
 authRouter.get('/consent', requireAuth, async (c) => {
   const user = c.get('user');
   const db = c.env && (c.env.BASEBALL_DB || c.env.DB);
