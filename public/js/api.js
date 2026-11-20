@@ -26,7 +26,7 @@
   }
 
   // Installed Client Application Version: '152' (stamped by scripts/bump-version.js)
-  API.CLIENT_VERSION = '168';
+  API.CLIENT_VERSION = '169';
 
   // Current user cache
   API.currentUser = null;

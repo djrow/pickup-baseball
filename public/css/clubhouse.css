@@ -139,7 +139,9 @@ html, body.clubhouse-body {
   height: 100dvh;
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
+  position: relative;
+  z-index: 20;
 }
 
 .ch-server-header {
@@ -1518,14 +1520,15 @@ html, body.clubhouse-body {
 .ch-quick-nav-menu {
   position: absolute;
   bottom: calc(100% + 6px);
-  inset-inline-start: 0;
-  min-width: 170px;
+  inset-inline-end: 0;
+  inset-inline-start: auto;
+  min-width: 190px;
   background: var(--ch-bg-rail);
   border: 1px solid var(--ch-border);
   border-radius: 10px;
   box-shadow: var(--ch-shadow-float);
   padding: 0.35rem;
-  z-index: 40;
+  z-index: 100;
   display: none;
   flex-direction: column;
   gap: 2px;
