@@ -873,6 +873,71 @@ html, body.clubhouse-body {
   color: var(--ch-text-primary);
 }
 
+.ch-rx-count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+/* Slide-out emoji drawer: sits right of submitted emoji, left of "Reply in Thread" */
+.ch-rx-drawer {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.ch-rx-toggle {
+  background-color: var(--ch-bg-sidebar);
+  border: 1px dashed var(--ch-border);
+  color: var(--ch-text-secondary);
+  border-radius: 999px;
+  padding: 3px 8px;
+  min-height: 26px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ch-rx-toggle:hover,
+.ch-rx-drawer.open .ch-rx-toggle {
+  border-color: var(--ch-accent);
+  color: var(--ch-text-primary);
+}
+
+.ch-rx-tray {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+  max-width: 0;
+  opacity: 0;
+  visibility: hidden;
+  overflow: hidden;
+  transition: max-width 0.25s ease, opacity 0.2s ease, visibility 0s linear 0.25s;
+}
+
+.ch-rx-drawer.open .ch-rx-tray {
+  max-width: min(60vw, 320px);
+  opacity: 1;
+  visibility: visible;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding: 2px;
+  transition: max-width 0.25s ease, opacity 0.2s ease, visibility 0s;
+}
+
+.ch-rx-choice {
+  flex: 0 0 auto;
+  font-size: 15px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ch-rx-tray,
+  .ch-rx-drawer.open .ch-rx-tray {
+    transition: none;
+  }
+}
+
 .ch-thread-btn {
   background: transparent;
   border: none;

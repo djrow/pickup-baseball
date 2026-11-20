@@ -92,7 +92,7 @@
     return html;
   }
 
-  function groupReactions(rawReactions) {
+  function groupReactions(rawReactions, myUserId) {
     if (!Array.isArray(rawReactions) || rawReactions.length === 0) return [];
     var byEmoji = {};
     var order = [];
@@ -100,11 +100,12 @@
       var r = rawReactions[i];
       if (!r || !r.emoji) continue;
       if (!byEmoji[r.emoji]) {
-        byEmoji[r.emoji] = { emoji: r.emoji, count: 0, users: [] };
+        byEmoji[r.emoji] = { emoji: r.emoji, count: 0, users: [], mine: false };
         order.push(r.emoji);
       }
       byEmoji[r.emoji].count += Number(r.count || 1);
       if (r.user_name) byEmoji[r.emoji].users.push(r.user_name);
+      if (myUserId && Number(r.user_id) === Number(myUserId)) byEmoji[r.emoji].mine = true;
     }
     var grouped = [];
     for (var j = 0; j < order.length; j++) {
@@ -210,9 +211,14 @@
       var target = e.target && typeof (/** @type {Element} */ (e.target)).closest === 'function' ? /** @type {Element} */ (e.target).closest('button') : null;
       if (!target || !streamEl.contains(target)) return;
 
-      if (target.hasAttribute('data-rx-msg')) {
+      if (target.hasAttribute('data-rx-toggle')) {
+        var tId = target.getAttribute('data-rx-toggle');
+        uiState.rxDrawerMsgId = String(uiState.rxDrawerMsgId) === String(tId) ? null : tId;
+        renderMessageStream(null);
+      } else if (target.hasAttribute('data-rx-msg')) {
         var mId = Number(target.getAttribute('data-rx-msg'));
         var emoji = target.getAttribute('data-rx-emoji') || '';
+        if (target.classList.contains('ch-rx-choice')) uiState.rxDrawerMsgId = null;
         Store.toggleReaction(mId, emoji).then(function () {
           renderMessageStream(null);
         }).catch(function (err) {
@@ -399,7 +405,7 @@
     var displayContent = getSafeMessageDisplayContent(msg);
     var initial = isSystemMsg ? '🛡️' : (msg.author_name || 'P').charAt(0).toUpperCase();
     var attachments = (!isHiddenByMod && Array.isArray(msg.attachments)) ? msg.attachments : [];
-    var reactions = (!isHiddenByMod) ? groupReactions(msg.reactions) : [];
+    var reactions = (!isHiddenByMod) ? groupReactions(msg.reactions, currentUser && currentUser.id) : [];
     var isAuthor = Boolean(!isSystemMsg && currentUser && Number(msg.author_id) === Number(currentUser.id));
     var canDeleteMsg = Boolean(!isSystemMsg && (isAuthor || isMod || (currentUser && currentUser.role === 'organizer')));
 
@@ -491,15 +497,20 @@
       for (var r = 0; r < reactions.length; r++) {
         var rx = reactions[r];
         var tooltip = rx.users && rx.users.length ? rx.users.join(', ') : rx.emoji;
-        html += '<button type="button" class="ch-reaction-pill" title="' + escapeHtml(tooltip) + '" aria-label="React ' + escapeHtml(rx.emoji) + ' (' + Number(rx.count || 1) + ')" data-rx-msg="' + msg.id + '" data-rx-emoji="' + escapeHtml(rx.emoji) + '">';
-        html += '<span>' + escapeHtml(rx.emoji) + '</span><span>' + Number(rx.count || 1) + '</span>';
+        html += '<button type="button" class="ch-reaction-pill' + (rx.mine ? ' active' : '') + '" title="' + escapeHtml(tooltip) + '" aria-pressed="' + (rx.mine ? 'true' : 'false') + '" aria-label="React ' + escapeHtml(rx.emoji) + ' (' + Number(rx.count || 1) + ')" data-rx-msg="' + msg.id + '" data-rx-emoji="' + escapeHtml(rx.emoji) + '">';
+        html += '<span>' + escapeHtml(rx.emoji) + '</span><span class="ch-rx-count">' + Number(rx.count || 1) + '</span>';
         html += '</button>';
       }
       if (currentUser) {
+        var drawerOpen = String(uiState.rxDrawerMsgId) === String(msg.id);
+        html += '<span class="ch-rx-drawer' + (drawerOpen ? ' open' : '') + '">';
+        html += '<button type="button" class="ch-rx-toggle" data-rx-toggle="' + msg.id + '" aria-expanded="' + (drawerOpen ? 'true' : 'false') + '" aria-label="Add reaction" title="Add reaction">😊＋</button>';
+        html += '<span class="ch-rx-tray" role="group" aria-label="Choose a reaction">';
         for (var d = 0; d < DEFAULT_EMOJIS.length; d++) {
           var em = DEFAULT_EMOJIS[d];
-          html += '<button type="button" class="ch-reaction-pill" style="opacity:0.55;" title="React ' + em + '" aria-label="React with ' + em + '" data-rx-msg="' + msg.id + '" data-rx-emoji="' + em + '">' + em + '</button>';
+          html += '<button type="button" class="ch-reaction-pill ch-rx-choice" title="React ' + em + '" aria-label="React with ' + em + '" data-rx-msg="' + msg.id + '" data-rx-emoji="' + em + '">' + em + '</button>';
         }
+        html += '</span></span>';
       }
     }
     if (currentUser || msg.reply_count) {
