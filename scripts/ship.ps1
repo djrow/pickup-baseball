@@ -1,18 +1,19 @@
 ﻿<#
 .SYNOPSIS
-  Bump version, test, commit, tag, deploy to Cloudflare Pages (and optional Cron Worker), and push to GitHub.
+  Bump version, test, commit, tag, push to GitHub (triggering CI & Cloudflare Pages deploy), and verify live production.
 
 .DESCRIPTION
   Editable release workflow script for both interactive human releases and non-interactive agent releases.
-  Default flow:
+  Default flow (GitHub Actions CI & Security Audit deploy):
     1. Verify current git branch matches $DefaultBranch (unless -AllowWrongBranch)
     2. Bump app & cache version (npm run bump) — auto-skipped if working tree is clean and current version is not yet tagged (e.g. after merging a pre-bumped branch), unless -ForceBump is passed
     3. Run the unified verification gate on the bumped files (npm run check)
     4. Show `git status --short`, confirm staging, prompt for commit summary if -Message wasn't passed, and commit
     5. Create git tag `v<version>` (even if -SkipCommit was used or changes were already committed)
-    6. Deploy to Cloudflare Pages (`npm run deploy`) and optionally the Cron Worker (`npm run deploy:cron` via -DeployCron)
-    7. Push branch and tag to GitHub (`origin/trunk`)
-    8. Run live production security verification (`npm run security:scan:live`, unless -SkipDeploy)
+    6. Push branch and tag to GitHub (`origin/trunk`), triggering `.github/workflows/security.yml` (CI checks + Cloudflare Pages deploy)
+    7. Wait for the GitHub Actions workflow (`security.yml`) to finish (via `gh` CLI, unless -NoWait, -NoPush, or -SkipDeploy)
+    8. Optionally deploy locally (`-LocalDeploy`) and/or deploy the Cron Worker (`npm run deploy:cron` via `-DeployCron`)
+    9. Run live production security verification (`npm run security:scan:live`, unless -SkipDeploy or -NoWait)
 
   You do NOT need to edit this file for commit messages: pass `-Message "..."` when
   running it, or just run `.\scripts\ship.ps1` and type the message when prompted.
@@ -22,7 +23,8 @@
   .\scripts\ship.ps1
   .\scripts\ship.ps1 -Message "Change sportsmanship to goodwill"
   .\scripts\ship.ps1 -Message "Quick fix" -Yes
-  .\scripts\ship.ps1 -DeployCron -Message "Update reminder worker" -Yes
+  .\scripts\ship.ps1 -NoWait -Message "Push and let CI finish in background" -Yes
+  .\scripts\ship.ps1 -LocalDeploy -DeployCron -Message "Update reminder worker" -Yes
   .\scripts\ship.ps1 -NoPush -SkipDeploy
   .\scripts\ship.ps1 -DryRun
 #>
@@ -34,7 +36,9 @@ param(
   [switch]$SkipTest,
   [switch]$SkipCommit,
   [switch]$SkipDeploy,
+  [switch]$LocalDeploy,
   [switch]$DeployCron,
+  [switch]$NoWait,
   [switch]$StagedOnly,
   [switch]$NoPush,
   [switch]$NoTag,
@@ -178,8 +182,44 @@ try {
     }
   }
 
-  # 6. Deploy to Cloudflare Pages (and optional Cron Worker)
-  if (-not $SkipDeploy) {
+  # 6. Push branch (and new release tag) to GitHub — triggers CI & Security Audit + Cloudflare Pages deploy
+  $PushedToRemote = $false
+  if ($PushByDefault -and (-not $NoPush)) {
+    Invoke-Step -Label "Pushing $CurrentBranch to $RemoteName" -Command { git push $RemoteName $CurrentBranch }
+    if ($TagCreated) {
+      Invoke-Step -Label "Pushing tag $TagName to $RemoteName" -Command { git push $RemoteName $TagName }
+    }
+    $PushedToRemote = $true
+  }
+
+  # 7. Wait for GitHub Actions CI & Security Audit deploy workflow (unless -LocalDeploy, -SkipDeploy, -NoPush, or -NoWait)
+  $CiCompleted = $false
+  if ($PushedToRemote -and (-not $SkipDeploy) -and (-not $LocalDeploy) -and (-not $NoWait)) {
+    $GhCmd = Get-Command gh -ErrorAction SilentlyContinue
+    if ($GhCmd) {
+      $HeadSha = ("$((git rev-parse HEAD) -join '')").Trim()
+      Invoke-Step -Label "Waiting for GitHub Actions CI & Deploy (security.yml @ $($HeadSha.Substring(0, [Math]::Min(7, $HeadSha.Length))))" -Command {
+        $RunId = ''
+        for ($i = 0; $i -lt 15; $i++) {
+          $RunId = ("$((gh run list --workflow=security.yml --branch $CurrentBranch --commit $HeadSha --limit 1 --json databaseId --jq '.[0].databaseId' 2>$null) -join '')").Trim()
+          if (-not [string]::IsNullOrWhiteSpace($RunId)) { break }
+          Start-Sleep -Seconds 2
+        }
+        if ([string]::IsNullOrWhiteSpace($RunId)) {
+          Write-Host "    Could not locate workflow run yet; check GitHub Actions tab." -ForegroundColor Yellow
+          return
+        }
+        Write-Host "    Watching GitHub Actions run #$RunId..." -ForegroundColor DarkGray
+        gh run watch $RunId --exit-status
+      }
+      $CiCompleted = $true
+    } else {
+      Write-Host "`n==> GitHub CLI (gh) not found; skipping CI wait. Monitor deploy in GitHub Actions." -ForegroundColor Yellow
+    }
+  }
+
+  # 8. Optional local Cloudflare deploy (-LocalDeploy) and/or standalone Cron Worker (-DeployCron)
+  if ((-not $SkipDeploy) -and ($LocalDeploy -or $DeployCron)) {
     # Load per-project Cloudflare credentials from untracked .env / .dev.vars if not already set
     foreach ($EnvFile in @('.env', '.dev.vars')) {
       $EnvPath = Join-Path $RepoRoot $EnvFile
@@ -197,23 +237,19 @@ try {
       }
     }
 
-    Invoke-Step -Label 'Deploying to Cloudflare Pages (npm run deploy)' -Command { npm run deploy }
+    if ($LocalDeploy) {
+      Invoke-Step -Label 'Deploying locally to Cloudflare Pages (npm run deploy)' -Command { npm run deploy }
+    }
     if ($DeployCron) {
       Invoke-Step -Label 'Deploying Standalone Cron Worker (npm run deploy:cron)' -Command { npm run deploy:cron }
     }
   }
 
-  # 7. Push branch (and new release tag) to remote
-  if ($PushByDefault -and (-not $NoPush)) {
-    Invoke-Step -Label "Pushing $CurrentBranch to $RemoteName" -Command { git push $RemoteName $CurrentBranch }
-    if ($TagCreated) {
-      Invoke-Step -Label "Pushing tag $TagName to $RemoteName" -Command { git push $RemoteName $TagName }
-    }
-  }
-
-  # 8. Post-deploy live security check (after push so network hiccups never block git push)
-  if (-not $SkipDeploy) {
+  # 9. Post-deploy live security check (runs after CI deploy finishes or after -LocalDeploy)
+  if ((-not $SkipDeploy) -and ($CiCompleted -or $LocalDeploy)) {
     Invoke-Step -Label 'Verifying live production security (npm run security:scan:live)' -Command { npm run security:scan:live }
+  } elseif ((-not $SkipDeploy) -and $PushedToRemote) {
+    Write-Host "`n==> Skipping local live security scan because CI deploy is still running. Run 'npm run security:scan:live' once GitHub Actions finishes." -ForegroundColor DarkGray
   }
 
   Write-Host "`nDone! Released v$AppVersion." -ForegroundColor Green
