@@ -295,6 +295,26 @@ async function clickEl(session, selector) {
   assert(ok, `Clickable element not found: ${selector}`);
 }
 
+async function clickPointer(session, selector) {
+  const box = await session.evaluate(`(() => {
+    const el = document.querySelector(${JSON.stringify(selector)});
+    if (!el) return null;
+    el.scrollIntoView({ block: 'center', inline: 'center' });
+    const r = el.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height };
+  })()`);
+  assert(box && box.w > 0 && box.h > 0, `Pointer target visible: ${selector}`);
+  await session.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: box.x, y: box.y });
+  await session.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: box.x, y: box.y, button: 'left', clickCount: 1 });
+  await session.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: box.x, y: box.y, button: 'left', clickCount: 1 });
+}
+
+async function clickCoords(session, x, y) {
+  await session.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+  await session.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 });
+  await session.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 });
+}
+
 /**
  * Injected into Clubhouse contexts via Page.addScriptToEvaluateOnNewDocument so
  * WebRTC voice/signaling flows run cleanly with zero external STUN/TURN traffic.
@@ -706,6 +726,38 @@ async function runPublicShellAndDiagnosticsSmoke(browser, session, server, track
   await session.evaluate('localStorage.setItem("pickup_lang", "en");');
   await session.setViewport(1280, 900);
   record('clubhouse.html mobile sidebar & context drawers render in RTL (ar/fa) without horizontal overflow');
+
+  // Mobile (390x844) Clubhouse stacked sidebar drawer + theme modal + backdrop real-pointer regression check
+  await session.evaluate('localStorage.setItem("pickup_theme", "light");');
+  await session.setViewport(390, 844);
+  await session.navigateAndCheck(`${server.baseUrl}/clubhouse.html`, 'clubhouse.html (mobile/theme-modal)', tracker);
+  await session.waitFor('document.getElementById("btn-mobile-sidebar") && document.getElementById("btn-user-settings")');
+  await clickPointer(session, '#btn-mobile-sidebar');
+  await session.waitFor('document.getElementById("ch-sidebar").classList.contains("mobile-open")');
+  const mobileBackdropInert = await session.evaluate('document.getElementById("ch-mobile-backdrop").inert === true');
+  assert(!mobileBackdropInert, 'Mobile drawer keeps #ch-mobile-backdrop non-inert so tap-outside dismisses drawer');
+
+  await clickPointer(session, '#btn-user-settings');
+  await session.waitFor('!document.getElementById("ch-user-settings-card").classList.contains("hidden")');
+  await clickPointer(session, '#btn-user-theme');
+  await session.waitFor('!document.getElementById("ch-theme-modal").classList.contains("hidden") && document.querySelector("#ch-theme-picker-body .theme-palette-card[data-color-theme=\\"aurora-cycle\\"]")');
+  const stackedModalInert = await session.evaluate('({ modalInert: document.getElementById("ch-theme-modal").inert === true, appInert: document.getElementById("clubhouse-app").inert === true })');
+  assert(!stackedModalInert.modalInert && stackedModalInert.appInert, 'Mobile stacked theme modal is non-inert while #clubhouse-app is inert');
+
+  await clickPointer(session, '#ch-theme-picker-body .theme-palette-card[data-color-theme="aurora-cycle"]');
+  await clickPointer(session, '#btn-done-theme-modal');
+  await session.waitFor('document.getElementById("ch-theme-modal").classList.contains("hidden")');
+  const afterMobileTheme = await session.evaluate('({ colorTheme: document.documentElement.getAttribute("data-color-theme"), appInert: document.getElementById("clubhouse-app").inert === true, sidebarOpen: document.getElementById("ch-sidebar").classList.contains("mobile-open") })');
+  assert(afterMobileTheme.colorTheme === 'aurora-cycle', 'Real pointer click inside mobile theme modal selects aurora-cycle');
+  assert(!afterMobileTheme.appInert && afterMobileTheme.sidebarOpen, 'Closing mobile theme modal restores app interactivity while sidebar drawer remains open');
+
+  await clickCoords(session, 375, 420);
+  await session.waitFor('!document.getElementById("ch-sidebar").classList.contains("mobile-open")');
+  const afterBackdropTap = await session.evaluate('document.getElementById("main-content").inert === true');
+  assert(!afterBackdropTap, 'Real pointer click on mobile backdrop dismisses drawer and clears inert on stage');
+  await session.evaluate('localStorage.removeItem("pickup_theme_mode"); localStorage.removeItem("pickup_theme"); localStorage.removeItem("pickup_color_theme");');
+  await session.setViewport(1280, 900);
+  record('clubhouse.html mobile stacked sidebar drawer + theme modal remain responsive to real pointer events');
 }
 
 /**

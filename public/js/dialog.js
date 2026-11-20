@@ -3,6 +3,10 @@
   'use strict';
 
   var activeBackdrop = null;
+  var activeFocusController = null;
+  var activeTraps = [];
+  var managedInertElements = [];
+  var trapKeyListenerBound = false;
   var toastContainer = null;
 
   function translateText(key, fallback) {
@@ -149,6 +153,10 @@
   }
 
   function closeExistingModal() {
+    if (activeFocusController) {
+      activeFocusController.release();
+      activeFocusController = null;
+    }
     if (activeBackdrop && activeBackdrop.parentNode) {
       activeBackdrop.parentNode.removeChild(activeBackdrop);
     }
@@ -180,6 +188,104 @@
     return res;
   }
 
+  function isInList(el, list) {
+    if (!Array.isArray(list) || !el) return false;
+    for (var i = 0; i < list.length; i++) {
+      if (list[i] === el) return true;
+    }
+    return false;
+  }
+
+  function syncTrapStack() {
+    var i;
+    for (i = 0; i < managedInertElements.length; i++) {
+      try {
+        managedInertElements[i].inert = false;
+      } catch (e) { /* ignore */ }
+    }
+    managedInertElements = [];
+
+    if (activeTraps.length === 0 || typeof document === 'undefined') return;
+    var top = activeTraps[activeTraps.length - 1];
+    if (!top || !top.containerEl) return;
+
+    // Guarantee top trap container and its ancestors are not left inert by an underlying trap
+    var anc = top.containerEl;
+    while (anc && anc !== document.body) {
+      if (anc.inert) {
+        try { anc.inert = false; } catch (e) { /* ignore */ }
+      }
+      anc = anc.parentElement;
+    }
+
+    if (top.siblingInert && document.body) {
+      var cur = top.containerEl;
+      while (cur && cur !== document.body && cur.parentElement) {
+        var parent = cur.parentElement;
+        var siblings = parent.children;
+        for (var s = 0; s < siblings.length; s++) {
+          var sib = siblings[s];
+          if (sib !== cur && sib.nodeType === 1 && !sib.inert && !isInList(sib, top.excludeInert)) {
+            sib.inert = true;
+            managedInertElements.push(sib);
+          }
+        }
+        cur = parent;
+      }
+    }
+  }
+
+  function onGlobalTrapKeyDown(e) {
+    var top = activeTraps.length > 0 ? activeTraps[activeTraps.length - 1] : null;
+    if (!top || !top.containerEl) return;
+
+    if (top.enableEscape && e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      if (top.onEscape) {
+        top.onEscape();
+      }
+      return;
+    }
+
+    if (e.key === 'Tab') {
+      var focusables = getFocusableElements(top.containerEl);
+      if (focusables.length === 0) {
+        e.preventDefault();
+        return;
+      }
+      var first = focusables[0];
+      var last = focusables[focusables.length - 1];
+      var active = document.activeElement;
+
+      if (e.shiftKey) {
+        if (active === first || !top.containerEl.contains(active)) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (active === last || !top.containerEl.contains(active)) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    }
+  }
+
+  function ensureTrapKeyListener() {
+    if (!trapKeyListenerBound && typeof document !== 'undefined') {
+      trapKeyListenerBound = true;
+      document.addEventListener('keydown', onGlobalTrapKeyDown, true);
+    }
+  }
+
+  function cleanupTrapKeyListener() {
+    if (trapKeyListenerBound && activeTraps.length === 0 && typeof document !== 'undefined') {
+      trapKeyListenerBound = false;
+      document.removeEventListener('keydown', onGlobalTrapKeyDown, true);
+    }
+  }
+
   function trapFocus(containerEl, opts) {
     if (!containerEl) {
       return {
@@ -192,62 +298,23 @@
     var onEscape = typeof options.onEscape === 'function' ? options.onEscape : null;
     var enableEscape = options.escape !== false;
     var siblingInert = options.siblingInert !== false;
+    var excludeInert = Array.isArray(options.excludeInert) ? options.excludeInert : [];
     var initialFocus = options.initialFocus !== undefined ? options.initialFocus : true;
 
-    var inertElements = [];
+    var trapEntry = {
+      containerEl: containerEl,
+      triggerEl: triggerEl,
+      onEscape: onEscape,
+      enableEscape: enableEscape,
+      siblingInert: siblingInert,
+      excludeInert: excludeInert
+    };
 
-    if (siblingInert && typeof document !== 'undefined' && document.body) {
-      var cur = containerEl;
-      while (cur && cur !== document.body && cur.parentElement) {
-        var parent = cur.parentElement;
-        var siblings = parent.children;
-        for (var s = 0; s < siblings.length; s++) {
-          var sib = siblings[s];
-          if (sib !== cur && sib.nodeType === 1 && !sib.inert) {
-            sib.inert = true;
-            inertElements.push(sib);
-          }
-        }
-        cur = parent;
-      }
-    }
+    activeTraps.push(trapEntry);
+    ensureTrapKeyListener();
+    syncTrapStack();
 
-    function onKeyDown(e) {
-      if (enableEscape && e.key === 'Escape') {
-        e.preventDefault();
-        e.stopPropagation();
-        if (onEscape) {
-          onEscape();
-        }
-        return;
-      }
-      if (e.key === 'Tab') {
-        var focusables = getFocusableElements(containerEl);
-        if (focusables.length === 0) {
-          e.preventDefault();
-          return;
-        }
-        var first = focusables[0];
-        var last = focusables[focusables.length - 1];
-        var active = document.activeElement;
-
-        if (e.shiftKey) {
-          if (active === first || !containerEl.contains(active)) {
-            e.preventDefault();
-            last.focus();
-          }
-        } else {
-          if (active === last || !containerEl.contains(active)) {
-            e.preventDefault();
-            first.focus();
-          }
-        }
-      }
-    }
-
-    if (typeof document !== 'undefined') {
-      document.addEventListener('keydown', onKeyDown, true);
-    }
+    var released = false;
 
     if (initialFocus) {
       var target = null;
@@ -261,31 +328,29 @@
       }
       if (target && typeof target.focus === 'function') {
         setTimeout(function () {
+          if (released) return;
           try { target.focus(); } catch (e) { /* best-effort focus */ }
         }, 0);
       }
     }
 
-    var released = false;
     function release() {
       if (released) return;
       released = true;
-      if (typeof document !== 'undefined') {
-        document.removeEventListener('keydown', onKeyDown, true);
+      var idx = activeTraps.indexOf(trapEntry);
+      var wasTop = idx !== -1 && idx === activeTraps.length - 1;
+      if (idx !== -1) {
+        activeTraps.splice(idx, 1);
       }
-      for (var i = 0; i < inertElements.length; i++) {
-        try {
-          inertElements[i].inert = false;
-        } catch (e) { /* ignore */ }
-      }
-      inertElements = [];
-      if (triggerEl && typeof triggerEl.focus === 'function') {
+      cleanupTrapKeyListener();
+      syncTrapStack();
+      if (wasTop && triggerEl && typeof triggerEl.focus === 'function') {
         try { triggerEl.focus(); } catch (e) { /* best-effort restore */ }
       }
     }
 
     function update() {
-      // Refresh inert siblings if container was remounted or DOM changed
+      syncTrapStack();
     }
 
     return {
@@ -351,6 +416,9 @@
         if (settled) return;
         settled = true;
         if (focusController) {
+          if (activeFocusController === focusController) {
+            activeFocusController = null;
+          }
           focusController.release();
           focusController = null;
         }
@@ -377,6 +445,7 @@
         siblingInert: true,
         initialFocus: card.querySelector('input, textarea, select, button.pbf-dialog-btn-primary, button')
       });
+      activeFocusController = focusController;
     });
   }
 

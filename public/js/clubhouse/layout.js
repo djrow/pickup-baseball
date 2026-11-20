@@ -499,6 +499,7 @@
         escape: true,
         onEscape: closeMobileDrawers,
         siblingInert: true,
+        excludeInert: backdrop ? [backdrop] : [],
         initialFocus: el('btn-close-sidebar') || true
       });
     }
@@ -521,6 +522,7 @@
         escape: true,
         onEscape: closeMobileDrawers,
         siblingInert: true,
+        excludeInert: backdrop ? [backdrop] : [],
         initialFocus: el('btn-close-context') || true
       });
     }
