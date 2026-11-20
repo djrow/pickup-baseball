@@ -32,7 +32,7 @@
     "aws4fetch": "^1.0.20",
     "better-sqlite3": "^13.0.3",
     "express": "^5.3.0",
-    "hono": "^4.13.13"
+    "hono": "^4.13.19"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261115.1",
