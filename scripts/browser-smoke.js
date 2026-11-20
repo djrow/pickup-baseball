@@ -458,12 +458,11 @@ async function runPublicShellAndDiagnosticsSmoke(browser, session, server, track
   assert(overflowDesktop, 'desktop index has no horizontal overflow');
   record('index.html renders seeded games, footer version, and zero horizontal overflow (1280x900)');
 
+  await session.waitFor('document.getElementById("nav-menu-toggle")');
   await clickEl(session, '#nav-menu-toggle');
-  const menuOpened = await session.evaluate('document.getElementById("nav-menu-toggle").getAttribute("aria-expanded") === "true"');
-  assert(menuOpened, '☰ Menu opens on click');
+  await session.waitFor('document.getElementById("nav-menu-toggle") && document.getElementById("nav-menu-toggle").getAttribute("aria-expanded") === "true"', 3000);
   await session.evaluate('document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))');
-  const menuClosed = await session.evaluate('document.getElementById("nav-menu-toggle").getAttribute("aria-expanded") === "false"');
-  assert(menuClosed, '☰ Menu closes on Escape');
+  await session.waitFor('document.getElementById("nav-menu-toggle") && document.getElementById("nav-menu-toggle").getAttribute("aria-expanded") === "false"', 3000);
   record('☰ Menu dropdown opens on click and closes on Escape');
 
   await session.evaluate(`
