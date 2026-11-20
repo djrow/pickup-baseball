@@ -1021,8 +1021,9 @@
         var iframe = document.createElement('iframe');
         iframe.src = 'https://www.youtube-nocookie.com/embed/' + encodeURIComponent(song.youtubeId) + '?start=' + startSec + '&end=' + ytEnd + '&autoplay=1&rel=0';
         iframe.title = 'Walk-up song YouTube clip preview';
-        iframe.allow = 'autoplay; encrypted-media';
-        iframe.style.cssText = 'width:100%;height:120px;border:0;display:block;border-radius:6px;';
+        iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+        iframe.referrerPolicy = 'strict-origin-when-cross-origin';
+        iframe.style.cssText = 'width:100%;height:180px;border:0;display:block;border-radius:6px;';
         walkupYtContainerRef.appendChild(iframe);
         walkupYtContainerRef.style.display = 'block';
         if (walkupPlayBtnRef) walkupPlayBtnRef.textContent = '⏹ Stop';
@@ -1033,7 +1034,7 @@
         walkupStopTimer = setTimeout(function () {
           stopWalkupPreview();
           if (walkupStatusRef) walkupStatusRef.textContent = '';
-        }, 7000);
+        }, 10000);
         return;
       }
     }

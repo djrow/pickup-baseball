@@ -19,7 +19,7 @@ app.use((req, res, next) => {
   res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
   res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
   res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
-  res.setHeader('Cross-Origin-Embedder-Policy', req.path === '/gallery.html' ? 'unsafe-none' : 'credentialless');
+  res.setHeader('Cross-Origin-Embedder-Policy', (req.path === '/gallery.html' || req.path === '/profile.html' || req.path === '/clubhouse.html') ? 'unsafe-none' : 'credentialless');
   if (!req.path.startsWith('/api/')) {
     res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https://www.googleapis.com https://api.open-meteo.com https://geocoding-api.open-meteo.com; frame-src https://www.youtube-nocookie.com https://www.youtube.com https://drive.google.com; media-src 'self' https: data: blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests;");
   }

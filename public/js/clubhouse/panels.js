@@ -357,14 +357,15 @@
         var iframe = document.createElement('iframe');
         iframe.src = 'https://www.youtube-nocookie.com/embed/' + encodeURIComponent(entry.song.youtubeId) + '?start=' + clipStart + '&end=' + ytEnd + '&autoplay=1&rel=0';
         iframe.title = 'At-Bat DJ YouTube walk-up clip';
-        iframe.allow = 'autoplay; encrypted-media';
-        iframe.style.cssText = 'width:100%;height:110px;border:0;display:block;';
+        iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+        iframe.referrerPolicy = 'strict-origin-when-cross-origin';
+        iframe.style.cssText = 'width:100%;height:150px;border:0;display:block;';
         ytWrap.appendChild(iframe);
         ytWrap.classList.remove('hidden');
         syncDjBarUi();
         djState.stopTimer = setTimeout(function () {
           stopAtBatDj();
-        }, 7000);
+        }, 10000);
         return;
       }
     }

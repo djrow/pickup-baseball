@@ -12,6 +12,12 @@
 /gallery.html
   Cross-Origin-Embedder-Policy: unsafe-none
 
+/profile.html
+  Cross-Origin-Embedder-Policy: unsafe-none
+
+/clubhouse.html
+  Cross-Origin-Embedder-Policy: unsafe-none
+
 /feed.xml
   Content-Type: application/rss+xml; charset=utf-8
   Cache-Control: no-cache, no-store, must-revalidate
