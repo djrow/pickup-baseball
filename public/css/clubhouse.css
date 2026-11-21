@@ -703,6 +703,7 @@ html, body.clubhouse-body {
 }
 
 .ch-msg-card {
+  position: relative;
   display: flex;
   gap: 12px;
   padding: 8px 10px;
@@ -710,7 +711,9 @@ html, body.clubhouse-body {
   transition: background-color 0.12s ease;
 }
 
-.ch-msg-card:hover {
+.ch-msg-card:hover,
+.ch-msg-card.rx-open,
+.ch-msg-card.actions-open {
   background-color: var(--ch-bg-hover);
 }
 
@@ -878,25 +881,78 @@ html, body.clubhouse-body {
   font-weight: 600;
 }
 
-.ch-rx-toggle {
-  background-color: var(--ch-bg-sidebar);
-  border: 1px dashed var(--ch-border);
+/* Floating top-right message action toolbar (hidden until hover/focus/rx-open/touch-tap) */
+.ch-msg-actions {
+  position: absolute;
+  top: -10px;
+  right: 10px;
+  z-index: 10;
+  max-width: calc(100% - 20px);
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 2px;
+  padding: 2px 4px;
+  border-radius: 999px;
+  background-color: var(--ch-bg-elevated);
+  border: 1px solid var(--ch-border);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(2px);
+  transition: opacity 0.14s ease, transform 0.14s ease;
+}
+
+[dir="rtl"] .ch-msg-actions {
+  right: auto;
+  left: 10px;
+}
+
+.ch-msg-card:hover .ch-msg-actions,
+.ch-msg-card:focus-within .ch-msg-actions,
+.ch-msg-card.rx-open .ch-msg-actions,
+.ch-msg-card.actions-open .ch-msg-actions {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.ch-msg-action-btn {
+  background: transparent;
+  border: 1px solid transparent;
   color: var(--ch-text-secondary);
   border-radius: 999px;
-  padding: 3px 8px;
+  min-width: 28px;
   min-height: 26px;
-  font-size: 12px;
+  padding: 2px 6px;
+  font-size: 13px;
+  line-height: 1;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  justify-content: center;
+  flex: 0 0 auto;
+  transition: background-color 0.1s ease, border-color 0.1s ease, color 0.1s ease;
 }
 
-.ch-rx-toggle:hover,
-.ch-rx-toggle.open {
-  border-color: var(--ch-accent);
+.ch-msg-action-btn.ch-rx-toggle {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.ch-msg-action-btn:hover,
+.ch-msg-action-btn:focus-visible,
+.ch-msg-action-btn.open {
   background-color: var(--ch-bg-active);
+  border-color: var(--ch-accent);
   color: var(--ch-text-primary);
+}
+
+.ch-msg-action-btn.ch-msg-action-danger:hover,
+.ch-msg-action-btn.ch-msg-action-danger:focus-visible {
+  background-color: rgba(239, 68, 68, 0.18);
+  border-color: rgba(239, 68, 68, 0.55);
+  color: #fca5a5;
 }
 
 /* Shared Floating Slide-Out Emoji Drawer */
@@ -910,27 +966,19 @@ html, body.clubhouse-body {
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
   padding: 8px;
   opacity: 0;
-  transform: translateX(-10px) scale(0.97);
+  transform: translateY(-6px) scale(0.97);
   pointer-events: none;
   transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.16s ease;
 }
 
 .ch-rx-popover.open {
   opacity: 1;
-  transform: translateX(0) scale(1);
+  transform: translateY(0) scale(1);
   pointer-events: auto;
 }
 
 .ch-rx-popover.hidden {
   display: none;
-}
-
-[dir="rtl"] .ch-rx-popover {
-  transform: translateX(10px) scale(0.97);
-}
-
-[dir="rtl"] .ch-rx-popover.open {
-  transform: translateX(0) scale(1);
 }
 
 .ch-rx-popover-head {
@@ -1034,6 +1082,8 @@ html, body.clubhouse-body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .ch-msg-actions,
+  .ch-msg-action-btn,
   .ch-rx-popover,
   .ch-rx-popover.open,
   .ch-rx-choice {

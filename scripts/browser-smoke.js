@@ -1085,7 +1085,7 @@ async function runTwoContextClubhouseE2eeAndWebRtcSmoke(browser, server, tracker
     await ctxA.waitFor(`document.getElementById("ch-message-stream").textContent.includes(${JSON.stringify(bobReply)})`, 10000);
     record('Two-context E2EE DM send, ciphertext-at-rest verification, and bidirectional decrypt pass');
 
-    // Step 5c-rx: Scalable emoji drawer, pre-reaction trigger visibility, and count >= 2 display
+    // Step 5c-rx: Hover floating message actions + scalable emoji drawer + count >= 2 display
     const aliceMsgId = await ctxA.evaluate(`(() => {
       const cards = Array.from(document.querySelectorAll('#ch-message-stream article.ch-msg-card[data-msg-id]'));
       const card = cards.find((c) => c.textContent && c.textContent.includes(${JSON.stringify(alicePlaintext)}));
@@ -1095,26 +1095,30 @@ async function runTwoContextClubhouseE2eeAndWebRtcSmoke(browser, server, tracker
 
     const msgCardSel = `article[data-msg-id="${aliceMsgId}"]`;
     const preReactionState = await ctxA.evaluate(`(() => {
-      const row = document.querySelector(${JSON.stringify(msgCardSel + ' .ch-msg-Reactions-row')});
-      if (!row) return null;
-      const toggle = row.querySelector('.ch-rx-toggle');
-      const threadBtn = row.querySelector('.ch-thread-btn');
+      const card = document.querySelector(${JSON.stringify(msgCardSel)});
+      if (!card) return null;
+      const row = card.querySelector('.ch-msg-Reactions-row');
+      const actions = card.querySelector('.ch-msg-actions');
       return {
-        pillCount: row.querySelectorAll('.ch-reaction-pill').length,
-        hasToggle: Boolean(toggle),
-        hasThreadBtn: Boolean(threadBtn),
-        toggleBeforeThread: Boolean(toggle && threadBtn && toggle.nextElementSibling === threadBtn)
+        hasReactionsRow: Boolean(row),
+        hasActionsBar: Boolean(actions),
+        hasToggle: Boolean(actions && actions.querySelector('.ch-rx-toggle')),
+        hasThreadAction: Boolean(actions && actions.querySelector('[data-thread-msg]')),
+        actionsOpacity: actions ? getComputedStyle(actions).opacity : null
       };
     })()`);
-    assert(preReactionState && preReactionState.pillCount === 0, 'Message starts with zero submitted reaction pills');
-    assert(preReactionState.hasToggle && preReactionState.toggleBeforeThread, 'Add-emoji button renders immediately before Reply in Thread even before any emoji is clicked');
+    assert(preReactionState && !preReactionState.hasReactionsRow, 'Message with zero reactions/replies omits bottom reactions row');
+    assert(preReactionState.hasActionsBar && preReactionState.hasToggle && preReactionState.hasThreadAction, 'Hover action toolbar contains emoji drawer toggle and thread reply button');
+    assert(preReactionState.actionsOpacity === '0', `Floating action toolbar is hidden until hover/focus/open (got opacity ${preReactionState.actionsOpacity})`);
 
-    await clickEl(ctxA, `${msgCardSel} .ch-rx-toggle`);
-    await ctxA.waitFor('document.getElementById("ch-rx-popover") && document.getElementById("ch-rx-popover").classList.contains("open")');
+    await ctxA.evaluate(`document.querySelector(${JSON.stringify(msgCardSel + ' .ch-rx-toggle')}).click()`);
+    await ctxA.waitFor(`document.getElementById("ch-rx-popover") && document.getElementById("ch-rx-popover").classList.contains("open") && getComputedStyle(document.querySelector(${JSON.stringify(msgCardSel + ' .ch-msg-actions')})).opacity === "1"`);
     const drawerInitialStats = await ctxA.evaluate(`({
+      cardRxOpen: document.querySelector(${JSON.stringify(msgCardSel)}).classList.contains('rx-open'),
       tabs: document.querySelectorAll('#ch-rx-popover .ch-rx-tab').length,
       choices: document.querySelectorAll('#ch-rx-popover .ch-rx-choice').length
     })`);
+    assert(drawerInitialStats.cardRxOpen, 'Message card keeps floating actions visible with .rx-open while emoji drawer is open');
     assert(drawerInitialStats.tabs >= 5, `Scalable emoji drawer renders category tabs (got ${drawerInitialStats.tabs})`);
     assert(drawerInitialStats.choices >= 40, `Scalable emoji drawer renders >= 40 emoji choices (got ${drawerInitialStats.choices})`);
 
@@ -1128,18 +1132,19 @@ async function runTwoContextClubhouseE2eeAndWebRtcSmoke(browser, server, tracker
     await clickEl(ctxA, '#ch-rx-popover [data-rx-pick="⚾"]');
     await ctxA.waitFor(`document.getElementById("ch-rx-popover").classList.contains("hidden") && Boolean(document.querySelector(${JSON.stringify(msgCardSel + ' .ch-reaction-pill[data-rx-emoji="⚾"]')}))`);
     const singleRxRowState = await ctxA.evaluate(`(() => {
-      const row = document.querySelector(${JSON.stringify(msgCardSel + ' .ch-msg-Reactions-row')});
+      const card = document.querySelector(${JSON.stringify(msgCardSel)});
+      const row = card ? card.querySelector('.ch-msg-Reactions-row') : null;
       const pill = row ? row.querySelector('.ch-reaction-pill[data-rx-emoji="⚾"]') : null;
-      const toggle = row ? row.querySelector('.ch-rx-toggle') : null;
-      const threadBtn = row ? row.querySelector('.ch-thread-btn') : null;
+      const actions = card ? card.querySelector('.ch-msg-actions') : null;
       return {
+        hasReactionsRow: Boolean(row),
         hasCountBadge: Boolean(pill && pill.querySelector('.ch-rx-count')),
-        pillBeforeToggle: Boolean(pill && toggle && pill.nextElementSibling === toggle),
-        toggleBeforeThread: Boolean(toggle && threadBtn && toggle.nextElementSibling === threadBtn)
+        cardRxOpen: Boolean(card && card.classList.contains('rx-open')),
+        actionsOpacity: actions ? getComputedStyle(actions).opacity : null
       };
     })()`);
-    assert(!singleRxRowState.hasCountBadge, 'Single reaction (count === 1) hides count label');
-    assert(singleRxRowState.pillBeforeToggle && singleRxRowState.toggleBeforeThread, 'Emoji toggle sits right of submitted emoji pill and left of Reply in Thread');
+    assert(singleRxRowState.hasReactionsRow && !singleRxRowState.hasCountBadge, 'Single reaction (count === 1) renders bottom pill without count label');
+    assert(!singleRxRowState.cardRxOpen && singleRxRowState.actionsOpacity === '0', 'Floating action toolbar returns to hidden after reaction selection');
 
     await ctxB.evaluate('window.ClubhouseStore.pollDeltaSync()');
     await ctxB.waitFor(`Boolean(document.querySelector(${JSON.stringify(msgCardSel + ' .ch-reaction-pill[data-rx-emoji="⚾"]')}))`, 10000);
@@ -1150,7 +1155,7 @@ async function runTwoContextClubhouseE2eeAndWebRtcSmoke(browser, server, tracker
     await ctxB.waitFor(`Boolean(document.querySelector(${JSON.stringify(msgCardSel + ' .ch-reaction-pill[data-rx-emoji="⚾"] .ch-rx-count')}))`, 10000);
     const duplicateRxCountText = await ctxB.evaluate(`document.querySelector(${JSON.stringify(msgCardSel + ' .ch-reaction-pill[data-rx-emoji="⚾"] .ch-rx-count')}).textContent.trim()`);
     assert(duplicateRxCountText === '2', `Duplicate reaction shows counter "2" (got "${duplicateRxCountText}")`);
-    record('Clubhouse emoji reaction drawer renders before click, scales with search/tabs, and hides count until >= 2');
+    record('Clubhouse hover action toolbar + scalable emoji drawer hide clutter until hover and hide count until >= 2');
 
     // Step 5d: Mocked WebRTC Voice Lounge & Signaling UI Transitions
     await clickEl(ctxA, '#ch-channel-list .ch-channel-item[data-channel-type="voice"]');

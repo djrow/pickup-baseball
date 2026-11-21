@@ -363,6 +363,10 @@
       openToggles[i].classList.remove('open');
       openToggles[i].setAttribute('aria-expanded', 'false');
     }
+    var openCards = document.querySelectorAll('.ch-msg-card.rx-open');
+    for (var c = 0; c < openCards.length; c++) {
+      openCards[c].classList.remove('rx-open');
+    }
   }
 
   function closeReactionDrawer(restoreFocus) {
@@ -440,23 +444,12 @@
     var vh = typeof window !== 'undefined' && window.innerHeight ? window.innerHeight : 768;
     var isRtl = typeof document !== 'undefined' && document.documentElement && document.documentElement.getAttribute('dir') === 'rtl';
 
-    var left;
-    if (isRtl) {
-      left = rect.left - popW - 6;
-      if (left < 8) {
-        left = rect.right - popW;
-      }
-    } else {
-      left = rect.right + 6;
-      if (left + popW > vw - 8) {
-        left = rect.left;
-      }
-    }
+    var left = isRtl ? rect.left : (rect.right - popW);
     left = Math.max(8, Math.min(left, Math.max(8, vw - popW - 8)));
 
-    var top = rect.top - 8;
+    var top = rect.bottom + 6;
     if (top + popH > vh - 8) {
-      top = rect.bottom - popH;
+      top = rect.top - popH - 6;
     }
     top = Math.max(8, Math.min(top, Math.max(8, vh - popH - 8)));
 
@@ -557,6 +550,16 @@
     if (triggerBtn) {
       triggerBtn.setAttribute('aria-expanded', 'true');
       triggerBtn.classList.add('open');
+      var triggerCard = typeof triggerBtn.closest === 'function' ? triggerBtn.closest('.ch-msg-card') : null;
+      if (triggerCard) {
+        triggerCard.classList.add('rx-open');
+      }
+    }
+    if (typeof document !== 'undefined') {
+      var actionOpenCards = document.querySelectorAll('.ch-msg-card.actions-open');
+      for (var ao = 0; ao < actionOpenCards.length; ao++) {
+        actionOpenCards[ao].classList.remove('actions-open');
+      }
     }
 
     var pop = ensureReactionPopover();
@@ -574,6 +577,15 @@
     }
   }
 
+  function clearOpenMessageActionBars(streamEl, exceptCard) {
+    if (!streamEl) return;
+    var openCards = streamEl.querySelectorAll('.ch-msg-card.actions-open');
+    for (var i = 0; i < openCards.length; i++) {
+      if (exceptCard && openCards[i] === exceptCard) continue;
+      openCards[i].classList.remove('actions-open');
+    }
+  }
+
   function bindMessageStreamDelegation(streamEl) {
     if (!streamEl || streamEl._delegatedClickBound) return;
     streamEl._delegatedClickBound = true;
@@ -583,8 +595,31 @@
       }
     });
     streamEl.addEventListener('click', function (e) {
-      var target = e.target && typeof (/** @type {Element} */ (e.target)).closest === 'function' ? /** @type {Element} */ (e.target).closest('button') : null;
-      if (!target || !streamEl.contains(target)) return;
+      var rawTarget = /** @type {Element | null} */ (e.target);
+      var target = rawTarget && typeof rawTarget.closest === 'function' ? rawTarget.closest('button') : null;
+      if (!target || !streamEl.contains(target)) {
+        var isTouch = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(hover: none), (pointer: coarse)').matches;
+        if (isTouch && rawTarget && typeof rawTarget.closest === 'function') {
+          if (rawTarget.closest('a, input, textarea, select, video, audio, summary')) return;
+          var tappedCard = rawTarget.closest('.ch-msg-card');
+          if (tappedCard && streamEl.contains(tappedCard) && tappedCard.querySelector('.ch-msg-actions')) {
+            var willOpen = !tappedCard.classList.contains('actions-open');
+            clearOpenMessageActionBars(streamEl, willOpen ? tappedCard : null);
+            if (willOpen) {
+              tappedCard.classList.add('actions-open');
+            } else {
+              tappedCard.classList.remove('actions-open');
+            }
+          } else {
+            clearOpenMessageActionBars(streamEl, null);
+          }
+        }
+        return;
+      }
+
+      if (!target.hasAttribute('data-rx-toggle') && typeof target.closest === 'function' && target.closest('.ch-msg-actions')) {
+        clearOpenMessageActionBars(streamEl, null);
+      }
 
       if (target.hasAttribute('data-rx-toggle')) {
         openReactionDrawer(target.getAttribute('data-rx-toggle'), /** @type {HTMLElement} */ (target));
@@ -833,7 +868,8 @@
       ? UI.renderAvatarContentHtml(authorAvatarUrl, msg.author_name || 'Player', initial)
       : escapeHtml(initial);
 
-    html += '<article class="ch-msg-card' + (isMentioned ? ' ch-msg-mentioned' : '') + '" data-msg-id="' + msg.id + '">';
+    var drawerOpen = Boolean(!isHiddenByMod && currentUser && String(uiState.rxDrawerMsgId || '') === String(msg.id));
+    html += '<article class="ch-msg-card' + (isMentioned ? ' ch-msg-mentioned' : '') + (drawerOpen ? ' rx-open' : '') + '" data-msg-id="' + msg.id + '">';
     html += '<div class="ch-msg-avatar' + (authorAvatarUrl ? ' has-avatar' : '') + '">' + avatarInner + '</div>';
     html += '<div class="ch-msg-body">';
     html += '<div class="ch-msg-header">';
@@ -864,54 +900,69 @@
       html += '</div>';
     }
 
-    html += '<div class="ch-msg-Reactions-row">';
-    if (!isHiddenByMod) {
-      for (var r = 0; r < reactions.length; r++) {
-        var rx = reactions[r];
-        var rxCount = Number(rx.count || 1);
-        var tooltip = rx.users && rx.users.length ? rx.users.join(', ') : rx.emoji;
-        var rxAriaLabel = 'React ' + rx.emoji + (rxCount >= 2 ? (' (' + rxCount + ')') : '');
-        html += '<button type="button" class="ch-reaction-pill' + (rx.mine ? ' active' : '') + '" title="' + escapeHtml(tooltip) + '" aria-pressed="' + (rx.mine ? 'true' : 'false') + '" aria-label="' + escapeHtml(rxAriaLabel) + '" data-rx-msg="' + msg.id + '" data-rx-emoji="' + escapeHtml(rx.emoji) + '">';
-        html += '<span class="ch-rx-emoji">' + escapeHtml(rx.emoji) + '</span>';
-        if (rxCount >= 2) {
-          html += '<span class="ch-rx-count">' + rxCount + '</span>';
+    var replyCount = Number(msg.reply_count || 0);
+    var hasBottomReactions = !isHiddenByMod && reactions.length > 0;
+    if (hasBottomReactions || replyCount > 0) {
+      html += '<div class="ch-msg-Reactions-row">';
+      if (hasBottomReactions) {
+        for (var r = 0; r < reactions.length; r++) {
+          var rx = reactions[r];
+          var rxCount = Number(rx.count || 1);
+          var tooltip = rx.users && rx.users.length ? rx.users.join(', ') : rx.emoji;
+          var rxAriaLabel = 'React ' + rx.emoji + (rxCount >= 2 ? (' (' + rxCount + ')') : '');
+          html += '<button type="button" class="ch-reaction-pill' + (rx.mine ? ' active' : '') + '" title="' + escapeHtml(tooltip) + '" aria-pressed="' + (rx.mine ? 'true' : 'false') + '" aria-label="' + escapeHtml(rxAriaLabel) + '" data-rx-msg="' + msg.id + '" data-rx-emoji="' + escapeHtml(rx.emoji) + '">';
+          html += '<span class="ch-rx-emoji">' + escapeHtml(rx.emoji) + '</span>';
+          if (rxCount >= 2) {
+            html += '<span class="ch-rx-count">' + rxCount + '</span>';
+          }
+          html += '</button>';
         }
-        html += '</button>';
       }
-      if (currentUser) {
-        var drawerOpen = String(uiState.rxDrawerMsgId || '') === String(msg.id);
-        html += '<button type="button" class="ch-rx-toggle' + (drawerOpen ? ' open' : '') + '" data-rx-toggle="' + msg.id + '" aria-expanded="' + (drawerOpen ? 'true' : 'false') + '" aria-haspopup="dialog" aria-controls="ch-rx-popover" aria-label="Add reaction" title="Add reaction">😊+</button>';
+      if (replyCount > 0) {
+        html += '<button type="button" class="ch-thread-btn ch-thread-count-btn" data-thread-msg="' + msg.id + '">💬 ' + replyCount + (replyCount === 1 ? ' Reply' : ' Replies') + '</button>';
       }
+      html += '</div>';
     }
-    if (currentUser || msg.reply_count) {
-      html += '<button type="button" class="ch-thread-btn" data-thread-msg="' + msg.id + '">💬 ' + (msg.reply_count ? msg.reply_count + ' Replies' : 'Reply in Thread') + '</button>';
+
+    var actionsHtml = '';
+    if (!isHiddenByMod && currentUser) {
+      actionsHtml += '<button type="button" class="ch-msg-action-btn ch-rx-toggle' + (drawerOpen ? ' open' : '') + '" data-rx-toggle="' + msg.id + '" aria-expanded="' + (drawerOpen ? 'true' : 'false') + '" aria-haspopup="dialog" aria-controls="ch-rx-popover" aria-label="Add reaction" title="Add reaction">😊+</button>';
+    }
+    if (currentUser) {
+      actionsHtml += '<button type="button" class="ch-msg-action-btn" data-thread-msg="' + msg.id + '" aria-label="Reply in Thread" title="Reply in Thread">💬</button>';
     }
     if (isAuthor && !isHiddenByMod) {
-      html += '<button type="button" class="ch-thread-btn" data-edit-msg="' + msg.id + '" title="Edit message">✏️ Edit</button>';
+      actionsHtml += '<button type="button" class="ch-msg-action-btn" data-edit-msg="' + msg.id + '" aria-label="Edit message" title="Edit message">✏️</button>';
     }
     if (isMod) {
       if (isHiddenByMod) {
-        html += '<button type="button" class="ch-thread-btn" data-unhide-msg="' + msg.id + '" title="Restore hidden message">👁️ Unhide</button>';
+        actionsHtml += '<button type="button" class="ch-msg-action-btn" data-unhide-msg="' + msg.id + '" aria-label="Restore hidden message" title="Restore hidden message">👁️</button>';
       } else {
-        html += '<button type="button" class="ch-thread-btn" data-hide-msg="' + msg.id + '" title="Hide message for a stated reason">🙈 Hide</button>';
+        actionsHtml += '<button type="button" class="ch-msg-action-btn" data-hide-msg="' + msg.id + '" aria-label="Hide message for a stated reason" title="Hide message for a stated reason">🙈</button>';
       }
     }
     if (!isAuthor && currentUser) {
-      html += '<button type="button" class="ch-thread-btn" data-report-msg="' + msg.id + '" data-report-author="' + escapeHtml(msg.author_name) + '" title="Report message for a stated reason">🚩 Report</button>';
+      actionsHtml += '<button type="button" class="ch-msg-action-btn" data-report-msg="' + msg.id + '" data-report-author="' + escapeHtml(msg.author_name) + '" aria-label="Report message for a stated reason" title="Report message for a stated reason">🚩</button>';
       if (msg.author_id && !isSystemMsg) {
         var authorBlocked = Boolean(Store.isPeerBlockedByMe && Store.isPeerBlockedByMe(msg.author_id));
-        html += '<button type="button" class="ch-thread-btn" data-peer-block-uid="' + msg.author_id + '" data-peer-block-name="' + escapeHtml(msg.author_name || 'Member') + '" data-peer-block-active="' + (authorBlocked ? '1' : '0') + '" title="' + escapeHtml(authorBlocked ? tClubhouse('clubhouse.peer_unblock_title', 'Unblock this member') : tClubhouse('clubhouse.peer_block_title', 'Block this member (hides their shared-channel messages and prevents 1:1 DMs and voice)')) + '">' + escapeHtml(authorBlocked ? tClubhouse('clubhouse.peer_unblock_btn', '🔓 Unblock') : tClubhouse('clubhouse.peer_block_btn', '🚫 Block')) + '</button>';
+        var blockTitle = authorBlocked
+          ? tClubhouse('clubhouse.peer_unblock_title', 'Unblock this member')
+          : tClubhouse('clubhouse.peer_block_title', 'Block this member (hides their shared-channel messages and prevents 1:1 DMs and voice)');
+        actionsHtml += '<button type="button" class="ch-msg-action-btn" data-peer-block-uid="' + msg.author_id + '" data-peer-block-name="' + escapeHtml(msg.author_name || 'Member') + '" data-peer-block-active="' + (authorBlocked ? '1' : '0') + '" aria-label="' + escapeHtml(blockTitle) + '" title="' + escapeHtml(blockTitle) + '">' + (authorBlocked ? '🔓' : '🚫') + '</button>';
       }
       if (isMod && msg.author_id) {
-        html += '<button type="button" class="ch-thread-btn" data-mod-mute-uid="' + msg.author_id + '" data-mod-mute-name="' + escapeHtml(msg.author_name) + '" title="Blanket-mute this user in Clubhouse">🔇 Mod Mute</button>';
+        actionsHtml += '<button type="button" class="ch-msg-action-btn" data-mod-mute-uid="' + msg.author_id + '" data-mod-mute-name="' + escapeHtml(msg.author_name) + '" aria-label="Blanket-mute this user in Clubhouse" title="Blanket-mute this user in Clubhouse">🔇</button>';
       }
     }
     if (canDeleteMsg) {
-      html += '<button type="button" class="ch-thread-btn" data-delete-msg="' + msg.id + '" title="Delete message">🗑️ Delete</button>';
+      actionsHtml += '<button type="button" class="ch-msg-action-btn ch-msg-action-danger" data-delete-msg="' + msg.id + '" aria-label="Delete message" title="Delete message">🗑️</button>';
     }
-    html += '</div>';
 
-    html += '</div></article>';
+    html += '</div>';
+    if (actionsHtml) {
+      html += '<div class="ch-msg-actions" role="toolbar" aria-label="Message actions">' + actionsHtml + '</div>';
+    }
+    html += '</article>';
     return html;
   }
 
