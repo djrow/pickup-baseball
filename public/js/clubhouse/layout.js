@@ -881,6 +881,23 @@
     }
   }
 
+  function refreshComposerPlaceholder(target) {
+    var inputEl = el('ch-composer-input');
+    if (!inputEl || !target) return;
+    var isDmChannelActive = target.channel_type === 'dm' || target.channel_type === 'group_dm';
+    var isPrivateBoardActive = !isDmChannelActive && (target.is_private === 1 || target.is_private === true || target.min_role_read === 'invite');
+    var isE2eeChannelActive = isDmChannelActive || isPrivateBoardActive;
+    if (!Store.state.user) {
+      inputEl.placeholder = 'Sign in to chat in Clubhouse...';
+    } else if (Store.state.user.chatMuted) {
+      inputEl.placeholder = 'Clubhouse posting is muted for your account.';
+    } else {
+      inputEl.placeholder = isE2eeChannelActive
+        ? ('Encrypted message in ' + target.name + ' — Press Enter to send')
+        : ('Message ' + target.name + ' — Press Enter to send');
+    }
+  }
+
   function selectTextChannel(channelId) {
     var channels = Store.state.channels || [];
     var target = null;
@@ -897,17 +914,16 @@
 
     uiState.activeChannelId = target.id;
     uiState.activeChannel = target;
+    if (typeof UI.closeReactionDrawer === 'function') UI.closeReactionDrawer(false);
 
     var titleEl = el('ch-active-channel-name');
     var topicEl = el('ch-active-channel-topic');
     var e2eeBadge = el('ch-active-e2ee-badge');
-    var inputEl = el('ch-composer-input');
 
     if (titleEl) titleEl.textContent = target.name;
     if (topicEl) topicEl.textContent = target.topic || '';
     var isDmChannelActive = target.channel_type === 'dm' || target.channel_type === 'group_dm';
     var isPrivateBoardActive = !isDmChannelActive && (target.is_private === 1 || target.is_private === true || target.min_role_read === 'invite');
-    var isE2eeChannelActive = isDmChannelActive || isPrivateBoardActive;
     if (e2eeBadge) {
       if (isDmChannelActive) {
         e2eeBadge.textContent = '🔒 End-to-End Encrypted (ECDH)';
@@ -923,17 +939,7 @@
         e2eeBadge.style.display = 'none';
       }
     }
-    if (inputEl) {
-      if (!Store.state.user) {
-        inputEl.placeholder = 'Sign in to chat in Clubhouse...';
-      } else if (Store.state.user.chatMuted) {
-        inputEl.placeholder = 'Clubhouse posting is muted for your account.';
-      } else {
-        inputEl.placeholder = isE2eeChannelActive
-          ? ('Encrypted message in ' + target.name + ' — Press Enter to send')
-          : ('Message ' + target.name + ' — Press Enter to send');
-      }
-    }
+    refreshComposerPlaceholder(target);
 
     if (typeof UI.refreshDmE2eeNotice === 'function') UI.refreshDmE2eeNotice(target);
     if (typeof UI.refreshVerifyKeyButton === 'function') UI.refreshVerifyKeyButton(target);
@@ -962,6 +968,7 @@
     uiState.activeThreadRoot = null;
     uiState.revealedMutedMsgIds = {};
     uiState.revealedBlockedMsgIds = {};
+    if (typeof UI.closeReactionDrawer === 'function') UI.closeReactionDrawer(false);
     var titleEl = el('ch-active-channel-name');
     var topicEl = el('ch-active-channel-topic');
     var e2eeBadge = el('ch-active-e2ee-badge');
@@ -1657,6 +1664,7 @@
     renderUserBar: renderUserBar,
     handleClubhouseOptToggle: handleClubhouseOptToggle,
     renderChannelSidebar: renderChannelSidebar,
+    refreshComposerPlaceholder: refreshComposerPlaceholder,
     selectTextChannel: selectTextChannel,
     clearSignedOutUi: clearSignedOutUi,
     initClubhouseTheme: initClubhouseTheme,

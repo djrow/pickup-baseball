@@ -182,8 +182,44 @@
       emit('sync_message_delete', { channelId: chId, messageId: ev.target_id });
     } else if (ev.event_type === 'reaction_add' || ev.event_type === 'reaction_remove') {
       for (var k = 0; k < list.length; k++) {
-        if (String(list[k].id) === String(ev.target_id) && Array.isArray(payload.reactions)) {
-          list[k].reactions = payload.reactions;
+        if (String(list[k].id) === String(ev.target_id)) {
+          if (Array.isArray(payload.reactions)) {
+            list[k].reactions = payload.reactions;
+            ClubhouseStore.saveMessagesToIdb([list[k]]);
+          } else if (payload && payload.emoji) {
+            var curRx = Array.isArray(list[k].reactions) ? list[k].reactions.slice() : [];
+            var pUid = Number(payload.user_id || 0);
+            var pEmoji = String(payload.emoji);
+            if (ev.event_type === 'reaction_remove') {
+              var nextRx = [];
+              for (var rxIdx = 0; rxIdx < curRx.length; rxIdx++) {
+                var item = curRx[rxIdx];
+                if (!item || (Number(item.user_id) === pUid && String(item.emoji) === pEmoji)) continue;
+                nextRx.push(item);
+              }
+              list[k].reactions = nextRx;
+            } else {
+              var hasRx = false;
+              for (var rxChk = 0; rxChk < curRx.length; rxChk++) {
+                var chk = curRx[rxChk];
+                if (chk && Number(chk.user_id) === pUid && String(chk.emoji) === pEmoji) {
+                  hasRx = true;
+                  break;
+                }
+              }
+              if (!hasRx) {
+                curRx.push({
+                  message_id: Number(ev.target_id),
+                  channel_id: chId,
+                  user_id: pUid,
+                  user_name: payload.user_name || '',
+                  emoji: pEmoji
+                });
+              }
+              list[k].reactions = curRx;
+            }
+            ClubhouseStore.saveMessagesToIdb([list[k]]);
+          }
           break;
         }
       }

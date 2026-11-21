@@ -94,6 +94,12 @@
             }
           }
           UI.selectTextChannel((general || Store.state.channels[0]).id);
+        } else if (eventType === 'bootstrapped' && uiState.activeChannelId) {
+          uiState.activeChannel = UI.findChannelInStore(uiState.activeChannelId) || uiState.activeChannel;
+          if (typeof UI.refreshComposerPlaceholder === 'function') UI.refreshComposerPlaceholder(uiState.activeChannel);
+          if (typeof UI.refreshDmE2eeNotice === 'function') UI.refreshDmE2eeNotice(uiState.activeChannel);
+          if (typeof UI.refreshVerifyKeyButton === 'function') UI.refreshVerifyKeyButton(uiState.activeChannel);
+          UI.renderMessageStream(null);
         }
       } else if (eventType === 'auth_required') {
         var authWarn = el('ch-auth-banner');

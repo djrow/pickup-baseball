@@ -24,8 +24,105 @@
   var uiState = UI.uiState;
 
   var DEFAULT_EMOJIS = ['👍', '⚾', '🔥', '😂', '❤️', '🙌'];
+  var EMOJI_CATALOG = [
+    {
+      id: 'baseball',
+      label: 'Baseball',
+      icon: '⚾',
+      emojis: [
+        { e: '⚾', k: 'baseball ball' },
+        { e: '🥎', k: 'softball' },
+        { e: '🏟️', k: 'stadium field' },
+        { e: '🧢', k: 'cap hat' },
+        { e: '🧤', k: 'glove mitt' },
+        { e: '🏆', k: 'trophy win' },
+        { e: '🥇', k: 'gold medal first' },
+        { e: '🎯', k: 'target bullseye' },
+        { e: '💪', k: 'strong muscle' },
+        { e: '🏃', k: 'run sprint' },
+        { e: '🔥', k: 'fire hot lit' },
+        { e: '⚡', k: 'lightning fast zap' },
+        { e: '☀️', k: 'sun sunny' },
+        { e: '🌧️', k: 'rain rainout weather' },
+        { e: '🌭', k: 'hotdog snack' },
+        { e: '🍺', k: 'beer cold' }
+      ]
+    },
+    {
+      id: 'reactions',
+      label: 'Reactions',
+      icon: '👍',
+      emojis: [
+        { e: '👍', k: 'thumbs up yes like' },
+        { e: '👎', k: 'thumbs down no' },
+        { e: '🙌', k: 'hands celebrate hooray' },
+        { e: '👏', k: 'clap applause' },
+        { e: '🤝', k: 'handshake deal' },
+        { e: '🙏', k: 'pray thanks please' },
+        { e: '👌', k: 'ok nice' },
+        { e: '✌️', k: 'peace victory' },
+        { e: '🤞', k: 'crossed fingers luck' },
+        { e: '🫡', k: 'salute respect' },
+        { e: '🫶', k: 'heart hands love' },
+        { e: '💯', k: '100 hundred perfect' },
+        { e: '✅', k: 'check done yes' },
+        { e: '❌', k: 'cross no cancel' },
+        { e: '👀', k: 'eyes look watching' },
+        { e: '🎉', k: 'party congrats' }
+      ]
+    },
+    {
+      id: 'faces',
+      label: 'Faces',
+      icon: '😂',
+      emojis: [
+        { e: '😂', k: 'laugh tears lol' },
+        { e: '🤣', k: 'rofl rolling laugh' },
+        { e: '😄', k: 'smile happy' },
+        { e: '😁', k: 'grin beam' },
+        { e: '😊', k: 'blush warm' },
+        { e: '😎', k: 'cool sunglasses' },
+        { e: '🥳', k: 'party celebrate' },
+        { e: '🤩', k: 'star struck amazed' },
+        { e: '😮', k: 'wow surprised' },
+        { e: '🤯', k: 'mind blown shocked' },
+        { e: '😅', k: 'sweat whew' },
+        { e: '😬', k: 'grimace awkward' },
+        { e: '😢', k: 'sad cry' },
+        { e: '😤', k: 'huff determined' },
+        { e: '🤔', k: 'thinking hmm' },
+        { e: '😴', k: 'sleepy tired' }
+      ]
+    },
+    {
+      id: 'vibes',
+      label: 'Hearts & Vibes',
+      icon: '❤️',
+      emojis: [
+        { e: '❤️', k: 'red heart love' },
+        { e: '🧡', k: 'orange heart giants' },
+        { e: '💛', k: 'yellow heart gold' },
+        { e: '💚', k: 'green heart oakland' },
+        { e: '💙', k: 'blue heart' },
+        { e: '💜', k: 'purple heart' },
+        { e: '⭐', k: 'star' },
+        { e: '✨', k: 'sparkles shine' },
+        { e: '🚀', k: 'rocket launch' },
+        { e: '🎵', k: 'music walkup song' },
+        { e: '📣', k: 'megaphone announce' },
+        { e: '🍻', k: 'cheers drinks' },
+        { e: '🍕', k: 'pizza food' },
+        { e: '🌮', k: 'taco food' },
+        { e: '🍿', k: 'popcorn watch' },
+        { e: '🐶', k: 'dog rally' }
+      ]
+    }
+  ];
   /** @type {any} */
   var gifPickerTriggerEl = null;
+  /** @type {HTMLElement | null} */
+  var rxPopoverTriggerEl = null;
+  var rxGlobalListenersBound = false;
 
   var el = UI.el;
   var escapeHtml = UI.escapeHtml;
@@ -204,23 +301,298 @@
     });
   }
 
+  function getAllCatalogEmojis() {
+    /** @type {Record<string, { e: string, k: string }>} */
+    var byEmoji = {};
+    for (var c = 0; c < EMOJI_CATALOG.length; c++) {
+      var catList = EMOJI_CATALOG[c].emojis || [];
+      for (var i = 0; i < catList.length; i++) {
+        if (!byEmoji[catList[i].e]) {
+          byEmoji[catList[i].e] = catList[i];
+        }
+      }
+    }
+    /** @type {Array<{ e: string, k: string }>} */
+    var ordered = [];
+    /** @type {Record<string, boolean>} */
+    var seen = {};
+    for (var d = 0; d < DEFAULT_EMOJIS.length; d++) {
+      var defEm = DEFAULT_EMOJIS[d];
+      if (!seen[defEm]) {
+        seen[defEm] = true;
+        ordered.push(byEmoji[defEm] || { e: defEm, k: defEm });
+      }
+    }
+    for (var c2 = 0; c2 < EMOJI_CATALOG.length; c2++) {
+      var list2 = EMOJI_CATALOG[c2].emojis || [];
+      for (var j = 0; j < list2.length; j++) {
+        if (!seen[list2[j].e]) {
+          seen[list2[j].e] = true;
+          ordered.push(list2[j]);
+        }
+      }
+    }
+    return ordered;
+  }
+
+  function getMessageMyReactionsMap(msgId) {
+    /** @type {Record<string, boolean>} */
+    var mine = {};
+    var myUid = Store.state && Store.state.user ? Number(Store.state.user.id) : 0;
+    if (!myUid) return mine;
+    var chId = Number(uiState.activeChannelId);
+    var msgs = (Store.state && Store.state.messagesByChannel && Store.state.messagesByChannel[chId]) || [];
+    for (var i = 0; i < msgs.length; i++) {
+      if (Number(msgs[i].id) === Number(msgId)) {
+        var rxList = Array.isArray(msgs[i].reactions) ? msgs[i].reactions : [];
+        for (var j = 0; j < rxList.length; j++) {
+          if (rxList[j] && rxList[j].emoji && Number(rxList[j].user_id) === myUid) {
+            mine[rxList[j].emoji] = true;
+          }
+        }
+        break;
+      }
+    }
+    return mine;
+  }
+
+  function resetReactionToggleStates() {
+    if (typeof document === 'undefined') return;
+    var openToggles = document.querySelectorAll('.ch-rx-toggle.open, .ch-rx-toggle[aria-expanded="true"]');
+    for (var i = 0; i < openToggles.length; i++) {
+      openToggles[i].classList.remove('open');
+      openToggles[i].setAttribute('aria-expanded', 'false');
+    }
+  }
+
+  function closeReactionDrawer(restoreFocus) {
+    uiState.rxDrawerMsgId = null;
+    var pop = el('ch-rx-popover');
+    if (pop) {
+      pop.classList.remove('open');
+      pop.classList.add('hidden');
+    }
+    resetReactionToggleStates();
+    var prevTrigger = rxPopoverTriggerEl;
+    rxPopoverTriggerEl = null;
+    if (restoreFocus && prevTrigger && typeof document !== 'undefined' && document.body && document.body.contains(prevTrigger)) {
+      try { prevTrigger.focus(); } catch (e) { /* ignore */ }
+    }
+  }
+
+  function renderReactionPopoverContent() {
+    var tabsEl = el('ch-rx-tabs');
+    var gridEl = el('ch-rx-grid');
+    if (!tabsEl || !gridEl) return;
+
+    var activeCat = uiState.rxCategory || 'all';
+    var q = String(uiState.rxSearch || '').trim().toLowerCase();
+
+    var tabsHtml = '<button type="button" class="ch-rx-tab' + (activeCat === 'all' ? ' active' : '') + '" data-rx-cat="all" role="tab" aria-selected="' + (activeCat === 'all' ? 'true' : 'false') + '">All</button>';
+    for (var c = 0; c < EMOJI_CATALOG.length; c++) {
+      var cat = EMOJI_CATALOG[c];
+      var isSel = activeCat === cat.id;
+      tabsHtml += '<button type="button" class="ch-rx-tab' + (isSel ? ' active' : '') + '" data-rx-cat="' + escapeHtml(cat.id) + '" role="tab" aria-selected="' + (isSel ? 'true' : 'false') + '" title="' + escapeHtml(cat.label) + '">' + escapeHtml(cat.icon + ' ' + cat.label) + '</button>';
+    }
+    tabsEl.innerHTML = tabsHtml;
+
+    var sourceItems = [];
+    if (q || activeCat === 'all') {
+      sourceItems = getAllCatalogEmojis();
+    } else {
+      for (var c2 = 0; c2 < EMOJI_CATALOG.length; c2++) {
+        if (EMOJI_CATALOG[c2].id === activeCat) {
+          sourceItems = EMOJI_CATALOG[c2].emojis || [];
+          break;
+        }
+      }
+    }
+
+    var filtered = [];
+    for (var i = 0; i < sourceItems.length; i++) {
+      var item = sourceItems[i];
+      if (!q || item.e.indexOf(q) !== -1 || item.k.toLowerCase().indexOf(q) !== -1) {
+        filtered.push(item);
+      }
+    }
+
+    if (filtered.length === 0) {
+      gridEl.innerHTML = '<div class="ch-rx-empty">No matching emoji</div>';
+      return;
+    }
+
+    var mineMap = getMessageMyReactionsMap(uiState.rxDrawerMsgId);
+    var gridHtml = '';
+    for (var j = 0; j < filtered.length; j++) {
+      var em = filtered[j];
+      var isMine = Boolean(mineMap[em.e]);
+      gridHtml += '<button type="button" class="ch-rx-choice' + (isMine ? ' active' : '') + '" data-rx-pick="' + escapeHtml(em.e) + '" aria-pressed="' + (isMine ? 'true' : 'false') + '" title="' + escapeHtml(em.k) + '" aria-label="React with ' + escapeHtml(em.e) + '">' + escapeHtml(em.e) + '</button>';
+    }
+    gridEl.innerHTML = gridHtml;
+  }
+
+  function positionReactionPopover(pop, triggerBtn) {
+    if (!pop || !triggerBtn || typeof triggerBtn.getBoundingClientRect !== 'function') return;
+    var rect = triggerBtn.getBoundingClientRect();
+    var popW = pop.offsetWidth || 304;
+    var popH = pop.offsetHeight || 280;
+    var vw = typeof window !== 'undefined' && window.innerWidth ? window.innerWidth : 1024;
+    var vh = typeof window !== 'undefined' && window.innerHeight ? window.innerHeight : 768;
+    var isRtl = typeof document !== 'undefined' && document.documentElement && document.documentElement.getAttribute('dir') === 'rtl';
+
+    var left;
+    if (isRtl) {
+      left = rect.left - popW - 6;
+      if (left < 8) {
+        left = rect.right - popW;
+      }
+    } else {
+      left = rect.right + 6;
+      if (left + popW > vw - 8) {
+        left = rect.left;
+      }
+    }
+    left = Math.max(8, Math.min(left, Math.max(8, vw - popW - 8)));
+
+    var top = rect.top - 8;
+    if (top + popH > vh - 8) {
+      top = rect.bottom - popH;
+    }
+    top = Math.max(8, Math.min(top, Math.max(8, vh - popH - 8)));
+
+    pop.style.left = Math.round(left) + 'px';
+    pop.style.top = Math.round(top) + 'px';
+  }
+
+  function ensureReactionPopover() {
+    if (typeof document === 'undefined' || !document.body) return null;
+    var existing = document.getElementById('ch-rx-popover');
+    if (existing) return existing;
+
+    var pop = document.createElement('div');
+    pop.id = 'ch-rx-popover';
+    pop.className = 'ch-rx-popover hidden';
+    pop.setAttribute('role', 'dialog');
+    pop.setAttribute('aria-label', 'Choose a reaction');
+    pop.innerHTML = '' +
+      '<div class="ch-rx-popover-head">' +
+      '<input type="search" id="ch-rx-search" class="ch-rx-search" placeholder="Search emoji..." aria-label="Search emoji" autocomplete="off" />' +
+      '<button type="button" id="ch-rx-close" class="ch-icon-btn ch-rx-close" aria-label="Close emoji drawer">✕</button>' +
+      '</div>' +
+      '<div id="ch-rx-tabs" class="ch-rx-tabs" role="tablist" aria-label="Emoji categories"></div>' +
+      '<div id="ch-rx-grid" class="ch-rx-grid" role="group" aria-label="Emoji reactions"></div>';
+    document.body.appendChild(pop);
+
+    pop.addEventListener('click', function (ev) {
+      var targetEl = /** @type {Element | null} */ (ev.target);
+      var btn = targetEl && typeof targetEl.closest === 'function' ? targetEl.closest('button') : null;
+      if (!btn || !pop.contains(btn)) return;
+
+      if (btn.id === 'ch-rx-close') {
+        closeReactionDrawer(true);
+      } else if (btn.hasAttribute('data-rx-cat')) {
+        uiState.rxCategory = btn.getAttribute('data-rx-cat') || 'all';
+        renderReactionPopoverContent();
+      } else if (btn.hasAttribute('data-rx-pick')) {
+        var emoji = btn.getAttribute('data-rx-pick') || '';
+        var mId = Number(uiState.rxDrawerMsgId);
+        closeReactionDrawer(false);
+        if (mId && emoji) {
+          Store.toggleReaction(mId, emoji).then(function () {
+            renderMessageStream({ preserveScroll: true });
+          }).catch(function (err) {
+            handlePeerActionError(err, 'Failed to toggle reaction.');
+          });
+        }
+      }
+    });
+
+    var searchEl = el('ch-rx-search');
+    if (searchEl) {
+      searchEl.addEventListener('input', function () {
+        uiState.rxSearch = this.value;
+        renderReactionPopoverContent();
+      });
+    }
+
+    if (!rxGlobalListenersBound) {
+      rxGlobalListenersBound = true;
+      document.addEventListener('click', function (ev) {
+        if (!uiState.rxDrawerMsgId) return;
+        var popNode = el('ch-rx-popover');
+        var tNode = /** @type {Node | null} */ (ev.target);
+        var tEl = /** @type {Element | null} */ (ev.target);
+        if (popNode && tNode && popNode.contains(tNode)) return;
+        if (tEl && typeof tEl.closest === 'function' && tEl.closest('[data-rx-toggle]')) return;
+        closeReactionDrawer(false);
+      });
+      document.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Escape' && uiState.rxDrawerMsgId) {
+          closeReactionDrawer(true);
+        }
+      });
+      if (typeof window !== 'undefined') {
+        window.addEventListener('resize', function () {
+          if (uiState.rxDrawerMsgId) {
+            closeReactionDrawer(false);
+          }
+        });
+      }
+    }
+
+    return pop;
+  }
+
+  function openReactionDrawer(msgId, triggerBtn) {
+    if (String(uiState.rxDrawerMsgId || '') === String(msgId)) {
+      closeReactionDrawer(true);
+      return;
+    }
+    resetReactionToggleStates();
+    uiState.rxDrawerMsgId = String(msgId);
+    uiState.rxCategory = 'all';
+    uiState.rxSearch = '';
+    rxPopoverTriggerEl = /** @type {HTMLElement | null} */ (triggerBtn || null);
+
+    if (triggerBtn) {
+      triggerBtn.setAttribute('aria-expanded', 'true');
+      triggerBtn.classList.add('open');
+    }
+
+    var pop = ensureReactionPopover();
+    if (!pop) return;
+    var searchEl = el('ch-rx-search');
+    if (searchEl) searchEl.value = '';
+    renderReactionPopoverContent();
+    pop.classList.remove('hidden');
+    pop.classList.remove('open');
+    positionReactionPopover(pop, triggerBtn);
+    pop.getBoundingClientRect();
+    pop.classList.add('open');
+    if (searchEl && typeof searchEl.focus === 'function') {
+      try { searchEl.focus({ preventScroll: true }); } catch (e) { /* ignore */ }
+    }
+  }
+
   function bindMessageStreamDelegation(streamEl) {
     if (!streamEl || streamEl._delegatedClickBound) return;
     streamEl._delegatedClickBound = true;
+    streamEl.addEventListener('scroll', function () {
+      if (uiState.rxDrawerMsgId) {
+        closeReactionDrawer(false);
+      }
+    });
     streamEl.addEventListener('click', function (e) {
       var target = e.target && typeof (/** @type {Element} */ (e.target)).closest === 'function' ? /** @type {Element} */ (e.target).closest('button') : null;
       if (!target || !streamEl.contains(target)) return;
 
       if (target.hasAttribute('data-rx-toggle')) {
-        var tId = target.getAttribute('data-rx-toggle');
-        uiState.rxDrawerMsgId = String(uiState.rxDrawerMsgId) === String(tId) ? null : tId;
-        renderMessageStream(null);
+        openReactionDrawer(target.getAttribute('data-rx-toggle'), /** @type {HTMLElement} */ (target));
       } else if (target.hasAttribute('data-rx-msg')) {
         var mId = Number(target.getAttribute('data-rx-msg'));
         var emoji = target.getAttribute('data-rx-emoji') || '';
-        if (target.classList.contains('ch-rx-choice')) uiState.rxDrawerMsgId = null;
         Store.toggleReaction(mId, emoji).then(function () {
-          renderMessageStream(null);
+          renderMessageStream({ preserveScroll: true });
         }).catch(function (err) {
           handlePeerActionError(err, 'Failed to toggle reaction.');
         });
@@ -496,21 +868,19 @@
     if (!isHiddenByMod) {
       for (var r = 0; r < reactions.length; r++) {
         var rx = reactions[r];
+        var rxCount = Number(rx.count || 1);
         var tooltip = rx.users && rx.users.length ? rx.users.join(', ') : rx.emoji;
-        html += '<button type="button" class="ch-reaction-pill' + (rx.mine ? ' active' : '') + '" title="' + escapeHtml(tooltip) + '" aria-pressed="' + (rx.mine ? 'true' : 'false') + '" aria-label="React ' + escapeHtml(rx.emoji) + ' (' + Number(rx.count || 1) + ')" data-rx-msg="' + msg.id + '" data-rx-emoji="' + escapeHtml(rx.emoji) + '">';
-        html += '<span>' + escapeHtml(rx.emoji) + '</span><span class="ch-rx-count">' + Number(rx.count || 1) + '</span>';
+        var rxAriaLabel = 'React ' + rx.emoji + (rxCount >= 2 ? (' (' + rxCount + ')') : '');
+        html += '<button type="button" class="ch-reaction-pill' + (rx.mine ? ' active' : '') + '" title="' + escapeHtml(tooltip) + '" aria-pressed="' + (rx.mine ? 'true' : 'false') + '" aria-label="' + escapeHtml(rxAriaLabel) + '" data-rx-msg="' + msg.id + '" data-rx-emoji="' + escapeHtml(rx.emoji) + '">';
+        html += '<span class="ch-rx-emoji">' + escapeHtml(rx.emoji) + '</span>';
+        if (rxCount >= 2) {
+          html += '<span class="ch-rx-count">' + rxCount + '</span>';
+        }
         html += '</button>';
       }
       if (currentUser) {
-        var drawerOpen = String(uiState.rxDrawerMsgId) === String(msg.id);
-        html += '<span class="ch-rx-drawer' + (drawerOpen ? ' open' : '') + '">';
-        html += '<button type="button" class="ch-rx-toggle" data-rx-toggle="' + msg.id + '" aria-expanded="' + (drawerOpen ? 'true' : 'false') + '" aria-label="Add reaction" title="Add reaction">😊＋</button>';
-        html += '<span class="ch-rx-tray" role="group" aria-label="Choose a reaction">';
-        for (var d = 0; d < DEFAULT_EMOJIS.length; d++) {
-          var em = DEFAULT_EMOJIS[d];
-          html += '<button type="button" class="ch-reaction-pill ch-rx-choice" title="React ' + em + '" aria-label="React with ' + em + '" data-rx-msg="' + msg.id + '" data-rx-emoji="' + em + '">' + em + '</button>';
-        }
-        html += '</span></span>';
+        var drawerOpen = String(uiState.rxDrawerMsgId || '') === String(msg.id);
+        html += '<button type="button" class="ch-rx-toggle' + (drawerOpen ? ' open' : '') + '" data-rx-toggle="' + msg.id + '" aria-expanded="' + (drawerOpen ? 'true' : 'false') + '" aria-haspopup="dialog" aria-controls="ch-rx-popover" aria-label="Add reaction" title="Add reaction">😊+</button>';
       }
     }
     if (currentUser || msg.reply_count) {
@@ -606,6 +976,12 @@
       return;
     }
 
+    var preserveScroll = Boolean(options && options.preserveScroll);
+    var prevScrollTop = streamEl.scrollTop;
+    if (uiState.rxDrawerMsgId) {
+      closeReactionDrawer(false);
+    }
+
     var html = '';
     for (var j = 0; j < filtered.length; j++) {
       html += buildMessageCardHtml(filtered[j], currentUser, isMod);
@@ -615,7 +991,7 @@
     streamEl._renderedQuery = query;
     streamEl._renderedCount = filtered.length;
     streamEl.innerHTML = html;
-    streamEl.scrollTop = streamEl.scrollHeight;
+    streamEl.scrollTop = preserveScroll ? prevScrollTop : streamEl.scrollHeight;
     hydrateEncryptedAttachments(streamEl, filtered, chId);
   }
 
@@ -1153,9 +1529,12 @@
   }
 
   Object.assign(UI, {
+    EMOJI_CATALOG: EMOJI_CATALOG,
     renderMessageTextWithGifs: renderMessageTextWithGifs,
     renderAuthorBadges: renderAuthorBadges,
     groupReactions: groupReactions,
+    openReactionDrawer: openReactionDrawer,
+    closeReactionDrawer: closeReactionDrawer,
     renderAttachmentItem: renderAttachmentItem,
     hydrateEncryptedAttachments: hydrateEncryptedAttachments,
     promoteAttachmentToGallery: promoteAttachmentToGallery,

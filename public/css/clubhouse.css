@@ -878,15 +878,6 @@ html, body.clubhouse-body {
   font-weight: 600;
 }
 
-/* Slide-out emoji drawer: sits right of submitted emoji, left of "Reply in Thread" */
-.ch-rx-drawer {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-  max-width: 100%;
-}
-
 .ch-rx-toggle {
   background-color: var(--ch-bg-sidebar);
   border: 1px dashed var(--ch-border);
@@ -896,44 +887,156 @@ html, body.clubhouse-body {
   min-height: 26px;
   font-size: 12px;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
 }
 
 .ch-rx-toggle:hover,
-.ch-rx-drawer.open .ch-rx-toggle {
+.ch-rx-toggle.open {
+  border-color: var(--ch-accent);
+  background-color: var(--ch-bg-active);
+  color: var(--ch-text-primary);
+}
+
+/* Shared Floating Slide-Out Emoji Drawer */
+.ch-rx-popover {
+  position: fixed;
+  z-index: 95;
+  width: min(304px, calc(100vw - 16px));
+  background-color: var(--ch-bg-elevated);
+  border: 1px solid var(--ch-border);
+  border-radius: 12px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+  padding: 8px;
+  opacity: 0;
+  transform: translateX(-10px) scale(0.97);
+  pointer-events: none;
+  transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.16s ease;
+}
+
+.ch-rx-popover.open {
+  opacity: 1;
+  transform: translateX(0) scale(1);
+  pointer-events: auto;
+}
+
+.ch-rx-popover.hidden {
+  display: none;
+}
+
+[dir="rtl"] .ch-rx-popover {
+  transform: translateX(10px) scale(0.97);
+}
+
+[dir="rtl"] .ch-rx-popover.open {
+  transform: translateX(0) scale(1);
+}
+
+.ch-rx-popover-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.ch-rx-search {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  padding: 5px 8px;
+  border-radius: 7px;
+  border: 1px solid var(--ch-border);
+  background-color: var(--ch-bg-sidebar);
+  color: var(--ch-text-primary);
+}
+
+.ch-rx-search:focus {
+  outline: none;
+  border-color: var(--ch-accent);
+}
+
+.ch-rx-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--ch-border);
+  scrollbar-width: none;
+}
+
+.ch-rx-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.ch-rx-tab {
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--ch-text-secondary);
+  cursor: pointer;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.ch-rx-tab:hover,
+.ch-rx-tab.active {
+  background-color: var(--ch-bg-active);
   border-color: var(--ch-accent);
   color: var(--ch-text-primary);
 }
 
-.ch-rx-tray {
-  display: inline-flex;
-  flex-wrap: nowrap;
-  align-items: center;
+.ch-rx-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(34px, 1fr));
   gap: 4px;
-  max-width: 0;
-  opacity: 0;
-  visibility: hidden;
-  overflow: hidden;
-  transition: max-width 0.25s ease, opacity 0.2s ease, visibility 0s linear 0.25s;
-}
-
-.ch-rx-drawer.open .ch-rx-tray {
-  max-width: min(60vw, 320px);
-  opacity: 1;
-  visibility: visible;
-  overflow-x: auto;
+  max-height: 204px;
+  overflow-y: auto;
   scrollbar-width: thin;
   padding: 2px;
-  transition: max-width 0.25s ease, opacity 0.2s ease, visibility 0s;
 }
 
 .ch-rx-choice {
-  flex: 0 0 auto;
-  font-size: 15px;
+  width: 100%;
+  height: 34px;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  background: transparent;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.1s ease, transform 0.1s ease;
+}
+
+.ch-rx-choice:hover {
+  background-color: var(--ch-bg-hover);
+  transform: scale(1.08);
+}
+
+.ch-rx-choice.active {
+  background-color: var(--ch-bg-active);
+  border-color: var(--ch-accent);
+}
+
+.ch-rx-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  font-size: 12px;
+  color: var(--ch-text-muted);
+  padding: 14px 6px;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ch-rx-tray,
-  .ch-rx-drawer.open .ch-rx-tray {
+  .ch-rx-popover,
+  .ch-rx-popover.open,
+  .ch-rx-choice {
     transition: none;
   }
 }

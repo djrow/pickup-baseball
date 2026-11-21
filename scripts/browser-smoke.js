@@ -1085,6 +1085,73 @@ async function runTwoContextClubhouseE2eeAndWebRtcSmoke(browser, server, tracker
     await ctxA.waitFor(`document.getElementById("ch-message-stream").textContent.includes(${JSON.stringify(bobReply)})`, 10000);
     record('Two-context E2EE DM send, ciphertext-at-rest verification, and bidirectional decrypt pass');
 
+    // Step 5c-rx: Scalable emoji drawer, pre-reaction trigger visibility, and count >= 2 display
+    const aliceMsgId = await ctxA.evaluate(`(() => {
+      const cards = Array.from(document.querySelectorAll('#ch-message-stream article.ch-msg-card[data-msg-id]'));
+      const card = cards.find((c) => c.textContent && c.textContent.includes(${JSON.stringify(alicePlaintext)}));
+      return card ? card.getAttribute('data-msg-id') : null;
+    })()`);
+    assert(Boolean(aliceMsgId), 'Found Alice DM message card for emoji reaction checks');
+
+    const msgCardSel = `article[data-msg-id="${aliceMsgId}"]`;
+    const preReactionState = await ctxA.evaluate(`(() => {
+      const row = document.querySelector(${JSON.stringify(msgCardSel + ' .ch-msg-Reactions-row')});
+      if (!row) return null;
+      const toggle = row.querySelector('.ch-rx-toggle');
+      const threadBtn = row.querySelector('.ch-thread-btn');
+      return {
+        pillCount: row.querySelectorAll('.ch-reaction-pill').length,
+        hasToggle: Boolean(toggle),
+        hasThreadBtn: Boolean(threadBtn),
+        toggleBeforeThread: Boolean(toggle && threadBtn && toggle.nextElementSibling === threadBtn)
+      };
+    })()`);
+    assert(preReactionState && preReactionState.pillCount === 0, 'Message starts with zero submitted reaction pills');
+    assert(preReactionState.hasToggle && preReactionState.toggleBeforeThread, 'Add-emoji button renders immediately before Reply in Thread even before any emoji is clicked');
+
+    await clickEl(ctxA, `${msgCardSel} .ch-rx-toggle`);
+    await ctxA.waitFor('document.getElementById("ch-rx-popover") && document.getElementById("ch-rx-popover").classList.contains("open")');
+    const drawerInitialStats = await ctxA.evaluate(`({
+      tabs: document.querySelectorAll('#ch-rx-popover .ch-rx-tab').length,
+      choices: document.querySelectorAll('#ch-rx-popover .ch-rx-choice').length
+    })`);
+    assert(drawerInitialStats.tabs >= 5, `Scalable emoji drawer renders category tabs (got ${drawerInitialStats.tabs})`);
+    assert(drawerInitialStats.choices >= 40, `Scalable emoji drawer renders >= 40 emoji choices (got ${drawerInitialStats.choices})`);
+
+    await fillInput(ctxA, '#ch-rx-search', 'baseball');
+    const filteredDrawerStats = await ctxA.evaluate(`({
+      choices: document.querySelectorAll('#ch-rx-popover .ch-rx-choice').length,
+      hasBaseball: Boolean(document.querySelector('#ch-rx-popover [data-rx-pick="⚾"]'))
+    })`);
+    assert(filteredDrawerStats.choices >= 1 && filteredDrawerStats.choices <= 5 && filteredDrawerStats.hasBaseball, 'Emoji drawer live search filters cleanly to matching subset including ⚾');
+
+    await clickEl(ctxA, '#ch-rx-popover [data-rx-pick="⚾"]');
+    await ctxA.waitFor(`document.getElementById("ch-rx-popover").classList.contains("hidden") && Boolean(document.querySelector(${JSON.stringify(msgCardSel + ' .ch-reaction-pill[data-rx-emoji="⚾"]')}))`);
+    const singleRxRowState = await ctxA.evaluate(`(() => {
+      const row = document.querySelector(${JSON.stringify(msgCardSel + ' .ch-msg-Reactions-row')});
+      const pill = row ? row.querySelector('.ch-reaction-pill[data-rx-emoji="⚾"]') : null;
+      const toggle = row ? row.querySelector('.ch-rx-toggle') : null;
+      const threadBtn = row ? row.querySelector('.ch-thread-btn') : null;
+      return {
+        hasCountBadge: Boolean(pill && pill.querySelector('.ch-rx-count')),
+        pillBeforeToggle: Boolean(pill && toggle && pill.nextElementSibling === toggle),
+        toggleBeforeThread: Boolean(toggle && threadBtn && toggle.nextElementSibling === threadBtn)
+      };
+    })()`);
+    assert(!singleRxRowState.hasCountBadge, 'Single reaction (count === 1) hides count label');
+    assert(singleRxRowState.pillBeforeToggle && singleRxRowState.toggleBeforeThread, 'Emoji toggle sits right of submitted emoji pill and left of Reply in Thread');
+
+    await ctxB.evaluate('window.ClubhouseStore.pollDeltaSync()');
+    await ctxB.waitFor(`Boolean(document.querySelector(${JSON.stringify(msgCardSel + ' .ch-reaction-pill[data-rx-emoji="⚾"]')}))`, 10000);
+    const ctxBPreCountBadge = await ctxB.evaluate(`Boolean(document.querySelector(${JSON.stringify(msgCardSel + ' .ch-reaction-pill[data-rx-emoji="⚾"] .ch-rx-count')}))`);
+    assert(!ctxBPreCountBadge, 'Peer context also hides count label when reaction count is 1');
+
+    await clickEl(ctxB, `${msgCardSel} .ch-reaction-pill[data-rx-emoji="⚾"]`);
+    await ctxB.waitFor(`Boolean(document.querySelector(${JSON.stringify(msgCardSel + ' .ch-reaction-pill[data-rx-emoji="⚾"] .ch-rx-count')}))`, 10000);
+    const duplicateRxCountText = await ctxB.evaluate(`document.querySelector(${JSON.stringify(msgCardSel + ' .ch-reaction-pill[data-rx-emoji="⚾"] .ch-rx-count')}).textContent.trim()`);
+    assert(duplicateRxCountText === '2', `Duplicate reaction shows counter "2" (got "${duplicateRxCountText}")`);
+    record('Clubhouse emoji reaction drawer renders before click, scales with search/tabs, and hides count until >= 2');
+
     // Step 5d: Mocked WebRTC Voice Lounge & Signaling UI Transitions
     await clickEl(ctxA, '#ch-channel-list .ch-channel-item[data-channel-type="voice"]');
     await ctxA.waitFor(`!document.getElementById("ch-media-stage").classList.contains("hidden") && document.getElementById("rtc-tile-${server.adminUser.id}")`);
