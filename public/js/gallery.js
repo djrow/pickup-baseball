@@ -18,10 +18,7 @@
   var currentLightboxIndex = -1;
   var currentPhotoItems = [];
   var currentUser = null;
-  var selectedFile = null;
-  var selectedFileBase64 = null;
-  var selectedFileMime = null;
-  var selectedFileName = null;
+  var selectedFiles = /** @type {Array<{ file: File, name: string, mime: string, previewUrl: string }>} */ ([]);
 
   function stripJpegMetadataClient(buffer) {
     if (window.ClubhouseCrypto && typeof window.ClubhouseCrypto.stripJpegMetadata === 'function') {
@@ -1090,12 +1087,12 @@
         e.preventDefault();
         dropzone.classList.remove('dropzone-dragover');
         if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-          handleFileChosen(e.dataTransfer.files[0]);
+          handleFilesChosen(e.dataTransfer.files);
         }
       });
       fileInput.addEventListener('change', function() {
         if (fileInput.files && fileInput.files.length > 0) {
-          handleFileChosen(fileInput.files[0]);
+          handleFilesChosen(fileInput.files);
         }
       });
     }
@@ -1143,62 +1140,100 @@
     return false;
   }
 
-  // Preserve full original quality: NO canvas resizing or lossy re-encoding!
-  function readFileWithoutCompression(file, callback) {
-    var reader = new FileReader();
-    reader.onload = function(e) {
-      var mime = file.type;
-      if (!mime) {
-        var name = (file.name || '').toLowerCase();
-        if (name.endsWith('.png')) mime = 'image/png';
-        else if (name.endsWith('.webp')) mime = 'image/webp';
-        else if (name.endsWith('.gif')) mime = 'image/gif';
-        else if (name.endsWith('.avif')) mime = 'image/avif';
-        else if (name.endsWith('.mp4')) mime = 'video/mp4';
-        else if (name.endsWith('.webm')) mime = 'video/webm';
-        else mime = 'image/jpeg';
-      }
-      callback(e.target.result, mime);
-    };
-    reader.onerror = function() {
-      if (window.PBFDialog) window.PBFDialog.toast('Could not read the selected file from your device.', { type: 'error' });
-    };
-    reader.readAsDataURL(file);
+  function inferMediaMime(file) {
+    var mime = (file && file.type) ? String(file.type).toLowerCase() : '';
+    if (mime) return mime;
+    var name = (file && file.name ? String(file.name) : '').toLowerCase();
+    if (name.endsWith('.png')) return 'image/png';
+    if (name.endsWith('.webp')) return 'image/webp';
+    if (name.endsWith('.gif')) return 'image/gif';
+    if (name.endsWith('.avif')) return 'image/avif';
+    if (name.endsWith('.mp4')) return 'video/mp4';
+    if (name.endsWith('.webm')) return 'video/webm';
+    return 'image/jpeg';
   }
 
-  function handleFileChosen(file) {
+  function updateSelectedFilesLabel() {
     var fileNameLabel = document.getElementById('dropzone-file-name');
-    if (!file) return;
-
-    if (!isAllowedMediaType(file)) {
-      if (window.PBFDialog) {
-        window.PBFDialog.alert('Unsupported file format (' + (file.type || file.name) + ').\n\nPlease select web-compatible media:\n• Photos: JPG/JPEG, PNG, WebP, GIF, or AVIF (HEIC/TIFF files must be converted to JPG or PNG before submitting)\n• Videos: MP4 or WebM (MOV/AVI/MKV files are disallowed as they do not stream natively across web browsers).');
-      }
+    if (!fileNameLabel) return;
+    if (selectedFiles.length === 0) {
+      fileNameLabel.textContent = '';
       return;
     }
+    var totalBytes = 0;
+    for (var i = 0; i < selectedFiles.length; i++) {
+      totalBytes += Number(selectedFiles[i].file.size || 0);
+    }
+    var sizeText = totalBytes > 1024 * 1024
+      ? (totalBytes / (1024 * 1024)).toFixed(2) + ' MB'
+      : Math.max(1, Math.round(totalBytes / 1024)) + ' KB';
+    if (selectedFiles.length === 1) {
+      fileNameLabel.textContent = '✓ Selected 1 file: ' + selectedFiles[0].name + ' (' + sizeText + ') · Full uncompressed quality';
+    } else {
+      fileNameLabel.textContent = '✓ Selected ' + selectedFiles.length + ' files (' + sizeText + ' total) · Full uncompressed quality';
+    }
+  }
 
+  function clearSelectedFiles() {
+    for (var i = 0; i < selectedFiles.length; i++) {
+      if (selectedFiles[i].previewUrl && typeof URL !== 'undefined' && typeof URL.revokeObjectURL === 'function') {
+        try { URL.revokeObjectURL(selectedFiles[i].previewUrl); } catch (e) { /* ignore */ }
+      }
+    }
+    selectedFiles = [];
+    var fileInput = /** @type {HTMLInputElement|null} */ (document.getElementById('media-file-input'));
+    if (fileInput) fileInput.value = '';
+    updateSelectedFilesLabel();
+  }
+
+  function handleFilesChosen(fileList) {
+    if (!fileList || fileList.length === 0) return;
     var maxBytes = 50 * 1024 * 1024; // 50MB max file size
-    if (file.size > maxBytes) {
-      if (window.PBFDialog) {
-        window.PBFDialog.alert('Selected file is too large (' + (file.size / 1024 / 1024).toFixed(1) + 'MB). Please choose a photo or video under 50MB.');
+    var maxBatch = 50;
+    var skipped = [];
+
+    for (var i = 0; i < fileList.length; i++) {
+      var f = fileList[i];
+      if (!f) continue;
+      if (selectedFiles.length >= maxBatch) {
+        skipped.push(f.name + ' (batch limit of ' + maxBatch + ' files reached)');
+        continue;
       }
-      return;
+      if (!isAllowedMediaType(f)) {
+        skipped.push(f.name + ' (unsupported format)');
+        continue;
+      }
+      if (f.size > maxBytes) {
+        skipped.push(f.name + ' (' + (f.size / 1024 / 1024).toFixed(1) + ' MB exceeds 50MB limit)');
+        continue;
+      }
+      var dup = false;
+      for (var d = 0; d < selectedFiles.length; d++) {
+        var cur = selectedFiles[d].file;
+        if (cur.name === f.name && cur.size === f.size && cur.lastModified === f.lastModified) {
+          dup = true;
+          break;
+        }
+      }
+      if (dup) continue;
+
+      var previewUrl = (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function')
+        ? URL.createObjectURL(f)
+        : '';
+      selectedFiles.push({
+        file: f,
+        name: f.name,
+        mime: inferMediaMime(f),
+        previewUrl: previewUrl
+      });
     }
 
-    if (fileNameLabel) {
-      var sizeMb = (file.size / (1024 * 1024)).toFixed(2);
-      var sizeText = file.size > 1024 * 1024 ? sizeMb + ' MB' : (file.size / 1024).toFixed(0) + ' KB';
-      fileNameLabel.textContent = '✓ Selected: ' + file.name + ' (' + sizeText + ') · Full uncompressed quality';
+    if (skipped.length > 0 && window.PBFDialog) {
+      window.PBFDialog.alert('Skipped ' + skipped.length + ' file(s):\n• ' + skipped.join('\n• '));
     }
 
-    selectedFileName = file.name;
-    selectedFile = file;
-
-    readFileWithoutCompression(file, function(b64, mime) {
-      selectedFileBase64 = b64;
-      selectedFileMime = mime;
-      updateLivePreview();
-    });
+    updateSelectedFilesLabel();
+    updateLivePreview();
   }
 
   function updateLivePreview() {
@@ -1269,18 +1304,47 @@
         `;
       }
     } else {
-      if (selectedFileBase64 && (selectedFileBase64.startsWith('data:image/') || selectedFileBase64.startsWith('data:video/'))) {
+      if (selectedFiles.length > 0) {
         previewBox.style.display = 'block';
-        var isVideo = selectedFileMime && selectedFileMime.startsWith('video/');
-        var safePreviewSrc = API.escapeHtml(selectedFileBase64);
-        if (isVideo) {
-          previewTarget.innerHTML = `
-            <video src="${safePreviewSrc}" controls style="max-width: 100%; max-height: 250px; border-radius: var(--radius-sm);"></video>
-          `;
-        } else {
-          previewTarget.innerHTML = `
-            <img src="${safePreviewSrc}" alt="Upload Preview" style="max-width: 100%; max-height: 250px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
-          `;
+        var cardsHtml = '<div style="display:flex;flex-wrap:wrap;gap:10px;">';
+        for (var i = 0; i < selectedFiles.length; i++) {
+          var item = selectedFiles[i];
+          var isVideo = item.mime && item.mime.indexOf('video/') === 0;
+          var safeSrc = item.previewUrl ? API.escapeHtml(item.previewUrl) : '';
+          var mediaHtml;
+          if (safeSrc) {
+            mediaHtml = isVideo
+              ? '<video src="' + safeSrc + '" controls style="width:100%;height:96px;object-fit:cover;border-radius:4px;display:block;"></video>'
+              : '<img src="' + safeSrc + '" alt="' + API.escapeHtml(item.name) + '" style="width:100%;height:96px;object-fit:cover;border-radius:4px;display:block;">';
+          } else {
+            mediaHtml = '<div style="height:96px;display:flex;align-items:center;justify-content:center;font-size:1.6rem;">' + (isVideo ? '🎬' : '🖼️') + '</div>';
+          }
+          cardsHtml += '<div style="width:124px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px;background:var(--bg-subtle);display:flex;flex-direction:column;gap:4px;">' +
+            mediaHtml +
+            '<div style="display:flex;align-items:center;justify-content:space-between;gap:4px;">' +
+              '<span style="font-size:0.74rem;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + API.escapeHtml(item.name) + '">' + API.escapeHtml(item.name) + '</span>' +
+              '<button type="button" class="btn btn-outline btn-xs btn-remove-selected-file" data-remove-idx="' + i + '" aria-label="Remove ' + API.escapeHtml(item.name) + '" style="padding:1px 6px;line-height:1.2;">✕</button>' +
+            '</div>' +
+          '</div>';
+        }
+        cardsHtml += '</div>';
+        previewTarget.innerHTML = cardsHtml;
+
+        if (!/** @type {any} */ (previewTarget)._removeDelegationBound) {
+          /** @type {any} */ (previewTarget)._removeDelegationBound = true;
+          previewTarget.addEventListener('click', function(ev) {
+            var btn = ev.target && /** @type {Element} */ (ev.target).closest ? /** @type {Element} */ (ev.target).closest('.btn-remove-selected-file') : null;
+            if (!btn) return;
+            var idx = Number(btn.getAttribute('data-remove-idx'));
+            if (!isNaN(idx) && idx >= 0 && idx < selectedFiles.length) {
+              var removed = selectedFiles.splice(idx, 1)[0];
+              if (removed && removed.previewUrl && typeof URL !== 'undefined' && typeof URL.revokeObjectURL === 'function') {
+                try { URL.revokeObjectURL(removed.previewUrl); } catch (e) { /* ignore */ }
+              }
+              updateSelectedFilesLabel();
+              updateLivePreview();
+            }
+          });
         }
       } else {
         previewBox.style.display = 'none';
@@ -1289,13 +1353,104 @@
     }
   }
 
+  async function uploadSingleFile(entry, payload, submitBtn, index, total) {
+    if (submitBtn) {
+      submitBtn.textContent = total > 1
+        ? ('Uploading ' + (index + 1) + ' of ' + total + '…')
+        : 'Uploading Media…';
+    }
+    var rawBuf = await entry.file.arrayBuffer();
+    var uploadBuf = rawBuf;
+    var mimeToUpload = entry.mime || entry.file.type || 'image/jpeg';
+
+    if (mimeToUpload === 'image/jpeg' || mimeToUpload === 'image/jpg') {
+      uploadBuf = stripJpegMetadataClient(rawBuf);
+    }
+
+    var initPayload = {
+      file_name: entry.name || entry.file.name,
+      mime_type: mimeToUpload,
+      file_size: uploadBuf.byteLength,
+      date_taken: payload.date_taken,
+      album: payload.album,
+      title: payload.title,
+      caption: payload.caption,
+      contributor_name: payload.contributor_name
+    };
+    if (payload.publish_immediately === false) {
+      initPayload.publish_immediately = false;
+    }
+
+    var initRes = await API.request('POST', '/api/media/init', initPayload, {
+      throwOnError: true,
+      errorMsg: 'Failed to initialize media upload.'
+    });
+
+    var mediaId = initRes.mediaId || initRes.media_id;
+    var uploadToken = initRes.uploadToken || initRes.upload_token;
+    var uploadUrl = initRes.uploadUrl || initRes.upload_url;
+    var storageProvider = initRes.storageProvider || initRes.storage_provider || 'local';
+
+    var isGdriveUploadUrl = false;
+    if (storageProvider === 'gdrive' && uploadUrl) {
+      try {
+        var uHost = new URL(uploadUrl).hostname.toLowerCase();
+        isGdriveUploadUrl = (uHost === 'googleapis.com' || uHost.endsWith('.googleapis.com'));
+      } catch (e) { isGdriveUploadUrl = false; }
+    }
+
+    if (isGdriveUploadUrl) {
+      if (submitBtn && total === 1) submitBtn.textContent = 'Uploading to Drive…';
+      var gdriveMeta = await uploadChunksToGDrive(uploadUrl, uploadBuf, mimeToUpload);
+      var resolvedDriveId = (gdriveMeta && gdriveMeta.id) ? gdriveMeta.id : initRes.driveFileId;
+      return await API.request('POST', '/api/media/' + encodeURIComponent(mediaId) + '/complete', {
+        upload_token: uploadToken,
+        drive_file_id: resolvedDriveId
+      }, { throwOnError: true, errorMsg: 'Failed to complete Google Drive upload.' });
+    }
+
+    if (storageProvider === 'r2' && uploadUrl) {
+      if (submitBtn && total === 1) submitBtn.textContent = 'Uploading to R2…';
+      var r2PutRes = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': mimeToUpload,
+          'Content-Length': String(uploadBuf.byteLength)
+        },
+        body: uploadBuf
+      });
+      if (!r2PutRes.ok) {
+        throw new Error('Direct R2 upload failed with HTTP ' + r2PutRes.status);
+      }
+      return await API.request('POST', '/api/media/' + encodeURIComponent(mediaId) + '/complete', {
+        upload_token: uploadToken
+      }, { throwOnError: true, errorMsg: 'Failed to complete R2 upload.' });
+    }
+
+    if (submitBtn && total === 1) submitBtn.textContent = 'Uploading media…';
+    var localPutRes = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': mimeToUpload,
+        'X-Upload-Token': uploadToken
+      },
+      body: uploadBuf
+    });
+    if (!localPutRes.ok) {
+      var errData = await localPutRes.json().catch(function() { return {}; });
+      throw new Error(errData.error || ('Local direct upload failed with HTTP ' + localPutRes.status));
+    }
+    return await API.request('POST', '/api/media/' + encodeURIComponent(mediaId) + '/complete', {
+      upload_token: uploadToken
+    }, { throwOnError: true, errorMsg: 'Failed to complete local upload.' });
+  }
+
   async function handleFormSubmit(e) {
     e.preventDefault();
     var alertBox = document.getElementById('media-submit-alert');
     var submitBtn = /** @type {HTMLButtonElement|null} */ (document.getElementById('media-submit-btn'));
     var tabModeLink = document.getElementById('tab-mode-link');
     var isLinkMode = tabModeLink && tabModeLink.classList.contains('active');
-    var fileInput = /** @type {HTMLInputElement|null} */ (document.getElementById('media-file-input'));
     var urlInput = /** @type {HTMLInputElement|null} */ (document.getElementById('media-url-input'));
     var dateInput = /** @type {HTMLInputElement|null} */ (document.getElementById('media-date-input'));
     var albumSelect = /** @type {HTMLSelectElement|null} */ (document.getElementById('media-album-select'));
@@ -1342,14 +1497,9 @@
         return;
       }
       payload.url = url;
-    } else {
-      if (!selectedFileBase64) {
-        if (alertBox) alertBox.innerHTML = '<div class="alert alert-error">Please select a photo or video file from your camera roll or desktop.</div>';
-        return;
-      }
-      payload.file_data = selectedFileBase64;
-      payload.mime_type = selectedFileMime;
-      if (selectedFileName) payload.file_name = selectedFileName;
+    } else if (selectedFiles.length === 0) {
+      if (alertBox) alertBox.innerHTML = '<div class="alert alert-error">Please select at least one photo or video file from your camera roll or desktop.</div>';
+      return;
     }
 
     try {
@@ -1358,163 +1508,129 @@
         submitBtn.textContent = isLinkMode ? 'Copying & Saving Media…' : 'Uploading Media…';
       }
 
-      var res;
-
-      if (!isLinkMode && selectedFile) {
-        // Direct upload path: init -> upload (with client JPEG EXIF strip) -> complete
-        var rawBuf = await selectedFile.arrayBuffer();
-        var uploadBuf = rawBuf;
-        var mimeToUpload = selectedFileMime || selectedFile.type || 'image/jpeg';
-
-        if (mimeToUpload === 'image/jpeg' || mimeToUpload === 'image/jpg') {
-          uploadBuf = stripJpegMetadataClient(rawBuf);
-        }
-
-        var initPayload = {
-          file_name: selectedFileName || selectedFile.name,
-          mime_type: mimeToUpload,
-          file_size: uploadBuf.byteLength,
-          date_taken: payload.date_taken,
-          album: payload.album,
-          title: payload.title,
-          caption: payload.caption,
-          contributor_name: payload.contributor_name
-        };
-        if (payload.publish_immediately === false) {
-          initPayload.publish_immediately = false;
-        }
-
-        var initRes = await API.request('POST', '/api/media/init', initPayload, {
-          throwOnError: true,
-          errorMsg: 'Failed to initialize media upload.'
-        });
-
-        var mediaId = initRes.mediaId || initRes.media_id;
-        var uploadToken = initRes.uploadToken || initRes.upload_token;
-        var uploadUrl = initRes.uploadUrl || initRes.upload_url;
-        var storageProvider = initRes.storageProvider || initRes.storage_provider || 'local';
-
-        var isGdriveUploadUrl = false;
-        if (storageProvider === 'gdrive' && uploadUrl) {
-          try {
-            var uHost = new URL(uploadUrl).hostname.toLowerCase();
-            isGdriveUploadUrl = (uHost === 'googleapis.com' || uHost.endsWith('.googleapis.com'));
-          } catch (e) { isGdriveUploadUrl = false; }
-        }
-
-        if (isGdriveUploadUrl) {
-          if (submitBtn) submitBtn.textContent = 'Uploading to Drive…';
-          var gdriveMeta = await uploadChunksToGDrive(uploadUrl, uploadBuf, mimeToUpload);
-          var resolvedDriveId = (gdriveMeta && gdriveMeta.id) ? gdriveMeta.id : initRes.driveFileId;
-          res = await API.request('POST', '/api/media/' + encodeURIComponent(mediaId) + '/complete', {
-            upload_token: uploadToken,
-            drive_file_id: resolvedDriveId
-          }, { throwOnError: true, errorMsg: 'Failed to complete Google Drive upload.' });
-        } else if (storageProvider === 'r2' && uploadUrl) {
-          if (submitBtn) submitBtn.textContent = 'Uploading to R2…';
-          var r2PutRes = await fetch(uploadUrl, {
-            method: 'PUT',
-            headers: {
-              'Content-Type': mimeToUpload,
-              'Content-Length': String(uploadBuf.byteLength)
-            },
-            body: uploadBuf
+      if (isLinkMode) {
+        var res = await API.submitMedia(payload);
+        if (res && res.item) {
+          saveMySubmission({
+            id: res.item.id,
+            title: res.item.title || payload.title || 'Submission #' + res.item.id,
+            token: res.delete_token,
+            date_taken: res.item.date_taken || payload.date_taken,
+            media_type: res.item.media_type || 'youtube',
+            file_url: res.item.file_url,
+            is_approved: res.is_approved
           });
-          if (!r2PutRes.ok) {
-            throw new Error('Direct R2 upload failed with HTTP ' + r2PutRes.status);
+        }
+        if (alertBox) {
+          var alertClass = res.requires_approval ? 'alert-info' : 'alert-success';
+          var takedownHtml = (res && res.item) ? (
+            '<div style="margin-top: 8px;">' +
+              '<button type="button" class="btn btn-outline btn-xs btn-immediate-takedown" data-id="' + res.item.id + '" data-type="' + (res.item.media_type || 'photo') + '" style="color: var(--danger); border-color: #fca5a5; font-size: 0.78rem; padding: 4px 10px;">' +
+                '🗑️ Take down this submission' +
+              '</button>' +
+            '</div>'
+          ) : '';
+          var defaultMsg = (res.requires_approval || res.is_approved === 0)
+            ? '✓ Media saved as hidden from the public timeline.'
+            : '✓ Media uploaded and published live to gallery!';
+          alertBox.innerHTML = '<div class="alert ' + alertClass + '" style="font-weight: 600;">' +
+            API.escapeHtml(res.message || defaultMsg) + takedownHtml + '</div>';
+          var immediateBtn = alertBox.querySelector('.btn-immediate-takedown');
+          if (immediateBtn) {
+            immediateBtn.addEventListener('click', function() {
+              handleDeleteMedia(immediateBtn.getAttribute('data-id'), immediateBtn.getAttribute('data-type'));
+            });
           }
-          res = await API.request('POST', '/api/media/' + encodeURIComponent(mediaId) + '/complete', {
-            upload_token: uploadToken
-          }, { throwOnError: true, errorMsg: 'Failed to complete R2 upload.' });
-        } else {
-          // Local storage PUT binary upload
-          if (submitBtn) submitBtn.textContent = 'Uploading media…';
-          var localPutRes = await fetch(uploadUrl, {
-            method: 'PUT',
-            headers: {
-              'Content-Type': mimeToUpload,
-              'X-Upload-Token': uploadToken
-            },
-            body: uploadBuf
-          });
-          if (!localPutRes.ok) {
-            var errData = await localPutRes.json().catch(function() { return {}; });
-            throw new Error(errData.error || ('Local direct upload failed with HTTP ' + localPutRes.status));
+        }
+        if (urlInput) urlInput.value = '';
+        if (titleInput) titleInput.value = '';
+        if (captionInput) captionInput.value = '';
+        if (newAlbumInput) newAlbumInput.value = '';
+        updateLivePreview();
+        await loadGalleryData();
+        if (!res.requires_approval) {
+          var targetSlug = slugify(chosenAlbum);
+          setTimeout(function() { jumpToAlbum(targetSlug); }, 350);
+        }
+        return;
+      }
+
+      var batch = selectedFiles.slice();
+      var succeeded = [];
+      var failed = [];
+      for (var i = 0; i < batch.length; i++) {
+        try {
+          var itemRes = await uploadSingleFile(batch[i], payload, submitBtn, i, batch.length);
+          succeeded.push(itemRes);
+          if (itemRes && itemRes.item) {
+            saveMySubmission({
+              id: itemRes.item.id,
+              title: itemRes.item.title || payload.title || batch[i].name || ('Submission #' + itemRes.item.id),
+              token: itemRes.delete_token,
+              date_taken: itemRes.item.date_taken || payload.date_taken,
+              media_type: itemRes.item.media_type || 'photo',
+              file_url: itemRes.item.file_url,
+              is_approved: itemRes.is_approved
+            });
           }
-          res = await API.request('POST', '/api/media/' + encodeURIComponent(mediaId) + '/complete', {
-            upload_token: uploadToken
-          }, { throwOnError: true, errorMsg: 'Failed to complete local upload.' });
+        } catch (fileErr) {
+          failed.push({ entry: batch[i], error: (fileErr && fileErr.message) ? fileErr.message : 'Upload failed' });
+        }
+      }
+
+      if (failed.length === 0) {
+        var firstRes = succeeded[0];
+        if (alertBox) {
+          if (succeeded.length === 1 && firstRes) {
+            var oneClass = firstRes.requires_approval ? 'alert-info' : 'alert-success';
+            var oneTakedown = (firstRes.item) ? (
+              '<div style="margin-top: 8px;">' +
+                '<button type="button" class="btn btn-outline btn-xs btn-immediate-takedown" data-id="' + firstRes.item.id + '" data-type="' + (firstRes.item.media_type || 'photo') + '" style="color: var(--danger); border-color: #fca5a5; font-size: 0.78rem; padding: 4px 10px;">' +
+                  '🗑️ Take down this submission' +
+                '</button>' +
+              '</div>'
+            ) : '';
+            var oneMsg = (firstRes.requires_approval || firstRes.is_approved === 0)
+              ? '✓ Media saved as hidden from the public timeline.'
+              : '✓ Media uploaded and published live to gallery!';
+            alertBox.innerHTML = '<div class="alert ' + oneClass + '" style="font-weight: 600;">' +
+              API.escapeHtml(firstRes.message || oneMsg) + oneTakedown + '</div>';
+            var oneBtn = alertBox.querySelector('.btn-immediate-takedown');
+            if (oneBtn) {
+              oneBtn.addEventListener('click', function() {
+                handleDeleteMedia(oneBtn.getAttribute('data-id'), oneBtn.getAttribute('data-type'));
+              });
+            }
+          } else {
+            alertBox.innerHTML = '<div class="alert alert-success" style="font-weight: 600;">✓ Uploaded ' + succeeded.length + ' of ' + batch.length + ' files and published live to gallery!</div>';
+          }
+        }
+        clearSelectedFiles();
+        if (titleInput) titleInput.value = '';
+        if (captionInput) captionInput.value = '';
+        if (newAlbumInput) newAlbumInput.value = '';
+        updateLivePreview();
+        await loadGalleryData();
+        if (firstRes && !firstRes.requires_approval) {
+          var albumSlug = slugify(chosenAlbum);
+          setTimeout(function() { jumpToAlbum(albumSlug); }, 350);
         }
       } else {
-        res = await API.submitMedia(payload);
-      }
-
-      if (res && res.item) {
-        saveMySubmission({
-          id: res.item.id,
-          title: res.item.title || payload.title || 'Submission #' + res.item.id,
-          token: res.delete_token,
-          date_taken: res.item.date_taken || payload.date_taken,
-          media_type: res.item.media_type || (payload.url ? 'youtube' : 'photo'),
-          file_url: res.item.file_url,
-          is_approved: res.is_approved
-        });
-      }
-
-      if (alertBox) {
-        var alertClass = res.requires_approval ? 'alert-info' : 'alert-success';
-        var takedownHtml = (res && res.item) ? `
-          <div style="margin-top: 8px;">
-            <button type="button" class="btn btn-outline btn-xs btn-immediate-takedown" data-id="${res.item.id}" data-type="${res.item.media_type || 'photo'}" style="color: var(--danger); border-color: #fca5a5; font-size: 0.78rem; padding: 4px 10px;">
-              🗑️ Take down this submission
-            </button>
-          </div>
-        ` : '';
-
-        var defaultMsg = (res.requires_approval || res.is_approved === 0)
-          ? '✓ Media saved as hidden from the public timeline.'
-          : '✓ Media uploaded and published live to gallery!';
-
-        alertBox.innerHTML = `
-          <div class="alert ${alertClass}" style="font-weight: 600;">
-            ${API.escapeHtml(res.message || defaultMsg)}
-            ${takedownHtml}
-          </div>
-        `;
-
-        var immediateBtn = alertBox.querySelector('.btn-immediate-takedown');
-        if (immediateBtn) {
-          immediateBtn.addEventListener('click', function() {
-            var subId = immediateBtn.getAttribute('data-id');
-            var subType = immediateBtn.getAttribute('data-type');
-            handleDeleteMedia(subId, subType);
-          });
+        var failedEntries = [];
+        var errNames = [];
+        for (var fIdx = 0; fIdx < failed.length; fIdx++) {
+          failedEntries.push(failed[fIdx].entry);
+          errNames.push(failed[fIdx].entry.name + ' (' + failed[fIdx].error + ')');
         }
-      }
-
-      // Reset form
-      selectedFile = null;
-      selectedFileBase64 = null;
-      selectedFileMime = null;
-      selectedFileName = null;
-      if (fileInput) fileInput.value = '';
-      var fileLabel = document.getElementById('dropzone-file-name');
-      if (fileLabel) fileLabel.textContent = '';
-      if (urlInput) urlInput.value = '';
-      if (titleInput) titleInput.value = '';
-      if (captionInput) captionInput.value = '';
-      if (newAlbumInput) newAlbumInput.value = '';
-      updateLivePreview();
-
-      // Refresh gallery
-      await loadGalleryData();
-
-      // If published immediately, scroll to album
-      if (!res.requires_approval) {
-        var targetSlug = slugify(chosenAlbum);
-        setTimeout(function() {
-          jumpToAlbum(targetSlug);
-        }, 350);
+        selectedFiles = failedEntries;
+        updateSelectedFilesLabel();
+        updateLivePreview();
+        if (succeeded.length > 0) {
+          await loadGalleryData();
+        }
+        if (alertBox) {
+          alertBox.innerHTML = '<div class="alert alert-error">Uploaded ' + succeeded.length + ' of ' + batch.length + ' files. Failed (' + failed.length + '): ' + API.escapeHtml(errNames.join(', ')) + '</div>';
+        }
       }
 
     } catch (err) {
