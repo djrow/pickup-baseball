@@ -149,18 +149,54 @@
    * Post a new message (automatically encrypts with AES-GCM-256 when channel is E2EE and useClientE2ee is set).
    */
   // Resolve @Name / @First / @channel tokens to member ids for opt-in push alerts (ids only; no plaintext leaves the client).
+  function escapeMentionRegex(str) {
+    return String(str || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
   function extractMentions(text) {
-    var lower = String(text || '').toLowerCase();
+    var remainingLower = String(text || '').toLowerCase();
     var ids = [];
+    var seenIds = Object.create(null);
+    var myId = state.user && state.user.id ? Number(state.user.id) : 0;
     var list = Array.isArray(state.members) ? state.members : [];
-    for (var i = 0; i < list.length && ids.length < 20; i++) {
-      var full = String(list[i].name || '').trim().toLowerCase();
-      var first = full ? full.split(/\s+/)[0] : '';
-      if ((full && lower.indexOf('@' + full) !== -1) || (first.length >= 2 && new RegExp('@' + first.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![\\w])').test(lower))) {
-        ids.push(Number(list[i].id));
+    var eligible = [];
+    for (var i = 0; i < list.length; i++) {
+      var m = list[i];
+      if (!m || !m.id) continue;
+      var uid = Number(m.id);
+      if (myId && uid === myId) continue;
+      if (ClubhouseStore.isPeerBlockedByMe && ClubhouseStore.isPeerBlockedByMe(uid)) continue;
+      var full = String(m.name || '').trim().toLowerCase();
+      if (!full) continue;
+      eligible.push({ id: uid, full: full, first: full.split(/\s+/)[0] });
+    }
+    eligible.sort(function (a, b) {
+      return b.full.length - a.full.length;
+    });
+
+    for (var p1 = 0; p1 < eligible.length && ids.length < 20; p1++) {
+      var e1 = eligible[p1];
+      var reFull = new RegExp('@' + escapeMentionRegex(e1.full) + '(?![\\w])', 'g');
+      if (reFull.test(remainingLower)) {
+        if (!seenIds[e1.id]) {
+          seenIds[e1.id] = true;
+          ids.push(e1.id);
+        }
+        remainingLower = remainingLower.replace(reFull, ' ');
       }
     }
-    return { ids: ids, everyone: /@(channel|everyone|here)(?![\w])/.test(lower) };
+
+    for (var p2 = 0; p2 < eligible.length && ids.length < 20; p2++) {
+      var e2 = eligible[p2];
+      if (seenIds[e2.id] || e2.first.length < 2) continue;
+      var reFirst = new RegExp('@' + escapeMentionRegex(e2.first) + '(?![\\w])');
+      if (reFirst.test(remainingLower)) {
+        seenIds[e2.id] = true;
+        ids.push(e2.id);
+      }
+    }
+
+    return { ids: ids, everyone: /@(channel|everyone|here)(?![\w])/.test(String(text || '').toLowerCase()) };
   }
 
   function sendMessage(channelId, options) {
@@ -904,6 +940,7 @@
   ClubhouseStore.loadPublicGuestChannels = loadPublicGuestChannels;
   ClubhouseStore.bootstrap = bootstrap;
   ClubhouseStore.fetchChannelMessages = fetchChannelMessages;
+  ClubhouseStore.extractMentions = extractMentions;
   ClubhouseStore.sendMessage = sendMessage;
   ClubhouseStore.createChannel = createChannel;
   ClubhouseStore.editMessage = editMessage;

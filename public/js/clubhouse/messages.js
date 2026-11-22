@@ -134,6 +134,25 @@
   var handlePeerActionError = UI.handlePeerActionError;
   var showPeerBlockedFeedback = UI.showPeerBlockedFeedback;
 
+  function highlightMentionsInEscapedText(escapedText) {
+    var out = String(escapedText || '');
+    if (!out || out.indexOf('@') === -1) return out;
+    out = out.replace(/(^|[\s(>])(@(?:channel|everyone|here))(?![\w])/gi, '$1<span class="ch-mention-pill ch-mention-everyone">$2</span>');
+    var members = (Store.state && Array.isArray(Store.state.members)) ? Store.state.members : [];
+    var names = [];
+    for (var i = 0; i < members.length; i++) {
+      var rawName = members[i] && members[i].name ? String(members[i].name).trim() : '';
+      if (rawName) names.push(escapeHtml(rawName));
+    }
+    names.sort(function (a, b) { return b.length - a.length; });
+    for (var j = 0; j < names.length; j++) {
+      var escName = names[j].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      var re = new RegExp('(^|[\\s(>])(@' + escName + ')(?![\\w<])', 'gi');
+      out = out.replace(re, '$1<span class="ch-mention-pill">$2</span>');
+    }
+    return out;
+  }
+
   function renderMessageTextWithGifs(str) {
     var text = String(str || '');
     var tokenRe = /(\[\[gif:(\/(?:gifs\/[a-zA-Z0-9._-]+|api\/gifs\/[a-zA-Z0-9_-]+\/stream))(?:\|([^\]\r\n]{0,120}))?\]\])/g;
@@ -142,7 +161,7 @@
     var match;
     while ((match = tokenRe.exec(text)) !== null) {
       if (match.index > lastIdx) {
-        out += escapeHtml(text.slice(lastIdx, match.index));
+        out += highlightMentionsInEscapedText(escapeHtml(text.slice(lastIdx, match.index)));
       }
       var gifPath = match[2];
       var gifTitle = (match[3] || 'GIF').trim() || 'GIF';
@@ -155,7 +174,7 @@
       lastIdx = tokenRe.lastIndex;
     }
     if (lastIdx < text.length) {
-      out += escapeHtml(text.slice(lastIdx));
+      out += highlightMentionsInEscapedText(escapeHtml(text.slice(lastIdx)));
     }
     return out;
   }
@@ -1370,6 +1389,242 @@
     });
   }
 
+  var mentionState = {
+    inputEl: /** @type {HTMLTextAreaElement | HTMLInputElement | null} */ (null),
+    token: /** @type {{ start: number, end: number, query: string } | null} */ (null),
+    items: /** @type {Array<{ type: string, id: number, name: string, insertText: string, meta: string }>} */ ([]),
+    activeIdx: 0
+  };
+  var mentionGlobalBound = false;
+
+  function getActiveMentionToken(inputEl) {
+    if (!inputEl) return null;
+    var val = String(inputEl.value || '');
+    var caret = typeof inputEl.selectionStart === 'number' ? inputEl.selectionStart : val.length;
+    var prefix = val.slice(0, caret);
+    var m = prefix.match(/(?:^|\s)@([^\n@]{0,40})$/);
+    if (!m) return null;
+    var query = m[1];
+    var atStart = caret - query.length - 1;
+    return { start: atStart, end: caret, query: query };
+  }
+
+  function getMentionCandidates(query) {
+    var q = String(query || '').trim().toLowerCase();
+    var myId = Store.state && Store.state.user && Store.state.user.id ? Number(Store.state.user.id) : 0;
+    var members = (Store.state && Array.isArray(Store.state.members)) ? Store.state.members : [];
+    var matches = [];
+
+    for (var i = 0; i < members.length; i++) {
+      var m = members[i];
+      if (!m || !m.id) continue;
+      var uid = Number(m.id);
+      if (myId && uid === myId) continue;
+      if (Store.isPeerBlockedByMe && Store.isPeerBlockedByMe(uid)) continue;
+      var name = String(m.name || '').trim();
+      if (!name) continue;
+      var lower = name.toLowerCase();
+      var idx = q ? lower.indexOf(q) : 0;
+      if (idx === -1) continue;
+      matches.push({
+        type: 'member',
+        id: uid,
+        name: name,
+        insertText: name,
+        meta: m.role === 'admin' ? 'Admin' : (m.role === 'organizer' ? 'Organizer' : 'Member'),
+        score: idx === 0 ? 0 : 1
+      });
+    }
+
+    matches.sort(function (a, b) {
+      if (a.score !== b.score) return a.score - b.score;
+      return a.name.localeCompare(b.name);
+    });
+
+    var items = matches.slice(0, 8);
+    var ch = findChannelInStore(uiState.activeChannelId) || uiState.activeChannel;
+    var isDm = Boolean(ch && (ch.channel_type === 'dm' || ch.channel_type === 'group_dm'));
+    var u = Store.state ? Store.state.user : null;
+    var canEveryone = Boolean(u && (isModeratorUser(u) || u.role === 'organizer' || u.isOrganizer));
+    if (!isDm && canEveryone && (!q || 'channel'.indexOf(q) === 0 || 'everyone'.indexOf(q) === 0 || 'here'.indexOf(q) === 0)) {
+      items.push({
+        type: 'everyone',
+        id: 0,
+        name: 'channel',
+        insertText: 'channel',
+        meta: 'Alert everyone in this channel',
+        score: 2
+      });
+    }
+    return items;
+  }
+
+  function closeMentionMenu() {
+    mentionState.inputEl = null;
+    mentionState.token = null;
+    mentionState.items = [];
+    mentionState.activeIdx = 0;
+    var menuEl = el('ch-mention-menu');
+    if (menuEl) {
+      menuEl.classList.add('hidden');
+      menuEl.innerHTML = '';
+    }
+  }
+
+  function applyMentionCandidate(idx) {
+    var inputEl = mentionState.inputEl;
+    var token = mentionState.token;
+    var item = mentionState.items[idx];
+    if (!inputEl || !token || !item) return;
+
+    var val = String(inputEl.value || '');
+    var inserted = '@' + item.insertText + ' ';
+    var nextVal = val.slice(0, token.start) + inserted + val.slice(token.end);
+    inputEl.value = nextVal;
+    var nextCaret = token.start + inserted.length;
+    closeMentionMenu();
+    try { inputEl.focus(); } catch (e) { /* ignore */ }
+    if (typeof inputEl.setSelectionRange === 'function') {
+      try { inputEl.setSelectionRange(nextCaret, nextCaret); } catch (e) { /* ignore */ }
+    }
+  }
+
+  function positionMentionMenu(menuEl, inputEl) {
+    if (!menuEl || !inputEl || typeof inputEl.getBoundingClientRect !== 'function') return;
+    var rect = inputEl.getBoundingClientRect();
+    var vw = typeof window !== 'undefined' && window.innerWidth ? window.innerWidth : 1024;
+    var menuW = Math.min(300, Math.max(220, rect.width));
+    menuEl.style.width = Math.round(menuW) + 'px';
+    var menuH = menuEl.offsetHeight || 180;
+    var left = Math.max(8, Math.min(rect.left, Math.max(8, vw - menuW - 8)));
+    var top = rect.top >= menuH + 16 ? (rect.top - menuH - 6) : (rect.bottom + 6);
+    menuEl.style.left = Math.round(left) + 'px';
+    menuEl.style.top = Math.round(Math.max(8, top)) + 'px';
+  }
+
+  function renderMentionMenu() {
+    var menuEl = ensureMentionMenu();
+    if (!menuEl || !mentionState.inputEl || mentionState.items.length === 0) {
+      closeMentionMenu();
+      return;
+    }
+    var html = '';
+    for (var i = 0; i < mentionState.items.length; i++) {
+      var item = mentionState.items[i];
+      var isActive = i === mentionState.activeIdx;
+      var avatarText = item.type === 'everyone' ? '📣' : item.name.charAt(0).toUpperCase();
+      html += '<button type="button" class="ch-mention-item' + (isActive ? ' active' : '') + '" role="option" aria-selected="' + (isActive ? 'true' : 'false') + '" data-mention-idx="' + i + '">';
+      html += '<span class="ch-mention-avatar">' + escapeHtml(avatarText) + '</span>';
+      html += '<span class="ch-mention-name">@' + escapeHtml(item.name) + '</span>';
+      html += '<span class="ch-mention-meta">' + escapeHtml(item.meta) + '</span>';
+      html += '</button>';
+    }
+    menuEl.innerHTML = html;
+    menuEl.classList.remove('hidden');
+    positionMentionMenu(menuEl, mentionState.inputEl);
+  }
+
+  function ensureMentionMenu() {
+    if (typeof document === 'undefined' || !document.body) return null;
+    var existing = document.getElementById('ch-mention-menu');
+    if (existing) return existing;
+
+    var menu = document.createElement('div');
+    menu.id = 'ch-mention-menu';
+    menu.className = 'ch-mention-menu hidden';
+    menu.setAttribute('role', 'listbox');
+    menu.setAttribute('aria-label', 'Mention a member');
+    document.body.appendChild(menu);
+
+    menu.addEventListener('mousedown', function (ev) {
+      ev.preventDefault();
+    });
+    menu.addEventListener('click', function (ev) {
+      var targetEl = /** @type {Element | null} */ (ev.target);
+      var btn = targetEl && typeof targetEl.closest === 'function' ? targetEl.closest('[data-mention-idx]') : null;
+      if (!btn || !menu.contains(btn)) return;
+      applyMentionCandidate(Number(btn.getAttribute('data-mention-idx')));
+    });
+
+    if (!mentionGlobalBound) {
+      mentionGlobalBound = true;
+      document.addEventListener('click', function (ev) {
+        if (!mentionState.inputEl) return;
+        var mNode = el('ch-mention-menu');
+        var tNode = /** @type {Node | null} */ (ev.target);
+        if (mNode && tNode && mNode.contains(tNode)) return;
+        if (tNode === mentionState.inputEl) return;
+        closeMentionMenu();
+      });
+      if (typeof window !== 'undefined') {
+        window.addEventListener('resize', function () {
+          if (mentionState.inputEl) closeMentionMenu();
+        });
+      }
+    }
+
+    return menu;
+  }
+
+  function updateMentionForInput(inputEl) {
+    if (!inputEl || !Store.state || !Store.state.user) {
+      closeMentionMenu();
+      return;
+    }
+    var token = getActiveMentionToken(inputEl);
+    if (!token) {
+      closeMentionMenu();
+      return;
+    }
+    var items = getMentionCandidates(token.query);
+    if (items.length === 0) {
+      closeMentionMenu();
+      return;
+    }
+    mentionState.inputEl = inputEl;
+    mentionState.token = token;
+    mentionState.items = items;
+    if (mentionState.activeIdx >= items.length) {
+      mentionState.activeIdx = 0;
+    }
+    renderMentionMenu();
+  }
+
+  function attachMentionAutocomplete(inputEl) {
+    if (!inputEl || inputEl._mentionAutocompleteBound) return;
+    inputEl._mentionAutocompleteBound = true;
+
+    inputEl.addEventListener('input', function () {
+      updateMentionForInput(inputEl);
+    });
+    inputEl.addEventListener('click', function () {
+      updateMentionForInput(inputEl);
+    });
+    inputEl.addEventListener('keydown', function (ev) {
+      if (!mentionState.inputEl || mentionState.inputEl !== inputEl || mentionState.items.length === 0) {
+        return;
+      }
+      if (ev.key === 'ArrowDown') {
+        ev.preventDefault();
+        mentionState.activeIdx = (mentionState.activeIdx + 1) % mentionState.items.length;
+        renderMentionMenu();
+      } else if (ev.key === 'ArrowUp') {
+        ev.preventDefault();
+        mentionState.activeIdx = (mentionState.activeIdx - 1 + mentionState.items.length) % mentionState.items.length;
+        renderMentionMenu();
+      } else if (ev.key === 'Enter' || ev.key === 'Tab') {
+        ev.preventDefault();
+        if (typeof ev.stopImmediatePropagation === 'function') {
+          ev.stopImmediatePropagation();
+        }
+        applyMentionCandidate(mentionState.activeIdx);
+      } else if (ev.key === 'Escape') {
+        ev.preventDefault();
+        closeMentionMenu();
+      }
+    });
+  }
+
   function initMessagesDomEvents() {
     var RtcEngine = root.ClubhouseRTC;
     var composerForm = el('ch-composer-form');
@@ -1467,6 +1722,7 @@
     }
 
     if (composerForm && composerInput) {
+      attachMentionAutocomplete(composerInput);
       composerInput.addEventListener('keydown', function (ev) {
         if (typeof Store.markChatActivity === 'function') {
           Store.markChatActivity();
@@ -1481,6 +1737,7 @@
 
       composerForm.addEventListener('submit', function (ev) {
         ev.preventDefault();
+        closeMentionMenu();
         var text = composerInput.value.trim();
         if (!text && uiState.pendingAttachmentIds.length === 0) return;
         if (!uiState.activeChannelId) return;
@@ -1560,8 +1817,10 @@
     var threadForm = el('ch-thread-form');
     var threadInput = el('ch-thread-input');
     if (threadForm && threadInput) {
+      attachMentionAutocomplete(threadInput);
       threadForm.addEventListener('submit', function (ev) {
         ev.preventDefault();
+        closeMentionMenu();
         var text = threadInput.value.trim();
         if (!text || !uiState.activeThreadRoot || !uiState.activeChannelId) return;
         threadInput.value = '';
@@ -1586,6 +1845,7 @@
     groupReactions: groupReactions,
     openReactionDrawer: openReactionDrawer,
     closeReactionDrawer: closeReactionDrawer,
+    closeMentionMenu: closeMentionMenu,
     renderAttachmentItem: renderAttachmentItem,
     hydrateEncryptedAttachments: hydrateEncryptedAttachments,
     promoteAttachmentToGallery: promoteAttachmentToGallery,

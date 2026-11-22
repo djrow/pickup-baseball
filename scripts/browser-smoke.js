@@ -1157,6 +1157,26 @@ async function runTwoContextClubhouseE2eeAndWebRtcSmoke(browser, server, tracker
     assert(duplicateRxCountText === '2', `Duplicate reaction shows counter "2" (got "${duplicateRxCountText}")`);
     record('Clubhouse hover action toolbar + scalable emoji drawer hide clutter until hover and hide count until >= 2');
 
+    // Step 5c-mention: @ mention autocomplete, Enter insertion, pill highlight, and mention_user_ids resolution
+    await fillInput(ctxA, '#ch-composer-input', 'Hey @');
+    await ctxA.waitFor('document.getElementById("ch-mention-menu") && !document.getElementById("ch-mention-menu").classList.contains("hidden") && document.querySelectorAll("#ch-mention-menu .ch-mention-item").length >= 1');
+    await ctxA.evaluate(`(() => {
+      const inp = document.getElementById('ch-composer-input');
+      inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    })()`);
+    await ctxA.waitFor('document.getElementById("ch-mention-menu").classList.contains("hidden")');
+    const mentionResolution = await ctxA.evaluate(`(() => {
+      const val = document.getElementById('ch-composer-input').value;
+      const extracted = window.ClubhouseStore.extractMentions(val);
+      return { val, ids: extracted.ids };
+    })()`);
+    assert(mentionResolution.val.includes('@') && mentionResolution.val.endsWith(' '), `Enter inserts @mention into composer without premature submit (got "${mentionResolution.val}")`);
+    assert(mentionResolution.ids.includes(server.orgUser.id) && !mentionResolution.ids.includes(server.adminUser.id), 'extractMentions resolves peer user id and excludes self');
+
+    await ctxA.evaluate('document.getElementById("ch-composer-form").dispatchEvent(new Event("submit", { cancelable: true }))');
+    await ctxA.waitFor('Boolean(document.querySelector("#ch-message-stream .ch-mention-pill"))', 10000);
+    record('Clubhouse @ mention autocomplete opens, inserts member on Enter, highlights pill, and resolves mention_user_ids');
+
     // Step 5d: Mocked WebRTC Voice Lounge & Signaling UI Transitions
     await clickEl(ctxA, '#ch-channel-list .ch-channel-item[data-channel-type="voice"]');
     await ctxA.waitFor(`!document.getElementById("ch-media-stage").classList.contains("hidden") && document.getElementById("rtc-tile-${server.adminUser.id}")`);
