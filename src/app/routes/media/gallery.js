@@ -37,6 +37,7 @@ import {
 import { canUserAccessEvent } from '../../policy.js';
 import { getDisallowZeroLoginMediaSetting } from '../../schema.js';
 import { r2StorageAdapter } from '../../storage/r2.js';
+import { gdriveStorageAdapter } from '../../storage/gdrive.js';
 import {
   resolveStorageProvider,
   getStorageAdapter,
@@ -157,7 +158,7 @@ mediaGalleryRouter.get('/:id/file', async (c) => {
 
     const row = await c.env.DB.prepare(`
       SELECT m.id, m.title, m.file_data, m.file_url, m.original_url, m.mime_type, m.is_approved, m.event_id,
-             m.storage_provider, m.r2_key,
+             m.storage_provider, m.r2_key, m.drive_file_id,
              e.id as event_exists, e.allowed_emails as event_allowed_emails
       FROM media_items m
       LEFT JOIN events e ON m.event_id = e.id
@@ -195,6 +196,22 @@ mediaGalleryRouter.get('/:id/file', async (c) => {
       if (target.type === 'redirect') {
         c.header('Cache-Control', String(target.cacheControl || 'private, no-store'));
         return c.redirect(target.url, 302);
+      }
+    }
+
+    // 1b. If stored in Google Drive, stream via authenticated Drive v3 API (ADR-0008)
+    const resolvedDriveId = row.drive_file_id || (row.storage_provider === 'gdrive' ? extractGoogleDriveFileId(row.original_url || row.file_url || '') : null);
+    if ((row.storage_provider === 'gdrive' || row.drive_file_id) && resolvedDriveId) {
+      const target = await gdriveStorageAdapter.getDownloadTarget(c.env, {
+        driveFileId: String(resolvedDriveId),
+        mimeType: String(row.mime_type || 'application/octet-stream'),
+        rangeHeader: c.req.header('Range') || undefined,
+        reqUrl: c.req.url,
+        isPublic: !row.event_allowed_emails && Number(row.is_approved) === 1,
+        cacheControl: mediaCacheControl
+      });
+      if (target && target.type === 'stream' && target.response) {
+        return target.response;
       }
     }
 
