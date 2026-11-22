@@ -198,6 +198,7 @@
 
     var mount = function () {
       self.renderFooter();
+      self.initHeroBannerSlideshow();
     };
     if (typeof document !== 'undefined') {
       if (document.readyState === 'loading') {
@@ -208,10 +209,39 @@
     }
   };
 
+  API.BANNER_SLIDESHOW_KEY = 'pbf_banner_slideshow';
+
+  API.getBannerSlideshowEnabled = function () {
+    try {
+      return localStorage.getItem(this.BANNER_SLIDESHOW_KEY) !== 'off';
+    } catch (_) {
+      return true;
+    }
+  };
+
+  /**
+   * @param {boolean} enabled
+   */
+  API.setBannerSlideshowEnabled = function (enabled) {
+    var isOn = Boolean(enabled);
+    try {
+      localStorage.setItem(this.BANNER_SLIDESHOW_KEY, isOn ? 'on' : 'off');
+    } catch (_) { /* ignore storage errors */ }
+    if (typeof document !== 'undefined') {
+      document.querySelectorAll('.theme-slideshow-toggle').forEach(function (el) {
+        /** @type {HTMLInputElement} */ (el).checked = isOn;
+      });
+    }
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof CustomEvent === 'function') {
+      window.dispatchEvent(new CustomEvent('pbf:banner-slideshow-changed', { detail: { enabled: isOn } }));
+    }
+  };
+
   API.updateThemePickersUi = function (rootEl) {
     if (typeof document === 'undefined') return;
     var currentMode = this.getThemeMode();
     var currentColor = this.getColorTheme();
+    var slideshowOn = this.getBannerSlideshowEnabled();
     var scope = rootEl || document;
 
     scope.querySelectorAll('.theme-mode-tab').forEach(function (tab) {
@@ -225,6 +255,10 @@
       htmlCard.classList.toggle('selected', isSelected);
       var check = htmlCard.querySelector('.palette-check');
       if (check) check.textContent = isSelected ? '✓' : '';
+    });
+
+    scope.querySelectorAll('.theme-slideshow-toggle').forEach(function (el) {
+      /** @type {HTMLInputElement} */ (el).checked = slideshowOn;
     });
   };
 
@@ -259,7 +293,11 @@
       '<div class="theme-palette-heading" style="text-align: start; margin-top: 10px;">Select Market Palette</div>' +
       '<div class="footer-theme-palette-grid">' +
         paletteCardsHtml +
-      '</div>';
+      '</div>' +
+      '<label class="theme-slideshow-row" style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;font-size:0.84rem;color:var(--text-main);">' +
+        '<span>🎞️ <strong>Banner Photo Slideshow</strong></span>' +
+        '<input type="checkbox" class="theme-slideshow-toggle" aria-label="Toggle banner photo slideshow">' +
+      '</label>';
 
     containerEl.querySelectorAll('.theme-mode-tab').forEach(function (tab) {
       tab.addEventListener('click', function (e) {
@@ -278,6 +316,15 @@
         if (htmlCard.dataset.colorTheme) {
           self.setColorTheme(htmlCard.dataset.colorTheme);
         }
+      });
+    });
+
+    containerEl.querySelectorAll('.theme-slideshow-toggle').forEach(function (el) {
+      var input = /** @type {HTMLInputElement} */ (el);
+      input.addEventListener('click', function (e) { e.stopPropagation(); });
+      input.addEventListener('change', function (e) {
+        e.stopPropagation();
+        self.setBannerSlideshowEnabled(Boolean(input.checked));
       });
     });
 
@@ -394,6 +441,151 @@
     if (typeof this.initAppUpdater === 'function') {
       this.initAppUpdater();
     }
+  };
+
+  API.initHeroBannerSlideshow = function () {
+    if (typeof document === 'undefined') return;
+    var hero = /** @type {HTMLElement|null} */ (document.querySelector('section.hero'));
+    if (!hero || hero.dataset.slideshowInit) return;
+    hero.dataset.slideshowInit = '1';
+
+    var bg = document.createElement('div');
+    bg.className = 'hero-slideshow-bg';
+    bg.setAttribute('aria-hidden', 'true');
+    bg.style.display = 'none';
+
+    var slideA = document.createElement('img');
+    slideA.className = 'hero-slideshow-slide';
+    slideA.alt = '';
+    slideA.decoding = 'async';
+
+    var slideB = document.createElement('img');
+    slideB.className = 'hero-slideshow-slide';
+    slideB.alt = '';
+    slideB.decoding = 'async';
+
+    var scrim = document.createElement('div');
+    scrim.className = 'hero-slideshow-scrim';
+
+    bg.appendChild(slideA);
+    bg.appendChild(slideB);
+    bg.appendChild(scrim);
+    hero.insertBefore(bg, hero.firstChild);
+
+    var nextBtn = document.createElement('button');
+    nextBtn.type = 'button';
+    nextBtn.className = 'hero-slideshow-next-btn';
+    nextBtn.setAttribute('aria-label', 'Switch banner photo');
+    nextBtn.textContent = '📷 Next Photo ›';
+    nextBtn.style.display = 'none';
+    hero.appendChild(nextBtn);
+
+    var slides = [slideA, slideB];
+    /** @type {string[]} */
+    var urls = [];
+    var fetched = false;
+    var fetching = false;
+    var activeSlot = 0;
+    var currentIdx = 0;
+    /** @type {number|null} */
+    var timerId = null;
+    var self = this;
+
+    function stopTimer() {
+      if (timerId !== null) {
+        clearInterval(timerId);
+        timerId = null;
+      }
+    }
+
+    function showSlideAt(idx) {
+      if (urls.length === 0) return;
+      var nextSlot = activeSlot === 0 ? 1 : 0;
+      var nextImg = slides[nextSlot];
+      var prevImg = slides[activeSlot];
+      nextImg.onerror = function () {
+        var brokenUrl = urls[idx];
+        urls = urls.filter(function (u) { return u !== brokenUrl; });
+        if (urls.length === 0) {
+          stopTimer();
+          bg.style.display = 'none';
+          nextBtn.style.display = 'none';
+        }
+      };
+      nextImg.classList.remove('is-panning-left', 'is-panning-right');
+      nextImg.src = urls[idx];
+      void nextImg.offsetWidth;
+      nextImg.classList.add(idx % 2 === 0 ? 'is-panning-left' : 'is-panning-right');
+      nextImg.classList.add('is-active');
+      prevImg.classList.remove('is-active');
+      activeSlot = nextSlot;
+    }
+
+    function scheduleAutoAdvance() {
+      stopTimer();
+      var reducedMotion = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (urls.length > 1 && !reducedMotion) {
+        timerId = window.setInterval(function () {
+          if (urls.length === 0) { stopTimer(); return; }
+          currentIdx = (currentIdx + 1) % urls.length;
+          showSlideAt(currentIdx);
+        }, 12000);
+      }
+    }
+
+    function startSlideshow() {
+      stopTimer();
+      if (!self.getBannerSlideshowEnabled()) {
+        bg.style.display = 'none';
+        nextBtn.style.display = 'none';
+        return;
+      }
+      if (!fetched && !fetching) {
+        fetching = true;
+        fetch('/api/media?type=photo&limit=24', { credentials: 'same-origin' })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            fetched = true;
+            fetching = false;
+            var items = (data && Array.isArray(data.media)) ? data.media : ((data && Array.isArray(data.items)) ? data.items : (Array.isArray(data) ? data : []));
+            urls = items
+              .filter(function (item) { return item && item.media_type === 'photo' && item.file_url; })
+              .map(function (item) { return self.safeUrl ? self.safeUrl(item.file_url) : item.file_url; })
+              .filter(Boolean);
+            if (self.getBannerSlideshowEnabled() && urls.length > 0) {
+              startSlideshow();
+            }
+          })
+          .catch(function () {
+            fetched = true;
+            fetching = false;
+          });
+        return;
+      }
+      if (urls.length === 0) {
+        bg.style.display = 'none';
+        nextBtn.style.display = 'none';
+        return;
+      }
+      bg.style.display = '';
+      nextBtn.style.display = urls.length > 1 ? 'inline-flex' : 'none';
+      currentIdx = currentIdx % urls.length;
+      showSlideAt(currentIdx);
+      scheduleAutoAdvance();
+    }
+
+    nextBtn.addEventListener('click', function () {
+      if (urls.length <= 1) return;
+      currentIdx = (currentIdx + 1) % urls.length;
+      showSlideAt(currentIdx);
+      scheduleAutoAdvance();
+    });
+
+    window.addEventListener('pbf:banner-slideshow-changed', function () {
+      startSlideshow();
+    });
+
+    startSlideshow();
   };
 
   API.initFooterThemePicker = function () {

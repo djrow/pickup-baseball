@@ -147,18 +147,22 @@
     if (!grid || !stage || !RtcEngine || !RtcEngine.state) return;
 
     if (!RtcEngine.state.activeChannelId) {
+      var existingViewerOff = el('ch-screen-viewer');
+      if (existingViewerOff && existingViewerOff.parentNode) existingViewerOff.parentNode.removeChild(existingViewerOff);
       stage.classList.add('hidden');
       grid.innerHTML = '';
       return;
     }
 
     stage.classList.remove('hidden');
+    var myUserId = (Store.state.user && Store.state.user.id) ? Number(Store.state.user.id) : (RtcEngine.state.userId ? Number(RtcEngine.state.userId) : null);
     var participants = Store.state.voiceParticipants || [];
     var html = '';
     for (var i = 0; i < participants.length; i++) {
       var p = participants[i];
       if (Number(p.channel_id) !== Number(RtcEngine.state.activeChannelId)) continue;
       var isSpeaking = RtcEngine.state.speakingUsers && RtcEngine.state.speakingUsers[p.user_id];
+      var isLocalScreen = Boolean(myUserId && Number(p.user_id) === myUserId && RtcEngine.state.screenSharing);
       var pAvatar = typeof UI.getAvatarUrlForUser === 'function' ? UI.getAvatarUrlForUser(p.user_id, p.avatar_url || p.avatarUrl || '') : '';
       var pAvatarInner = (pAvatar && typeof UI.renderAvatarContentHtml === 'function')
         ? UI.renderAvatarContentHtml(pAvatar, p.user_name || 'Player', (p.user_name || 'P').charAt(0).toUpperCase())
@@ -166,7 +170,7 @@
       html += '<div class="ch-video-tile' + (isSpeaking ? ' speaking' : '') + '" id="rtc-tile-' + p.user_id + '">';
       html += '<div class="ch-user-avatar' + (pAvatar ? ' has-avatar' : '') + '" style="margin-bottom:6px;">' + pAvatarInner + '</div>';
       html += '<div style="font-size:12.5px;font-weight:700;">' + escapeHtml(p.user_name) + '</div>';
-      if (p.screen_sharing) {
+      if (p.screen_sharing || isLocalScreen) {
         html += '<span class="ch-screen-pill" style="margin-top:4px;">Sharing Screen</span>';
       }
       html += '<video id="rtc-video-' + p.user_id + '" autoplay playsinline style="max-width:100%;max-height:140px;border-radius:6px;display:none;margin-top:4px;"></video>';
@@ -175,16 +179,96 @@
     grid.innerHTML = html;
 
     var peerIds = Object.keys(uiState.remoteStreams);
+    /** @type {MediaStream|null} */
+    var activeScreenStream = null;
+    var activeScreenOwnerId = null;
+    var isLocalScreenActive = false;
+
     for (var s = 0; s < peerIds.length; s++) {
       var pid = peerIds[s];
-      var vidEl = el('rtc-video-' + pid);
-      if (vidEl && uiState.remoteStreams[pid]) {
+      var vidEl = /** @type {HTMLVideoElement|null} */ (el('rtc-video-' + pid));
+      var rStream = uiState.remoteStreams[pid];
+      if (vidEl && rStream) {
         try {
-          vidEl.srcObject = uiState.remoteStreams[pid];
+          vidEl.srcObject = rStream;
           vidEl.muted = Boolean((Store.isUserMutedByMe && Store.isUserMutedByMe(pid)) || (Store.isPeerBlockedByMe && Store.isPeerBlockedByMe(pid)));
           vidEl.style.display = 'block';
         } catch (e) { /* ignore video element srcObject attachment failure */ }
       }
+      if (!activeScreenStream && rStream && typeof rStream.getVideoTracks === 'function' && rStream.getVideoTracks().length > 0) {
+        activeScreenStream = rStream;
+        activeScreenOwnerId = pid;
+      }
+    }
+
+    if (myUserId && RtcEngine.state.screenSharing && RtcEngine.state.localScreenStream) {
+      var myVidEl = /** @type {HTMLVideoElement|null} */ (el('rtc-video-' + myUserId));
+      if (myVidEl) {
+        try {
+          myVidEl.srcObject = RtcEngine.state.localScreenStream;
+          myVidEl.muted = true;
+          myVidEl.style.display = 'block';
+        } catch (e) { /* ignore local video element srcObject attachment failure */ }
+      }
+      if (!activeScreenStream) {
+        activeScreenStream = RtcEngine.state.localScreenStream;
+        activeScreenOwnerId = myUserId;
+        isLocalScreenActive = true;
+      }
+    }
+
+    var viewer = el('ch-screen-viewer');
+    if (activeScreenStream) {
+      var sharerName = isLocalScreenActive ? 'You' : 'Teammate';
+      if (!isLocalScreenActive && activeScreenOwnerId !== null) {
+        for (var k = 0; k < participants.length; k++) {
+          if (String(participants[k].user_id) === String(activeScreenOwnerId) && participants[k].user_name) {
+            sharerName = participants[k].user_name;
+            break;
+          }
+        }
+      }
+      if (!viewer) {
+        viewer = document.createElement('div');
+        viewer.id = 'ch-screen-viewer';
+        viewer.className = 'ch-screen-viewer';
+        stage.insertBefore(viewer, grid);
+      }
+      viewer.innerHTML =
+        '<div class="ch-screen-viewer-header">' +
+          '<span>🖥️ ' + escapeHtml(sharerName) + (isLocalScreenActive ? ' are sharing your screen' : ' is sharing their screen') + '</span>' +
+          '<div class="ch-screen-viewer-actions">' +
+            '<button type="button" class="btn btn-outline btn-xs" id="btn-screen-fullscreen" style="padding:2px 8px;font-size:11.5px;">⛶ Fullscreen</button>' +
+            (isLocalScreenActive ? '<button type="button" class="btn btn-outline btn-xs" id="btn-screen-stop" style="padding:2px 8px;font-size:11.5px;color:#fca5a5;border-color:rgba(252,165,165,0.5);">⏹ Stop Sharing</button>' : '') +
+          '</div>' +
+        '</div>' +
+        '<video id="ch-screen-video" class="ch-screen-video" autoplay playsinline></video>';
+
+      var screenVid = /** @type {HTMLVideoElement|null} */ (el('ch-screen-video'));
+      if (screenVid) {
+        try {
+          screenVid.srcObject = activeScreenStream;
+          screenVid.muted = isLocalScreenActive || Boolean((Store.isUserMutedByMe && Store.isUserMutedByMe(activeScreenOwnerId)) || (Store.isPeerBlockedByMe && Store.isPeerBlockedByMe(activeScreenOwnerId)));
+        } catch (e) { /* ignore screen viewer srcObject failure */ }
+      }
+      var fsBtn = el('btn-screen-fullscreen');
+      if (fsBtn && screenVid) {
+        fsBtn.addEventListener('click', function () {
+          if (screenVid && typeof screenVid.requestFullscreen === 'function') {
+            screenVid.requestFullscreen().catch(function () {});
+          }
+        });
+      }
+      var stopBtn = el('btn-screen-stop');
+      if (stopBtn) {
+        stopBtn.addEventListener('click', function () {
+          RtcEngine.toggleScreenShare().then(function () {
+            renderVoiceVideoTiles();
+          });
+        });
+      }
+    } else if (viewer && viewer.parentNode) {
+      viewer.parentNode.removeChild(viewer);
     }
   }
 
