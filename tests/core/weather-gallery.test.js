@@ -49,7 +49,7 @@ module.exports = async function registerWeatherGalleryTests(ctx, t9) {
     assert.equal(typeof ws.calculateFieldDrainage, 'function');
     assert.equal(typeof ws.renderAssistantWidget, 'function');
     assert.equal(typeof ws.populateCardWeatherBadges, 'function');
-    assert.equal(ws.HEURISTIC_CONFIG.DRAINAGE_DECAY_HOURS, 8.0, 'Drainage decay half-life must be 8 hours');
+    assert.equal(ws.HEURISTIC_CONFIG.DRAINAGE_DECAY_HOURS, 14.0, 'Drainage decay half-life must be 14 hours');
 
     // 3. Test Drainage Heuristic: Scenario 1 - 0.00" Rain (Dry & Firm)
     const times = [];
@@ -103,7 +103,7 @@ module.exports = async function registerWeatherGalleryTests(ctx, t9) {
     assert.equal(rSat.rainfall5Day, 0.80, '5-day rainfall must sum precipitation correctly');
     assert.equal(rSat.rainfall5DayFormatted, '0.80"');
     assert.ok(Array.isArray(rSat.dailyForecast), 'rSat must contain dailyForecast array');
-    assert.ok(rSat.effectiveMoisture < 0.10, 'Effective moisture must decay below 0.10" after 20 hours');
+    assert.ok(rSat.effectiveMoisture < 0.25 && rSat.effectiveMoisture > 0.10, 'Effective moisture must decay below 0.25" after 20+ hours with 14h decay');
     assert.ok(rSat.recommendation.includes('Playable'));
     assert.ok(rSat.maxSurfaceWater > rSat.maxHourlyRain, 'Cumulative surface water must exceed single-hour rainfall peak during multi-hour rain');
     const rSatNoon = rSat.hourlyBreakdown.find(h => h.time === '2026-11-08T12:00');

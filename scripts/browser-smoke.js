@@ -479,7 +479,13 @@ async function runPublicShellAndDiagnosticsSmoke(browser, session, server, track
 
   await session.waitFor('document.getElementById("nav-menu-toggle")');
   await clickEl(session, '#nav-menu-toggle');
-  await session.waitFor('document.getElementById("nav-menu-toggle") && document.getElementById("nav-menu-toggle").getAttribute("aria-expanded") === "true"', 3000);
+  try {
+    await session.waitFor('document.getElementById("nav-menu-toggle") && document.getElementById("nav-menu-toggle").getAttribute("aria-expanded") === "true"', 1500);
+  } catch (_) {
+    // API.renderNav(user) can re-render the nav bar after /api/auth/me resolves, resetting aria-expanded
+    await clickEl(session, '#nav-menu-toggle');
+    await session.waitFor('document.getElementById("nav-menu-toggle") && document.getElementById("nav-menu-toggle").getAttribute("aria-expanded") === "true"', 3000);
+  }
   await session.evaluate('document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))');
   await session.waitFor('document.getElementById("nav-menu-toggle") && document.getElementById("nav-menu-toggle").getAttribute("aria-expanded") === "false"', 3000);
   record('☰ Menu dropdown opens on click and closes on Escape');
