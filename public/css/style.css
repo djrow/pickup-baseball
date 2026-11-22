@@ -577,11 +577,11 @@ header.site-header {
 }
 
 .hero-slideshow-slide.is-panning-left {
-  animation: hero-pan-left 14s ease-in-out forwards;
+  animation: hero-pan-left 26s ease-in-out forwards;
 }
 
 .hero-slideshow-slide.is-panning-right {
-  animation: hero-pan-right 14s ease-in-out forwards;
+  animation: hero-pan-right 26s ease-in-out forwards;
 }
 
 .hero-slideshow-scrim {

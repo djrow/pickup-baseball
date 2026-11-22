@@ -486,7 +486,9 @@
     var fetched = false;
     var fetching = false;
     var activeSlot = 0;
-    var currentIdx = 0;
+    var currentIdx = -1;
+    var panToggle = 0;
+    var loadSeq = 0;
     /** @type {number|null} */
     var timerId = null;
     var self = this;
@@ -498,27 +500,48 @@
       }
     }
 
+    /**
+     * @param {number} excludeIdx
+     * @returns {number}
+     */
+    function pickRandomIndex(excludeIdx) {
+      if (urls.length <= 1) return 0;
+      if (excludeIdx < 0 || excludeIdx >= urls.length) {
+        return Math.floor(Math.random() * urls.length);
+      }
+      return (excludeIdx + 1 + Math.floor(Math.random() * (urls.length - 1))) % urls.length;
+    }
+
     function showSlideAt(idx) {
       if (urls.length === 0) return;
+      var targetUrl = urls[idx];
+      var seq = ++loadSeq;
       var nextSlot = activeSlot === 0 ? 1 : 0;
       var nextImg = slides[nextSlot];
       var prevImg = slides[activeSlot];
+      nextImg.onload = function () {
+        if (seq !== loadSeq) return;
+        nextImg.classList.remove('is-panning-left', 'is-panning-right');
+        void nextImg.offsetWidth;
+        panToggle = 1 - panToggle;
+        nextImg.classList.add(panToggle === 0 ? 'is-panning-left' : 'is-panning-right');
+        nextImg.classList.add('is-active');
+        prevImg.classList.remove('is-active');
+        activeSlot = nextSlot;
+      };
       nextImg.onerror = function () {
-        var brokenUrl = urls[idx];
-        urls = urls.filter(function (u) { return u !== brokenUrl; });
+        if (seq !== loadSeq) return;
+        urls = urls.filter(function (u) { return u !== targetUrl; });
+        nextBtn.style.display = (self.getBannerSlideshowEnabled() && urls.length > 1) ? 'inline-flex' : 'none';
         if (urls.length === 0) {
           stopTimer();
           bg.style.display = 'none';
-          nextBtn.style.display = 'none';
+          return;
         }
+        currentIdx = pickRandomIndex(-1);
+        showSlideAt(currentIdx);
       };
-      nextImg.classList.remove('is-panning-left', 'is-panning-right');
-      nextImg.src = urls[idx];
-      void nextImg.offsetWidth;
-      nextImg.classList.add(idx % 2 === 0 ? 'is-panning-left' : 'is-panning-right');
-      nextImg.classList.add('is-active');
-      prevImg.classList.remove('is-active');
-      activeSlot = nextSlot;
+      nextImg.src = targetUrl;
     }
 
     function scheduleAutoAdvance() {
@@ -527,9 +550,9 @@
       if (urls.length > 1 && !reducedMotion) {
         timerId = window.setInterval(function () {
           if (urls.length === 0) { stopTimer(); return; }
-          currentIdx = (currentIdx + 1) % urls.length;
+          currentIdx = pickRandomIndex(currentIdx);
           showSlideAt(currentIdx);
-        }, 12000);
+        }, 24000);
       }
     }
 
@@ -569,16 +592,24 @@
       }
       bg.style.display = '';
       nextBtn.style.display = urls.length > 1 ? 'inline-flex' : 'none';
-      currentIdx = currentIdx % urls.length;
+      if (currentIdx < 0 || currentIdx >= urls.length) {
+        currentIdx = pickRandomIndex(-1);
+      }
       showSlideAt(currentIdx);
       scheduleAutoAdvance();
     }
 
     nextBtn.addEventListener('click', function () {
       if (urls.length <= 1) return;
-      currentIdx = (currentIdx + 1) % urls.length;
+      currentIdx = pickRandomIndex(currentIdx);
       showSlideAt(currentIdx);
       scheduleAutoAdvance();
+    });
+
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible' && self.getBannerSlideshowEnabled() && urls.length > 1) {
+        scheduleAutoAdvance();
+      }
     });
 
     window.addEventListener('pbf:banner-slideshow-changed', function () {
