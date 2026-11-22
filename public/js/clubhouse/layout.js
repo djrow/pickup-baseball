@@ -915,6 +915,7 @@
     uiState.activeChannelId = target.id;
     uiState.activeChannel = target;
     if (typeof UI.closeReactionDrawer === 'function') UI.closeReactionDrawer(false);
+    if (typeof UI.closeMentionMenu === 'function') UI.closeMentionMenu();
 
     var titleEl = el('ch-active-channel-name');
     var topicEl = el('ch-active-channel-topic');
@@ -969,6 +970,7 @@
     uiState.revealedMutedMsgIds = {};
     uiState.revealedBlockedMsgIds = {};
     if (typeof UI.closeReactionDrawer === 'function') UI.closeReactionDrawer(false);
+    if (typeof UI.closeMentionMenu === 'function') UI.closeMentionMenu();
     var titleEl = el('ch-active-channel-name');
     var topicEl = el('ch-active-channel-topic');
     var e2eeBadge = el('ch-active-e2ee-badge');

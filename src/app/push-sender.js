@@ -273,18 +273,29 @@ export async function dispatchMessagePush(env, ev) {
   }
   const mentionIds = (ev.mentionIds || []).filter((n) => Number.isInteger(n)).slice(0, 20);
   mentionIds.forEach((id) => reasons.get('mention').add(id));
+  const isRestrictedChannel = isDm || isPrivateEncryptedBoard(channel);
   const canEveryone = Boolean(author.isAdmin || author.isModerator || author.canModerateChat || author.role === 'organizer' || author.isOrganizer);
   if (ev.mentionEveryone && canEveryone && !isDm) {
-    const { results } = await chatDb.prepare(
-      'SELECT user_id FROM channel_members WHERE channel_id = ? AND COALESCE(muted, 0) = 0 LIMIT ?'
-    ).bind(channel.id, MAX_RECIPIENTS).all();
-    (results || []).forEach((r) => reasons.get('everyone').add(r.user_id));
+    if (isPrivateEncryptedBoard(channel)) {
+      const { results } = await chatDb.prepare(
+        'SELECT user_id FROM channel_members WHERE channel_id = ? AND COALESCE(muted, 0) = 0 LIMIT ?'
+      ).bind(channel.id, MAX_RECIPIENTS).all();
+      (results || []).forEach((r) => reasons.get('everyone').add(r.user_id));
+    } else {
+      const db = env.BASEBALL_DB || env.DB;
+      if (db) {
+        const { results } = await db.prepare(
+          'SELECT DISTINCT user_id FROM push_subscriptions WHERE notify_everyone = 1 LIMIT ?'
+        ).bind(MAX_RECIPIENTS).all();
+        (results || []).forEach((r) => reasons.get('everyone').add(r.user_id));
+      }
+    }
   }
 
   const all = new Set();
   reasons.forEach((s) => s.forEach((id) => all.add(id)));
   if (all.size === 0) return;
-  const ok = await eligibleUsers(env, channel, Array.from(all), author.id, { requireMember: true, keyEpoch });
+  const ok = await eligibleUsers(env, channel, Array.from(all), author.id, { requireMember: isRestrictedChannel, keyEpoch });
   if (ok.size === 0) return;
 
   const body = encrypted ? 'Open Clubhouse to read it.' : preview(message.content);

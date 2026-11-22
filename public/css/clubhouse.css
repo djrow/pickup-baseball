@@ -2340,9 +2340,14 @@ html, body.clubhouse-body {
 
 
 /* @ Mention Autocomplete & Highlighting */
+.ch-mention-trigger-btn {
+  font-weight: 700;
+  font-size: 14px;
+}
+
 .ch-mention-menu {
   position: fixed;
-  z-index: 96;
+  z-index: 100010;
   background-color: var(--ch-bg-elevated);
   border: 1px solid var(--ch-border);
   border-radius: 10px;
@@ -2393,6 +2398,15 @@ html, body.clubhouse-body {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  overflow: hidden;
+}
+
+.ch-mention-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
 }
 
 .ch-mention-name {

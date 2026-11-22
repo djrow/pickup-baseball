@@ -664,7 +664,13 @@
         }
         var currentText = targetMsg ? (targetMsg.decrypted_content || targetMsg.content || '') : '';
         if (typeof window !== 'undefined' && window.PBFDialog) {
-          window.PBFDialog.prompt('Edit message:', currentText, { title: '✏️ Edit Message', multiline: true }).then(function (nextText) {
+          var editPromise = window.PBFDialog.prompt('Edit message:', currentText, { title: '✏️ Edit Message', multiline: true });
+          var editInput = document.querySelector('.pbf-dialog-backdrop .pbf-dialog-input');
+          if (editInput) {
+            attachMentionAutocomplete(/** @type {HTMLTextAreaElement} */ (editInput));
+          }
+          editPromise.then(function (nextText) {
+            closeMentionMenu();
             if (nextText !== null && nextText.trim() && nextText.trim() !== currentText) {
               Store.editMessage(editId, nextText.trim(), Number(uiState.activeChannelId)).then(function () {
                 renderMessageStream(null);
@@ -873,9 +879,20 @@
     if (currentUser && !isHiddenByMod && displayContent) {
       var myFull = String(currentUser.name || '').trim();
       var myFirst = myFull ? myFull.split(/\s+/)[0] : '';
+      var myAbbrev = '';
+      var dirMembers = (Store.state && Array.isArray(Store.state.members)) ? Store.state.members : [];
+      for (var dmIdx = 0; dmIdx < dirMembers.length; dmIdx++) {
+        if (dirMembers[dmIdx] && Number(dirMembers[dmIdx].id) === Number(currentUser.id) && dirMembers[dmIdx].name) {
+          myAbbrev = String(dirMembers[dmIdx].name).trim();
+          break;
+        }
+      }
       var lowerBody = String(displayContent).toLowerCase();
+      var isDmChannel = Boolean(msgChannel && (msgChannel.channel_type === 'dm' || msgChannel.channel_type === 'group_dm'));
       if ((myFull && lowerBody.indexOf('@' + myFull.toLowerCase()) !== -1) ||
-          (myFirst && myFirst.length >= 2 && lowerBody.indexOf('@' + myFirst.toLowerCase()) !== -1)) {
+          (myAbbrev && lowerBody.indexOf('@' + myAbbrev.toLowerCase()) !== -1) ||
+          (myFirst && myFirst.length >= 2 && new RegExp('@' + myFirst.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![\\w])').test(lowerBody)) ||
+          (!isDmChannel && /@(channel|everyone|here)(?![\w])/.test(lowerBody))) {
         isMentioned = true;
       }
     }
@@ -1392,7 +1409,7 @@
   var mentionState = {
     inputEl: /** @type {HTMLTextAreaElement | HTMLInputElement | null} */ (null),
     token: /** @type {{ start: number, end: number, query: string } | null} */ (null),
-    items: /** @type {Array<{ type: string, id: number, name: string, insertText: string, meta: string }>} */ ([]),
+    items: /** @type {Array<{ type: string, id: number, name: string, insertText: string, meta: string, avatarUrl: string }>} */ ([]),
     activeIdx: 0
   };
   var mentionGlobalBound = false;
@@ -1402,7 +1419,7 @@
     var val = String(inputEl.value || '');
     var caret = typeof inputEl.selectionStart === 'number' ? inputEl.selectionStart : val.length;
     var prefix = val.slice(0, caret);
-    var m = prefix.match(/(?:^|\s)@([^\n@]{0,40})$/);
+    var m = prefix.match(/(?:^|[\s([{"'])@([^\n@]{0,40})$/);
     if (!m) return null;
     var query = m[1];
     var atStart = caret - query.length - 1;
@@ -1412,27 +1429,59 @@
   function getMentionCandidates(query) {
     var q = String(query || '').trim().toLowerCase();
     var myId = Store.state && Store.state.user && Store.state.user.id ? Number(Store.state.user.id) : 0;
-    var members = (Store.state && Array.isArray(Store.state.members)) ? Store.state.members : [];
-    var matches = [];
+    var members = (Store.state && Array.isArray(Store.state.members) && Store.state.members.length > 0)
+      ? Store.state.members
+      : ((uiState.upcomingData && Array.isArray(uiState.upcomingData.attendees)) ? uiState.upcomingData.attendees : []);
+    var ch = findChannelInStore(uiState.activeChannelId) || uiState.activeChannel;
+    var isRestricted = Boolean(ch && (ch.channel_type === 'dm' || ch.channel_type === 'group_dm' || ch.is_private === 1 || ch.is_private === true || ch.min_role_read === 'invite'));
+    /** @type {Record<string, boolean> | null} */
+    var allowedSet = null;
+    if (isRestricted && ch && Array.isArray(ch.member_ids) && ch.member_ids.length > 0) {
+      allowedSet = Object.create(null);
+      for (var cm = 0; cm < ch.member_ids.length; cm++) {
+        allowedSet[String(Number(ch.member_ids[cm]))] = true;
+      }
+    }
 
+    var matches = [];
     for (var i = 0; i < members.length; i++) {
       var m = members[i];
-      if (!m || !m.id) continue;
-      var uid = Number(m.id);
+      if (!m) continue;
+      var uid = Number(m.id || m.user_id || 0);
+      if (!uid) continue;
       if (myId && uid === myId) continue;
+      if (allowedSet && !allowedSet[String(uid)]) continue;
       if (Store.isPeerBlockedByMe && Store.isPeerBlockedByMe(uid)) continue;
       var name = String(m.name || '').trim();
       if (!name) continue;
       var lower = name.toLowerCase();
-      var idx = q ? lower.indexOf(q) : 0;
-      if (idx === -1) continue;
+      var score = -1;
+      if (!q || lower.indexOf(q) === 0) {
+        score = 0;
+      } else {
+        var words = lower.split(/\s+/);
+        for (var w = 0; w < words.length; w++) {
+          if (words[w].indexOf(q) === 0) {
+            score = 1;
+            break;
+          }
+        }
+        if (score === -1 && lower.indexOf(q) !== -1) {
+          score = 2;
+        }
+      }
+      if (score === -1) continue;
+      var avatarUrl = (typeof UI.getAvatarUrlForUser === 'function')
+        ? UI.getAvatarUrlForUser(uid, m.avatar_url || '')
+        : '';
       matches.push({
         type: 'member',
         id: uid,
         name: name,
         insertText: name,
         meta: m.role === 'admin' ? 'Admin' : (m.role === 'organizer' ? 'Organizer' : 'Member'),
-        score: idx === 0 ? 0 : 1
+        avatarUrl: avatarUrl,
+        score: score
       });
     }
 
@@ -1442,19 +1491,25 @@
     });
 
     var items = matches.slice(0, 8);
-    var ch = findChannelInStore(uiState.activeChannelId) || uiState.activeChannel;
     var isDm = Boolean(ch && (ch.channel_type === 'dm' || ch.channel_type === 'group_dm'));
     var u = Store.state ? Store.state.user : null;
     var canEveryone = Boolean(u && (isModeratorUser(u) || u.role === 'organizer' || u.isOrganizer));
-    if (!isDm && canEveryone && (!q || 'channel'.indexOf(q) === 0 || 'everyone'.indexOf(q) === 0 || 'here'.indexOf(q) === 0)) {
-      items.push({
-        type: 'everyone',
-        id: 0,
-        name: 'channel',
-        insertText: 'channel',
-        meta: 'Alert everyone in this channel',
-        score: 2
-      });
+    if (!isDm && canEveryone) {
+      var broadcastKeywords = !q ? ['channel'] : ['channel', 'everyone', 'here'];
+      for (var bk = 0; bk < broadcastKeywords.length; bk++) {
+        var kw = broadcastKeywords[bk];
+        if (!q || kw.indexOf(q) === 0) {
+          items.push({
+            type: 'everyone',
+            id: 0,
+            name: kw,
+            insertText: kw,
+            meta: 'Alert everyone in this channel',
+            avatarUrl: '',
+            score: 3
+          });
+        }
+      }
     }
     return items;
   }
@@ -1492,18 +1547,24 @@
   function positionMentionMenu(menuEl, inputEl) {
     if (!menuEl || !inputEl || typeof inputEl.getBoundingClientRect !== 'function') return;
     var rect = inputEl.getBoundingClientRect();
-    var vw = typeof window !== 'undefined' && window.innerWidth ? window.innerWidth : 1024;
+    var vv = (typeof window !== 'undefined' && window.visualViewport) ? window.visualViewport : null;
+    var vw = vv ? vv.width : ((typeof window !== 'undefined' && window.innerWidth) ? window.innerWidth : 1024);
+    var vh = vv ? vv.height : ((typeof window !== 'undefined' && window.innerHeight) ? window.innerHeight : 768);
+    var offsetLeft = vv ? vv.offsetLeft : 0;
+    var offsetTop = vv ? vv.offsetTop : 0;
     var menuW = Math.min(300, Math.max(220, rect.width));
     menuEl.style.width = Math.round(menuW) + 'px';
     var menuH = menuEl.offsetHeight || 180;
-    var left = Math.max(8, Math.min(rect.left, Math.max(8, vw - menuW - 8)));
-    var top = rect.top >= menuH + 16 ? (rect.top - menuH - 6) : (rect.bottom + 6);
+    var left = Math.max(offsetLeft + 8, Math.min(rect.left, offsetLeft + vw - menuW - 8));
+    var top = (rect.top - offsetTop >= menuH + 16)
+      ? (rect.top - menuH - 6)
+      : Math.min(rect.bottom + 6, offsetTop + vh - menuH - 8);
     menuEl.style.left = Math.round(left) + 'px';
-    menuEl.style.top = Math.round(Math.max(8, top)) + 'px';
+    menuEl.style.top = Math.round(Math.max(offsetTop + 8, top)) + 'px';
   }
 
   function renderMentionMenu() {
-    var menuEl = ensureMentionMenu();
+    var menuEl = ensureMentionMenu(mentionState.inputEl);
     if (!menuEl || !mentionState.inputEl || mentionState.items.length === 0) {
       closeMentionMenu();
       return;
@@ -1513,8 +1574,11 @@
       var item = mentionState.items[i];
       var isActive = i === mentionState.activeIdx;
       var avatarText = item.type === 'everyone' ? '📣' : item.name.charAt(0).toUpperCase();
+      var avatarHtml = (item.type !== 'everyone' && item.avatarUrl && typeof UI.renderAvatarContentHtml === 'function')
+        ? UI.renderAvatarContentHtml(item.avatarUrl, item.name, avatarText)
+        : escapeHtml(avatarText);
       html += '<button type="button" class="ch-mention-item' + (isActive ? ' active' : '') + '" role="option" aria-selected="' + (isActive ? 'true' : 'false') + '" data-mention-idx="' + i + '">';
-      html += '<span class="ch-mention-avatar">' + escapeHtml(avatarText) + '</span>';
+      html += '<span class="ch-mention-avatar">' + avatarHtml + '</span>';
       html += '<span class="ch-mention-name">@' + escapeHtml(item.name) + '</span>';
       html += '<span class="ch-mention-meta">' + escapeHtml(item.meta) + '</span>';
       html += '</button>';
@@ -1522,19 +1586,30 @@
     menuEl.innerHTML = html;
     menuEl.classList.remove('hidden');
     positionMentionMenu(menuEl, mentionState.inputEl);
+    var activeBtn = menuEl.querySelector('.ch-mention-item.active');
+    if (activeBtn && typeof activeBtn.scrollIntoView === 'function') {
+      try { activeBtn.scrollIntoView({ block: 'nearest' }); } catch (e) { /* ignore */ }
+    }
   }
 
-  function ensureMentionMenu() {
+  function ensureMentionMenu(inputEl) {
     if (typeof document === 'undefined' || !document.body) return null;
+    var dialogHost = (inputEl && typeof inputEl.closest === 'function') ? inputEl.closest('.pbf-dialog-backdrop') : null;
+    var targetParent = dialogHost || document.body;
     var existing = document.getElementById('ch-mention-menu');
-    if (existing) return existing;
+    if (existing) {
+      if (existing.parentNode !== targetParent) {
+        targetParent.appendChild(existing);
+      }
+      return existing;
+    }
 
     var menu = document.createElement('div');
     menu.id = 'ch-mention-menu';
     menu.className = 'ch-mention-menu hidden';
     menu.setAttribute('role', 'listbox');
     menu.setAttribute('aria-label', 'Mention a member');
-    document.body.appendChild(menu);
+    targetParent.appendChild(menu);
 
     menu.addEventListener('mousedown', function (ev) {
       ev.preventDefault();
@@ -1552,8 +1627,10 @@
         if (!mentionState.inputEl) return;
         var mNode = el('ch-mention-menu');
         var tNode = /** @type {Node | null} */ (ev.target);
+        var tEl = /** @type {Element | null} */ (ev.target);
         if (mNode && tNode && mNode.contains(tNode)) return;
         if (tNode === mentionState.inputEl) return;
+        if (tEl && typeof tEl.closest === 'function' && tEl.closest('#btn-mention-member')) return;
         closeMentionMenu();
       });
       if (typeof window !== 'undefined') {
@@ -1600,6 +1677,12 @@
     inputEl.addEventListener('click', function () {
       updateMentionForInput(inputEl);
     });
+    inputEl.addEventListener('keyup', function (ev) {
+      if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp' || ev.key === 'Enter' || ev.key === 'Tab' || ev.key === 'Escape') {
+        return;
+      }
+      updateMentionForInput(inputEl);
+    });
     inputEl.addEventListener('keydown', function (ev) {
       if (!mentionState.inputEl || mentionState.inputEl !== inputEl || mentionState.items.length === 0) {
         return;
@@ -1639,6 +1722,24 @@
     var gifTabsWrap = el('ch-gif-tabs');
     var gifImportForm = el('ch-gif-import-form');
     var gifGrid = el('ch-gif-grid');
+    var mentionBtn = el('btn-mention-member');
+
+    if (mentionBtn && composerInput) {
+      mentionBtn.addEventListener('click', function () {
+        var val = String(composerInput.value || '');
+        var pos = typeof composerInput.selectionStart === 'number' ? composerInput.selectionStart : val.length;
+        var before = val.slice(0, pos);
+        var needSpace = before.length > 0 && !/[\s([{"'@]$/.test(before);
+        var insert = needSpace ? ' @' : '@';
+        composerInput.value = before + insert + val.slice(pos);
+        var nextPos = before.length + insert.length;
+        try { composerInput.focus(); } catch (e) { /* ignore */ }
+        if (typeof composerInput.setSelectionRange === 'function') {
+          try { composerInput.setSelectionRange(nextPos, nextPos); } catch (e) { /* ignore */ }
+        }
+        updateMentionForInput(composerInput);
+      });
+    }
 
     if (gifOpenBtn && gifPicker) {
       gifOpenBtn.addEventListener('click', function () {

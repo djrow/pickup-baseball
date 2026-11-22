@@ -1157,9 +1157,11 @@ async function runTwoContextClubhouseE2eeAndWebRtcSmoke(browser, server, tracker
     assert(duplicateRxCountText === '2', `Duplicate reaction shows counter "2" (got "${duplicateRxCountText}")`);
     record('Clubhouse hover action toolbar + scalable emoji drawer hide clutter until hover and hide count until >= 2');
 
-    // Step 5c-mention: @ mention autocomplete, Enter insertion, pill highlight, and mention_user_ids resolution
-    await fillInput(ctxA, '#ch-composer-input', 'Hey @');
+    // Step 5c-mention: @ trigger button, scoped DM autocomplete, Enter insertion, pill highlight, mention_user_ids & thread input
+    await clickEl(ctxA, '#btn-mention-member');
     await ctxA.waitFor('document.getElementById("ch-mention-menu") && !document.getElementById("ch-mention-menu").classList.contains("hidden") && document.querySelectorAll("#ch-mention-menu .ch-mention-item").length >= 1');
+    const dmMentionNames = await ctxA.evaluate('Array.from(document.querySelectorAll("#ch-mention-menu .ch-mention-name")).map(el => el.textContent.trim())');
+    assert(dmMentionNames.length === 1 && dmMentionNames[0].includes('Bob'), `DM mention menu scopes cleanly to DM peer Bob (got ${JSON.stringify(dmMentionNames)})`);
     await ctxA.evaluate(`(() => {
       const inp = document.getElementById('ch-composer-input');
       inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
@@ -1175,7 +1177,20 @@ async function runTwoContextClubhouseE2eeAndWebRtcSmoke(browser, server, tracker
 
     await ctxA.evaluate('document.getElementById("ch-composer-form").dispatchEvent(new Event("submit", { cancelable: true }))');
     await ctxA.waitFor('Boolean(document.querySelector("#ch-message-stream .ch-mention-pill"))', 10000);
-    record('Clubhouse @ mention autocomplete opens, inserts member on Enter, highlights pill, and resolves mention_user_ids');
+
+    await clickEl(ctxA, `${msgCardSel} [data-thread-msg]`);
+    await ctxA.waitFor('document.getElementById("ch-thread-input") && document.getElementById("tab-panel-thread").style.display !== "none"');
+    await fillInput(ctxA, '#ch-thread-input', 'Ping @');
+    await ctxA.waitFor('document.getElementById("ch-mention-menu") && !document.getElementById("ch-mention-menu").classList.contains("hidden") && document.querySelectorAll("#ch-mention-menu .ch-mention-item").length >= 1');
+    await ctxA.evaluate(`(() => {
+      const tinp = document.getElementById('ch-thread-input');
+      tinp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    })()`);
+    await ctxA.waitFor('document.getElementById("ch-mention-menu").classList.contains("hidden")');
+    const threadMentionVal = await ctxA.evaluate('document.getElementById("ch-thread-input").value');
+    assert(threadMentionVal.startsWith('Ping @') && threadMentionVal.endsWith(' '), `Thread composer @ autocomplete inserts mention cleanly (got "${threadMentionVal}")`);
+    await clickEl(ctxA, '#btn-close-thread');
+    record('Clubhouse @ mention autocomplete works across composer & thread inputs, @ button, scopes DM peers, and resolves push ids');
 
     // Step 5d: Mocked WebRTC Voice Lounge & Signaling UI Transitions
     await clickEl(ctxA, '#ch-channel-list .ch-channel-item[data-channel-type="voice"]');
