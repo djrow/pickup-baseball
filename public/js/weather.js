@@ -23,7 +23,7 @@
   var HEURISTIC_CONFIG = {
     // Soil drainage half-decay rate in hours:
     // Water that fell t hours before game time is weighted by exp(-t / DRAINAGE_DECAY_HOURS)
-    DRAINAGE_DECAY_HOURS: 8.0,
+    DRAINAGE_DECAY_HOURS: 14.0,
 
     // Effective Surface Moisture (ESM) thresholds in inches:
     // ESM = sum_{h=1}^{24} (rain_h * exp(-h / DRAINAGE_DECAY_HOURS))
