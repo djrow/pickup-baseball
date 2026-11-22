@@ -158,7 +158,7 @@ mediaGalleryRouter.get('/:id/file', async (c) => {
 
     const row = await c.env.DB.prepare(`
       SELECT m.id, m.title, m.file_data, m.file_url, m.original_url, m.mime_type, m.is_approved, m.event_id,
-             m.storage_provider, m.r2_key, m.drive_file_id,
+             m.storage_provider, m.r2_key,
              e.id as event_exists, e.allowed_emails as event_allowed_emails
       FROM media_items m
       LEFT JOIN events e ON m.event_id = e.id
@@ -200,8 +200,10 @@ mediaGalleryRouter.get('/:id/file', async (c) => {
     }
 
     // 1b. If stored in Google Drive, stream via authenticated Drive v3 API (ADR-0008)
-    const resolvedDriveId = row.drive_file_id || (row.storage_provider === 'gdrive' ? extractGoogleDriveFileId(row.original_url || row.file_url || '') : null);
-    if ((row.storage_provider === 'gdrive' || row.drive_file_id) && resolvedDriveId) {
+    const resolvedDriveId = row.storage_provider === 'gdrive'
+      ? extractGoogleDriveFileId(row.original_url || row.file_url || '')
+      : null;
+    if (row.storage_provider === 'gdrive' && resolvedDriveId) {
       const target = await gdriveStorageAdapter.getDownloadTarget(c.env, {
         driveFileId: String(resolvedDriveId),
         mimeType: String(row.mime_type || 'application/octet-stream'),

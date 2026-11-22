@@ -168,17 +168,17 @@ Summary: 173 mounted routes | 36 DB tables | 61 exported modules | 13 HTML pages
 
 ### `src/app/routes/media/gallery.js`
 - `GET /api/media` [public/token] `:52`
-- `POST /api/media` [public/token] `:654`
-- `DELETE /api/media/:id` [public/token] `:1208`
-- `PUT /api/media/:id` [requireOrganizer] `:1091`
-- `POST /api/media/:id/approve` [requireOrganizer] `:1011`
-- `PUT /api/media/:id/approve` [requireOrganizer] `:995`
-- `POST /api/media/:id/complete` [public/token] `:570`
-- `POST /api/media/:id/delete` [public/token] `:1209`
+- `POST /api/media` [public/token] `:656`
+- `DELETE /api/media/:id` [public/token] `:1210`
+- `PUT /api/media/:id` [requireOrganizer] `:1093`
+- `POST /api/media/:id/approve` [requireOrganizer] `:1013`
+- `PUT /api/media/:id/approve` [requireOrganizer] `:997`
+- `POST /api/media/:id/complete` [public/token] `:572`
+- `POST /api/media/:id/delete` [public/token] `:1211`
 - `GET /api/media/:id/file` [public/token] `:154`
-- `POST /api/media/:id/update` [requireOrganizer] `:1092`
-- `PUT /api/media/:id/upload` [public/token] `:497`
-- `POST /api/media/init` [public/token] `:333`
+- `POST /api/media/:id/update` [requireOrganizer] `:1094`
+- `PUT /api/media/:id/upload` [public/token] `:499`
+- `POST /api/media/init` [public/token] `:335`
 
 ### `src/app/routes/notifications.js`
 - `GET /api/notifications/unsubscribe` [public/token] `:23`
